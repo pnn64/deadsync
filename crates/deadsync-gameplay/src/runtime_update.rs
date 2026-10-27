@@ -43,7 +43,6 @@ where
             audio_snapshot,
             music_rate,
             stream_lead_in,
-            self.clock.offsets.global_offset_seconds(),
         );
         let lead_in = self.clock.audio_clock.positive_lead_in_seconds();
         let previous_music_time_ns = self.clock.song_position.current_music_time_ns;
@@ -412,7 +411,7 @@ where
 
         let future_row = self.timing_runtime.time_to_beat_caches.assist_future_row(
             &self.timing_runtime.timing,
-            self.clock.offsets.global_offset_seconds(),
+            self.clock.offsets.global_offset_seconds() * self.music_rate(),
             self.clock.audio_clock.output_delay_seconds(),
             music_time_ns,
             slope,
@@ -717,7 +716,6 @@ where
                 audio_snapshot,
                 music_rate,
                 stream_lead_in,
-                self.clock.offsets.global_offset_seconds(),
             )
             .song_time_ns,
         )
@@ -910,7 +908,21 @@ where
         let normalized = self.music_rate();
         self.timing_runtime.step_resolution_distance_ns =
             max_step_distance_ns(&self.timing_runtime.timing_profile, normalized);
-        self.recompute_end_times();
+        let global_offset = self.clock.offsets.global_offset_seconds();
+        mutate_timing_arc(&mut self.timing_runtime.timing, |timing| {
+            timing.set_global_offset_seconds_with_rate(global_offset, normalized);
+        });
+        for (player, timing) in self.timing_runtime.timing_players.iter_mut().enumerate() {
+            let offset = self.clock.offsets.effective_player_global_offset_seconds(player);
+            mutate_timing_arc(timing, |timing| {
+                timing.set_global_offset_seconds_with_rate(offset, normalized);
+            });
+        }
+        self.refresh_timing_after_offset_change();
+        // Song corrections convert real-time samples with the active rate.
+        // Do not combine samples taken on different playback timelines.
+        self.control.autosync.offset_sample_count = 0;
+        self.control.autosync.standard_deviation = 0.0;
         true
     }
 
@@ -962,8 +974,9 @@ where
         else {
             return false;
         };
+        let rate = self.music_rate();
         mutate_timing_arc(&mut self.timing_runtime.timing, |timing| {
-            timing.set_global_offset_seconds(new_offset);
+            timing.set_global_offset_seconds_with_rate(new_offset, rate);
         });
         for (player_idx, timing) in self.timing_runtime.timing_players.iter_mut().enumerate() {
             let effective_offset = new_offset
@@ -972,7 +985,7 @@ where
                     .offsets
                     .player_global_offset_shift_seconds(player_idx);
             mutate_timing_arc(timing, |timing| {
-                timing.set_global_offset_seconds(effective_offset);
+                timing.set_global_offset_seconds_with_rate(effective_offset, rate);
             });
         }
         self.refresh_timing_after_offset_change();
@@ -1004,7 +1017,7 @@ where
         let result = self.apply_autosync_offset_sample(note_off_by_ns);
         match result.correction {
             Some(AutosyncOffsetCorrection::Song(mean)) => {
-                let _ = self.apply_song_offset_delta(mean);
+                let _ = self.apply_song_offset_delta(mean * self.music_rate());
             }
             Some(AutosyncOffsetCorrection::Machine(mean)) => {
                 let _ = self.apply_global_offset_delta(mean);
@@ -2109,7 +2122,7 @@ where
             .time_to_beat_caches
             .assist_row_no_offset(
                 &self.timing_runtime.timing,
-                self.clock.offsets.global_offset_seconds(),
+                self.clock.offsets.global_offset_seconds() * self.music_rate(),
                 music_time_ns,
             )
     }

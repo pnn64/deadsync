@@ -1,0 +1,14 @@
+{
+  "base_revision": "77747ae5238aa4c54719acd58be6055c31b672c8",
+  "candidate_encoder_sha256": "ba44e9e1576d50ba049cc75434552fcd3783b38f7b42633a9f47f439dda33b8f",
+  "candidate_patch_sha256": "83d925683e5991424d071a41009a495c7270feaff4790fa7d5fcea11173a918a",
+  "status": "rejected as production default: decoder throughput cost outweighs default-stage size saving",
+  "production_encoder_restored_sha256": "1b43d89f7309a570519891d46fbed40098bc0d4589c2e243c93fde7276878494",
+  "line_ending_restoration": {
+    "before_sha256": "e3f49580e46892f07677fb6ee601f9adc7861e1106adc198846ad1774874f2ed",
+    "after_sha256": "1b43d89f7309a570519891d46fbed40098bc0d4589c2e243c93fde7276878494",
+    "reason": "Reverse patch produced CRLF; normalized to the exact LF bytes of the previously tested source. Canonical content was identical."
+  },
+  "original_context_patch_sha256": "33068f547800d88c2a3a686b807a0bee5045049e8cbb30aa137f17b6461b312e",
+  "retained_patch_format": "Zero-context diff; apply with git apply --unidiff-zero. Reconstructs the exact measured candidate source."
+}

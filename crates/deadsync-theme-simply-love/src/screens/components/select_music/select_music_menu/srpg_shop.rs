@@ -85,6 +85,7 @@ pub struct SrpgShopOverlayStateData {
     queued: [HashSet<Box<str>>; SHOPS.len()],
     confirm: Option<PurchaseConfirm>,
     local_message: Option<String>,
+    purchase_pending: bool,
     presentation_revision: u64,
     presentation: RefCell<Option<SrpgShopPresentation>>,
 }
@@ -154,6 +155,7 @@ pub fn show_srpg_shop_overlay(side: PlayerSide) -> SrpgShopOverlayState {
         queued: std::array::from_fn(|_| HashSet::new()),
         confirm: None,
         local_message: None,
+        purchase_pending: false,
         presentation_revision: 0,
         presentation: RefCell::new(None),
     }))
@@ -178,14 +180,11 @@ pub fn update_srpg_shop_overlay(state: &mut SrpgShopOverlayState, snapshot: &Srp
         presentation_changed |= clamped != overlay.item_indices[index];
         overlay.item_indices[index] = clamped;
     }
-    if snapshot.phase == SrpgShopPhase::Ready
-        && overlay
-            .local_message
-            .as_deref()
-            .is_some_and(|message| message.starts_with("Purchasing "))
+    if matches!(snapshot.phase, SrpgShopPhase::Ready | SrpgShopPhase::Error) && overlay.purchase_pending
     {
         presentation_changed |= overlay.local_message != snapshot.message;
         overlay.local_message.clone_from(&snapshot.message);
+        overlay.purchase_pending = false;
     }
     if snapshot.phase != SrpgShopPhase::Ready {
         presentation_changed |= overlay.confirm.take().is_some();
@@ -327,7 +326,8 @@ fn handle_confirm_input(
                 .confirm
                 .take()
                 .expect("purchase confirmation is visible");
-            overlay.local_message = Some(format!("Purchasing {}...", confirm.name));
+            overlay.purchase_pending = true;
+            overlay.local_message = Some(crate::i18n::tr_fmt("SrpgShop", "MessagePurchasing", &[("arg0", &(confirm.name).to_string())]).to_string());
             SrpgShopInputOutcome::Purchase {
                 shop_id: confirm.shop_id,
                 item_id: confirm.item_id,
@@ -339,7 +339,7 @@ fn handle_confirm_input(
         | VirtualAction::p1_select
         | VirtualAction::p2_select => {
             overlay.confirm = None;
-            overlay.local_message = Some("Purchase canceled.".to_string());
+            overlay.local_message = Some(crate::i18n::tr("SrpgShop", "MessagePurchaseCanceled").to_string());
             SrpgShopInputOutcome::ChangedSelection
         }
         _ => SrpgShopInputOutcome::None,
@@ -384,15 +384,11 @@ fn activate_item(
     };
     if !item.owned {
         let Some(cost) = item.cost else {
-            overlay.local_message = Some("This item is not currently available.".to_string());
+            overlay.local_message = Some(crate::i18n::tr("SrpgShop", "MessageThisItemIsNotCurrentlyAvailable").to_string());
             return SrpgShopInputOutcome::ChangedSelection;
         };
         if cost > shop.balance {
-            overlay.local_message = Some(format!(
-                "Need {} more {}.",
-                format_number(cost - shop.balance),
-                SHOPS[overlay.shop_index].currency
-            ));
+            overlay.local_message = Some(crate::i18n::tr_fmt("SrpgShop", "MessageNeedMore", &[("arg0", &(format_number(cost - shop.balance)).to_string()), ("arg1", &(SHOPS[overlay.shop_index].currency).to_string())]).to_string());
             return SrpgShopInputOutcome::ChangedSelection;
         }
         overlay.confirm = Some(PurchaseConfirm {
@@ -405,18 +401,18 @@ fn activate_item(
         return SrpgShopInputOutcome::ChangedSelection;
     }
     if item.downloaded {
-        overlay.local_message = Some("This owned song is already downloaded here.".to_string());
+        overlay.local_message = Some(crate::i18n::tr("SrpgShop", "MessageThisOwnedSongIsAlreadyDownloadedHere").to_string());
         return SrpgShopInputOutcome::ChangedSelection;
     }
     let Some(url) = item.download_url.as_ref() else {
-        overlay.local_message = Some("This item is not currently available.".to_string());
+        overlay.local_message = Some(crate::i18n::tr("SrpgShop", "MessageThisItemIsNotCurrentlyAvailable").to_string());
         return SrpgShopInputOutcome::ChangedSelection;
     };
     if !overlay.queued[overlay.shop_index].insert(item.item_id.as_str().into()) {
-        overlay.local_message = Some("This unlock is already queued.".to_string());
+        overlay.local_message = Some(crate::i18n::tr("SrpgShop", "MessageThisUnlockIsAlreadyQueued").to_string());
         return SrpgShopInputOutcome::ChangedSelection;
     }
-    overlay.local_message = Some(format!("Queued {} for download.", item.name));
+    overlay.local_message = Some(crate::i18n::tr_fmt("SrpgShop", "MessageQueuedForDownload", &[("arg0", &(item.name).to_string())]).to_string());
     SrpgShopInputOutcome::Download {
         shop_id: shop.id,
         name: item.name.clone(),
@@ -440,10 +436,10 @@ fn download_all(overlay: &mut SrpgShopOverlayStateData, shop: &SrpgShop) -> Srpg
         })
         .collect::<Vec<_>>();
     if downloads.is_empty() {
-        overlay.local_message = Some("All owned songs are downloaded or queued.".to_string());
+        overlay.local_message = Some(crate::i18n::tr("SrpgShop", "MessageAllOwnedSongsAreDownloadedOrQueued").to_string());
         return SrpgShopInputOutcome::ChangedSelection;
     }
-    overlay.local_message = Some(format!("Queued {} songs for download.", downloads.len()));
+    overlay.local_message = Some(crate::i18n::tr_fmt("SrpgShop", "MessageQueuedSongsForDownload", &[("arg0", &(downloads.len()).to_string())]).to_string());
     SrpgShopInputOutcome::DownloadAll {
         shop_id: shop.id,
         downloads,
@@ -529,7 +525,7 @@ fn push_srpg_shop_overlay_unreserved(
         diffuse(0.0, 0.0, 0.0, 0.86): z(Z + 4)
     ));
     actors.push(act!(text:
-        font(header_font): settext("SRPG SHOP"):
+        font(header_font): settext(crate::i18n::tr("SrpgShop", "Title")):
         align(0.5, 0.5): xy(cx - 143.0, cy + HEADER_CONTENT_Y): maxwidth(250.0):
         zoom(0.42): diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 5): horizalign(center)
     ));
@@ -549,7 +545,7 @@ fn push_srpg_shop_overlay_unreserved(
             snapshot
                 .message
                 .as_deref()
-                .unwrap_or("Loading SRPG10 shops..."),
+                .unwrap_or(&crate::i18n::tr("SrpgShop", "MessageLoadingSRPG10Shops")),
             [1.0, 1.0, 1.0, 1.0],
             cx,
             cy,
@@ -560,7 +556,7 @@ fn push_srpg_shop_overlay_unreserved(
             snapshot
                 .message
                 .as_deref()
-                .unwrap_or("Unable to load SRPG10 shops."),
+                .unwrap_or(&crate::i18n::tr("SrpgShop", "MessageUnableToLoadSRPG10Shops")),
             [1.0, 0.45, 0.35, 1.0],
             cx,
             cy,
@@ -630,7 +626,7 @@ fn push_catalog(
     let Some(shop) = active_shop(overlay, snapshot) else {
         push_status(
             actors,
-            "This shop is unavailable.",
+            &crate::i18n::tr("SrpgShop", "MessageThisShopIsUnavailable"),
             [1.0, 0.5, 0.4, 1.0],
             cx,
             cy,
@@ -641,7 +637,7 @@ fn push_catalog(
     if shop.items.is_empty() {
         push_status(
             actors,
-            "Nothing is currently listed here.",
+            &crate::i18n::tr("SrpgShop", "MessageNothingIsCurrentlyListedHere"),
             [1.0; 4],
             cx,
             cy,
@@ -666,7 +662,7 @@ fn push_catalog(
         let active = row_index == selected;
         let (name, detail) = if row_index == 0 {
             (
-                "DOWNLOAD ALL SONGS".to_string(),
+                crate::i18n::tr("SrpgShop", "MessageDOWNLOADALLSONGS").to_string(),
                 bulk_row_detail(overlay, shop),
             )
         } else {
@@ -732,9 +728,9 @@ fn push_bulk_detail(
         .count();
     let message = overlay.local_message.clone().unwrap_or_else(|| {
         if ready == 0 {
-            "All owned songs are downloaded or queued.".to_string()
+            crate::i18n::tr("SrpgShop", "MessageAllOwnedSongsAreDownloadedOrQueued").to_string()
         } else {
-            format!("Press START to download all {ready} ready songs.")
+            crate::i18n::tr_fmt("SrpgShop", "MessagePressSTARTToDownloadAllReadyReadySongs", &[("ready", &(ready).to_string())]).to_string()
         }
     });
     actors.push(act!(quad:
@@ -742,17 +738,17 @@ fn push_bulk_detail(
         diffuse(0.0, 0.0, 0.0, 0.72): z(Z + 4)
     ));
     actors.push(act!(text:
-        font(bold_font): settext("DOWNLOAD ALL SONGS"):
+        font(bold_font): settext(crate::i18n::tr("SrpgShop", "DownloadAll")):
         align(0.0, 0.5): xy(x + 4.0, cy - 99.0): zoom(0.34): maxwidth(260.0):
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 6): horizalign(left)
     ));
     actors.push(act!(text:
-        font("miso"): settext(format!("{ready} READY  •  {downloaded} DOWNLOADED")):
+        font("miso"): settext(crate::i18n::tr_fmt("SrpgShop", "MessageReadyREADYDownloadedDOWNLOADED", &[("ready", &(ready).to_string()), ("downloaded", &(downloaded).to_string())]).to_string()):
         align(0.0, 0.0): xy(x + 4.0, cy - 78.0): zoom(0.72): maxwidth(260.0):
         diffuse(meta.tint[0], meta.tint[1], meta.tint[2], 1.0): z(Z + 6): horizalign(left)
     ));
     actors.push(act!(text:
-        font("miso"): settext("Queue every owned song in this shop that is not already present in the selected shop folder."):
+        font("miso"): settext(crate::i18n::tr("SrpgShop", "DownloadAllHelp")):
         align(0.0, 0.0): xy(x + 4.0, cy - 35.0): zoom(0.66):
         wrapwidthpixels(395.0): maxwidth(260.0):
         diffuse(0.92, 0.92, 0.92, 1.0): z(Z + 6): horizalign(left)
@@ -831,12 +827,12 @@ fn push_status(
 
 fn push_footer(actors: &mut Vec<Actor>, phase: SrpgShopPhase, cx: f32, cy: f32) {
     let hint = match phase {
-        SrpgShopPhase::Error => "&START; retry    &SELECT; / BACK close",
+        SrpgShopPhase::Error => crate::i18n::tr("SrpgShop", "MessageSTARTRetrySELECTBACKClose"),
         SrpgShopPhase::Loading | SrpgShopPhase::Purchasing => {
-            "Please wait    &SELECT; / BACK close"
+            crate::i18n::tr("SrpgShop", "MessagePleaseWaitSELECTBACKClose")
         }
         _ => {
-            "&MENULEFT; &MENURIGHT; shop    &MENUUP; &MENUDOWN; item    &START; action    &SELECT; close"
+            crate::i18n::tr("SrpgShop", "MessageMENULEFTMENURIGHTShopMENUUPMENUDOWNItemSTARTActionSELECTClose")
         }
     };
     actors.push(act!(quad:
@@ -868,7 +864,7 @@ fn push_confirmation(
         diffuse(0.02, 0.02, 0.02, 0.98): z(Z + 21)
     ));
     actors.push(act!(text:
-        font(header_font): settext("CONFIRM PURCHASE"):
+        font(header_font): settext(crate::i18n::tr("SrpgShop", "ConfirmPurchase")):
         align(0.5, 0.5): xy(cx, cy - 55.0): zoom(0.37):
         diffuse(meta.tint[0], meta.tint[1], meta.tint[2], 1.0): z(Z + 22): horizalign(center)
     ));
@@ -879,7 +875,7 @@ fn push_confirmation(
         diffuse(1.0, 1.0, 1.0, 1.0): z(Z + 22): horizalign(center)
     ));
     actors.push(act!(text:
-        font("miso"): settext("Press &START; to buy one.  Press &SELECT; / BACK to cancel."):
+        font("miso"): settext(crate::i18n::tr("SrpgShop", "PurchaseHint")):
         align(0.5, 0.5): xy(cx, cy + 58.0): zoom(0.70): maxwidth(400.0):
         diffuse(1.0, 1.0, 1.0, 0.9): z(Z + 22): horizalign(center)
     ));
@@ -892,7 +888,7 @@ fn bulk_row_detail(overlay: &SrpgShopOverlayStateData, shop: &SrpgShop) -> Strin
         .iter()
         .filter(|item| item.owned && item.downloaded)
         .count();
-    format!("{ready} READY  •  {downloaded} DOWNLOADED")
+    crate::i18n::tr_fmt("SrpgShop", "MessageReadyREADYDownloadedDOWNLOADED", &[("ready", &(ready).to_string()), ("downloaded", &(downloaded).to_string())]).to_string()
 }
 
 fn ready_count(overlay: &SrpgShopOverlayStateData, shop: &SrpgShop) -> usize {
@@ -912,9 +908,9 @@ fn item_row_detail(item: &SrpgShopItem, currency: &str, queued: bool) -> String 
         let kind = match item.kind {
             SrpgShopItemKind::Song => match (item.difficulty, item.bpm) {
                 (Some(level), Some(bpm)) => format!("LV {level}  •  {bpm} BPM"),
-                _ => "SONG UNLOCK".to_string(),
+                _ => crate::i18n::tr("SrpgShop", "MessageSONGUNLOCK").to_string(),
             },
-            SrpgShopItemKind::Relic => "RELIC".to_string(),
+            SrpgShopItemKind::Relic => crate::i18n::tr("SrpgShop", "MessageRELIC").to_string(),
         };
         return item.cost.map_or_else(
             || kind.clone(),
@@ -922,17 +918,13 @@ fn item_row_detail(item: &SrpgShopItem, currency: &str, queued: bool) -> String 
         );
     }
     if item.downloaded {
-        return "OWNED  •  DOWNLOADED".to_string();
+        return crate::i18n::tr("SrpgShop", "MessageOWNEDDOWNLOADED").to_string();
     }
     if queued {
-        return "DOWNLOAD QUEUED".to_string();
+        return crate::i18n::tr("SrpgShop", "MessageDOWNLOADQUEUED").to_string();
     }
-    let new = if item.site_downloaded {
-        ""
-    } else {
-        "  •  NEW"
-    };
-    format!("OWNED  •  READY TO DOWNLOAD{new}")
+    let new = if item.site_downloaded { String::new() } else { crate::i18n::tr("SrpgShop", "MessageNEW").to_string() };
+    crate::i18n::tr_fmt("SrpgShop", "MessageOWNEDREADYTODOWNLOADNew", &[("new", &(new).to_string())]).to_string()
 }
 
 fn active_message(
@@ -944,20 +936,20 @@ fn active_message(
     if !item.owned {
         return item.cost.map(|cost| {
             if cost <= balance {
-                format!("Press START to buy for {} {currency}.", format_number(cost))
+                crate::i18n::tr_fmt("SrpgShop", "MessagePressSTARTToBuyForCurrency", &[("arg0", &(format_number(cost)).to_string()), ("currency", &(currency).to_string())]).to_string()
             } else {
-                format!("Insufficient {currency}.")
+                crate::i18n::tr_fmt("SrpgShop", "MessageInsufficientCurrency", &[("currency", &(currency).to_string())]).to_string()
             }
         });
     }
     if item.downloaded {
-        return Some("This owned song is already downloaded here.".to_string());
+        return Some(crate::i18n::tr("SrpgShop", "MessageThisOwnedSongIsAlreadyDownloadedHere").to_string());
     }
     if queued {
-        return Some("This song is queued for download.".to_string());
+        return Some(crate::i18n::tr("SrpgShop", "MessageThisSongIsQueuedForDownload").to_string());
     }
     if item.download_url.is_some() {
-        return Some("Press START to download this owned unlock.".to_string());
+        return Some(crate::i18n::tr("SrpgShop", "MessagePressSTARTToDownloadThisOwnedUnlock").to_string());
     }
     None
 }

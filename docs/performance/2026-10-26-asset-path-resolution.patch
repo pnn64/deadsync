@@ -1,0 +1,26 @@
+--- a/crates/deadlib-assets/src/lib.rs
++++ b/crates/deadlib-assets/src/lib.rs
+@@ -260,5 +260,6 @@
+-    while i < bytes.len() {
+-        if bytes[i] != b'(' {
+-            i += 1;
+-            continue;
+-        }
++    while let Some(offset) = if bytes.len() - i < 16 {
++        bytes[i..].iter().position(|&b| b == b'(')
++    } else {
++        memchr::memchr(b'(', &bytes[i..])
++    } {
++        i += offset;
+@@ -266,5 +267,3 @@
+-        if end <= i + 2 {
+-            i = end.max(i + 1);
+-            continue;
+-        }
+-        if let Some(dims) = parse_res_dims(&bytes[i + 1..end - 1]) {
++        if end > i + 2
++            && let Some(dims) = parse_res_dims(&bytes[i + 1..end - 1])
++        {
+@@ -273 +272 @@
+-        i = end.max(i + 1);
++        i = end;

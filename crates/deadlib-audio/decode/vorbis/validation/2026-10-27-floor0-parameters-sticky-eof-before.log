@@ -1,0 +1,24 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `release` profile [optimized] target(s) in 18.34s
+     Running unittests src\lib.rs (target\release\deps\deadlib_audio_decode_vorbis-e263eb7a592d2a37.exe)
+
+running 3 tests
+test floor::reference_tests::floor_zero_components_match_retained_reference ... ok
+floor0 Bark: 1088 maps, 312 published/reference integer differences
+test floor::reference_tests::floor_zero_bark_maps_match_retained_reference ... ok
+
+thread 'floor::reference_tests::floor_zero_components_match_reference_callbacks' (7604) panicked at crates\deadlib-audio\decode\vorbis\src\floor_reference.rs:171:9:
+assertion `left == right` failed: case 13
+  left: true
+ right: false
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test floor::reference_tests::floor_zero_components_match_reference_callbacks ... FAILED
+
+failures:
+
+failures:
+    floor::reference_tests::floor_zero_components_match_reference_callbacks
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 22 filtered out; finished in 0.16s
+
+error: test failed, to rerun pass `-p deadlib-audio-decode-vorbis --lib`

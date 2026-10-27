@@ -1,0 +1,31 @@
+--- a/crates/deadlib-assets/src/lib.rs
++++ b/crates/deadlib-assets/src/lib.rs
+@@ -288,9 +287,0 @@
+-#[inline(always)]
+-const fn is_res_tag(bytes: &[u8], idx: usize) -> bool {
+-    idx + 4 <= bytes.len()
+-        && bytes[idx] == b'('
+-        && bytes[idx + 1].eq_ignore_ascii_case(&b'r')
+-        && bytes[idx + 2].eq_ignore_ascii_case(&b'e')
+-        && bytes[idx + 3].eq_ignore_ascii_case(&b's')
+-}
+-
+@@ -304 +295,13 @@
+-        if is_res_tag(bytes, i) {
++        if !matches!(bytes[i], b'(' | b'x' | b'X') {
++            let Some(offset) = (if bytes.len() - i < 16 {
++                bytes[i..]
++                    .iter()
++                    .position(|b| matches!(b, b'(' | b'x' | b'X'))
++            } else {
++                memchr::memchr3(b'(', b'x', b'X', &bytes[i..])
++            }) else {
++                break;
++            };
++            i += offset;
++        }
++        if bytes[i] == b'(' && hint_starts_with(bytes, i, b"(res") {
+@@ -321,2 +324 @@
+-            if left < i
+-                && i + 1 < right
++            if i + 1 < right

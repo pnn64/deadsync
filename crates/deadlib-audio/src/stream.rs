@@ -410,7 +410,16 @@ fn push_silence(
         return Ok(music_start_sec);
     }
     let mut next_music_sec = music_start_sec;
-    let silence_chunk = vec![0i16; SILENCE_CHUNK_FRAMES * out_channels];
+    let owned_silence;
+    let silence_chunk: &[i16] = if out_channels <= 8 {
+        // Mono through 7.1 borrow 32 KiB of immutable zeros instead of allocating
+        // and clearing a fresh buffer at every negative-start playback.
+        static SILENCE: [i16; SILENCE_CHUNK_FRAMES * 8] = [0; SILENCE_CHUNK_FRAMES * 8];
+        &SILENCE[..SILENCE_CHUNK_FRAMES * out_channels]
+    } else {
+        owned_silence = vec![0; SILENCE_CHUNK_FRAMES * out_channels];
+        &owned_silence
+    };
     let mut frames_left = silence_frames;
     while frames_left > 0 {
         let chunk_frames = frames_left.min(SILENCE_CHUNK_FRAMES);
@@ -1041,6 +1050,31 @@ mod tests {
         assert_eq!(frames, 6 * SAMPLE_RATE as usize);
         assert!((music_sec_per_frame - 1.5 / f64::from(SAMPLE_RATE)).abs() <= f64::EPSILON);
         assert!((frames as f64).mul_add(music_sec_per_frame, -9.0).abs() <= 1e-12);
+    }
+
+    #[test]
+    fn common_lead_in_layouts_submit_without_allocator_work() {
+        for channels in [1, 2, 3, 6, 8] {
+            let generation = 7;
+            let (mut stream, _render) = music_transport(SAMPLE_RATE, channels);
+            let control = control(generation);
+            let mut backpressure =
+                MusicBackpressure::new(SAMPLE_RATE, stream.writer.capacity_blocks(), generation);
+            super::perf_tests::allocations::assert_no_churn(|| {
+                std::hint::black_box(
+                    super::push_silence(
+                        &mut stream.writer,
+                        731,
+                        channels,
+                        -0.125,
+                        1.2 / f64::from(SAMPLE_RATE),
+                        &control,
+                        &mut backpressure,
+                    )
+                    .unwrap(),
+                );
+            });
+        }
     }
 
     #[test]

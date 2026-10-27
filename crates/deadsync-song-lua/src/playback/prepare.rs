@@ -684,7 +684,7 @@ fn song_lua_runtime_overlays<S: Clone + std::fmt::Debug>(
         let mut draw_frames = compiled.draw_frames.clone();
         for frame in &mut draw_frames {
             // Match the chart-second clock used by rendered update tracks.
-            frame.second -= global_offset_seconds;
+            frame.second -= global_offset_seconds * timing_player.global_offset_rate();
         }
         overlays.push(SongLuaOverlayActor {
             kind: SongLuaOverlayKind::UpdateTracks {

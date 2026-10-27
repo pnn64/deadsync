@@ -1,0 +1,14 @@
+{
+  "current": {
+    "path": "target/deadlib-audio-reference/word-refill-pipeline-20261027/binaries/current.exe",
+    "sha256": "b1cdfaedd6f98ae5b2d2f99fc0e95d41eccd5dee74d2bbcc739ae13299caac54"
+  },
+  "baseline": {
+    "path": "target/deadlib-audio-reference/word-refill-pipeline-20261027/binaries/baseline.exe",
+    "sha256": "fc663aeb522edfaff697a030468e51d755e1b2191764de8f450fd853c2b0c8c7"
+  },
+  "libvorbis": {
+    "path": "target/deadlib-audio-reference/word-refill-pipeline-20261027/binaries/libvorbis.exe",
+    "sha256": "7e03a740e2219f11f44179bd807b6b066989a8e2c8a27d896f6cff1ed699a1ad"
+  }
+}

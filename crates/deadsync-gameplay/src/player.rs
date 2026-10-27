@@ -93,6 +93,7 @@ pub struct PlayerRuntime {
     pub autoplay_judged: bool,
     pub calories_burned: f32,
 
+    pub ghost: GameplayGhostState,
     pub earned_grade_points: i32,
     /// ScoreKeeperNormal advances this once per scored row/hold after failure,
     /// independently of combo-weighted judgments and frozen earned points.
@@ -255,6 +256,7 @@ pub fn init_player_runtime_with_caps(caps: PlayerBufferCaps) -> PlayerRuntime {
         stage_failed: false,
         autoplay_judged: false,
         calories_burned: 0.0,
+        ghost: GameplayGhostState::default(),
         earned_grade_points: 0,
         current_possible_points: 0,
         combo_milestones: Vec::with_capacity(caps.combo_milestones),

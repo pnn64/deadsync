@@ -2,8 +2,8 @@
 use super::*;
 use std::cell::Cell;
 
-pub(super) const MATH_FIRST: u32 = 32;
-pub(super) const MATH_LAST: u32 = 59;
+pub(super) const MATH_FIRST: u64 = 32;
+pub(super) const MATH_LAST: u64 = 59;
 
 // The Windows CRT used by the reference keeps rand/srand state per OS thread,
 // shared by Lua states on that thread. This stream is portable and deterministic;
@@ -98,8 +98,8 @@ impl Vm {
         .enumerate()
         {
             let key = self.intern(name);
-            self.tables[table.0 as usize]
-                .set(key, Value::Native(MATH_FIRST + i as u32))
+            self.tables[slot_index(table.0)]
+                .set(key, Value::Native(MATH_FIRST + i as u64))
                 .expect("math names are valid");
         }
         for (name, value) in [
@@ -108,7 +108,7 @@ impl Vm {
             (b"huge", Value::Number(f64::INFINITY)),
         ] {
             let key = self.intern(name);
-            self.tables[table.0 as usize]
+            self.tables[slot_index(table.0)]
                 .set(key, value)
                 .expect("math names are valid");
         }
@@ -117,11 +117,11 @@ impl Vm {
     }
     fn math_number(&self, base: usize, count: usize, index: usize) -> Result<f64, Error> {
         self.number(self.argument(base, count, index))
-            .ok_or_else(|| fail(format!("bad argument #{} (number expected)", index + 1)))
+            .ok_or_else(|| self.argument_type_error(base, count, index, "number"))
     }
     pub(super) fn math_native(
         &mut self,
-        id: u32,
+        id: u64,
         base: usize,
         count: usize,
     ) -> Result<usize, Error> {
@@ -137,7 +137,7 @@ impl Vm {
                 1 => {
                     let upper = self.integer_argument(base, count, 0, None)? as i32;
                     if upper < 1 {
-                        return Err(fail("bad argument #1 (interval is empty)"));
+                        return Err(self.argument_error(0, b"interval is empty"));
                     }
                     (r * f64::from(upper)).floor() + 1.0
                 }
@@ -145,7 +145,7 @@ impl Vm {
                     let lower = self.integer_argument(base, count, 0, None)? as i32;
                     let upper = self.integer_argument(base, count, 1, None)? as i32;
                     if lower > upper {
-                        return Err(fail("bad argument #2 (interval is empty)"));
+                        return Err(self.argument_error(1, b"interval is empty"));
                     }
                     (r * f64::from(upper.wrapping_sub(lower).wrapping_add(1))).floor()
                         + f64::from(lower)
@@ -160,8 +160,38 @@ impl Vm {
             RANDOM.with(|state| state.set(seed));
             return Ok(0);
         }
+        if id == 57 {
+            // The pinned MSVC Lua 5.1 build evaluates ldexp's exponent check
+            // before its mantissa check. This determines which error is raised
+            // when both arguments are invalid, including a missing exponent.
+            let exponent = self.integer_argument(base, count, 1, None)? as i32;
+            let x = self.math_number(base, count, 0)?;
+            self.registers[base] = Value::Number(ldexp(x, exponent));
+            return Ok(1);
+        }
+        if matches!(id, 42 | 45 | 52) {
+            // The pinned Linux/glibc GCC oracle checks the second C-call
+            // operand first; the MSVC oracle checks the first operand first.
+            #[cfg(all(target_os = "linux", target_env = "gnu"))]
+            let (x, y) = {
+                let y = self.math_number(base, count, 1)?;
+                (self.math_number(base, count, 0)?, y)
+            };
+            #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+            let (x, y) = {
+                let x = self.math_number(base, count, 0)?;
+                (x, self.math_number(base, count, 1)?)
+            };
+            let value = match id {
+                42 => x.powf(y),
+                45 => x % y,
+                52 => x.atan2(y),
+                _ => unreachable!("binary math IDs are fixed"),
+            };
+            self.registers[base] = Value::Number(value);
+            return Ok(1);
+        }
         let x = self.math_number(base, count, 0)?;
-        let y = |vm: &Self| vm.math_number(base, count, 1);
         let result = match id {
             32 => x.abs(),
             33 => x.floor(),
@@ -173,15 +203,12 @@ impl Vm {
             39 => x.exp(),
             40 => x.ln(),
             41 => x.log10(),
-            42 => x.powf(y(self)?),
-            45 => x % y(self)?,
             46 => x.asin(),
             47 => x.acos(),
             48 => x.atan(),
             49 => x.sinh(),
             50 => x.cosh(),
             51 => x.tanh(),
-            52 => x.atan2(y(self)?),
             53 => x / (std::f64::consts::PI / 180.0),
             54 => x * (std::f64::consts::PI / 180.0),
             43 | 44 => {
@@ -201,21 +228,18 @@ impl Vm {
                 } else {
                     (x - integral).copysign(x)
                 };
-                self.registers
-                    .resize(self.registers.len().max(base + 2), Value::Nil);
+                self.resize_registers(self.registers.len().max(base + 2));
                 self.registers[base] = Value::Number(integral);
                 self.registers[base + 1] = Value::Number(fraction);
                 return Ok(2);
             }
             56 => {
                 let (fraction, exponent) = frexp(x);
-                self.registers
-                    .resize(self.registers.len().max(base + 2), Value::Nil);
+                self.resize_registers(self.registers.len().max(base + 2));
                 self.registers[base] = Value::Number(fraction);
                 self.registers[base + 1] = Value::Number(f64::from(exponent));
                 return Ok(2);
             }
-            57 => ldexp(x, self.integer_argument(base, count, 1, None)? as i32),
             _ => unreachable!("math ID range is fixed"),
         };
         self.registers[base] = Value::Number(result);
@@ -225,7 +249,7 @@ impl Vm {
         let radix = self.integer_argument(base, count, 1, Some(10))? as i32;
         if radix == 10 {
             if count == 0 {
-                return Err(fail("bad argument #1 (value expected)"));
+                return Err(self.argument_error(0, b"value expected"));
             }
             return Ok(self
                 .number(self.argument(base, count, 0))
@@ -233,11 +257,11 @@ impl Vm {
         }
         let string = self.string_argument(base, count, 0)?;
         if !(2..=36).contains(&radix) {
-            return Err(fail("bad argument #2 (base out of range)"));
+            return Err(self.argument_error(1, b"base out of range"));
         }
-        let text = &self.strings.bytes[string.0 as usize];
+        let text = &self.strings.bytes[slot_index(string.0)];
         let text = &text[..text.iter().position(|&c| c == 0).unwrap_or(text.len())];
-        let whitespace = |c: &u8| matches!(c, 9..=13 | 32);
+        let whitespace = |c: &u8| crate::locale::is_space(*c);
         let first = text
             .iter()
             .position(|c| !whitespace(c))
@@ -260,7 +284,7 @@ impl Vm {
         if text.is_empty() {
             return Ok(Value::Nil);
         }
-        let maximum = if cfg!(windows) {
+        let maximum = if std::mem::size_of::<std::ffi::c_ulong>() == 4 {
             u64::from(u32::MAX)
         } else {
             u64::MAX

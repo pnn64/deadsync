@@ -1,0 +1,62 @@
+[package]
+name = "deadlib-audio-decode-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[features]
+seed = []
+
+[dependencies]
+libfuzzer-sys = "0.4"
+deadlib-audio-decode-ogg = { path = "../ogg" }
+deadlib-audio-decode-vorbis = { path = "../vorbis" }
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "ogg_container"
+path = "fuzz_targets/ogg_container.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vorbis_headers"
+path = "fuzz_targets/vorbis_headers.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vorbis_packets"
+path = "fuzz_targets/vorbis_packets.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vorbis_stream"
+path = "fuzz_targets/vorbis_stream.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vorbis_encode"
+path = "fuzz_targets/vorbis_encode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "seed"
+path = "src/bin/seed.rs"
+required-features = ["seed"]
+test = false
+doc = false
+bench = false

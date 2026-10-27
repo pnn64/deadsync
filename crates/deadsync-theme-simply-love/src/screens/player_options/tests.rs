@@ -3281,6 +3281,50 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn judgment_animation_display_row_persists_each_player_independently() {
+        use deadsync_profile::JudgmentAnimation;
+        ensure_i18n();
+        let mut view = test_init_view_for(PlayStyle::Versus, PlayerSide::P1, [true, true]);
+        view.players[P1].options.judgment_animation = JudgmentAnimation::Default;
+        view.players[P2].options.judgment_animation = JudgmentAnimation::Itg;
+        let (mut state, _) = setup_state_with(view);
+        super::super::apply_pane(&mut state, OptionsPane::Display);
+        let row_index = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::JudgmentAnimation)
+            .unwrap();
+        let row = state.pane().row_map.get(RowId::JudgmentAnimation).unwrap();
+        assert_eq!(row.selected_choice_index, [0, 2]);
+        assert_eq!(
+            row.choices
+                .iter()
+                .map(|choice| choice.as_ref())
+                .collect::<Vec<_>>(),
+            ["Default", "Still", "ITG"]
+        );
+        state.pane_mut().selected_row[P2] = row_index;
+        super::change_choice_for_player(&mut state, P2, -1, super::NavWrap::Wrap);
+        assert_eq!(
+            state.player_options[P1].judgment_animation,
+            JudgmentAnimation::Default
+        );
+        assert_eq!(
+            state.player_options[P2].judgment_animation,
+            JudgmentAnimation::Still
+        );
+        assert!(state.pending_effects.iter().any(|effect| matches!(effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::UpdatePlayerOptions {
+                    side: PlayerSide::P2, options, ..
+                }
+            )) if options.judgment_animation == JudgmentAnimation::Still
+        )));
+    }
+
+    #[test]
     fn judgment_colors_row_selects_a_profile_palette_and_persists_its_id() {
         ensure_i18n();
         let mut view = test_init_view();
@@ -5553,6 +5597,7 @@ pub(super) mod tests {
             RowId::TapExplosionSkin,
             RowId::TapExplosionOptions,
             RowId::JudgmentColors,
+            RowId::JudgmentAnimation,
             RowId::JudgmentOffsetX,
             RowId::JudgmentOffsetY,
             RowId::ComboOffsetX,
@@ -6017,7 +6062,7 @@ pub(super) mod tests {
         // CycleInit / NumericInit contract.
         let p = &mut state.player_options[P1];
         p.perspective = Perspective::Distant;
-        p.combo_font = ComboFont::Wendy;
+        p.combo_font = ComboFont::Unprofessional;
         p.background_filter = BackgroundFilter::from_i32(42);
         p.visual_delay_ms = 35;
         p.global_offset_shift_ms = -45;
@@ -6073,7 +6118,7 @@ pub(super) mod tests {
 
         let p = &mut state.player_options[P1];
         p.perspective = Perspective::Distant;
-        p.combo_font = ComboFont::Wendy;
+        p.combo_font = ComboFont::Unprofessional;
         p.background_filter = BackgroundFilter::from_i32(42);
         p.spacing_percent = 95;
         p.judgment_offset_x = -25;
@@ -6265,7 +6310,7 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn golf_extras_are_opt_in_and_keep_independent_player_choices() {
+    fn golf_extras_default_on_and_keep_independent_player_choices() {
         ensure_i18n();
         let (state, _assets) = setup_state();
         for scorebox_available in [false, true] {
@@ -6276,7 +6321,11 @@ pub(super) mod tests {
                 state.persisted_player_idx, scorebox_available,
                 true,
             );
-            let defaults = PlayerOptionsData::default();
+            let defaults = PlayerOptionsData {
+                show_golf_score: false,
+                show_golf_results: false,
+                ..PlayerOptionsData::default()
+            };
             let mut masks = [PlayerOptionMasks::default(); 2];
             panes::apply_profile_defaults(&mut rows, &defaults, P1, &mut masks[P1]);
             panes::apply_profile_defaults(&mut rows, &defaults, P2, &mut masks[P2]);
@@ -6310,7 +6359,7 @@ pub(super) mod tests {
         p.score_position = super::SCORE_POSITION_VARIANTS[1];
         p.score_display_mode = super::SCORE_DISPLAY_MODE_VARIANTS[1];
         p.display_scorebox = true;
-        p.target_score = super::TARGET_SCORE_VARIANTS[1];
+        p.target_score = deadsync_profile::TargetScoreSetting::GhostData;
         p.mini_indicator_score_type = super::MINI_INDICATOR_SCORE_TYPE_VARIANTS[1];
         p.mini_indicator_subtractive_display =
             super::MINI_INDICATOR_SUBTRACTIVE_DISPLAY_VARIANTS[1];

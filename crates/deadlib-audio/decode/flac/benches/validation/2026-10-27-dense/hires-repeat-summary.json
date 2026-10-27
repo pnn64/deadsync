@@ -1,0 +1,34 @@
+[
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 12.168077902779038,
+    "min_ns_per_unit": 10.928232597804072,
+    "max_ns_per_unit": 12.388315391913686,
+    "median_ns_per_iteration": 20394574.666666668
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 12.073686837107502,
+    "min_ns_per_unit": 10.889015573979584,
+    "max_ns_per_unit": 12.1872031750426,
+    "median_ns_per_iteration": 20236368.444444444
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "baseline-stream-md5",
+    "median_ns_per_unit": 23.42760406474185,
+    "min_ns_per_unit": 22.629443603854728,
+    "max_ns_per_unit": 23.588738192631343,
+    "median_ns_per_iteration": 39266351.2
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "stream-md5",
+    "median_ns_per_unit": 22.710212210453967,
+    "min_ns_per_unit": 21.56198409137555,
+    "max_ns_per_unit": 23.173736927769212,
+    "median_ns_per_iteration": 38063950.8
+  }
+]

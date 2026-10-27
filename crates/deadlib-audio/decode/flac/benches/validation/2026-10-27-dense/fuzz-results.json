@@ -1,0 +1,122 @@
+[
+  {
+    "target": "primitives",
+    "exit_code": 0,
+    "binary_sha256": "0f1ef15521e434f87b30b972a390981ead6a1b44241a0d957162a6392afb86f7",
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-dense-20261027\\build\\x86_64-pc-windows-msvc\\release\\primitives.exe",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-dense-20261027\\corpus\\primitives",
+      "-max_total_time=60",
+      "-max_len=131072",
+      "-timeout=20",
+      "-rss_limit_mb=2048",
+      "-seed=9639",
+      "-print_final_stats=1",
+      "-artifact_prefix=C:/GitHub/deadsync/target/deadlib-flac-reference/fuzz-perf-dense-20261027/artifacts/primitives/",
+      "-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\fuzz\\flac.dict"
+    ],
+    "stats": {
+      "number_of_executed_units": 66112,
+      "average_exec_per_sec": 1083,
+      "new_units_added": 740,
+      "slowest_unit_time_sec": 0,
+      "peak_rss_mb": 470
+    },
+    "coverage": [
+      66112,
+      520,
+      1434
+    ],
+    "elapsed_upper_bound_seconds": 62.61409659998026
+  },
+  {
+    "target": "frame",
+    "exit_code": 0,
+    "binary_sha256": "cffd41c3dce084a982f0446ab85b644bbdd5b2144de2801bb639c2c8aa0b7c6a",
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-dense-20261027\\build\\x86_64-pc-windows-msvc\\release\\frame.exe",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-dense-20261027\\corpus\\frame",
+      "-max_total_time=60",
+      "-max_len=131072",
+      "-timeout=20",
+      "-rss_limit_mb=2048",
+      "-seed=9640",
+      "-print_final_stats=1",
+      "-artifact_prefix=C:/GitHub/deadsync/target/deadlib-flac-reference/fuzz-perf-dense-20261027/artifacts/frame/",
+      "-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\fuzz\\flac.dict"
+    ],
+    "stats": {
+      "number_of_executed_units": 32822,
+      "average_exec_per_sec": 538,
+      "new_units_added": 555,
+      "slowest_unit_time_sec": 0,
+      "peak_rss_mb": 514
+    },
+    "coverage": [
+      32822,
+      2125,
+      7036
+    ],
+    "elapsed_upper_bound_seconds": 62.423060700064525
+  },
+  {
+    "target": "native",
+    "exit_code": 0,
+    "binary_sha256": "c431c0916842239ff2feeb955030ffdac03cec990904ca2cf92e39aa39094f5b",
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-dense-20261027\\build\\x86_64-pc-windows-msvc\\release\\native.exe",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-dense-20261027\\corpus\\native",
+      "-max_total_time=60",
+      "-max_len=131072",
+      "-timeout=20",
+      "-rss_limit_mb=2048",
+      "-seed=9641",
+      "-print_final_stats=1",
+      "-artifact_prefix=C:/GitHub/deadsync/target/deadlib-flac-reference/fuzz-perf-dense-20261027/artifacts/native/",
+      "-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\fuzz\\flac.dict"
+    ],
+    "stats": {
+      "number_of_executed_units": 14604,
+      "average_exec_per_sec": 239,
+      "new_units_added": 562,
+      "slowest_unit_time_sec": 0,
+      "peak_rss_mb": 530
+    },
+    "coverage": [
+      14604,
+      2556,
+      8250
+    ],
+    "elapsed_upper_bound_seconds": 62.29007919994183
+  },
+  {
+    "target": "ogg",
+    "exit_code": 0,
+    "binary_sha256": "55e000c90d8890862c512a5574c2bd06ff7805ce8600e5e4e248a936389e4af4",
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-dense-20261027\\build\\x86_64-pc-windows-msvc\\release\\ogg.exe",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-dense-20261027\\corpus\\ogg",
+      "-max_total_time=60",
+      "-max_len=131072",
+      "-timeout=20",
+      "-rss_limit_mb=2048",
+      "-seed=9642",
+      "-print_final_stats=1",
+      "-artifact_prefix=C:/GitHub/deadsync/target/deadlib-flac-reference/fuzz-perf-dense-20261027/artifacts/ogg/",
+      "-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\fuzz\\flac.dict"
+    ],
+    "stats": {
+      "number_of_executed_units": 3945,
+      "average_exec_per_sec": 64,
+      "new_units_added": 233,
+      "slowest_unit_time_sec": 0,
+      "peak_rss_mb": 449
+    },
+    "coverage": [
+      3945,
+      2974,
+      7743
+    ],
+    "elapsed_upper_bound_seconds": 62.06443490006495
+  }
+]

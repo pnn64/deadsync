@@ -1,0 +1,46 @@
+[
+    {
+        "target":  "ogg_container",
+        "exit_code":  0,
+        "executions":  17423,
+        "coverage":  792,
+        "features":  2753,
+        "peak_rss_mb":  453,
+        "average_exec_per_second":  57,
+        "binary_sha256":  "dc373bfa3395dec8c4c49fdd48a6214b32e4f19d45031fedabca280a27f2b6fe",
+        "arguments":  [
+                          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-packet-seek-20261027\\corpus\\ogg_container\"",
+                          "-max_total_time=300",
+                          "-max_len=131073",
+                          "-timeout=20",
+                          "-rss_limit_mb=2048",
+                          "-seed=1337",
+                          "-print_final_stats=1",
+                          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-packet-seek-20261027/artifacts/ogg_container/\"",
+                          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+                      ],
+        "wall_seconds":  301.4868206
+    },
+    {
+        "target":  "vorbis_stream",
+        "exit_code":  0,
+        "executions":  6353,
+        "coverage":  3328,
+        "features":  10209,
+        "peak_rss_mb":  529,
+        "average_exec_per_second":  20,
+        "binary_sha256":  "d3b8bed62c11b6ee8b608bfe67ad11655a17b6f5bb607eac1911c03646875d4c",
+        "arguments":  [
+                          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-packet-seek-20261027\\corpus\\vorbis_stream\"",
+                          "-max_total_time=300",
+                          "-max_len=131073",
+                          "-timeout=20",
+                          "-rss_limit_mb=2048",
+                          "-seed=1338",
+                          "-print_final_stats=1",
+                          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-packet-seek-20261027/artifacts/vorbis_stream/\"",
+                          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+                      ],
+        "wall_seconds":  307.2805929
+    }
+]

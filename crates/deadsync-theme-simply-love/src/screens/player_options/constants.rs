@@ -167,7 +167,7 @@ pub(super) const PERSPECTIVE_VARIANTS: [Perspective; 5] = [
     Perspective::Space,
 ];
 
-pub(super) const COMBO_FONT_VARIANTS: [ComboFont; 9] = [
+pub(super) const COMBO_FONT_VARIANTS: [ComboFont; 10] = [
     ComboFont::Wendy,
     ComboFont::ArialRounded,
     ComboFont::Asap,
@@ -176,6 +176,7 @@ pub(super) const COMBO_FONT_VARIANTS: [ComboFont; 9] = [
     ComboFont::Work,
     ComboFont::WendyCursed,
     ComboFont::Mega,
+    ComboFont::Unprofessional,
     ComboFont::None,
 ];
 
@@ -203,7 +204,7 @@ pub(super) const SCORE_POSITION_VARIANTS: [ScorePosition; 2] =
 pub(super) const SCORE_DISPLAY_MODE_VARIANTS: [ScoreDisplayMode; 2] =
     [ScoreDisplayMode::Normal, ScoreDisplayMode::Predictive];
 
-pub(super) const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 19] = [
+pub(super) const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 20] = [
     TargetScoreSetting::CMinus,
     TargetScoreSetting::C,
     TargetScoreSetting::CPlus,
@@ -223,6 +224,7 @@ pub(super) const TARGET_SCORE_VARIANTS: [TargetScoreSetting; 19] = [
     TargetScoreSetting::SpecifiedValue,
     TargetScoreSetting::MachineBest,
     TargetScoreSetting::PersonalBest,
+    TargetScoreSetting::GhostData,
 ];
 
 pub(super) const LIFE_METER_TYPE_VARIANTS: [LifeMeterType; 3] = [

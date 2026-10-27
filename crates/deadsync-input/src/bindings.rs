@@ -1,6 +1,6 @@
 use std::fmt::Write as _;
 
-use deadlib_platform::input::KeyCode;
+use deadlib_platform::input::{KeyCode, PadDir};
 
 use crate::{
     ALL_VIRTUAL_ACTIONS, InputBinding, Keymap, VirtualAction, gamepad_code_binding_to_token,
@@ -70,7 +70,11 @@ where
                     bindings.push(binding);
                 }
             }
-            km.bind(action, &bindings);
+            if bindings.len() == bindings.capacity() {
+                km.bind_owned(action, bindings);
+            } else {
+                km.bind(action, &bindings);
+            }
             seen |= action.bit();
         }
     }
@@ -89,7 +93,17 @@ where
     km
 }
 
-pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [
+// Keep the individual defaults and their serialized block in one declaration.
+macro_rules! default_keymap_ini {
+    ($(($key:literal, $value:literal),)*) => {
+        pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [$(($key, $value),)*];
+        const DEFAULT_KEYMAP_INI_SECTION: &str = concat!(
+            "[Keymaps]\n", $($key, "=", $value, "\n",)* "\n"
+        );
+    };
+}
+
+default_keymap_ini! {
     ("P1_Back", "KeyCode::Escape"),
     ("P1_Down", "KeyCode::ArrowDown,KeyCode::KeyQ"),
     ("P1_Left", "KeyCode::ArrowLeft,KeyCode::KeyZ"),
@@ -122,7 +136,7 @@ pub const DEFAULT_KEYMAP_INI_LINES: [(&str, &str); 32] = [
     ("P2_Center", "KeyCode::Numpad5"),
     ("P1_Coin", "KeyCode::F1"),
     ("P2_Coin", ""),
-];
+}
 
 #[must_use]
 pub fn keymap_ini_lines(keymap: &Keymap) -> Vec<(&'static str, String)> {
@@ -143,9 +157,9 @@ fn write_binding_list(content: &mut String, bindings: &[InputBinding]) {
         }
         match binding {
             InputBinding::Key(code) => write!(content, "KeyCode::{code:?}").unwrap(),
-            InputBinding::PadDir(dir) => write!(content, "PadDir::{dir:?}").unwrap(),
+            InputBinding::PadDir(dir) => content.push_str(pad_dir_token(dir)),
             InputBinding::PadDirOn { device, dir } => {
-                write!(content, "Pad{device}::Dir::{dir:?}").unwrap()
+                append_pad_device_dir_token(content, device, dir);
             }
             InputBinding::GamepadCode(binding) => {
                 crate::write_gamepad_code_binding_token(content, binding)
@@ -155,11 +169,7 @@ fn write_binding_list(content: &mut String, bindings: &[InputBinding]) {
 }
 
 pub fn write_default_keymap_ini_section(content: &mut String) {
-    content.push_str("[Keymaps]\n");
-    for (key, value) in DEFAULT_KEYMAP_INI_LINES {
-        writeln!(content, "{key}={value}").expect("writing into String cannot fail");
-    }
-    content.push('\n');
+    content.push_str(DEFAULT_KEYMAP_INI_SECTION);
 }
 
 pub fn write_keymap_ini_section(content: &mut String, keymap: &Keymap) {
@@ -187,14 +197,50 @@ pub fn default_binding_for_action(action: VirtualAction) -> Option<InputBinding>
     default_key_for_action(action).map(InputBinding::Key)
 }
 
+const fn pad_dir_token(dir: PadDir) -> &'static str {
+    match dir {
+        PadDir::Up => "PadDir::Up",
+        PadDir::Down => "PadDir::Down",
+        PadDir::Left => "PadDir::Left",
+        PadDir::Right => "PadDir::Right",
+    }
+}
+
+fn append_pad_device_dir_token(out: &mut String, device: usize, dir: PadDir) {
+    const MAX_DIGITS: usize = usize::MAX.ilog10() as usize + 1;
+    let suffix = match dir {
+        PadDir::Up => "::Dir::Up",
+        PadDir::Down => "::Dir::Down",
+        PadDir::Left => "::Dir::Left",
+        PadDir::Right => "::Dir::Right",
+    };
+    // Room for "Pad", every decimal digit, and the longest suffix, "::Dir::Right".
+    let mut text = [0; 3 + MAX_DIGITS + 12];
+    let mut first = 3 + MAX_DIGITS;
+    let mut value = device;
+    while value >= 10 {
+        first -= 1;
+        text[first] = b'0' + (value % 10) as u8;
+        value /= 10;
+    }
+    first -= 1;
+    text[first] = b'0' + value as u8;
+    text[first - 3..first].copy_from_slice(b"Pad");
+    let end = 3 + MAX_DIGITS + suffix.len();
+    text[3 + MAX_DIGITS..end].copy_from_slice(suffix.as_bytes());
+    out.push_str(std::str::from_utf8(&text[first - 3..end]).expect("pad token bytes are ASCII"));
+}
+
 #[inline(always)]
 #[must_use]
 pub fn binding_to_token(binding: InputBinding) -> String {
     match binding {
         InputBinding::Key(code) => format!("KeyCode::{code:?}"),
-        InputBinding::PadDir(dir) => format!("PadDir::{dir:?}"),
+        InputBinding::PadDir(dir) => pad_dir_token(dir).to_owned(),
         InputBinding::PadDirOn { device, dir } => {
-            format!("Pad{device}::Dir::{dir:?}")
+            let mut out = String::new();
+            append_pad_device_dir_token(&mut out, device, dir);
+            out
         }
         InputBinding::GamepadCode(binding) => gamepad_code_binding_to_token(binding),
     }

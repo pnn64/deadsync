@@ -1,0 +1,76 @@
+{
+  "verified_saved_binaries": [
+    {
+      "group": "before",
+      "target": "inflate",
+      "binary": "target\\png-huffman-call-baseline\\inflate_bench.exe",
+      "sha256": "be9ab1be3c841e93d4bf8e5032c0d4e52569d9e64b3b23ba21584afcd1421bc9"
+    },
+    {
+      "group": "before",
+      "target": "corpus",
+      "binary": "target\\png-huffman-call-baseline\\corpus_bench.exe",
+      "sha256": "75ef0621e8fe28a7c094a034f5638850a0ba794ecfd1e87c238e004fba179d3e"
+    },
+    {
+      "group": "before",
+      "target": "pipeline",
+      "binary": "target\\png-huffman-call-baseline\\pipeline.exe",
+      "sha256": "dbb12bd50ae701a7e550d5b85ee49926f14c686705c3ab58a7fd74fe25744c1f"
+    },
+    {
+      "group": "split-trial",
+      "target": "inflate",
+      "binary": "target\\png-huffman-call-selected\\inflate_bench.exe",
+      "sha256": "e429dc200080d5e3583dbedb0e637e757240b8d861a8e7210198264003fa6e53"
+    },
+    {
+      "group": "split-trial",
+      "target": "corpus",
+      "binary": "target\\png-huffman-call-selected\\corpus_bench.exe",
+      "sha256": "c139a42ef08a6a5ae37bc815dc7874703fed9d660f07f3b844193d706c3fa5c0"
+    },
+    {
+      "group": "split-trial",
+      "target": "pipeline",
+      "binary": "target\\png-huffman-call-selected\\pipeline.exe",
+      "sha256": "ad9894cc5e5769cac01de0ed209402dba29001d72efb0b45604aa58ad43fbad4"
+    },
+    {
+      "group": "narrow-trial",
+      "target": "inflate",
+      "binary": "target\\png-huffman-narrow-trial\\inflate_bench.exe",
+      "sha256": "460e2a5aeb1b7c6c26622e222abb1fb45000e6179f0177d72e4041c55839a5a5"
+    },
+    {
+      "group": "narrow-trial",
+      "target": "corpus",
+      "binary": "target\\png-huffman-narrow-trial\\corpus_bench.exe",
+      "sha256": "7fba3914b34931c9eeb1fe835f4a990cd875c7619dd260d9c532f860ceda3160"
+    },
+    {
+      "group": "narrow-trial",
+      "target": "pipeline",
+      "binary": "target\\png-huffman-narrow-trial\\pipeline.exe",
+      "sha256": "36c565ba237b4da97d3ee760de35dc551a463f196033a0293307095113188ffb"
+    },
+    {
+      "group": "combined-trial",
+      "target": "inflate",
+      "binary": "target\\png-huffman-combined-trial\\inflate_bench.exe",
+      "sha256": "1c1711793365dc501358a5c4a58dc0930de596c35dd032e0a0615f6e6f36488c"
+    },
+    {
+      "group": "combined-trial",
+      "target": "corpus",
+      "binary": "target\\png-huffman-combined-trial\\corpus_bench.exe",
+      "sha256": "4e00f721fd5d7ca29f5326b414747ce3ec01a1caf1a1f4d629189a6eb3edbbe4"
+    },
+    {
+      "group": "combined-trial",
+      "target": "pipeline",
+      "binary": "target\\png-huffman-combined-trial\\pipeline.exe",
+      "sha256": "a6fd6b73f1f76f29acb0b84c1b46bd986c19fdf1d07fccbb4bf1674545591cb9"
+    }
+  ]
+}

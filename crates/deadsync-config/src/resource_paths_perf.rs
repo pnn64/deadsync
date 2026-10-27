@@ -5,6 +5,9 @@ mod original;
 #[path = "../../../tests/perf/resource_support.rs"]
 mod support;
 
+#[path = "text_codecs.rs"]
+mod text_codecs;
+
 fn fixture(root: &Path, count: usize) -> AssetPaths {
     let search_roots: Vec<_> = (0..count)
         .map(|i| {

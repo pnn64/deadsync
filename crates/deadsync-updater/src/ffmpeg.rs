@@ -598,13 +598,17 @@ fn extract_tools_from_zip(
         if !entry.is_file() {
             continue;
         }
-        let Some(tool) = match_tool(entry.name()) else {
+        let name = entry
+            .name()
+            .map_err(|err| io_err_op("decode zip entry name", err))?;
+        let Some(tool) = match_tool(&name) else {
             continue;
         };
+        let name = name.into_owned();
         let mut bytes = Vec::with_capacity(entry.size() as usize);
         entry
             .read_to_end(&mut bytes)
-            .map_err(|err| io_err_op(&format!("extract '{}'", entry.name()), err))?;
+            .map_err(|err| io_err_op(&format!("extract '{name}'"), err))?;
         let dest = install_dir.join(installed_tool_name(tool));
         write_executable(&dest, &bytes)?;
         if !installed.contains(&tool) {
@@ -820,7 +824,7 @@ mod tests {
         {
             let file = fs::File::create(&archive_path).unwrap();
             let mut zip = zip::ZipWriter::new(file);
-            let opts: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+            let opts = zip::write::SimpleFileOptions::default();
             zip.start_file("build/bin/ffmpeg.exe", opts).unwrap();
             zip.write_all(b"fake-ffmpeg").unwrap();
             zip.start_file("build/bin/ffprobe.exe", opts).unwrap();
@@ -854,7 +858,7 @@ mod tests {
         {
             let file = fs::File::create(&archive_path).unwrap();
             let mut zip = zip::ZipWriter::new(file);
-            let opts: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+            let opts = zip::write::SimpleFileOptions::default();
             zip.start_file("ffmpeg", opts).unwrap();
             zip.write_all(b"only-ffmpeg").unwrap();
             zip.finish().unwrap();

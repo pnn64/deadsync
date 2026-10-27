@@ -1,0 +1,443 @@
+{
+    "target":  "decode",
+    "stage":  "pipeline",
+    "iterations":  12,
+    "runs":  3,
+    "warmups_per_operation":  3,
+    "rustc":  "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "cargo":  "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "commit":  "788659fb452589026ecd393be0822aa60fd87daa",
+    "source_sha256":  [
+                          {
+                              "path":  "src/apng.rs",
+                              "sha256":  "A7776F11D43D8DD4A9802E4D354689978D819CDF56308369020D07A8EB6DA412"
+                          },
+                          {
+                              "path":  "src/checksum.rs",
+                              "sha256":  "35B18A4A03C88605B044ADF657E8631C85074D07CA0193B566DF59AE94E47A14"
+                          },
+                          {
+                              "path":  "src/codec.rs",
+                              "sha256":  "5FAD4314C55583E8A743215081FDB98809F73AA48D7D0FCDA233D564130B2E0E"
+                          },
+                          {
+                              "path":  "src/composite.rs",
+                              "sha256":  "C8E1725049CE5AF49FA3D4BAC24926BD758920DD548C27B0CAC18D30BD5EDD79"
+                          },
+                          {
+                              "path":  "src/lib.rs",
+                              "sha256":  "DFA95C53F3697B5F0975B7C9A471B79DA254CB2BAA2AF6CD4118EBD13E4A6AF9"
+                          },
+                          {
+                              "path":  "src/metadata.rs",
+                              "sha256":  "B664D12E18EFB201DD9F033E132AD99C2A62C7A92CB6CE4543AD0E30624BEA0B"
+                          },
+                          {
+                              "path":  "src/metadata/language.rs",
+                              "sha256":  "3B97FCF0DA4BB275883B1D2C31653BEF733939F0C9A867A177207AAA2C38F7CB"
+                          },
+                          {
+                              "path":  "src/metadata/language/registry.rs",
+                              "sha256":  "9AC990B5A00EF5EACA278B8012B98434EBE31DA96EA7313CA2DC1E463D1B88F4"
+                          },
+                          {
+                              "path":  "src/metadata/profile.rs",
+                              "sha256":  "9A0FAE073E45227763EDEFCE53AF4AE07AE79FF7D0BCE38CA66C8D6075ADFF1B"
+                          },
+                          {
+                              "path":  "src/reference.rs",
+                              "sha256":  "A697D0E85784053BC856CF26D3307D9F1D3D74DEC81F7C0859CF9D00654C94E5"
+                          },
+                          {
+                              "path":  "src/scanline.rs",
+                              "sha256":  "A8EB599EF3AB866B01A0129EB1F8BB6462CA2845B0ED1BD1C3DEE26F4614207E"
+                          },
+                          {
+                              "path":  "src/stream/decode.rs",
+                              "sha256":  "2108E0114B57620CE3FFF41174377548CC49214D783F637BEE9E72ABDA6B4C30"
+                          },
+                          {
+                              "path":  "src/stream/encode_rows.rs",
+                              "sha256":  "EAB412202BD525F1A969500B13894FA0008600DA9B34C1F42A78421D121CF447"
+                          },
+                          {
+                              "path":  "src/stream/mod.rs",
+                              "sha256":  "8C7B0A66F345402BBD804D345D1C9815161E84A632A6E82F1530679A669F017B"
+                          },
+                          {
+                              "path":  "src/stream/read.rs",
+                              "sha256":  "4B0E6E9A1C1863757D28521254F3E4613A6929280972922B6A0FD9DED216E46D"
+                          },
+                          {
+                              "path":  "src/stream/rows.rs",
+                              "sha256":  "D648E905E12ACD1319F459E15FA605DBE59E51404B4F0C93B18E67293F270805"
+                          },
+                          {
+                              "path":  "src/stream/write.rs",
+                              "sha256":  "BE5AA900A1BBDC206D6EA32444E322CF2B89ECE631A03B5A54E05062C891A463"
+                          },
+                          {
+                              "path":  "src/zlib.rs",
+                              "sha256":  "57984DB9D36F37210DB69AC28689E18F9BA9AC5F743D90E2A4A5AFA7DDD3F570"
+                          },
+                          {
+                              "path":  "src/zlib/deflate.rs",
+                              "sha256":  "9BD571140A43B90F75B8031F342B5E51FEB1FF61DEA8E4C417A079280C7DA0E4"
+                          },
+                          {
+                              "path":  "src/zlib/inflate.rs",
+                              "sha256":  "9082DE5B5ED2A318C9C6821FAC0AA3A8D81F67A1F8B9A896B02526F4E9B65D97"
+                          },
+                          {
+                              "path":  "src/zlib/matcher.rs",
+                              "sha256":  "1582C0A4FA53C020D02B697DDEB3388C3253C4B30A1352AEDFF905977F46AE19"
+                          }
+                      ],
+    "benchmark_source":  "examples/decode_bench.rs",
+    "benchmark_source_sha256":  "C30BAAE289A56086D5BB51B6DA5CA04D303977A229C75B6118B712B1BA8EBC06",
+    "corpus_sha256":  [
+                          {
+                              "file":  "color-0-depth-01-adam7-0-noise-0.png",
+                              "bytes":  138,
+                              "sha256":  "2F5B0848B110F31297952740E486E71F55BF845E79A984F76566B24104E60E08"
+                          },
+                          {
+                              "file":  "color-0-depth-01-adam7-0-noise-1.png",
+                              "bytes":  4439,
+                              "sha256":  "D083E61E6170F960B0F38F50CDF4A317A39AF9705E83E343DFD7780DB4F8A04F"
+                          },
+                          {
+                              "file":  "color-0-depth-01-adam7-1-noise-0.png",
+                              "bytes":  178,
+                              "sha256":  "EC5A5B477674F8CB103174164D87C4D88CC74F6EF00AEA73B2DE4B5843A6EF10"
+                          },
+                          {
+                              "file":  "color-0-depth-01-adam7-1-noise-1.png",
+                              "bytes":  4527,
+                              "sha256":  "4D2B0D2607C89517EC6B88B60029027A1B7D6593D13031CB1FBA33C2091B0E94"
+                          },
+                          {
+                              "file":  "color-0-depth-02-adam7-0-noise-0.png",
+                              "bytes":  192,
+                              "sha256":  "F03DD1D2174E9C54A3B32D4DD0B3655DB6CE2B9B3BEAE123CAEC06E46CC81393"
+                          },
+                          {
+                              "file":  "color-0-depth-02-adam7-0-noise-1.png",
+                              "bytes":  8582,
+                              "sha256":  "6E986ECB2D37B2281D0D5DA30AA3EBE1B1B6D4271BCAE06E1B5DFAA86B6B466E"
+                          },
+                          {
+                              "file":  "color-0-depth-02-adam7-1-noise-0.png",
+                              "bytes":  289,
+                              "sha256":  "88196F855FED4BD9ECEA0588207970D045D878673B0BB5F58873C68A750359FA"
+                          },
+                          {
+                              "file":  "color-0-depth-02-adam7-1-noise-1.png",
+                              "bytes":  8675,
+                              "sha256":  "B6F339D8FFA87098CAB0C909B8B510D2E6147C71D0B424A9FA88350738C36254"
+                          },
+                          {
+                              "file":  "color-0-depth-04-adam7-0-noise-0.png",
+                              "bytes":  469,
+                              "sha256":  "16A88C5F4B16CF04C49082CC7DEAE80EA7C808E2FD943703B69A004B87EC1B21"
+                          },
+                          {
+                              "file":  "color-0-depth-04-adam7-0-noise-1.png",
+                              "bytes":  16855,
+                              "sha256":  "0238E98181A16C0FBA4FE485D8317A8A37DEC5EFAF3ADA2B49155E87EA9CF7AA"
+                          },
+                          {
+                              "file":  "color-0-depth-04-adam7-1-noise-0.png",
+                              "bytes":  871,
+                              "sha256":  "1CE0933C59C4E45E8D02247EDEC3DBD5AE20520720751D2B70782A99C99ACC0A"
+                          },
+                          {
+                              "file":  "color-0-depth-04-adam7-1-noise-1.png",
+                              "bytes":  16970,
+                              "sha256":  "3B7007509DF1240537D02DEDC5B7452E6C62DE95D56888DE61DFFDE242329E44"
+                          },
+                          {
+                              "file":  "color-0-depth-08-adam7-0-noise-0.png",
+                              "bytes":  2116,
+                              "sha256":  "BC0BAF5846D892A1862BD41963CC183D04E755DFB435E750806DAAB141051D72"
+                          },
+                          {
+                              "file":  "color-0-depth-08-adam7-0-noise-1.png",
+                              "bytes":  33384,
+                              "sha256":  "399D47C6F6D9F488D2378D4340D8C0E177F165C1BE1313FB67AAF16EE591EDAE"
+                          },
+                          {
+                              "file":  "color-0-depth-08-adam7-1-noise-0.png",
+                              "bytes":  2298,
+                              "sha256":  "0CE6CA285CEB41086750BA85E32761E7544EC3CC83B0B278866E55BCDECE9325"
+                          },
+                          {
+                              "file":  "color-0-depth-08-adam7-1-noise-1.png",
+                              "bytes":  33499,
+                              "sha256":  "7D977F92620C17D015FC52FDC31B85E9561C9F33A2E25358384AACE2B48DD1D0"
+                          },
+                          {
+                              "file":  "color-0-depth-16-adam7-0-noise-0.png",
+                              "bytes":  2370,
+                              "sha256":  "5825DC7726D85E7B44E69B63F5F7A077D1DB34E67ABE3284E274061C0A9B1032"
+                          },
+                          {
+                              "file":  "color-0-depth-16-adam7-0-noise-1.png",
+                              "bytes":  66571,
+                              "sha256":  "5A34B039824E1C738F35A26A530A47D0948D68B1B35D8F891E2BD604752BCE82"
+                          },
+                          {
+                              "file":  "color-0-depth-16-adam7-1-noise-0.png",
+                              "bytes":  57892,
+                              "sha256":  "34A74D01354CCFBD9BAE18646B5AE907AF8EE35FC88576BEE39A484BFAF9DCF1"
+                          },
+                          {
+                              "file":  "color-0-depth-16-adam7-1-noise-1.png",
+                              "bytes":  66686,
+                              "sha256":  "50EC2098C028DD3058701D9B9D9D48FB0BBBD3A012ACC0B58C57B0A24D600D63"
+                          },
+                          {
+                              "file":  "color-2-depth-08-adam7-0-noise-0.png",
+                              "bytes":  3016,
+                              "sha256":  "4E5EBAF49EA470B39C965079D56173F571C8D82E1C8D44C469CCEE6EC3454374"
+                          },
+                          {
+                              "file":  "color-2-depth-08-adam7-0-noise-1.png",
+                              "bytes":  99758,
+                              "sha256":  "C8517CA323F819E49A31065849947EB334B24E5132F1BC3251D7BBE571DDBE34"
+                          },
+                          {
+                              "file":  "color-2-depth-08-adam7-1-noise-0.png",
+                              "bytes":  2063,
+                              "sha256":  "505D6B7BBAF5757466E23DA96DAF0A470C78FF22ACE205E001DC95C1D26A50FF"
+                          },
+                          {
+                              "file":  "color-2-depth-08-adam7-1-noise-1.png",
+                              "bytes":  99873,
+                              "sha256":  "7F0EA9781C8263FD197003F254143E980764CC7F48185F0DEBD3437DFB8B4A4A"
+                          },
+                          {
+                              "file":  "color-2-depth-16-adam7-0-noise-0.png",
+                              "bytes":  4765,
+                              "sha256":  "62D25EDB4348C65969E463307B1CFB28227DDF4CA60B95920CE3FBD1448DC56A"
+                          },
+                          {
+                              "file":  "color-2-depth-16-adam7-0-noise-1.png",
+                              "bytes":  199319,
+                              "sha256":  "EC29D2D204007A8566EFA68AD7A3A6BC39D2EA836C476E946A44E2398F226171"
+                          },
+                          {
+                              "file":  "color-2-depth-16-adam7-1-noise-0.png",
+                              "bytes":  8237,
+                              "sha256":  "4DC91D8E166CAA029BE6FFE75BF2BB79E56BDE64F65A87DE3FBE7F2A95BAFCB5"
+                          },
+                          {
+                              "file":  "color-2-depth-16-adam7-1-noise-1.png",
+                              "bytes":  199434,
+                              "sha256":  "66BF5CD0675C6CAB967A7D9BEA19B1511977EB6321AE2683B8CFC61AA37618E2"
+                          },
+                          {
+                              "file":  "color-3-depth-01-adam7-0-noise-0.png",
+                              "bytes":  172,
+                              "sha256":  "D1294AC18BCAD75B79898AF348A748295FD372E4CEED076B938F66141032B0CF"
+                          },
+                          {
+                              "file":  "color-3-depth-01-adam7-0-noise-1.png",
+                              "bytes":  4468,
+                              "sha256":  "1944B820E8B56C6CC23C7D9EB958B15131F31BC4FE96E69F0475FC8FE0F6ADD4"
+                          },
+                          {
+                              "file":  "color-3-depth-01-adam7-1-noise-0.png",
+                              "bytes":  269,
+                              "sha256":  "BDA31D1F9CE738368A609197504376EECEDF3B6E5331058A20EF9F6DC333324F"
+                          },
+                          {
+                              "file":  "color-3-depth-01-adam7-1-noise-1.png",
+                              "bytes":  4539,
+                              "sha256":  "00D54CFF8D1842767256FFDF94973BC34315679AE5BFAA585A5AB988A2776803"
+                          },
+                          {
+                              "file":  "color-3-depth-02-adam7-0-noise-0.png",
+                              "bytes":  261,
+                              "sha256":  "4DB2759B2055D871290067599E00724F96DD03EEFF99F59E60FF1540DF340F15"
+                          },
+                          {
+                              "file":  "color-3-depth-02-adam7-0-noise-1.png",
+                              "bytes":  8606,
+                              "sha256":  "BF9AD07DEF1B735C80886744031A84F6651A06D8FDF114B9F13121988C3E7327"
+                          },
+                          {
+                              "file":  "color-3-depth-02-adam7-1-noise-0.png",
+                              "bytes":  328,
+                              "sha256":  "D1F7E8FEC4BFC5A4FE8DB47BDF82DB1701882A6A2ACBDF9BED9126C023CBE8CF"
+                          },
+                          {
+                              "file":  "color-3-depth-02-adam7-1-noise-1.png",
+                              "bytes":  8699,
+                              "sha256":  "BE9E43084CDCFED68441B61B601604D2AB61E7A118B4D74B8B2A1918F0567BC4"
+                          },
+                          {
+                              "file":  "color-3-depth-04-adam7-0-noise-0.png",
+                              "bytes":  488,
+                              "sha256":  "8482FEBC033DB3F6F74C7D3EC4E915875C06487F2C88ECAE64E0CF82574DAF5F"
+                          },
+                          {
+                              "file":  "color-3-depth-04-adam7-0-noise-1.png",
+                              "bytes":  16915,
+                              "sha256":  "07BBB3CED3F5E56DAA358E8B153C006B2F4A57D431D510FED35A38ADD24B2CE4"
+                          },
+                          {
+                              "file":  "color-3-depth-04-adam7-1-noise-0.png",
+                              "bytes":  708,
+                              "sha256":  "2DD257239A1FB06286511382664B79ADC15034F538155DC3D0DDE3D245465363"
+                          },
+                          {
+                              "file":  "color-3-depth-04-adam7-1-noise-1.png",
+                              "bytes":  17025,
+                              "sha256":  "9843C41CC820DC64BB8C739A1FA039A7B1095B5AF47ADD2431555532492D5677"
+                          },
+                          {
+                              "file":  "color-3-depth-08-adam7-0-noise-0.png",
+                              "bytes":  2731,
+                              "sha256":  "41660C948443F0D6A4DAB12C1DAF03071518FE7CC47CF467D7AA3CDB0668B4CC"
+                          },
+                          {
+                              "file":  "color-3-depth-08-adam7-0-noise-1.png",
+                              "bytes":  34164,
+                              "sha256":  "3A77896CA4019B1E8EBBA56A6D50365E93B2A788BC4564BA4159C791CF8FC08C"
+                          },
+                          {
+                              "file":  "color-3-depth-08-adam7-1-noise-0.png",
+                              "bytes":  1777,
+                              "sha256":  "9F05D0729FB548E0A671A3DE391E9E9964C16950C667FB309AE26FBD4D2CDBBA"
+                          },
+                          {
+                              "file":  "color-3-depth-08-adam7-1-noise-1.png",
+                              "bytes":  34279,
+                              "sha256":  "6836F6254EB5BECBE48BE8877C5C9087FF194D522E7FCA849C6A8B53B1B25431"
+                          },
+                          {
+                              "file":  "color-4-depth-08-adam7-0-noise-0.png",
+                              "bytes":  1030,
+                              "sha256":  "7D3946DD6859F5C046C009B87A24D6155D6E570CAC7D4634BFACDE7CA14CE881"
+                          },
+                          {
+                              "file":  "color-4-depth-08-adam7-0-noise-1.png",
+                              "bytes":  66571,
+                              "sha256":  "31795D02B1A11AE6DBE5EE0DDF9E937A8FF7A3A9AD6A464F0E725B5A4043C876"
+                          },
+                          {
+                              "file":  "color-4-depth-08-adam7-1-noise-0.png",
+                              "bytes":  1684,
+                              "sha256":  "6B474F7B199E0824EE5086CBF9AF8D85E4DA46E42C615FE6497DEED403E76E2C"
+                          },
+                          {
+                              "file":  "color-4-depth-08-adam7-1-noise-1.png",
+                              "bytes":  66686,
+                              "sha256":  "47CCFA6D488157F03177A1B1D63BFA9C9E4CADB64B7DE2F29F09E7FE4BB15856"
+                          },
+                          {
+                              "file":  "color-4-depth-16-adam7-0-noise-0.png",
+                              "bytes":  6173,
+                              "sha256":  "1720899E558A6538DDCA3E41A0935305BDD60317FB1DD8298F364257605A69B0"
+                          },
+                          {
+                              "file":  "color-4-depth-16-adam7-0-noise-1.png",
+                              "bytes":  132945,
+                              "sha256":  "AAFA3EDAC4996AD9ECD2026B41D7F5895F1CD79576B1AAA3C29D14332236C3C3"
+                          },
+                          {
+                              "file":  "color-4-depth-16-adam7-1-noise-0.png",
+                              "bytes":  8616,
+                              "sha256":  "D3A64A6F6286076A093781507EB135D3C80813A899C433C3E9B7D65DEBFBFF0B"
+                          },
+                          {
+                              "file":  "color-4-depth-16-adam7-1-noise-1.png",
+                              "bytes":  133060,
+                              "sha256":  "FBA42E0E51BBFF41467C6C743FDF31021E310D0C744C7C5F9F25C840DE72DB43"
+                          },
+                          {
+                              "file":  "color-6-depth-08-adam7-0-noise-0.png",
+                              "bytes":  4402,
+                              "sha256":  "403465371C992D8FCFC4AFC676796FDB153DBA5866860FC55BCCE1C905D9C11C"
+                          },
+                          {
+                              "file":  "color-6-depth-08-adam7-0-noise-1.png",
+                              "bytes":  132945,
+                              "sha256":  "FCEA43036F6F03AB741010C9CB42CA36EB22538D07424D4EEA12459583E56C48"
+                          },
+                          {
+                              "file":  "color-6-depth-08-adam7-1-noise-0.png",
+                              "bytes":  3909,
+                              "sha256":  "61E57AD2CC1693A0A96C74E69207BC6CAC6F64D94295B258F98DE1047ADCE87A"
+                          },
+                          {
+                              "file":  "color-6-depth-08-adam7-1-noise-1.png",
+                              "bytes":  133060,
+                              "sha256":  "D90D5EAC342DDD47831AD02F00649A13196853C36D4A4F6F52881509204E2B0D"
+                          },
+                          {
+                              "file":  "color-6-depth-16-adam7-0-noise-0.png",
+                              "bytes":  5109,
+                              "sha256":  "1290F8D05F0CBAF13B5FCFADEEBA4814E382C8B89802C30B37A8880236E13719"
+                          },
+                          {
+                              "file":  "color-6-depth-16-adam7-0-noise-1.png",
+                              "bytes":  265693,
+                              "sha256":  "B465A6A80079948987F114936895AD4B900E7D045E6A9951AEE848E1F4DF9F7B"
+                          },
+                          {
+                              "file":  "color-6-depth-16-adam7-1-noise-0.png",
+                              "bytes":  250192,
+                              "sha256":  "07B812C2406D1D2546251BFDA5C487DE03D2E483EC8CD29F94EA7253D07DD36E"
+                          },
+                          {
+                              "file":  "color-6-depth-16-adam7-1-noise-1.png",
+                              "bytes":  265808,
+                              "sha256":  "49EE5B8F980546E2C24E882A0D05EC1D3456C01E1BF0BE194F0957973022F6F6"
+                          }
+                      ],
+    "executable":  "C:\\GitHub\\deadsync\\target\\png-stream-copy-trial\\decode_bench.exe",
+    "executable_sha256":  "F1EA88E03F07E49F96A0AD961D59BD6550ECE43B01A849FC6E20D0E63C562C2E",
+    "processor":  {
+                      "Name":  "Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz",
+                      "NumberOfCores":  22,
+                      "NumberOfLogicalProcessors":  44
+                  },
+    "eligible_affinity":  17592186044415,
+    "cpu":  0,
+    "affinity":  1,
+    "measurements":  [
+                         {
+                             "run":  1,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T19:18:43.8584138Z",
+                             "end_utc":  "2026-10-27T19:18:45.1656618Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-sentinel-bits-control-formats-a-run1.tsv",
+                             "stderr":  ""
+                         },
+                         {
+                             "run":  2,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T19:18:45.1798691Z",
+                             "end_utc":  "2026-10-27T19:18:46.4401066Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-sentinel-bits-control-formats-a-run2.tsv",
+                             "stderr":  ""
+                         },
+                         {
+                             "run":  3,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-27T19:18:46.4411043Z",
+                             "end_utc":  "2026-10-27T19:18:47.6788743Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-sentinel-bits-control-formats-a-run3.tsv",
+                             "stderr":  ""
+                         }
+                     ],
+    "limits":  "Single logical CPU affinity; shared host, frequency and other workloads are not controlled. Includes each codec\u0027s allocations. Deflate stage uses identical filtered bytes per source.",
+    "control_of":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-stream-copy-trial-formats-a-manifest.json",
+    "control_manifest_sha256":  "76E4F07507473EFEC3F373BE526DE000AB3DA1C0DF5A7A38A408F46C8E0774D6",
+    "control_runner_sha256":  "78E7C215EDCAADF3693FA1B20ADC6A08E85744C566FC494D532EC19503023DF0"
+}

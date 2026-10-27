@@ -1,0 +1,50 @@
+cargo :     Blocking waiting for file lock on build directory
+At line:2 char:296
++ ... .ogg).Path; cargo test -p deadlib-audio-decode-vorbis --release --lib ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Blocking wa...build directory:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `release` profile [optimized] target(s) in 19.64s
+     Running unittests src\lib.rs (target\release\deps\deadlib_audio_decode_vorbis-c9105d67e6ba438e.exe)
+
+running 14 tests
+test codebook::prefix_tests::lookup_matches_tree_at_every_prefix_alignment_and_packet_tail ... ok
+test codebook::prefix_tests::prefix_memory_is_optional_and_logical_node_limits_are_unchanged ... ok
+test decoder::tests::inverse_coupling_covers_all_signs_and_channel_orders ... ok
+test decoder::tests::windows_obey_complementary_slopes_and_hybrid_bounds ... ok
+test encoder::tests::first_stage_words_decode_all_entries_with_exact_lengths ... ok
+test floor::tests::floor0_odd_even_products_match_closed_form_at_dc ... ok
+test floor::tests::render_integer_line_and_prediction_use_spec_rounding ... ok
+test residue::tests::residue_interleaves_clips_and_propagates_truncation ... ok
+test residue::tests::residue_two_scatter_covers_pairs_generic_interleaves_and_truncation ... ok
+test residue::tests::residue_zero_truncation_keeps_only_completed_partitions ... ok
+test setup::tests::floor1_sixty_five_point_limit_is_a_format_constraint ... ok
+test transform::tests::analysis_window_and_synthesis_overlap_reconstruct_unquantized_pcm ... ok
+test transform::tests::fft_imdct_matches_direct_cosine_for_all_vorbis_sizes ... ok
+test transform::tests::fft_mdct_matches_direct_analysis_at_every_legal_size ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests\concealment.rs (target\release\deps\concealment-f44ed7dd8165cb02.exe)
+
+running 2 tests
+mono: residue kinds [1]
+mono: 67 cases, 232 packets, 4 discarded, 59 truncated, 41216 samples, peak 0.00000017881393432617188, RMS
+0.00000003873540983342969
+stereo: residue kinds [2, 2]
+stereo: 890 cases, 3384 packets, 6 discarded, 878 truncated, 4869632 samples, peak 0.00000017881393432617188, RMS
+0.000000027502320636227765
+eight-channel-silence: residue kinds [1, 1]
+eight-channel-silence: 9 cases, 27 packets, 3 discarded, 3 truncated, 94208 samples, peak 0, RMS 0
+eight-channel-tones: residue kinds [1, 1]
+eight-channel-tones: 3067 cases, 11171 packets, 5 discarded, 3057 truncated, 62770176 samples, peak
+0.00000008195638656616211, RMS 0.000000015114274419834382
+test every_fixture_packet_byte_prefix_and_following_recovery_match_libvorbis ... ok
+floor-zero: residue kinds [0, 0]
+floor-zero: 2981 cases, 14892 packets, 14 discarded, 2953 truncated, 15297536 samples, peak
+0.000000008847564458847046, RMS 0.000000000904471084650481
+test historical_floor_zero_packet_prefixes_and_recovery_match_libvorbis ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.68s

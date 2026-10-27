@@ -1,0 +1,99 @@
+{
+  "completed_utc": "2026-10-27T01:53:07.599229+00:00",
+  "scope": "Real-PCM encoding/size/source-error and warm full/open/first-packet baseline; no production codec source changes",
+  "production_source_revision": "0e5ecb23d32acaeeb285a2bc049b7004c5e6c5f4",
+  "production_source_unchanged": true,
+  "quality_cases": 42,
+  "timing_rows": 294,
+  "symbol_profiles": 24,
+  "exact_channel_samples_per_decoder": 6401696,
+  "observed_max_libvorbis_peak": 6.556510925292969e-07,
+  "observed_max_libvorbis_case_rms": 1.0188384699619963e-07,
+  "observed_max_symphonia_peak": 5.960464477539062e-07,
+  "observed_max_symphonia_case_rms": 6.600531737707571e-08,
+  "commands": [
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "python",
+      "command": [
+        "python",
+        "-m",
+        "py_compile",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\scripts\\benchmark_encoding.py",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\scripts\\profile_encoding.py"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "independent-bench",
+      "command": [
+        "cargo",
+        "bench",
+        "--offline",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\encoding-baseline-independent-20261027\\vorbis\\Cargo.toml",
+        "--bench",
+        "encoding",
+        "--no-run",
+        "--message-format=json"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "independent_tests": {
+    "passed": 84,
+    "failed": 0,
+    "ignored": 23
+  },
+  "independent_benchmark": "offline extracted-package build and byte-identical encode smoke; current worker source hash matches copied file",
+  "all_source_input_output_binary_hashes_rechecked": true,
+  "logs": {
+    "2026-10-27-encoding-baseline.json": "2425c5391f106ef8306ae4dc04236547eb6103d103862918c6a25a0d0d425033",
+    "2026-10-27-encoding-baseline-quality.tsv": "76127d12ab09844a07c2371d8211d121819fd2fe0669cf7ebd7dd66b3d7a8a35",
+    "2026-10-27-encoding-baseline-summary.tsv": "a3df07e3312e908a59b19129ff91d24e39cc434bd88ea31a0d0ca30ea3fe1930",
+    "2026-10-27-encoding-baseline-trials.tsv": "7a9b6149d21c4f0d2657c9c36adf64f1db6e6888fcdd5bfbb9ece8b41934f22c",
+    "2026-10-27-encoding-baseline-symbols.tsv": "af7f5712cb55d8ddab4d3b4a13f077790133847ba48542382fa223a7ffb2ff19",
+    "2026-10-27-encoding-baseline-symbols.json": "e88672450a394a3d08f280d2bfc8071ccdcab11ae3d72cd1c5e1bd1f31cc3788",
+    "2026-10-27-encoding-baseline-rust-build.log": "cf452c1989a50a9d0d7f11ac442e9a3fb8ece255746b8bbf741d515a9479a7c8",
+    "2026-10-27-encoding-baseline-c-configure.log": "ea036ea429bf950c4047fb13fc56e90c93f8936f7e7c58357a40d7d9b9ae1d3c",
+    "2026-10-27-encoding-baseline-c-build.log": "231899012870baf3f7eec438eb5b2c759a62a5b661db1274c149558314624d62",
+    "2026-10-27-encoding-baseline-fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-encoding-baseline-clippy.log": "6daa5db7a373bdb06e98eb875ed09dbe73468275c4a78f6653ecf8bddb37cc87",
+    "2026-10-27-encoding-baseline-python.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-encoding-baseline-independent-bench.log": "ae1616340327acfa87760df34a88366e86651004436327fa2b03cea91f9161b0",
+    "2026-10-27-encoding-baseline-independent-bench-smoke.json": "42d03df6e9042f0336b164b5732b6236b6f4349ef055d3bbc75f8c28305513d0",
+    "2026-10-27-encoding-baseline-independent.log": "1285cf39fc3b5f727feb603240359fb69650ebfa9818b491afe85b2dfe6e89de"
+  },
+  "symbol_analyzer_sha256": "cace39a5e6a14107feb8ddd27432ee71ce87816d2a09416d5a7503d48b9d7bdd",
+  "limitations": [
+    "Distinct precision/quality settings; no matched perceptual-quality speedup claim",
+    "Warm-process timings, not launch/cold IO",
+    "No encoding allocation/process-memory measurement",
+    "Projection is not a production entropy optimization"
+  ]
+}

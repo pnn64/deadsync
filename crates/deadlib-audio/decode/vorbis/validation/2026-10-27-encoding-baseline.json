@@ -1,0 +1,291 @@
+{
+  "started_utc": "2026-10-27T01:48:41.097003+00:00",
+  "git_head": "14f1cafadcf6cb91dc27d1b5f918da3a36431a42",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cmake": "cmake version 4.2.1",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "logical_cpus": 44,
+  "reference_pins": {
+    "ogg": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+    "vorbis": "0657aee69dec8508a0011f47f3b69d7538e9d262"
+  },
+  "repeats": 7,
+  "min_seconds": 0.15,
+  "seed": 4187,
+  "excerpt_seconds": 5,
+  "preferred_skip_seconds": 15,
+  "binary_paths": {
+    "rust": "C:\\GitHub\\deadsync\\target\\release\\deps\\encoding-a4659db1c800e263.exe",
+    "libvorbis": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\vorbis-encoding-build\\Release\\deadlib_vorbis_encoding.exe"
+  },
+  "binary_sha256": {
+    "rust": "8e7e717989f624a9c71dc72ca00cfb13f3f642a913a140cb16d42c2b78eb3d6e",
+    "libvorbis": "240126675c2f731a366a11dd30f9d464b547156b56718cfff02335b2708dd942"
+  },
+  "cargo_artifact_profile": {
+    "opt_level": "3",
+    "debuginfo": 1,
+    "debug_assertions": false,
+    "overflow_checks": false,
+    "test": true
+  },
+  "registry_packages": [
+    "registry+https://github.com/rust-lang/crates.io-index#autocfg@1.5.1",
+    "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.13.2",
+    "registry+https://github.com/rust-lang/crates.io-index#bytemuck@1.25.2",
+    "registry+https://github.com/rust-lang/crates.io-index#byteorder@1.5.0",
+    "registry+https://github.com/rust-lang/crates.io-index#lazy_static@1.5.1",
+    "registry+https://github.com/rust-lang/crates.io-index#log@0.4.34",
+    "registry+https://github.com/rust-lang/crates.io-index#num-complex@0.4.6",
+    "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19",
+    "registry+https://github.com/rust-lang/crates.io-index#ogg@0.9.2",
+    "registry+https://github.com/rust-lang/crates.io-index#regex-lite@0.1.9",
+    "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.16.3",
+    "registry+https://github.com/rust-lang/crates.io-index#symphonia-codec-vorbis@0.6.1",
+    "registry+https://github.com/rust-lang/crates.io-index#symphonia-common@0.6.1",
+    "registry+https://github.com/rust-lang/crates.io-index#symphonia-core@0.6.1",
+    "registry+https://github.com/rust-lang/crates.io-index#symphonia-format-ogg@0.6.1",
+    "registry+https://github.com/rust-lang/crates.io-index#symphonia-metadata@0.6.1",
+    "registry+https://github.com/rust-lang/crates.io-index#symphonia@0.6.1"
+  ],
+  "cargo_profiles": {
+    "release": {
+      "opt-level": 3,
+      "overflow-checks": false,
+      "debug-assertions": false,
+      "lto": true,
+      "debug": false,
+      "panic": "abort"
+    },
+    "dev": {
+      "package": {
+        "png": {
+          "opt-level": 3
+        },
+        "fdeflate": {
+          "opt-level": 3
+        },
+        "deadlib-audio": {
+          "opt-level": 3
+        },
+        "deadlib-audio-decode": {
+          "opt-level": 3
+        },
+        "rubato": {
+          "opt-level": 3
+        },
+        "symphonia-core": {
+          "opt-level": 3
+        },
+        "symphonia-codec-vorbis": {
+          "opt-level": 3
+        },
+        "sha2": {
+          "opt-level": 3
+        },
+        "deadsync-song-lua": {
+          "opt-level": 3
+        },
+        "deadlib-lua-legacy": {
+          "opt-level": 3
+        },
+        "deadlib-lua-legacy-sys": {
+          "opt-level": 3
+        }
+      }
+    },
+    "local": {
+      "inherits": "release",
+      "lto": "thin"
+    },
+    "profiling": {
+      "inherits": "release",
+      "debug": 1
+    },
+    "bench": {
+      "debug": 1
+    }
+  },
+  "rustflags_environment": {
+    "RUSTFLAGS": null,
+    "CARGO_ENCODED_RUSTFLAGS": null
+  },
+  "cmake_release_flags": [
+    "CMAKE_CXX_FLAGS_RELEASE:STRING=/O2 /Ob2 /DNDEBUG",
+    "CMAKE_C_FLAGS_RELEASE:STRING=/O2 /Ob2 /DNDEBUG",
+    "CMAKE_EXE_LINKER_FLAGS_RELEASE:STRING=/INCREMENTAL:NO"
+  ],
+  "source_sha256": {
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+    "Cargo.lock": "3c0749be15998357c6528b36f25f3c350b7f018bd9341840f1d33df12246b857",
+    "Cargo.toml": "a8dc40aa325b8810a298d0e49db4bbccc5674fa51630a0ed53bf66e47e488d73",
+    "crates/deadlib-audio/decode/ogg/Cargo.toml": "5a74a0204c5095a1d67a6133c8dec2eca742c4106feb00b5eb58dc62107a2b31",
+    "crates/deadlib-audio/decode/ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+    "crates/deadlib-audio/decode/ogg/src/crc.rs": "3e6a9a1c2046d71f7f7d9d195febdb7a59b8d49dc06a6001092194420fb7a1db",
+    "crates/deadlib-audio/decode/ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "crates/deadlib-audio/decode/ogg/src/index.rs": "1780d259a1a73c883eaf5c53dec8dc4d7f66b8a7fd82a54beaa521ae942e81b3",
+    "crates/deadlib-audio/decode/ogg/src/lib.rs": "5d479af544338dadb1ab99627b4fe1c2581c40e0cb41bc491c7b3ee1b1ab6c77",
+    "crates/deadlib-audio/decode/ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+    "crates/deadlib-audio/decode/ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+    "crates/deadlib-audio/decode/ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+    "crates/deadlib-audio/decode/ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+    "crates/deadlib-audio/decode/scripts/benchmark.py": "f865eb30044d665941464eea174fb1a9f034e56f50a305371755d9d887ff63b6",
+    "crates/deadlib-audio/decode/scripts/benchmark_encoding.py": "8cb2342ae7af67d248191f4644051ad2a3217dc33fd58bf74b9f7a84be8d09f6",
+    "crates/deadlib-audio/decode/vorbis/benches/encoding.rs": "b38b992ba7d845e4ced852cdb8f9e7e95c8bc3b0e3e3d5c888b35f2ba119ad6d",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/alloc_profile.cpp": "814e5651b891db3029382721c423f5eacc3ff36102a6fc42d128cf5860cc94ba",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/alloc_profile.h": "003f94d430b8123e6d67b0743b6700af004a89f69d329ba0d77bbdc8800f8d0d",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/benchmark.cpp": "0fe5153bc37e1f8eaced24447f3c66638fb95fe64c31e367638db719d2758574",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/CMakeLists.txt": "8b66350685910c64bb0d50ac8c33e26be510ec68bbd74c3bf73a00f90c187d76",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/encoding.cpp": "997d939365364f497c43e8c4e71e80c76fbfdaccafe7ef20d4183e3748a39f17",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/resources.cpp": "3a303e11ca007bec6eaf156e4615e2ebf58e270af7eeb33190cac35fc739bedb",
+    "crates/deadlib-audio/decode/vorbis/benches/oracle/seek_support.h": "a52cdda5799870a30d6e1a19d41e3548878f9084adef2614dcb37e9dcda3e5a0",
+    "crates/deadlib-audio/decode/vorbis/benches/pipeline.rs": "d58e98402bb5f67a2a0c3f46a2476ea4c11ffc04eed2657b959dc766cb32b399",
+    "crates/deadlib-audio/decode/vorbis/benches/resources.rs": "52aec945a67b721f8a4eec9c6596acbaf6f9788830ad35de8ea49a209b0d9ad2",
+    "crates/deadlib-audio/decode/vorbis/benches/support/alloc.rs": "ef798a2aa62694ea01242d31aa93a4fb893159222ef96e4619a93b29243a0763",
+    "crates/deadlib-audio/decode/vorbis/benches/support/huffman.rs": "9c062fa9995065c2cd9f41acef5a519a10f36147b8013fc877e7a1675a0aa27f",
+    "crates/deadlib-audio/decode/vorbis/benches/support/io.rs": "a03cf39395f8294c6d782e1ee068b174f4593ecb4705891d56ebea1a4905e6f2",
+    "crates/deadlib-audio/decode/vorbis/benches/support/seek.rs": "a23d83c79589655d18d20ccf71e11b561a18261c6865904142e374a41c9160be",
+    "crates/deadlib-audio/decode/vorbis/Cargo.toml": "f43d8776a2408c8a6ac0bff98fac4e9141b2bcccf499ff9f0fa845c918337a9e",
+    "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "78317c5437373a5846975e5ee9064f4b0c8d0195013556ff3ca691742bd7bd5e",
+    "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "2481396cedcc2b56b4c9e0c5b81050285ea63302250c11cef4e28c9e1b66f822",
+    "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "a294f7b7851fd63b67cc18e3cf7aae0b0a45162ced5139f07623d3ee25c20993",
+    "crates/deadlib-audio/decode/vorbis/src/encoder.rs": "5f572db0631a47471b1a3286230280a8dd1bd589696270e47bd5fd2e9e5242fc",
+    "crates/deadlib-audio/decode/vorbis/src/floor.rs": "4f36467be94caec08a96041d76c9acd00ab5e1d0b477dc82cb43682eadb519c8",
+    "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "crates/deadlib-audio/decode/vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "crates/deadlib-audio/decode/vorbis/src/lib.rs": "63b0f30394af64da60ef7db2214a23830a5caba1d249d6c4d9f04c8bc106a0ee",
+    "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "c46605ce428141d22de18cccc620e19109847f70a1dc6560c73bc8c43be97c25",
+    "crates/deadlib-audio/decode/vorbis/src/residue.rs": "2ea169ccb23a57ed15f676c5c1d9dacf84cd5c6dcc69711560f1b54ec7d7669e",
+    "crates/deadlib-audio/decode/vorbis/src/seek.rs": "f03118fcdf174888d2e76063e1882969bd64fd5f5e6cdc0e563d0ca174da22ed",
+    "crates/deadlib-audio/decode/vorbis/src/setup.rs": "637f9a2e7dc064f57b12e91a1963c57fd338efa166b69e2018f3da209f9dba6b",
+    "crates/deadlib-audio/decode/vorbis/src/transform.rs": "4f1d5114d47add85aed0c4f3ffe56dc69b4c6133754244bfb4ff054708360fab"
+  },
+  "input_sha256": {
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg": "fbff11482b3552dafff0a7ee5b61ba59469296be07e7c27e9cce4c29a45f5e05",
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg": "7538eee111f352e5e7d0b003b6ea7acbe2999d38c081d72591e263959bd81c7e",
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg": "3e4c0456de37adc014a3aa6b5aebf49f3c66717cf798fd9e6a3b9feff4c1cfb0",
+    "assets/sounds/boom.ogg": "1ba66ba35e11fc10e2a4f7de2212990448d68bbce04e722c2acbada66e37b6e8",
+    "assets/music/in_two (loop).ogg": "670927f858874d016710bac6b38341045c5b0e06666c7fbb17a33ceaee48df33",
+    "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg": "9d211f2fee8bc5327119ea9b1b6bb77f88226c5a1317628ad2467734fe4cb483"
+  },
+  "prepared_inputs": {
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg": {
+      "channels": 1,
+      "rate": 8000,
+      "frames": 640,
+      "start_frame": 0,
+      "pcm_sha256": "b18c633c3162c2bb4836041001da1ba039dc593d3c2e9578b46881c17a971853",
+      "reference_pcm_sha256": "64e4f21f35d075c00986968921afa46fdd81c8614a74195bd6db1913d6715a3a",
+      "input_parity": {
+        "samples": 640,
+        "peak_abs_error": 1.1920928955078125e-07,
+        "rms_error": 4.0400444273989304e-08
+      }
+    },
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg": {
+      "channels": 2,
+      "rate": 48000,
+      "frames": 3840,
+      "start_frame": 0,
+      "pcm_sha256": "f352bbb4cc9c6f1748f8cb8732bb6e69f8c973980fbed4f57056d5534c6b53a6",
+      "reference_pcm_sha256": "4d7bd9d6cd67908922d4101287211adc2220a392cfc827203edcbfd8d0a2fb69",
+      "input_parity": {
+        "samples": 7680,
+        "peak_abs_error": 1.341104507446289e-07,
+        "rms_error": 3.154629992267327e-08
+      }
+    },
+    "crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg": {
+      "channels": 8,
+      "rate": 44100,
+      "frames": 882,
+      "start_frame": 0,
+      "pcm_sha256": "a7080bb37c0a61c6425edd33b8d9a30574c50ccbc1c611b7306e22662a77e416",
+      "reference_pcm_sha256": "92809d841385e1a654b8a29ca2f9e2c0d19be8c5932c51a9d660dc18aa6a1de8",
+      "input_parity": {
+        "samples": 7056,
+        "peak_abs_error": 0,
+        "rms_error": 0
+      }
+    },
+    "assets/sounds/boom.ogg": {
+      "channels": 1,
+      "rate": 44100,
+      "frames": 17152,
+      "start_frame": 0,
+      "pcm_sha256": "22b1cb957e29062da27028680e6ee3ac0fa140b8c1523217db973bdab6e5fa1f",
+      "reference_pcm_sha256": "5b25393dda2e8588b784afca13fc7e3b7b27a68d00afda039267785dfa2030e2",
+      "input_parity": {
+        "samples": 17152,
+        "peak_abs_error": 5.960464477539062e-07,
+        "rms_error": 9.903386790958119e-08
+      }
+    },
+    "assets/music/in_two (loop).ogg": {
+      "channels": 2,
+      "rate": 44100,
+      "frames": 220500,
+      "start_frame": 661500,
+      "pcm_sha256": "641d7633a1a86484194676738d9a41d343cb93066a519db558540e4beab5a840",
+      "reference_pcm_sha256": "5033e119e6176699663e98cf0432e793eb0d8da2a10a7c357f600836483a3752",
+      "input_parity": {
+        "samples": 441000,
+        "peak_abs_error": 5.364418029785156e-07,
+        "rms_error": 7.229676342779101e-08
+      }
+    },
+    "target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg": {
+      "channels": 2,
+      "rate": 44100,
+      "frames": 220500,
+      "start_frame": 661500,
+      "pcm_sha256": "81dc9585b83f5d80807b9dfaacfc3a8ecda6e6a16a817b2f38f7cf6ebe9ca42c",
+      "reference_pcm_sha256": "88f63bd8ba3152ac3001fdf6270f99634aeecbe21de1deda803a162c09f23638",
+      "input_parity": {
+        "samples": 441000,
+        "peak_abs_error": 5.960464477539062e-07,
+        "rms_error": 7.371238704335502e-08
+      }
+    }
+  },
+  "configurations": [
+    [
+      "native",
+      "1"
+    ],
+    [
+      "native",
+      "2"
+    ],
+    [
+      "native",
+      "3"
+    ],
+    [
+      "native",
+      "4"
+    ],
+    [
+      "libvorbis",
+      "0"
+    ],
+    [
+      "libvorbis",
+      "0.4"
+    ],
+    [
+      "libvorbis",
+      "0.9"
+    ]
+  ],
+  "timing_policy": "resident interleaved f32 input, 4096-frame pushes, fresh encoder per iteration, full native/Xiph Ogg mux into discard sink; one warm run per worker; input/output file IO excluded; uninstrumented",
+  "open_policy": "through setup/metadata/header page generation and flushing; before audio input",
+  "first_packet_policy": "through encoding and mux submission of first audio packet with granule >0; page need not yet be flushed; includes open and configured input batching; supplied frames are the caller chunk boundary, not a minimum algorithmic lookahead claim; report granule separately",
+  "quality_policy": "exact retained frames/channels/rate; source PCM error without alignment or gain fitting; libvorbisfile raw-start and native/Symphonia decoder parity, peak 3e-6 and RMS 5e-7 times max(1, reference_peak)",
+  "scope_limit": "Precision stages and Xiph VBR quality are distinct configurations, not matched perceptual quality or bitrate. Source excerpts are decoded lossy files, not original studio PCM.",
+  "completed_utc": "2026-10-27T01:49:46.201800+00:00",
+  "quality_cases": 42,
+  "timing_rows": 294,
+  "final_hashes_verified": true
+}

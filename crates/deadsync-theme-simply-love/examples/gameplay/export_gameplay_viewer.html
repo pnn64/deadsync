@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simply Love gameplay layouts</title>
+  <style>
+    body { background: #181818; color: #eee; font: 16px sans-serif; }
+    img { max-width: 100%; height: auto; }
+    a { color: #8cf; }
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      padding: 12px;
+      margin: 16px 0;
+      background: #282828;
+      border-radius: 8px;
+    }
+    .filter-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+    .filter-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      background: #383838;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .filters fieldset { border: 0; padding: 0; margin: 0; }
+    .filters legend { margin-bottom: 6px; font-weight: bold; }
+    .pair { display: flex; gap: 12px; align-items: flex-start; }
+    .pair figure { flex: 1; min-width: 0; margin: 24px 0; }
+    section[hidden] { display: none; }
+    figure[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Simply Love gameplay layouts</h1>
+  <p>
+    Real gameplay rendering with synthetic sample data. Click an image for full resolution.
+    Aspect-dependent visibility rules are preserved.
+  </p>
+  <div class="filters" id="gallery-filters">
+    <fieldset>
+      <legend>Layout</legend>
+      <div class="filter-tabs">
+        {% for layout in layouts %}
+        <label class="filter-tab">
+          <input type="checkbox" data-filter-group="layout" data-filter-value="{{ layout.value }}" checked>
+          {{ layout.label }}
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Resolution</legend>
+      <div class="filter-tabs">
+        {% for resolution in resolutions %}
+        <label class="filter-tab">
+          <input type="checkbox" data-filter-group="resolution" data-filter-value="{{ resolution.value }}" checked>
+          {{ resolution.value }}
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Variants</legend>
+      <div class="filter-tabs">
+        <label class="filter-tab">
+          <input type="checkbox" data-filter-group="center" data-filter-value="1p" checked>
+          Center 1P
+        </label>
+        <label class="filter-tab">
+          <input type="checkbox" data-filter-group="variant" data-filter-value="hmr" checked>
+          HMR
+        </label>
+        <label class="filter-tab">
+          <input type="checkbox" data-filter-group="variant" data-filter-value="leaderboard" checked>
+          Leaderboard
+        </label>
+      </div>
+    </fieldset>
+    <button type="button" id="reset-filters">Reset filters</button>
+  </div>
+
+  {% for section in sections %}
+  <section class="pair" data-layout="{{ section.layout }}" data-resolution="{{ section.resolution }}" data-centered="{{ section.centered }}">
+    {% for image in section.images %}
+    <figure data-variant="{{ image.variant }}">
+      <figcaption>{{ image.caption }}</figcaption>
+      <a href="{{ image.src }}"><img loading="lazy" src="{{ image.src }}" alt="{{ image.caption }}"></a>
+    </figure>
+    {% endfor %}
+  </section>
+  {% endfor %}
+
+  <script>
+    (() => {
+      const storageKey = 'gameplayGalleryFilters';
+      const controls = [...document.querySelectorAll('#gallery-filters input[type=checkbox]')];
+      const sections = [...document.querySelectorAll('section[data-layout][data-resolution]')];
+      const key = control => control.dataset.filterGroup + ':' + control.dataset.filterValue;
+
+      const apply = () => {
+        const enabled = new Map(controls.map(control => [key(control), control.checked]));
+        for (const section of sections) {
+          const singlePlayer = section.dataset.layout === 'p1' || section.dataset.layout === 'p2';
+          section.hidden = !(
+            enabled.get('layout:' + section.dataset.layout)
+            && (!singlePlayer || enabled.get('layout:single'))
+            && enabled.get('resolution:' + section.dataset.resolution)
+            && (section.dataset.centered !== 'true' || enabled.get('center:1p'))
+          );
+          for (const figure of section.querySelectorAll('figure[data-variant]')) {
+            figure.hidden = !enabled.get('variant:' + figure.dataset.variant);
+          }
+        }
+      };
+
+      const save = () => {
+        const preferences = Object.fromEntries(controls.map(control => [key(control), control.checked]));
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(preferences));
+        } catch {}
+      };
+
+      let preferences;
+      try {
+        preferences = JSON.parse(localStorage.getItem(storageKey) || 'null');
+      } catch {}
+      if (preferences && typeof preferences === 'object') {
+        for (const control of controls) {
+          if (typeof preferences[key(control)] === 'boolean') {
+            control.checked = preferences[key(control)];
+          }
+        }
+      }
+
+      for (const control of controls) {
+        control.addEventListener('change', () => {
+          save();
+          apply();
+        });
+      }
+
+      document.querySelector('#reset-filters').addEventListener('click', () => {
+        for (const control of controls) {
+          control.checked = true;
+        }
+        try {
+          localStorage.removeItem(storageKey);
+        } catch {}
+        apply();
+      });
+      apply();
+    })();
+  </script>
+</body>
+</html>

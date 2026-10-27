@@ -1,0 +1,14 @@
+{
+  "native": {
+    "path": "target/deadlib-audio-reference/ogg-tool-smoke-20261027/binaries/native.exe",
+    "sha256": "437e8c26283c5af109904d4ca570e8cef903177834b07148ba5d9cb6dd4422ef"
+  },
+  "native-baseline": {
+    "path": "target/deadlib-audio-reference/ogg-tool-smoke-20261027/binaries/native-baseline.exe",
+    "sha256": "5b949cb3a2e01edae04acb57ad7b9012cf9c538b6b857368377f5bfa0185c360"
+  },
+  "libogg": {
+    "path": "target/deadlib-audio-reference/ogg-tool-smoke-20261027/binaries/libogg.exe",
+    "sha256": "657fbcf931b928be92bc5ff048f500b6c168c2dd78f33193c453f53ffa8cc598"
+  }
+}

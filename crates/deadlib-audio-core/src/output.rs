@@ -44,10 +44,11 @@ impl FromStr for AudioOutputMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "auto" => Ok(Self::Auto),
-            "shared" => Ok(Self::Shared),
-            "exclusive" => Ok(Self::Exclusive),
+        let s = s.trim();
+        match s.len() {
+            4 if s.eq_ignore_ascii_case("auto") => Ok(Self::Auto),
+            6 if s.eq_ignore_ascii_case("shared") => Ok(Self::Shared),
+            9 if s.eq_ignore_ascii_case("exclusive") => Ok(Self::Exclusive),
             _ => Err(()),
         }
     }

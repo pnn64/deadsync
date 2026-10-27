@@ -1,0 +1,184 @@
+{
+  "command": [
+    "cargo",
+    "rustc",
+    "--offline",
+    "-p",
+    "deadlib-audio-decode-vorbis",
+    "--profile",
+    "bench",
+    "--bench",
+    "pipeline",
+    "--target-dir",
+    "target/deadlib-audio-reference/split-prefix-assembly",
+    "--",
+    "--emit=asm"
+  ],
+  "path": "target/deadlib-audio-reference/split-prefix-assembly/release/deps/pipeline-536b18ea81cc8d27.s",
+  "sha256": "0ecd303471f4eeb626aaa927366032aa0fb59d3ee92e5e39965f4d03999d69b8",
+  "all_calls": {
+    "refill": 62,
+    "decode_from": 9
+  },
+  "packet_decoder_call_counts": {
+    "refill": 21,
+    "decode_from": 7
+  },
+  "packet_decoder_calls": [
+    {
+      "line": 112060,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 112132,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 112182,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 112242,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 112289,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 112352,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 112441,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 112489,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 112572,
+      "kind": "decode_from",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman11decode_from"
+    },
+    {
+      "line": 112789,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 113225,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 113276,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 113359,
+      "kind": "decode_from",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman11decode_from"
+    },
+    {
+      "line": 113464,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 113516,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 113601,
+      "kind": "decode_from",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman11decode_from"
+    },
+    {
+      "line": 114974,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 115026,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 115044,
+      "kind": "decode_from",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman11decode_from"
+    },
+    {
+      "line": 115398,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 115449,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 115519,
+      "kind": "decode_from",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman11decode_from"
+    },
+    {
+      "line": 115829,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 115877,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 115947,
+      "kind": "decode_from",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman11decode_from"
+    },
+    {
+      "line": 116194,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 116243,
+      "kind": "refill",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill"
+    },
+    {
+      "line": 116314,
+      "kind": "decode_from",
+      "instruction": "callq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman11decode_from"
+    }
+  ],
+  "examples": [
+    {
+      "line": 112060,
+      "kind": "refill",
+      "caller": ".seh_proc _RNvMs_NtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7decoderNtB4_13PacketDecoder6decode",
+      "context": "\tmovl\t112(%rsp), %edi\n\ttestl\t%edi, %edi\n\tjne\t.LBB324_34\n\t.cv_loc\t14348 71 40 0\n\tleaq\t80(%rsp), %rcx\n\tmovq\t%r11, %rsi\n\tcallq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7bitpackNtB2_9BitReader6refill\n\tmovq\t%rsi, %r11\n\tmovq\t64(%rsp), %r10\n\tmovq\t56(%rsp), %rbx\n\tmovq\t48(%rsp), %rcx\n\t.cv_loc\t14348 71 42 0\n\tmovl\t112(%rsp), %edi\n\ttestl\t%edi, %edi"
+    },
+    {
+      "line": 112572,
+      "kind": "decode_from",
+      "caller": ".seh_proc _RNvMs_NtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis7decoderNtB4_13PacketDecoder6decode",
+      "context": "\t.cv_loc\t14377 145 161 0\n\tmovq\t32(%rbp), %rdx\n\tmovq\t40(%rbp), %r8\n\tmovq\t%r9, 32(%rsp)\n\tleaq\t2040(%rsp), %rcx\n\tleaq\t80(%rsp), %r9\n\tcallq\t_RNvMNtCs9iS0JE1xqag_27deadlib_audio_decode_vorbis8codebookNtB2_7Huffman11decode_from\n\tmovq\t48(%rsp), %rcx\n.Ltmp15266:\n\t.cv_loc\t14376 24 2177 0\n\tmovq\t2040(%rsp), %rax\n\t.cv_loc\t14376 24 2178 0\n\tmovl\t2048(%rsp), %r9d\n\t.cv_loc\t14376 24 2177 0"
+    }
+  ],
+  "scope": "Separate matching-profile assembly emission from the measured sources, not disassembly of the measured executable."
+}

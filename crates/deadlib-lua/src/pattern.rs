@@ -1,5 +1,5 @@
 //! Lua 5.1 byte patterns with compact instructions and explicit backtracking.
-use crate::{Error, ErrorKind};
+use crate::{Error, ErrorKind, locale::class};
 
 const UNFINISHED: usize = usize::MAX;
 const POSITION: usize = usize::MAX - 1;
@@ -91,6 +91,12 @@ pub(crate) struct Pattern {
     pub anchored: bool,
 }
 
+impl Pattern {
+    pub fn heap_bytes(&self) -> usize {
+        std::mem::size_of_val(self.code.as_ref()) + std::mem::size_of_val(self.sets.as_ref())
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Alternative {
     Once,
@@ -113,7 +119,6 @@ pub(crate) struct Work {
     undo: [(u8, Capture); 64],
     undo_len: usize,
     count: u8,
-    steps: u64,
 }
 impl Default for Work {
     fn default() -> Self {
@@ -123,30 +128,18 @@ impl Default for Work {
             undo: [(0, EMPTY); 64],
             undo_len: 0,
             count: 0,
-            steps: 0,
         }
+    }
+}
+impl Work {
+    pub fn heap_bytes(&self) -> usize {
+        self.choices.capacity() * std::mem::size_of::<Choice>()
     }
 }
 fn error(message: &str) -> Error {
     Error::new(ErrorKind::Runtime, 0, message)
 }
 
-fn class(byte: u8, class: u8) -> bool {
-    let hit = match class.to_ascii_lowercase() {
-        b'a' => byte.is_ascii_alphabetic(),
-        b'c' => byte.is_ascii_control(),
-        b'd' => byte.is_ascii_digit(),
-        b'l' => byte.is_ascii_lowercase(),
-        b'p' => byte.is_ascii_punctuation(),
-        b's' => matches!(byte, b' ' | b'\t' | b'\n' | b'\r' | 11 | 12),
-        b'u' => byte.is_ascii_uppercase(),
-        b'w' => byte.is_ascii_alphanumeric(),
-        b'x' => byte.is_ascii_hexdigit(),
-        b'z' => byte == 0,
-        _ => return byte == class,
-    };
-    hit != class.is_ascii_uppercase()
-}
 fn set_has(set: &[u64; 4], byte: u8) -> bool {
     set[usize::from(byte) / 64] & (1u64 << (byte % 64)) != 0
 }
@@ -287,7 +280,7 @@ impl Pattern {
                                 arg = 2;
                             }
                         }
-                        Some(c @ b'0'..=b'9') => {
+                        Some(c) if crate::locale::is_digit(c) => {
                             kind = Kind::Reference;
                             arg = u32::from(c - b'0');
                         }
@@ -353,7 +346,6 @@ impl Pattern {
         start: usize,
         work: &mut Work,
     ) -> Result<Option<Matched>, Error> {
-        work.steps = 0;
         for pos in start..=source.len() {
             if let Some(found) = self.match_at(source, pos, work)? {
                 return Ok(Some(found));
@@ -377,14 +369,6 @@ impl Pattern {
         let mut pc = 0;
         let mut pos = start;
         'match_loop: loop {
-            work.steps += 1;
-            if work.steps > 10_000_000 {
-                return Err(Error::new(
-                    ErrorKind::Limit,
-                    0,
-                    "pattern matching limit exceeded",
-                ));
-            }
             if pc == self.code.len() {
                 return Ok(Some(Matched {
                     start,
@@ -565,8 +549,5 @@ impl Pattern {
             }
             return Ok(None);
         }
-    }
-    pub fn reset(work: &mut Work) {
-        work.steps = 0;
     }
 }

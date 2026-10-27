@@ -1,0 +1,305 @@
+run	stage	workload	cycles_per_op	ns_per_op	fingerprint	allocs	reallocs	frees	allocated_bytes	freed_bytes	peak_bytes	storage_allocs	storage_reallocs	storage_frees	storage_allocated_bytes	storage_freed_bytes	storage_peak_bytes
+0	score-frozen-before	sola/append-6ch	159276.41	72841.41		0	0	0	0	0	0	8	0	0	150012	0	150012
+0	score-frozen-before	sola/append-8ch	216306.95	98806.25		0	0	0	0	0	0	10	0	0	198096	0	198096
+0	score-frozen-before	sola/append-16ch	456616.59	209035.16		0	0	0	0	0	0	18	0	0	390432	0	390432
+0	score-frozen-before	sola/crossfade-256	148.55	66.99		0	0	0	0	0	0						
+0	score-frozen-before	sola/crossfade-1440	681.22	309.57		0	0	0	0	0	0						
+0	score-frozen-before	sola/mono/360	117651.97	53640.62		0	0	0	0	0	0						
+0	score-frozen-before	sola/stereo/360	237046.31	108140.62		0	0	0	0	0	0						
+0	score-frozen-before	sola/left-silent/360	118680.91	54331.25		0	0	0	0	0	0						
+0	score-frozen-before	sola/right-silent/360	116739.69	53234.38		0	0	0	0	0	0						
+0	score-frozen-before	sola/mono/720	476013.19	217362.5		0	0	0	0	0	0						
+0	score-frozen-before	sola/stereo/720	952088.06	434987.5		0	0	0	0	0	0						
+0	score-frozen-before	sola/left-silent/720	473729.03	216431.25		0	0	0	0	0	0						
+0	score-frozen-before	sola/right-silent/720	474030.81	216431.25		0	0	0	0	0	0						
+0	score-frozen-before	sola/stream-1ch-noise-1.2	564444.5	256700.0	b136b3511ed0a703	0	0	0	0	0	0						
+0	score-frozen-before	sola/stream-2ch-noise-0.8	2156807.5	989200.0	af8cf13a71adbea9	0	0	0	0	0	0						
+0	score-frozen-before	sola/stream-2ch-tone-1.2	219280.5	99550.0	5907aac396672cd5	0	0	0	0	0	0						
+0	score-frozen-before	sola/stream-2ch-left-silent-1.2	745422.0	339150.0	11b0c279269ca04b	0	0	0	0	0	0						
+0	score-frozen-before	sola/stream-2ch-silence-1.2	99762.5	46600.0	b40ebf824bb571ed	0	0	0	0	0	0						
+0	score-frozen-before	sola/stream-6ch-noise-1.2	3465685.0	1580950.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+0	score-frozen-final	sola/append-6ch	159588.52	73042.97		0	0	0	0	0	0	8	0	0	150012	0	150012
+0	score-frozen-final	sola/append-8ch	221924.79	101399.22		0	0	0	0	0	0	10	0	0	198096	0	198096
+0	score-frozen-final	sola/append-16ch	456355.95	208623.44		0	0	0	0	0	0	18	0	0	390432	0	390432
+0	score-frozen-final	sola/crossfade-256	172.34	77.64		0	0	0	0	0	0						
+0	score-frozen-final	sola/crossfade-1440	693.65	318.07		0	0	0	0	0	0						
+0	score-frozen-final	sola/mono/360	88732.88	40471.88		0	0	0	0	0	0						
+0	score-frozen-final	sola/stereo/360	177870.47	81806.25		0	0	0	0	0	0						
+0	score-frozen-final	sola/left-silent/360	90674.06	41406.25		0	0	0	0	0	0						
+0	score-frozen-final	sola/right-silent/360	87978.34	40165.62		0	0	0	0	0	0						
+0	score-frozen-final	sola/mono/720	346144.62	158418.75		0	0	0	0	0	0						
+0	score-frozen-final	sola/stereo/720	697968.88	318796.88		0	0	0	0	0	0						
+0	score-frozen-final	sola/left-silent/720	347180.41	158690.62		0	0	0	0	0	0						
+0	score-frozen-final	sola/right-silent/720	344230.84	157062.5		0	0	0	0	0	0						
+0	score-frozen-final	sola/stream-1ch-noise-1.2	454255.0	206550.0	b136b3511ed0a703	0	0	0	0	0	0						
+0	score-frozen-final	sola/stream-2ch-noise-0.8	1637580.0	746700.0	af8cf13a71adbea9	0	0	0	0	0	0						
+0	score-frozen-final	sola/stream-2ch-tone-1.2	196123.5	88950.0	5907aac396672cd5	0	0	0	0	0	0						
+0	score-frozen-final	sola/stream-2ch-left-silent-1.2	591882.0	275000.0	11b0c279269ca04b	0	0	0	0	0	0						
+0	score-frozen-final	sola/stream-2ch-silence-1.2	108323.5	48950.0	b40ebf824bb571ed	0	0	0	0	0	0						
+0	score-frozen-final	sola/stream-6ch-noise-1.2	2738921.0	1258950.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+1	score-frozen-final	sola/append-6ch	160831.76	73554.69		0	0	0	0	0	0	8	0	0	150012	0	150012
+1	score-frozen-final	sola/append-8ch	215339.79	98510.94		0	0	0	0	0	0	10	0	0	198096	0	198096
+1	score-frozen-final	sola/append-16ch	455908.35	208438.28		0	0	0	0	0	0	18	0	0	390432	0	390432
+1	score-frozen-final	sola/crossfade-256	168.27	75.78		0	0	0	0	0	0						
+1	score-frozen-final	sola/crossfade-1440	678.22	308.01		0	0	0	0	0	0						
+1	score-frozen-final	sola/mono/360	85495.25	39287.5		0	0	0	0	0	0						
+1	score-frozen-final	sola/stereo/360	177431.47	80859.38		0	0	0	0	0	0						
+1	score-frozen-final	sola/left-silent/360	87566.84	40278.12		0	0	0	0	0	0						
+1	score-frozen-final	sola/right-silent/360	85508.97	38878.12		0	0	0	0	0	0						
+1	score-frozen-final	sola/mono/720	342454.28	156762.5		0	0	0	0	0	0						
+1	score-frozen-final	sola/stereo/720	696912.53	318181.25		0	0	0	0	0	0						
+1	score-frozen-final	sola/left-silent/720	352983.44	160903.12		0	0	0	0	0	0						
+1	score-frozen-final	sola/right-silent/720	339758.59	154881.25		0	0	0	0	0	0						
+1	score-frozen-final	sola/stream-1ch-noise-1.2	446133.5	202800.0	b136b3511ed0a703	0	0	0	0	0	0						
+1	score-frozen-final	sola/stream-2ch-noise-0.8	1633519.0	751300.0	af8cf13a71adbea9	0	0	0	0	0	0						
+1	score-frozen-final	sola/stream-2ch-tone-1.2	195794.0	88800.0	5907aac396672cd5	0	0	0	0	0	0						
+1	score-frozen-final	sola/stream-2ch-left-silent-1.2	590674.5	270000.0	11b0c279269ca04b	0	0	0	0	0	0						
+1	score-frozen-final	sola/stream-2ch-silence-1.2	107774.5	48700.0	b40ebf824bb571ed	0	0	0	0	0	0						
+1	score-frozen-final	sola/stream-6ch-noise-1.2	2713130.0	1236800.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+1	score-frozen-before	sola/append-6ch	164285.46	75053.91		0	0	0	0	0	0	8	0	0	150012	0	150012
+1	score-frozen-before	sola/append-8ch	219680.05	100335.16		0	0	0	0	0	0	10	0	0	198096	0	198096
+1	score-frozen-before	sola/append-16ch	461929.16	211112.5		0	0	0	0	0	0	18	0	0	390432	0	390432
+1	score-frozen-before	sola/crossfade-256	143.83	64.65		0	0	0	0	0	0						
+1	score-frozen-before	sola/crossfade-1440	669.22	304.1		0	0	0	0	0	0						
+1	score-frozen-before	sola/mono/360	115093.47	52406.25		0	0	0	0	0	0						
+1	score-frozen-before	sola/stereo/360	237643.06	108356.25		0	0	0	0	0	0						
+1	score-frozen-before	sola/left-silent/360	117590.25	53659.38		0	0	0	0	0	0						
+1	score-frozen-before	sola/right-silent/360	115100.34	52700.0		0	0	0	0	0	0						
+1	score-frozen-before	sola/mono/720	468220.97	213993.75		0	0	0	0	0	0						
+1	score-frozen-before	sola/stereo/720	931461.97	425768.75		0	0	0	0	0	0						
+1	score-frozen-before	sola/left-silent/720	463206.75	211525.0		0	0	0	0	0	0						
+1	score-frozen-before	sola/right-silent/720	479045.0	218953.12		0	0	0	0	0	0						
+1	score-frozen-before	sola/stream-1ch-noise-1.2	576956.0	262450.0	b136b3511ed0a703	0	0	0	0	0	0						
+1	score-frozen-before	sola/stream-2ch-noise-0.8	2169537.5	989150.0	af8cf13a71adbea9	0	0	0	0	0	0						
+1	score-frozen-before	sola/stream-2ch-tone-1.2	223999.5	101600.0	5907aac396672cd5	0	0	0	0	0	0						
+1	score-frozen-before	sola/stream-2ch-left-silent-1.2	761995.0	352550.0	11b0c279269ca04b	0	0	0	0	0	0						
+1	score-frozen-before	sola/stream-2ch-silence-1.2	110518.0	49900.0	b40ebf824bb571ed	0	0	0	0	0	0						
+1	score-frozen-before	sola/stream-6ch-noise-1.2	3540205.5	1615200.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+2	score-frozen-before	sola/append-6ch	161773.19	73966.41		0	0	0	0	0	0	8	0	0	150012	0	150012
+2	score-frozen-before	sola/append-8ch	215549.0	98418.75		0	0	0	0	0	0	10	0	0	198096	0	198096
+2	score-frozen-before	sola/append-16ch	455601.42	208261.72		0	0	0	0	0	0	18	0	0	390432	0	390432
+2	score-frozen-before	sola/crossfade-256	143.62	64.55		0	0	0	0	0	0						
+2	score-frozen-before	sola/crossfade-1440	668.79	303.91		0	0	0	0	0	0						
+2	score-frozen-before	sola/mono/360	114723.06	52709.38		0	0	0	0	0	0						
+2	score-frozen-before	sola/stereo/360	234288.78	106878.12		0	0	0	0	0	0						
+2	score-frozen-before	sola/left-silent/360	117377.66	53528.12		0	0	0	0	0	0						
+2	score-frozen-before	sola/right-silent/360	116636.81	53440.62		0	0	0	0	0	0						
+2	score-frozen-before	sola/mono/720	482920.62	220615.62		0	0	0	0	0	0						
+2	score-frozen-before	sola/stereo/720	953802.94	435778.12		0	0	0	0	0	0						
+2	score-frozen-before	sola/left-silent/720	468344.41	213853.12		0	0	0	0	0	0						
+2	score-frozen-before	sola/right-silent/720	479387.97	218943.75		0	0	0	0	0	0						
+2	score-frozen-before	sola/stream-1ch-noise-1.2	567956.5	265150.0	b136b3511ed0a703	0	0	0	0	0	0						
+2	score-frozen-before	sola/stream-2ch-noise-0.8	2172501.5	996200.0	af8cf13a71adbea9	0	0	0	0	0	0						
+2	score-frozen-before	sola/stream-2ch-tone-1.2	219500.0	99550.0	5907aac396672cd5	0	0	0	0	0	0						
+2	score-frozen-before	sola/stream-2ch-left-silent-1.2	749043.5	347900.0	11b0c279269ca04b	0	0	0	0	0	0						
+2	score-frozen-before	sola/stream-2ch-silence-1.2	108652.5	49100.0	b40ebf824bb571ed	0	0	0	0	0	0						
+2	score-frozen-before	sola/stream-6ch-noise-1.2	3456466.0	1575350.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+2	score-frozen-final	sola/append-6ch	158295.51	72344.53		0	0	0	0	0	0	8	0	0	150012	0	150012
+2	score-frozen-final	sola/append-8ch	214784.19	98077.34		0	0	0	0	0	0	10	0	0	198096	0	198096
+2	score-frozen-final	sola/append-16ch	454651.38	207672.66		0	0	0	0	0	0	18	0	0	390432	0	390432
+2	score-frozen-final	sola/crossfade-256	166.98	75.29		0	0	0	0	0	0						
+2	score-frozen-final	sola/crossfade-1440	674.15	306.35		0	0	0	0	0	0						
+2	score-frozen-final	sola/mono/360	86249.78	39318.75		0	0	0	0	0	0						
+2	score-frozen-final	sola/stereo/360	172664.22	78778.12		0	0	0	0	0	0						
+2	score-frozen-final	sola/left-silent/360	87278.72	40081.25		0	0	0	0	0	0						
+2	score-frozen-final	sola/right-silent/360	88726.0	40400.0		0	0	0	0	0	0						
+2	score-frozen-final	sola/mono/720	338873.69	154675.0		0	0	0	0	0	0						
+2	score-frozen-final	sola/stereo/720	679818.97	310643.75		0	0	0	0	0	0						
+2	score-frozen-final	sola/left-silent/720	341411.69	156056.25		0	0	0	0	0	0						
+2	score-frozen-final	sola/right-silent/720	339058.94	154662.5		0	0	0	0	0	0						
+2	score-frozen-final	sola/stream-1ch-noise-1.2	445804.5	202700.0	b136b3511ed0a703	0	0	0	0	0	0						
+2	score-frozen-final	sola/stream-2ch-noise-0.8	1647347.5	758950.0	af8cf13a71adbea9	0	0	0	0	0	0						
+2	score-frozen-final	sola/stream-2ch-tone-1.2	195464.5	88700.0	5907aac396672cd5	0	0	0	0	0	0						
+2	score-frozen-final	sola/stream-2ch-left-silent-1.2	586943.0	266950.0	11b0c279269ca04b	0	0	0	0	0	0						
+2	score-frozen-final	sola/stream-2ch-silence-1.2	107994.0	48750.0	b40ebf824bb571ed	0	0	0	0	0	0						
+2	score-frozen-final	sola/stream-6ch-noise-1.2	2724873.0	1242650.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+3	score-frozen-final	sola/append-6ch	160080.67	73140.62		0	0	0	0	0	0	8	0	0	150012	0	150012
+3	score-frozen-final	sola/append-8ch	215348.36	98410.94		0	0	0	0	0	0	10	0	0	198096	0	198096
+3	score-frozen-final	sola/append-16ch	454164.34	207560.94		0	0	0	0	0	0	18	0	0	390432	0	390432
+3	score-frozen-final	sola/crossfade-256	180.7	81.54		0	0	0	0	0	0						
+3	score-frozen-final	sola/crossfade-1440	687.01	312.11		0	0	0	0	0	0						
+3	score-frozen-final	sola/mono/360	89007.25	40503.12		0	0	0	0	0	0						
+3	score-frozen-final	sola/stereo/360	178885.66	81931.25		0	0	0	0	0	0						
+3	score-frozen-final	sola/left-silent/360	90180.19	41318.75		0	0	0	0	0	0						
+3	score-frozen-final	sola/right-silent/360	85673.59	39096.88		0	0	0	0	0	0						
+3	score-frozen-final	sola/mono/720	346569.91	158315.62		0	0	0	0	0	0						
+3	score-frozen-final	sola/stereo/720	702496.06	320862.5		0	0	0	0	0	0						
+3	score-frozen-final	sola/left-silent/720	342859.03	156593.75		0	0	0	0	0	0						
+3	score-frozen-final	sola/right-silent/720	335046.16	153262.5		0	0	0	0	0	0						
+3	score-frozen-final	sola/stream-1ch-noise-1.2	448877.5	209950.0	b136b3511ed0a703	0	0	0	0	0	0						
+3	score-frozen-final	sola/stream-2ch-noise-0.8	1536171.0	699200.0	af8cf13a71adbea9	0	0	0	0	0	0						
+3	score-frozen-final	sola/stream-2ch-tone-1.2	195465.0	88650.0	5907aac396672cd5	0	0	0	0	0	0						
+3	score-frozen-final	sola/stream-2ch-left-silent-1.2	583102.0	271250.0	11b0c279269ca04b	0	0	0	0	0	0						
+3	score-frozen-final	sola/stream-2ch-silence-1.2	108323.0	48900.0	b40ebf824bb571ed	0	0	0	0	0	0						
+3	score-frozen-final	sola/stream-6ch-noise-1.2	2766029.5	1267450.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+3	score-frozen-before	sola/append-6ch	159144.36	72711.72		0	0	0	0	0	0	8	0	0	150012	0	150012
+3	score-frozen-before	sola/append-8ch	220588.93	100839.06		0	0	0	0	0	0	10	0	0	198096	0	198096
+3	score-frozen-before	sola/append-16ch	469743.71	214752.34		0	0	0	0	0	0	18	0	0	390432	0	390432
+3	score-frozen-before	sola/crossfade-256	143.62	64.65		0	0	0	0	0	0						
+3	score-frozen-before	sola/crossfade-1440	666.22	302.64		0	0	0	0	0	0						
+3	score-frozen-before	sola/mono/360	118996.47	54537.5		0	0	0	0	0	0						
+3	score-frozen-before	sola/stereo/360	243061.94	110859.38		0	0	0	0	0	0						
+3	score-frozen-before	sola/left-silent/360	122508.44	55787.5		0	0	0	0	0	0						
+3	score-frozen-before	sola/right-silent/360	120382.03	54815.62		0	0	0	0	0	0						
+3	score-frozen-before	sola/mono/720	487495.75	222921.88		0	0	0	0	0	0						
+3	score-frozen-before	sola/stereo/720	937333.56	428662.5		0	0	0	0	0	0						
+3	score-frozen-before	sola/left-silent/720	467109.72	213034.38		0	0	0	0	0	0						
+3	score-frozen-before	sola/right-silent/720	470827.47	214875.0		0	0	0	0	0	0						
+3	score-frozen-before	sola/stream-1ch-noise-1.2	564554.0	256800.0	b136b3511ed0a703	0	0	0	0	0	0						
+3	score-frozen-before	sola/stream-2ch-noise-0.8	2045959.5	932000.0	af8cf13a71adbea9	0	0	0	0	0	0						
+3	score-frozen-before	sola/stream-2ch-tone-1.2	219829.0	99750.0	5907aac396672cd5	0	0	0	0	0	0						
+3	score-frozen-before	sola/stream-2ch-left-silent-1.2	742459.0	337750.0	11b0c279269ca04b	0	0	0	0	0	0						
+3	score-frozen-before	sola/stream-2ch-silence-1.2	114030.5	51600.0	b40ebf824bb571ed	0	0	0	0	0	0						
+3	score-frozen-before	sola/stream-6ch-noise-1.2	3385238.5	1545050.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+4	score-frozen-before	sola/append-6ch	162198.5	74086.72		0	0	0	0	0	0	8	0	0	150012	0	150012
+4	score-frozen-before	sola/append-8ch	218757.47	99957.03		0	0	0	0	0	0	10	0	0	198096	0	198096
+4	score-frozen-before	sola/append-16ch	465372.59	212784.38		0	0	0	0	0	0	18	0	0	390432	0	390432
+4	score-frozen-before	sola/crossfade-256	144.05	64.65		0	0	0	0	0	0						
+4	score-frozen-before	sola/crossfade-1440	666.0	302.54		0	0	0	0	0	0						
+4	score-frozen-before	sola/mono/360	115491.31	52634.38		0	0	0	0	0	0						
+4	score-frozen-before	sola/stereo/360	235180.53	107168.75		0	0	0	0	0	0						
+4	score-frozen-before	sola/left-silent/360	118715.22	54478.12		0	0	0	0	0	0						
+4	score-frozen-before	sola/right-silent/360	118824.97	54187.5		0	0	0	0	0	0						
+4	score-frozen-before	sola/mono/720	474881.44	217118.75		0	0	0	0	0	0						
+4	score-frozen-before	sola/stereo/720	950860.31	435071.88		0	0	0	0	0	0						
+4	score-frozen-before	sola/left-silent/720	471870.16	215978.12		0	0	0	0	0	0						
+4	score-frozen-before	sola/right-silent/720	478215.03	218246.88		0	0	0	0	0	0						
+4	score-frozen-before	sola/stream-1ch-noise-1.2	582224.0	268700.0	b136b3511ed0a703	0	0	0	0	0	0						
+4	score-frozen-before	sola/stream-2ch-noise-0.8	2200597.0	1003850.0	af8cf13a71adbea9	0	0	0	0	0	0						
+4	score-frozen-before	sola/stream-2ch-tone-1.2	224768.0	101950.0	5907aac396672cd5	0	0	0	0	0	0						
+4	score-frozen-before	sola/stream-2ch-left-silent-1.2	768360.0	350950.0	11b0c279269ca04b	0	0	0	0	0	0						
+4	score-frozen-before	sola/stream-2ch-silence-1.2	111945.0	50600.0	b40ebf824bb571ed	0	0	0	0	0	0						
+4	score-frozen-before	sola/stream-6ch-noise-1.2	3532193.0	1623050.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+4	score-frozen-final	sola/append-6ch	160593.41	73354.69		0	0	0	0	0	0	8	0	0	150012	0	150012
+4	score-frozen-final	sola/append-8ch	214425.79	97947.66		0	0	0	0	0	0	10	0	0	198096	0	198096
+4	score-frozen-final	sola/append-16ch	460531.57	210500.0		0	0	0	0	0	0	18	0	0	390432	0	390432
+4	score-frozen-final	sola/crossfade-256	169.13	76.17		0	0	0	0	0	0						
+4	score-frozen-final	sola/crossfade-1440	669.65	304.2		0	0	0	0	0	0						
+4	score-frozen-final	sola/mono/360	87436.44	40103.12		0	0	0	0	0	0						
+4	score-frozen-final	sola/stereo/360	178302.59	81456.25		0	0	0	0	0	0						
+4	score-frozen-final	sola/left-silent/360	89357.09	40737.5		0	0	0	0	0	0						
+4	score-frozen-final	sola/right-silent/360	88561.38	40321.88		0	0	0	0	0	0						
+4	score-frozen-final	sola/mono/720	339257.81	154678.12		0	0	0	0	0	0						
+4	score-frozen-final	sola/stereo/720	688873.34	314825.0		0	0	0	0	0	0						
+4	score-frozen-final	sola/left-silent/720	348730.66	159681.25		0	0	0	0	0	0						
+4	score-frozen-final	sola/right-silent/720	339189.25	154653.12		0	0	0	0	0	0						
+4	score-frozen-final	sola/stream-1ch-noise-1.2	447341.0	203400.0	b136b3511ed0a703	0	0	0	0	0	0						
+4	score-frozen-final	sola/stream-2ch-noise-0.8	1632641.0	744550.0	af8cf13a71adbea9	0	0	0	0	0	0						
+4	score-frozen-final	sola/stream-2ch-tone-1.2	188441.0	85450.0	5907aac396672cd5	0	0	0	0	0	0						
+4	score-frozen-final	sola/stream-2ch-left-silent-1.2	590674.5	269850.0	11b0c279269ca04b	0	0	0	0	0	0						
+4	score-frozen-final	sola/stream-2ch-silence-1.2	107884.5	48700.0	b40ebf824bb571ed	0	0	0	0	0	0						
+4	score-frozen-final	sola/stream-6ch-noise-1.2	2761749.0	1258650.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+5	score-frozen-final	sola/append-6ch	159423.88	72888.28		0	0	0	0	0	0	8	0	0	150012	0	150012
+5	score-frozen-final	sola/append-8ch	217754.3	99534.38		0	0	0	0	0	0	10	0	0	198096	0	198096
+5	score-frozen-final	sola/append-16ch	458360.6	209398.44		0	0	0	0	0	0	18	0	0	390432	0	390432
+5	score-frozen-final	sola/crossfade-256	168.05	75.78		0	0	0	0	0	0						
+5	score-frozen-final	sola/crossfade-1440	665.57	302.44		0	0	0	0	0	0						
+5	score-frozen-final	sola/mono/360	85069.94	38796.88		0	0	0	0	0	0						
+5	score-frozen-final	sola/stereo/360	173981.19	79296.88		0	0	0	0	0	0						
+5	score-frozen-final	sola/left-silent/360	87477.59	39765.62		0	0	0	0	0	0						
+5	score-frozen-final	sola/right-silent/360	87532.47	39962.5		0	0	0	0	0	0						
+5	score-frozen-final	sola/mono/720	348127.03	159421.88		0	0	0	0	0	0						
+5	score-frozen-final	sola/stereo/720	686431.34	313800.0		0	0	0	0	0	0						
+5	score-frozen-final	sola/left-silent/720	350472.88	160200.0		0	0	0	0	0	0						
+5	score-frozen-final	sola/right-silent/720	338736.47	154815.62		0	0	0	0	0	0						
+5	score-frozen-final	sola/stream-1ch-noise-1.2	445695.0	202600.0	b136b3511ed0a703	0	0	0	0	0	0						
+5	score-frozen-final	sola/stream-2ch-noise-0.8	1636153.0	746900.0	af8cf13a71adbea9	0	0	0	0	0	0						
+5	score-frozen-final	sola/stream-2ch-tone-1.2	195684.0	88700.0	5907aac396672cd5	0	0	0	0	0	0						
+5	score-frozen-final	sola/stream-2ch-left-silent-1.2	586504.0	266750.0	11b0c279269ca04b	0	0	0	0	0	0						
+5	score-frozen-final	sola/stream-2ch-silence-1.2	108103.5	48850.0	b40ebf824bb571ed	0	0	0	0	0	0						
+5	score-frozen-final	sola/stream-6ch-noise-1.2	2733543.5	1246100.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+5	score-frozen-before	sola/append-6ch	159571.36	72915.62		0	0	0	0	0	0	8	0	0	150012	0	150012
+5	score-frozen-before	sola/append-8ch	214605.82	98107.81		0	0	0	0	0	0	10	0	0	198096	0	198096
+5	score-frozen-before	sola/append-16ch	458360.56	209475.0		0	0	0	0	0	0	18	0	0	390432	0	390432
+5	score-frozen-before	sola/crossfade-256	145.55	65.53		0	0	0	0	0	0						
+5	score-frozen-before	sola/crossfade-1440	1193.32	541.89		0	0	0	0	0	0						
+5	score-frozen-before	sola/mono/360	119449.16	54493.75		0	0	0	0	0	0						
+5	score-frozen-before	sola/stereo/360	232491.66	106025.0		0	0	0	0	0	0						
+5	score-frozen-before	sola/left-silent/360	117014.09	53734.38		0	0	0	0	0	0						
+5	score-frozen-before	sola/right-silent/360	115093.47	52518.75		0	0	0	0	0	0						
+5	score-frozen-before	sola/mono/720	484319.94	221365.62		0	0	0	0	0	0						
+5	score-frozen-before	sola/stereo/720	963337.47	441037.5		0	0	0	0	0	0						
+5	score-frozen-before	sola/left-silent/720	471362.5	215500.0		0	0	0	0	0	0						
+5	score-frozen-before	sola/right-silent/720	476294.44	217553.12		0	0	0	0	0	0						
+5	score-frozen-before	sola/stream-1ch-noise-1.2	570700.5	261150.0	b136b3511ed0a703	0	0	0	0	0	0						
+5	score-frozen-before	sola/stream-2ch-noise-0.8	2179964.0	995250.0	af8cf13a71adbea9	0	0	0	0	0	0						
+5	score-frozen-before	sola/stream-2ch-tone-1.2	219280.5	99450.0	5907aac396672cd5	0	0	0	0	0	0						
+5	score-frozen-before	sola/stream-2ch-left-silent-1.2	747397.5	340050.0	11b0c279269ca04b	0	0	0	0	0	0						
+5	score-frozen-before	sola/stream-2ch-silence-1.2	108652.5	49150.0	b40ebf824bb571ed	0	0	0	0	0	0						
+5	score-frozen-before	sola/stream-6ch-noise-1.2	3492574.0	1594350.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+6	score-frozen-before	sola/append-6ch	160908.93	73546.09		0	0	0	0	0	0	8	0	0	150012	0	150012
+6	score-frozen-before	sola/append-8ch	218503.69	99860.16		0	0	0	0	0	0	10	0	0	198096	0	198096
+6	score-frozen-before	sola/append-16ch	459523.23	210137.5		0	0	0	0	0	0	18	0	0	390432	0	390432
+6	score-frozen-before	sola/crossfade-256	161.84	72.56		0	0	0	0	0	0						
+6	score-frozen-before	sola/crossfade-1440	725.17	333.2		0	0	0	0	0	0						
+6	score-frozen-before	sola/mono/360	117336.47	53418.75		0	0	0	0	0	0						
+6	score-frozen-before	sola/stereo/360	235653.78	107868.75		0	0	0	0	0	0						
+6	score-frozen-before	sola/left-silent/360	118379.06	54003.12		0	0	0	0	0	0						
+6	score-frozen-before	sola/right-silent/360	117103.25	53415.62		0	0	0	0	0	0						
+6	score-frozen-before	sola/mono/720	477028.41	217953.12		0	0	0	0	0	0						
+6	score-frozen-before	sola/stereo/720	964311.5	440246.88		0	0	0	0	0	0						
+6	score-frozen-before	sola/left-silent/720	482845.09	221090.62		0	0	0	0	0	0						
+6	score-frozen-before	sola/right-silent/720	489306.66	224006.25		0	0	0	0	0	0						
+6	score-frozen-before	sola/stream-1ch-noise-1.2	582772.5	264950.0	b136b3511ed0a703	0	0	0	0	0	0						
+6	score-frozen-before	sola/stream-2ch-noise-0.8	2169647.5	989900.0	af8cf13a71adbea9	0	0	0	0	0	0						
+6	score-frozen-before	sola/stream-2ch-tone-1.2	225316.5	102250.0	5907aac396672cd5	0	0	0	0	0	0						
+6	score-frozen-before	sola/stream-2ch-left-silent-1.2	765945.5	350200.0	11b0c279269ca04b	0	0	0	0	0	0						
+6	score-frozen-before	sola/stream-2ch-silence-1.2	108762.0	49150.0	b40ebf824bb571ed	0	0	0	0	0	0						
+6	score-frozen-before	sola/stream-6ch-noise-1.2	3575545.0	1630150.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+6	score-frozen-final	sola/append-6ch	169738.67	77738.28		0	0	0	0	0	0	8	0	0	150012	0	150012
+6	score-frozen-final	sola/append-8ch	226143.3	103367.19		0	0	0	0	0	0	10	0	0	198096	0	198096
+6	score-frozen-final	sola/append-16ch	476832.88	217959.38		0	0	0	0	0	0	18	0	0	390432	0	390432
+6	score-frozen-final	sola/crossfade-256	147.69	66.6		0	0	0	0	0	0						
+6	score-frozen-final	sola/crossfade-1440	670.29	304.59		0	0	0	0	0	0						
+6	score-frozen-final	sola/mono/360	84438.91	38509.38		0	0	0	0	0	0						
+6	score-frozen-final	sola/stereo/360	188859.22	86737.5		0	0	0	0	0	0						
+6	score-frozen-final	sola/left-silent/360	97739.22	44853.12		0	0	0	0	0	0						
+6	score-frozen-final	sola/right-silent/360	95057.22	43359.38		0	0	0	0	0	0						
+6	score-frozen-final	sola/mono/720	367298.97	167468.75		0	0	0	0	0	0						
+6	score-frozen-final	sola/stereo/720	746478.34	341503.12		0	0	0	0	0	0						
+6	score-frozen-final	sola/left-silent/720	363841.81	166318.75		0	0	0	0	0	0						
+6	score-frozen-final	sola/right-silent/720	361379.31	165365.62		0	0	0	0	0	0						
+6	score-frozen-final	sola/stream-1ch-noise-1.2	440317.0	200200.0	b136b3511ed0a703	0	0	0	0	0	0						
+6	score-frozen-final	sola/stream-2ch-noise-0.8	1683894.0	768300.0	af8cf13a71adbea9	0	0	0	0	0	0						
+6	score-frozen-final	sola/stream-2ch-tone-1.2	195904.0	88850.0	5907aac396672cd5	0	0	0	0	0	0						
+6	score-frozen-final	sola/stream-2ch-left-silent-1.2	591004.0	268800.0	11b0c279269ca04b	0	0	0	0	0	0						
+6	score-frozen-final	sola/stream-2ch-silence-1.2	96799.5	43750.0	b40ebf824bb571ed	0	0	0	0	0	0						
+6	score-frozen-final	sola/stream-6ch-noise-1.2	2828477.0	1289800.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+7	score-frozen-final	sola/append-6ch	162808.98	74489.84		0	0	0	0	0	0	8	0	0	150012	0	150012
+7	score-frozen-final	sola/append-8ch	224054.62	102346.09		0	0	0	0	0	0	10	0	0	198096	0	198096
+7	score-frozen-final	sola/append-16ch	473097.95	216242.19		0	0	0	0	0	0	18	0	0	390432	0	390432
+7	score-frozen-final	sola/crossfade-256	171.7	77.44		0	0	0	0	0	0						
+7	score-frozen-final	sola/crossfade-1440	708.02	321.68		0	0	0	0	0	0						
+7	score-frozen-final	sola/mono/360	91483.5	41721.88		0	0	0	0	0	0						
+7	score-frozen-final	sola/stereo/360	185292.28	85075.0		0	0	0	0	0	0						
+7	score-frozen-final	sola/left-silent/360	90187.06	41159.38		0	0	0	0	0	0						
+7	score-frozen-final	sola/right-silent/360	93705.94	43403.12		0	0	0	0	0	0						
+7	score-frozen-final	sola/mono/720	360707.06	164521.88		0	0	0	0	0	0						
+7	score-frozen-final	sola/stereo/720	717195.72	327628.12		0	0	0	0	0	0						
+7	score-frozen-final	sola/left-silent/720	358813.94	163615.62		0	0	0	0	0	0						
+7	score-frozen-final	sola/right-silent/720	357675.25	163696.88		0	0	0	0	0	0						
+7	score-frozen-final	sola/stream-1ch-noise-1.2	452828.5	205700.0	b136b3511ed0a703	0	0	0	0	0	0						
+7	score-frozen-final	sola/stream-2ch-noise-0.8	1644823.0	749450.0	af8cf13a71adbea9	0	0	0	0	0	0						
+7	score-frozen-final	sola/stream-2ch-tone-1.2	195355.0	88600.0	5907aac396672cd5	0	0	0	0	0	0						
+7	score-frozen-final	sola/stream-2ch-left-silent-1.2	591113.5	274750.0	11b0c279269ca04b	0	0	0	0	0	0						
+7	score-frozen-final	sola/stream-2ch-silence-1.2	113481.5	51100.0	b40ebf824bb571ed	0	0	0	0	0	0						
+7	score-frozen-final	sola/stream-6ch-noise-1.2	2819697.0	1285950.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+7	score-frozen-before	sola/append-6ch	166610.78	76168.75		0	0	0	0	0	0	8	0	0	150012	0	150012
+7	score-frozen-before	sola/append-8ch	221506.35	101356.25		0	0	0	0	0	0	10	0	0	198096	0	198096
+7	score-frozen-before	sola/append-16ch	478525.44	218778.12		0	0	0	0	0	0	18	0	0	390432	0	390432
+7	score-frozen-before	sola/crossfade-256	143.83	64.65		0	0	0	0	0	0						
+7	score-frozen-before	sola/crossfade-1440	668.79	303.91		0	0	0	0	0	0						
+7	score-frozen-before	sola/mono/360	121410.94	55256.25		0	0	0	0	0	0						
+7	score-frozen-before	sola/stereo/360	250058.53	113993.75		0	0	0	0	0	0						
+7	score-frozen-before	sola/left-silent/360	123777.44	56656.25		0	0	0	0	0	0						
+7	score-frozen-before	sola/right-silent/360	122796.56	55971.88		0	0	0	0	0	0						
+7	score-frozen-before	sola/mono/720	492345.34	224956.25		0	0	0	0	0	0						
+7	score-frozen-before	sola/stereo/720	977124.78	446659.38		0	0	0	0	0	0						
+7	score-frozen-before	sola/left-silent/720	477522.25	218306.25		0	0	0	0	0	0						
+7	score-frozen-before	sola/right-silent/720	491741.75	224765.62		0	0	0	0	0	0						
+7	score-frozen-before	sola/stream-1ch-noise-1.2	579041.0	263250.0	b136b3511ed0a703	0	0	0	0	0	0						
+7	score-frozen-before	sola/stream-2ch-noise-0.8	2209597.0	1008200.0	af8cf13a71adbea9	0	0	0	0	0	0						
+7	score-frozen-before	sola/stream-2ch-tone-1.2	219829.5	99750.0	5907aac396672cd5	0	0	0	0	0	0						
+7	score-frozen-before	sola/stream-2ch-left-silent-1.2	673206.5	306350.0	11b0c279269ca04b	0	0	0	0	0	0						
+7	score-frozen-before	sola/stream-2ch-silence-1.2	108762.5	49200.0	b40ebf824bb571ed	0	0	0	0	0	0						
+7	score-frozen-before	sola/stream-6ch-noise-1.2	3483794.5	1594800.0	5d00c00f1cc77d00	0	0	0	0	0	0						

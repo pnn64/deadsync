@@ -11,7 +11,8 @@
 //! author included. Both are ordinary pages, not downloads, so a rip asks them
 //! as freely as it reads a pack page. The chart's reading also says how long
 //! the song is and how many measures the chart runs to, which a card's BPM
-//! takes its colour from ([`super::bpm`]).
+//! takes its colour from ([`super::bpm`]), and its notes say whether it is
+//! written for a keyboard.
 //!
 //! Everything here blocks on the network. Worker threads only.
 
@@ -210,6 +211,9 @@ pub(super) struct ChartFacts {
     pub length_ms: Option<u32>,
     /// How many measures the chart's notes run to.
     pub measures: Option<u32>,
+    /// Written for a keyboard: hands, or jumpstream at a keyboard's pace
+    /// ([`Shape::keyboard`]). False when the notes cannot be read.
+    pub keyboard: bool,
 }
 
 pub(super) fn fetch_chart(agent: &network::HttpAgent, chart_id: u64) -> Result<ChartFacts, String> {
@@ -249,6 +253,7 @@ pub(super) fn parse_chart(body: &str) -> Result<ChartFacts, String> {
         _ => 0,
     };
     let (length_ms, measures) = lengths(body);
+    let keyboard = keyboard(body);
     Ok(ChartFacts {
         author: chart.author.unwrap_or_default().trim().to_owned(),
         meter,
@@ -257,6 +262,7 @@ pub(super) fn parse_chart(body: &str) -> Result<ChartFacts, String> {
         chart_key: chart.chart_key.unwrap_or_default(),
         length_ms,
         measures,
+        keyboard,
     })
 }
 
@@ -293,6 +299,89 @@ fn lengths(body: &str) -> (Option<u32>, Option<u32>) {
         .map(|measures| u32::try_from(measures.len()).unwrap_or(u32::MAX))
         .filter(|measures| *measures > 0);
     (length_ms, measures)
+}
+
+/// What a chart's rows hold: how many have a note in them, how many of those
+/// are jumps (two at once) and hands (three or more), and the notes in all.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct Shape {
+    rows: u32,
+    jumps: u32,
+    hands: u32,
+    notes: u32,
+}
+
+/// Hands in one row in twenty or more: of 70 pad charts from stamina, tech
+/// and tournament packs none had more than 3%, where chordjack, Etterna and
+/// osu!mania charts run 7 to 75%. Or jumps in nearly half the rows at seven
+/// notes a second or more, a keyboard jumpstream, where pad charts had at
+/// most 26%. The relay judges a chart the same way.
+const HANDS_SHARE: f64 = 0.05;
+const JUMPS_SHARE: f64 = 0.45;
+const JUMPS_NPS: f64 = 7.0;
+
+impl Shape {
+    /// A tap, a hold's head or a roll's head is a note.
+    fn of(rows: &[Vec<String>]) -> Self {
+        let mut shape = Self::default();
+        for row in rows {
+            let notes = row
+                .iter()
+                .filter(|cell| matches!(cell.as_str(), "1" | "2" | "4"))
+                .count();
+            let notes = u32::try_from(notes).unwrap_or(u32::MAX);
+            if notes == 0 {
+                continue;
+            }
+            shape.rows = shape.rows.saturating_add(1);
+            shape.notes = shape.notes.saturating_add(notes);
+            match notes {
+                2 => shape.jumps = shape.jumps.saturating_add(1),
+                3.. => shape.hands = shape.hands.saturating_add(1),
+                _ => {}
+            }
+        }
+        shape
+    }
+
+    /// Whether the chart is written for a keyboard, at `nps` notes a second
+    /// as the site averages them.
+    fn keyboard(self, nps: Option<f64>) -> bool {
+        if self.rows == 0 {
+            return false;
+        }
+        let share = |n: u32| f64::from(n) / f64::from(self.rows);
+        share(self.hands) >= HANDS_SHARE
+            || (share(self.jumps) >= JUMPS_SHARE && nps.is_some_and(|nps| nps >= JUMPS_NPS))
+    }
+}
+
+/// The notes, read apart from the rest as [`Lengths`] is: a reply that has
+/// them in some other shape costs only this check, never the song.
+#[derive(serde::Deserialize)]
+struct Notes {
+    chartdata: Vec<Measure>,
+    #[serde(default)]
+    npsavg: Option<serde_json::Value>,
+}
+
+/// A measure as the site sends it: its index, then its rows, a cell a column.
+#[derive(serde::Deserialize)]
+struct Measure(serde::de::IgnoredAny, Vec<Vec<String>>);
+
+fn keyboard(body: &str) -> bool {
+    let Ok(notes) = serde_json::from_str::<Notes>(body) else {
+        return false;
+    };
+    let mut shape = Shape::default();
+    for Measure(_, rows) in &notes.chartdata {
+        let measure = Shape::of(rows);
+        shape.rows = shape.rows.saturating_add(measure.rows);
+        shape.jumps = shape.jumps.saturating_add(measure.jumps);
+        shape.hands = shape.hands.saturating_add(measure.hands);
+        shape.notes = shape.notes.saturating_add(measure.notes);
+    }
+    shape.keyboard(notes.npsavg.as_ref().and_then(serde_json::Value::as_f64))
 }
 
 fn fetch_text(agent: &network::HttpAgent, url: String, max_bytes: usize) -> Result<String, String> {
@@ -491,8 +580,73 @@ mod tests {
                 chart_key: "X31013383114125e64aa270738ed05377c1dadd94".to_owned(),
                 length_ms: Some(156_734),
                 measures: Some(1),
+                keyboard: false,
             }
         );
+    }
+
+    /// `/api/chart` with the given rows, one measure of them, and SMO's
+    /// average.
+    fn chart_with(rows: &[&str], nps: f64) -> String {
+        let rows: Vec<String> = rows
+            .iter()
+            .map(|row| {
+                let cells: Vec<String> = row.chars().map(|cell| format!("\"{cell}\"")).collect();
+                format!("[{}]", cells.join(", "))
+            })
+            .collect();
+        format!(
+            r#"{{"author": "x", "meter": 12, "npsavg": {nps}, "chartdata": [[0, [{}]]]}}"#,
+            rows.join(", ")
+        )
+    }
+
+    #[test]
+    fn a_chart_with_hands_is_a_keyboard_chart() {
+        // a chordjack: hands in most rows
+        let chordjack = chart_with(&["1101", "0111", "1110", "1001", "1111"], 20.0);
+        assert!(parse_chart(&chordjack).unwrap().keyboard);
+        // a pad stream with a jump now and then, mines and holds' tails aside
+        let stream = chart_with(
+            &[
+                "1000", "0100", "0010", "0001", "1001", "0M00", "3000", "0200", "0010", "0001",
+            ],
+            12.0,
+        );
+        assert!(!parse_chart(&stream).unwrap().keyboard);
+        // one hand in twenty rows is the line
+        let mut rows = vec!["1000"; 19];
+        rows.push("1110");
+        assert!(parse_chart(&chart_with(&rows, 8.0)).unwrap().keyboard);
+        rows.push("0100");
+        assert!(!parse_chart(&chart_with(&rows, 8.0)).unwrap().keyboard);
+    }
+
+    #[test]
+    fn jumpstream_is_a_keyboard_chart_only_at_a_keyboards_pace() {
+        let rows = [
+            "1001", "0110", "1000", "1010", "0101", "0010", "1100", "0001", "0011", "0100",
+        ];
+        // half jumps
+        assert!(parse_chart(&chart_with(&rows, 9.5)).unwrap().keyboard);
+        assert!(
+            !parse_chart(&chart_with(&rows, 5.0)).unwrap().keyboard,
+            "slow"
+        );
+        let no_average = r#"{"chartdata": [[0, [["1","0","0","1"], ["0","1","1","0"]]]]}"#;
+        assert!(
+            !parse_chart(no_average).unwrap().keyboard,
+            "no pace to go by"
+        );
+    }
+
+    #[test]
+    fn notes_in_another_shape_say_nothing_and_cost_nothing() {
+        let odd = r#"{"author": "Zaia", "meter": 9, "npsavg": 20, "chartdata": [[0, "1111"]]}"#;
+        let chart = parse_chart(odd).unwrap();
+        assert_eq!((chart.author.as_str(), chart.meter), ("Zaia", 9));
+        assert!(!chart.keyboard);
+        assert!(!parse_chart(r#"{"author": "x"}"#).unwrap().keyboard);
     }
 
     #[test]

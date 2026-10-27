@@ -289,6 +289,9 @@ const fn gameplay_target_score_setting(
         deadsync_profile::TargetScoreSetting::MachineBest => {
             deadsync_gameplay::GameplayTargetScoreSetting::MachineBest
         }
+        deadsync_profile::TargetScoreSetting::GhostData => {
+            deadsync_gameplay::GameplayTargetScoreSetting::GhostData
+        }
         deadsync_profile::TargetScoreSetting::PersonalBest => {
             deadsync_gameplay::GameplayTargetScoreSetting::PersonalBest
         }
@@ -1781,6 +1784,29 @@ pub fn save_local_scores_from_app_runtime<RuntimeProfile, OverlayActor, Captured
     RuntimeProfile:
         Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
 {
+    for player in 0..gs.num_players() {
+        let Some(histories) = gs.ghost_history_for_save(player) else {
+            continue;
+        };
+        let Some((_, id)) =
+            deadsync_profile::app_runtime::active_local_profile_id_for_gameplay_player(
+                gs.num_players(),
+                player,
+            )
+        else {
+            continue;
+        };
+        let Some(chart) = gs.chart(player) else {
+            continue;
+        };
+        let dir = deadsync_profile::app_runtime::local_profile_dir(&id);
+        if let Err(error) = deadsync_score::ghost::save_best(&dir, &chart.short_hash, histories) {
+            log::warn!(
+                "Could not save ghost history for {}: {error}",
+                chart.short_hash
+            );
+        }
+    }
     save_local_scores_from_runtime(
         gs,
         |num_players, player_idx| {

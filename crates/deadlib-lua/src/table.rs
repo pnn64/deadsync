@@ -1,17 +1,28 @@
 //! Array storage and indexed hash entries with deletion-safe linear iteration.
 
-use crate::{Error, ErrorKind, FunctionId, StringId, TableId, ThreadId, Value};
+use crate::{
+    Error, ErrorKind, FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value,
+};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 enum Key {
     Boolean(bool),
     Number(u64),
     String(StringId),
     Table(TableId),
     Function(FunctionId),
-    Native(u32),
+    Native(u64),
     Thread(ThreadId),
+    Userdata(UserdataId),
+    LightUserdata(u64),
+    ParserPrototype(ParserPrototypeId),
 }
+impl PartialEq for Key {
+    fn eq(&self, other: &Self) -> bool {
+        self.identity() == other.identity()
+    }
+}
+impl Eq for Key {}
 
 impl Key {
     fn from_value(value: Value) -> Option<Self> {
@@ -19,12 +30,15 @@ impl Key {
             Value::Nil => return None,
             Value::Boolean(v) => Self::Boolean(v),
             Value::Number(v) if v.is_nan() => return None,
-            Value::Number(v) => Self::Number(if v == 0.0 { 0 } else { v.to_bits() }),
+            Value::Number(v) => Self::Number(v.to_bits()),
             Value::String(v) => Self::String(v),
             Value::Table(v) => Self::Table(v),
             Value::Function(v) => Self::Function(v),
             Value::Native(v) => Self::Native(v),
             Value::Thread(v) => Self::Thread(v),
+            Value::Userdata(v) => Self::Userdata(v),
+            Value::LightUserdata(v) => Self::LightUserdata(v),
+            Value::ParserPrototype(v) => Self::ParserPrototype(v),
         })
     }
     fn value(self) -> Value {
@@ -36,20 +50,29 @@ impl Key {
             Self::Function(v) => Value::Function(v),
             Self::Native(v) => Value::Native(v),
             Self::Thread(v) => Value::Thread(v),
+            Self::Userdata(v) => Value::Userdata(v),
+            Self::LightUserdata(v) => Value::LightUserdata(v),
+            Self::ParserPrototype(v) => Value::ParserPrototype(v),
+        }
+    }
+    fn identity(self) -> (u64, u64) {
+        match self {
+            Self::Boolean(v) => (u64::from(v), 1),
+            Self::Number(v) => (if v << 1 == 0 { 0 } else { v }, 2),
+            Self::String(v) => (v.0, 3),
+            Self::Table(v) => (v.0, 4),
+            Self::Function(v) => (v.0, 5),
+            Self::Native(v) => (v, 6),
+            Self::Thread(v) => (v.0, 7),
+            Self::Userdata(v) => (v.0, 8),
+            Self::LightUserdata(v) => (v, 9),
+            Self::ParserPrototype(v) => (v.0, 10),
         }
     }
     fn hash(self) -> usize {
-        let (bits, tag) = match self {
-            Self::Boolean(v) => (u64::from(v), 1),
-            Self::Number(v) => (v, 2),
-            Self::String(v) => (u64::from(v.0), 3),
-            Self::Table(v) => (u64::from(v.0), 4),
-            Self::Function(v) => (u64::from(v.0), 5),
-            Self::Native(v) => (u64::from(v), 6),
-            Self::Thread(v) => (u64::from(v.0), 7),
-        };
+        let (bits, tag) = self.identity();
         let mut h = bits
-            ^ (tag as u64)
+            ^ tag
                 .wrapping_mul(0x9e3779b97f4a7c15)
                 .wrapping_add(bits.rotate_left(17));
         h = (h ^ (h >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
@@ -81,10 +104,129 @@ pub(crate) struct Table {
     array: Vec<Value>,
     entries: Vec<Entry>,
     slots: Vec<u32>,
-    pub metatable: Option<TableId>,
+    // Arena identities have a nonzero generation; zero denotes no metatable.
+    // This leaves room for the scan state without growing the table header.
+    metatable: u64,
+    pub trace: TableTrace,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum TableTrace {
+    #[default]
+    Idle,
+    Pending(bool, bool),
+    Restart,
 }
 
 impl Table {
+    pub fn with_capacity(array: usize, records: usize) -> Result<Self, Error> {
+        let failed = || Error::new(ErrorKind::Runtime, 0, "not enough memory");
+        let slots = if records == 0 {
+            0
+        } else {
+            records
+                .checked_mul(4)
+                .and_then(|n| (n / 3 + 1).max(8).checked_next_power_of_two())
+                .ok_or_else(failed)?
+        };
+        let mut table = Self::default();
+        table.array.try_reserve_exact(array).map_err(|_| failed())?;
+        table.array.resize(array, Value::Nil);
+        table
+            .entries
+            .try_reserve_exact(records)
+            .map_err(|_| failed())?;
+        table.slots.try_reserve_exact(slots).map_err(|_| failed())?;
+        table.slots.resize(slots, 0);
+        Ok(table)
+    }
+    pub fn metatable(&self) -> Option<TableId> {
+        (self.metatable != 0).then_some(TableId(self.metatable))
+    }
+    pub fn set_metatable(&mut self, table: Option<TableId>) {
+        self.metatable = table.map_or(0, |id| id.0);
+    }
+    pub fn with_record_capacity(capacity: usize) -> Self {
+        if capacity == 0 {
+            return Self::default();
+        }
+        // Keep the final insert below the strict 3/4 rebuild threshold.
+        let slots = (capacity.checked_mul(4).expect("table capacity overflow") / 3 + 1)
+            .max(8)
+            .next_power_of_two();
+        Self {
+            entries: Vec::with_capacity(capacity),
+            slots: vec![0; slots],
+            ..Self::default()
+        }
+    }
+    pub fn heap_bytes(&self) -> usize {
+        self.array.capacity() * std::mem::size_of::<Value>()
+            + self.entries.capacity() * std::mem::size_of::<Entry>()
+            + self.slots.capacity() * 4
+    }
+    pub fn pairs(&self) -> impl Iterator<Item = (Value, Value)> + '_ {
+        self.array
+            .iter()
+            .enumerate()
+            .filter(|(_, v)| **v != Value::Nil)
+            .map(|(i, v)| (Value::Number((i + 1) as f64), *v))
+            .chain(
+                self.entries
+                    .iter()
+                    .filter(|e| e.value != Value::Nil)
+                    .map(|e| (e.key.value(), e.value)),
+            )
+    }
+    /// Visit at most `budget` physical slots, including holes and tombstones.
+    /// The low cursor bit selects array/hash storage; the other bits are an index.
+    pub fn trace_slice(
+        &self,
+        cursor: usize,
+        budget: usize,
+    ) -> (Option<usize>, impl Iterator<Item = (Value, Value)> + '_) {
+        let start = cursor >> 1;
+        let (array, entries, next) = if cursor & 1 == 0 {
+            let end = start.saturating_add(budget).min(self.array.len());
+            let hash_end = if end == self.array.len() {
+                budget.saturating_sub(end - start).min(self.entries.len())
+            } else {
+                0
+            };
+            let next = if end < self.array.len() {
+                Some(end << 1)
+            } else {
+                (hash_end < self.entries.len()).then_some((hash_end << 1) | 1)
+            };
+            (&self.array[start..end], &self.entries[..hash_end], next)
+        } else {
+            let end = start.saturating_add(budget).min(self.entries.len());
+            (
+                &self.array[..0],
+                &self.entries[start..end],
+                (end < self.entries.len()).then_some((end << 1) | 1),
+            )
+        };
+        (
+            next,
+            array
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| **v != Value::Nil)
+                .map(move |(i, v)| (Value::Number((start + i + 1) as f64), *v))
+                .chain(
+                    entries
+                        .iter()
+                        .filter(|e| e.value != Value::Nil)
+                        .map(|e| (e.key.value(), e.value)),
+                ),
+        )
+    }
+    fn invalidate_trace(&mut self) {
+        if self.trace != TableTrace::Idle {
+            self.trace = TableTrace::Restart;
+        }
+    }
     fn slot(&self, key: Key) -> Option<(usize, Option<usize>)> {
         if self.slots.is_empty() {
             return None;
@@ -102,7 +244,11 @@ impl Table {
         }
     }
     fn rebuild(&mut self) {
+        let old_len = self.entries.len();
         self.entries.retain(|entry| entry.value != Value::Nil);
+        if self.entries.len() != old_len {
+            self.invalidate_trace();
+        }
         if (self.entries.len() + 1) * 4 >= self.slots.len() * 3 {
             self.slots.resize((self.slots.len() * 2).max(8), 0);
         }
@@ -121,6 +267,9 @@ impl Table {
             return None;
         };
         let old = std::mem::replace(&mut self.entries[i].value, Value::Nil);
+        if old != Value::Nil {
+            self.invalidate_trace();
+        }
         (old != Value::Nil).then_some(old)
     }
     pub fn get(&self, key: Value) -> Value {

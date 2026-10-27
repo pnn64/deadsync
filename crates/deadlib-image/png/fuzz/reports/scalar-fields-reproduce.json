@@ -1,0 +1,41 @@
+{
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "run",
+        "--manifest-path",
+        "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/Cargo.toml",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--example",
+        "seed_fuzz",
+        "--target-dir",
+        "/tmp/deadlib-image-scalar-fields-seed-target-20261027-a",
+        "--",
+        "/tmp/deadlib-image-scalar-fields-full-reproduction-20261027-a"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 6.011819867999293
+    },
+    {
+      "command": [
+        "python3",
+        "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/scripts/archive_native_seeds.py",
+        "--corpus-root",
+        "/tmp/deadlib-image-scalar-fields-full-reproduction-20261027-a",
+        "--output",
+        "/tmp/deadlib-image-scalar-fields-full-reproduction-20261027-a.zip",
+        "--targets",
+        "png_stream"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.352250815019943
+    }
+  ],
+  "full_generator_png_archive_matches_merged_archive": true,
+  "archive_sha256": "7b5d927b5f52efc06da75d29ea91f3b0c6891c4420d320c1912f73d44d95d2f9",
+  "log_sha256": "875ab90ecd85715d5836c373f298b2c6f7cef9632cae893cc4152461601b3d59",
+  "runner_sha256": "7182ca5c2786f9501d9a23dfb1034b675e9bea214093f9c1f35101597115af06"
+}

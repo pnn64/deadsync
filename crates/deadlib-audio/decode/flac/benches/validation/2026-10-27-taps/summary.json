@@ -1,0 +1,394 @@
+[
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 10.904808502155442,
+    "min_ns_per_unit": 10.574984799780719,
+    "max_ns_per_unit": 11.147431785901174,
+    "median_ns_per_iteration": 6732628.769230769
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 10.444966360170442,
+    "min_ns_per_unit": 10.201977025242332,
+    "max_ns_per_unit": 11.331361291769454,
+    "median_ns_per_iteration": 6448722.230769231
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 8.633517674927115,
+    "min_ns_per_unit": 8.360274842079688,
+    "max_ns_per_unit": 8.732057620667314,
+    "median_ns_per_iteration": 5330333.8125
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "ffmpeg",
+    "median_ns_per_unit": 13.347518950437317,
+    "min_ns_per_unit": 13.138904923874312,
+    "max_ns_per_unit": 13.464173145448656,
+    "median_ns_per_iteration": 8240758.2
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "symphonia-crc",
+    "median_ns_per_unit": 11.525101095993953,
+    "min_ns_per_unit": 11.453657272432782,
+    "max_ns_per_unit": 11.724655544757585,
+    "median_ns_per_iteration": 7115597.416666667
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "baseline-stream-md5",
+    "median_ns_per_unit": 16.568968861354065,
+    "min_ns_per_unit": 16.340896298995787,
+    "max_ns_per_unit": 17.368187965662454,
+    "median_ns_per_iteration": 10229681.375
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "stream-md5",
+    "median_ns_per_unit": 16.509378644314868,
+    "min_ns_per_unit": 16.203188775510203,
+    "max_ns_per_unit": 17.30115241334629,
+    "median_ns_per_iteration": 10192890.375
+  },
+  {
+    "case": "subset/03 - blocksize 16.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 14.569056617355937,
+    "min_ns_per_unit": 14.200671093834359,
+    "max_ns_per_unit": 14.660704927473635,
+    "median_ns_per_iteration": 8994935.555555556
+  },
+  {
+    "case": "subset/03 - blocksize 16.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 14.704453622718928,
+    "min_ns_per_unit": 14.099494295072526,
+    "max_ns_per_unit": 14.776375301443329,
+    "median_ns_per_iteration": 9078529.666666666
+  },
+  {
+    "case": "subset/03 - blocksize 16.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 24.49638905085844,
+    "min_ns_per_unit": 24.369531908001296,
+    "max_ns_per_unit": 24.637087463556853,
+    "median_ns_per_iteration": 15124070.6
+  },
+  {
+    "case": "subset/03 - blocksize 16.flac",
+    "mode": "ffmpeg",
+    "median_ns_per_unit": 32.74435131195335,
+    "min_ns_per_unit": 31.181334629089733,
+    "max_ns_per_unit": 33.240831308713965,
+    "median_ns_per_iteration": 20216362.5
+  },
+  {
+    "case": "subset/03 - blocksize 16.flac",
+    "mode": "symphonia-crc",
+    "median_ns_per_unit": 14.200116078177302,
+    "min_ns_per_unit": 13.885130835402943,
+    "max_ns_per_unit": 14.453647554259799,
+    "median_ns_per_iteration": 8767151.666666666
+  },
+  {
+    "case": "subset/03 - blocksize 16.flac",
+    "mode": "baseline-stream-md5",
+    "median_ns_per_unit": 23.16422956484181,
+    "min_ns_per_unit": 23.011867508908324,
+    "max_ns_per_unit": 23.345216499298132,
+    "median_ns_per_iteration": 14301595.333333334
+  },
+  {
+    "case": "subset/03 - blocksize 16.flac",
+    "mode": "stream-md5",
+    "median_ns_per_unit": 23.583897527264874,
+    "min_ns_per_unit": 23.089753806284417,
+    "max_ns_per_unit": 26.35369992441421,
+    "median_ns_per_iteration": 14560698.333333334
+  },
+  {
+    "case": "subset/15 - only verbatim subframes.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 2.1990687148605317,
+    "min_ns_per_unit": 2.175061820739057,
+    "max_ns_per_unit": 2.2323754414536294,
+    "median_ns_per_iteration": 968707.3614457832
+  },
+  {
+    "case": "subset/15 - only verbatim subframes.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 2.20158196526381,
+    "min_ns_per_unit": 2.1786779142102106,
+    "max_ns_per_unit": 2.2436233862561212,
+    "median_ns_per_iteration": 969814.4683544304
+  },
+  {
+    "case": "subset/15 - only verbatim subframes.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 10.502361415053125,
+    "min_ns_per_unit": 10.415398812280367,
+    "max_ns_per_unit": 10.98944324885511,
+    "median_ns_per_iteration": 4626374.222222222
+  },
+  {
+    "case": "subset/15 - only verbatim subframes.flac",
+    "mode": "ffmpeg",
+    "median_ns_per_unit": 5.2727306395603,
+    "min_ns_per_unit": 5.232710675596616,
+    "max_ns_per_unit": 5.32026485006272,
+    "median_ns_per_iteration": 2322680.0285714287
+  },
+  {
+    "case": "subset/15 - only verbatim subframes.flac",
+    "mode": "symphonia-crc",
+    "median_ns_per_unit": 5.774032859032451,
+    "min_ns_per_unit": 5.7464035462087715,
+    "max_ns_per_unit": 5.816569279105034,
+    "median_ns_per_iteration": 2543507.6666666665
+  },
+  {
+    "case": "subset/15 - only verbatim subframes.flac",
+    "mode": "baseline-stream-md5",
+    "median_ns_per_unit": 7.268398939406322,
+    "min_ns_per_unit": 7.15905427370218,
+    "max_ns_per_unit": 7.424222397777112,
+    "median_ns_per_iteration": 3201787.88
+  },
+  {
+    "case": "subset/15 - only verbatim subframes.flac",
+    "mode": "stream-md5",
+    "median_ns_per_unit": 7.327127335561064,
+    "min_ns_per_unit": 7.2599232023027955,
+    "max_ns_per_unit": 7.397854011731909,
+    "median_ns_per_iteration": 3227658.2083333335
+  },
+  {
+    "case": "subset/17 - all fixed orders.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 7.876528984119576,
+    "min_ns_per_unit": 7.861514955106382,
+    "max_ns_per_unit": 8.027191824950167,
+    "median_ns_per_iteration": 3694312.6363636362
+  },
+  {
+    "case": "subset/17 - all fixed orders.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 7.888341033332377,
+    "min_ns_per_unit": 7.809148920746736,
+    "max_ns_per_unit": 8.201518013656095,
+    "median_ns_per_iteration": 3699852.8181818184
+  },
+  {
+    "case": "subset/17 - all fixed orders.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 8.764865233048594,
+    "min_ns_per_unit": 8.711868733681257,
+    "max_ns_per_unit": 8.819842312186053,
+    "median_ns_per_iteration": 4110967.210526316
+  },
+  {
+    "case": "subset/17 - all fixed orders.flac",
+    "mode": "ffmpeg",
+    "median_ns_per_unit": 9.401472596281861,
+    "min_ns_per_unit": 9.356205220631225,
+    "max_ns_per_unit": 9.627385192829047,
+    "median_ns_per_iteration": 4409553.888888889
+  },
+  {
+    "case": "subset/17 - all fixed orders.flac",
+    "mode": "symphonia-crc",
+    "median_ns_per_unit": 9.461490453543167,
+    "min_ns_per_unit": 9.38140390576066,
+    "max_ns_per_unit": 9.501342374252946,
+    "median_ns_per_iteration": 4437703.944444444
+  },
+  {
+    "case": "subset/17 - all fixed orders.flac",
+    "mode": "baseline-stream-md5",
+    "median_ns_per_unit": 13.558960888672548,
+    "min_ns_per_unit": 13.511322761770495,
+    "max_ns_per_unit": 13.956431500563195,
+    "median_ns_per_iteration": 6359532.307692308
+  },
+  {
+    "case": "subset/17 - all fixed orders.flac",
+    "mode": "stream-md5",
+    "median_ns_per_unit": 13.827122616702344,
+    "min_ns_per_unit": 13.66655064658542,
+    "max_ns_per_unit": 14.51024441326886,
+    "median_ns_per_iteration": 6485307.666666667
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 12.353366979461503,
+    "min_ns_per_unit": 12.203102551680358,
+    "max_ns_per_unit": 12.81276863404436,
+    "median_ns_per_iteration": 20705132.5
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 12.460313906562487,
+    "min_ns_per_unit": 12.282415224405634,
+    "max_ns_per_unit": 12.828520194836498,
+    "median_ns_per_iteration": 20884383.25
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 10.162597430181997,
+    "min_ns_per_unit": 9.92252254079777,
+    "max_ns_per_unit": 10.302278064426826,
+    "median_ns_per_iteration": 17033245.0
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "ffmpeg",
+    "median_ns_per_unit": 13.363470861235873,
+    "min_ns_per_unit": 13.226172463553674,
+    "max_ns_per_unit": 13.504596461249875,
+    "median_ns_per_iteration": 22398139.333333332
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "symphonia-crc",
+    "median_ns_per_unit": 13.069906006424546,
+    "min_ns_per_unit": 12.917547247373621,
+    "max_ns_per_unit": 13.324551391586997,
+    "median_ns_per_iteration": 21906103.5
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "baseline-stream-md5",
+    "median_ns_per_unit": 23.7108552019245,
+    "min_ns_per_unit": 23.41755097633037,
+    "max_ns_per_unit": 23.840425411318847,
+    "median_ns_per_iteration": 39741100.5
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "stream-md5",
+    "median_ns_per_unit": 23.750992200812377,
+    "min_ns_per_unit": 22.62686567164179,
+    "max_ns_per_unit": 24.514727887584783,
+    "median_ns_per_iteration": 39808373.0
+  },
+  {
+    "case": "subset/31 - high resolution audio, using only 32nd order predictors.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 22.585780330259936,
+    "min_ns_per_unit": 22.450883276032712,
+    "max_ns_per_unit": 23.08839304318383,
+    "median_ns_per_iteration": 34686338.0
+  },
+  {
+    "case": "subset/31 - high resolution audio, using only 32nd order predictors.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 17.55234433331597,
+    "min_ns_per_unit": 17.25001931725443,
+    "max_ns_per_unit": 18.299534432463407,
+    "median_ns_per_iteration": 26956188.333333332
+  },
+  {
+    "case": "subset/31 - high resolution audio, using only 32nd order predictors.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 26.363937724644476,
+    "min_ns_per_unit": 25.683455097150595,
+    "max_ns_per_unit": 28.506896585403968,
+    "median_ns_per_iteration": 40488681.0
+  },
+  {
+    "case": "subset/31 - high resolution audio, using only 32nd order predictors.flac",
+    "mode": "ffmpeg",
+    "median_ns_per_unit": 25.718556284836172,
+    "min_ns_per_unit": 25.504602281606502,
+    "max_ns_per_unit": 25.92038697452727,
+    "median_ns_per_iteration": 39497530.0
+  },
+  {
+    "case": "subset/31 - high resolution audio, using only 32nd order predictors.flac",
+    "mode": "symphonia-crc",
+    "median_ns_per_unit": 21.748976728134604,
+    "min_ns_per_unit": 21.5054927202167,
+    "max_ns_per_unit": 22.003771097046414,
+    "median_ns_per_iteration": 33401208.5
+  },
+  {
+    "case": "subset/31 - high resolution audio, using only 32nd order predictors.flac",
+    "mode": "baseline-stream-md5",
+    "median_ns_per_unit": 34.75763205188311,
+    "min_ns_per_unit": 34.535249322810856,
+    "max_ns_per_unit": 45.06631667708496,
+    "median_ns_per_iteration": 53379381.0
+  },
+  {
+    "case": "subset/31 - high resolution audio, using only 32nd order predictors.flac",
+    "mode": "stream-md5",
+    "median_ns_per_unit": 28.973075545658176,
+    "min_ns_per_unit": 28.72451489816117,
+    "max_ns_per_unit": 30.02346688284628,
+    "median_ns_per_iteration": 44495690.5
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 22.339606761650007,
+    "min_ns_per_unit": 21.75690699779052,
+    "max_ns_per_unit": 33.22874200190114,
+    "median_ns_per_iteration": 517592068.0
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 16.588360195942418,
+    "min_ns_per_unit": 16.522062598816294,
+    "max_ns_per_unit": 17.11997886336963,
+    "median_ns_per_iteration": 384339964.0
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 24.828631959524294,
+    "min_ns_per_unit": 24.736530598997224,
+    "max_ns_per_unit": 25.543355557036445,
+    "median_ns_per_iteration": 575260930.0
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "ffmpeg",
+    "median_ns_per_unit": 25.807555797216793,
+    "min_ns_per_unit": 25.747465477527633,
+    "max_ns_per_unit": 26.495186120780055,
+    "median_ns_per_iteration": 597941867.0
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "symphonia-crc",
+    "median_ns_per_unit": 21.173343675774483,
+    "min_ns_per_unit": 21.09946435051691,
+    "max_ns_per_unit": 21.7068763882621,
+    "median_ns_per_iteration": 490570620.0
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "baseline-stream-md5",
+    "median_ns_per_unit": 31.643530547549737,
+    "min_ns_per_unit": 31.427387612273783,
+    "max_ns_per_unit": 31.844595743600916,
+    "median_ns_per_iteration": 733157060.0
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "stream-md5",
+    "median_ns_per_unit": 26.303634480105877,
+    "min_ns_per_unit": 26.19275582262978,
+    "max_ns_per_unit": 27.777155684239492,
+    "median_ns_per_iteration": 609435641.0
+  }
+]

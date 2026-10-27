@@ -112,18 +112,13 @@ fn convert_music_chunk(
 ) {
     if *current_gain == target_gain {
         let scale = music_vol * target_gain;
-        if scale == 0.0 {
-            // Multiplication by signed zero preserves the exact sign bit that
-            // the general `(sample / 32768) * scale` path produced, while
-            // skipping its division for muted output.
+        if (scale.abs() >= f32::MIN_POSITIVE * 32768.0 && scale.is_finite()) || scale == 0.0 {
+            // Dividing the gain by 32768 is exact above this bound. Fold PCM
+            // normalization into it once; keep the original order near underflow.
+            // Signed zero must still multiply each sample to preserve its sign.
+            let pcm_scale = scale / 32768.0;
             for (dst, &src) in dst.iter_mut().zip(src) {
-                *dst = f32::from(src) * scale;
-            }
-            return;
-        }
-        if scale == 1.0 {
-            for (dst, &src) in dst.iter_mut().zip(src) {
-                *dst = i16_to_f32(src);
+                *dst = f32::from(src) * pcm_scale;
             }
             return;
         }
@@ -280,11 +275,21 @@ impl RenderState {
         }
     }
 
-    fn mix_music(&mut self, mix_f32: &mut [f32], total_before: u64, music_vol: f32) -> usize {
-        let len = mix_f32.len();
+    fn mix_music<const DIRECT_PCM: bool, const MUTED: bool>(
+        &mut self,
+        mix_f32: &mut [f32],
+        pcm: &mut [i16],
+        total_before: u64,
+        music_vol: f32,
+        target_gain: f32,
+    ) -> usize {
+        debug_assert!(
+            !MUTED || self.music_is_muted((music_vol, target_gain)),
+            "muted music requires finite positive gain state"
+        );
+        let len = if DIRECT_PCM { pcm.len() } else { mix_f32.len() };
         let channels = self.device_channels.max(1);
         let frames = len / channels;
-        let target_gain = music_target_gain();
         let mut track_frame_start = None;
         let mut frame = 0;
         while frame < frames && self.load_music_block() {
@@ -302,15 +307,29 @@ impl RenderState {
             let consumed = take * channels;
             let dst_start = frame * channels;
             let src = &active.samples()[self.active_sample..self.active_sample + consumed];
-            let dst = &mut mix_f32[dst_start..dst_start + consumed];
-            convert_music_samples(
-                src,
-                dst,
-                channels,
-                music_vol,
-                target_gain,
-                &mut self.music_gain_current,
-            );
+            if DIRECT_PCM {
+                if !MUTED {
+                    debug_assert!(
+                        music_vol * target_gain == 1.0 && self.music_gain_current == target_gain,
+                        "direct PCM requires unity gain"
+                    );
+                    pcm[dst_start..dst_start + consumed].copy_from_slice(src);
+                }
+            } else if MUTED {
+                // Positive gains leave zero's sign determined by source and volume.
+                for (dst, &src) in mix_f32[dst_start..dst_start + consumed].iter_mut().zip(src) {
+                    *dst = f32::from(src) * music_vol;
+                }
+            } else {
+                convert_music_samples(
+                    src,
+                    &mut mix_f32[dst_start..dst_start + consumed],
+                    channels,
+                    music_vol,
+                    target_gain,
+                    &mut self.music_gain_current,
+                );
+            }
             self.transport.push_played(
                 timing.generation,
                 MusicMapSeg {
@@ -329,14 +348,20 @@ impl RenderState {
             }
         }
         if self.music_gain_current != target_gain {
-            for _ in frame..frames {
+            // Muted samples do not depend on gain magnitude. Advance the same
+            // sequential ramp once per frame after traversing their blocks.
+            for _ in (if MUTED { 0 } else { frame })..frames {
                 if advance_gain(&mut self.music_gain_current, target_gain) {
                     break;
                 }
             }
         }
         let popped_samples = frame * channels;
-        mix_f32[popped_samples..].fill(0.0);
+        if DIRECT_PCM {
+            pcm[if MUTED { 0 } else { popped_samples }..].fill(0);
+        } else {
+            mix_f32[popped_samples..].fill(0.0);
+        }
         popped_samples
     }
 
@@ -349,22 +374,50 @@ impl RenderState {
         }
     }
 
+    #[cfg(test)]
     fn mix_f32_buffer(&mut self, total_before: u64, len: usize) -> (usize, bool) {
         debug_assert!(len <= self.mix_f32.len());
+        let levels = self.music_levels();
         let mut mix_f32 = std::mem::take(&mut self.mix_f32);
-        let result = self.mix_f32_buffer_into(total_before, &mut mix_f32[..len]);
+        let result = self.mix_f32_buffer_into(total_before, &mut mix_f32[..len], levels);
         self.mix_f32 = mix_f32;
         result
     }
 
-    fn mix_f32_buffer_into(&mut self, total_before: u64, mix_f32: &mut [f32]) -> (usize, bool) {
+    #[inline]
+    fn music_levels(&mut self) -> (f32, f32) {
         let stream_gain = self.controls.stream_gain();
         let snap_gen = music_gain_snap_generation();
         if snap_gen != self.music_gain_snap_seen {
             self.music_gain_current = music_target_gain();
             self.music_gain_snap_seen = snap_gen;
         }
-        let popped = self.mix_music(mix_f32, total_before, stream_gain);
+        (stream_gain, music_target_gain())
+    }
+
+    #[inline]
+    fn music_is_muted(&self, (volume, target): (f32, f32)) -> bool {
+        volume == 0.0
+            && self.music_gain_current.is_finite()
+            && self.music_gain_current >= 0.0
+            && target.is_finite()
+            && target > 0.0
+    }
+
+    fn mix_f32_buffer_into(
+        &mut self,
+        total_before: u64,
+        mix_f32: &mut [f32],
+        (stream_gain, target_gain): (f32, f32),
+    ) -> (usize, bool) {
+        // Stereo ramps already overlap sample conversion with gain updates.
+        let popped = if self.music_is_muted((stream_gain, target_gain))
+            && (self.device_channels != 2 || self.music_gain_current == target_gain)
+        {
+            self.mix_music::<false, true>(mix_f32, &mut [], total_before, stream_gain, target_gain)
+        } else {
+            self.mix_music::<false, false>(mix_f32, &mut [], total_before, stream_gain, target_gain)
+        };
 
         let mixed_sfx = mix_active_sfx(
             &mut self.active_sfx,
@@ -387,7 +440,9 @@ impl RenderState {
         let mut mixed_sfx = false;
         for (chunk, out_chunk) in out.chunks_mut(chunk_samples).enumerate() {
             let chunk_total = total_before + (chunk * MIX_CHUNK_FRAMES) as u64;
-            let (popped, chunk_mixed_sfx) = self.mix_f32_buffer_into(chunk_total, out_chunk);
+            let levels = self.music_levels();
+            let (popped, chunk_mixed_sfx) =
+                self.mix_f32_buffer_into(chunk_total, out_chunk, levels);
             mixed_sfx |= chunk_mixed_sfx;
             popped_samples += popped;
         }
@@ -409,12 +464,36 @@ impl RenderState {
         for (chunk, out_chunk) in out.chunks_mut(chunk_samples).enumerate() {
             let chunk_total = total_before + (chunk * MIX_CHUNK_FRAMES) as u64;
             let chunk_len = out_chunk.len();
-            let (popped, mixed_sfx) = self.mix_f32_buffer(chunk_total, chunk_len);
-            write_i16_samples(
-                &self.mix_f32[..chunk_len],
-                out_chunk,
-                popped > 0 || mixed_sfx,
-            );
+            let levels = self.music_levels();
+            let muted = self.music_is_muted(levels);
+            let popped = if self.active_sfx.is_empty()
+                && (muted || (self.music_gain_current == levels.1 && levels.0 * levels.1 == 1.0))
+            {
+                if muted {
+                    self.mix_music::<true, true>(
+                        &mut [],
+                        out_chunk,
+                        chunk_total,
+                        levels.0,
+                        levels.1,
+                    )
+                } else {
+                    self.mix_music::<true, false>(
+                        &mut [],
+                        out_chunk,
+                        chunk_total,
+                        levels.0,
+                        levels.1,
+                    )
+                }
+            } else {
+                let mut mix_f32 = std::mem::take(&mut self.mix_f32);
+                let (popped, mixed_sfx) =
+                    self.mix_f32_buffer_into(chunk_total, &mut mix_f32[..chunk_len], levels);
+                write_i16_samples(&mix_f32[..chunk_len], out_chunk, popped > 0 || mixed_sfx);
+                self.mix_f32 = mix_f32;
+                popped
+            };
             popped_samples += popped;
         }
         popped_samples

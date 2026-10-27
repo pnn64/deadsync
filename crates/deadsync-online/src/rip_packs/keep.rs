@@ -13,6 +13,10 @@
 //! has its offsets moved 9 ms, so the booster plays right whatever the
 //! machine's `Pack.ini` settings, as the singles group does.
 //!
+//! Every booster names one series in its `Pack.ini` -- [`SERIES`] -- so the
+//! music wheel's series sort keeps them together in a folder of their own;
+//! one kept before boosters named it is given it at the next keep.
+//!
 //! Once the songs are in, the pack asks itgcontent.net for a banner of its
 //! own -- its wrapper torn open on a wall of the cards that landed, the
 //! hardest in gold, drawn from what the pack is: its number and day, what it
@@ -88,8 +92,11 @@ const MAX_BANNER_BYTES: usize = 2 * 1024 * 1024;
 const SMO_SONG_ART: &str = "https://stepmaniaonline.net/media/images/songs/";
 const ART_HASH_LEN: usize = 40;
 
-/// What a booster says about itself: ITGmania's text in DeadSync's words.
-/// The `#` line and one line per song follow it.
+/// The series every booster pack names, ITGmania's as well.
+const SERIES: &str = "Content Browser Booster Packs";
+
+/// What a booster says about itself: ITGmania's text in DeadSync's words,
+/// with its [`SERIES`]. The `#` line and one line per song follow it.
 const PACK_INI_HEAD: &str = concat!(
     "[Group]\n",
     "# Written by DeadSync's Find Content.\n",
@@ -99,6 +106,7 @@ const PACK_INI_HEAD: &str = concat!(
     "# to NULL, so the pack plays right whatever the machine's settings.\n",
     "Version=1\n",
     "SyncOffset=NULL\n",
+    "Series=Content Browser Booster Packs\n",
 );
 
 pub(super) struct KeepJob {
@@ -154,6 +162,7 @@ fn keep(job: &KeepJob) -> Result<PathBuf, String> {
         smo_songs::describe_song_error(&smo_songs::io("create the Downloads folder", error))
     })?;
     sweep_leftovers(&job.songs_root, &downloads);
+    group_boosters(&job.songs_root);
 
     // The number is taken before anything is downloaded: a pack whose songs
     // all fail has still used it. Unsaved, it is still unique on disk once
@@ -368,12 +377,17 @@ fn write_history(path: &Path, count: u32) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
+    replace_file(path, format!("count {count}\n").as_bytes())
+}
+
+/// A file replaced whole: written beside itself, then renamed over.
+fn replace_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut temp = path.as_os_str().to_owned();
     temp.push(".tmp");
     let temp = PathBuf::from(temp);
     let written = File::create(&temp)
         .and_then(|mut file| {
-            file.write_all(format!("count {count}\n").as_bytes())?;
+            file.write_all(bytes)?;
             file.sync_all()
         })
         .and_then(|()| fs::rename(&temp, path));
@@ -426,6 +440,65 @@ fn sweep_leftovers(songs_root: &Path, downloads: &Path) {
     };
     sweep(downloads, DOWNLOAD_PREFIX);
     sweep(songs_root, STAGING_PREFIX);
+}
+
+// ------------------------------------------------------------------- series
+
+/// Boosters kept before boosters named their series are given it, so every
+/// booster pack sits in the one folder: the `Series` line goes in after
+/// their `Version`, nothing else changes. Before each keep; the song scanner
+/// shows it once it next reads the pack.
+fn group_boosters(songs_root: &Path) {
+    let Ok(entries) = fs::read_dir(songs_root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        if !super::is_booster_folder(&entry.file_name().to_string_lossy()) {
+            continue;
+        }
+        let path = entry.path().join("Pack.ini");
+        let Ok(bytes) = fs::read(&path) else {
+            continue;
+        };
+        if bytes.len() > MAX_PACK_INI_BYTES {
+            continue;
+        }
+        let Some(grouped) = with_series(&String::from_utf8_lossy(&bytes)) else {
+            continue;
+        };
+        if let Err(error) = replace_file(&path, grouped.as_bytes()) {
+            log::warn!("Could not add the series to '{}': {error}", path.display());
+        }
+    }
+}
+
+/// `text` with [`SERIES`] added after its `Version` line, in the file's own
+/// line endings. `None` when it names a series already, or has no `[Group]`
+/// or `Version` -- without which neither game reads it at all.
+fn with_series(text: &str) -> Option<String> {
+    if !text.contains("[Group]") || text.lines().any(|line| is_key(line, "Series")) {
+        return None;
+    }
+    let eol = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut out = String::with_capacity(text.len() + SERIES.len() + 16);
+    let mut added = false;
+    for line in text.split_inclusive('\n') {
+        out.push_str(line);
+        if !added && is_key(line, "Version") {
+            if !line.ends_with('\n') {
+                out.push_str(eol);
+            }
+            let _ = write!(out, "Series={SERIES}{eol}");
+            added = true;
+        }
+    }
+    added.then_some(out)
+}
+
+/// Whether an ini line sets `key`, case aside, as the song scanner reads it.
+fn is_key(line: &str, key: &str) -> bool {
+    line.split_once('=')
+        .is_some_and(|(name, _)| name.trim().eq_ignore_ascii_case(key))
 }
 
 // --------------------------------------------------------------------- sync
@@ -1113,6 +1186,7 @@ mod tests {
                 "# to NULL, so the pack plays right whatever the machine's settings.\n",
                 "Version=1\n",
                 "SyncOffset=NULL\n",
+                "Series=Content Browser Booster Packs\n",
                 "#\n",
                 "# Vertex -- from Pack A, synced ITG; offsets moved -0.009 s to NULL\n",
                 "# Vertex (2) -- from Pack B, synced NULL; offsets as they were\n",
@@ -1120,6 +1194,75 @@ mod tests {
                 "# Nested -- from Pack D, synced ITG; offsets as they were\n",
             )
         );
+    }
+
+    #[test]
+    fn a_booster_names_the_series_every_booster_shares() {
+        assert!(PACK_INI_HEAD.contains(&format!("\nSeries={SERIES}\n")));
+        let text = pack_ini_text(&[], false);
+        assert_eq!(with_series(&text), None, "named already");
+    }
+
+    #[test]
+    fn an_older_booster_is_given_the_series_after_its_version() {
+        assert_eq!(
+            with_series("[Group]\n# ours\nVersion=1\nSyncOffset=ITG\n#\n# Song -- from Pack\n"),
+            Some(format!(
+                "[Group]\n# ours\nVersion=1\nSeries={SERIES}\nSyncOffset=ITG\n#\n# Song -- from Pack\n"
+            ))
+        );
+        assert_eq!(
+            with_series("[Group]\r\nVersion=1\r\nSyncOffset=NULL\r\n"),
+            Some(format!(
+                "[Group]\r\nVersion=1\r\nSeries={SERIES}\r\nSyncOffset=NULL\r\n"
+            )),
+            "in the file's own line endings"
+        );
+        assert_eq!(
+            with_series("[Group]\nversion = 1"),
+            Some(format!("[Group]\nversion = 1\nSeries={SERIES}\n")),
+            "a last line without its newline"
+        );
+        assert_eq!(with_series("[Group]\nVersion=1\nseries = Mine\n"), None);
+        assert_eq!(with_series("[Group]\nSyncOffset=ITG\n"), None, "no Version");
+        assert_eq!(with_series("Version=1\n"), None, "no [Group]");
+    }
+
+    #[test]
+    fn boosters_on_disk_are_grouped_and_nothing_else_is() {
+        let root = TempDir::new("series");
+        let songs = root.0.join("Songs");
+        let older = songs.join("Content Booster Pack 3 - 2026-10-17");
+        let named = songs.join("Content Booster Pack 4 - 2026-10-18");
+        let other = songs.join("Some Pack");
+        for dir in [&older, &named, &other] {
+            fs::create_dir_all(dir).unwrap();
+        }
+        fs::write(
+            older.join("Pack.ini"),
+            "[Group]\nVersion=1\nSyncOffset=NULL\n",
+        )
+        .unwrap();
+        let mine = format!("[Group]\nVersion=1\nSeries={SERIES}\nSyncOffset=NULL\n");
+        fs::write(named.join("Pack.ini"), &mine).unwrap();
+        fs::write(other.join("Pack.ini"), "[Group]\nVersion=1\n").unwrap();
+
+        group_boosters(&songs);
+        assert_eq!(
+            fs::read_to_string(older.join("Pack.ini")).unwrap(),
+            format!("[Group]\nVersion=1\nSeries={SERIES}\nSyncOffset=NULL\n")
+        );
+        assert_eq!(fs::read_to_string(named.join("Pack.ini")).unwrap(), mine);
+        assert_eq!(
+            fs::read_to_string(other.join("Pack.ini")).unwrap(),
+            "[Group]\nVersion=1\n",
+            "not a booster"
+        );
+        assert!(
+            !older.join("Pack.ini.tmp").exists(),
+            "no temporary file left"
+        );
+        group_boosters(&root.0.join("missing"));
     }
 
     #[test]

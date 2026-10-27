@@ -4849,6 +4849,39 @@ impl core::fmt::Display for ComboColors {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum JudgmentAnimation {
+    #[default]
+    Default,
+    Still,
+    Itg,
+}
+
+impl FromStr for JudgmentAnimation {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        with_lower_option_key(s, |key| match key {
+            "default" => Ok(Self::Default),
+            "still" => Ok(Self::Still),
+            "itg" => Ok(Self::Itg),
+            other => Err(format!(
+                "'{other}' is not a valid JudgmentAnimation setting"
+            )),
+        })
+    }
+}
+
+impl core::fmt::Display for JudgmentAnimation {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::Default => "Default",
+            Self::Still => "Still",
+            Self::Itg => "ITG",
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ComboFont {
     #[default]
     Wendy,
@@ -4859,6 +4892,7 @@ pub enum ComboFont {
     Work,
     WendyCursed,
     Mega,
+    Unprofessional,
     None,
 }
 
@@ -4875,6 +4909,7 @@ impl FromStr for ComboFont {
             "work" => Ok(Self::Work),
             "wendy (cursed)" | "wendy cursed" | "wendycursed" => Ok(Self::WendyCursed),
             "mega" => Ok(Self::Mega),
+            "unprofessional" => Ok(Self::Unprofessional),
             "none" => Ok(Self::None),
             other => Err(format!("'{other}' is not a valid ComboFont setting")),
         })
@@ -4892,6 +4927,7 @@ impl core::fmt::Display for ComboFont {
             Self::Work => write!(f, "Work"),
             Self::WendyCursed => write!(f, "Wendy (Cursed)"),
             Self::Mega => write!(f, "Mega"),
+            Self::Unprofessional => write!(f, "Unprofessional"),
             Self::None => write!(f, "None"),
         }
     }
@@ -4919,6 +4955,7 @@ pub enum TargetScoreSetting {
     SpecifiedValue,
     MachineBest,
     PersonalBest,
+    GhostData,
 }
 
 impl FromStr for TargetScoreSetting {
@@ -4957,6 +4994,7 @@ impl FromStr for TargetScoreSetting {
             "specifiedvalue" | "specified" => Ok(Self::SpecifiedValue),
             "machinebest" | "machine" => Ok(Self::MachineBest),
             "personalbest" | "personal" => Ok(Self::PersonalBest),
+            "ghostdata" | "ghost" => Ok(Self::GhostData),
             other => Err(format!("'{other}' is not a valid TargetScore setting")),
         })
     }
@@ -4984,6 +5022,7 @@ impl core::fmt::Display for TargetScoreSetting {
             Self::SpecifiedValue => write!(f, "Specified Value"),
             Self::MachineBest => write!(f, "Machine Best"),
             Self::PersonalBest => write!(f, "Personal Best"),
+            Self::GhostData => write!(f, "Ghost Data"),
         }
     }
 }
@@ -7397,6 +7436,7 @@ pub struct PlayerOptionsData {
     pub custom_fantastic_window_ms: u8,
     /// Pad-light brightness 0..=100 (gamma-mapped on send; 0 = off, 100 = full).
     pub pad_light_brightness: u8,
+    pub judgment_animation: JudgmentAnimation,
     pub judgment_tilt: bool,
     pub column_cues: bool,
     pub measure_cues: bool,
@@ -7549,13 +7589,17 @@ fn default_player_options() -> PlayerOptionsData {
         scatterplot_max_window: ScatterplotMaxWindow::Off,
         score_position: ScorePosition::Normal,
         score_display_mode: ScoreDisplayMode::Normal,
-        show_golf_score: false,
+        // Golf scoring defaults on so golf packs light up as soon as the machine's
+        // golf master switch is enabled. `golf_all_charts` stays off, so charts
+        // without an authored par keep the normal score and results.
+        show_golf_score: true,
         golf_all_charts: false,
         golf_stroke_feedback: false,
-        show_golf_results: false,
+        show_golf_results: true,
         custom_fantastic_window: false,
         custom_fantastic_window_ms: CUSTOM_FANTASTIC_WINDOW_DEFAULT_MS,
         pad_light_brightness: PAD_LIGHT_BRIGHTNESS_DEFAULT,
+        judgment_animation: JudgmentAnimation::Default,
         judgment_tilt: false,
         column_cues: false,
         measure_cues: false,
@@ -7965,6 +8009,9 @@ where
         .and_then(|s| s.parse::<u8>().ok())
         .map(clamp_pad_light_brightness)
         .unwrap_or(options.pad_light_brightness);
+    options.judgment_animation = get("JudgmentAnimation")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(options.judgment_animation);
     options.judgment_tilt = load_u8_bool(&mut get, "JudgmentTilt", options.judgment_tilt);
     options.column_cues = load_u8_bool(&mut get, "ColumnCues", options.column_cues);
     options.measure_cues = load_u8_bool(&mut get, "MeasureCues", options.measure_cues);
@@ -8606,6 +8653,11 @@ pub fn append_player_options_section(
         content,
         "PadLightBrightness={}\n",
         options.pad_light_brightness
+    );
+    let _ = write!(
+        content,
+        "JudgmentAnimation={}\n",
+        options.judgment_animation
     );
     let _ = write!(
         content,
@@ -9310,6 +9362,7 @@ pub struct Profile {
     /// Pad-light brightness 0..=100. Seeded from the `StepManiaX` machine default
     /// when the profile is created; the player adjusts it in Player Options.
     pub pad_light_brightness: u8,
+    pub judgment_animation: JudgmentAnimation,
     // Judgment tilt (Simply Love semantics).
     pub judgment_tilt: bool,
     pub column_cues: bool,
@@ -9523,6 +9576,7 @@ impl Default for Profile {
             custom_fantastic_window: player_options.custom_fantastic_window,
             custom_fantastic_window_ms: player_options.custom_fantastic_window_ms,
             pad_light_brightness: player_options.pad_light_brightness,
+            judgment_animation: player_options.judgment_animation,
             judgment_tilt: player_options.judgment_tilt,
             column_cues: player_options.column_cues,
             measure_cues: player_options.measure_cues,
@@ -10499,6 +10553,7 @@ impl Profile {
             custom_fantastic_window: self.custom_fantastic_window,
             custom_fantastic_window_ms: self.custom_fantastic_window_ms,
             pad_light_brightness: self.pad_light_brightness,
+            judgment_animation: self.judgment_animation,
             judgment_tilt: self.judgment_tilt,
             column_cues: self.column_cues,
             measure_cues: self.measure_cues,
@@ -10650,6 +10705,7 @@ impl Profile {
         self.custom_fantastic_window = options.custom_fantastic_window;
         self.custom_fantastic_window_ms = options.custom_fantastic_window_ms;
         self.pad_light_brightness = options.pad_light_brightness;
+        self.judgment_animation = options.judgment_animation;
         self.judgment_tilt = options.judgment_tilt;
         self.column_cues = options.column_cues;
         self.measure_cues = options.measure_cues;
@@ -11708,7 +11764,7 @@ mod tests {
             ("HoldJudgmentGraphic", "itg2"),
             ("HeldGraphic", "none"),
             ("JudgmentGraphic", "custom.png"),
-            ("ComboFont", "BebasNeue"),
+            ("ComboFont", "Unprofessional"),
             ("ComboColors", "RainbowScroll"),
             ("ComboMode", "CurrentCombo"),
             ("ComboContinuesBetweenSongs", "1"),
@@ -11749,7 +11805,7 @@ mod tests {
         );
         assert_eq!(options.held_miss_graphic.as_str(), "None");
         assert_eq!(options.judgment_graphic.as_str(), "judgements/custom.png");
-        assert_eq!(options.combo_font, ComboFont::BebasNeue);
+        assert_eq!(options.combo_font, ComboFont::Unprofessional);
         assert_eq!(options.combo_colors, ComboColors::RainbowScroll);
         assert_eq!(options.combo_mode, ComboMode::CurrentCombo);
         assert!(options.carry_combo_between_songs);
@@ -14709,6 +14765,7 @@ ApiKey = gs-key
             ComboFont::Work,
             ComboFont::WendyCursed,
             ComboFont::Mega,
+            ComboFont::Unprofessional,
             ComboFont::None,
         ] {
             assert_eq!(setting.to_string().parse::<ComboFont>(), Ok(setting));
@@ -14742,6 +14799,8 @@ ApiKey = gs-key
             ("machinebest", TargetScoreSetting::MachineBest),
             ("personal", TargetScoreSetting::PersonalBest),
             ("personalbest", TargetScoreSetting::PersonalBest),
+            ("Ghost Data", TargetScoreSetting::GhostData),
+            ("ghost", TargetScoreSetting::GhostData),
         ] {
             assert_eq!(TargetScoreSetting::from_str(raw), Ok(setting));
             assert_eq!(
@@ -14976,6 +15035,64 @@ ApiKey = gs-key
     }
 
     #[test]
+    fn judgment_animation_round_trips_profiles_and_defaults() {
+        let defaults = PlayerOptionsData::default();
+        assert_eq!(defaults.judgment_animation, JudgmentAnimation::Default);
+        for animation in [
+            JudgmentAnimation::Default,
+            JudgmentAnimation::Still,
+            JudgmentAnimation::Itg,
+        ] {
+            assert_eq!(
+                animation.to_string().parse::<JudgmentAnimation>(),
+                Ok(animation)
+            );
+            let options = PlayerOptionsData {
+                judgment_animation: animation,
+                ..defaults.clone()
+            };
+            let mut content = String::new();
+            append_player_options_section(&mut content, "PlayerOptionsSingles", &options);
+            let ini = ProfileIni::parse(&content);
+            let loaded = load_player_options_section(
+                true,
+                |key| ini.get("PlayerOptionsSingles", key),
+                &defaults,
+            )
+            .unwrap();
+            assert_eq!(loaded.judgment_animation, animation);
+            let seeded = profile_with_player_options(&loaded);
+            assert_eq!(seeded.judgment_animation, animation);
+            let mut profile = Profile::default();
+            profile.set_current_player_options(loaded);
+            assert_eq!(profile.judgment_animation, animation);
+            assert_eq!(
+                profile.current_player_options().judgment_animation,
+                animation
+            );
+        }
+        for value in [None, Some("unknown")] {
+            let loaded = load_player_options_section(
+                true,
+                |key| {
+                    if key == "JudgmentAnimation" {
+                        value.map(str::to_owned)
+                    } else {
+                        None
+                    }
+                },
+                &defaults,
+            )
+            .unwrap();
+            assert_eq!(loaded.judgment_animation, JudgmentAnimation::Default);
+        }
+        assert_eq!(
+            "sTiLl".parse::<JudgmentAnimation>(),
+            Ok(JudgmentAnimation::Still)
+        );
+    }
+
+    #[test]
     fn column_flash_visual_options_round_trip() {
         for setting in [ColumnFlashBrightness::Normal, ColumnFlashBrightness::Dimmed] {
             assert_eq!(
@@ -15030,19 +15147,19 @@ ApiKey = gs-key
     }
 
     #[test]
-    fn golf_options_default_off_and_round_trip_independently() {
+    fn golf_scoring_defaults_to_golf_charts_only_and_round_trips_independently() {
         let defaults = PlayerOptionsData::default();
         assert!(
-            !defaults.show_golf_score
+            defaults.show_golf_score
                 && !defaults.golf_all_charts
                 && !defaults.golf_stroke_feedback
-                && !defaults.show_golf_results
+                && defaults.show_golf_results
         );
         let options = PlayerOptionsData {
-            show_golf_score: true,
+            show_golf_score: false,
             golf_all_charts: true,
             golf_stroke_feedback: true,
-            show_golf_results: true,
+            show_golf_results: false,
             ..defaults.clone()
         };
         let mut text = String::new();
@@ -15062,7 +15179,8 @@ ApiKey = gs-key
         profile.set_current_player_options(options.clone());
         assert_eq!(profile.current_player_options(), options);
         let legacy = load_player_options_section(true, |_| None, &defaults).unwrap();
-        assert!(!legacy.show_golf_score && !legacy.show_golf_results);
+        assert!(legacy.show_golf_score && legacy.show_golf_results);
+        assert!(!legacy.golf_all_charts && !legacy.golf_stroke_feedback);
     }
 
     #[test]

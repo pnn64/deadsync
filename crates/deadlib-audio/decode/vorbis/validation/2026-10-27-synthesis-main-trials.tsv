@@ -1,0 +1,71 @@
+path	engine	trial	iterations	elapsed_ns	samples	packets	header_ns	clear_floor_ns	residue_ns	coupling_ns	floor_gain_ns	imdct_finite_ns	window_ns	overlap_copy_ns
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	production	0	3723	73386400	2859264	14892	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	profiled	0	5682	137342500	4363776	22728	1484000	18133500	31599400	1166800	5960200	54067200	3382700	10921400
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	production	1	3723	75244800	2859264	14892	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	profiled	1	5682	134665400	4363776	22728	1492500	17854000	30856000	1153200	5972000	52843800	3271700	10847900
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	production	2	3723	72800500	2859264	14892	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	profiled	2	5682	136574500	4363776	22728	1497300	17854000	31089900	1174300	5996300	54090500	3294000	10968500
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	profiled	3	5682	133284300	4363776	22728	1505200	17990300	30354800	1085400	5681200	52254600	3108000	10853400
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	production	3	3723	72669800	2859264	14892	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	profiled	4	5682	135194300	4363776	22728	1500700	17695500	31107100	1141800	5798000	53264000	3138000	10910200
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	production	4	3723	73224200	2859264	14892	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	profiled	5	5682	135686000	4363776	22728	1486700	17914600	31096200	1401100	5789900	53074400	3206300	10962600
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	production	5	3723	75403900	2859264	14892	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	profiled	6	5682	134933200	4363776	22728	1543900	17675000	31132600	1100300	5809900	52926200	3273900	10990900
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	production	6	3723	75766500	2859264	14892	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	profiled	0	602	138975900	5625088	3612	259400	18401400	30307900	5502100	5408400	61519200	2427100	12762600
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	production	0	632	138878500	5905408	3792	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	profiled	1	602	136238600	5625088	3612	267500	18248400	29649500	5272600	5336700	60259100	2373100	12417600
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	production	1	632	134990300	5905408	3792	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	production	2	632	142719000	5905408	3792	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	profiled	2	602	136528300	5625088	3612	274600	18011100	29735100	5339300	5375800	60387100	2463200	12513300
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	profiled	3	602	136165800	5625088	3612	242800	18217600	29519200	5366500	5301100	60390400	2404100	12397900
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	production	3	632	136298000	5905408	3792	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	production	4	632	138990800	5905408	3792	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	profiled	4	602	136916700	5625088	3612	243500	18133000	30050900	5345200	5372300	60483600	2380700	12625200
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	profiled	5	602	137044800	5625088	3612	275100	18071900	30072900	5383000	5220500	60140700	2519000	12978700
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	production	5	632	137666100	5905408	3792	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	production	6	632	138519900	5905408	3792	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	profiled	6	602	136662000	5625088	3612	265700	18051200	29753700	5304100	5358300	60659200	2453400	12405100
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	production	0	220	141324600	6420480	1100	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	profiled	0	201	137338900	5865984	1005	79000	20972000	24961300	54300	5806300	67353300	2550500	13825700
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	production	1	220	135544700	6420480	1100	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	profiled	1	201	136485600	5865984	1005	81300	20625800	24532000	55000	5770500	67071500	2619100	13958900
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	production	2	220	144174800	6420480	1100	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	profiled	2	201	137204300	5865984	1005	113400	20774100	24841900	55400	5915400	67112900	2709300	13899000
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	profiled	3	201	136192100	5865984	1005	79900	20413800	24658200	55700	5862100	66966100	2586400	13768400
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	production	3	220	142789700	6420480	1100	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	profiled	4	201	136039800	5865984	1005	81900	20621300	24506800	53000	5925700	66768900	2639000	13696300
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	production	4	220	145800300	6420480	1100	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	profiled	5	201	139950800	5865984	1005	83700	21161000	25150500	72900	6062900	68861400	2623600	14025800
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	production	5	220	145990200	6420480	1100	0	0	0	0	0	0	0	0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	profiled	6	201	139561700	5865984	1005	86400	21152800	25175400	57500	6014200	68500500	2635700	14085200
+crates/deadlib-audio/decode/vorbis/tests/fixtures/surround.ogg	production	6	220	146425700	6420480	1100	0	0	0	0	0	0	0	0
+assets/music/in_two (loop).ogg	production	0	1	363391800	8890624	10349	0	0	0	0	0	0	0	0
+assets/music/in_two (loop).ogg	profiled	0	1	379367400	8890624	10349	1168200	39520600	205491800	7838900	8433700	85695400	3939400	20302100
+assets/music/in_two (loop).ogg	production	1	1	360032000	8890624	10349	0	0	0	0	0	0	0	0
+assets/music/in_two (loop).ogg	profiled	1	1	380233200	8890624	10349	1119000	39289900	206178500	7798400	8329300	86593400	3922600	20160000
+assets/music/in_two (loop).ogg	production	2	1	365236500	8890624	10349	0	0	0	0	0	0	0	0
+assets/music/in_two (loop).ogg	profiled	2	1	376320000	8890624	10349	1116400	38717900	204199400	7905000	8309200	85152800	3948300	20145300
+assets/music/in_two (loop).ogg	profiled	3	1	380290100	8890624	10349	1105900	39256600	207081700	7934300	8253400	85609000	3989200	20199100
+assets/music/in_two (loop).ogg	production	3	1	374088100	8890624	10349	0	0	0	0	0	0	0	0
+assets/music/in_two (loop).ogg	production	4	1	377227000	8890624	10349	0	0	0	0	0	0	0	0
+assets/music/in_two (loop).ogg	profiled	4	1	389872600	8890624	10349	1180300	40369700	211911000	8089200	8505600	87782400	4027000	20852300
+assets/music/in_two (loop).ogg	profiled	5	1	384511300	8890624	10349	1166200	39830200	208617400	7942600	8434400	87273400	3844800	20511300
+assets/music/in_two (loop).ogg	production	5	1	372903000	8890624	10349	0	0	0	0	0	0	0	0
+assets/music/in_two (loop).ogg	production	6	1	375656600	8890624	10349	0	0	0	0	0	0	0	0
+assets/music/in_two (loop).ogg	profiled	6	1	393702400	8890624	10349	1106000	40567500	213987200	8142100	8521600	88927900	4133800	21052900
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	profiled	0	1	362187600	10888064	10707	1151500	44648800	149792800	9735500	10104500	108861000	4844700	25710200
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	production	0	1	348178500	10888064	10707	0	0	0	0	0	0	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	profiled	1	1	361616600	10888064	10707	1107300	44663300	148856300	9964900	10272000	108717000	4783700	25766000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	production	1	1	346074700	10888064	10707	0	0	0	0	0	0	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	production	2	1	345396900	10888064	10707	0	0	0	0	0	0	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	profiled	2	1	359363500	10888064	10707	1108400	44341300	148726700	9839600	10024800	107755200	4675900	25554000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	profiled	3	1	359814700	10888064	10707	1152600	44378500	148941300	9667100	10090700	108098900	4707300	25549600
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	production	3	1	343484600	10888064	10707	0	0	0	0	0	0	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	profiled	4	1	361270400	10888064	10707	1136700	44416900	149430500	9834700	10109900	108536500	4770300	25577800
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	production	4	1	344348800	10888064	10707	0	0	0	0	0	0	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	profiled	5	1	360923000	10888064	10707	1119400	44643200	149536600	9730000	10290200	108080500	4848200	25387000
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	production	5	1	351440500	10888064	10707	0	0	0	0	0	0	0	0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	profiled	6	1	364230700	10888064	10707	1126100	44936100	150540200	9857800	10279900	109333300	4830600	25856500
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	production	6	1	340628800	10888064	10707	0	0	0	0	0	0	0	0

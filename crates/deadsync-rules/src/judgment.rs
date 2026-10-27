@@ -536,7 +536,8 @@ fn ex_total_possible(data: &ExScoreData) -> f64 {
 }
 
 #[inline(always)]
-fn ex_score_points(data: &ExScoreData) -> f64 {
+/// Earned EX points before percentage rounding, including mine penalties.
+pub fn ex_score_points(data: &ExScoreData) -> f64 {
     let mines_effective = data.mines_hit.min(data.mines_total);
     f64::from(mines_effective).mul_add(
         EX_WEIGHT_HIT_MINE,
@@ -558,7 +559,8 @@ fn ex_score_points(data: &ExScoreData) -> f64 {
 }
 
 #[inline(always)]
-fn hard_ex_score_points(data: &ExScoreData) -> f64 {
+/// Earned Hard EX points before percentage rounding, including mine penalties.
+pub fn hard_ex_score_points(data: &ExScoreData) -> f64 {
     let w010 = data.counts_10ms.w0;
     let fantastic_total = data.counts.w0.saturating_add(data.counts.w1);
     let w110 = fantastic_total.saturating_sub(w010);

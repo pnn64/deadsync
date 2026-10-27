@@ -48,6 +48,9 @@ const HIT_GLOW: f32 = 0.75;
 /// Above the pack page, under any popup.
 const Z_WINDOW: i16 = 40;
 const Z_RECEPTOR: i16 = 44;
+/// Hold bodies: over the receptors a held one runs down from, under the
+/// arrows. Their heads are arrows.
+const Z_HOLD: i16 = Z_NOTE - 1;
 const Z_NOTE: i16 = 46;
 const Z_EXPLOSION: i16 = 48;
 const Z_WINDOW_TEXT: i16 = 52;
@@ -92,8 +95,9 @@ pub fn preview_skin_models(skin: &Noteskin) -> PreviewSkinModels {
 
 /// Every texture the window draws a skin with, once each, and whether a model
 /// samples it: the pieces of four columns -- taps and lifts at every
-/// quantization, mines, receptors, the W1 explosion -- and not the whole skin,
-/// most of which (holds, rolls, the other judgments) the window never shows.
+/// quantization, holds and rolls, mines, receptors, the W1 explosion -- and
+/// not the whole skin, much of which (the other judgments, hold explosions)
+/// the window never shows.
 #[must_use]
 pub fn preview_skin_textures(skin: &Noteskin) -> Vec<(Arc<str>, bool)> {
     let mut textures: Vec<(Arc<str>, bool)> = Vec::new();
@@ -143,7 +147,7 @@ pub(super) fn push_window(actors: &mut Vec<Actor>, state: &State, w: f32) {
     ));
 
     actors.push(act!(text:
-        font("wendy"): settext("CHART PREVIEW".to_owned()):
+        font("wendy"): settext(crate::i18n::tr("ContentBrowser", "ChartPreview")):
         align(0.5, 0.5): xy(cx, PANEL_Y + 14.0): zoom(0.38): horizalign(center):
         diffuse(accent[0], accent[1], accent[2], alpha): z(Z_WINDOW_TEXT)
     ));
@@ -219,11 +223,53 @@ pub(super) fn push_window(actors: &mut Vec<Actor>, state: &State, w: f32) {
         }
     }
 
-    // Notes rising to them. A forward-only cursor: nothing behind the
-    // receptors is walked, and the walk stops at the first note still below
-    // the window.
     if let (Some(chart), Some(time)) = (chart, time) {
         let entry_y = PANEL_Y + ENTRY_DY;
+
+        // Holds and rolls, head to tail. One struck keeps its head on the
+        // receptor until it lets go, as a held hold does in play, its body
+        // shortening into it. Ordered by head, so the walk stops at the first
+        // still below the window.
+        let entry_time = time + (entry_y - receptor_y) / PX_PER_SECOND;
+        for hold in chart.holds.iter() {
+            if hold.start > entry_time {
+                break;
+            }
+            let lane = usize::from(hold.lane);
+            if hold.end <= time || lane >= lanes {
+                continue;
+            }
+            let held = hold.start <= time;
+            let head = [
+                lane_x(lane),
+                receptor_y + (hold.start - time).max(0.0) * PX_PER_SECOND,
+            ];
+            let tail_y = receptor_y + (hold.end - time) * PX_PER_SECOND;
+            match skin {
+                Some(skin) => noteskin_draw::draw_hold(
+                    actors,
+                    skin,
+                    lane % SKIN_COLS,
+                    usize::from(hold.quant),
+                    hold.roll,
+                    held,
+                    head,
+                    tail_y,
+                    [receptor_y, entry_y],
+                    ARROW_PX,
+                    alpha,
+                    Z_HOLD,
+                    now,
+                    beat,
+                    models.as_deref_mut(),
+                ),
+                None => push_plain_hold(actors, head, tail_y.min(entry_y), alpha),
+            }
+        }
+
+        // Notes rising to them. A forward-only cursor: nothing behind the
+        // receptors is walked, and the walk stops at the first note still below
+        // the window.
         for note in chart.notes.get(preview.passed..).unwrap_or_default() {
             let y = receptor_y + (note.time - time) * PX_PER_SECOND;
             if y > entry_y {
@@ -238,6 +284,8 @@ pub(super) fn push_window(actors: &mut Vec<Actor>, state: &State, w: f32) {
                 let center = [lane_x(lane), y];
                 let col = lane % SKIN_COLS;
                 match skin {
+                    // drawn with its body, above
+                    Some(_) if note.holds & bit != 0 => {}
                     Some(skin) if note.mines & bit != 0 => noteskin_draw::draw_mine(
                         actors,
                         skin,
@@ -331,7 +379,7 @@ pub(super) fn push_window(actors: &mut Vec<Actor>, state: &State, w: f32) {
         }
         if chart.notes.is_empty() {
             actors.push(act!(text:
-                font("miso"): settext("nothing in this part of the song".to_owned()):
+                font("miso"): settext(crate::i18n::tr("ContentBrowser", "NoNotesHere")):
                 align(0.5, 0.5): xy(cx, PANEL_Y + 230.0): zoom(0.5): horizalign(center):
                 diffuse(0.75, 0.75, 0.75, alpha): z(Z_WINDOW_TEXT)
             ));
@@ -351,8 +399,8 @@ pub(super) fn push_window(actors: &mut Vec<Actor>, state: &State, w: f32) {
             accent,
         ));
         let label = match progress {
-            Some(fraction) => format!("loading sample  {:.0}%", fraction * 100.0),
-            None => format!("loading sample{}", spinner::ellipsis()),
+            Some(fraction) => crate::i18n::tr_fmt("ContentBrowser", "MessageLoadingSample0", &[("arg0", &format!("{:.0}", fraction * 100.0))]).to_string(),
+            None => crate::i18n::tr_fmt("ContentBrowser", "MessageLoadingSample", &[("arg0", &(spinner::ellipsis()).to_string())]).to_string(),
         };
         actors.push(act!(text:
             font("miso"): settext(label):
@@ -411,11 +459,7 @@ fn glow_white(actors: &mut [Actor], amount: f32) {
 /// a line that carries it is built in one buffer.
 fn write_chart_label(out: &mut String, chart: &PreviewChart) {
     if chart.difficulty.is_empty() {
-        out.push_str(if chart.lanes == 8 {
-            "DOUBLES"
-        } else {
-            "SINGLES"
-        });
+        out.push_str(&super::localization::text(if chart.lanes == 8 { "DOUBLES" } else { "SINGLES" }));
     } else {
         out.extend(chart.difficulty.chars().flat_map(char::to_uppercase));
     }
@@ -534,7 +578,7 @@ fn push_chips(
             diffuse(0.75, 0.75, 0.75, alpha): z(Z_WINDOW_TEXT)
         ));
         actors.push(act!(text:
-            font("miso"): settext("difficulty".to_owned()):
+            font("miso"): settext(crate::i18n::tr("ContentBrowser", "Difficulty")):
             align(0.0, 0.5): xy(cx + row_w * 0.5 + 5.0, y): zoom(0.34): horizalign(left):
             diffuse(0.6, 0.6, 0.6, alpha): z(Z_WINDOW_TEXT)
         ));
@@ -569,6 +613,18 @@ fn push_plain_note(actors: &mut Vec<Actor>, center: [f32; 2], quant: usize, alph
     actors.push(act!(quad:
         align(0.5, 0.5): xy(center[0], center[1]): zoomto(size, size):
         diffuse(rgb[0], rgb[1], rgb[2], alpha): z(Z_NOTE)
+    ));
+}
+
+/// A hold without the skin: a bar from its head to its tail, under the head
+/// the notes draw.
+fn push_plain_hold(actors: &mut Vec<Actor>, head: [f32; 2], tail_y: f32, alpha: f32) {
+    if tail_y <= head[1] {
+        return;
+    }
+    actors.push(act!(quad:
+        align(0.5, 0.0): xy(head[0], head[1]): zoomto(ARROW_PX * 0.4, tail_y - head[1]):
+        diffuse(1.0, 1.0, 1.0, 0.35 * alpha): z(Z_HOLD)
     ));
 }
 
@@ -625,7 +681,7 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
         diffuse(0.05, 0.05, 0.07, 1.0): z(Z_MENU_PANEL + 1)
     ));
     actors.push(act!(text:
-        font("wendy"): settext("LISTEN OR DOWNLOAD?".to_owned()):
+        font("wendy"): settext(crate::i18n::tr("ContentBrowser", "ListenOrDownload")):
         align(0.5, 0.5): xy(cx, top + 22.0): zoom(0.45): horizalign(center):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z_MENU_TEXT)
     ));
@@ -637,21 +693,13 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(format!(
-            "from {}   -   a single song lands in \"{}\"",
-            pack.name,
-            deadsync_online::smo_songs::SINGLES_GROUP
-        )):
+        settext(crate::i18n::tr_fmt("ContentBrowser", "MessageFromASingleSongLandsIn", &[("arg0", &(pack.name).to_string()), ("arg1", &(deadsync_online::smo_songs::SINGLES_GROUP).to_string())]).to_string()):
         align(0.5, 0.5): xy(cx, top + 66.0): zoom(0.45): horizalign(center):
         maxwidth(panel_w - 40.0):
         diffuse(0.7, 0.7, 0.7, 1.0): z(Z_MENU_TEXT)
     ));
     let mut line_y = top + 66.0 + LINE_H;
-    let size = format!(
-        "{}  -  {} songs",
-        format_bytes(pack.size_bytes),
-        pack.song_count
-    );
+    let size = crate::i18n::tr_fmt("ContentBrowser", "MessageSongs32b9e2", &[("arg0", &(format_bytes(pack.size_bytes)).to_string()), ("arg1", &(pack.song_count).to_string())]).to_string();
     for (show, line) in [
         (true, size.as_str()),
         (
@@ -668,7 +716,7 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
             continue;
         }
         actors.push(act!(text:
-            font("miso"): settext(line.to_owned()):
+            font("miso"): settext(super::localization::text(line)):
             align(0.5, 0.5): xy(cx, line_y): zoom(0.45): horizalign(center):
             maxwidth(panel_w - 40.0):
             diffuse(0.7, 0.7, 0.7, 1.0): z(Z_MENU_TEXT)
@@ -677,7 +725,7 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
     }
 
     let known = deadsync_online::smo_songs::runtime_known_charts(pack.id, &song.title, artist);
-    let mut preview_label = String::from("Preview");
+    let mut preview_label = super::localization::text("Preview").to_string();
     if let Some(chart) = known
         .as_deref()
         .and_then(|charts| menu.chart.and_then(|index| charts.get(index)))
@@ -689,7 +737,7 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
     const CHOICE_W: f32 = 170.0;
     const CHOICE_H: f32 = 34.0;
     let choice_y = top + 112.0 + body_h;
-    for (index, label) in [preview_label, "Get this song".to_owned(), pack_label]
+    for (index, label) in [preview_label, crate::i18n::tr("ContentBrowser", "MessageGetThisSong").to_string(), pack_label]
         .into_iter()
         .enumerate()
     {
@@ -718,7 +766,7 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
         "LEFT/RIGHT choose    START go    BACK cancel"
     };
     actors.push(act!(text:
-        font("miso"): settext(hint.to_owned()):
+        font("miso"): settext(super::localization::text(hint)):
         align(0.5, 0.5): xy(cx, top + 164.0 + body_h): zoom(0.5): horizalign(center):
         diffuse(0.6, 0.6, 0.6, 1.0): z(Z_MENU_TEXT)
     ));
@@ -734,7 +782,8 @@ pub(super) fn itg_sync(state: &State, pack: &deadsync_online::stepmaniaonline::P
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_online::smo_songs::{PreviewNote, PreviewSnapshot};
+    use deadlib_present::actors::SizeSpec;
+    use deadsync_online::smo_songs::{PreviewHold, PreviewNote, PreviewSnapshot};
 
     fn chart(doubles: bool, difficulty: &str, meter: u32) -> PreviewChart {
         PreviewChart {
@@ -743,6 +792,7 @@ mod tests {
             meter,
             lanes: if doubles { 8 } else { 4 },
             notes: Arc::from(Vec::<PreviewNote>::new()),
+            holds: Arc::from(Vec::new()),
         }
     }
 
@@ -920,6 +970,7 @@ mod tests {
             cols: 0b0001,
             lifts: 0,
             mines: 0,
+            holds: 0,
             quant: 0,
         }]);
         state.song_preview = Arc::new(PreviewSnapshot {
@@ -977,6 +1028,7 @@ mod tests {
             cols: 0b0001,
             lifts: 0,
             mines: 0b0001,
+            holds: 0,
             quant: 0,
         }]);
         state.song_preview = Arc::new(PreviewSnapshot {
@@ -1030,6 +1082,181 @@ mod tests {
         state.music_time = Some(0.5 + 2.0 * MINE_EXIT_PX / PX_PER_SECOND);
         preview::update(&mut state, 0.01);
         assert_eq!(notes(&drawn(&state)), 0, "gone");
+    }
+
+    /// A hold is drawn head to tail with its head once, the body clipped where
+    /// notes come into view. Struck, its head stays on the receptor while the
+    /// body shortens into it, the cap under the tail; let go, it is gone.
+    #[test]
+    fn a_struck_hold_keeps_its_head_on_the_receptor() {
+        let skin = dance_skin("default");
+        let mut state = super::super::state::init();
+        state.preview_skin = Some(Arc::clone(&skin));
+        preview::start(&mut state, 7, "Song A".to_owned(), String::new(), 0, None);
+        state.pending_songs.clear();
+        let mut held = chart(false, "Challenge", 12);
+        held.notes = Arc::from(vec![PreviewNote {
+            time: 0.5,
+            cols: 0b0001,
+            lifts: 0,
+            mines: 0,
+            holds: 0b0001,
+            quant: 0,
+        }]);
+        held.holds = Arc::from(vec![PreviewHold {
+            start: 0.5,
+            end: 1.5,
+            lane: 0,
+            roll: false,
+            quant: 0,
+        }]);
+        state.song_preview = Arc::new(PreviewSnapshot {
+            phase: PreviewPhase::Ready,
+            pack_id: 7,
+            title: "Song A".to_owned(),
+            length: 15.0,
+            bpm: 120.0,
+            clip: true,
+            charts: Arc::from(vec![held]),
+            audio_path: Some(std::path::PathBuf::from("cache/preview.ogg")),
+            ..PreviewSnapshot::default()
+        });
+        preview::sync(&mut state);
+
+        let visuals = skin.hold_visuals_for_col(0, false);
+        let body_keys: Vec<Arc<str>> = [&visuals.body_inactive, &visuals.body_active]
+            .into_iter()
+            .flatten()
+            .map(SpriteSlot::texture_key_shared)
+            .collect();
+        let cap_keys: Vec<Arc<str>> = [&visuals.bottomcap_inactive, &visuals.bottomcap_active]
+            .into_iter()
+            .flatten()
+            .map(SpriteSlot::texture_key_shared)
+            .collect();
+        let receptor_y = PANEL_Y + RECEPTOR_DY;
+        let entry_y = PANEL_Y + ENTRY_DY;
+        let x = 854.0 * 0.5 - 1.5 * ARROW_PX;
+        // The top and bottom of every piece drawn from one of `keys`.
+        let spans = |actors: &[Actor], keys: &[Arc<str>]| {
+            let mut spans: Vec<(f32, f32)> = actors
+                .iter()
+                .filter_map(|actor| match actor {
+                    Actor::Sprite {
+                        offset,
+                        size: [_, SizeSpec::Px(height)],
+                        source,
+                        ..
+                    } if keys
+                        .iter()
+                        .any(|key| source.texture_key() == Some(key.as_ref())) =>
+                    {
+                        Some((offset[1] - height * 0.5, offset[1] + height * 0.5))
+                    }
+                    _ => None,
+                })
+                .collect();
+            spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+            spans
+        };
+        // Arrows over the hold's lane at `y`.
+        let arrows_at = |actors: &[Actor], y: f32| {
+            actors
+                .iter()
+                .filter(|actor| {
+                    matches!(actor, Actor::Sprite { offset, z, .. }
+                        if *z >= Z_NOTE
+                            && (offset[0] - x).abs() < 1.0
+                            && (offset[1] - y).abs() < 1.0)
+                })
+                .count()
+        };
+        let at = |state: &mut State, time: f32| {
+            state.music_time = Some(time);
+            preview::update(state, 0.01);
+            let mut actors = Vec::new();
+            push_window(&mut actors, state, 854.0);
+            actors
+        };
+
+        // Coming up: the head where the note is, the body down past where
+        // notes come into view, and one arrow for the head.
+        let actors = at(&mut state, 0.2);
+        let head_y = receptor_y + 0.3 * PX_PER_SECOND;
+        let body = spans(&actors, &body_keys);
+        assert!(!body.is_empty(), "a body");
+        assert!((body[0].0 - head_y).abs() < 0.01, "from the head {body:?}");
+        assert!(
+            (body.last().unwrap().1 - entry_y).abs() < 0.01,
+            "clipped where notes come in {body:?}"
+        );
+        assert!(body.windows(2).all(|w| (w[0].1 - w[1].0).abs() < 0.01));
+        assert!(
+            spans(&actors, &cap_keys).is_empty(),
+            "the tail is not in yet"
+        );
+        let mut lone = Vec::new();
+        noteskin_draw::draw_hold(
+            &mut lone,
+            &skin,
+            0,
+            0,
+            false,
+            false,
+            [x, head_y],
+            receptor_y + 1.3 * PX_PER_SECOND,
+            [receptor_y, entry_y],
+            ARROW_PX,
+            1.0,
+            Z_HOLD,
+            0.2,
+            0.0,
+            None,
+        );
+        assert!(arrows_at(&lone, head_y) > 0);
+        assert_eq!(
+            arrows_at(&actors, head_y),
+            arrows_at(&lone, head_y),
+            "the head is drawn once"
+        );
+
+        // Held: the head on the receptor, the body from it to the tail, and
+        // the cap under that.
+        let actors = at(&mut state, 1.0);
+        let tail_y = receptor_y + 0.5 * PX_PER_SECOND;
+        let body = spans(&actors, &body_keys);
+        assert!((body[0].0 - receptor_y).abs() < 0.01, "{body:?}");
+        assert!((body.last().unwrap().1 - tail_y).abs() < 0.01, "{body:?}");
+        let cap = spans(&actors, &cap_keys);
+        assert_eq!(cap.len(), 1);
+        assert!((cap[0].0 - tail_y).abs() < 0.01, "{cap:?}");
+        let mut lone = Vec::new();
+        noteskin_draw::draw_hold(
+            &mut lone,
+            &skin,
+            0,
+            0,
+            false,
+            true,
+            [x, receptor_y],
+            tail_y,
+            [receptor_y, entry_y],
+            ARROW_PX,
+            1.0,
+            Z_HOLD,
+            1.0,
+            2.0,
+            None,
+        );
+        assert!(
+            arrows_at(&actors, receptor_y) >= arrows_at(&lone, receptor_y),
+            "the head on the receptor"
+        );
+
+        // Let go: nothing left of it.
+        let actors = at(&mut state, 1.6);
+        assert!(spans(&actors, &body_keys).is_empty());
+        assert!(spans(&actors, &cap_keys).is_empty());
     }
 }
 

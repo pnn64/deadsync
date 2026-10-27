@@ -1,0 +1,2 @@
+fuzz/*.sh text eol=lf
+tests/fixtures/**/*.gif binary

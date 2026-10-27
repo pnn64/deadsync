@@ -263,7 +263,7 @@ fn append_background_lua_changes<'a>(
                 normalized_background_lua_color(fields.get(10).map(AsRef::as_ref)),
             ];
             let effect = key[0].clone();
-            let color1 = fields.get(9).and_then(|field| parse_bgchange_color(&field.replace('^', ",")));
+            let color1 = fields.get(9).and_then(|field| parse_background_lua_color(field));
             out.push((key, SerializableSongBackgroundLuaChange {
                 start_beat,
                 path: path.to_string_lossy().into_owned(),
@@ -280,10 +280,33 @@ fn append_background_lua_changes<'a>(
     uses_lua
 }
 
+fn parse_background_lua_color(field: &str) -> Option<[f32; 4]> {
+    // Both separators are accepted directly. Keep legacy normalized input for
+    // non-ASCII hex slice diagnostics.
+    if field.is_ascii() {
+        parse_bgchange_color(field)
+    } else {
+        parse_bgchange_color(&field.replace('^', ","))
+    }
+}
+
 fn normalized_background_lua_color(field: Option<&str>) -> String {
-    let Some(color) = field.and_then(|field| parse_bgchange_color(&field.replace('^', ","))) else { return String::new(); };
-    let [r,g,b,a] = color.map(|component| (component * 255.0).round_ties_even().clamp(0.0,255.0) as u8);
-    if a == 255 { format!("#{r:02X}{g:02X}{b:02X}") } else { format!("#{r:02X}{g:02X}{b:02X}{a:02X}") }
+    let Some(color) = field.and_then(parse_background_lua_color) else {
+        return String::new();
+    };
+    let [r, g, b, a] =
+        color.map(|component| (component * 255.0).round_ties_even().clamp(0.0, 255.0) as u8);
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut digits = [0; 8];
+    for (pair, byte) in digits.as_chunks_mut::<2>().0.iter_mut().zip([r, g, b, a]) {
+        pair[0] = HEX[usize::from(byte >> 4)];
+        pair[1] = HEX[usize::from(byte & 15)];
+    }
+    let len = if a == 255 { 6 } else { 8 };
+    let mut output = String::with_capacity(if a == 255 { 8 } else { 16 });
+    output.push('#');
+    output.push_str(std::str::from_utf8(&digits[..len]).expect("hex digits are ASCII"));
+    output
 }
 
 fn cache_background_lua_owners(
@@ -354,6 +377,7 @@ fn resolve_background_changes_from_values<'a>(
 ) -> Vec<SongBackgroundChange> {
     let entries = list_song_dir_rel_entries(song_dir);
     let mut out: Vec<SongBackgroundChange> = Vec::new();
+    let mut beat_indices = None;
     let mut saw_no_song_bg = false;
     for raw in values {
         let decoded = decode_bytes(raw);
@@ -373,7 +397,7 @@ fn resolve_background_changes_from_values<'a>(
                 saw_no_song_bg = true;
                 continue;
             }
-            upsert_background_change(&mut out, change);
+            upsert_background_change(&mut out, &mut beat_indices, change);
         }
     }
 
@@ -610,14 +634,47 @@ fn list_bgchange_song_movies(song_dir: &Path) -> Vec<PathBuf> {
     files
 }
 
-fn upsert_background_change(out: &mut Vec<SongBackgroundChange>, change: SongBackgroundChange) {
-    if let Some(slot) = out
-        .iter_mut()
-        .find(|existing| existing.start_beat == change.start_beat)
-    {
-        *slot = change;
-    } else {
+fn upsert_background_change(
+    out: &mut Vec<SongBackgroundChange>,
+    indices: &mut Option<rustc_hash::FxHashMap<u32, usize>>,
+    change: SongBackgroundChange,
+) {
+    // NaNs never replace an existing beat, including another NaN.
+    if change.start_beat.is_nan() {
         out.push(change);
+        return;
+    }
+    const INDEX_THRESHOLD: usize = 32;
+    if out.len() < INDEX_THRESHOLD {
+        if let Some(slot) = out
+            .iter_mut()
+            .find(|existing| existing.start_beat == change.start_beat)
+        {
+            *slot = change;
+        } else {
+            out.push(change);
+        }
+        return;
+    }
+    // Numeric equality merges both zero signs; all other non-NaN beats have
+    // unique bit patterns. Store positions so replacements keep their first slot.
+    let key = |beat: f32| if beat == 0.0 { 0 } else { beat.to_bits() };
+    let indices = indices.get_or_insert_with(|| {
+        let mut indices =
+            rustc_hash::FxHashMap::with_capacity_and_hasher(INDEX_THRESHOLD, Default::default());
+        for (index, existing) in out.iter().enumerate() {
+            if !existing.start_beat.is_nan() {
+                indices.insert(key(existing.start_beat), index);
+            }
+        }
+        indices
+    });
+    match indices.entry(key(change.start_beat)) {
+        std::collections::hash_map::Entry::Occupied(slot) => out[*slot.get()] = change,
+        std::collections::hash_map::Entry::Vacant(slot) => {
+            slot.insert(out.len());
+            out.push(change);
+        }
     }
 }
 
@@ -665,6 +722,14 @@ fn sort_foreground_changes<T>(
     out.sort_by(|left, right| start_beat(left).partial_cmp(&start_beat(right))
         .expect("foreground beats are finite"));
 }
+
+#[cfg(test)]
+#[path = "changes/background_fields.rs"]
+mod background_fields;
+
+#[cfg(test)]
+#[path = "changes/lookup_growth.rs"]
+mod lookup_growth;
 
 #[cfg(test)]
 mod tests {

@@ -1,11 +1,11 @@
 //! Single-file official suite probe; run by scripts/check_rust_lua_suite.py.
-use deadlib_lua::{Value, Vm, compile, compile_named};
+use deadlib_lua::{ProgramCache, Value, Vm, compile, compile_named};
 use std::{env, fs, path::Path, process::ExitCode};
 
 fn main() -> ExitCode {
     let args: Vec<_> = env::args().skip(1).collect();
     let [engine, path] = args.as_slice() else {
-        eprintln!("usage: official_suite rust|reference path.lua");
+        eprintln!("usage: official_suite rust|rust-cache|reference path.lua");
         return ExitCode::FAILURE;
     };
     let source = fs::read(path).expect("read test source");
@@ -14,13 +14,23 @@ fn main() -> ExitCode {
         Path::new(path).file_name().unwrap().to_string_lossy()
     );
     let bootstrap = b"_U=true; function Message(s) print(s) end";
-    if engine == "rust" {
+    if engine == "rust" || engine == "rust-cache" {
         let mut vm = Vm::new();
         vm.set_output_capture(true);
         vm.set_instruction_limit(Some(100_000_000));
         vm.execute(&compile(bootstrap).unwrap()).unwrap();
-        let outcome = compile_named(&source, name.as_bytes())
-            .and_then(|p| vm.execute(&p).map(|v| v.to_vec()));
+        let program = if engine == "rust-cache" {
+            let directory = env::var_os("DEADLIB_LUA_TEST_CACHE").expect("test cache directory");
+            ProgramCache::new(directory)
+                .compile_named(&source, name.as_bytes())
+                .map(|cached| {
+                    eprintln!("CACHE\t{:?}", cached.status);
+                    cached.program
+                })
+        } else {
+            compile_named(&source, name.as_bytes())
+        };
+        let outcome = program.and_then(|p| vm.execute(&p).map(|v| v.to_vec()));
         use std::io::Write;
         std::io::stdout()
             .write_all(vm.output().unwrap())

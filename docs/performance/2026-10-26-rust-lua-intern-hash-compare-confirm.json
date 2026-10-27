@@ -1,0 +1,5685 @@
+{
+  "parent_revision": "2a4dbb99c80298b8337ee7ed695955da6767ee5c",
+  "current_revision": "2a4dbb99c80298b8337ee7ed695955da6767ee5c",
+  "dirty": true,
+  "source_hashes": {
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+    "Cargo.lock": "e6874b1159561b22f63dcd6151625b07a98f4cbdbaad7b522cfbb70534743167",
+    "Cargo.toml": "b887572a8dc7ddbb357a54b0ce575e275e0a98fde922f60340fee70573235d4b",
+    "crates/deadlib-lua/benches/baseline.rs": "bbe7218e9f362167416114998e9459338606757a3840f4020b06d79736b8e739",
+    "crates/deadlib-lua/Cargo.toml": "593c0a2ee9101f8057fd13e9108ec78bde817b490182d4e22a27c0a244b13724",
+    "crates/deadlib-lua/examples/official_suite.rs": "80b1bd2bc9d6c51b1f314897066f4026a3b36ebb56beb97fafc9ec9023cf780c",
+    "crates/deadlib-lua/examples/os_process.rs": "3c9e80fb1ff2eeb6ece410b62d9b0322fa9f67620b602217b6ae2bf55001b870",
+    "crates/deadlib-lua/src/arena.rs": "6e4a0f35a8e160cdb80d150f92000f17f2e242d9f9af195cf19dfd413c401a84",
+    "crates/deadlib-lua/src/bin/deadlua/cli.rs": "828b79325069c3d1ba3c90ce04c6ecd17291600bff4bac871ae7bd3d214fcf1d",
+    "crates/deadlib-lua/src/bin/deadlua.rs": "da704b62e14936545c166e18147d400ae7d70a6a3e41fcdb2840ead6669d9996",
+    "crates/deadlib-lua/src/bytecode.rs": "3a148053ee732600ccdc932a578b47e20f71d03c6e13c371b8973b580df6bb80",
+    "crates/deadlib-lua/src/chunk51/dump/jumps.rs": "d67affeaac94f15d932bc6b42bc516e14bf48ce8fc439d80f9799dcf930d5478",
+    "crates/deadlib-lua/src/chunk51/dump/lower.rs": "59b1206b3468601f8fba83b0b6ac132ecc9fc92e6060c21d57447406ef51007b",
+    "crates/deadlib-lua/src/chunk51/dump.rs": "1c751f59a9844bf77ee0e8b621c51a61194a2a89b0d19e3be878f7c1d0b37b53",
+    "crates/deadlib-lua/src/chunk51/tests.rs": "74e684fccb61434b6b8a96f97eb41c4ad52ef5441a24fa2952f5414b65dcea34",
+    "crates/deadlib-lua/src/chunk51/translate.rs": "7710330cbed9f0ee06d027bb99d20d9f87660025299e97787e7db519559a58f1",
+    "crates/deadlib-lua/src/chunk51/verify.rs": "1d1291c22f551cb6949a45703c1f290588b47872136a8338819fb7da8103a2c2",
+    "crates/deadlib-lua/src/chunk51.rs": "317a95abb812ab640d3f7ca924b171fcab928509ee2fe692ca8cecd0a06cb196",
+    "crates/deadlib-lua/src/compiler/expressions.rs": "3b8163e4f4d1553e1f1e8ff46dc79367513161ea3784a9f99d6262f908f656a1",
+    "crates/deadlib-lua/src/compiler/statements.rs": "13b611e452288148129a90638481fc74917a9357688b985ac14ce11e5a893e3f",
+    "crates/deadlib-lua/src/compiler/tasks.rs": "76e0cfedd67d485306ae4f7fd1e0e784cea9f8ae2ea04d20a632bd99e84f4dce",
+    "crates/deadlib-lua/src/compiler.rs": "d1b405755dfaf2a334b2fe9e1e579dd6d009772114903a9ab7ffc2e2fbbd212c",
+    "crates/deadlib-lua/src/error.rs": "743360acdca737b1ee2b65aa5cd11d57e55427153ea9f634d1b1eaa6e27faee2",
+    "crates/deadlib-lua/src/format.rs": "0a23763500c566db4ba18448fd15564cb57428df2d410f80b37c5283b34f7d0d",
+    "crates/deadlib-lua/src/lexer/scanner.rs": "4d3524f2463176d0b85b1d7e4070eab807694dbcb3badf4a3055da5cd0024d73",
+    "crates/deadlib-lua/src/lexer.rs": "8754b3cbab2565e52e1297414acfc6d37497414b7182e124430230cfc33e2d0c",
+    "crates/deadlib-lua/src/lib.rs": "bb1ef31c9ea96ae61d339121bba3e75cc64df9c9df22722fb3b8a8ae58e1ade5",
+    "crates/deadlib-lua/src/locale/windows.rs": "5aade2fe5d823b4a8424eeaa3979817e212c7f1c135f08496197e20b0d2c9ed9",
+    "crates/deadlib-lua/src/locale.rs": "456cf8e12a559ea02443203813fa819e099735ef3f618b818c8fe4014d32f4bb",
+    "crates/deadlib-lua/src/numeric.rs": "2afdcaad6e4659b148667be4db1bafcf6bc5e3b75bd0292916eb3690579e3f12",
+    "crates/deadlib-lua/src/optimizer.rs": "daa6527ab937ecc89e128252cb095ff370dae6b378ab5091513ae72604a71426",
+    "crates/deadlib-lua/src/parser/bindings.rs": "138baf4ef45bb039983e673466bee8e2cbaddad3385913af3ee0a2158315e375",
+    "crates/deadlib-lua/src/parser/resources.rs": "cd610b4fbca645350fb4bcfbbe23ab694b442c55ee2ede8fccb04f458ec95c10",
+    "crates/deadlib-lua/src/parser/resume.rs": "08a5d6da3044cac11fb0121bdd77d50e7d29197b5734326b0c3efecfe60a93c3",
+    "crates/deadlib-lua/src/parser.rs": "490fdfc7ff391b4421d4f0d1265e5dae84939f4bad0d72dce2031eb2554e8b71",
+    "crates/deadlib-lua/src/pattern.rs": "4415a2f2a5e743aa3cdad758f45c229378ca67211aeafa1b74c7cf36e6481627",
+    "crates/deadlib-lua/src/table.rs": "5f2815d69a294c6a46d0e43ee3fc840bc380dd7af2b591d3d959ffe2f6ef887b",
+    "crates/deadlib-lua/src/value.rs": "f24a28b8ab79ceb6e6fb9dce25d719d6378f2f63788784729acf79130959f7fc",
+    "crates/deadlib-lua/src/vm/console.rs": "7b025de1d41dd0bebfdb0e5f010ea6350a225624589a8f274ca4a2b55aa49860",
+    "crates/deadlib-lua/src/vm/debug.rs": "9016516e80f5e4f247a317f9e3238bc1195be89b5773527a24992b6bcf31c94e",
+    "crates/deadlib-lua/src/vm/errors.rs": "892dd847b6c35c300fd902cd6cb5ddcb01f80477c96f3e61b514ab04cdedd2e9",
+    "crates/deadlib-lua/src/vm/gc.rs": "b4bd576d3c1aee3396638f07287214cffc4750ba5516c33207b78c57cb788459",
+    "crates/deadlib-lua/src/vm/hooks.rs": "b5825777e414a0f39e08f761323e6bb2859d0299f053f0a2f09082a9417b79e8",
+    "crates/deadlib-lua/src/vm/io/number.rs": "56928749ea72f1eca5be18ffd33995fec9521641b6d8322df59003bc7469cb26",
+    "crates/deadlib-lua/src/vm/io/output.rs": "6850ce12b119beae7fbeccc4e9f8e3e946e2cf2cbda2e4a68c35f864e3192aa5",
+    "crates/deadlib-lua/src/vm/io/stream.rs": "d5a01ef2e193655e25849e60aafcac66a1d575751d0e6c3e5232f57e6ca49cb4",
+    "crates/deadlib-lua/src/vm/io.rs": "dc85c743aa267cd83ef7c2009602c032efd268ccd67750cd73c0e5ffb68f5a20",
+    "crates/deadlib-lua/src/vm/limits.rs": "fe7c21e3a6d8a2b5d76de75763bf043382122b206bd08cd532b28d31243cd35e",
+    "crates/deadlib-lua/src/vm/loads.rs": "83eae76435efeb81c431af26454c52e302d162acf32ae4760651e796aa2e007f",
+    "crates/deadlib-lua/src/vm/math.rs": "ba770fa64f891571d757ed55f019f0c1bfb77d3573e4601644d0facfbebcd0df",
+    "crates/deadlib-lua/src/vm/meta.rs": "b3142b4c6a1799f22cba7f59a6e903c9907e6e781f240245b00fc71adb565dad",
+    "crates/deadlib-lua/src/vm/native.rs": "d22340b380ca7ff3516075c269334ca95105e4c677a195a6a43c312dbe6ff8e1",
+    "crates/deadlib-lua/src/vm/os/calendar.rs": "3985cd6ca93831586cc52f7730395e94c5b51d8c80d8630be25e9ca0f5eb8d1e",
+    "crates/deadlib-lua/src/vm/os/platform/posix_calendar.rs": "cfd512034a919ab2ac92525f18db5e309f92be20dbea2ac473021784af61d6d8",
+    "crates/deadlib-lua/src/vm/os/platform/windows.rs": "f064bdce5216c465e48b67471afe2721db8a4528a2e7453888cc035a9f4c79d3",
+    "crates/deadlib-lua/src/vm/os/platform.rs": "795f9cf59689a58523b6b6d213741f391bec3ba77126aea5746dae4e74ee9b25",
+    "crates/deadlib-lua/src/vm/os/process.rs": "abedd37df91e057215475c85185bb5daa697b4d15706fff2b69b82508590c0cf",
+    "crates/deadlib-lua/src/vm/os.rs": "711ad043839bcd321732c36fc462cc28c40dc462e4da5d8b032ab8231b4cc99d",
+    "crates/deadlib-lua/src/vm/package.rs": "1669d9b1c9eab72456c24a59468f41ca97a15b5c214898de872158c63ecd4a2d",
+    "crates/deadlib-lua/src/vm/standalone.rs": "ed4be867e3e0f2623c925fb1817644c500a05a47a7fd913ae8c19667e93ad6ca",
+    "crates/deadlib-lua/src/vm/strings.rs": "c71fc2471afff837fad0819d8f88216382db8c7ddd2c03de904b3e4d539b62f4",
+    "crates/deadlib-lua/src/vm/tables.rs": "c03b1b69a14dd4bb3980e7953fbb05f6e1b83492b140749e641c0a2edbe34a51",
+    "crates/deadlib-lua/src/vm/threads.rs": "aeace8531dac7043dc25cdad76dc5edade9910d672a812713f68a6e2abfba3d3",
+    "crates/deadlib-lua/src/vm/traces.rs": "aa1339b4a9d3ed52e34e35c45128b4062a26bbf039694e9247b1809418d206d4",
+    "crates/deadlib-lua/src/vm/userdata.rs": "e53126e06d87d1a7dc7a0a5ce28a120f52ce23234fbbdcda490a9b47408e0e80",
+    "crates/deadlib-lua/src/vm.rs": "320e86bf3a3aee45e658fa8d171daff6bf3c326ed0935c718f5f6bdc612d8712",
+    "crates/deadlib-lua/tests/calendar.rs": "b1d8136acf80be9f9da1780044901caa3fc252784f5b01f91d3d4f8588856939",
+    "crates/deadlib-lua/tests/call_limits.rs": "7c00a96eb8ce34e62529a23d21631ee682e5aa8947543cf6c2c049aaf3b82801",
+    "crates/deadlib-lua/tests/capture_limits.rs": "130d828ef872c72e78c21e3b01a5152791b1d93fd9a972053dce8b0a0af8545d",
+    "crates/deadlib-lua/tests/codegen.rs": "6ce2e1616dbf4c5fe13be05f769a8cf338510ca0914dd1b594a479182ce31196",
+    "crates/deadlib-lua/tests/coroutines.rs": "caf53fdc2e4d678e4420984356308f4cf3831519af6c0d1233beb7c0c6f2f20c",
+    "crates/deadlib-lua/tests/debug.rs": "a8324a8552b206a4bd5e7a670833f547b05e81a0d2580a8622e24d2793e61480",
+    "crates/deadlib-lua/tests/debug_console.rs": "bbeb8cb2905bda00f24b9bdf885bd128381b3e27de33ac97576ba9c010953f54",
+    "crates/deadlib-lua/tests/debug_locals.rs": "ae478e99557a817c43dbfdb1e204783a134b185d23b62906b4b37cc9ae7636af",
+    "crates/deadlib-lua/tests/file_loading.rs": "f0e94dc6a03da16a2f9ff97ed20103a7a3239e89d33726901660ad65a946a7ed",
+    "crates/deadlib-lua/tests/gc.rs": "6c13af6eb1b688c5e727cf3c90a092e5a8d9222ae6414b86234d4498b7177fa3",
+    "crates/deadlib-lua/tests/hooks.rs": "7658278d79d5a21d82aa15871efb9ee2e6fff0e62ed8d80a2d8a3c05f48698d9",
+    "crates/deadlib-lua/tests/host_calls.rs": "48d2bf2dcf5a5849e79bf64eab081f029c110b1a8f9bab86d33183656f427e2a",
+    "crates/deadlib-lua/tests/interning.rs": "aa7c47ed57857d5c43862aa0c7873c44f7a298450a78024d823909877173b4da",
+    "crates/deadlib-lua/tests/io.rs": "f46e52f3f3fc914740b8a9179fe4bc8ebe06ec5563edc93b88c1957f94da2113",
+    "crates/deadlib-lua/tests/loading.rs": "2e3d1898bed58d1f22623079f55132a349ac9b4d9cf6e8309a2a839aa61bcebc",
+    "crates/deadlib-lua/tests/lua51.rs": "d57b376a6ee2da4e2ea45586f805a8aa7027abc314e2683c4dc5d3b851748607",
+    "crates/deadlib-lua/tests/native_errors.rs": "337233e236e270e58c7a55804d3a63da9f33c10a3e4bbeee566aeb866d5c971d",
+    "crates/deadlib-lua/tests/os.rs": "146b6517714ede2ea716898f11b08a1c1dd68419badd6e5efa202a30ad375bd8",
+    "crates/deadlib-lua/tests/package.rs": "abc56676397035a2f56900aa9c17f5e22b523a8f8723d33975af3ff6393c1f72",
+    "crates/deadlib-lua/tests/register_limits.rs": "72140b0e817cdd7ba21cbe2d41b2f75685607b09274bd2800bb1fe4ef891ca7f",
+    "crates/deadlib-lua/tests/runtime_errors.rs": "5bc1473504aeb0c653f701608e90bb28696d5e3887abe7fbaeb8475ec4d828e7",
+    "crates/deadlib-lua/tests/standalone.rs": "2024ded5dbd922e36b5e1207134c975ed7bb86916e1fe09fa032fad473fc925b",
+    "crates/deadlib-lua/tests/stdlib.rs": "c09ad78e3a93612564b869dacf929cd31d7c5a8431755494bcfa10910bc0b547",
+    "crates/deadlib-lua/tests/syntax.rs": "0cef3d8108355af80bc52bade3baed22a3bcb86b189ec7a1e8357ff90f9ed724",
+    "crates/deadlib-lua/tests/tracebacks.rs": "215ac3d208984413ffec93691ac7a72f923cf17a9c31d54e7b4cc9afec0b35fa",
+    "crates/deadlib-lua/tests/userdata.rs": "c163e9694e6fb04db3bc7e582dd5e9873ebb721f227d635c2761bc04366978cd",
+    "scripts/benchmark_rust_lua_intern.py": "f8b045e3743f2e6073d9a28fab8fb1506bf9e4ce50fd02729a2b1ee8b1dd7570"
+  },
+  "parent_source_hashes": {
+    "crates/deadlib-lua/src/arena.rs": "228b5379cb95002cd491404e4eb96f2f49a35d8795a1e40e76da716221e3010a",
+    "crates/deadlib-lua/src/bin/deadlua/cli.rs": "69bec8c733f21a97c904f948c8ef096083b58601db3f1b646c137a76c8cf6993",
+    "crates/deadlib-lua/src/bin/deadlua.rs": "5596e8cf1715328a9a9f2fc94a213a6b94e71b3e5da09dc736360e296b6f7083",
+    "crates/deadlib-lua/src/bytecode.rs": "2b86f55a63f5b26003b21624374b41cbef6471b8154af70b262b968cccc6b5d5",
+    "crates/deadlib-lua/src/chunk51/dump/jumps.rs": "40c5923c4ebbca22fa464fab9ab07553361914ed3465010186db19d6309edb8b",
+    "crates/deadlib-lua/src/chunk51/dump/lower.rs": "cb1c63643d05d93302b638895db01c75349f0265bbbf15a58715157690a1e85c",
+    "crates/deadlib-lua/src/chunk51/dump.rs": "af44e1413e0e225e78c12e3508393ddf57105e959b86667486494376591bb3eb",
+    "crates/deadlib-lua/src/chunk51/tests.rs": "3f36c40541a1d226e957810d5fa99730e8bf372e9d6e4bc13baf14a4d668ea30",
+    "crates/deadlib-lua/src/chunk51/translate.rs": "5969785f3541d2fc342c364e8b79287dec458f1b960aa6e8c602665f6024d94b",
+    "crates/deadlib-lua/src/chunk51/verify.rs": "97bfcaaeaea12810c8450558e023bbe9ceaf238366c25c68be75af50b9b15645",
+    "crates/deadlib-lua/src/chunk51.rs": "a1a3b7133225dfb46e7324cda3ba634641fed2b20ecfdb6dfa55add3c6b854c3",
+    "crates/deadlib-lua/src/compiler/expressions.rs": "3b8163e4f4d1553e1f1e8ff46dc79367513161ea3784a9f99d6262f908f656a1",
+    "crates/deadlib-lua/src/compiler/statements.rs": "13b611e452288148129a90638481fc74917a9357688b985ac14ce11e5a893e3f",
+    "crates/deadlib-lua/src/compiler/tasks.rs": "d7a61d5ad30eb6609088e941da406bf440a1bbaf21719bad8a2279f01555322f",
+    "crates/deadlib-lua/src/compiler.rs": "f65ddec12167057b2212d9890b07dd81b67c1b9c7ac2ca18ec5c211fafdf45a5",
+    "crates/deadlib-lua/src/error.rs": "997b52aa34aef53cfb04e081ce397241095a3f8f175963ed9a6db9fa5539883c",
+    "crates/deadlib-lua/src/format.rs": "9581c3a4dd8b17b0ad8ce977cd9f0f6660f9d2027981f548efc6d2b9e8cbec7a",
+    "crates/deadlib-lua/src/lexer/scanner.rs": "71b25d21e90aa788ff4a960475f82069cacab1aeb77deb935702cb8837331ce9",
+    "crates/deadlib-lua/src/lexer.rs": "8754b3cbab2565e52e1297414acfc6d37497414b7182e124430230cfc33e2d0c",
+    "crates/deadlib-lua/src/lib.rs": "bb1ef31c9ea96ae61d339121bba3e75cc64df9c9df22722fb3b8a8ae58e1ade5",
+    "crates/deadlib-lua/src/locale/windows.rs": "03b192417267bca53aefa31fcdf02580b50c131beaa2ad94e0d801c8f1961fca",
+    "crates/deadlib-lua/src/locale.rs": "456cf8e12a559ea02443203813fa819e099735ef3f618b818c8fe4014d32f4bb",
+    "crates/deadlib-lua/src/numeric.rs": "2afdcaad6e4659b148667be4db1bafcf6bc5e3b75bd0292916eb3690579e3f12",
+    "crates/deadlib-lua/src/optimizer.rs": "60bfa583b75bec6919019b17d7bd746549a303a151bc084d18a5b482134c038c",
+    "crates/deadlib-lua/src/parser/bindings.rs": "7a4dc606eed7a46f363b0b01a10f39411e29be85e9cc7d2dae3020c1c0251213",
+    "crates/deadlib-lua/src/parser/resources.rs": "b45a4f11a0a987a3ebd96f54991d2b65522fabafbdafc4d09c0588471e9ef0b6",
+    "crates/deadlib-lua/src/parser/resume.rs": "a42dd9338db38a3afa774ab5b15f9d5eba64f6c28b1c297f1c22b2ab443a8b16",
+    "crates/deadlib-lua/src/parser.rs": "008015dd99b761fef1897da97226672827322cae170a9dbcc0844748abff39c3",
+    "crates/deadlib-lua/src/pattern.rs": "4415a2f2a5e743aa3cdad758f45c229378ca67211aeafa1b74c7cf36e6481627",
+    "crates/deadlib-lua/src/table.rs": "e7b504f0cee26f1d33b5f182bb27ca006e6ed97329c3e20a2ae65667ce29813b",
+    "crates/deadlib-lua/src/value.rs": "dc0d9c5e50a137c1fb2ff6cc41426d8694ddee08f8b92dc19d0696da30af1a35",
+    "crates/deadlib-lua/src/vm/console.rs": "9492d2942bd9064ff8ea084f9a7cb900865a961227cbc0276978717f0b7f0b79",
+    "crates/deadlib-lua/src/vm/debug.rs": "1ecd3075a1d528863633ffbfda5c709d17ac35f63e3454a482f43771eb51f05d",
+    "crates/deadlib-lua/src/vm/errors.rs": "4d0538bcecb16141e962564938d329e5e9ecbbca9f3ee62eecf3ce914997a6fb",
+    "crates/deadlib-lua/src/vm/gc.rs": "7312b2b073b166230ed12d7761e2dddecec2590f1640ac6c29f80c77212eb792",
+    "crates/deadlib-lua/src/vm/hooks.rs": "e55766191d1cc807c40c841c97e00f89bd5bfd179dcd6f3a9da9bb350f04e3c8",
+    "crates/deadlib-lua/src/vm/io/number.rs": "56928749ea72f1eca5be18ffd33995fec9521641b6d8322df59003bc7469cb26",
+    "crates/deadlib-lua/src/vm/io/output.rs": "6850ce12b119beae7fbeccc4e9f8e3e946e2cf2cbda2e4a68c35f864e3192aa5",
+    "crates/deadlib-lua/src/vm/io/stream.rs": "d5a01ef2e193655e25849e60aafcac66a1d575751d0e6c3e5232f57e6ca49cb4",
+    "crates/deadlib-lua/src/vm/io.rs": "dc85c743aa267cd83ef7c2009602c032efd268ccd67750cd73c0e5ffb68f5a20",
+    "crates/deadlib-lua/src/vm/limits.rs": "fe7c21e3a6d8a2b5d76de75763bf043382122b206bd08cd532b28d31243cd35e",
+    "crates/deadlib-lua/src/vm/loads.rs": "a52a486b7e5184752137907a43a765ff00987149cd6c0884f5fd8adeb82262dd",
+    "crates/deadlib-lua/src/vm/math.rs": "ba770fa64f891571d757ed55f019f0c1bfb77d3573e4601644d0facfbebcd0df",
+    "crates/deadlib-lua/src/vm/meta.rs": "1d75cf28354adf3a950bf6a1a464700295db2d41a8b1373ef0f6934339143fce",
+    "crates/deadlib-lua/src/vm/native.rs": "df7b3d92ae6faf238fcb391cc82541f972f3873c64987ea86d38b0a64d304fdb",
+    "crates/deadlib-lua/src/vm/os/calendar.rs": "3985cd6ca93831586cc52f7730395e94c5b51d8c80d8630be25e9ca0f5eb8d1e",
+    "crates/deadlib-lua/src/vm/os/platform/posix_calendar.rs": "cfd512034a919ab2ac92525f18db5e309f92be20dbea2ac473021784af61d6d8",
+    "crates/deadlib-lua/src/vm/os/platform/windows.rs": "f064bdce5216c465e48b67471afe2721db8a4528a2e7453888cc035a9f4c79d3",
+    "crates/deadlib-lua/src/vm/os/platform.rs": "795f9cf59689a58523b6b6d213741f391bec3ba77126aea5746dae4e74ee9b25",
+    "crates/deadlib-lua/src/vm/os/process.rs": "abedd37df91e057215475c85185bb5daa697b4d15706fff2b69b82508590c0cf",
+    "crates/deadlib-lua/src/vm/os.rs": "711ad043839bcd321732c36fc462cc28c40dc462e4da5d8b032ab8231b4cc99d",
+    "crates/deadlib-lua/src/vm/package.rs": "1669d9b1c9eab72456c24a59468f41ca97a15b5c214898de872158c63ecd4a2d",
+    "crates/deadlib-lua/src/vm/standalone.rs": "cc5844b96d52a353cb4dfdad2b44891e19ab984acfae4cf34e00b0d919cb33cc",
+    "crates/deadlib-lua/src/vm/strings.rs": "2a304ac667d448c0b1773191be1dbba889dad45dd8da18521d09ca0bb0fa1422",
+    "crates/deadlib-lua/src/vm/tables.rs": "c782565a645cbb430300ca017becf6e4ce1c2b6a95172d6bfadfb6353093b146",
+    "crates/deadlib-lua/src/vm/threads.rs": "08fc8a35dfad28fa875bdb391e26de50553de38bd7bc3444b0e171c45c6c19bc",
+    "crates/deadlib-lua/src/vm/traces.rs": "aa1339b4a9d3ed52e34e35c45128b4062a26bbf039694e9247b1809418d206d4",
+    "crates/deadlib-lua/src/vm/userdata.rs": "e53126e06d87d1a7dc7a0a5ce28a120f52ce23234fbbdcda490a9b47408e0e80",
+    "crates/deadlib-lua/src/vm.rs": "0c7e62257297a59147afcd68b262905739e7bbc2089e682bffb7c9e141609235"
+  },
+  "binary_sha256": "b07204ce90f3110e5ccdc6d8c722b6fd5db1ac487abe87c5774128a8eda4fbc4",
+  "protocol": "Two independently compiled rlibs linked into one executable with identical flags and fat LTO; nine paired samples alternate parent/current order. Compile, input/VM setup and correctness are outside timing. Host hit fixtures reuse existing interned bytes; miss fixtures use fresh VMs and 128 distinct inputs per sample. Automatic GC is inside timing for Lua workloads.",
+  "build_commands": [
+    [
+      "rustc",
+      "--edition=2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "debuginfo=1",
+      "-C",
+      "codegen-units=16",
+      "-C",
+      "embed-bitcode=yes",
+      "-C",
+      "panic=abort",
+      "-C",
+      "target-feature=+crt-static",
+      "--crate-type=rlib",
+      "--crate-name",
+      "lua_parent",
+      "C:\\GitHub\\deadsync\\target\\lua-intern-s85cwvy1\\parent\\crates\\deadlib-lua\\src\\lib.rs",
+      "-o",
+      "C:\\GitHub\\deadsync\\target\\lua-intern-s85cwvy1\\liblua_parent.rlib"
+    ],
+    [
+      "rustc",
+      "--edition=2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "debuginfo=1",
+      "-C",
+      "codegen-units=16",
+      "-C",
+      "embed-bitcode=yes",
+      "-C",
+      "panic=abort",
+      "-C",
+      "target-feature=+crt-static",
+      "--crate-type=rlib",
+      "--crate-name",
+      "lua_current",
+      "C:\\GitHub\\deadsync\\crates\\deadlib-lua\\src\\lib.rs",
+      "-o",
+      "C:\\GitHub\\deadsync\\target\\lua-intern-s85cwvy1\\liblua_current.rlib"
+    ],
+    [
+      "rustc",
+      "--edition=2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "debuginfo=1",
+      "-C",
+      "codegen-units=16",
+      "-C",
+      "embed-bitcode=yes",
+      "-C",
+      "panic=abort",
+      "-C",
+      "target-feature=+crt-static",
+      "-C",
+      "lto=fat",
+      "C:\\GitHub\\deadsync\\target\\lua-intern-s85cwvy1\\compare.rs",
+      "--extern",
+      "lua_parent=C:\\GitHub\\deadsync\\target\\lua-intern-s85cwvy1\\liblua_parent.rlib",
+      "--extern",
+      "lua_current=C:\\GitHub\\deadsync\\target\\lua-intern-s85cwvy1\\liblua_current.rlib",
+      "-o",
+      "C:\\GitHub\\deadsync\\target\\lua-intern-s85cwvy1\\compare.exe"
+    ]
+  ],
+  "utc": "2026-10-26T05:10:00Z",
+  "build_and_run_seconds": 112.9546492099762,
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "samples": [
+    {
+      "workload": "intern_hit_0",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_0",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 8,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 8,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 8,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 8,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 8,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 9,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_3",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 15,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 13,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 17,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 13,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 27,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 16,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 15,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 27,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 27,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 16,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 15,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 27,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 29,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 15,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 15,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 27,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 29,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 17,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 21,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 32,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 35,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_7",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 18,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 41,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 38,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 41,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 38,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 37,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 39,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 40,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 13,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 11,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 40,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 40,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_8",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 10,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 47,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 33,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 31,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 43,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 48,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 33,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 33,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 48,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 48,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 33,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 31,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 48,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 46,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 29,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 34,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 48,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 42,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_15",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 31,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 37,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 36,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 42,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 34,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 35,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 34,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 34,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 32,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 31,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 33,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 32,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 31,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 32,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 32,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 33,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 32,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 33,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_16",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 32,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 22,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 21,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 20,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 21,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 21,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 24,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 23,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 26,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 23,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 21,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 22,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 23,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 25,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 23,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 21,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 26,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 23,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_17",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 20,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 54,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 21,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 21,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 57,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 63,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 21,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 23,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 53,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 57,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 21,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 23,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 53,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 54,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 21,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 24,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 54,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 54,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_31",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 21,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 54,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 55,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 55,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 55,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 53,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 13,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 55,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 55,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 54,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 55,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_32",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 12,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 40,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 16,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 15,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 41,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 41,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 16,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 15,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 42,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 39,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 16,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 15,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 40,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 42,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 15,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 15,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 41,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 39,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_33",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 15,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 93,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 26,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 25,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 92,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 94,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 25,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 25,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 92,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 92,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 25,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 25,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 91,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 95,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 28,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 26,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 91,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 92,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_63",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 25,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 95,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 16,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 18,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 94,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 94,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 16,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 17,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 95,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 94,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 16,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 16,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 95,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 95,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 16,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 16,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 94,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 96,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_64",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 17,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 97,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 200000,
+      "ns_per_iteration": 18,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 17,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 200000,
+      "ns_per_iteration": 101,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 95,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 200000,
+      "ns_per_iteration": 18,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 18,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 200000,
+      "ns_per_iteration": 97,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 94,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 200000,
+      "ns_per_iteration": 18,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 18,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 200000,
+      "ns_per_iteration": 94,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 96,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 200000,
+      "ns_per_iteration": 18,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 18,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 200000,
+      "ns_per_iteration": 94,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 100,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 200000,
+      "ns_per_iteration": 20,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 32768,
+      "ns_per_iteration": 653,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 32768,
+      "ns_per_iteration": 67,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 32768,
+      "ns_per_iteration": 71,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 32768,
+      "ns_per_iteration": 641,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 32768,
+      "ns_per_iteration": 631,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 32768,
+      "ns_per_iteration": 63,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 32768,
+      "ns_per_iteration": 63,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 32768,
+      "ns_per_iteration": 656,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 32768,
+      "ns_per_iteration": 641,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 32768,
+      "ns_per_iteration": 64,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 32768,
+      "ns_per_iteration": 63,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 32768,
+      "ns_per_iteration": 659,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 32768,
+      "ns_per_iteration": 637,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 32768,
+      "ns_per_iteration": 63,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 32768,
+      "ns_per_iteration": 65,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 32768,
+      "ns_per_iteration": 636,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 32768,
+      "ns_per_iteration": 630,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_512",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 32768,
+      "ns_per_iteration": 63,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 4096,
+      "ns_per_iteration": 4961,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 4096,
+      "ns_per_iteration": 426,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 4096,
+      "ns_per_iteration": 382,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 4096,
+      "ns_per_iteration": 4964,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 4096,
+      "ns_per_iteration": 5081,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 4096,
+      "ns_per_iteration": 370,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 4096,
+      "ns_per_iteration": 383,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 4096,
+      "ns_per_iteration": 5033,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 4096,
+      "ns_per_iteration": 5029,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 4096,
+      "ns_per_iteration": 371,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 4096,
+      "ns_per_iteration": 390,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 4096,
+      "ns_per_iteration": 5068,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 4096,
+      "ns_per_iteration": 5018,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 4096,
+      "ns_per_iteration": 371,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 4096,
+      "ns_per_iteration": 373,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 4096,
+      "ns_per_iteration": 5011,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 4096,
+      "ns_per_iteration": 5074,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_4096",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 4096,
+      "ns_per_iteration": 415,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 256,
+      "ns_per_iteration": 81408,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 256,
+      "ns_per_iteration": 7192,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 256,
+      "ns_per_iteration": 7103,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 256,
+      "ns_per_iteration": 84326,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 256,
+      "ns_per_iteration": 82565,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 256,
+      "ns_per_iteration": 7089,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 256,
+      "ns_per_iteration": 8037,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 256,
+      "ns_per_iteration": 80842,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 256,
+      "ns_per_iteration": 83122,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 256,
+      "ns_per_iteration": 7312,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 256,
+      "ns_per_iteration": 7240,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 256,
+      "ns_per_iteration": 84726,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 256,
+      "ns_per_iteration": 80601,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 256,
+      "ns_per_iteration": 7289,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 256,
+      "ns_per_iteration": 7246,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 256,
+      "ns_per_iteration": 81753,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 256,
+      "ns_per_iteration": 80909,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_65536",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 256,
+      "ns_per_iteration": 7107,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 16,
+      "ns_per_iteration": 1353781,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 16,
+      "ns_per_iteration": 126600,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 16,
+      "ns_per_iteration": 131712,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 16,
+      "ns_per_iteration": 1299268,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 16,
+      "ns_per_iteration": 1330137,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 16,
+      "ns_per_iteration": 126331,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 16,
+      "ns_per_iteration": 123387,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 16,
+      "ns_per_iteration": 1332750,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 16,
+      "ns_per_iteration": 1309531,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 16,
+      "ns_per_iteration": 128775,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 16,
+      "ns_per_iteration": 124231,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 16,
+      "ns_per_iteration": 1310318,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 16,
+      "ns_per_iteration": 1320706,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 16,
+      "ns_per_iteration": 126387,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 16,
+      "ns_per_iteration": 123518,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 16,
+      "ns_per_iteration": 1334631,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 16,
+      "ns_per_iteration": 1304862,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_hit_1048576",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 16,
+      "ns_per_iteration": 128400,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 128,
+      "ns_per_iteration": 417,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 128,
+      "ns_per_iteration": 278,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 128,
+      "ns_per_iteration": 275,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 128,
+      "ns_per_iteration": 447,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 128,
+      "ns_per_iteration": 413,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 128,
+      "ns_per_iteration": 311,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 128,
+      "ns_per_iteration": 243,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 128,
+      "ns_per_iteration": 275,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 128,
+      "ns_per_iteration": 285,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 128,
+      "ns_per_iteration": 155,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 128,
+      "ns_per_iteration": 206,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 128,
+      "ns_per_iteration": 276,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 128,
+      "ns_per_iteration": 289,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 128,
+      "ns_per_iteration": 157,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 128,
+      "ns_per_iteration": 185,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 128,
+      "ns_per_iteration": 288,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 128,
+      "ns_per_iteration": 285,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_32",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 128,
+      "ns_per_iteration": 178,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 16448
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 128,
+      "ns_per_iteration": 2065,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 128,
+      "ns_per_iteration": 708,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 128,
+      "ns_per_iteration": 573,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 128,
+      "ns_per_iteration": 2067,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 128,
+      "ns_per_iteration": 1688,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 128,
+      "ns_per_iteration": 662,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 128,
+      "ns_per_iteration": 628,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 128,
+      "ns_per_iteration": 2028,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 128,
+      "ns_per_iteration": 1667,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 128,
+      "ns_per_iteration": 888,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 128,
+      "ns_per_iteration": 529,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 128,
+      "ns_per_iteration": 2018,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 128,
+      "ns_per_iteration": 2007,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 128,
+      "ns_per_iteration": 537,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 128,
+      "ns_per_iteration": 521,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 128,
+      "ns_per_iteration": 2011,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 128,
+      "ns_per_iteration": 1707,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_512",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 128,
+      "ns_per_iteration": 624,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 77888
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 128,
+      "ns_per_iteration": 13154,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 128,
+      "ns_per_iteration": 2260,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 128,
+      "ns_per_iteration": 2472,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 128,
+      "ns_per_iteration": 12575,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 128,
+      "ns_per_iteration": 12271,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 128,
+      "ns_per_iteration": 2360,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 128,
+      "ns_per_iteration": 2673,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 128,
+      "ns_per_iteration": 12607,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 128,
+      "ns_per_iteration": 12074,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 128,
+      "ns_per_iteration": 2301,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 128,
+      "ns_per_iteration": 2727,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 128,
+      "ns_per_iteration": 13247,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 128,
+      "ns_per_iteration": 11982,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 128,
+      "ns_per_iteration": 2389,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 128,
+      "ns_per_iteration": 2419,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 128,
+      "ns_per_iteration": 12136,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 128,
+      "ns_per_iteration": 12405,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_4096",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 128,
+      "ns_per_iteration": 2275,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 128,
+      "ns_per_iteration": 210978,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 128,
+      "ns_per_iteration": 44227,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 128,
+      "ns_per_iteration": 53680,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 128,
+      "ns_per_iteration": 203607,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 128,
+      "ns_per_iteration": 218348,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 128,
+      "ns_per_iteration": 51960,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 128,
+      "ns_per_iteration": 52601,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 128,
+      "ns_per_iteration": 227815,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 128,
+      "ns_per_iteration": 219924,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 128,
+      "ns_per_iteration": 54335,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 128,
+      "ns_per_iteration": 42803,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 128,
+      "ns_per_iteration": 209992,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 128,
+      "ns_per_iteration": 207592,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 128,
+      "ns_per_iteration": 50724,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 128,
+      "ns_per_iteration": 46765,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 128,
+      "ns_per_iteration": 211784,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 128,
+      "ns_per_iteration": 205253,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_miss_65536",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 128,
+      "ns_per_iteration": 54421,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 8400960
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 128,
+      "ns_per_iteration": 14792,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 128,
+      "ns_per_iteration": 2454,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 128,
+      "ns_per_iteration": 2298,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 128,
+      "ns_per_iteration": 12197,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 128,
+      "ns_per_iteration": 13190,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 128,
+      "ns_per_iteration": 2401,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 128,
+      "ns_per_iteration": 2540,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 128,
+      "ns_per_iteration": 12852,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 128,
+      "ns_per_iteration": 12840,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 128,
+      "ns_per_iteration": 2264,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 128,
+      "ns_per_iteration": 2694,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 128,
+      "ns_per_iteration": 14216,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 128,
+      "ns_per_iteration": 13169,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 128,
+      "ns_per_iteration": 2245,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 128,
+      "ns_per_iteration": 2493,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 128,
+      "ns_per_iteration": 12469,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 128,
+      "ns_per_iteration": 12704,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "intern_middle_4096",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 128,
+      "ns_per_iteration": 2284,
+      "allocations_total": 129,
+      "reallocations_total": 3,
+      "allocated_bytes_total": 536640
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 100,
+      "ns_per_iteration": 642796,
+      "allocations_total": 10003,
+      "reallocations_total": 27,
+      "allocated_bytes_total": 138424
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 100,
+      "ns_per_iteration": 288174,
+      "allocations_total": 10003,
+      "reallocations_total": 27,
+      "allocated_bytes_total": 138424
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 100,
+      "ns_per_iteration": 285548,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 100,
+      "ns_per_iteration": 635096,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 100,
+      "ns_per_iteration": 638680,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 100,
+      "ns_per_iteration": 285669,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 100,
+      "ns_per_iteration": 284070,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 100,
+      "ns_per_iteration": 651258,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 100,
+      "ns_per_iteration": 633779,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 100,
+      "ns_per_iteration": 283911,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 100,
+      "ns_per_iteration": 286312,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 100,
+      "ns_per_iteration": 642632,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 100,
+      "ns_per_iteration": 637329,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 100,
+      "ns_per_iteration": 282559,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 100,
+      "ns_per_iteration": 290106,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 100,
+      "ns_per_iteration": 662200,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 100,
+      "ns_per_iteration": 660180,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "gsub_callback_wide",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 100,
+      "ns_per_iteration": 286044,
+      "allocations_total": 10000,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 40000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 50,
+      "ns_per_iteration": 5618408,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 50,
+      "ns_per_iteration": 965116,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 50,
+      "ns_per_iteration": 949470,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 50,
+      "ns_per_iteration": 5703828,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 50,
+      "ns_per_iteration": 5711572,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 50,
+      "ns_per_iteration": 948492,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 50,
+      "ns_per_iteration": 952670,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 50,
+      "ns_per_iteration": 5654256,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 50,
+      "ns_per_iteration": 5615896,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 50,
+      "ns_per_iteration": 979484,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 50,
+      "ns_per_iteration": 976956,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 50,
+      "ns_per_iteration": 5637274,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 50,
+      "ns_per_iteration": 5763558,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 50,
+      "ns_per_iteration": 962348,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 50,
+      "ns_per_iteration": 1039014,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 50,
+      "ns_per_iteration": 6709622,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 50,
+      "ns_per_iteration": 6447606,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_concat",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 50,
+      "ns_per_iteration": 982758,
+      "allocations_total": 100000,
+      "reallocations_total": 50000,
+      "allocated_bytes_total": 614450000
+    },
+    {
+      "workload": "long_rep",
+      "engine": "parent",
+      "sample": 0,
+      "repeats": 50,
+      "ns_per_iteration": 28273234,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "current",
+      "sample": 0,
+      "repeats": 50,
+      "ns_per_iteration": 22353050,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "current",
+      "sample": 1,
+      "repeats": 50,
+      "ns_per_iteration": 22457062,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "parent",
+      "sample": 1,
+      "repeats": 50,
+      "ns_per_iteration": 27588042,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "parent",
+      "sample": 2,
+      "repeats": 50,
+      "ns_per_iteration": 28216936,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "current",
+      "sample": 2,
+      "repeats": 50,
+      "ns_per_iteration": 22673196,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "current",
+      "sample": 3,
+      "repeats": 50,
+      "ns_per_iteration": 25680442,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "parent",
+      "sample": 3,
+      "repeats": 50,
+      "ns_per_iteration": 29825216,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "parent",
+      "sample": 4,
+      "repeats": 50,
+      "ns_per_iteration": 27788602,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "current",
+      "sample": 4,
+      "repeats": 50,
+      "ns_per_iteration": 22241808,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "current",
+      "sample": 5,
+      "repeats": 50,
+      "ns_per_iteration": 22736492,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "parent",
+      "sample": 5,
+      "repeats": 50,
+      "ns_per_iteration": 27965454,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "parent",
+      "sample": 6,
+      "repeats": 50,
+      "ns_per_iteration": 28073066,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "current",
+      "sample": 6,
+      "repeats": 50,
+      "ns_per_iteration": 21164292,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "current",
+      "sample": 7,
+      "repeats": 50,
+      "ns_per_iteration": 21488590,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "parent",
+      "sample": 7,
+      "repeats": 50,
+      "ns_per_iteration": 26475942,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "parent",
+      "sample": 8,
+      "repeats": 50,
+      "ns_per_iteration": 26853466,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    },
+    {
+      "workload": "long_rep",
+      "engine": "current",
+      "sample": 8,
+      "repeats": 50,
+      "ns_per_iteration": 21207488,
+      "allocations_total": 0,
+      "reallocations_total": 0,
+      "allocated_bytes_total": 0
+    }
+  ],
+  "program_layouts": {
+    "gsub_callback_wide": {
+      "instructions": 29,
+      "entry_registers": 10
+    },
+    "long_concat": {
+      "instructions": 21,
+      "entry_registers": 8
+    },
+    "long_rep": {
+      "instructions": 18,
+      "entry_registers": 8
+    }
+  },
+  "heap_estimates": {
+    "intern_hit_0": {
+      "parent": {
+        "live_bytes": 17420,
+        "reserved_bytes": 22508,
+        "observed_peak_reserved_bytes": 22508,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17420,
+        "reserved_bytes": 22508,
+        "observed_peak_reserved_bytes": 22508,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_1": {
+      "parent": {
+        "live_bytes": 17421,
+        "reserved_bytes": 22509,
+        "observed_peak_reserved_bytes": 22509,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17421,
+        "reserved_bytes": 22509,
+        "observed_peak_reserved_bytes": 22509,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_3": {
+      "parent": {
+        "live_bytes": 17423,
+        "reserved_bytes": 22511,
+        "observed_peak_reserved_bytes": 22511,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17423,
+        "reserved_bytes": 22511,
+        "observed_peak_reserved_bytes": 22511,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_4": {
+      "parent": {
+        "live_bytes": 17424,
+        "reserved_bytes": 22512,
+        "observed_peak_reserved_bytes": 22512,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17424,
+        "reserved_bytes": 22512,
+        "observed_peak_reserved_bytes": 22512,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_7": {
+      "parent": {
+        "live_bytes": 17427,
+        "reserved_bytes": 22515,
+        "observed_peak_reserved_bytes": 22515,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17427,
+        "reserved_bytes": 22515,
+        "observed_peak_reserved_bytes": 22515,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_8": {
+      "parent": {
+        "live_bytes": 17428,
+        "reserved_bytes": 22516,
+        "observed_peak_reserved_bytes": 22516,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17428,
+        "reserved_bytes": 22516,
+        "observed_peak_reserved_bytes": 22516,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_15": {
+      "parent": {
+        "live_bytes": 17435,
+        "reserved_bytes": 22523,
+        "observed_peak_reserved_bytes": 22523,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17435,
+        "reserved_bytes": 22523,
+        "observed_peak_reserved_bytes": 22523,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_16": {
+      "parent": {
+        "live_bytes": 17436,
+        "reserved_bytes": 22524,
+        "observed_peak_reserved_bytes": 22524,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17436,
+        "reserved_bytes": 22524,
+        "observed_peak_reserved_bytes": 22524,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_17": {
+      "parent": {
+        "live_bytes": 17437,
+        "reserved_bytes": 22525,
+        "observed_peak_reserved_bytes": 22525,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17437,
+        "reserved_bytes": 22525,
+        "observed_peak_reserved_bytes": 22525,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_31": {
+      "parent": {
+        "live_bytes": 17451,
+        "reserved_bytes": 22539,
+        "observed_peak_reserved_bytes": 22539,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17451,
+        "reserved_bytes": 22539,
+        "observed_peak_reserved_bytes": 22539,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_32": {
+      "parent": {
+        "live_bytes": 17452,
+        "reserved_bytes": 22540,
+        "observed_peak_reserved_bytes": 22540,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17452,
+        "reserved_bytes": 22540,
+        "observed_peak_reserved_bytes": 22540,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_33": {
+      "parent": {
+        "live_bytes": 17453,
+        "reserved_bytes": 22541,
+        "observed_peak_reserved_bytes": 22541,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17453,
+        "reserved_bytes": 22541,
+        "observed_peak_reserved_bytes": 22541,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_63": {
+      "parent": {
+        "live_bytes": 17483,
+        "reserved_bytes": 22571,
+        "observed_peak_reserved_bytes": 22571,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17483,
+        "reserved_bytes": 22571,
+        "observed_peak_reserved_bytes": 22571,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_64": {
+      "parent": {
+        "live_bytes": 17484,
+        "reserved_bytes": 22572,
+        "observed_peak_reserved_bytes": 22572,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17484,
+        "reserved_bytes": 22572,
+        "observed_peak_reserved_bytes": 22572,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_65": {
+      "parent": {
+        "live_bytes": 17485,
+        "reserved_bytes": 22573,
+        "observed_peak_reserved_bytes": 22573,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17485,
+        "reserved_bytes": 22573,
+        "observed_peak_reserved_bytes": 22573,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_512": {
+      "parent": {
+        "live_bytes": 17932,
+        "reserved_bytes": 23020,
+        "observed_peak_reserved_bytes": 23020,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 17932,
+        "reserved_bytes": 23020,
+        "observed_peak_reserved_bytes": 23020,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_4096": {
+      "parent": {
+        "live_bytes": 21516,
+        "reserved_bytes": 26604,
+        "observed_peak_reserved_bytes": 26604,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 21516,
+        "reserved_bytes": 26604,
+        "observed_peak_reserved_bytes": 26604,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_65536": {
+      "parent": {
+        "live_bytes": 82956,
+        "reserved_bytes": 88044,
+        "observed_peak_reserved_bytes": 88044,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 82956,
+        "reserved_bytes": 88044,
+        "observed_peak_reserved_bytes": 88044,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_hit_1048576": {
+      "parent": {
+        "live_bytes": 1065996,
+        "reserved_bytes": 1071084,
+        "observed_peak_reserved_bytes": 1071084,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 1065996,
+        "reserved_bytes": 1071084,
+        "observed_peak_reserved_bytes": 1071084,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_miss_32": {
+      "parent": {
+        "live_bytes": 24572,
+        "reserved_bytes": 32780,
+        "observed_peak_reserved_bytes": 32780,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 24572,
+        "reserved_bytes": 32780,
+        "observed_peak_reserved_bytes": 32780,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_miss_512": {
+      "parent": {
+        "live_bytes": 86012,
+        "reserved_bytes": 94220,
+        "observed_peak_reserved_bytes": 94220,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 86012,
+        "reserved_bytes": 94220,
+        "observed_peak_reserved_bytes": 94220,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_miss_4096": {
+      "parent": {
+        "live_bytes": 544764,
+        "reserved_bytes": 552972,
+        "observed_peak_reserved_bytes": 552972,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 544764,
+        "reserved_bytes": 552972,
+        "observed_peak_reserved_bytes": 552972,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_miss_65536": {
+      "parent": {
+        "live_bytes": 8409084,
+        "reserved_bytes": 8417292,
+        "observed_peak_reserved_bytes": 8417292,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 8409084,
+        "reserved_bytes": 8417292,
+        "observed_peak_reserved_bytes": 8417292,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "intern_middle_4096": {
+      "parent": {
+        "live_bytes": 544764,
+        "reserved_bytes": 552972,
+        "observed_peak_reserved_bytes": 552972,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 544764,
+        "reserved_bytes": 552972,
+        "observed_peak_reserved_bytes": 552972,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "gsub_callback_wide": {
+      "parent": {
+        "live_bytes": 43754,
+        "reserved_bytes": 91946,
+        "observed_peak_reserved_bytes": 94678,
+        "collections": 107,
+        "reclaimed_objects": 90833
+      },
+      "current": {
+        "live_bytes": 43754,
+        "reserved_bytes": 91946,
+        "observed_peak_reserved_bytes": 94678,
+        "collections": 107,
+        "reclaimed_objects": 90833
+      }
+    },
+    "long_concat": {
+      "parent": {
+        "live_bytes": 31886,
+        "reserved_bytes": 37262,
+        "observed_peak_reserved_bytes": 37262,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 31886,
+        "reserved_bytes": 37262,
+        "observed_peak_reserved_bytes": 37262,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    },
+    "long_rep": {
+      "parent": {
+        "live_bytes": 154918,
+        "reserved_bytes": 160326,
+        "observed_peak_reserved_bytes": 160326,
+        "collections": 0,
+        "reclaimed_objects": 0
+      },
+      "current": {
+        "live_bytes": 154918,
+        "reserved_bytes": 160326,
+        "observed_peak_reserved_bytes": 160326,
+        "collections": 0,
+        "reclaimed_objects": 0
+      }
+    }
+  },
+  "median_paired_current_over_parent": {
+    "gsub_callback_wide": 0.44553025681883257,
+    "intern_hit_0": 0.8181818181818182,
+    "intern_hit_1": 0.8,
+    "intern_hit_1048576": 0.09497593105071132,
+    "intern_hit_15": 0.6875,
+    "intern_hit_16": 1.03125,
+    "intern_hit_17": 0.92,
+    "intern_hit_3": 1.0,
+    "intern_hit_31": 0.3888888888888889,
+    "intern_hit_32": 0.21818181818181817,
+    "intern_hit_33": 0.375,
+    "intern_hit_4": 1.0909090909090908,
+    "intern_hit_4096": 0.07609775481819989,
+    "intern_hit_512": 0.0998439937597504,
+    "intern_hit_63": 0.2717391304347826,
+    "intern_hit_64": 0.1702127659574468,
+    "intern_hit_65": 0.18947368421052632,
+    "intern_hit_65536": 0.08796708452635885,
+    "intern_hit_7": 0.5555555555555556,
+    "intern_hit_8": 0.275,
+    "intern_middle_4096": 0.18203184230477634,
+    "intern_miss_32": 0.6423611111111112,
+    "intern_miss_4096": 0.19658051689860834,
+    "intern_miss_512": 0.3096646942800789,
+    "intern_miss_65536": 0.23796874713759686,
+    "long_concat": 0.16697116607484475,
+    "long_rep": 0.8035314677681518
+  },
+  "cpu_samples": [
+    {
+      "engine": "parent",
+      "sample": 0,
+      "substitutions": 400000,
+      "wall_ns": 2801625800,
+      "kernel_100ns": 0,
+      "user_100ns": 27812500,
+      "cpu_ns": 2781250000,
+      "cpu_cycles": 6079557784
+    },
+    {
+      "engine": "current",
+      "sample": 0,
+      "substitutions": 400000,
+      "wall_ns": 1178804300,
+      "kernel_100ns": 156250,
+      "user_100ns": 11250000,
+      "cpu_ns": 1140625000,
+      "cpu_cycles": 2529569598
+    },
+    {
+      "engine": "current",
+      "sample": 1,
+      "substitutions": 400000,
+      "wall_ns": 1164521900,
+      "kernel_100ns": 468750,
+      "user_100ns": 10937500,
+      "cpu_ns": 1140625000,
+      "cpu_cycles": 2498398166
+    },
+    {
+      "engine": "parent",
+      "sample": 1,
+      "substitutions": 400000,
+      "wall_ns": 2556586900,
+      "kernel_100ns": 156250,
+      "user_100ns": 25000000,
+      "cpu_ns": 2515625000,
+      "cpu_cycles": 5546480968
+    },
+    {
+      "engine": "parent",
+      "sample": 2,
+      "substitutions": 400000,
+      "wall_ns": 2617478000,
+      "kernel_100ns": 312500,
+      "user_100ns": 25000000,
+      "cpu_ns": 2531250000,
+      "cpu_cycles": 5571753118
+    },
+    {
+      "engine": "current",
+      "sample": 2,
+      "substitutions": 400000,
+      "wall_ns": 1187151100,
+      "kernel_100ns": 156250,
+      "user_100ns": 11562500,
+      "cpu_ns": 1171875000,
+      "cpu_cycles": 2546250266
+    },
+    {
+      "engine": "current",
+      "sample": 3,
+      "substitutions": 400000,
+      "wall_ns": 1177097900,
+      "kernel_100ns": 0,
+      "user_100ns": 11562500,
+      "cpu_ns": 1156250000,
+      "cpu_cycles": 2526463009
+    },
+    {
+      "engine": "parent",
+      "sample": 3,
+      "substitutions": 400000,
+      "wall_ns": 2854869700,
+      "kernel_100ns": 468750,
+      "user_100ns": 27656250,
+      "cpu_ns": 2812500000,
+      "cpu_cycles": 6198930462
+    },
+    {
+      "engine": "parent",
+      "sample": 4,
+      "substitutions": 400000,
+      "wall_ns": 2487479900,
+      "kernel_100ns": 156250,
+      "user_100ns": 24375000,
+      "cpu_ns": 2453125000,
+      "cpu_cycles": 5390601939
+    },
+    {
+      "engine": "current",
+      "sample": 4,
+      "substitutions": 400000,
+      "wall_ns": 1117496400,
+      "kernel_100ns": 312500,
+      "user_100ns": 10625000,
+      "cpu_ns": 1093750000,
+      "cpu_cycles": 2392287253
+    }
+  ],
+  "missing_metrics": [
+    "exact allocator live/peak heap",
+    "process peak RSS",
+    "native CRT allocation counts"
+  ]
+}

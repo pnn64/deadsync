@@ -1,0 +1,13 @@
+cargo :     Checking deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+At line:2 char:1
++ cargo clippy --offline --manifest-path target/deadlib-audio-reference ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking de...dio\decode\ogg):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+    Checking deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Checking deadlib-vorbis-codebook-profile v0.0.0
+(C:\GitHub\deadsync\target\deadlib-audio-reference\split-prefix-profile-main-20261027\profiled)
+    Checking deadlib-vorbis-codebook-probe v0.0.0
+(C:\GitHub\deadsync\target\deadlib-audio-reference\split-prefix-profile-main-20261027)
+    Finished `release` profile [optimized + debuginfo] target(s) in 2.01s

@@ -1,0 +1,133 @@
+{
+  "checks": [
+    {
+      "command": [
+        "rustfmt",
+        "--check",
+        "--edition",
+        "2024",
+        "--config",
+        "skip_children=true",
+        "crates/deadlib-audio/src/stream/stretch.rs",
+        "crates/deadlib-audio/src/stream/stretch/perf_tests.rs",
+        "crates/deadlib-audio/src/stream/stretch/rate_bench.rs"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "C:\\GitHub\\deadsync\\target\\audio-sola\\cargo"
+      },
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "elapsed_seconds": 0.15086569997947663
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio",
+        "--lib",
+        "--test",
+        "playback",
+        "--",
+        "--test-threads=1"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "C:\\GitHub\\deadsync\\target\\audio-sola\\cargo"
+      },
+      "exit_code": 0,
+      "stdout": "\nrunning 56 tests\ntest launch::tests::linux_backend_config_is_owned_by_the_native_facade ... ok\ntest stream::perf_tests::benchmark_arc_finalization ... ignored, paired release benchmark\ntest stream::perf_tests::benchmark_audio_padding_storage ... ignored, paired release benchmark\ntest stream::perf_tests::direct_arc_finalization_preserves_values_and_removes_shrink ... ok\ntest stream::perf_tests::reused_padding_matches_original_pcm_and_timestamps ... ok\ntest stream::perf_tests::sfx_loading_matches_original_for_empty_short_and_partial_clips ... ok\ntest stream::perf_tests::silence::benchmark_lead_in ... ignored, CPU-cycle benchmark; one test thread\ntest stream::perf_tests::silence::dump_lead_in ... ignored, write PCM and transport timing for archived binary comparison\ntest stream::perf_tests::silence::silence_preserves_samples_block_boundaries_and_exact_timing ... ok\ntest stream::perf_tests::warmed_music_tail_needs_no_allocator_work ... ok\ntest stream::processing::tests::live_stretch_changes_keep_buffered_audio_and_rate_timestamps ... ok\ntest stream::processing::tests::real_conversion_and_pitch_changing_rates_still_resample ... ok\ntest stream::processing::tests::short_stretched_stream_has_no_filtering_or_padded_tail ... ok\ntest stream::processing::tests::stage_switches_and_loop_resets_keep_current_ratio ... ok\ntest stream::processing::tests::stretch_keeps_onset_pitch_and_duration_without_a_converter ... ok\ntest stream::stretch::perf_tests::benchmark_sola_kernels ... ignored, CPU-cycle benchmark; run with one test thread\ntest stream::stretch::perf_tests::correlation_matches_scalar_oracle ... ok\ntest stream::stretch::perf_tests::crossfade_preserves_original_float_formula_across_pcm_range ... ok\ntest stream::stretch::perf_tests::deinterleaving_preserves_every_i16_value_and_channel ... ok\ntest stream::stretch::perf_tests::dispatched_crossfade_matches_scalar_bits ... ok\ntest stream::stretch::perf_tests::dump_sola_pcm ... ignored, writes complete PCM for byte comparison between archived sources\ntest stream::stretch::perf_tests::fixed_layout_unpacking_handles_block_boundaries_and_reused_buffers ... ok\ntest stream::stretch::perf_tests::grouped_pcm_scores_preserve_rounding_and_rejection ... ok\ntest stream::stretch::perf_tests::rates::benchmark_sola_packets ... ignored, CPU-cycle benchmark; packet-sized planar unpacking\ntest stream::stretch::perf_tests::rates::benchmark_sola_rates ... ignored, CPU-cycle benchmark; one test thread\ntest stream::stretch::tests::cached_crossfade_weights_match_per_sample_formula ... ok\ntest stream::stretch::tests::cached_cursor_extrema_follow_incremental_streaming ... ok\ntest stream::stretch::tests::correlation_checks_final_valid_position ... ok\ntest stream::stretch::tests::correlation_returns_earliest_exact_match ... ok\ntest stream::stretch::tests::finish_flushes_tail ... ok\ntest stream::stretch::tests::finish_on_empty_is_noop ... ok\ntest stream::stretch::tests::identity_crossfade_copies_source_samples_bit_for_bit ... ok\ntest stream::stretch::tests::incremental_capped_feed_tracks_speed_ratio ... ok\ntest stream::stretch::tests::mid_stream_rate_change_continues_producing ... ok\ntest stream::stretch::tests::mono_pitch_is_preserved_under_stretch ... ok\ntest stream::stretch::tests::output_length_tracks_speed_ratio ... ok\ntest stream::stretch::tests::rate_one_does_not_stall ... ok\ntest stream::stretch::tests::rate_one_is_near_identity_for_sine ... ok\ntest stream::stretch::tests::reset_clears_state ... ok\ntest stream::stretch::tests::silence_in_silence_out ... ok\ntest stream::stretch::tests::sine_pitch_is_preserved_under_stretch ... ok\ntest stream::stretch::tests::source_prefix_reclaimed_without_growing ... ok\ntest stream::stretch::tests::stereo_channels_produce_independent_output ... ok\ntest stream::stretch::tests::stereo_correlation_matches_scalar_oracle ... ok\ntest stream::stretch::tests::sub_window_push_does_not_panic ... ok\ntest stream::tests::common_lead_in_layouts_submit_without_allocator_work ... ok\ntest stream::tests::generation_change_cancels_a_backpressured_block ... ok\ntest stream::tests::generation_transition_can_use_reserved_pool_blocks ... ok\ntest stream::tests::live_transition_waits_for_render_drain_before_steady_pacing ... ok\ntest stream::tests::negative_lead_in_silence_scales_with_music_rate ... ok\ntest stream::tests::preroll_drop_uses_actual_seek_distance ... ok\ntest stream::tests::seeked_map_starts_at_decoder_frame ... ok\ntest stream::tests::sfx_capacity_rejects_missing_or_unbounded_hints ... ok\ntest stream::tests::sfx_capacity_scales_frame_hint_to_output_format ... ok\ntest stream::tests::short_initial_stream_publishes_its_partial_prefill_at_eof ... ok\ntest stream::tests::watermarks_leave_at_least_190_ms_transition_reserve ... ok\n\ntest result: ok. 48 passed; 0 failed; 8 ignored; 0 measured; 0 filtered out; finished in 4.99s\n\n\nrunning 1 test\ntest stretched_worker_preserves_cuts_fades_channels_and_timing ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s\n\n",
+      "stderr": "   Compiling deadlib-audio-core v0.1.0 (C:\\GitHub\\deadsync\\crates\\deadlib-audio-core)\n   Compiling deadlib-audio-backend-wasapi v0.1.0 (C:\\GitHub\\deadsync\\crates\\deadlib-audio-backend-wasapi)\n   Compiling deadlib-audio v0.1.0 (C:\\GitHub\\deadsync\\crates\\deadlib-audio)\nwarning: method `is_direct` is never used\n   --> crates\\deadlib-audio\\src\\stream\\perf_original_processing.rs:140:25\n    |\n 62 | impl MusicStages {\n    | ---------------- method in this implementation\n...\n140 |     pub(super) const fn is_direct(&self) -> bool {\n    |                         ^^^^^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `deadlib-audio` (lib test) generated 1 warning\n    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.47s\n     Running unittests src\\lib.rs (target\\audio-sola\\cargo\\debug\\deps\\deadlib_audio-610b8e363285bd52.exe)\n     Running tests\\playback.rs (target\\audio-sola\\cargo\\debug\\deps\\playback-2eef88c6deea8626.exe)\n",
+      "elapsed_seconds": 17.43597949994728
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--release",
+        "-p",
+        "deadlib-audio",
+        "--lib",
+        "--test",
+        "playback",
+        "--",
+        "--test-threads=1"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "C:\\GitHub\\deadsync\\target\\audio-lead-in\\cargo",
+        "CARGO_PROFILE_RELEASE_DEBUG": "1",
+        "CARGO_PROFILE_RELEASE_CODEGEN_UNITS": "1"
+      },
+      "exit_code": 0,
+      "stdout": "\nrunning 56 tests\ntest launch::tests::linux_backend_config_is_owned_by_the_native_facade ... ok\ntest stream::perf_tests::benchmark_arc_finalization ... ignored, paired release benchmark\ntest stream::perf_tests::benchmark_audio_padding_storage ... ignored, paired release benchmark\ntest stream::perf_tests::direct_arc_finalization_preserves_values_and_removes_shrink ... ok\ntest stream::perf_tests::reused_padding_matches_original_pcm_and_timestamps ... ok\ntest stream::perf_tests::sfx_loading_matches_original_for_empty_short_and_partial_clips ... ok\ntest stream::perf_tests::silence::benchmark_lead_in ... ignored, CPU-cycle benchmark; one test thread\ntest stream::perf_tests::silence::dump_lead_in ... ignored, write PCM and transport timing for archived binary comparison\ntest stream::perf_tests::silence::silence_preserves_samples_block_boundaries_and_exact_timing ... ok\ntest stream::perf_tests::warmed_music_tail_needs_no_allocator_work ... ok\ntest stream::processing::tests::live_stretch_changes_keep_buffered_audio_and_rate_timestamps ... ok\ntest stream::processing::tests::real_conversion_and_pitch_changing_rates_still_resample ... ok\ntest stream::processing::tests::short_stretched_stream_has_no_filtering_or_padded_tail ... ok\ntest stream::processing::tests::stage_switches_and_loop_resets_keep_current_ratio ... ok\ntest stream::processing::tests::stretch_keeps_onset_pitch_and_duration_without_a_converter ... ok\ntest stream::stretch::perf_tests::benchmark_sola_kernels ... ignored, CPU-cycle benchmark; run with one test thread\ntest stream::stretch::perf_tests::correlation_matches_scalar_oracle ... ok\ntest stream::stretch::perf_tests::crossfade_preserves_original_float_formula_across_pcm_range ... ok\ntest stream::stretch::perf_tests::deinterleaving_preserves_every_i16_value_and_channel ... ok\ntest stream::stretch::perf_tests::dispatched_crossfade_matches_scalar_bits ... ok\ntest stream::stretch::perf_tests::dump_sola_pcm ... ignored, writes complete PCM for byte comparison between archived sources\ntest stream::stretch::perf_tests::fixed_layout_unpacking_handles_block_boundaries_and_reused_buffers ... ok\ntest stream::stretch::perf_tests::grouped_pcm_scores_preserve_rounding_and_rejection ... ok\ntest stream::stretch::perf_tests::rates::benchmark_sola_packets ... ignored, CPU-cycle benchmark; packet-sized planar unpacking\ntest stream::stretch::perf_tests::rates::benchmark_sola_rates ... ignored, CPU-cycle benchmark; one test thread\ntest stream::stretch::tests::cached_crossfade_weights_match_per_sample_formula ... ok\ntest stream::stretch::tests::cached_cursor_extrema_follow_incremental_streaming ... ok\ntest stream::stretch::tests::correlation_checks_final_valid_position ... ok\ntest stream::stretch::tests::correlation_returns_earliest_exact_match ... ok\ntest stream::stretch::tests::finish_flushes_tail ... ok\ntest stream::stretch::tests::finish_on_empty_is_noop ... ok\ntest stream::stretch::tests::identity_crossfade_copies_source_samples_bit_for_bit ... ok\ntest stream::stretch::tests::incremental_capped_feed_tracks_speed_ratio ... ok\ntest stream::stretch::tests::mid_stream_rate_change_continues_producing ... ok\ntest stream::stretch::tests::mono_pitch_is_preserved_under_stretch ... ok\ntest stream::stretch::tests::output_length_tracks_speed_ratio ... ok\ntest stream::stretch::tests::rate_one_does_not_stall ... ok\ntest stream::stretch::tests::rate_one_is_near_identity_for_sine ... ok\ntest stream::stretch::tests::reset_clears_state ... ok\ntest stream::stretch::tests::silence_in_silence_out ... ok\ntest stream::stretch::tests::sine_pitch_is_preserved_under_stretch ... ok\ntest stream::stretch::tests::source_prefix_reclaimed_without_growing ... ok\ntest stream::stretch::tests::stereo_channels_produce_independent_output ... ok\ntest stream::stretch::tests::stereo_correlation_matches_scalar_oracle ... ok\ntest stream::stretch::tests::sub_window_push_does_not_panic ... ok\ntest stream::tests::common_lead_in_layouts_submit_without_allocator_work ... ok\ntest stream::tests::generation_change_cancels_a_backpressured_block ... ok\ntest stream::tests::generation_transition_can_use_reserved_pool_blocks ... ok\ntest stream::tests::live_transition_waits_for_render_drain_before_steady_pacing ... ok\ntest stream::tests::negative_lead_in_silence_scales_with_music_rate ... ok\ntest stream::tests::preroll_drop_uses_actual_seek_distance ... ok\ntest stream::tests::seeked_map_starts_at_decoder_frame ... ok\ntest stream::tests::sfx_capacity_rejects_missing_or_unbounded_hints ... ok\ntest stream::tests::sfx_capacity_scales_frame_hint_to_output_format ... ok\ntest stream::tests::short_initial_stream_publishes_its_partial_prefill_at_eof ... ok\ntest stream::tests::watermarks_leave_at_least_190_ms_transition_reserve ... ok\n\ntest result: ok. 48 passed; 0 failed; 8 ignored; 0 measured; 0 filtered out; finished in 2.81s\n\n\nrunning 1 test\ntest stretched_worker_preserves_cuts_fades_channels_and_timing ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s\n\n",
+      "stderr": "   Compiling deadlib-audio-core v0.1.0 (C:\\GitHub\\deadsync\\crates\\deadlib-audio-core)\n   Compiling deadlib-audio-backend-wasapi v0.1.0 (C:\\GitHub\\deadsync\\crates\\deadlib-audio-backend-wasapi)\n   Compiling deadlib-audio v0.1.0 (C:\\GitHub\\deadsync\\crates\\deadlib-audio)\nwarning: method `is_direct` is never used\n   --> crates\\deadlib-audio\\src\\stream\\perf_original_processing.rs:140:25\n    |\n 62 | impl MusicStages {\n    | ---------------- method in this implementation\n...\n140 |     pub(super) const fn is_direct(&self) -> bool {\n    |                         ^^^^^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `deadlib-audio` (lib test) generated 1 warning\n    Finished `release` profile [optimized + debuginfo] target(s) in 53.47s\n     Running unittests src\\lib.rs (target\\audio-lead-in\\cargo\\release\\deps\\deadlib_audio-a8076ff892116fdf.exe)\n     Running tests\\playback.rs (target\\audio-lead-in\\cargo\\release\\deps\\playback-34d2ea15eb13885a.exe)\n",
+      "elapsed_seconds": 56.91233969992027
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "clippy::perf"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "C:\\GitHub\\deadsync\\target\\audio-sola\\cargo"
+      },
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "    Checking deadlib-audio-core v0.1.0 (C:\\GitHub\\deadsync\\crates\\deadlib-audio-core)\n    Checking deadlib-audio-backend-wasapi v0.1.0 (C:\\GitHub\\deadsync\\crates\\deadlib-audio-backend-wasapi)\n    Checking deadlib-audio v0.1.0 (C:\\GitHub\\deadsync\\crates\\deadlib-audio)\nwarning: method `is_direct` is never used\n   --> crates\\deadlib-audio\\src\\stream\\perf_original_processing.rs:140:25\n    |\n 62 | impl MusicStages {\n    | ---------------- method in this implementation\n...\n140 |     pub(super) const fn is_direct(&self) -> bool {\n    |                         ^^^^^^^^^\n    |\n    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default\n\nwarning: `deadlib-audio` (lib test) generated 1 warning\n    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.52s\n",
+      "elapsed_seconds": 2.8529054999817163
+    },
+    {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "--target",
+        "aarch64-unknown-linux-gnu",
+        "--emit=metadata",
+        "target/audio-sola/layout-retained/harness.rs",
+        "-o",
+        "target/audio-sola/layout-aarch64-unknown-linux-gnu.rmeta"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "C:\\GitHub\\deadsync\\target\\audio-sola\\cargo"
+      },
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "elapsed_seconds": 0.5493782999692485
+    },
+    {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "--target",
+        "i686-pc-windows-msvc",
+        "--emit=metadata",
+        "target/audio-sola/layout-retained/harness.rs",
+        "-o",
+        "target/audio-sola/layout-i686-pc-windows-msvc.rmeta"
+      ],
+      "environment": {
+        "CARGO_TARGET_DIR": "C:\\GitHub\\deadsync\\target\\audio-sola\\cargo"
+      },
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "",
+      "elapsed_seconds": 0.5216791999991983
+    }
+  ],
+  "source_sha256": {
+    "crates/deadlib-audio/src/stream/stretch.rs": "31c25442cf5af7252f043b4d0573dc802106bb1b98a83633efdd3db8bd80319d",
+    "crates/deadlib-audio/src/stream/stretch/perf_tests.rs": "23abec8022b207233d14bcf3a1c9480716667880e7f5c1da59adc836446e386c",
+    "crates/deadlib-audio/src/stream/stretch/rate_bench.rs": "7120864f7eddbb5ae38d0ce720b82df654dfc2710406a8bd5a4cc3550567d665",
+    "scripts/benchmark_audio_sola.py": "4ee01c94bd7621a462f2fbd2036f05258bcb32c06e6e99c8ee2d46fcc587c27d"
+  }
+}

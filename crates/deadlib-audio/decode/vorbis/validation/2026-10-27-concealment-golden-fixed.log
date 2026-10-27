@@ -1,0 +1,20 @@
+cargo :    Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+At line:2 char:43
++ ... ode-vorbis; cargo test -p deadlib-audio-decode-vorbis --release --tes ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de...\decode\vorbis):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+    Finished `release` profile [optimized] target(s) in 23.80s
+     Running tests\pcm.rs (target\release\deps\pcm-92498ff7b2210970.exe)
+
+running 1 test
+discarded long packet/libvorbis golden: 7296 samples, peak error 1.192092896e-7, RMS 2.782985710e-8, signal peak
+0.376549
+discarded long packet/libvorbis golden: 7296 samples, peak error 1.192092896e-7, RMS 2.782985710e-8, signal peak
+0.376549
+discarded long packet/libvorbis golden: 7296 samples, peak error 1.192092896e-7, RMS 2.782985710e-8, signal peak
+0.376549
+test discarded_long_packet_uses_actual_neighbor_windows_and_matches_libvorbis_golden ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.01s

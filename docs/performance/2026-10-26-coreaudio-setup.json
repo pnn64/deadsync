@@ -1,0 +1,1351 @@
+{
+  "baseline_commit": "50524a532",
+  "cpu": "Intel Xeon E5-2696 v4 @ 2.20GHz",
+  "record_count": 960,
+  "driver_sha256": "8ffd390061d6fafa91742f26ec60838c9c2962ba91bb0a3d961ffea5ca60ff46",
+  "stages": {
+    "before": {
+      "inputs_sha256": {
+        "lib.rs": "d95725b0ad9805da10af21a708e4f592143f57d19e2ac18e35ca54b4b140b8c9",
+        "fixtures.rs": "35b69b1a26acc66208279a4ab55c25672734a2a165cf94305d028c9af50b297a",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-setup\\before\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-setup\\before\\coreaudio.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "executable_sha256": "963482f6e0ab60cb532ed0b7c9121a099ac5b08ac9c3a661884c8bb8cb2fdbea",
+      "generated_sha256": "215016aacde05c773626f630310083baf703e4912e6fea2218f69c9cc9b89797",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "77df6706fd30ad1a52dc23445ad6de25c386e16c",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "operations_per_batch": 1,
+      "normalized_source_sha256": "d95725b0ad9805da10af21a708e4f592143f57d19e2ac18e35ca54b4b140b8c9",
+      "patch_from_baseline": "",
+      "checks": "running 5 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+    },
+    "name": {
+      "inputs_sha256": {
+        "lib.rs": "8383d9967ff17165c4b492b7ff5eab211bc25c17b553a0418b69b6927f45636a",
+        "fixtures.rs": "35b69b1a26acc66208279a4ab55c25672734a2a165cf94305d028c9af50b297a",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-setup\\name\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-setup\\name\\coreaudio.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "executable_sha256": "c70fffe410e1bd65bc9006f77f4c14a1ed3505c1170435328b3369b15a152b51",
+      "generated_sha256": "2299548a5e250a3d52c1bb2cb2a321d03303db2153d2a9abfaaeee7ad39c2001",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "77df6706fd30ad1a52dc23445ad6de25c386e16c",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "operations_per_batch": 1,
+      "normalized_source_sha256": "8383d9967ff17165c4b492b7ff5eab211bc25c17b553a0418b69b6927f45636a",
+      "patch_from_baseline": "--- baseline/lib.rs\n+++ name/lib.rs\n@@ -237,7 +237,6 @@\n     let buffer_frames = prep.buffer_frames.max(1);\n     let buffer_ns = frames_to_nanos(sample_rate_hz, buffer_frames);\n     let downstream_latency_ns = Arc::new(AtomicU64::new(prep.latency.nanos));\n-    let device_name = prep.device_name.clone();\n \n     type Args = render_callback::Args<data::Interleaved<f32>>;\n     let callback_downstream_latency_ns = Arc::clone(&downstream_latency_ns);\n@@ -316,7 +315,7 @@\n     publish_output_timing_quality(OutputTimingQuality::Trusted);\n     info!(\n         \"CoreAudio '{}' using native shared output at {} Hz, {} ch (buffer={} frames, downstream latency={} frames at {} Hz, total={:.1} ms).\",\n-        device_name,\n+        prep.device_name,\n         sample_rate_hz,\n         prep.channels,\n         buffer_frames,\n",
+      "checks": "running 5 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+    },
+    "event": {
+      "inputs_sha256": {
+        "lib.rs": "04975c38ff64903d2fab292acbdda7bd87273ca2e9042b60fb5f26df4be3a2f5",
+        "fixtures.rs": "35b69b1a26acc66208279a4ab55c25672734a2a165cf94305d028c9af50b297a",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-setup\\event\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-setup\\event\\coreaudio.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "executable_sha256": "814fa65e927e7e920fbec945940df0c6f654e95d4a38f5070d545d312e430914",
+      "generated_sha256": "4bb0af5b9687d25ace52b1ad23784c9211960248a93d7b153749e510f454e1a9",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "77df6706fd30ad1a52dc23445ad6de25c386e16c",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "operations_per_batch": 1,
+      "normalized_source_sha256": "04975c38ff64903d2fab292acbdda7bd87273ca2e9042b60fb5f26df4be3a2f5",
+      "patch_from_baseline": "--- baseline/lib.rs\n+++ event/lib.rs\n@@ -237,7 +237,6 @@\n     let buffer_frames = prep.buffer_frames.max(1);\n     let buffer_ns = frames_to_nanos(sample_rate_hz, buffer_frames);\n     let downstream_latency_ns = Arc::new(AtomicU64::new(prep.latency.nanos));\n-    let device_name = prep.device_name.clone();\n \n     type Args = render_callback::Args<data::Interleaved<f32>>;\n     let callback_downstream_latency_ns = Arc::clone(&downstream_latency_ns);\n@@ -316,7 +315,7 @@\n     publish_output_timing_quality(OutputTimingQuality::Trusted);\n     info!(\n         \"CoreAudio '{}' using native shared output at {} Hz, {} ch (buffer={} frames, downstream latency={} frames at {} Hz, total={:.1} ms).\",\n-        device_name,\n+        prep.device_name,\n         sample_rate_hz,\n         prep.channels,\n         buffer_frames,\n@@ -394,11 +393,14 @@\n         }\n         let event = (device_id != previous_device_id)\n             .then(|| get_device_name(device_id).ok())\n-            .flatten()\n-            .map_or_else(\n-                || \"CoreAudio latency compensation\".to_owned(),\n-                |name| format!(\"CoreAudio output changed to '{name}'; latency compensation\"),\n-            );\n+            .flatten();\n+        let event = std::fmt::from_fn(|f| match event.as_deref() {\n+            Some(name) => write!(\n+                f,\n+                \"CoreAudio output changed to '{name}'; latency compensation\"\n+            ),\n+            None => f.write_str(\"CoreAudio latency compensation\"),\n+        });\n         warn!(\n             \"{event} changed: {:.1} ms ({previous_frames} frames at {previous_rate_hz} Hz) -> {:.1} ms ({} frames at {} Hz).\",\n             nanos_to_ms(previous_ns),\n",
+      "checks": "running 5 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+    },
+    "capacity": {
+      "inputs_sha256": {
+        "lib.rs": "2d384bb205c13e0e402ca7b42e19f6a769da00a4ab09b0fa86985583f2690620",
+        "fixtures.rs": "35b69b1a26acc66208279a4ab55c25672734a2a165cf94305d028c9af50b297a",
+        "perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47",
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f"
+      },
+      "command": [
+        "rustc",
+        "--edition=2024",
+        "--test",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-setup\\capacity\\generated.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\coreaudio-setup\\capacity\\coreaudio.exe",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=thin",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static"
+      ],
+      "executable_sha256": "914ea058045a15f662daacf86eaf4f42fd361fd3e157d643ce8fb26a03243a1b",
+      "generated_sha256": "17b8306348414ba982c5a649c65b5da863d488cb69c15481dd88d1f9746b8796",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "head": "77df6706fd30ad1a52dc23445ad6de25c386e16c",
+      "platform": "Windows-11-10.0.26100-SP0",
+      "operations_per_batch": 1,
+      "normalized_source_sha256": "2d384bb205c13e0e402ca7b42e19f6a769da00a4ab09b0fa86985583f2690620",
+      "patch_from_baseline": "--- baseline/lib.rs\n+++ capacity/lib.rs\n@@ -237,7 +237,6 @@\n     let buffer_frames = prep.buffer_frames.max(1);\n     let buffer_ns = frames_to_nanos(sample_rate_hz, buffer_frames);\n     let downstream_latency_ns = Arc::new(AtomicU64::new(prep.latency.nanos));\n-    let device_name = prep.device_name.clone();\n \n     type Args = render_callback::Args<data::Interleaved<f32>>;\n     let callback_downstream_latency_ns = Arc::clone(&downstream_latency_ns);\n@@ -316,7 +315,7 @@\n     publish_output_timing_quality(OutputTimingQuality::Trusted);\n     info!(\n         \"CoreAudio '{}' using native shared output at {} Hz, {} ch (buffer={} frames, downstream latency={} frames at {} Hz, total={:.1} ms).\",\n-        device_name,\n+        prep.device_name,\n         sample_rate_hz,\n         prep.channels,\n         buffer_frames,\n@@ -394,11 +393,14 @@\n         }\n         let event = (device_id != previous_device_id)\n             .then(|| get_device_name(device_id).ok())\n-            .flatten()\n-            .map_or_else(\n-                || \"CoreAudio latency compensation\".to_owned(),\n-                |name| format!(\"CoreAudio output changed to '{name}'; latency compensation\"),\n-            );\n+            .flatten();\n+        let event = std::fmt::from_fn(|f| match event.as_deref() {\n+            Some(name) => write!(\n+                f,\n+                \"CoreAudio output changed to '{name}'; latency compensation\"\n+            ),\n+            None => f.write_str(\"CoreAudio latency compensation\"),\n+        });\n         warn!(\n             \"{event} changed: {:.1} ms ({previous_frames} frames at {previous_rate_hz} Hz) -> {:.1} ms ({} frames at {} Hz).\",\n             nanos_to_ms(previous_ns),\n@@ -561,19 +563,22 @@\n }\n \n fn supported_sample_rates_hz(device_id: AudioDeviceID, default_rate_hz: u32) -> Vec<u32> {\n-    let mut sample_rates_hz = Vec::with_capacity(COMMON_SAMPLE_RATES_HZ.len() + 3);\n-    if default_rate_hz > 0 {\n-        sample_rates_hz.push(default_rate_hz);\n-    }\n     let ranges = match get_available_sample_rates(device_id) {\n         Ok(ranges) => ranges,\n         Err(err) => {\n             warn!(\"failed to query CoreAudio sample rates for device {device_id}: {err}\");\n-            sample_rates_hz.sort_unstable();\n-            sample_rates_hz.dedup();\n-            return sample_rates_hz;\n-        }\n-    };\n+            return if default_rate_hz > 0 {\n+                vec![default_rate_hz]\n+            } else {\n+                Vec::new()\n+            };\n+        }\n+    };\n+    let mut sample_rates_hz =\n+        Vec::with_capacity(ranges.len() * 2 + COMMON_SAMPLE_RATES_HZ.len() + 1);\n+    if default_rate_hz > 0 {\n+        sample_rates_hz.push(default_rate_hz);\n+    }\n     let supported_ranges: Vec<_> = ranges\n         .into_iter()\n         .map(|range| (range.mMinimum, range.mMaximum))\n",
+      "checks": "running 5 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s"
+    }
+  },
+  "debug_checks": "running 5 tests\ntest benchmark_coreaudio_setup ... ignored, CPU and allocation benchmark; run explicitly\ntest fixed_log_sink_is_allocation_free ... ok\ntest refresh_messages_and_name_queries_match ... ok\ntest startup_message_preserves_name_and_numeric_fields ... ok\ntest supported_rates_match_original_for_adversarial_ranges ... ok\n\ntest result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.10s",
+  "summary": {
+    "startup-name": {
+      "rates_continuous": {
+        "before": {
+          "cycles_per_call": 532.58,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 72,
+            "freed_bytes": 72,
+            "peak_bytes": 72
+          }
+        },
+        "after": {
+          "cycles_per_call": 566.38,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 72,
+            "freed_bytes": 72,
+            "peak_bytes": 72
+          }
+        },
+        "cpu_throughput_ratio": 0.9403227515095873
+      },
+      "rates_discrete_2": {
+        "before": {
+          "cycles_per_call": 503.90999999999997,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 88,
+            "freed_bytes": 88,
+            "peak_bytes": 88
+          }
+        },
+        "after": {
+          "cycles_per_call": 532.405,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 88,
+            "freed_bytes": 88,
+            "peak_bytes": 88
+          }
+        },
+        "cpu_throughput_ratio": 0.9464787145124482
+      },
+      "rates_discrete_11": {
+        "before": {
+          "cycles_per_call": 1868.15,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 2,
+            "frees": 2,
+            "allocated_bytes": 568,
+            "freed_bytes": 568,
+            "peak_bytes": 400
+          }
+        },
+        "after": {
+          "cycles_per_call": 1869.715,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 2,
+            "frees": 2,
+            "allocated_bytes": 568,
+            "freed_bytes": 568,
+            "peak_bytes": 400
+          }
+        },
+        "cpu_throughput_ratio": 0.99916297403615
+      },
+      "rates_ranges_32": {
+        "before": {
+          "cycles_per_call": 3736.6,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 3,
+            "frees": 2,
+            "allocated_bytes": 1352,
+            "freed_bytes": 1352,
+            "peak_bytes": 960
+          }
+        },
+        "after": {
+          "cycles_per_call": 3651.855,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 3,
+            "frees": 2,
+            "allocated_bytes": 1352,
+            "freed_bytes": 1352,
+            "peak_bytes": 960
+          }
+        },
+        "cpu_throughput_ratio": 1.0232060144775736
+      },
+      "rates_error_default": {
+        "before": {
+          "cycles_per_call": 184.95999999999998,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 56,
+            "freed_bytes": 56,
+            "peak_bytes": 56
+          }
+        },
+        "after": {
+          "cycles_per_call": 175.125,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 56,
+            "freed_bytes": 56,
+            "peak_bytes": 56
+          }
+        },
+        "cpu_throughput_ratio": 1.05615988579586
+      },
+      "rates_error_empty": {
+        "before": {
+          "cycles_per_call": 182.55,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 56,
+            "freed_bytes": 56,
+            "peak_bytes": 56
+          }
+        },
+        "after": {
+          "cycles_per_call": 176.64,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 56,
+            "freed_bytes": 56,
+            "peak_bytes": 56
+          }
+        },
+        "cpu_throughput_ratio": 1.0334578804347827
+      },
+      "startup_name_short": {
+        "before": {
+          "cycles_per_call": 766.9000000000001,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 15,
+            "freed_bytes": 15,
+            "peak_bytes": 15
+          }
+        },
+        "after": {
+          "cycles_per_call": 596.0550000000001,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 1.286626234156244
+      },
+      "startup_name_long": {
+        "before": {
+          "cycles_per_call": 922.7850000000001,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 1408,
+            "freed_bytes": 1408,
+            "peak_bytes": 1408
+          }
+        },
+        "after": {
+          "cycles_per_call": 688.385,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 1.3405071290048447
+      },
+      "refresh_same": {
+        "before": {
+          "cycles_per_call": 1696.84,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 30,
+            "freed_bytes": 30,
+            "peak_bytes": 30
+          }
+        },
+        "after": {
+          "cycles_per_call": 1882.54,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 30,
+            "freed_bytes": 30,
+            "peak_bytes": 30
+          }
+        },
+        "cpu_throughput_ratio": 0.9013566776801555
+      },
+      "refresh_changed": {
+        "before": {
+          "cycles_per_call": 1982.855,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 118,
+            "freed_bytes": 118,
+            "peak_bytes": 118
+          }
+        },
+        "after": {
+          "cycles_per_call": 2130.7200000000003,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 118,
+            "freed_bytes": 118,
+            "peak_bytes": 118
+          }
+        },
+        "cpu_throughput_ratio": 0.9306032702560636
+      },
+      "refresh_name_error": {
+        "before": {
+          "cycles_per_call": 1676.635,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 30,
+            "freed_bytes": 30,
+            "peak_bytes": 30
+          }
+        },
+        "after": {
+          "cycles_per_call": 1875.315,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 30,
+            "freed_bytes": 30,
+            "peak_bytes": 30
+          }
+        },
+        "cpu_throughput_ratio": 0.8940551320711454
+      },
+      "refresh_disabled": {
+        "before": {
+          "cycles_per_call": 155.555,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 30,
+            "freed_bytes": 30,
+            "peak_bytes": 30
+          }
+        },
+        "after": {
+          "cycles_per_call": 159.375,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 30,
+            "freed_bytes": 30,
+            "peak_bytes": 30
+          }
+        },
+        "cpu_throughput_ratio": 0.9760313725490196
+      }
+    },
+    "latency-log": {
+      "rates_continuous": {
+        "before": {
+          "cycles_per_call": 568.8050000000001,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 72,
+            "freed_bytes": 72,
+            "peak_bytes": 72
+          }
+        },
+        "after": {
+          "cycles_per_call": 528.145,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 72,
+            "freed_bytes": 72,
+            "peak_bytes": 72
+          }
+        },
+        "cpu_throughput_ratio": 1.07698643364985
+      },
+      "rates_discrete_2": {
+        "before": {
+          "cycles_per_call": 525.05,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 88,
+            "freed_bytes": 88,
+            "peak_bytes": 88
+          }
+        },
+        "after": {
+          "cycles_per_call": 496.62,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 88,
+            "freed_bytes": 88,
+            "peak_bytes": 88
+          }
+        },
+        "cpu_throughput_ratio": 1.057246989650034
+      },
+      "rates_discrete_11": {
+        "before": {
+          "cycles_per_call": 1819.25,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 2,
+            "frees": 2,
+            "allocated_bytes": 568,
+            "freed_bytes": 568,
+            "peak_bytes": 400
+          }
+        },
+        "after": {
+          "cycles_per_call": 1876.1599999999999,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 2,
+            "frees": 2,
+            "allocated_bytes": 568,
+            "freed_bytes": 568,
+            "peak_bytes": 400
+          }
+        },
+        "cpu_throughput_ratio": 0.9696667661606687
+      },
+      "rates_ranges_32": {
+        "before": {
+          "cycles_per_call": 3634.1850000000004,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 3,
+            "frees": 2,
+            "allocated_bytes": 1352,
+            "freed_bytes": 1352,
+            "peak_bytes": 960
+          }
+        },
+        "after": {
+          "cycles_per_call": 3657.43,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 3,
+            "frees": 2,
+            "allocated_bytes": 1352,
+            "freed_bytes": 1352,
+            "peak_bytes": 960
+          }
+        },
+        "cpu_throughput_ratio": 0.9936444443229263
+      },
+      "rates_error_default": {
+        "before": {
+          "cycles_per_call": 175.985,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 56,
+            "freed_bytes": 56,
+            "peak_bytes": 56
+          }
+        },
+        "after": {
+          "cycles_per_call": 181.10500000000002,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 56,
+            "freed_bytes": 56,
+            "peak_bytes": 56
+          }
+        },
+        "cpu_throughput_ratio": 0.9717291074238701
+      },
+      "rates_error_empty": {
+        "before": {
+          "cycles_per_call": 172.42000000000002,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 56,
+            "freed_bytes": 56,
+            "peak_bytes": 56
+          }
+        },
+        "after": {
+          "cycles_per_call": 177.945,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 56,
+            "freed_bytes": 56,
+            "peak_bytes": 56
+          }
+        },
+        "cpu_throughput_ratio": 0.9689510803900083
+      },
+      "startup_name_short": {
+        "before": {
+          "cycles_per_call": 572.115,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "after": {
+          "cycles_per_call": 585.04,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 0.9779074935047177
+      },
+      "startup_name_long": {
+        "before": {
+          "cycles_per_call": 661.8900000000001,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "after": {
+          "cycles_per_call": 672.435,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 0.9843181868879523
+      },
+      "refresh_same": {
+        "before": {
+          "cycles_per_call": 1845.96,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 30,
+            "freed_bytes": 30,
+            "peak_bytes": 30
+          }
+        },
+        "after": {
+          "cycles_per_call": 1464.1,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 1.260815518065706
+      },
+      "refresh_changed": {
+        "before": {
+          "cycles_per_call": 2069.29,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 118,
+            "freed_bytes": 118,
+            "peak_bytes": 118
+          }
+        },
+        "after": {
+          "cycles_per_call": 1745.0149999999999,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 14,
+            "freed_bytes": 14,
+            "peak_bytes": 14
+          }
+        },
+        "cpu_throughput_ratio": 1.1858293481717923
+      },
+      "refresh_name_error": {
+        "before": {
+          "cycles_per_call": 1824.42,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 30,
+            "freed_bytes": 30,
+            "peak_bytes": 30
+          }
+        },
+        "after": {
+          "cycles_per_call": 1467.52,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 1.2431994112516356
+      },
+      "refresh_disabled": {
+        "before": {
+          "cycles_per_call": 188.26999999999998,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 30,
+            "freed_bytes": 30,
+            "peak_bytes": 30
+          }
+        },
+        "after": {
+          "cycles_per_call": 14.9,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 12.635570469798656
+      }
+    },
+    "rate-capacity": {
+      "rates_continuous": {
+        "before": {
+          "cycles_per_call": 534.5350000000001,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 72,
+            "freed_bytes": 72,
+            "peak_bytes": 72
+          }
+        },
+        "after": {
+          "cycles_per_call": 533.1400000000001,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 72,
+            "freed_bytes": 72,
+            "peak_bytes": 72
+          }
+        },
+        "cpu_throughput_ratio": 1.0026165735078967
+      },
+      "rates_discrete_2": {
+        "before": {
+          "cycles_per_call": 488.58000000000004,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 88,
+            "freed_bytes": 88,
+            "peak_bytes": 88
+          }
+        },
+        "after": {
+          "cycles_per_call": 503.095,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 96,
+            "freed_bytes": 96,
+            "peak_bytes": 96
+          }
+        },
+        "cpu_throughput_ratio": 0.971148590226498
+      },
+      "rates_discrete_11": {
+        "before": {
+          "cycles_per_call": 1842.29,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 2,
+            "frees": 2,
+            "allocated_bytes": 568,
+            "freed_bytes": 568,
+            "peak_bytes": 400
+          }
+        },
+        "after": {
+          "cycles_per_call": 1349.995,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 312,
+            "freed_bytes": 312,
+            "peak_bytes": 312
+          }
+        },
+        "cpu_throughput_ratio": 1.3646643135715317
+      },
+      "rates_ranges_32": {
+        "before": {
+          "cycles_per_call": 3592.065,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 3,
+            "frees": 2,
+            "allocated_bytes": 1352,
+            "freed_bytes": 1352,
+            "peak_bytes": 960
+          }
+        },
+        "after": {
+          "cycles_per_call": 2882.5150000000003,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 816,
+            "freed_bytes": 816,
+            "peak_bytes": 816
+          }
+        },
+        "cpu_throughput_ratio": 1.2461565681358118
+      },
+      "rates_error_default": {
+        "before": {
+          "cycles_per_call": 174.51,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 56,
+            "freed_bytes": 56,
+            "peak_bytes": 56
+          }
+        },
+        "after": {
+          "cycles_per_call": 158.5,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 4,
+            "freed_bytes": 4,
+            "peak_bytes": 4
+          }
+        },
+        "cpu_throughput_ratio": 1.1010094637223975
+      },
+      "rates_error_empty": {
+        "before": {
+          "cycles_per_call": 173.96,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 56,
+            "freed_bytes": 56,
+            "peak_bytes": 56
+          }
+        },
+        "after": {
+          "cycles_per_call": 21.46,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 8.106244175209692
+      },
+      "startup_name_short": {
+        "before": {
+          "cycles_per_call": 578.45,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "after": {
+          "cycles_per_call": 560.205,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 1.0325684347694148
+      },
+      "startup_name_long": {
+        "before": {
+          "cycles_per_call": 662.3050000000001,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "after": {
+          "cycles_per_call": 606.21,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 1.0925339403836956
+      },
+      "refresh_same": {
+        "before": {
+          "cycles_per_call": 1433.38,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "after": {
+          "cycles_per_call": 1443.065,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 0.9932885906040269
+      },
+      "refresh_changed": {
+        "before": {
+          "cycles_per_call": 1716.625,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 14,
+            "freed_bytes": 14,
+            "peak_bytes": 14
+          }
+        },
+        "after": {
+          "cycles_per_call": 1733.505,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 14,
+            "freed_bytes": 14,
+            "peak_bytes": 14
+          }
+        },
+        "cpu_throughput_ratio": 0.9902625028482755
+      },
+      "refresh_name_error": {
+        "before": {
+          "cycles_per_call": 1436.4499999999998,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "after": {
+          "cycles_per_call": 1448.385,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 0.9917597876255276
+      },
+      "refresh_disabled": {
+        "before": {
+          "cycles_per_call": 15.86,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "after": {
+          "cycles_per_call": 15.84,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 1.0012626262626263
+      }
+    },
+    "setup-final": {
+      "rates_continuous": {
+        "before": {
+          "cycles_per_call": 528.28,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 72,
+            "freed_bytes": 72,
+            "peak_bytes": 72
+          }
+        },
+        "after": {
+          "cycles_per_call": 538.7850000000001,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 72,
+            "freed_bytes": 72,
+            "peak_bytes": 72
+          }
+        },
+        "cpu_throughput_ratio": 0.9805024267564982
+      },
+      "rates_discrete_2": {
+        "before": {
+          "cycles_per_call": 496.405,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 88,
+            "freed_bytes": 88,
+            "peak_bytes": 88
+          }
+        },
+        "after": {
+          "cycles_per_call": 513.275,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 96,
+            "freed_bytes": 96,
+            "peak_bytes": 96
+          }
+        },
+        "cpu_throughput_ratio": 0.9671326287078077
+      },
+      "rates_discrete_11": {
+        "before": {
+          "cycles_per_call": 1891.98,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 2,
+            "frees": 2,
+            "allocated_bytes": 568,
+            "freed_bytes": 568,
+            "peak_bytes": 400
+          }
+        },
+        "after": {
+          "cycles_per_call": 1377.9450000000002,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 312,
+            "freed_bytes": 312,
+            "peak_bytes": 312
+          }
+        },
+        "cpu_throughput_ratio": 1.3730446425655594
+      },
+      "rates_ranges_32": {
+        "before": {
+          "cycles_per_call": 3648.6549999999997,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 3,
+            "frees": 2,
+            "allocated_bytes": 1352,
+            "freed_bytes": 1352,
+            "peak_bytes": 960
+          }
+        },
+        "after": {
+          "cycles_per_call": 2929.8999999999996,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 816,
+            "freed_bytes": 816,
+            "peak_bytes": 816
+          }
+        },
+        "cpu_throughput_ratio": 1.2453172463224
+      },
+      "rates_error_default": {
+        "before": {
+          "cycles_per_call": 175.25,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 56,
+            "freed_bytes": 56,
+            "peak_bytes": 56
+          }
+        },
+        "after": {
+          "cycles_per_call": 160.365,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 4,
+            "freed_bytes": 4,
+            "peak_bytes": 4
+          }
+        },
+        "cpu_throughput_ratio": 1.0928195055030712
+      },
+      "rates_error_empty": {
+        "before": {
+          "cycles_per_call": 175.14499999999998,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 56,
+            "freed_bytes": 56,
+            "peak_bytes": 56
+          }
+        },
+        "after": {
+          "cycles_per_call": 21.46,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 8.161463187325255
+      },
+      "startup_name_short": {
+        "before": {
+          "cycles_per_call": 736.915,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 15,
+            "freed_bytes": 15,
+            "peak_bytes": 15
+          }
+        },
+        "after": {
+          "cycles_per_call": 571.3,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 1.289891475582006
+      },
+      "startup_name_long": {
+        "before": {
+          "cycles_per_call": 885.745,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 1408,
+            "freed_bytes": 1408,
+            "peak_bytes": 1408
+          }
+        },
+        "after": {
+          "cycles_per_call": 614.815,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 1.4406691443767636
+      },
+      "refresh_same": {
+        "before": {
+          "cycles_per_call": 1668.315,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 30,
+            "freed_bytes": 30,
+            "peak_bytes": 30
+          }
+        },
+        "after": {
+          "cycles_per_call": 1487.0900000000001,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 1.1218655225978251
+      },
+      "refresh_changed": {
+        "before": {
+          "cycles_per_call": 1953.02,
+          "allocations": {
+            "allocs": 2,
+            "reallocs": 0,
+            "frees": 2,
+            "allocated_bytes": 118,
+            "freed_bytes": 118,
+            "peak_bytes": 118
+          }
+        },
+        "after": {
+          "cycles_per_call": 1776.7649999999999,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 14,
+            "freed_bytes": 14,
+            "peak_bytes": 14
+          }
+        },
+        "cpu_throughput_ratio": 1.0991999504717844
+      },
+      "refresh_name_error": {
+        "before": {
+          "cycles_per_call": 1694.0900000000001,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 30,
+            "freed_bytes": 30,
+            "peak_bytes": 30
+          }
+        },
+        "after": {
+          "cycles_per_call": 1477.78,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 1.1463749678571913
+      },
+      "refresh_disabled": {
+        "before": {
+          "cycles_per_call": 158.22,
+          "allocations": {
+            "allocs": 1,
+            "reallocs": 0,
+            "frees": 1,
+            "allocated_bytes": 30,
+            "freed_bytes": 30,
+            "peak_bytes": 30
+          }
+        },
+        "after": {
+          "cycles_per_call": 15.86,
+          "allocations": {
+            "allocs": 0,
+            "reallocs": 0,
+            "frees": 0,
+            "allocated_bytes": 0,
+            "freed_bytes": 0,
+            "peak_bytes": 0
+          }
+        },
+        "cpu_throughput_ratio": 9.976040353089534
+      }
+    }
+  }
+}

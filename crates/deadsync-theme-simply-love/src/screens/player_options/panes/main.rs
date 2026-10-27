@@ -11,6 +11,24 @@ use deadsync_profile::{
 
 // =============================== Bindings ===============================
 
+const JUDGMENT_ANIMATION_VARIANTS: [profile_data::JudgmentAnimation; 3] = [
+    profile_data::JudgmentAnimation::Default,
+    profile_data::JudgmentAnimation::Still,
+    profile_data::JudgmentAnimation::Itg,
+];
+const JUDGMENT_ANIMATION: ChoiceBinding<usize> = index_binding!(
+    JUDGMENT_ANIMATION_VARIANTS,
+    profile_data::JudgmentAnimation::Default,
+    judgment_animation,
+    false,
+    Some(CycleInit {
+        from_profile: |p| JUDGMENT_ANIMATION_VARIANTS
+            .iter()
+            .position(|&v| v == p.judgment_animation)
+            .unwrap_or(0)
+    })
+);
+
 const NO_CMOD_ALTERNATIVE: ChoiceBinding<usize> = index_binding!(
     NO_CMOD_ALTERNATIVE_VARIANTS,
     NoCmodAlternative::None,
@@ -650,6 +668,7 @@ fn push_combo_font_row(b: &mut RowBuilder) {
             tr("PlayerOptions", "ComboFontWork").to_string(),
             tr("PlayerOptions", "ComboFontWendyCursed").to_string(),
             tr("PlayerOptions", "ComboFontMega").to_string(),
+            tr("PlayerOptions", "ComboFontUnprofessional").to_string(),
             tr("PlayerOptions", "ComboFontNone").to_string(),
         ],
     ));
@@ -856,6 +875,20 @@ pub(super) fn push_display_modifier_rows(
     push_tap_explosion_options_row(b);
     push_judgment_font_row(b);
     push_judgment_colors_row(b);
+    b.push(Row::cycle(
+        RowId::JudgmentAnimation,
+        lookup_key("PlayerOptions", "JudgmentAnimation"),
+        lookup_key("PlayerOptionsHelp", "JudgmentAnimationHelp"),
+        CycleBinding::Index(JUDGMENT_ANIMATION),
+        [
+            "JudgmentAnimationDefault",
+            "JudgmentAnimationStill",
+            "JudgmentAnimationITG",
+        ]
+        .into_iter()
+        .map(|key| tr("PlayerOptions", key).to_string())
+        .collect(),
+    ));
     push_judgment_offset_rows(b);
     push_combo_font_row(b);
     push_combo_offset_rows(b);

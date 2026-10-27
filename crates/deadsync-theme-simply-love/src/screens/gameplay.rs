@@ -5551,6 +5551,16 @@ pub fn frame_layers<'a>(
             }
             match state.step_stats_mode {
                 GameplayStepStatsMode::Hidden => {}
+                GameplayStepStatsMode::Side
+                    if centered_single_notefield && !is_wide() =>
+                {
+                    gameplay_stats::push_centered_single_split_step_stats(
+                        actors,
+                        state,
+                        asset_manager,
+                        playfield_center_x,
+                    );
+                }
                 GameplayStepStatsMode::Side => gameplay_stats::push_step_stats(
                     actors,
                     state,

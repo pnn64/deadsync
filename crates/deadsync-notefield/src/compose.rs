@@ -194,6 +194,7 @@ pub struct NotefieldOptions {
     pub split_15_10ms: bool,
     pub custom_fantastic_window: bool,
     pub judgment_tilt_enabled: bool,
+    pub judgment_animation: crate::TapJudgmentAnimation,
     pub judgment_tilt_min_ms: f32,
     pub judgment_tilt_max_ms: f32,
     pub judgment_tilt_multiplier: f32,

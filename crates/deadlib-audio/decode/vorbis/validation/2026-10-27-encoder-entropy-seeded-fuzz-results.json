@@ -1,0 +1,24 @@
+[
+    {
+        "target":  "vorbis_stream",
+        "exit_code":  0,
+        "executions":  7271,
+        "coverage":  3301,
+        "features":  10245,
+        "peak_rss_mb":  491,
+        "average_exec_per_second":  24,
+        "binary_sha256":  "6ea2ae2bbdb7f7bc098b61768cc3026d068e4d08a681bc2a5b57a82cef18b066",
+        "arguments":  [
+                          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-encoder-entropy-streams-20261027\\corpus\\vorbis_stream\"",
+                          "-max_total_time=300",
+                          "-max_len=131073",
+                          "-timeout=20",
+                          "-rss_limit_mb=2048",
+                          "-seed=1337",
+                          "-print_final_stats=1",
+                          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-encoder-entropy-streams-20261027/artifacts/vorbis_stream/\"",
+                          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+                      ],
+        "wall_seconds":  301.29970119999996
+    }
+]

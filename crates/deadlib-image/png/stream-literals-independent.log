@@ -1,0 +1,28 @@
+﻿Isolated workspace: C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-029a2772fd69418b8efcb2561c80c2a7
+Command: cargo test -p deadlib-image-png --offline --test stream_literals
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+cargo 1.99.1 (5f94df478 2026-08-27)
+     Locking 11 packages to highest Rust 1.97 compatible versions
+   Compiling simd-adler32 v0.3.10
+   Compiling crc32fast v1.5.3
+   Compiling adler2 v2.0.1
+   Compiling cfg-if v1.0.5
+   Compiling miniz_oxide v0.9.1
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling flate2 v1.1.10
+   Compiling deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-029a2772fd69418b8efcb2561c80c2a7)
+   Compiling bitflags v2.13.2
+   Compiling deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-029a2772fd69418b8efcb2561c80c2a7\png)
+   Compiling png v0.18.1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.90s
+     Running tests\stream_literals.rs (target\debug\deps\stream_literals-c7fa3d51ae9371d0.exe)
+
+running 2 tests
+test c_zlib_literal_runs_and_history_wraps ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+test literal_runs_history_wrap_pending_output_limits_and_trailer_fragments ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 7.22s
+
+deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-029a2772fd69418b8efcb2561c80c2a7\png)
+└── deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-029a2772fd69418b8efcb2561c80c2a7)

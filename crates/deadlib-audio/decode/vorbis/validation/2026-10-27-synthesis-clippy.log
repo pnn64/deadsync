@@ -1,0 +1,4 @@
+    Checking deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+    Checking deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Checking deadlib-vorbis-synthesis-probe v0.0.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\synthesis-profile-final-20261027)
+    Finished `release` profile [optimized + debuginfo] target(s) in 1.93s

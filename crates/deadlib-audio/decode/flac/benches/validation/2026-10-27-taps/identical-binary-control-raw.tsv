@@ -1,0 +1,121 @@
+mode	iterations	ns	units	checksum	bytes	frames	bits	channels	case	trial	ns_per_unit	ns_per_iteration	unit
+stream-md5	7	75554964	4321800	2916284330092	549954	76	16	2	subset/01 - blocksize 4096.flac	0	17.48229071220325	10793566.285714285	channel sample
+libflac-new-ogg-md5	9	77451766	5556600	3749508424404	553296	76	0	0	subset/01 - blocksize 4096.flac	0	13.938697404887881	8605751.777777778	channel sample
+ogg-stream-md5	7	76187446	4321800	2916284330092	553296	76	16	2	subset/01 - blocksize 4096.flac	0	17.628637604701744	10883920.857142856	channel sample
+libflac-new-md5	10	84261381	6174000	4166120471560	549954	76	0	0	subset/01 - blocksize 4096.flac	0	13.647777939747327	8426138.1	channel sample
+baseline-stream-md5	7	76980807	4321800	2916284330092	549954	76	16	2	subset/01 - blocksize 4096.flac	0	17.812209496043316	10997258.142857144	channel sample
+baseline-ogg-stream-md5	7	79044323	4321800	2916284330092	553296	76	16	2	subset/01 - blocksize 4096.flac	0	18.289676292285623	11292046.142857144	channel sample
+libflac-new-md5	10	86099247	6174000	4166120471560	549954	76	0	0	subset/01 - blocksize 4096.flac	1	13.945456268221575	8609924.7	channel sample
+stream-md5	7	76712891	4321800	2916284330092	549954	76	16	2	subset/01 - blocksize 4096.flac	1	17.750217733351842	10958984.42857143	channel sample
+ogg-stream-md5	7	76566808	4321800	2916284330092	553296	76	16	2	subset/01 - blocksize 4096.flac	1	17.716416308019806	10938115.42857143	channel sample
+baseline-stream-md5	7	74697714	4321800	2916284330092	549954	76	16	2	subset/01 - blocksize 4096.flac	1	17.28393586005831	10671102.0	channel sample
+libflac-new-ogg-md5	9	78627504	5556600	3749508424404	553296	76	0	0	subset/01 - blocksize 4096.flac	1	14.150290465392507	8736389.333333334	channel sample
+baseline-ogg-stream-md5	7	78035662	4321800	2916284330092	553296	76	16	2	subset/01 - blocksize 4096.flac	1	18.05628719515017	11147951.714285715	channel sample
+libflac-new-ogg-md5	9	90019475	5556600	3749508424404	553296	76	0	0	subset/01 - blocksize 4096.flac	2	16.200459813555053	10002163.888888888	channel sample
+stream-md5	7	74691317	4321800	2916284330092	549954	76	16	2	subset/01 - blocksize 4096.flac	2	17.282455689758898	10670188.142857144	channel sample
+baseline-stream-md5	7	75152644	4321800	2916284330092	549954	76	16	2	subset/01 - blocksize 4096.flac	2	17.38919987042436	10736092.0	channel sample
+ogg-stream-md5	7	75229655	4321800	2916284330092	553296	76	16	2	subset/01 - blocksize 4096.flac	2	17.407019066129852	10747093.57142857	channel sample
+baseline-ogg-stream-md5	7	75690324	4321800	2916284330092	553296	76	16	2	subset/01 - blocksize 4096.flac	2	17.513610995418574	10812903.42857143	channel sample
+libflac-new-md5	10	81369911	6174000	4166120471560	549954	76	0	0	subset/01 - blocksize 4096.flac	2	13.179447845804988	8136991.1	channel sample
+baseline-stream-md5	7	77324048	4321800	2916284330092	549954	76	16	2	subset/01 - blocksize 4096.flac	3	17.891630339210515	11046292.57142857	channel sample
+stream-md5	7	75976718	4321800	2916284330092	549954	76	16	2	subset/01 - blocksize 4096.flac	3	17.579878291452637	10853816.857142856	channel sample
+libflac-new-ogg-md5	9	77397746	5556600	3749508424404	553296	76	0	0	subset/01 - blocksize 4096.flac	3	13.928975632581075	8599749.555555556	channel sample
+libflac-new-md5	10	87258049	6174000	4166120471560	549954	76	0	0	subset/01 - blocksize 4096.flac	3	14.1331469063816	8725804.9	channel sample
+ogg-stream-md5	7	75880531	4321800	2916284330092	553296	76	16	2	subset/01 - blocksize 4096.flac	3	17.55762205562497	10840075.857142856	channel sample
+baseline-ogg-stream-md5	7	76372847	4321800	2916284330092	553296	76	16	2	subset/01 - blocksize 4096.flac	3	17.671536628256746	10910406.714285715	channel sample
+libflac-new-md5	10	80910547	6174000	4166120471560	549954	76	0	0	subset/01 - blocksize 4096.flac	4	13.105044865565274	8091054.7	channel sample
+stream-md5	7	75666433	4321800	2916284330092	549954	76	16	2	subset/01 - blocksize 4096.flac	4	17.508082974686474	10809490.42857143	channel sample
+ogg-stream-md5	7	77282590	4321800	2916284330092	553296	76	16	2	subset/01 - blocksize 4096.flac	4	17.882037576935534	11040370.0	channel sample
+libflac-new-ogg-md5	9	77284113	5556600	3749508424404	553296	76	0	0	subset/01 - blocksize 4096.flac	4	13.908525537199006	8587123.666666666	channel sample
+baseline-ogg-stream-md5	7	76040841	4321800	2916284330092	553296	76	16	2	subset/01 - blocksize 4096.flac	4	17.594715396362627	10862977.285714285	channel sample
+baseline-stream-md5	7	75682271	4321800	2916284330092	549954	76	16	2	subset/01 - blocksize 4096.flac	4	17.511747651441528	10811753.0	channel sample
+baseline-stream-md5	24	81969123	10572192	9380209635984	889862	54	16	2	subset/15 - only verbatim subframes.flac	0	7.753276047200051	3415380.125	channel sample
+ogg-stream-md5	17	86088049	7488636	6644315158822	894941	54	16	2	subset/15 - only verbatim subframes.flac	0	11.495825007384523	5064002.882352941	channel sample
+libflac-new-md5	10	65892462	4405080	3908420681660	889862	54	0	0	subset/15 - only verbatim subframes.flac	0	14.95828952028113	6589246.2	channel sample
+stream-md5	25	81305610	11012700	9771051704150	889862	54	16	2	subset/15 - only verbatim subframes.flac	0	7.3828952028113	3252224.4	channel sample
+libflac-new-ogg-md5	9	73837112	3964572	3517578613494	894941	54	0	0	subset/15 - only verbatim subframes.flac	0	18.624232830176876	8204123.555555556	channel sample
+baseline-ogg-stream-md5	17	77201176	7488636	6644315158822	894941	54	16	2	subset/15 - only verbatim subframes.flac	0	10.309110497559235	4541245.647058823	channel sample
+baseline-ogg-stream-md5	17	76900046	7488636	6644315158822	894941	54	16	2	subset/15 - only verbatim subframes.flac	1	10.268898902283407	4523532.117647059	channel sample
+libflac-new-md5	10	67415253	4405080	3908420681660	889862	54	0	0	subset/15 - only verbatim subframes.flac	1	15.303979269388979	6741525.3	channel sample
+libflac-new-ogg-md5	9	67412371	3964572	3517578613494	894941	54	0	0	subset/15 - only verbatim subframes.flac	1	17.003694471937955	7490263.444444444	channel sample
+baseline-stream-md5	24	81809421	10572192	9380209635984	889862	54	16	2	subset/15 - only verbatim subframes.flac	1	7.7381701921418	3408725.875	channel sample
+ogg-stream-md5	17	77404443	7488636	6644315158822	894941	54	16	2	subset/15 - only verbatim subframes.flac	1	10.336253891897002	4553202.529411765	channel sample
+stream-md5	25	80756698	11012700	9771051704150	889862	54	16	2	subset/15 - only verbatim subframes.flac	1	7.333051658539686	3230267.92	channel sample
+libflac-new-md5	10	66385392	4405080	3908420681660	889862	54	0	0	subset/15 - only verbatim subframes.flac	2	15.07018987169359	6638539.2	channel sample
+baseline-ogg-stream-md5	17	88830375	7488636	6644315158822	894941	54	16	2	subset/15 - only verbatim subframes.flac	2	11.862023337761377	5225316.176470588	channel sample
+stream-md5	25	80871851	11012700	9771051704150	889862	54	16	2	subset/15 - only verbatim subframes.flac	2	7.343508040716627	3234874.04	channel sample
+ogg-stream-md5	17	77432956	7488636	6644315158822	894941	54	16	2	subset/15 - only verbatim subframes.flac	2	10.340061394358065	4554879.764705882	channel sample
+baseline-stream-md5	24	77883362	10572192	9380209635984	889862	54	16	2	subset/15 - only verbatim subframes.flac	2	7.366813050689961	3245140.0833333335	channel sample
+libflac-new-ogg-md5	9	66511935	3964572	3517578613494	894941	54	0	0	subset/15 - only verbatim subframes.flac	2	16.776573864719822	7390215.0	channel sample
+baseline-ogg-stream-md5	17	76258699	7488636	6644315158822	894941	54	16	2	subset/15 - only verbatim subframes.flac	3	10.18325620313232	4485805.823529412	channel sample
+baseline-stream-md5	24	77621957	10572192	9380209635984	889862	54	16	2	subset/15 - only verbatim subframes.flac	3	7.3420873362874985	3234248.2083333335	channel sample
+stream-md5	25	82409170	11012700	9771051704150	889862	54	16	2	subset/15 - only verbatim subframes.flac	3	7.483103144551291	3296366.8	channel sample
+libflac-new-md5	10	66122741	4405080	3908420681660	889862	54	0	0	subset/15 - only verbatim subframes.flac	3	15.01056530187874	6612274.1	channel sample
+libflac-new-ogg-md5	9	66151046	3964572	3517578613494	894941	54	0	0	subset/15 - only verbatim subframes.flac	3	16.68554537538983	7350116.222222222	channel sample
+ogg-stream-md5	17	84575958	7488636	6644315158822	894941	54	16	2	subset/15 - only verbatim subframes.flac	3	11.293906927776968	4975056.352941177	channel sample
+stream-md5	25	84239616	11012700	9771051704150	889862	54	16	2	subset/15 - only verbatim subframes.flac	4	7.649315426734589	3369584.64	channel sample
+libflac-new-md5	10	67244439	4405080	3908420681660	889862	54	0	0	subset/15 - only verbatim subframes.flac	4	15.2652026750933	6724443.9	channel sample
+libflac-new-ogg-md5	9	66313041	3964572	3517578613494	894941	54	0	0	subset/15 - only verbatim subframes.flac	4	16.726406028191693	7368115.666666667	channel sample
+baseline-stream-md5	24	79993671	10572192	9380209635984	889862	54	16	2	subset/15 - only verbatim subframes.flac	4	7.566422459978026	3333069.625	channel sample
+ogg-stream-md5	17	78220554	7488636	6644315158822	894941	54	16	2	subset/15 - only verbatim subframes.flac	4	10.44523381828146	4601209.05882353	channel sample
+baseline-ogg-stream-md5	17	78049530	7488636	6644315158822	894941	54	16	2	subset/15 - only verbatim subframes.flac	4	10.42239601444108	4591148.823529412	channel sample
+baseline-ogg-stream-md5	2	82664015	3352144	2989383852654	3496274	205	24	2	subset/28 - high resolution audio, default settings.flac	0	24.660042945649113	41332007.5	channel sample
+libflac-new-md5	3	103036061	5028216	4484075778981	3476937	205	0	0	subset/28 - high resolution audio, default settings.flac	0	20.491574148763696	34345353.666666664	channel sample
+libflac-new-ogg-md5	2	74166005	3352144	2989383852654	3496274	205	0	0	subset/28 - high resolution audio, default settings.flac	0	22.124946004706242	37083002.5	channel sample
+stream-md5	2	80266939	3352144	2989383852654	3476937	205	24	2	subset/28 - high resolution audio, default settings.flac	0	23.9449555269702	40133469.5	channel sample
+baseline-stream-md5	2	82228788	3352144	2989383852654	3476937	205	24	2	subset/28 - high resolution audio, default settings.flac	0	24.530207532850618	41114394.0	channel sample
+ogg-stream-md5	2	89238416	3352144	2989383852654	3496274	205	24	2	subset/28 - high resolution audio, default settings.flac	0	26.621295505205026	44619208.0	channel sample
+baseline-ogg-stream-md5	2	87016805	3352144	2989383852654	3496274	205	24	2	subset/28 - high resolution audio, default settings.flac	1	25.95855219823492	43508402.5	channel sample
+libflac-new-md5	3	109913520	5028216	4484075778981	3476937	205	0	0	subset/28 - high resolution audio, default settings.flac	1	21.859347331140906	36637840.0	channel sample
+libflac-new-ogg-md5	2	73088983	3352144	2989383852654	3496274	205	0	0	subset/28 - high resolution audio, default settings.flac	1	21.803652528053686	36544491.5	channel sample
+ogg-stream-md5	2	94268370	3352144	2989383852654	3496274	205	24	2	subset/28 - high resolution audio, default settings.flac	1	28.12181397935172	47134185.0	channel sample
+baseline-stream-md5	2	80303121	3352144	2989383852654	3476937	205	24	2	subset/28 - high resolution audio, default settings.flac	1	23.95574921602413	40151560.5	channel sample
+stream-md5	2	80557751	3352144	2989383852654	3476937	205	24	2	subset/28 - high resolution audio, default settings.flac	1	24.031709556630027	40278875.5	channel sample
+ogg-stream-md5	2	82543487	3352144	2989383852654	3496274	205	24	2	subset/28 - high resolution audio, default settings.flac	2	24.624087449703833	41271743.5	channel sample
+baseline-stream-md5	2	80450578	3352144	2989383852654	3476937	205	24	2	subset/28 - high resolution audio, default settings.flac	2	23.99973807807779	40225289.0	channel sample
+baseline-ogg-stream-md5	2	82384260	3352144	2989383852654	3496274	205	24	2	subset/28 - high resolution audio, default settings.flac	2	24.576587401973185	41192130.0	channel sample
+libflac-new-ogg-md5	2	64786679	3352144	2989383852654	3496274	205	0	0	subset/28 - high resolution audio, default settings.flac	2	19.326937923907803	32393339.5	channel sample
+stream-md5	2	81637737	3352144	2989383852654	3476937	205	24	2	subset/28 - high resolution audio, default settings.flac	2	24.35388724350744	40818868.5	channel sample
+libflac-new-md5	3	100384588	5028216	4484075778981	3476937	205	0	0	subset/28 - high resolution audio, default settings.flac	2	19.964255314409723	33461529.333333332	channel sample
+ogg-stream-md5	2	84433349	3352144	2989383852654	3496274	205	24	2	subset/28 - high resolution audio, default settings.flac	3	25.187864542812004	42216674.5	channel sample
+libflac-new-md5	3	91966947	5028216	4484075778981	3476937	205	0	0	subset/28 - high resolution audio, default settings.flac	3	18.29017428845539	30655649.0	channel sample
+libflac-new-ogg-md5	2	65552484	3352144	2989383852654	3496274	205	0	0	subset/28 - high resolution audio, default settings.flac	3	19.555390221899774	32776242.0	channel sample
+baseline-stream-md5	2	81619908	3352144	2989383852654	3476937	205	24	2	subset/28 - high resolution audio, default settings.flac	3	24.34856855791398	40809954.0	channel sample
+baseline-ogg-stream-md5	2	83487187	3352144	2989383852654	3496274	205	24	2	subset/28 - high resolution audio, default settings.flac	3	24.90560876859705	41743593.5	channel sample
+stream-md5	2	79090941	3352144	2989383852654	3476937	205	24	2	subset/28 - high resolution audio, default settings.flac	3	23.59413587244462	39545470.5	channel sample
+ogg-stream-md5	2	82262462	3352144	2989383852654	3496274	205	24	2	subset/28 - high resolution audio, default settings.flac	4	24.540253044021973	41131231.0	channel sample
+baseline-ogg-stream-md5	2	81833696	3352144	2989383852654	3496274	205	24	2	subset/28 - high resolution audio, default settings.flac	4	24.41234505438907	40916848.0	channel sample
+baseline-stream-md5	2	80407759	3352144	2989383852654	3476937	205	24	2	subset/28 - high resolution audio, default settings.flac	4	23.98696446214721	40203879.5	channel sample
+libflac-new-ogg-md5	2	64308801	3352144	2989383852654	3496274	205	0	0	subset/28 - high resolution audio, default settings.flac	4	19.184379012357464	32154400.5	channel sample
+stream-md5	2	80397082	3352144	2989383852654	3476937	205	24	2	subset/28 - high resolution audio, default settings.flac	4	23.983779336448553	40198541.0	channel sample
+libflac-new-md5	3	92267471	5028216	4484075778981	3476937	205	0	0	subset/28 - high resolution audio, default settings.flac	4	18.349941808386912	30755823.666666668	channel sample
+libflac-new-md5	1	739024775	23169256	6360817110560	42264726	177	0	0	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	0	31.896784903235563	739024775.0	channel sample
+baseline-ogg-stream-md5	1	652412405	23169256	6360817110560	42449685	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	0	28.15853927290544	652412405.0	channel sample
+baseline-stream-md5	1	605642177	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	0	26.13990613250594	605642177.0	channel sample
+stream-md5	1	609337477	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	0	26.299397658690463	609337477.0	channel sample
+libflac-new-ogg-md5	1	776958120	23169256	6360817110560	42449685	177	0	0	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	0	33.53401248620154	776958120.0	channel sample
+ogg-stream-md5	1	650158067	23169256	6360817110560	42449685	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	0	28.061240594000946	650158067.0	channel sample
+libflac-new-md5	1	795858681	23169256	6360817110560	42264726	177	0	0	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	1	34.349772862797145	795858681.0	channel sample
+libflac-new-ogg-md5	1	808688222	23169256	6360817110560	42449685	177	0	0	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	1	34.90350410906591	808688222.0	channel sample
+ogg-stream-md5	1	646818781	23169256	6360817110560	42449685	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	1	27.91711486117638	646818781.0	channel sample
+baseline-stream-md5	1	601825590	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	1	25.97517978134473	601825590.0	channel sample
+baseline-ogg-stream-md5	1	651145420	23169256	6360817110560	42449685	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	1	28.1038553849118	651145420.0	channel sample
+stream-md5	1	620982388	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	1	26.801999511766798	620982388.0	channel sample
+baseline-ogg-stream-md5	1	650291112	23169256	6360817110560	42449685	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	2	28.06698290182473	650291112.0	channel sample
+ogg-stream-md5	1	663929225	23169256	6360817110560	42449685	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	2	28.65561263598624	663929225.0	channel sample
+stream-md5	1	606240563	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	2	26.165732857369264	606240563.0	channel sample
+libflac-new-ogg-md5	1	790453368	23169256	6360817110560	42449685	177	0	0	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	2	34.11647607501941	790453368.0	channel sample
+baseline-stream-md5	1	601643809	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	2	25.967333996395915	601643809.0	channel sample
+libflac-new-md5	1	756823309	23169256	6360817110560	42264726	177	0	0	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	2	32.664981085279564	756823309.0	channel sample
+stream-md5	1	608132717	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	3	26.24739944174297	608132717.0	channel sample
+baseline-ogg-stream-md5	1	648735785	23169256	6360817110560	42449685	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	3	27.999853987542803	648735785.0	channel sample
+ogg-stream-md5	1	654657042	23169256	6360817110560	42449685	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	3	28.25541925040666	654657042.0	channel sample
+baseline-stream-md5	1	604268729	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	3	26.080627232915894	604268729.0	channel sample
+libflac-new-md5	1	737926808	23169256	6360817110560	42264726	177	0	0	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	3	31.84939594089685	737926808.0	channel sample
+libflac-new-ogg-md5	1	792349033	23169256	6360817110560	42449685	177	0	0	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	3	34.1982941964127	792349033.0	channel sample
+ogg-stream-md5	1	653340157	23169256	6360817110560	42449685	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	4	28.198581646298873	653340157.0	channel sample
+libflac-new-md5	1	741224806	23169256	6360817110560	42264726	177	0	0	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	4	31.991739657069697	741224806.0	channel sample
+libflac-new-ogg-md5	1	779561600	23169256	6360817110560	42449685	177	0	0	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	4	33.64638035852338	779561600.0	channel sample
+baseline-stream-md5	1	605896539	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	4	26.15088456012571	605896539.0	channel sample
+stream-md5	1	605813424	23169256	6360817110560	42264726	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	4	26.147297263235384	605813424.0	channel sample
+baseline-ogg-stream-md5	1	655807875	23169256	6360817110560	42449685	177	24	8	subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	4	28.305089943328348	655807875.0	channel sample

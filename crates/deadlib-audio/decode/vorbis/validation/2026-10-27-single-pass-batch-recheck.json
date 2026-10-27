@@ -1,0 +1,20 @@
+{
+  "completed_utc": "2026-10-27T04:11:12.039417+00:00",
+  "parent_manifest_sha256": "3a608e1266dea792d3c9c375ba1bdfaca77f1136a5662e17950409fb8d3dcef0",
+  "repeats": 15,
+  "seed": 1338,
+  "min_seconds": 0.15,
+  "workers": {
+    "rust_timing": {
+      "path": "target/deadlib-audio-reference/single-pass-resources-20261027/binaries/rust_timing.exe",
+      "sha256": "20741a0683020330869e7d780b0054a47274f4c0b77df56298cd8703bb172b00"
+    },
+    "rust_baseline": {
+      "path": "target/deadlib-audio-reference/single-pass-resources-20261027/binaries/rust_baseline.exe",
+      "sha256": "da70b443725be6bb807f3549400ddb703b088838565af2c1e68d896b6852fcb8"
+    }
+  },
+  "timing_rows": 150,
+  "same_pcm_count_io_and_exposed_work_verified_every_iteration": true,
+  "source_input_workload_binary_hashes_rechecked": true
+}

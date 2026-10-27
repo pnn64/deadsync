@@ -181,6 +181,10 @@ pub fn stage_result<A, C, D>(
                 .saturating_add(column.w5)
         });
         let side = gs.setup.session.runtime_player_side(player_idx);
+        let golf_par = deadsync_chart::golf::par(
+            &gs.song().simfile_path,
+            &gs.charts()[player_idx].difficulty,
+        );
         players[deadsync_gameplay::gameplay_player_side_index(side)] = Some(PlayerStageSummary {
             profile_name: prof.display_name.clone(),
             chart: gs.charts()[player_idx].clone(),
@@ -227,11 +231,9 @@ pub fn stage_result<A, C, D>(
             show_hard_ex_score: prof.show_hard_ex_score,
             track_early_judgments: prof.track_early_judgments,
             dim_post_fail_scatter: prof.dim_post_fail_scatter,
-            golf_score: prof.show_golf_results.then(|| p.golf_score()),
-            golf_par: deadsync_chart::golf::par(
-                &gs.song().simfile_path,
-                &gs.charts()[player_idx].difficulty,
-            ),
+            golf_score: golf_results_shown(prof.show_golf_results, prof.golf_all_charts, golf_par)
+                .then(|| p.golf_score()),
+            golf_par,
         });
     }
     let music_rate = gs.music_rate();
@@ -245,6 +247,13 @@ pub fn stage_result<A, C, D>(
         duration_seconds: gs.total_elapsed_in_screen(),
         players,
     }
+}
+
+/// Whether the stage summary carries a golf score for the results pane. It follows
+/// the same Golf Display choice as the gameplay counter: charts without an authored
+/// par stay untouched unless the player opted into golf on all charts.
+fn golf_results_shown(show_golf_results: bool, golf_all_charts: bool, par: Option<f64>) -> bool {
+    show_golf_results && (golf_all_charts || par.is_some())
 }
 
 fn collect_foot_parity<const LANES: usize>(
@@ -359,6 +368,14 @@ fn stage_grade(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn golf_results_follow_the_golf_display_choice() {
+        assert!(golf_results_shown(true, false, Some(3.0)));
+        assert!(!golf_results_shown(true, false, None));
+        assert!(golf_results_shown(true, true, None));
+        assert!(!golf_results_shown(false, true, Some(3.0)));
+    }
+
     #[test]
     fn disqualified_grade_fails() {
         assert_eq!(

@@ -1,0 +1,48 @@
+{
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "stages": {
+    "stereo-loop-before": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\stereo-loop-before\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\stereo-loop-before\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "358bc4092ae8b7ad4ed164bcfd08d5912dba566224aa4eb16f33976b7229a428",
+      "binary_sha256": "bbd7f1c0d805b8ce465ae1de3b775dfd7eb94da83e6ee04c04ef2cc48faab9c2"
+    },
+    "stereo-retained": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\stereo-retained\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\stereo-retained\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "d02525a8cbf1d10fd177056d56600ecf51da20419ee79e36d90164c6f3f5d9bd",
+      "binary_sha256": "7641fe0a836b4052f91332cd57d66c8eba295193a38dad9a37037c629d8cb3ae"
+    }
+  }
+}

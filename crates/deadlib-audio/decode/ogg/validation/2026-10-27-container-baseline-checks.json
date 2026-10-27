@@ -1,0 +1,83 @@
+{
+  "completed_utc": "2026-10-27T05:10:33.413851+00:00",
+  "scope": "Independent Ogg/CRC benchmark; production source unchanged; no new production sanitizer claim.",
+  "runs": [
+    {
+      "folder": "ogg-baseline-20261027",
+      "timing_rows": 462,
+      "byte_exact_verified_inputs": 7,
+      "source_input_saved_binary_wire_hashes_rechecked": true
+    },
+    {
+      "folder": "ogg-tool-smoke-20261027",
+      "timing_rows": 189,
+      "byte_exact_verified_inputs": 4,
+      "source_input_saved_binary_wire_hashes_rechecked": true
+    }
+  ],
+  "checks": [
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "python",
+      "command": [
+        "python",
+        "-m",
+        "py_compile",
+        "crates/deadlib-audio/decode/scripts/benchmark_ogg.py"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "production_source_unchanged_from": "013711c18",
+  "manifest_change": "Only [[bench]] registration; no production dependencies/features added.",
+  "prior_production_validation": "../vorbis/validation/2026-10-27-residue-cursor-checks.json",
+  "artifacts": {
+    "2026-10-27-container-baseline-trials.tsv": "e20f0d68591e9de3bc56f3273c199af0645158f934662b0f7ff3571e70f85a86",
+    "2026-10-27-container-baseline-summary.tsv": "323120c11e3bf7b893bbc5787444d037fc70087feb13a637fd2270f6d622e6e4",
+    "2026-10-27-container-baseline-saved-binaries.json": "f121f20dce98ce4b72b47b1ba180b2255bc1ea3dda8738e1774108710dfaea9b",
+    "2026-10-27-container-baseline-c-build.log": "956c4278ab1b03d2ea0912e80c6254cafab8def0f8274da9e9fd39105070f951",
+    "2026-10-27-container-baseline-rust-build.log": "dd50b7f20de8a7b2d8b5f7b658ca6d83ff2fec7e6c54be42a02f990f6eb3750f",
+    "2026-10-27-container-baseline-c-configure.log": "296a6cd482a0535a39999bf19c8a65bcf1b6643c4f854e025beaa9cedc08a6ec",
+    "2026-10-27-container-baseline-smoke-manifest.json": "a1c0f75b416dd2f653f054db9d69e339acc6ae180fd34ea3a84955b31ef5d2b4",
+    "2026-10-27-container-baseline-smoke-trials.tsv": "8dde6958227aec0ab5ab4ee7781748b7d680b15e6b1eb4b89f3a16b4e8ec74bd",
+    "2026-10-27-container-baseline-smoke-summary.tsv": "40aff1c9be3db8b73c6e9ce9be4d3396f60307b26c5a71e9c52b9c7d92af8649",
+    "2026-10-27-container-baseline-smoke-saved-binaries.json": "e7f935e0363b92cecde76fade23d1a310d5a8012fb3aae4d3f066a9b912e90d7",
+    "2026-10-27-container-baseline-smoke-baseline-build.log": "638b87f588aa7edcafeaca1e22bb369118aa449b671e949fb2a180be937308f7",
+    "2026-10-27-container-baseline-smoke-c-build.log": "7d930d4c41bafea72f2c0821f11471e7ca444165af17dba37a1a5693b95bf1e6",
+    "2026-10-27-container-baseline-smoke-rust-build.log": "d6ed3ece13309a15a01476c090a0691e1887187a2a8d58f3bbf1d4a59f81ab95",
+    "2026-10-27-container-baseline-smoke-c-configure.log": "1bae2b77c2e09b34b513783f39584cb5be7e1bd7efcbfc3467c4f2fae51c7e66",
+    "2026-10-27-container-baseline-fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-container-baseline-clippy.log": "182e0273ab1d85020feb801d5e48b162fe456a7158fff856876f75864df8bcb0",
+    "2026-10-27-container-baseline-python.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-container-baseline.json": "9d08e1486f2c4e3de8de703170e647136a07de284624d2119c090c27463456a0"
+  },
+  "limitations": [
+    "Valid-input API timing with different buffering/physical validation guarantees.",
+    "Warm process, resident data; no cold executable startup or Ogg-only heap/index-seek claim.",
+    "One shared unlocked Windows host; some tiny startup spreads are large."
+  ]
+}

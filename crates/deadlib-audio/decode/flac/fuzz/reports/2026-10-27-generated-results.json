@@ -1,0 +1,32 @@
+[
+  {
+    "target": "encode",
+    "exit_code": 0,
+    "binary_sha256": "0191f123f986410853ab4fbf9ca43b312689e9a34eb14b13cf394489f8cb3834",
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-generated-pcm-20261027\\build\\x86_64-pc-windows-msvc\\release\\encode.exe",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-generated-pcm-20261027\\corpus\\encode",
+      "-max_total_time=120",
+      "-max_len=131072",
+      "-timeout=20",
+      "-rss_limit_mb=2048",
+      "-seed=9639",
+      "-print_final_stats=1",
+      "-artifact_prefix=C:/GitHub/deadsync/target/deadlib-flac-reference/fuzz-generated-pcm-20261027/artifacts/encode/",
+      "-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\fuzz\\flac.dict"
+    ],
+    "stats": {
+      "number_of_executed_units": 869,
+      "average_exec_per_sec": 7,
+      "new_units_added": 61,
+      "slowest_unit_time_sec": 0,
+      "peak_rss_mb": 227
+    },
+    "coverage": [
+      869,
+      2999,
+      9138
+    ],
+    "elapsed_upper_bound_seconds": 122.05550500005484
+  }
+]

@@ -1,0 +1,11 @@
+    Updating crates.io index
+     Locking 1 package to highest Rust 1.86.0 compatible version
+    Updating sha2 v0.11.0 -> v0.11.1
+    Checking deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+    Checking symphonia-metadata v0.6.1
+    Checking deadlib-audio-decode-flac v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\flac)
+    Checking symphonia-common v0.6.1
+    Checking symphonia-bundle-flac v0.6.1
+    Checking symphonia-format-ogg v0.6.1
+    Checking symphonia v0.6.1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.11s

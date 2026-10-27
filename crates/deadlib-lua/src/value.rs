@@ -2,23 +2,35 @@
 
 /// The identity of an interned byte string in its originating VM.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct StringId(pub(crate) u32);
+pub struct StringId(pub(crate) u64);
 
 /// The identity of a table in its originating VM.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct TableId(pub(crate) u32);
+pub struct TableId(pub(crate) u64);
 
 /// The identity of a Lua closure in its originating VM.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct FunctionId(pub(crate) u32);
+pub struct FunctionId(pub(crate) u64);
 
 /// The identity of a Lua thread in its originating VM, including the main thread.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct ThreadId(pub(crate) u32);
+pub struct ThreadId(pub(crate) u64);
+
+/// The identity of full userdata in its originating VM.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct UserdataId(pub(crate) u64);
+
+/// An internal prototype exposed only by Lua 5.1's native parser stack.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ParserPrototypeId(pub(crate) u64);
 
 /// A Lua register value. Object handles belong to the VM that produced them.
 ///
 /// Numbers use IEEE 754 binary64, including signed zero, infinities, and NaNs.
+/// Copying a value does not keep its object alive; use [`crate::Vm::pin`] for
+/// values retained by the host across executions or garbage collections.
+/// Raw object identities are scoped to a VM and may coincide across VMs;
+/// callers must not transfer them between VMs. Root handles check VM ownership.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Value {
     /// Absence of a value.
@@ -35,8 +47,16 @@ pub enum Value {
     Function(FunctionId),
     /// A coroutine or main-thread identity.
     Thread(ThreadId),
+    /// A full userdata identity with VM-owned byte storage.
+    Userdata(UserdataId),
+    /// An unmanaged opaque identity. It owns no storage and is never dereferenced.
+    /// Unlike arena handles, the same identity may be shared across VMs.
+    LightUserdata(u64),
     /// A native function's numeric dispatch ID.
-    Native(u32),
+    Native(u64),
+    /// A private parser prototype (native type tag 9), not a callable closure.
+    /// Reader callbacks may observe or retain this internal collector object.
+    ParserPrototype(ParserPrototypeId),
 }
 
 impl Value {
@@ -55,6 +75,8 @@ impl Value {
             Self::Table(_) => "table",
             Self::Function(_) | Self::Native(_) => "function",
             Self::Thread(_) => "thread",
+            Self::Userdata(_) | Self::LightUserdata(_) => "userdata",
+            Self::ParserPrototype(_) => "proto",
         }
     }
 }

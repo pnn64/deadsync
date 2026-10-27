@@ -21,6 +21,9 @@ fn ramp_conversion_matches_original_sample_bits_and_final_gain() {
         (f32::INFINITY, f32::INFINITY),
         (f32::NAN, 1.0),
         (1.0, f32::NAN),
+        (-0.0, f32::from_bits(1)),
+        (0.0, f32::MIN_POSITIVE),
+        (f32::MAX, f32::MIN_POSITIVE),
     ];
     for channels in [1, 2, 3, 6, 8] {
         for frames in [0, 1, 2, 7, 257, 2048, 4096] {

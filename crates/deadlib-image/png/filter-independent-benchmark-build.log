@@ -1,0 +1,14 @@
+   Compiling simd-adler32 v0.3.10
+   Compiling crc32fast v1.5.3
+   Compiling adler2 v2.0.1
+   Compiling cfg-if v1.0.5
+   Compiling deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-c6035cd109c940a693e9b762cdd8dbf0)
+   Compiling miniz_oxide v0.9.1
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling flate2 v1.1.10
+   Compiling bitflags v2.13.2
+   Compiling deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-c6035cd109c940a693e9b762cdd8dbf0\png)
+   Compiling png v0.18.1
+    Finished `release` profile [optimized] target(s) in 7.90s
+     Running `target\release\examples\filter_bench.exe`

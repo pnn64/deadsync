@@ -1075,6 +1075,7 @@ mod tests {
             split_15_10ms: false,
             custom_fantastic_window: false,
             judgment_tilt_enabled: false,
+            judgment_animation: crate::TapJudgmentAnimation::Default,
             judgment_tilt_min_ms: 0.0,
             judgment_tilt_max_ms: 0.0,
             judgment_tilt_multiplier: 0.0,
@@ -1289,6 +1290,70 @@ mod tests {
                 );
                 assert_eq!(result.combo_draw_range, Some(0..1));
                 assert_eq!(result.judgment_draw_range, Some(1..2));
+            }
+        }
+    }
+
+    #[test]
+    fn centered_stream_progress_keeps_style_spacing_when_mini_changes() {
+        use crate::{
+            CapturedActorScratch, MiniHudFrame, NotefieldHudFrameView, compose_notefield_hud,
+        };
+        use deadlib_present::actors::{InlineText, TextContent};
+
+        let ns = noteskin();
+        let timing = TimingData::default();
+        let hides = SongLuaNoteHideWindows::default();
+        let frame = NotefieldHudFrameView {
+            combo: None,
+            error_bar: None,
+            counter: None,
+            mini: Some(MiniHudFrame {
+                text: TextContent::frame_inline_slot(InlineText::copy_from("38.66%").unwrap(), 11),
+                color: [1.0; 4],
+                failed: false,
+                font: "widget",
+            }),
+            judgment: None,
+        };
+        for placement in [FieldPlacement::P1, FieldPlacement::P2] {
+            for (num_cols, column_width) in [(4, 64.0), (5, 50.0), (8, 64.0), (10, 50.0)] {
+                for mini in [0.0, 60.0, 100.0, -50.0] {
+                    let mut req = request(
+                        &ns,
+                        &timing,
+                        &[],
+                        &hides,
+                        placement,
+                        0,
+                        1,
+                        num_cols,
+                        num_cols,
+                    );
+                    req.geometry.center_one_player = true;
+                    req.geometry.field_zoom = 1.0 - mini * 0.005;
+                    req.visual.mini_percent = mini;
+                    req.options.counter_left = true;
+                    let prepared = prepare_notefield(&req).expect("centered HUD geometry");
+                    assert_eq!(prepared.field.playfield_center_x, 320.0);
+                    let mut actors = Vec::new();
+                    let mut draws = Vec::new();
+                    compose_notefield_hud(
+                        &mut actors,
+                        &mut draws,
+                        &req,
+                        &prepared,
+                        &frame,
+                        &mut CapturedActorScratch::with_capacities(1, 1),
+                    );
+                    assert!(actors.is_empty());
+                    assert_eq!(draws.len(), 1);
+                    let FlatDraw::PreparedInline(text) = &draws[0] else {
+                        panic!("expected direct mini indicator text");
+                    };
+                    assert_eq!(text.offset[0], 320.0 + column_width, "Mini {mini}");
+                    assert_eq!(text.align, [0.5, 0.5]);
+                }
             }
         }
     }

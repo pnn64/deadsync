@@ -1,0 +1,33 @@
+﻿Isolated workspace: C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-17af594e19684d29ab734bf345c3a46f
+Command: cargo test -p deadlib-image-png --offline --test huffman
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+cargo 1.99.1 (5f94df478 2026-08-27)
+     Locking 11 packages to highest Rust 1.97 compatible versions
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.3
+   Compiling cfg-if v1.0.5
+   Compiling bitflags v2.13.2
+   Compiling deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-17af594e19684d29ab734bf345c3a46f)
+   Compiling miniz_oxide v0.9.1
+   Compiling fdeflate v0.3.7
+   Compiling miniz_oxide v0.8.9
+   Compiling deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-17af594e19684d29ab734bf345c3a46f\png)
+   Compiling flate2 v1.1.10
+   Compiling png v0.18.1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.15s
+     Running tests\huffman.rs (target\debug\deps\huffman-00868d87b3dc2656.exe)
+
+running 7 tests
+test c_zlib_huffman_oracle ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+test malformed_and_single_symbol_trees ... ok
+test published_distance_counts_and_reserved_symbols ... ok
+test all_repeat_counts_and_cross_table_runs ... ok
+test every_complete_code_length_histogram ... ok
+test all_dynamic_count_fields ... ok
+test all_length_distance_values_and_fifteen_bit_codes ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 24.27s
+
+deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-17af594e19684d29ab734bf345c3a46f\png)
+└── deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-17af594e19684d29ab734bf345c3a46f)

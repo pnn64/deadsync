@@ -1,0 +1,5 @@
+     Locking 17 packages to highest Rust 1.97 compatible versions
+   Compiling deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\codebook-floats-before-after-verified-20261027\before\ogg)
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\codebook-floats-before-after-verified-20261027\before\vorbis)
+   Compiling deadlib-float-before v0.0.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\codebook-floats-before-after-verified-20261027\before)
+    Finished `release` profile [optimized] target(s) in 4.40s

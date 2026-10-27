@@ -1528,6 +1528,7 @@ pub(super) fn build_advanced_rows(
                 tr("PlayerOptions", "TargetScoreSpecifiedValue").to_string(),
                 tr("PlayerOptions", "TargetScoreMachineBest").to_string(),
                 tr("PlayerOptions", "TargetScorePersonalBest").to_string(),
+                tr("PlayerOptions", "TargetScoreGhostData").to_string(),
             ],
         )
         .with_initial_choice_index(10), // S by default

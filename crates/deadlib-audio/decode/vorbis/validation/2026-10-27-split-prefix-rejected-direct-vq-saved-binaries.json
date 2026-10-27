@@ -1,0 +1,14 @@
+{
+  "current": {
+    "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/binaries/current.exe",
+    "sha256": "1951b50334ba3b27089b7de3b5d05ce75f26ecc8c0308d95ef27ef5f47e0946d"
+  },
+  "baseline": {
+    "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/binaries/baseline.exe",
+    "sha256": "08caf6279400ced2d66095fb639f58746b0775dcbbe30741707d2132c65d1de5"
+  },
+  "libvorbis": {
+    "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/binaries/libvorbis.exe",
+    "sha256": "7e03a740e2219f11f44179bd807b6b066989a8e2c8a27d896f6cff1ed699a1ad"
+  }
+}

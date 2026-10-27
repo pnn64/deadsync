@@ -1,0 +1,32 @@
+{
+  "baseline_production_commit": "5a6747e32",
+  "baseline_test_commit": "f4b3b3eed",
+  "selected_source_sha256": "46ad510363bbe080b2401a327a6b9e017b259ec80d2bdb67fdfecb2a0a8b6117",
+  "variants": [
+    {
+      "variant": "baseline",
+      "benchmark_manifest": "benchmark-inflate-before-manifest.json",
+      "source_sha256": "2cea15413f1c402ad19cbd9f712302242e0b7afd94a8629afc6602760b182aa2",
+      "patch": "experiments/inflate-baseline-from-selected.patch",
+      "patch_sha256": "d529d679b37d51f8ad1c8f2f85d51e171fb937dadc9a4ecfe5928b19312dad2d",
+      "verified_replay_directory": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadlib-png-inflate-replay-2cgasj8h"
+    },
+    {
+      "variant": "wide",
+      "benchmark_manifest": "benchmark-inflate-wide-trial-manifest.json",
+      "source_sha256": "e56960eb99f7c40b89b43a6425d8e9b9f6c99348413c72e44559f818632f4f70",
+      "patch": "experiments/inflate-wide-from-selected.patch",
+      "patch_sha256": "f31f694aedc471e182c4d888fc76163f7df088c8f3370ba0f1608261572ed478",
+      "verified_replay_directory": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadlib-png-inflate-replay-9fwyf8rp"
+    },
+    {
+      "variant": "canonical",
+      "benchmark_manifest": "benchmark-inflate-canonical-trial-manifest.json",
+      "source_sha256": "e887a6abb4eaaffa45f3c3e982500134486c2fb4843b0d15656daa3aa490af03",
+      "patch": "experiments/inflate-canonical-from-selected.patch",
+      "patch_sha256": "cb059d44c1918421d466b5114a2b8dff2bf7091c931069f53a95805c0b027a06",
+      "verified_replay_directory": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadlib-png-inflate-replay-xji3__yn"
+    }
+  ],
+  "scope": "Only src/zlib.rs changes. All patches are alternatives from the selected source; replay directories are retained without recursive deletion."
+}

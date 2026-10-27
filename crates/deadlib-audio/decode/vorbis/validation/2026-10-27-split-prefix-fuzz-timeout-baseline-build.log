@@ -1,0 +1,12 @@
+   Compiling getrandom v0.4.3
+   Compiling cfg-if v1.0.5
+   Compiling find-msvc-tools v0.1.15
+   Compiling shlex v2.0.1
+   Compiling arbitrary v1.5.0
+   Compiling deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\split-prefix-timeout-baseline-20261027\ogg)
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\split-prefix-timeout-baseline-20261027\vorbis)
+   Compiling jobserver v0.1.35
+   Compiling cc v1.10.0
+   Compiling libfuzzer-sys v0.4.13
+   Compiling deadlib-audio-decode-fuzz v0.0.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\split-prefix-timeout-baseline-20261027\fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 23.06s

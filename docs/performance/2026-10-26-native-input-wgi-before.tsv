@@ -1,0 +1,11 @@
+run	stage	workload	cycles_per_op	ns_per_op	allocs	reallocs	frees	allocated_bytes	freed_bytes	peak_bytes	sha256
+0	uuid-fused	native/wgi/unchanged	541.73	246.2	0	0	0	0	0	0	42252eeb6b531e932dbf8ab78f502445cad8ded975fc3f3984d300fe674027ec
+0	uuid-fused	native/wgi/dpad	1521.57	692.5	0	0	0	0	0	0	42252eeb6b531e932dbf8ab78f502445cad8ded975fc3f3984d300fe674027ec
+0	uuid-fused	native/wgi/single	1914.26	871.4	0	0	0	0	0	0	42252eeb6b531e932dbf8ab78f502445cad8ded975fc3f3984d300fe674027ec
+0	uuid-fused	native/wgi/pair	2722.9	1239.9	0	0	0	0	0	0	42252eeb6b531e932dbf8ab78f502445cad8ded975fc3f3984d300fe674027ec
+0	uuid-fused	native/wgi/dense	3940.9	1796.6	0	0	0	0	0	0	42252eeb6b531e932dbf8ab78f502445cad8ded975fc3f3984d300fe674027ec
+1	uuid-fused	native/wgi/unchanged	523.51	237.7	0	0	0	0	0	0	42252eeb6b531e932dbf8ab78f502445cad8ded975fc3f3984d300fe674027ec
+1	uuid-fused	native/wgi/dpad	1433.34	652.3	0	0	0	0	0	0	42252eeb6b531e932dbf8ab78f502445cad8ded975fc3f3984d300fe674027ec
+1	uuid-fused	native/wgi/single	1816.8	828.5	0	0	0	0	0	0	42252eeb6b531e932dbf8ab78f502445cad8ded975fc3f3984d300fe674027ec
+1	uuid-fused	native/wgi/pair	2578.47	1175.4	0	0	0	0	0	0	42252eeb6b531e932dbf8ab78f502445cad8ded975fc3f3984d300fe674027ec
+1	uuid-fused	native/wgi/dense	4156.89	1894.5	0	0	0	0	0	0	42252eeb6b531e932dbf8ab78f502445cad8ded975fc3f3984d300fe674027ec

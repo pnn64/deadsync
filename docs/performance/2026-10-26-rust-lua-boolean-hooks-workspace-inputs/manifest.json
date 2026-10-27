@@ -1,0 +1,15 @@
+{
+  "base_revision": "e9fc10152ad917347b2e81bc449afa26bd6077a0",
+  "worktree": "C:\\GitHub\\deadsync\\target\\lua-boolean-isolated-1793028150333359900",
+  "target_directory": "C:\\GitHub\\deadsync\\target\\lua-boolean-isolated-1793028150333359900\\target\\cargo",
+  "source_hash_overrides": {
+    "Cargo.toml": "docs/performance/2026-10-26-rust-lua-boolean-hooks-workspace-inputs/workspace-Cargo.toml",
+    "Cargo.lock": "docs/performance/2026-10-26-rust-lua-boolean-hooks-workspace-inputs/workspace-Cargo.lock"
+  },
+  "frozen_hashes": {
+    "Cargo.toml": "46b891a8f8f65d8ffba9660459d05fd7fe6742a52265aeaca0dc346a67d1861d",
+    "Cargo.lock": "7ce8bed1871691db1536a30578c79391fa1c25eb6986ee01b45c321ed0240efa",
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+  },
+  "reason": "Concurrent main-worktree Cargo manifest/lock edits invalidated prior timing guards; these measurements use an isolated exact Lua-source checkout and fixed build inputs."
+}

@@ -1,0 +1,103 @@
+{
+  "baseline_commit": "763a12808",
+  "exit_code": 101,
+  "expected_failure": "Valid WPT fcTL before acTL rejected/discarded",
+  "production_sources": [
+    {
+      "path": "src\\apng.rs",
+      "sha256": "b5a01d3a00991e78df823911551ec2cd91386c552bf721cace3e1aa54c3d2594"
+    },
+    {
+      "path": "src\\checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "src\\codec.rs",
+      "sha256": "a22f2e776caaf8ee303ca7ae3c9cce451b13ee7fd31e5e29aada5d7355a62420"
+    },
+    {
+      "path": "src\\composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src\\lib.rs",
+      "sha256": "67e57fcb942e9813593df8c3f36b98f23f215cc1ff99a31e87ad39a5cfa4d8ab"
+    },
+    {
+      "path": "src\\metadata\\language\\registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src\\metadata\\language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src\\metadata\\profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src\\metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "src\\scanline.rs",
+      "sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3"
+    },
+    {
+      "path": "src\\stream\\decode.rs",
+      "sha256": "6392decf44c844cfa1594c2c8febc73becdb3e041f418e94bb5f708fe1418979"
+    },
+    {
+      "path": "src\\stream\\encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src\\stream\\mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "src\\stream\\read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "src\\stream\\rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src\\stream\\write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src\\zlib\\deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src\\zlib\\inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "src\\zlib\\matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src\\zlib.rs",
+      "sha256": "46ad510363bbe080b2401a327a6b9e017b259ec80d2bdb67fdfecb2a0a8b6117"
+    }
+  ],
+  "test_sha256": "3739de3c13a88f4356b7de2ccd24deeb3b54ee73a450e2488110d97e2d545463",
+  "argv": [
+    "cargo",
+    "test",
+    "--offline",
+    "--release",
+    "-p",
+    "deadlib-image-png",
+    "--test",
+    "apng_rendered",
+    "external_wpt_all_rendered_rgba16_frames_and_both_writers",
+    "--",
+    "--nocapture"
+  ],
+  "isolated_copy": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-image-independent-ba2c70b3b0f94d6a8442a24c6b1b2c56\\png",
+  "scope": "Final regression and pinned corpus against exact pre-fix production sources; all 20 production hashes verified."
+}

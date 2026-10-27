@@ -1,0 +1,93 @@
+
+running 42 tests
+test backend::deferred_sample::tests::sampling_is_lazy_and_shared_for_the_scope ... ok
+test backend::hid_report_cache::tests::ambiguous_report_routes_request_the_ordered_fallback ... ok
+test backend::hid_report_cache::tests::cache_reuses_fixed_storage_and_invalidates_wrong_lengths ... ok
+test backend::hid_report_cache::tests::cache_skips_only_a_remembered_exact_report ... ok
+test backend::iohid_filter::tests::host_instant_map_handles_earlier_and_later_events ... ok
+test backend::hid_report_cache::tests::report_routes_numbered_and_single_unnumbered_reports_directly ... ok
+test backend::tests::emit_dir_edges_updates_only_changed_dirs ... ok
+test backend::tests::host_time_sample_uses_authoritative_host_clock ... ok
+test backend::iohid_filter::tests::hats_and_buttons_preserve_repeated_raw_values ... ok
+test backend::iohid_filter::tests::axes_emit_first_and_changed_values_per_usage_code ... ok
+test backend::w32_raw_input::tests::capture_sync_skips_only_a_confirmed_matching_registration ... ok
+test backend::w32_raw_input::tests::duplicate_cache_skips_only_consecutive_reports ... ok
+test backend::w32_raw_input::tests::hid_payload_splits_complete_reports ... ok
+test backend::poll_registration::tests::rebuild_preserves_watcher_device_and_key_offsets ... ok
+test backend::poll_registration::tests::rebuild_supports_watcher_and_device_only_layouts ... ok
+test backend::w32_raw_input::tests::retained_raw_input_buffer_reads_once_and_uses_copied_length ... ok
+test backend::w32_raw_input::tests::vid_pid_participate_in_serial_uuid ... ok
+test backend::unix_time::tests::event_time_cache_matches_uncached_mapping ... ok
+test backend::wgi::reading_clock_tests::controller_scaling_preserves_bounds_and_truncation ... ok
+test backend::unix_time::tests::event_time_maps_earlier_kernel_timestamp ... ok
+test backend::unix_time::tests::event_time_preserves_saturating_clock_boundaries ... ok
+test backend::wgi::reading_clock_tests::invalid_clock_pairs_preserve_calibration ... ok
+test backend::wgi::reading_clock_tests::offset_average_preserves_extremes_and_truncates_toward_zero ... ok
+test pad_order::tests::device_slots_survive_reconnect_and_saturate_without_renumbering ... ok
+test backend::hid_report_cache::tests::report_buffer_covers_the_largest_validated_report ... ok
+test backend::w32_raw_input::tests::raw_input_queries_and_retries_only_when_needed ... ok
+test backend::w32_raw_input::tests::raw_input_rejects_failed_and_short_reads_without_using_stale_bytes ... ok
+test backend::iohid_filter::tests::nonstandard_axes_preserve_exact_code_identity_past_inline_storage ... ok
+test backend::w32_raw_input::tests::serial_less_falls_back_to_name ... ok
+test backend::w32_raw_input::tests::serial_uuid_is_port_independent ... ok
+test backend::wgi::reading_clock_tests::changed_button_gate_preserves_order_and_edges ... ok
+test backend::unix_time::tests::event_time_falls_back_when_kernel_time_is_implausible ... ok
+test backend::unix_time::tests::event_time_maps_small_future_kernel_timestamp ... ok
+test backend::wgi::reading_clock_tests::idle_clock_gating_preserves_next_edge_mapping ... ok
+test backend::unix_time::tests::event_time_preserves_tolerance_boundaries ... ok
+test backend::wgi::reading_clock_tests::locks_microseconds_through_stale_polls ... ok
+test backend::wgi::reading_clock_tests::reading_change_gate_covers_every_emitted_state_class ... ok
+test pad_order::tests::sanitize_dedups_and_caps ... ok
+test backend::tests::hat_axis_edges_match_full_direction_scan ... ok
+test backend::hid_report_cache::tests::report_time_samples_lazily_and_only_once ... ok
+test backend::w32_raw_input::tests::distinct_serials_are_distinct ... ok
+test backend::w32_raw_input::tests::hid_payload_rejects_invalid_bounds ... ok
+
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 31 tests
+test benchmark_uuid ... ignored, release CPU-cycle and allocation benchmark
+test rawinput::kernels::benchmark_dispatch ... ignored, release CPU-cycle and allocation benchmark
+test rawinput::kernels::benchmark_hex ... ignored, release CPU-cycle and allocation benchmark
+test rawinput::kernels::benchmark_hid_diff ... ignored, release CPU-cycle and allocation benchmark
+test rawinput::kernels::benchmark_serial ... ignored, release CPU-cycle and allocation benchmark
+test rawinput::tests::capture_sync_skips_only_a_confirmed_matching_registration ... ok
+test rawinput::tests::duplicate_cache_skips_only_consecutive_reports ... ok
+test rawinput::tests::distinct_serials_are_distinct ... ok
+test rawinput::tests::hid_payload_rejects_invalid_bounds ... ok
+test rawinput::tests::hid_payload_splits_complete_reports ... ok
+test wgi::kernels::benchmark_axes ... ignored, release CPU-cycle and allocation benchmark
+test wgi::kernels::benchmark_wgi_edges ... ignored, release CPU-cycle and allocation benchmark
+test rawinput::tests::vid_pid_participate_in_serial_uuid ... ok
+test rawinput::tests::raw_input_queries_and_retries_only_when_needed ... ok
+test wgi::kernels::axis_scaling_matches_floating_clamp_at_quantization_boundaries ... ok
+test wgi::reading_clock_tests::invalid_clock_pairs_preserve_calibration ... ok
+test wgi::reading_clock_tests::reading_change_gate_covers_every_emitted_state_class ... ok
+test wgi::reading_clock_tests::changed_button_gate_preserves_order_and_edges ... ok
+test rawinput::kernels::uuid_hex_preserves_leading_zeroes_and_lowercase ... ok
+test wgi::reading_clock_tests::controller_scaling_preserves_bounds_and_truncation ... ok
+test wgi::reading_clock_tests::idle_clock_gating_preserves_next_edge_mapping ... ok
+test rawinput::tests::retained_raw_input_buffer_reads_once_and_uses_copied_length ... ok
+test wgi::reading_clock_tests::locks_microseconds_through_stale_polls ... ok
+test rawinput::tests::serial_less_falls_back_to_name ... ok
+test wgi::reading_clock_tests::offset_average_preserves_extremes_and_truncates_toward_zero ... ok
+test rawinput::tests::serial_uuid_is_port_independent ... ok
+test rawinput::tests::raw_input_rejects_failed_and_short_reads_without_using_stale_bytes ... ok
+test wgi::kernels::mapped_edges_preserve_order_and_ignore_unmapped_bits ... ok
+test rawinput::kernels::sorted_usage_diff_preserves_all_event_fields_and_duplicate_order ... ok
+test uuid_preserves_persisted_identity_bytes ... ok
+test rawinput::kernels::serial_identity_preserves_formatted_bytes_for_all_vendor_values ... ok
+
+test result: ok. 24 passed; 0 failed; 7 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling deadlib-input-native v0.1.0 (C:\GitHub\deadsync\crates\deadlib-input-native)
+    Finished `release` profile [optimized] target(s) in 20.49s
+     Running unittests src\lib.rs (target\release\deps\deadlib_input_native-06470f85c1fcb908.exe)
+     Running tests\native_kernels.rs (target\release\deps\native_kernels-3ca30183632b03f8.exe)
+   Doc-tests deadlib_input_native

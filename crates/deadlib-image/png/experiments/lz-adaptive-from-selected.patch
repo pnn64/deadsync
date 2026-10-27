@@ -1,0 +1,1700 @@
+--- a/src/zlib.rs
++++ b/src/zlib.rs
+@@ -1,565 +1,540 @@
+-//! Native RFC 1950/1951 compression. No dictionaries are permitted in PNG.
+-use crate::{Error, checksum::adler32, reserve};
+-
+-mod deflate;
+-mod inflate;
+-mod matcher;
+-pub use deflate::{DeflateProgress, Deflater};
+-pub use inflate::{InflateProgress, Inflater, StreamStatus};
+-
+-const LENGTH_BASE: [usize; 29] = [
+-    3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131,
+-    163, 195, 227, 258,
+-];
+-const LENGTH_EXTRA: [u8; 29] = [
+-    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
+-];
+-const DIST_BASE: [usize; 30] = [
+-    1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537,
+-    2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
+-];
+-const DIST_EXTRA: [u8; 30] = [
+-    0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13,
+-    13,
+-];
+-
+-struct Bits<'a> {
+-    input: &'a [u8],
+-    pos: usize,
+-    word: u64,
+-    count: u8,
+-}
+-impl<'a> Bits<'a> {
+-    fn new(input: &'a [u8]) -> Self {
+-        Self {
+-            input,
+-            pos: 0,
+-            word: 0,
+-            count: 0,
+-        }
+-    }
+-    fn fill(&mut self, n: u8) {
+-        while self.count < n && self.pos < self.input.len() {
+-            self.word |= u64::from(self.input[self.pos]) << self.count;
+-            self.pos += 1;
+-            self.count += 8;
+-        }
+-    }
+-    fn read(&mut self, n: u8) -> Result<u32, Error> {
+-        self.fill(n);
+-        if self.count < n {
+-            return Err(Error::Truncated);
+-        }
+-        let value = self.word as u32 & ((1u64 << n) - 1) as u32;
+-        self.word >>= n;
+-        self.count -= n;
+-        Ok(value)
+-    }
+-    fn consumed(&self) -> usize {
+-        (self.pos * 8 - usize::from(self.count)).div_ceil(8)
+-    }
+-    fn align(&mut self) {
+-        let n = self.count % 8;
+-        self.word >>= n;
+-        self.count -= n;
+-    }
+-}
+-
+-// A small primary table handles common codes. Canonical arrays handle longer
+-// codes without a 128 KiB lookup allocation per dynamic block.
+-struct Huffman {
+-    fast: [u16; 512],
+-    counts: [u16; 16],
+-    first: [u16; 16],
+-    offsets: [u16; 16],
+-    symbols: [u16; 288],
+-    max: u8,
+-}
+-impl Huffman {
+-    fn new(lengths: &[u8], complete: bool, allow_empty: bool) -> Result<Self, Error> {
+-        let mut h = Self {
+-            fast: [0; 512],
+-            counts: [0; 16],
+-            first: [0; 16],
+-            offsets: [0; 16],
+-            symbols: [0; 288],
+-            max: 0,
+-        };
+-        for &n in lengths {
+-            if n > 15 {
+-                return Err(Error::Invalid("Huffman code length"));
+-            }
+-            if n != 0 {
+-                h.counts[n as usize] += 1;
+-                h.max = h.max.max(n);
+-            }
+-        }
+-        if h.max == 0 {
+-            return if allow_empty {
+-                Ok(h)
+-            } else {
+-                Err(Error::Invalid("empty Huffman tree"))
+-            };
+-        }
+-        let mut left = 1i32;
+-        let mut code = 0;
+-        let mut offset = 0;
+-        for n in 1..16 {
+-            left = left * 2 - i32::from(h.counts[n]);
+-            if left < 0 {
+-                return Err(Error::Invalid("oversubscribed Huffman tree"));
+-            }
+-            code = (code + h.counts[n - 1]) << 1;
+-            h.first[n] = code;
+-            h.offsets[n] = offset;
+-            offset += h.counts[n];
+-        }
+-        if left != 0 && (complete || h.max != 1) {
+-            return Err(Error::Invalid("incomplete Huffman tree"));
+-        }
+-        let mut next = h.first;
+-        for (symbol, &n) in lengths.iter().enumerate() {
+-            if n == 0 {
+-                continue;
+-            }
+-            let n = n as usize;
+-            let code = next[n];
+-            h.symbols[(h.offsets[n] + code - h.first[n]) as usize] = symbol as u16;
+-            if n <= 9 {
+-                let rev = (code.reverse_bits() >> (16 - n)) as usize;
+-                for index in (rev..512).step_by(1 << n) {
+-                    h.fast[index] = ((symbol as u16) << 4) | n as u16;
+-                }
+-            }
+-            next[n] += 1;
+-        }
+-        Ok(h)
+-    }
+-    fn decode(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
+-        bits.fill(9);
+-        let entry = self.fast[(bits.word & 511) as usize];
+-        let n = (entry & 15) as u8;
+-        if n != 0 && n <= bits.count {
+-            bits.word >>= n;
+-            bits.count -= n;
+-            return Ok((entry >> 4) as usize);
+-        }
+-        bits.fill(self.max);
+-        let mut code = 0u16;
+-        for n in 1..=self.max.min(bits.count) as usize {
+-            code = (code << 1) | ((bits.word >> (n - 1)) & 1) as u16;
+-            if code >= self.first[n] && code - self.first[n] < self.counts[n] {
+-                bits.word >>= n;
+-                bits.count -= n as u8;
+-                return Ok(
+-                    self.symbols[(self.offsets[n] + code - self.first[n]) as usize] as usize,
+-                );
+-            }
+-        }
+-        if bits.count < self.max {
+-            Err(Error::Truncated)
+-        } else {
+-            Err(Error::Invalid("invalid Huffman code"))
+-        }
+-    }
+-}
+-
+-fn fixed() -> (Huffman, Huffman) {
+-    let mut lengths = [8; 288];
+-    lengths[144..256].fill(9);
+-    lengths[256..280].fill(7);
+-    (
+-        Huffman::new(&lengths, false, false).unwrap(),
+-        Huffman::new(&[5; 32], false, false).unwrap(),
+-    )
+-}
+-
+-fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
+-    let nl = bits.read(5)? as usize + 257;
+-    let nd = bits.read(5)? as usize + 1;
+-    let nc = bits.read(4)? as usize + 4;
+-    if nl > 286 {
+-        return Err(Error::Invalid("too many literal codes"));
+-    }
+-    let order = [
+-        16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
+-    ];
+-    let mut lengths = [0; 19];
+-    for &index in &order[..nc] {
+-        lengths[index] = bits.read(3)? as u8;
+-    }
+-    let tree = Huffman::new(&lengths, true, false)?;
+-    let mut lengths = [0; 318];
+-    let mut pos = 0;
+-    while pos < nl + nd {
+-        let symbol = tree.decode(bits)?;
+-        let (value, count) = match symbol {
+-            0..=15 => (symbol as u8, 1),
+-            16 if pos != 0 => (lengths[pos - 1], bits.read(2)? as usize + 3),
+-            17 => (0, bits.read(3)? as usize + 3),
+-            18 => (0, bits.read(7)? as usize + 11),
+-            _ => return Err(Error::Invalid("invalid code length repeat")),
+-        };
+-        if pos + count > nl + nd {
+-            return Err(Error::Invalid("code length repeat overflow"));
+-        }
+-        lengths[pos..pos + count].fill(value);
+-        pos += count;
+-    }
+-    if lengths[256] == 0 {
+-        return Err(Error::Invalid("missing end of block code"));
+-    }
+-    Ok((
+-        Huffman::new(&lengths[..nl], false, false)?,
+-        Huffman::new(&lengths[nl..nl + nd], false, true)?,
+-    ))
+-}
+-
+-/// Decode exactly one zlib stream, rejecting trailing data. `limit` bounds output.
+-pub fn decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
+-    let (output, used) = decompress_prefix(input, limit)?;
+-    if used != input.len() {
+-        return Err(Error::Invalid("trailing zlib data"));
+-    }
+-    Ok(output)
+-}
+-
+-/// Decode the first zlib stream and return the number of input bytes consumed.
+-pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize), Error> {
+-    if input.len() < 6 {
+-        return Err(Error::Truncated);
+-    }
+-    let cmf = input[0];
+-    if cmf & 15 != 8 || cmf >> 4 > 7 || (u16::from(cmf) * 256 + u16::from(input[1])) % 31 != 0 {
+-        return Err(Error::Invalid("zlib header"));
+-    }
+-    if input[1] & 32 != 0 {
+-        return Err(Error::Invalid("zlib dictionary not permitted"));
+-    }
+-    let window = 1usize << ((cmf >> 4) + 8);
+-    let mut bits = Bits::new(&input[2..]);
+-    let mut output = Vec::new();
+-    loop {
+-        let last = bits.read(1)? != 0;
+-        let kind = bits.read(2)?;
+-        if kind == 0 {
+-            bits.align();
+-            let len = bits.read(16)? as usize;
+-            if len ^ bits.read(16)? as usize != 65535 {
+-                return Err(Error::Invalid("stored block length"));
+-            }
+-            if len > limit.saturating_sub(output.len()) {
+-                return Err(Error::LimitExceeded);
+-            }
+-            reserve(&mut output, len)?;
+-            // Drain bytes prefetched by a preceding Huffman block, then copy
+-            // the byte-aligned payload directly without bit-reader dispatch.
+-            let mut left = len;
+-            while left != 0 && bits.count >= 8 {
+-                output.push(bits.read(8)? as u8);
+-                left -= 1;
+-            }
+-            let end = bits.pos.checked_add(left).ok_or(Error::LimitExceeded)?;
+-            output.extend_from_slice(bits.input.get(bits.pos..end).ok_or(Error::Truncated)?);
+-            bits.pos = end;
+-        } else if kind == 1 || kind == 2 {
+-            let (lit, dist) = if kind == 1 {
+-                fixed()
+-            } else {
+-                dynamic(&mut bits)?
+-            };
+-            loop {
+-                match lit.decode(&mut bits)? {
+-                    literal @ 0..=255 => {
+-                        if output.len() == limit {
+-                            return Err(Error::LimitExceeded);
+-                        }
+-                        if output.len() == output.capacity() {
+-                            reserve(&mut output, 1)?;
+-                        }
+-                        output.push(literal as u8);
+-                    }
+-                    256 => break,
+-                    symbol @ 257..=285 => {
+-                        let index = symbol - 257;
+-                        let len = LENGTH_BASE[index] + bits.read(LENGTH_EXTRA[index])? as usize;
+-                        let symbol = dist.decode(&mut bits)?;
+-                        if symbol >= 30 {
+-                            return Err(Error::Invalid("reserved distance symbol"));
+-                        }
+-                        let distance = DIST_BASE[symbol] + bits.read(DIST_EXTRA[symbol])? as usize;
+-                        if distance > output.len() || distance > window {
+-                            return Err(Error::Invalid("distance outside history window"));
+-                        }
+-                        if len > limit.saturating_sub(output.len()) {
+-                            return Err(Error::LimitExceeded);
+-                        }
+-                        reserve(&mut output, len)?;
+-                        let start = output.len() - distance;
+-                        if distance == 1 {
+-                            output.resize(output.len() + len, output[start]);
+-                        } else {
+-                            let mut left = len;
+-                            while left != 0 {
+-                                let count = (output.len() - start).min(left);
+-                                output.extend_from_within(start..start + count);
+-                                left -= count;
+-                            }
+-                        }
+-                    }
+-                    _ => return Err(Error::Invalid("reserved literal symbol")),
+-                }
+-            }
+-        } else {
+-            return Err(Error::Invalid("reserved block type"));
+-        }
+-        if last {
+-            break;
+-        }
+-    }
+-    let used = 2 + bits.consumed();
+-    let checksum = input.get(used..used + 4).ok_or(Error::Truncated)?;
+-    if u32::from_be_bytes(checksum.try_into().unwrap()) != adler32(&output) {
+-        return Err(Error::Checksum);
+-    }
+-    Ok((output, used + 4))
+-}
+-
+-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+-pub enum Compression {
+-    Stored,
+-    #[default]
+-    Fast,
+-}
+-
+-struct Writer {
+-    bytes: Vec<u8>,
+-    word: u64,
+-    count: u8,
+-}
+-#[derive(Clone, Copy)]
+-struct Checkpoint {
+-    bytes: usize,
+-    word: u64,
+-    count: u8,
+-}
+-impl Writer {
+-    fn write(&mut self, value: u32, n: u8) {
+-        self.word |= u64::from(value) << self.count;
+-        self.count += n;
+-        while self.count >= 8 {
+-            self.bytes.push(self.word as u8);
+-            self.word >>= 8;
+-            self.count -= 8;
+-        }
+-    }
+-    fn literal(&mut self, symbol: usize) {
+-        let (code, n) = match symbol {
+-            0..=143 => (0x30 + symbol, 8),
+-            144..=255 => (0x190 + symbol - 144, 9),
+-            256..=279 => (symbol - 256, 7),
+-            _ => (0xc0 + symbol - 280, 8),
+-        };
+-        self.write((code as u32).reverse_bits() >> (32 - n), n);
+-    }
+-    fn align(&mut self) {
+-        if self.count != 0 {
+-            self.bytes.push(self.word as u8);
+-        }
+-        self.word = 0;
+-        self.count = 0;
+-    }
+-    fn stored(&mut self, input: &[u8], final_block: bool) {
+-        self.write(u32::from(final_block), 3);
+-        self.align();
+-        let len = input.len() as u16;
+-        self.bytes.extend_from_slice(&len.to_le_bytes());
+-        self.bytes.extend_from_slice(&(!len).to_le_bytes());
+-        self.bytes.extend_from_slice(input);
+-    }
+-    fn start_fixed(&mut self, final_block: bool) -> Checkpoint {
+-        let checkpoint = Checkpoint {
+-            bytes: self.bytes.len(),
+-            word: self.word,
+-            count: self.count,
+-        };
+-        self.write(u32::from(final_block) | 2, 3);
+-        checkpoint
+-    }
+-    fn finish_fixed(&mut self, checkpoint: Checkpoint, input: &[u8], final_block: bool) {
+-        self.literal(256);
+-        let fixed = (self.bytes.len() - checkpoint.bytes) * 8 + self.count as usize
+-            - checkpoint.count as usize;
+-        let fixed_padding = if final_block {
+-            (8 - self.count as usize % 8) % 8
+-        } else {
+-            0
+-        };
+-        let stored = 3 + (8 - (checkpoint.count as usize + 3) % 8) % 8 + 32 + input.len() * 8;
+-        if stored < fixed + fixed_padding {
+-            self.bytes.truncate(checkpoint.bytes);
+-            self.word = checkpoint.word;
+-            self.count = checkpoint.count;
+-            self.stored(input, final_block);
+-        }
+-    }
+-}
+-
+-#[inline(always)]
+-fn length_code(length: usize) -> usize {
+-    debug_assert!((3..=258).contains(&length));
+-    if length <= 10 {
+-        length - 3
+-    } else if length == 258 {
+-        28
+-    } else {
+-        let value = length - 3;
+-        let high = value.ilog2() as usize;
+-        (high - 1) * 4 + ((value >> (high - 2)) & 3)
+-    }
+-}
+-#[inline(always)]
+-fn distance_code(distance: usize) -> usize {
+-    debug_assert!((1..=32768).contains(&distance));
+-    let value = distance - 1;
+-    if value < 4 {
+-        value
+-    } else {
+-        let high = value.ilog2() as usize;
+-        high * 2 + ((value >> (high - 1)) & 1)
+-    }
+-}
+-
+-/// Encode a standards-compliant zlib stream with stored or fixed Huffman LZ77 blocks.
+-pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
+-    let bound = input
+-        .len()
+-        .checked_add(input.len().div_ceil(8))
+-        .and_then(|n| n.checked_add(64))
+-        .ok_or(Error::LimitExceeded)?;
+-    let mut bytes = Vec::new();
+-    reserve(&mut bytes, bound)?;
+-    bytes.extend_from_slice(&[0x78, 0x01]);
+-    if mode == Compression::Stored {
+-        if input.is_empty() {
+-            bytes.extend_from_slice(&[1, 0, 0, 255, 255]);
+-        }
+-        let blocks = input.chunks(65535);
+-        let count = blocks.len();
+-        for (n, block) in blocks.enumerate() {
+-            bytes.push(u8::from(n + 1 == count));
+-            let len = block.len() as u16;
+-            bytes.extend_from_slice(&len.to_le_bytes());
+-            bytes.extend_from_slice(&(!len).to_le_bytes());
+-            bytes.extend_from_slice(block);
+-        }
+-    } else {
+-        let mut w = Writer {
+-            bytes,
+-            word: 0,
+-            count: 0,
+-        };
+-        let mut matcher = matcher::Matcher::new()?;
+-        for block_start in (0..input.len().max(1)).step_by(matcher::WINDOW) {
+-            let end = input.len().min(block_start + matcher::WINDOW);
+-            let final_block = end == input.len();
+-            let checkpoint = w.start_fixed(final_block);
+-            let mut pos = block_start;
+-            let mut misses = 0usize;
+-            while pos < end {
+-                let mut length = 0;
+-                let mut distance = 0;
+-                if pos + 3 < input.len() {
+-                    let mut candidate = matcher.insert(&input[pos..], pos);
+-                    let max = (end - pos).min(258);
+-                    let bits = (w.bytes.len() - checkpoint.bytes) * 8 + w.count as usize
+-                        - checkpoint.count as usize;
+-                    let searches = matcher::searches(bits, pos - block_start);
+-                    for attempt in 0..searches {
+-                        let Some(previous) = candidate else {
+-                            break;
+-                        };
+-                        if length < max
+-                            && input[previous + length] == input[pos + length]
+-                            && input[previous] == input[pos]
+-                        {
+-                            let matched = matcher::prefix(
+-                                &input[previous..previous + max],
+-                                &input[pos..pos + max],
+-                            );
+-                            if matched > length {
+-                                length = matched;
+-                                distance = pos - previous;
+-                            }
+-                            if length == max {
+-                                break;
+-                            }
+-                        }
+-                        if attempt + 1 == searches {
+-                            break;
+-                        }
+-                        candidate = matcher.next(previous, pos);
+-                    }
+-                }
+-                if length >= 3 {
+-                    misses = 0;
+-                    let index = length_code(length);
+-                    w.literal(257 + index);
+-                    w.write((length - LENGTH_BASE[index]) as u32, LENGTH_EXTRA[index]);
+-                    let index = distance_code(distance);
+-                    w.write((index as u32).reverse_bits() >> 27, 5);
+-                    w.write((distance - DIST_BASE[index]) as u32, DIST_EXTRA[index]);
+-                    for next in matcher::positions(pos, length) {
+-                        if next + 3 < input.len() {
+-                            matcher.insert(&input[next..], next);
+-                        }
+-                    }
+-                    pos += length;
+-                } else {
+-                    // Bound work on sustained incompressible input. Search
+-                    // resumes within at most 15 literal bytes of new structure.
+-                    let count = (1 + (misses >> 8)).min(16).min(end - pos);
+-                    for &byte in &input[pos..pos + count] {
+-                        w.literal(byte as usize);
+-                    }
+-                    misses += count;
+-                    pos += count;
+-                }
+-            }
+-            w.finish_fixed(checkpoint, &input[block_start..end], final_block);
+-        }
+-        w.align();
+-        bytes = w.bytes;
+-    }
+-    bytes.extend_from_slice(&adler32(input).to_be_bytes());
+-    Ok(bytes)
+-}
+-
+-#[cfg(test)]
+-mod tests {
+-    use super::*;
+-
+-    #[test]
+-    fn every_length_and_distance_code_matches_rfc1951_tables() {
+-        for length in 3..=258 {
+-            assert_eq!(
+-                length_code(length),
+-                LENGTH_BASE
+-                    .iter()
+-                    .rposition(|&base| base <= length)
+-                    .unwrap(),
+-                "length={length}"
+-            );
+-        }
+-        for distance in 1..=32768 {
+-            assert_eq!(
+-                distance_code(distance),
+-                DIST_BASE
+-                    .iter()
+-                    .rposition(|&base| base <= distance)
+-                    .unwrap(),
+-                "distance={distance}"
+-            );
+-        }
+-    }
+-}
++//! Native RFC 1950/1951 compression. No dictionaries are permitted in PNG.
++use crate::{Error, checksum::adler32, reserve};
++
++mod deflate;
++mod inflate;
++mod matcher;
++pub use deflate::{DeflateProgress, Deflater};
++pub use inflate::{InflateProgress, Inflater, StreamStatus};
++
++const LENGTH_BASE: [usize; 29] = [
++    3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131,
++    163, 195, 227, 258,
++];
++const LENGTH_EXTRA: [u8; 29] = [
++    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0,
++];
++const DIST_BASE: [usize; 30] = [
++    1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537,
++    2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577,
++];
++const DIST_EXTRA: [u8; 30] = [
++    0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13,
++    13,
++];
++
++struct Bits<'a> {
++    input: &'a [u8],
++    pos: usize,
++    word: u64,
++    count: u8,
++}
++impl<'a> Bits<'a> {
++    fn new(input: &'a [u8]) -> Self {
++        Self {
++            input,
++            pos: 0,
++            word: 0,
++            count: 0,
++        }
++    }
++    fn fill(&mut self, n: u8) {
++        while self.count < n && self.pos < self.input.len() {
++            self.word |= u64::from(self.input[self.pos]) << self.count;
++            self.pos += 1;
++            self.count += 8;
++        }
++    }
++    fn read(&mut self, n: u8) -> Result<u32, Error> {
++        self.fill(n);
++        if self.count < n {
++            return Err(Error::Truncated);
++        }
++        let value = self.word as u32 & ((1u64 << n) - 1) as u32;
++        self.word >>= n;
++        self.count -= n;
++        Ok(value)
++    }
++    fn consumed(&self) -> usize {
++        (self.pos * 8 - usize::from(self.count)).div_ceil(8)
++    }
++    fn align(&mut self) {
++        let n = self.count % 8;
++        self.word >>= n;
++        self.count -= n;
++    }
++}
++
++// A small primary table handles common codes. Canonical arrays handle longer
++// codes without a 128 KiB lookup allocation per dynamic block.
++struct Huffman {
++    fast: [u16; 512],
++    counts: [u16; 16],
++    first: [u16; 16],
++    offsets: [u16; 16],
++    symbols: [u16; 288],
++    max: u8,
++}
++impl Huffman {
++    fn new(lengths: &[u8], complete: bool, allow_empty: bool) -> Result<Self, Error> {
++        let mut h = Self {
++            fast: [0; 512],
++            counts: [0; 16],
++            first: [0; 16],
++            offsets: [0; 16],
++            symbols: [0; 288],
++            max: 0,
++        };
++        for &n in lengths {
++            if n > 15 {
++                return Err(Error::Invalid("Huffman code length"));
++            }
++            if n != 0 {
++                h.counts[n as usize] += 1;
++                h.max = h.max.max(n);
++            }
++        }
++        if h.max == 0 {
++            return if allow_empty {
++                Ok(h)
++            } else {
++                Err(Error::Invalid("empty Huffman tree"))
++            };
++        }
++        let mut left = 1i32;
++        let mut code = 0;
++        let mut offset = 0;
++        for n in 1..16 {
++            left = left * 2 - i32::from(h.counts[n]);
++            if left < 0 {
++                return Err(Error::Invalid("oversubscribed Huffman tree"));
++            }
++            code = (code + h.counts[n - 1]) << 1;
++            h.first[n] = code;
++            h.offsets[n] = offset;
++            offset += h.counts[n];
++        }
++        if left != 0 && (complete || h.max != 1) {
++            return Err(Error::Invalid("incomplete Huffman tree"));
++        }
++        let mut next = h.first;
++        for (symbol, &n) in lengths.iter().enumerate() {
++            if n == 0 {
++                continue;
++            }
++            let n = n as usize;
++            let code = next[n];
++            h.symbols[(h.offsets[n] + code - h.first[n]) as usize] = symbol as u16;
++            if n <= 9 {
++                let rev = (code.reverse_bits() >> (16 - n)) as usize;
++                for index in (rev..512).step_by(1 << n) {
++                    h.fast[index] = ((symbol as u16) << 4) | n as u16;
++                }
++            }
++            next[n] += 1;
++        }
++        Ok(h)
++    }
++    fn decode(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
++        bits.fill(9);
++        let entry = self.fast[(bits.word & 511) as usize];
++        let n = (entry & 15) as u8;
++        if n != 0 && n <= bits.count {
++            bits.word >>= n;
++            bits.count -= n;
++            return Ok((entry >> 4) as usize);
++        }
++        bits.fill(self.max);
++        let mut code = 0u16;
++        for n in 1..=self.max.min(bits.count) as usize {
++            code = (code << 1) | ((bits.word >> (n - 1)) & 1) as u16;
++            if code >= self.first[n] && code - self.first[n] < self.counts[n] {
++                bits.word >>= n;
++                bits.count -= n as u8;
++                return Ok(
++                    self.symbols[(self.offsets[n] + code - self.first[n]) as usize] as usize,
++                );
++            }
++        }
++        if bits.count < self.max {
++            Err(Error::Truncated)
++        } else {
++            Err(Error::Invalid("invalid Huffman code"))
++        }
++    }
++}
++
++fn fixed() -> (Huffman, Huffman) {
++    let mut lengths = [8; 288];
++    lengths[144..256].fill(9);
++    lengths[256..280].fill(7);
++    (
++        Huffman::new(&lengths, false, false).unwrap(),
++        Huffman::new(&[5; 32], false, false).unwrap(),
++    )
++}
++
++fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
++    let nl = bits.read(5)? as usize + 257;
++    let nd = bits.read(5)? as usize + 1;
++    let nc = bits.read(4)? as usize + 4;
++    if nl > 286 {
++        return Err(Error::Invalid("too many literal codes"));
++    }
++    let order = [
++        16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
++    ];
++    let mut lengths = [0; 19];
++    for &index in &order[..nc] {
++        lengths[index] = bits.read(3)? as u8;
++    }
++    let tree = Huffman::new(&lengths, true, false)?;
++    let mut lengths = [0; 318];
++    let mut pos = 0;
++    while pos < nl + nd {
++        let symbol = tree.decode(bits)?;
++        let (value, count) = match symbol {
++            0..=15 => (symbol as u8, 1),
++            16 if pos != 0 => (lengths[pos - 1], bits.read(2)? as usize + 3),
++            17 => (0, bits.read(3)? as usize + 3),
++            18 => (0, bits.read(7)? as usize + 11),
++            _ => return Err(Error::Invalid("invalid code length repeat")),
++        };
++        if pos + count > nl + nd {
++            return Err(Error::Invalid("code length repeat overflow"));
++        }
++        lengths[pos..pos + count].fill(value);
++        pos += count;
++    }
++    if lengths[256] == 0 {
++        return Err(Error::Invalid("missing end of block code"));
++    }
++    Ok((
++        Huffman::new(&lengths[..nl], false, false)?,
++        Huffman::new(&lengths[nl..nl + nd], false, true)?,
++    ))
++}
++
++/// Decode exactly one zlib stream, rejecting trailing data. `limit` bounds output.
++pub fn decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
++    let (output, used) = decompress_prefix(input, limit)?;
++    if used != input.len() {
++        return Err(Error::Invalid("trailing zlib data"));
++    }
++    Ok(output)
++}
++
++/// Decode the first zlib stream and return the number of input bytes consumed.
++pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize), Error> {
++    if input.len() < 6 {
++        return Err(Error::Truncated);
++    }
++    let cmf = input[0];
++    if cmf & 15 != 8 || cmf >> 4 > 7 || (u16::from(cmf) * 256 + u16::from(input[1])) % 31 != 0 {
++        return Err(Error::Invalid("zlib header"));
++    }
++    if input[1] & 32 != 0 {
++        return Err(Error::Invalid("zlib dictionary not permitted"));
++    }
++    let window = 1usize << ((cmf >> 4) + 8);
++    let mut bits = Bits::new(&input[2..]);
++    let mut output = Vec::new();
++    loop {
++        let last = bits.read(1)? != 0;
++        let kind = bits.read(2)?;
++        if kind == 0 {
++            bits.align();
++            let len = bits.read(16)? as usize;
++            if len ^ bits.read(16)? as usize != 65535 {
++                return Err(Error::Invalid("stored block length"));
++            }
++            if len > limit.saturating_sub(output.len()) {
++                return Err(Error::LimitExceeded);
++            }
++            reserve(&mut output, len)?;
++            // Drain bytes prefetched by a preceding Huffman block, then copy
++            // the byte-aligned payload directly without bit-reader dispatch.
++            let mut left = len;
++            while left != 0 && bits.count >= 8 {
++                output.push(bits.read(8)? as u8);
++                left -= 1;
++            }
++            let end = bits.pos.checked_add(left).ok_or(Error::LimitExceeded)?;
++            output.extend_from_slice(bits.input.get(bits.pos..end).ok_or(Error::Truncated)?);
++            bits.pos = end;
++        } else if kind == 1 || kind == 2 {
++            let (lit, dist) = if kind == 1 {
++                fixed()
++            } else {
++                dynamic(&mut bits)?
++            };
++            loop {
++                match lit.decode(&mut bits)? {
++                    literal @ 0..=255 => {
++                        if output.len() == limit {
++                            return Err(Error::LimitExceeded);
++                        }
++                        if output.len() == output.capacity() {
++                            reserve(&mut output, 1)?;
++                        }
++                        output.push(literal as u8);
++                    }
++                    256 => break,
++                    symbol @ 257..=285 => {
++                        let index = symbol - 257;
++                        let len = LENGTH_BASE[index] + bits.read(LENGTH_EXTRA[index])? as usize;
++                        let symbol = dist.decode(&mut bits)?;
++                        if symbol >= 30 {
++                            return Err(Error::Invalid("reserved distance symbol"));
++                        }
++                        let distance = DIST_BASE[symbol] + bits.read(DIST_EXTRA[symbol])? as usize;
++                        if distance > output.len() || distance > window {
++                            return Err(Error::Invalid("distance outside history window"));
++                        }
++                        if len > limit.saturating_sub(output.len()) {
++                            return Err(Error::LimitExceeded);
++                        }
++                        reserve(&mut output, len)?;
++                        let start = output.len() - distance;
++                        if distance == 1 {
++                            output.resize(output.len() + len, output[start]);
++                        } else {
++                            let mut left = len;
++                            while left != 0 {
++                                let count = (output.len() - start).min(left);
++                                output.extend_from_within(start..start + count);
++                                left -= count;
++                            }
++                        }
++                    }
++                    _ => return Err(Error::Invalid("reserved literal symbol")),
++                }
++            }
++        } else {
++            return Err(Error::Invalid("reserved block type"));
++        }
++        if last {
++            break;
++        }
++    }
++    let used = 2 + bits.consumed();
++    let checksum = input.get(used..used + 4).ok_or(Error::Truncated)?;
++    if u32::from_be_bytes(checksum.try_into().unwrap()) != adler32(&output) {
++        return Err(Error::Checksum);
++    }
++    Ok((output, used + 4))
++}
++
++#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
++pub enum Compression {
++    Stored,
++    #[default]
++    Fast,
++}
++
++struct Writer {
++    bytes: Vec<u8>,
++    word: u64,
++    count: u8,
++}
++impl Writer {
++    fn write(&mut self, value: u32, n: u8) {
++        self.word |= u64::from(value) << self.count;
++        self.count += n;
++        while self.count >= 8 {
++            self.bytes.push(self.word as u8);
++            self.word >>= 8;
++            self.count -= 8;
++        }
++    }
++    fn literal(&mut self, symbol: usize) {
++        let (code, n) = match symbol {
++            0..=143 => (0x30 + symbol, 8),
++            144..=255 => (0x190 + symbol - 144, 9),
++            256..=279 => (symbol - 256, 7),
++            _ => (0xc0 + symbol - 280, 8),
++        };
++        self.write((code as u32).reverse_bits() >> (32 - n), n);
++    }
++    fn align(&mut self) {
++        if self.count != 0 {
++            self.bytes.push(self.word as u8);
++        }
++        self.word = 0;
++        self.count = 0;
++    }
++    fn stored(&mut self, input: &[u8], final_block: bool) {
++        self.write(u32::from(final_block), 3);
++        self.align();
++        let len = input.len() as u16;
++        self.bytes.extend_from_slice(&len.to_le_bytes());
++        self.bytes.extend_from_slice(&(!len).to_le_bytes());
++        self.bytes.extend_from_slice(input);
++    }
++}
++
++/// Packed match records and coalesced literal spans, bounded by a single block.
++/// Incompressible data can be copied directly without writing discarded bits.
++struct Tokens {
++    items: Vec<u32>,
++    bits: usize,
++}
++impl Tokens {
++    fn new() -> Result<Self, Error> {
++        let mut items = Vec::new();
++        reserve(&mut items, matcher::WINDOW / 2 + 1)?;
++        Ok(Self { items, bits: 0 })
++    }
++    fn clear(&mut self) {
++        self.items.clear();
++        self.bits = 0;
++    }
++    fn memory(&self) -> usize {
++        self.items.capacity() * 4
++    }
++    fn literals(&mut self, bytes: &[u8]) {
++        if let Some(last) = self.items.last_mut().filter(|v| **v & 0x8000_0000 == 0) {
++            *last += bytes.len() as u32;
++        } else {
++            self.items.push(bytes.len() as u32);
++        }
++        self.bits += bytes.len() * 8 + bytes.iter().filter(|&&b| b >= 144).count();
++    }
++    fn matched(&mut self, length: usize, distance: usize) {
++        let l = LENGTH_BASE.iter().rposition(|&n| n <= length).unwrap();
++        let d = DIST_BASE.iter().rposition(|&n| n <= distance).unwrap();
++        self.bits +=
++            if l <= 22 { 7 } else { 8 } + LENGTH_EXTRA[l] as usize + 5 + DIST_EXTRA[d] as usize;
++        self.items
++            .push(0x8000_0000 | ((length as u32 - 3) << 16) | (distance as u32 - 1));
++    }
++    fn emit(&self, writer: &mut Writer, input: &[u8], final_block: bool) {
++        let fixed = 3 + self.bits + 7;
++        let padding = if final_block {
++            (8 - (writer.count as usize + fixed) % 8) % 8
++        } else {
++            0
++        };
++        let stored = 3 + (8 - (writer.count as usize + 3) % 8) % 8 + 32 + input.len() * 8;
++        if stored < fixed + padding {
++            writer.stored(input, final_block);
++            return;
++        }
++        writer.write(u32::from(final_block) | 2, 3);
++        let mut pos = 0;
++        for &token in &self.items {
++            if token & 0x8000_0000 == 0 {
++                let end = pos + token as usize;
++                for &byte in &input[pos..end] {
++                    writer.literal(byte as usize);
++                }
++                pos = end;
++            } else {
++                let length = ((token >> 16) & 255) as usize + 3;
++                let distance = (token & 65535) as usize + 1;
++                let l = LENGTH_BASE.iter().rposition(|&n| n <= length).unwrap();
++                writer.literal(257 + l);
++                writer.write((length - LENGTH_BASE[l]) as u32, LENGTH_EXTRA[l]);
++                let d = DIST_BASE.iter().rposition(|&n| n <= distance).unwrap();
++                writer.write((d as u32).reverse_bits() >> 27, 5);
++                writer.write((distance - DIST_BASE[d]) as u32, DIST_EXTRA[d]);
++                pos += length;
++            }
++        }
++        debug_assert_eq!(pos, input.len());
++        writer.literal(256);
++    }
++}
++
++/// Encode a standards-compliant zlib stream with stored or fixed Huffman LZ77 blocks.
++pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
++    let bound = input
++        .len()
++        .checked_add(input.len().div_ceil(8))
++        .and_then(|n| n.checked_add(64))
++        .ok_or(Error::LimitExceeded)?;
++    let mut bytes = Vec::new();
++    reserve(&mut bytes, bound)?;
++    bytes.extend_from_slice(&[0x78, 0x01]);
++    if mode == Compression::Stored {
++        if input.is_empty() {
++            bytes.extend_from_slice(&[1, 0, 0, 255, 255]);
++        }
++        let blocks = input.chunks(65535);
++        let count = blocks.len();
++        for (n, block) in blocks.enumerate() {
++            bytes.push(u8::from(n + 1 == count));
++            let len = block.len() as u16;
++            bytes.extend_from_slice(&len.to_le_bytes());
++            bytes.extend_from_slice(&(!len).to_le_bytes());
++            bytes.extend_from_slice(block);
++        }
++    } else {
++        let mut w = Writer {
++            bytes,
++            word: 0,
++            count: 0,
++        };
++        let mut matcher = matcher::Matcher::new()?;
++        let mut tokens = Tokens::new()?;
++        for block_start in (0..input.len().max(1)).step_by(matcher::WINDOW) {
++            let end = input.len().min(block_start + matcher::WINDOW);
++            let final_block = end == input.len();
++            tokens.clear();
++            let mut pos = block_start;
++            let mut misses = 0usize;
++            while pos < end {
++                let mut length = 0;
++                let mut distance = 0;
++                if pos + 3 < input.len() {
++                    let mut candidate = matcher.insert(&input[pos..], pos);
++                    let max = (end - pos).min(258);
++                    for _ in 0..matcher::searches(tokens.bits, pos - block_start) {
++                        let Some(previous) = candidate else {
++                            break;
++                        };
++                        if length < max
++                            && input[previous + length] == input[pos + length]
++                            && input[previous] == input[pos]
++                        {
++                            let matched = matcher::prefix(
++                                &input[previous..previous + max],
++                                &input[pos..pos + max],
++                            );
++                            if matched > length {
++                                length = matched;
++                                distance = pos - previous;
++                            }
++                            if length == max {
++                                break;
++                            }
++                        }
++                        candidate = matcher.next(previous, pos);
++                    }
++                }
++                if length >= 3 {
++                    misses = 0;
++                    tokens.matched(length, distance);
++                    for next in matcher::positions(pos, length) {
++                        if next + 3 < input.len() {
++                            matcher.insert(&input[next..], next);
++                        }
++                    }
++                    pos += length;
++                } else {
++                    // Bound work on sustained incompressible input. Search
++                    // resumes within at most 15 literal bytes of new structure.
++                    let count = (1 + (misses >> 8)).min(16).min(end - pos);
++                    tokens.literals(&input[pos..pos + count]);
++                    misses += count;
++                    pos += count;
++                }
++            }
++            tokens.emit(&mut w, &input[block_start..end], final_block);
++        }
++        w.align();
++        bytes = w.bytes;
++    }
++    bytes.extend_from_slice(&adler32(input).to_be_bytes());
++    Ok(bytes)
++}
+--- a/src/zlib/deflate.rs
++++ b/src/zlib/deflate.rs
+@@ -1,295 +1,284 @@
+-use super::{
+-    Compression, DIST_BASE, DIST_EXTRA, LENGTH_BASE, LENGTH_EXTRA, StreamStatus, Writer,
+-    distance_code, length_code, matcher,
+-};
+-use crate::{Error, checksum::Adler32, reserve};
+-
+-const BLOCK: usize = 32768;
+-
+-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+-pub struct DeflateProgress {
+-    pub consumed: usize,
+-    pub written: usize,
+-    pub status: StreamStatus,
+-}
+-
+-/// Bounded zlib encoder with 32 KiB input blocks and cross-block LZ77 history.
+-///
+-/// `finish=true` marks the supplied input as the end of the stream. Resubmit any
+-/// unconsumed suffix with `finish=true` and drain until `Done`. Intermediate
+-/// calls may buffer a partial block. No flush padding is inserted between calls,
+-/// and the compressor never retains more than one block plus its history.
+-pub struct Deflater {
+-    mode: Compression,
+-    writer: Writer,
+-    pending: usize,
+-    block: Vec<u8>,
+-    history: Vec<u8>,
+-    matcher: Option<matcher::Matcher>,
+-    encoded: usize,
+-    total_in: usize,
+-    total_out: usize,
+-    checksum: Adler32,
+-    finishing: bool,
+-    done: bool,
+-    failure: Option<Error>,
+-}
+-impl Deflater {
+-    pub fn new(mode: Compression) -> Result<Self, Error> {
+-        let mut bytes = Vec::new();
+-        reserve(&mut bytes, BLOCK * 9 / 8 + 64)?;
+-        bytes.extend_from_slice(&[0x78, 0x01]);
+-        let mut block = Vec::new();
+-        reserve(&mut block, BLOCK)?;
+-        let mut history = Vec::new();
+-        let mut matcher = None;
+-        if mode == Compression::Fast {
+-            reserve(&mut history, BLOCK)?;
+-            history.resize(BLOCK, 0);
+-            matcher = Some(matcher::Matcher::new()?);
+-        }
+-        Ok(Self {
+-            mode,
+-            writer: Writer {
+-                bytes,
+-                word: 0,
+-                count: 0,
+-            },
+-            pending: 0,
+-            block,
+-            history,
+-            matcher,
+-            encoded: 0,
+-            total_in: 0,
+-            total_out: 0,
+-            checksum: Adler32::new(),
+-            finishing: false,
+-            done: false,
+-            failure: None,
+-        })
+-    }
+-    pub fn total_in(&self) -> usize {
+-        self.total_in
+-    }
+-    pub fn total_out(&self) -> usize {
+-        self.total_out
+-    }
+-    pub fn is_done(&self) -> bool {
+-        self.done && self.failure.is_none()
+-    }
+-    pub fn working_memory_bytes(&self) -> usize {
+-        core::mem::size_of::<Self>()
+-            + self.writer.bytes.capacity()
+-            + self.block.capacity()
+-            + self.history.capacity()
+-            + self.matcher.as_ref().map_or(0, matcher::Matcher::memory)
+-    }
+-    pub fn process(
+-        &mut self,
+-        input: &[u8],
+-        output: &mut [u8],
+-        finish: bool,
+-    ) -> Result<DeflateProgress, Error> {
+-        if let Some(error) = &self.failure {
+-            return Err(error.clone());
+-        }
+-        if self.finishing && !input.is_empty() {
+-            let error = Error::Invalid("input after zlib finish");
+-            self.failure = Some(error.clone());
+-            return Err(error);
+-        }
+-        let result = self.run(input, output, finish);
+-        if let Err(error) = &result {
+-            self.failure = Some(error.clone());
+-        }
+-        result
+-    }
+-    fn run(
+-        &mut self,
+-        input: &[u8],
+-        output: &mut [u8],
+-        finish: bool,
+-    ) -> Result<DeflateProgress, Error> {
+-        let (mut consumed, mut written) = (0, 0);
+-        loop {
+-            let n = (self.writer.bytes.len() - self.pending).min(output.len() - written);
+-            output[written..written + n]
+-                .copy_from_slice(&self.writer.bytes[self.pending..self.pending + n]);
+-            self.pending += n;
+-            written += n;
+-            self.total_out = self.total_out.checked_add(n).ok_or(Error::LimitExceeded)?;
+-            if self.pending != self.writer.bytes.len() {
+-                return Ok(DeflateProgress {
+-                    consumed,
+-                    written,
+-                    status: StreamStatus::NeedOutput,
+-                });
+-            }
+-            self.writer.bytes.clear();
+-            self.pending = 0;
+-            if self.finishing {
+-                self.done = true;
+-                return Ok(DeflateProgress {
+-                    consumed,
+-                    written,
+-                    status: StreamStatus::Done,
+-                });
+-            }
+-            let n = (BLOCK - self.block.len()).min(input.len() - consumed);
+-            self.total_in = self.total_in.checked_add(n).ok_or(Error::LimitExceeded)?;
+-            self.block.extend_from_slice(&input[consumed..consumed + n]);
+-            self.checksum.update(&input[consumed..consumed + n]);
+-            consumed += n;
+-            let final_block = finish && consumed == input.len();
+-            if self.block.len() == BLOCK || final_block {
+-                self.encode_block(final_block);
+-            } else {
+-                return Ok(DeflateProgress {
+-                    consumed,
+-                    written,
+-                    status: StreamStatus::NeedInput,
+-                });
+-            }
+-        }
+-    }
+-    fn value(&self, index: usize) -> u8 {
+-        if index >= self.encoded {
+-            self.block[index - self.encoded]
+-        } else {
+-            self.history[index & (BLOCK - 1)]
+-        }
+-    }
+-    fn encode_block(&mut self, final_block: bool) {
+-        if self.mode == Compression::Stored {
+-            self.writer.stored(&self.block, final_block);
+-        } else {
+-            let checkpoint = self.writer.start_fixed(final_block);
+-            // Hash the previous block's three trailing positions once their
+-            // lookahead is available. Absolute positions retain full history.
+-            for back in (1..=3).rev() {
+-                if self.encoded >= back && self.block.len() >= 4 - back {
+-                    let index = self.encoded - back;
+-                    let bytes = [
+-                        self.value(index),
+-                        self.value(index + 1),
+-                        self.value(index + 2),
+-                        self.value(index + 3),
+-                    ];
+-                    self.matcher.as_mut().unwrap().insert(&bytes, index);
+-                }
+-            }
+-            let mut pos = 0;
+-            let mut misses = 0usize;
+-            while pos < self.block.len() {
+-                let global = self.encoded + pos;
+-                let mut length = 0;
+-                let mut distance = 0;
+-                if pos + 3 < self.block.len() {
+-                    let mut candidate = self
+-                        .matcher
+-                        .as_mut()
+-                        .unwrap()
+-                        .insert(&self.block[pos..], global);
+-                    let bits = (self.writer.bytes.len() - checkpoint.bytes) * 8
+-                        + self.writer.count as usize
+-                        - checkpoint.count as usize;
+-                    let searches = matcher::searches(bits, pos);
+-                    for attempt in 0..searches {
+-                        let Some(previous) = candidate else {
+-                            break;
+-                        };
+-                        let max = (self.block.len() - pos).min(258);
+-                        if length < max
+-                            && self.value(previous + length) == self.block[pos + length]
+-                            && self.value(previous) == self.block[pos]
+-                        {
+-                            let matched = self.match_length(previous, pos, max);
+-                            if matched > length {
+-                                length = matched;
+-                                distance = global - previous;
+-                            }
+-                            if length == max {
+-                                break;
+-                            }
+-                        }
+-                        if attempt + 1 == searches {
+-                            break;
+-                        }
+-                        candidate = self.matcher.as_ref().unwrap().next(previous, global);
+-                    }
+-                }
+-                let count = if length >= 3 {
+-                    misses = 0;
+-                    let index = length_code(length);
+-                    self.writer.literal(257 + index);
+-                    self.writer
+-                        .write((length - LENGTH_BASE[index]) as u32, LENGTH_EXTRA[index]);
+-                    let index = distance_code(distance);
+-                    self.writer.write((index as u32).reverse_bits() >> 27, 5);
+-                    self.writer
+-                        .write((distance - DIST_BASE[index]) as u32, DIST_EXTRA[index]);
+-                    length
+-                } else {
+-                    let count = (1 + (misses >> 8)).min(16).min(self.block.len() - pos);
+-                    for &byte in &self.block[pos..pos + count] {
+-                        self.writer.literal(byte as usize);
+-                    }
+-                    misses += count;
+-                    count
+-                };
+-                if length >= 3 {
+-                    for next in matcher::positions(pos, count) {
+-                        if next + 3 < self.block.len() {
+-                            self.matcher
+-                                .as_mut()
+-                                .unwrap()
+-                                .insert(&self.block[next..], self.encoded + next);
+-                        }
+-                    }
+-                }
+-                pos += count;
+-            }
+-            // Current-block references read from `block`; keep the previous
+-            // block intact until all matches have been selected.
+-            let at = self.encoded & (BLOCK - 1);
+-            let first = self.block.len().min(BLOCK - at);
+-            self.history[at..at + first].copy_from_slice(&self.block[..first]);
+-            self.history[..self.block.len() - first].copy_from_slice(&self.block[first..]);
+-            self.writer
+-                .finish_fixed(checkpoint, &self.block, final_block);
+-        }
+-        self.encoded += self.block.len();
+-        self.block.clear();
+-        if final_block {
+-            self.writer.align();
+-            self.writer
+-                .bytes
+-                .extend_from_slice(&self.checksum.finish().to_be_bytes());
+-            self.finishing = true;
+-        }
+-    }
+-    #[inline(always)]
+-    fn match_length(&self, previous: usize, pos: usize, max: usize) -> usize {
+-        let mut length = 0;
+-        while length < max {
+-            let source = previous + length;
+-            let bytes = if source >= self.encoded {
+-                &self.block[source - self.encoded..]
+-            } else {
+-                let ring = source & (BLOCK - 1);
+-                let count = (self.encoded - source).min(BLOCK - ring);
+-                &self.history[ring..ring + count]
+-            };
+-            let count = bytes.len().min(max - length);
+-            let equal = matcher::prefix(
+-                &bytes[..count],
+-                &self.block[pos + length..pos + length + count],
+-            );
+-            length += equal;
+-            if equal != count {
+-                break;
+-            }
+-        }
+-        length
+-    }
+-}
++use super::{Compression, StreamStatus, Tokens, Writer, matcher};
++use crate::{Error, checksum::Adler32, reserve};
++
++const BLOCK: usize = 32768;
++
++#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++pub struct DeflateProgress {
++    pub consumed: usize,
++    pub written: usize,
++    pub status: StreamStatus,
++}
++
++/// Bounded zlib encoder with 32 KiB input blocks and cross-block LZ77 history.
++///
++/// `finish=true` marks the supplied input as the end of the stream. Resubmit any
++/// unconsumed suffix with `finish=true` and drain until `Done`. Intermediate
++/// calls may buffer a partial block. No flush padding is inserted between calls,
++/// and the compressor never retains more than one block plus its history.
++pub struct Deflater {
++    mode: Compression,
++    writer: Writer,
++    pending: usize,
++    block: Vec<u8>,
++    history: Vec<u8>,
++    matcher: Option<matcher::Matcher>,
++    tokens: Option<Tokens>,
++    encoded: usize,
++    total_in: usize,
++    total_out: usize,
++    checksum: Adler32,
++    finishing: bool,
++    done: bool,
++    failure: Option<Error>,
++}
++impl Deflater {
++    pub fn new(mode: Compression) -> Result<Self, Error> {
++        let mut bytes = Vec::new();
++        reserve(&mut bytes, BLOCK * 9 / 8 + 64)?;
++        bytes.extend_from_slice(&[0x78, 0x01]);
++        let mut block = Vec::new();
++        reserve(&mut block, BLOCK)?;
++        let mut history = Vec::new();
++        let mut matcher = None;
++        let mut tokens = None;
++        if mode == Compression::Fast {
++            reserve(&mut history, BLOCK)?;
++            history.resize(BLOCK, 0);
++            matcher = Some(matcher::Matcher::new()?);
++            tokens = Some(Tokens::new()?);
++        }
++        Ok(Self {
++            mode,
++            writer: Writer {
++                bytes,
++                word: 0,
++                count: 0,
++            },
++            pending: 0,
++            block,
++            history,
++            matcher,
++            tokens,
++            encoded: 0,
++            total_in: 0,
++            total_out: 0,
++            checksum: Adler32::new(),
++            finishing: false,
++            done: false,
++            failure: None,
++        })
++    }
++    pub fn total_in(&self) -> usize {
++        self.total_in
++    }
++    pub fn total_out(&self) -> usize {
++        self.total_out
++    }
++    pub fn is_done(&self) -> bool {
++        self.done && self.failure.is_none()
++    }
++    pub fn working_memory_bytes(&self) -> usize {
++        core::mem::size_of::<Self>()
++            + self.writer.bytes.capacity()
++            + self.block.capacity()
++            + self.history.capacity()
++            + self.matcher.as_ref().map_or(0, matcher::Matcher::memory)
++            + self.tokens.as_ref().map_or(0, Tokens::memory)
++    }
++    pub fn process(
++        &mut self,
++        input: &[u8],
++        output: &mut [u8],
++        finish: bool,
++    ) -> Result<DeflateProgress, Error> {
++        if let Some(error) = &self.failure {
++            return Err(error.clone());
++        }
++        if self.finishing && !input.is_empty() {
++            let error = Error::Invalid("input after zlib finish");
++            self.failure = Some(error.clone());
++            return Err(error);
++        }
++        let result = self.run(input, output, finish);
++        if let Err(error) = &result {
++            self.failure = Some(error.clone());
++        }
++        result
++    }
++    fn run(
++        &mut self,
++        input: &[u8],
++        output: &mut [u8],
++        finish: bool,
++    ) -> Result<DeflateProgress, Error> {
++        let (mut consumed, mut written) = (0, 0);
++        loop {
++            let n = (self.writer.bytes.len() - self.pending).min(output.len() - written);
++            output[written..written + n]
++                .copy_from_slice(&self.writer.bytes[self.pending..self.pending + n]);
++            self.pending += n;
++            written += n;
++            self.total_out = self.total_out.checked_add(n).ok_or(Error::LimitExceeded)?;
++            if self.pending != self.writer.bytes.len() {
++                return Ok(DeflateProgress {
++                    consumed,
++                    written,
++                    status: StreamStatus::NeedOutput,
++                });
++            }
++            self.writer.bytes.clear();
++            self.pending = 0;
++            if self.finishing {
++                self.done = true;
++                return Ok(DeflateProgress {
++                    consumed,
++                    written,
++                    status: StreamStatus::Done,
++                });
++            }
++            let n = (BLOCK - self.block.len()).min(input.len() - consumed);
++            self.total_in = self.total_in.checked_add(n).ok_or(Error::LimitExceeded)?;
++            self.block.extend_from_slice(&input[consumed..consumed + n]);
++            self.checksum.update(&input[consumed..consumed + n]);
++            consumed += n;
++            let final_block = finish && consumed == input.len();
++            if self.block.len() == BLOCK || final_block {
++                self.encode_block(final_block);
++            } else {
++                return Ok(DeflateProgress {
++                    consumed,
++                    written,
++                    status: StreamStatus::NeedInput,
++                });
++            }
++        }
++    }
++    fn value(&self, index: usize) -> u8 {
++        if index >= self.encoded {
++            self.block[index - self.encoded]
++        } else {
++            self.history[index & (BLOCK - 1)]
++        }
++    }
++    fn encode_block(&mut self, final_block: bool) {
++        if self.mode == Compression::Stored {
++            self.writer.stored(&self.block, final_block);
++        } else {
++            self.tokens.as_mut().unwrap().clear();
++            // Hash the previous block's two trailing positions once their
++            // lookahead is available. Absolute positions retain full history.
++            for back in (1..=3).rev() {
++                if self.encoded >= back && self.block.len() >= 4 - back {
++                    let index = self.encoded - back;
++                    let bytes = [
++                        self.value(index),
++                        self.value(index + 1),
++                        self.value(index + 2),
++                        self.value(index + 3),
++                    ];
++                    self.matcher.as_mut().unwrap().insert(&bytes, index);
++                }
++            }
++            let mut pos = 0;
++            let mut misses = 0usize;
++            while pos < self.block.len() {
++                let global = self.encoded + pos;
++                let mut length = 0;
++                let mut distance = 0;
++                if pos + 3 < self.block.len() {
++                    let mut candidate = self
++                        .matcher
++                        .as_mut()
++                        .unwrap()
++                        .insert(&self.block[pos..], global);
++                    for _ in 0..matcher::searches(self.tokens.as_ref().unwrap().bits, pos) {
++                        let Some(previous) = candidate else {
++                            break;
++                        };
++                        let max = (self.block.len() - pos).min(258);
++                        if length < max
++                            && self.value(previous + length) == self.block[pos + length]
++                            && self.value(previous) == self.block[pos]
++                        {
++                            let matched = self.match_length(previous, pos, max);
++                            if matched > length {
++                                length = matched;
++                                distance = global - previous;
++                            }
++                            if length == max {
++                                break;
++                            }
++                        }
++                        candidate = self.matcher.as_ref().unwrap().next(previous, global);
++                    }
++                }
++                let count = if length >= 3 {
++                    misses = 0;
++                    self.tokens.as_mut().unwrap().matched(length, distance);
++                    length
++                } else {
++                    let count = (1 + (misses >> 8)).min(16).min(self.block.len() - pos);
++                    self.tokens
++                        .as_mut()
++                        .unwrap()
++                        .literals(&self.block[pos..pos + count]);
++                    misses += count;
++                    count
++                };
++                if length >= 3 {
++                    for next in matcher::positions(pos, count) {
++                        if next + 3 < self.block.len() {
++                            self.matcher
++                                .as_mut()
++                                .unwrap()
++                                .insert(&self.block[next..], self.encoded + next);
++                        }
++                    }
++                }
++                let at = global & (BLOCK - 1);
++                let first = count.min(BLOCK - at);
++                self.history[at..at + first].copy_from_slice(&self.block[pos..pos + first]);
++                self.history[..count - first]
++                    .copy_from_slice(&self.block[pos + first..pos + count]);
++                pos += count;
++            }
++            self.tokens
++                .as_ref()
++                .unwrap()
++                .emit(&mut self.writer, &self.block, final_block);
++        }
++        self.encoded += self.block.len();
++        self.block.clear();
++        if final_block {
++            self.writer.align();
++            self.writer
++                .bytes
++                .extend_from_slice(&self.checksum.finish().to_be_bytes());
++            self.finishing = true;
++        }
++    }
++    fn match_length(&self, previous: usize, pos: usize, max: usize) -> usize {
++        let mut length = 0;
++        while length < max {
++            let source = previous + length;
++            let bytes = if source >= self.encoded {
++                &self.block[source - self.encoded..]
++            } else {
++                let ring = source & (BLOCK - 1);
++                let count = (self.encoded - source).min(BLOCK - ring);
++                &self.history[ring..ring + count]
++            };
++            let count = bytes.len().min(max - length);
++            let equal = matcher::prefix(
++                &bytes[..count],
++                &self.block[pos + length..pos + length + count],
++            );
++            length += equal;
++            if equal != count {
++                break;
++            }
++        }
++        length
++    }
++}
+--- a/src/zlib/matcher.rs
++++ b/src/zlib/matcher.rs
+@@ -74,7 +74,6 @@
+ 
+ /// Equal-prefix length in portable eight-byte groups. Little-endian words make
+ /// trailing-zero counts identify the first differing byte on every host.
+-#[inline(always)]
+ pub(super) fn prefix(a: &[u8], b: &[u8]) -> usize {
+     debug_assert_eq!(a.len(), b.len());
+     let mut equal = 0;

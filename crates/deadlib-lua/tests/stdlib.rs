@@ -16,6 +16,42 @@ fn number(n: f64) -> Scalar {
         Scalar::Number(n.to_bits())
     }
 }
+
+#[test]
+fn locale_queries_and_validation_keep_the_c_locale() {
+    compare(br#"
+      assert(os.setlocale('C'))
+      local out={os.setlocale(),os.setlocale(nil,'numeric'),os.setlocale('C','ctype')}
+      for _,args in ipairs({{false},{true,'bad'},{'C','bad'},{'C',false},{'C','NUMERIC'},
+        {'a locale which does not exist'},{'C\0ignored','numeric\0ignored'}})do
+        local ok,value=pcall(os.setlocale,unpack(args));out[#out+1]=tostring(ok);out[#out+1]=tostring(value)
+      end
+      out[#out+1]=os.setlocale(nil,'all');return unpack(out)
+    "#);
+}
+
+#[test]
+fn runtime_hexadecimal_fractions_round_like_native_conversions() {
+    for text in [
+        "0x1.8p1",
+        "-0x.8p+2",
+        "+0Xab.cdP-3",
+        "0x0.0p-99999",
+        "0x1p99999",
+        "0x1p-99999",
+        "0x1.fffffffffffffp-1023",
+        "0x.0000000000001p-1022",
+        "0x1.00000000000008p0",
+        "0x1.0000000000000800000001p0",
+        "0x.",
+        "0x..1",
+        "0x1p",
+        "0x1p+",
+        "0x1.2.3",
+    ] {
+        compare(format!("local n=tonumber('{text}');return n,n and 1/n").as_bytes());
+    }
+}
 fn compare(source: &[u8]) {
     let mut vm = Vm::new();
     vm.set_output_capture(true);
@@ -66,6 +102,186 @@ fn byte_string_primitives_and_methods() {
     ] {
         compare(source.as_bytes());
     }
+}
+
+#[test]
+fn select_and_unpack_narrow_native_integer_arguments() {
+    for index in [
+        "4294967297",
+        "4294967298",
+        "-4294967297",
+        "2147483648",
+        "0/0",
+        "1/0",
+        "-1/0",
+        "9223372036854775808",
+        "'4294967297'",
+        "-0.9",
+    ] {
+        compare(format!("local function pack(...)return select('#',...),... end;return pack(pcall(select,{index},'a',nil,false,'d'))").as_bytes());
+        compare(format!("local t={{[0]='zero',[1]='one',[2]='two',[3]='three'}};return pcall(unpack,t,{index},{index})").as_bytes());
+    }
+}
+
+#[test]
+fn character_arguments_use_native_int_narrowing() {
+    for value in [
+        "4294967296",
+        "4294967361",
+        "-4294967231",
+        "4294967551",
+        "4294967552",
+        "-4294967297",
+        "0/0",
+        "1/0",
+        "-1/0",
+        "9223372036854775808",
+        "'4294967361'",
+        "65.9",
+    ] {
+        compare(format!("return pcall(string.char,{value})").as_bytes());
+    }
+}
+
+#[test]
+fn native_result_limits_are_catchable_and_include_unused_arguments() {
+    for extra in 0..=3 {
+        let extra_args = ",true".repeat(extra);
+        for count in 7994..=8001 {
+            // Summarize in Lua before pcall returns: the development oracle's
+            // API checks reject pcall's own status push after huge open results.
+            compare(format!("local function summarize(...)return select('#',...),select(1,...),select(-1,...)end;return pcall(function()return summarize(unpack({{[1]='first',[{count}]='last'}},1,{count}{extra_args}))end)").as_bytes());
+            compare(format!("local s=string.rep('a',{count});local function summarize(...)return select('#',...),select(1,...),select(-1,...)end;return pcall(function()return summarize(string.byte(s,1,{count}{extra_args}))end)").as_bytes());
+        }
+    }
+}
+
+#[test]
+fn repeated_strings_narrow_counts_before_allocating() {
+    for value in [
+        "4294967296",
+        "4294967297",
+        "4294967299",
+        "-4294967295",
+        "-4294967297",
+        "0/0",
+        "1/0",
+        "-1/0",
+        "9223372036854775808",
+        "'4294967297'",
+        "3.9",
+    ] {
+        compare(format!("return pcall(string.rep,'xy',{value})").as_bytes());
+    }
+}
+
+#[test]
+fn generated_native_narrowing_preserves_results_errors_and_numeric_strings() {
+    let mut inputs = Vec::new();
+    for high in [-1_048_576_i64, -65_536, -1, 0, 1, 65_536, 1_048_576] {
+        for low in [-7, -1, 0, 1, 2, 3, 32, 255, 256] {
+            let value = high * 4_294_967_296 + low;
+            inputs.push(value.to_string());
+            inputs.push(format!("'{value}'"));
+        }
+    }
+    compare(format!(r#"local out={{}};local function save(...)out[#out+1]=tostring(select('#',...));for i=1,select('#',...)do out[#out+1]=tostring(select(i,...))end end;local t={{[0]='zero','one','two','three'}};for _,x in ipairs({{{}}})do save(pcall(select,x,'a',nil,false));save(pcall(unpack,t,x,x+2));save(pcall(string.char,x));save(pcall(string.rep,'xy',x))end;return table.concat(out,'|')"#,inputs.join(",")).as_bytes());
+}
+
+#[test]
+fn unpack_defaults_empty_ranges_and_overflow_keep_native_error_precedence() {
+    for count in 7997..=8001 {
+        compare(format!("local t={{}};for i=1,{count} do t[i]=i end;local function summarize(...)return select('#',...),select(1,...),select(-1,...)end;return pcall(function()return summarize(unpack(t))end)").as_bytes());
+    }
+    for arguments in [
+        "{},3,1",
+        "{},0/0,0/0",
+        "{},2147483647,-2147483648",
+        "{},nil,false",
+        "false,false,false",
+        "{},false,false",
+    ] {
+        compare(format!("return pcall(function()return unpack({arguments})end)").as_bytes());
+    }
+    // The GNU C oracle overflows its signed element count on these inputs.
+    // Keep its raw failures in check_rust_lua_unpack.py, outside this process.
+    #[cfg(windows)]
+    for arguments in ["{},-2147483648,2147483647", "{},0,2147483647"] {
+        compare(format!("return pcall(function()return unpack({arguments})end)").as_bytes());
+    }
+}
+
+#[test]
+fn unpack_overflow_is_a_catchable_error_and_preserves_later_calls() {
+    let mut vm = Vm::new();
+    vm.set_instruction_limit(Some(1000));
+    let program = compile(
+        br#"
+      for _,bounds in ipairs{{-2147483648,2147483647},{0,2147483647},{-1,2147483647},
+        {-2147483648,-1},{-2147483648,0}}do
+        local ok,e=pcall(unpack,{},bounds[1],bounds[2])
+        assert(not ok and e:find('too many results to unpack',1,true))
+      end
+      local a,b,c=unpack({11,22,33});return a,b,c
+    "#,
+    )
+    .unwrap();
+    assert_eq!(
+        vm.execute(&program).unwrap(),
+        &[
+            Value::Number(11.0),
+            Value::Number(22.0),
+            Value::Number(33.0)
+        ]
+    );
+}
+
+#[test]
+fn maximum_unpack_results_remain_live_during_collection() {
+    compare(br#"local function build()local t={};for i=1,7999 do t[i]={i}end;return unpack(t)end;local function check(...)collectgarbage();local t={...};return #t,t[1][1],t[#t][1]end;return check(build())"#);
+}
+
+#[test]
+fn table_concat_wide_intervals_preserve_first_value_errors() {
+    for arguments in [
+        "{},'',-2147483648,2147483647",
+        "{false},'',1,10000002",
+        "{'a'},'',1,10000002",
+        "{},false,1,10000002",
+        "{},'',2147483647,-2147483648",
+    ] {
+        compare(format!("return pcall(table.concat,{arguments})").as_bytes());
+    }
+}
+
+#[test]
+fn table_insert_accepts_a_large_negative_position_without_an_invented_limit() {
+    compare(br#"local t=setmetatable({4,5},{__newindex=function()error('metamethod')end});table.insert(t,-10000001,'x');return t[-10000001],t[-10000000],t[0],t[1],t[2],t[3]"#);
+}
+
+#[test]
+fn sort_reserves_native_stack_before_comparator_validation() {
+    for count in 7957..=7962 {
+        for comparator in ["nil", "false"] {
+            compare(format!("local args={{}};for i=1,{count} do args[i]=true end;return pcall(function()return table.sort({{}},{comparator},unpack(args))end)").as_bytes());
+        }
+    }
+}
+
+#[test]
+fn sort_discards_unused_argument_roots_before_comparison() {
+    compare(br#"local weak=setmetatable({},{__mode='v'});local function extra()local p={};weak[1]=p;return p end;local gone;local t={2,1};table.sort(t,function(a,b)collectgarbage();gone=weak[1]==nil;return a<b end,extra());return gone,t[1],t[2]"#);
+}
+
+#[test]
+fn finite_pattern_searches_and_backtracking_have_no_invented_work_limit() {
+    compare(br#"local s=string.rep('a',400);return string.find(s,'^a*a*a*b'),string.match(s,'^a*a*a*b'),string.gsub(s,'^a*a*a*b','x')"#);
+    compare(br#"local next=string.gmatch(string.rep('a',140),'a*a*a*b');return next()"#);
+}
+
+#[test]
+fn deferred_pattern_errors_remain_reachable_after_long_searches() {
+    compare(br#"local s=string.rep('a',500000)..'1';local p=string.rep('a',31)..'%d[';return pcall(string.find,s,p)"#);
 }
 
 #[test]
@@ -260,6 +476,86 @@ fn generated_float_formats_match_reference_bytes() {
 }
 
 #[test]
+fn generated_binary_replacements_preserve_captures_counts_and_errors() {
+    let patterns: &[&[u8]] = &[
+        b".",
+        b"(.)",
+        b"()",
+        b"(%a*)(%d*)",
+        b"(a?)",
+        b"",
+        b"^",
+        b"$",
+        b"(%b())",
+        b"(%f[%w]%w+)",
+        b"(%d+)(%a*)",
+        b"(())",
+        b"(.-)",
+        b"%z",
+    ];
+    let mut seed = 0xd154a32c695ed813u64;
+    let mut next = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed as usize
+    };
+    for _ in 0..2000 {
+        let len = next() % 25;
+        let subject: Vec<_> = (0..len).map(|_| b"ab019() \0\xff"[next() % 10]).collect();
+        let pattern = patterns[next() % patterns.len()];
+        let len = next() % 12;
+        let replacement: Vec<_> = (0..len).map(|_| b"a%019\0\xff"[next() % 7]).collect();
+        let maximum = next() % 10;
+        let source = format!(
+            "return pcall(string.gsub,{},{},{},{maximum})",
+            quoted(&subject),
+            quoted(pattern),
+            quoted(&replacement)
+        );
+        compare(source.as_bytes());
+    }
+}
+
+#[test]
+fn binary_format_options_and_malformed_specs_match_reference_errors() {
+    for byte in 0..=255 {
+        for suffix in [b"".as_slice(), b"tail"] {
+            let mut format = vec![b'%', byte];
+            format.extend_from_slice(suffix);
+            compare(format!("return pcall(string.format,{},17,'abc')", quoted(&format)).as_bytes());
+        }
+    }
+    for format in [
+        "%",
+        "%0",
+        "%.",
+        "%12",
+        "%123d",
+        "%.123f",
+        "%------d",
+        "%000000d",
+        "%+-# 0d",
+        "%1.2.3f",
+        "%*s",
+        "%ls",
+        "%Lf",
+        "%99.99q",
+        "%\0tail",
+        "before\0%safter",
+    ] {
+        compare(
+            format!(
+                "return pcall(string.format,{},17,'abc')",
+                quoted(format.as_bytes())
+            )
+            .as_bytes(),
+        );
+        compare(format!("return pcall(string.format,{})", quoted(format.as_bytes())).as_bytes());
+    }
+}
+
+#[test]
 fn extended_math_preserves_bits_and_multiple_result_arity() {
     for source in [
         "return math.asin(0.25),math.acos(0.75),math.atan(1),math.atan2(-0,-1),math.sinh(3),math.cosh(-3),math.tanh(0.5)",
@@ -319,6 +615,49 @@ fn generated_binary_scaling_rounds_subnormals_once() {
         let source =
             format!("local a,b=math.frexp({value:e});return a,b,math.ldexp({value:e},{exponent})");
         compare(source.as_bytes());
+    }
+}
+
+#[test]
+#[cfg(windows)]
+fn ldexp_validates_the_exponent_before_the_mantissa_like_the_msvc_reference() {
+    let arguments = [
+        "nil",
+        "false",
+        "true",
+        "0",
+        "1",
+        "-1",
+        "''",
+        "'2'",
+        "'bad'",
+        "'a\\000b'",
+        "{}",
+        "function()end",
+        "coroutine.create(function()end)",
+    ];
+    compare(b"return pcall(math.ldexp)");
+    for first in arguments {
+        compare(format!("return pcall(math.ldexp,{first})").as_bytes());
+        for second in arguments {
+            compare(format!("return pcall(math.ldexp,{first},{second},'ignored')").as_bytes());
+        }
+    }
+}
+
+#[test]
+#[cfg(windows)]
+fn imported_functions_preserve_ldexp_errors_and_successful_number_coercions() {
+    for operands in ["nil,nil", "false,'bad'", "'bad',1", "'1.5','2'", "'-0',0/0"] {
+        compare(
+            format!(
+                r#"
+local f=assert(loadstring(string.dump(function(a,b)return math.ldexp(a,b)end)))
+return pcall(f,{operands})
+"#
+            )
+            .as_bytes(),
+        );
     }
 }
 

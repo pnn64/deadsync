@@ -15,7 +15,8 @@
 //!
 //! Otherwise these are the relay's rules, as it runs them:
 //!
-//! * **Pool.** Every catalogue pack but the keyboard ones -- or, with authors
+//! * **Pool.** Every catalogue pack but the keyboard ones, by their type or
+//!   a name that says so ([`keyboard_pack`]) -- or, with authors
 //!   asked for, the packs SMO's exact credit search finds them in, dance
 //!   packs only, their own packs (every song theirs) first. Kept to eras,
 //!   only the packs the site's `pack-dates.json` and their names leave able
@@ -311,19 +312,44 @@ impl Candidate {
 }
 
 /// Every pack on the site but the keyboard ones. Untyped packs stay in: most
-/// of the catalogue is untyped, and a song with no singles chart fails the
-/// Expert test on its own anyway.
+/// of the catalogue is untyped, a song with no singles chart fails the Expert
+/// test on its own anyway, and a keyboard pack that slips through is passed
+/// over by its Expert chart ([`pages::ChartFacts::keyboard`]).
 fn catalogue_pool(catalog: &[PackInfo]) -> Vec<Candidate> {
     catalog
         .iter()
-        .filter(|pack| {
-            !pack
-                .pack_type
-                .as_deref()
-                .is_some_and(|kind| kind.trim().eq_ignore_ascii_case("keyboard"))
-        })
+        .filter(|pack| !keyboard_pack(pack))
         .map(Candidate::from_catalogue)
         .collect()
+}
+
+/// A keyboard pack, by the catalogue's type for it or by its name.
+fn keyboard_pack(pack: &PackInfo) -> bool {
+    pack.pack_type
+        .as_deref()
+        .is_some_and(|kind| kind.trim().eq_ignore_ascii_case("keyboard"))
+        || keyboard_name(&pack.name)
+}
+
+/// A pack named for keyboard play: chordjack and keyboard packs, and those of
+/// Etterna, osu!mania and Flash Flash Revolution. SMO has not typed a pack in
+/// years, so most keyboard packs are untyped; their names give them away. One
+/// that says it is for pads is taken at its word. As the relay reads them.
+fn keyboard_name(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    let words: Vec<&str> = lower
+        .split(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
+        .collect();
+    let word = |want: &str| words.contains(&want);
+    let named = lower.contains("chordjack")
+        || lower.contains("chord jack")
+        || lower.contains("keyboard")
+        || lower.contains("etterna")
+        || lower.contains("osu!")
+        || lower.replace(' ', "").contains("flashflashrevolution")
+        || word("osu")
+        || word("ffr");
+    named && !(word("pad") || word("pads"))
 }
 
 /// Every author's exact credit search, asked for together: SMO takes a second
@@ -375,6 +401,9 @@ fn author_pool(catalog: &[PackInfo], found: Vec<CreditPack>) -> Vec<Candidate> {
         let Some(info) = by_id.get(&pack.id) else {
             continue;
         };
+        if keyboard_pack(info) {
+            continue;
+        }
         let slot = *at.entry(pack.id).or_insert_with(|| {
             let mut candidate = Candidate::from_catalogue(info);
             candidate.hint = Some(HashSet::new());
@@ -1478,6 +1507,15 @@ impl Search<'_> {
                     continue;
                 }
             };
+            // A keyboard chart: a keyboard pack, whatever the catalogue says.
+            if chart.keyboard {
+                log::debug!(
+                    "Rip Packs: pack {} passed over: its Expert chart is a keyboard chart",
+                    candidate.id
+                );
+                lock(&self.passed).insert(candidate.id);
+                return Pick::Nothing;
+            }
             let singles_chart =
                 chart.charttype.is_empty() || chart.charttype.eq_ignore_ascii_case("dance-single");
             if !singles_chart || !credit_fits(&chart.author, &options.authors, &options.avoid) {
@@ -1776,9 +1814,38 @@ mod tests {
             pack(1, "Pad", 10, Some("itg")),
             pack(2, "Keys", 10, Some(" Keyboard ")),
             pack(3, "Untyped", 10, None),
+            pack(4, "Towa Chordjack Repo", 10, None),
+            pack(5, "FLipSide FFR Pad Pack", 10, None),
         ];
         let ids: Vec<u64> = catalogue_pool(&catalog).iter().map(|c| c.id).collect();
-        assert_eq!(ids, vec![1, 3]);
+        assert_eq!(ids, vec![1, 3, 5]);
+    }
+
+    #[test]
+    fn keyboard_packs_are_known_by_their_names() {
+        for name in [
+            "Blos Chordjack Pack",
+            "Martzi's Chord Jack Minipack",
+            "RKR2 Keyboard Mega Pack Final",
+            "#774 Etterna Explosion Excitepack",
+            "Osu!Mania X StepMania Challenge Pack 2 by Vrenrik",
+            "interesting files i found in osu!mania",
+            "0.Solo osu mania 6k Starter Pack Vol.1",
+            "FFR Community Pack Summer 2011",
+            "Flash Flash Revolution Community Pack 4",
+            "FlashFlashRevolution R2",
+        ] {
+            assert!(keyboard_name(name), "{name}");
+        }
+        for name in [
+            "FLipSide FFR Pad Pack",
+            "Michael Jackson Pack",
+            "East Coast Stamina 8 - Upper",
+            "Housu Pack",
+            "Buffr Zone",
+        ] {
+            assert!(!keyboard_name(name), "{name}");
+        }
     }
 
     #[test]

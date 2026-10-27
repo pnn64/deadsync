@@ -1,5 +1,8 @@
 #![cfg(target_os = "linux")]
 
+#[cfg(test)]
+mod perf_tests;
+
 use alsa::pcm::{Access, Format, HwParams, PCM, State, SwParams, TstampType};
 use alsa::{Ctl, Direction, ValueOr};
 use deadlib_audio_core::{
@@ -11,6 +14,7 @@ use deadlib_audio_core::{
 use deadlib_platform::host_time::now_nanos;
 use libc::timespec;
 use log::{info, warn};
+use std::ffi::{CStr, CString};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Sender, channel};
@@ -33,7 +37,7 @@ impl AlsaAccessMode {
 }
 
 pub struct AlsaOutputPrep {
-    pcm_id: String,
+    pcm_id: CString,
     device_name: String,
     sample_rate_hz: u32,
     channels: usize,
@@ -84,19 +88,82 @@ pub struct AlsaOutputDevice {
     pub is_default: bool,
 }
 
-struct PhysicalOutputDevice {
-    card_index: u32,
-    card_name: String,
-    device_index: u32,
-    device_name: String,
+// "hw:" + ten u32 decimal digits + NUL.
+fn control_pcm_name(card: u32, buffer: &mut [u8; 14]) -> &CStr {
+    let end = buffer.len() - 1;
+    buffer[end] = 0;
+    let digits = write_decimal_suffix(card, &mut buffer[..end]);
+    let start = digits - b"hw:".len();
+    buffer[start..digits].copy_from_slice(b"hw:");
+    CStr::from_bytes_with_nul(&buffer[start..]).unwrap()
+}
+
+fn write_decimal_suffix(mut value: u32, buffer: &mut [u8]) -> usize {
+    let mut start = buffer.len();
+    while value >= 10 {
+        start -= 1;
+        buffer[start] = b'0' + (value % 10) as u8;
+        value /= 10;
+    }
+    start -= 1;
+    buffer[start] = b'0' + value as u8;
+    start
+}
+
+// "hw:CARD=" + ten digits + ",DEV=" + ten digits + NUL.
+fn device_pcm_name(card: u32, device: u32, buffer: &mut [u8; 34]) -> &CStr {
+    let end = buffer.len() - 1;
+    buffer[end] = 0;
+    let device_start = write_decimal_suffix(device, &mut buffer[..end]);
+    let separator = device_start - b",DEV=".len();
+    buffer[separator..device_start].copy_from_slice(b",DEV=");
+    let card_start = write_decimal_suffix(card, &mut buffer[..separator]);
+    let start = card_start - b"hw:CARD=".len();
+    buffer[start..card_start].copy_from_slice(b"hw:CARD=");
+    CStr::from_bytes_with_nul(&buffer[start..]).unwrap()
 }
 
 pub fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
-    let default_pcm_id = default_hw_pcm_id();
-    let mut devices = physical_output_devices()
-        .into_iter()
-        .map(|device| build_output_device(device, default_pcm_id.as_deref()))
-        .collect::<Vec<_>>();
+    let default_address = default_hw_pcm_address();
+    let mut devices = Vec::new();
+    for card in alsa::card::Iter::new().filter_map(Result::ok) {
+        let card_index = card.get_index() as u32;
+        let mut control_name = [0; 14];
+        let Ok(ctl) = Ctl::open(control_pcm_name(card_index, &mut control_name), false) else {
+            continue;
+        };
+        let card_info = ctl.card_info().ok();
+        let fallback_card_name;
+        let card_name = match card_info.as_ref().and_then(|info| info.get_name().ok()) {
+            Some(name) => name,
+            None => {
+                fallback_card_name = card
+                    .get_name()
+                    .unwrap_or_else(|_| format!("Card {card_index}"));
+                &fallback_card_name
+            }
+        };
+        for device_index in alsa::ctl::DeviceIter::new(&ctl) {
+            let Ok(playback_info) = ctl.pcm_info(device_index as u32, 0, Direction::Playback)
+            else {
+                continue;
+            };
+            let mut pcm_name = [0; 34];
+            let pcm_id = device_pcm_name(card_index, device_index as u32, &mut pcm_name);
+            let name = match playback_info.get_name() {
+                Ok(device_name) => {
+                    let mut name = String::with_capacity(card_name.len() + 2 + device_name.len());
+                    name.push_str(card_name);
+                    name.push_str(", ");
+                    name.push_str(device_name);
+                    name
+                }
+                Err(_) => format!("{card_name}, Device {device_index}"),
+            };
+            let is_default = default_address == Some((card_index, device_index as u32));
+            devices.push(build_output_device(pcm_id, name, is_default));
+        }
+    }
     if !devices.iter().any(|device| device.is_default)
         && let Some(device) = devices.first_mut()
     {
@@ -105,88 +172,56 @@ pub fn enumerate_output_devices() -> Vec<AlsaOutputDevice> {
     devices
 }
 
-fn default_hw_pcm_id() -> Option<String> {
-    resolved_hw_pcm_id("default").or_else(|| resolved_hw_pcm_id("sysdefault"))
+fn default_hw_pcm_address() -> Option<(u32, u32)> {
+    resolved_hw_pcm_address(c"default").or_else(|| resolved_hw_pcm_address(c"sysdefault"))
 }
 
-fn physical_output_devices() -> Vec<PhysicalOutputDevice> {
-    let mut devices = Vec::new();
-    for card in alsa::card::Iter::new().filter_map(Result::ok) {
-        let card_index = card.get_index() as u32;
-        let Ok(ctl) = Ctl::new(&format!("hw:{card_index}"), false) else {
-            continue;
-        };
-        let card_name = ctl
-            .card_info()
-            .ok()
-            .and_then(|info| info.get_name().ok().map(str::to_string))
-            .or_else(|| card.get_name().ok())
-            .unwrap_or_else(|| format!("Card {card_index}"));
-        for device_index in alsa::ctl::DeviceIter::new(&ctl) {
-            let Ok(playback_info) = ctl.pcm_info(device_index as u32, 0, Direction::Playback)
-            else {
-                continue;
-            };
-            let device_name = playback_info
-                .get_name()
-                .map(str::to_string)
-                .unwrap_or_else(|_| format!("Device {}", device_index));
-            devices.push(PhysicalOutputDevice {
-                card_index,
-                card_name: card_name.clone(),
-                device_index: device_index as u32,
-                device_name,
-            });
-        }
-    }
-    devices
-}
-
-fn build_output_device(
-    device: PhysicalOutputDevice,
-    default_pcm_id: Option<&str>,
-) -> AlsaOutputDevice {
-    let pcm_id = format!("hw:CARD={},DEV={}", device.card_index, device.device_index);
-    let name = format!("{}, {}", device.card_name, device.device_name);
-    let (sample_rates_hz, default_rate_hz, channels) = match probe_output_device(&pcm_id) {
+fn build_output_device(pcm_id: &CStr, name: String, is_default: bool) -> AlsaOutputDevice {
+    let pcm_name = pcm_id.to_str().expect("generated PCM ID must be UTF-8");
+    let (sample_rates_hz, default_rate_hz, channels) = match probe_output_device(pcm_id) {
         Ok(probed) => probed,
-        Err(err) => {
-            warn!(
-                "Failed to probe ALSA playback device '{}' ({}): {err}. Listing it with fallback defaults.",
-                name, pcm_id
-            );
+        Err((reason, source)) => {
+            if let Some(source) = source {
+                warn!(
+                    "Failed to probe ALSA playback device '{name}' ({pcm_name}): {reason} '{pcm_name}': {source}. Listing it with fallback defaults."
+                );
+            } else {
+                warn!(
+                    "Failed to probe ALSA playback device '{name}' ({pcm_name}): {reason} '{pcm_name}'. Listing it with fallback defaults."
+                );
+            }
             (Vec::new(), 48_000, 2)
         }
     };
     AlsaOutputDevice {
-        is_default: default_pcm_id == Some(pcm_id.as_str()),
+        is_default,
         name,
-        pcm_id,
+        pcm_id: pcm_name.to_owned(),
         sample_rates_hz,
         default_rate_hz,
         channels,
     }
 }
 
-fn probe_output_device(pcm_id: &str) -> Result<(Vec<u32>, u32, usize), String> {
-    let pcm = open_pcm(pcm_id)?;
-    let hw = HwParams::any(&pcm)
-        .map_err(|e| format!("failed to create ALSA hw params for '{pcm_id}': {e}"))?;
+type DeviceProbeError = (&'static str, Option<alsa::Error>);
+
+fn probe_output_device(pcm_id: &CStr) -> Result<(Vec<u32>, u32, usize), DeviceProbeError> {
+    let pcm = PCM::open(pcm_id, Direction::Playback, false)
+        .map_err(|e| ("failed to open ALSA PCM", Some(e)))?;
+    let hw = HwParams::any(&pcm).map_err(|e| ("failed to create ALSA hw params for", Some(e)))?;
     hw.test_access(Access::RWInterleaved)
-        .map_err(|e| format!("missing RW interleaved access for '{pcm_id}': {e}"))?;
+        .map_err(|e| ("missing RW interleaved access for", Some(e)))?;
     hw.test_format(Format::s16())
-        .map_err(|e| format!("missing signed 16-bit format for '{pcm_id}': {e}"))?;
-    let channels = preferred_channels(&hw).ok_or_else(|| {
-        format!("failed to determine a usable channel count for ALSA PCM '{pcm_id}'")
-    })?;
-    let default_rate_hz = preferred_rate_hz(&hw).ok_or_else(|| {
-        format!("failed to determine a usable sample rate for ALSA PCM '{pcm_id}'")
-    })?;
-    Ok((
-        supported_sample_rates(&hw, default_rate_hz),
-        default_rate_hz,
-        channels,
-    ))
+        .map_err(|e| ("missing signed 16-bit format for", Some(e)))?;
+    let channels = preferred_channels(&hw).ok_or((
+        "failed to determine a usable channel count for ALSA PCM",
+        None,
+    ))?;
+    let (sample_rates_hz, default_rate_hz) = sample_rate_capabilities(&hw).ok_or((
+        "failed to determine a usable sample rate for ALSA PCM",
+        None,
+    ))?;
+    Ok((sample_rates_hz, default_rate_hz, channels))
 }
 
 fn preferred_channels(hw: &HwParams<'_>) -> Option<usize> {
@@ -200,46 +235,55 @@ fn preferred_channels(hw: &HwParams<'_>) -> Option<usize> {
     Some(min_channels as usize)
 }
 
-fn preferred_rate_hz(hw: &HwParams<'_>) -> Option<u32> {
+fn sample_rate_capabilities(hw: &HwParams<'_>) -> Option<(Vec<u32>, u32)> {
     const COMMON_SAMPLE_RATES: [u32; 11] = [
         48000, 44100, 96000, 88200, 192000, 176400, 32000, 22050, 16000, 11025, 384000,
     ];
-    for sample_rate_hz in COMMON_SAMPLE_RATES {
+    // Keep support in priority order without repeating ALSA constraint tests.
+    let mut supported = 0_u16;
+    for (index, sample_rate_hz) in COMMON_SAMPLE_RATES.into_iter().enumerate() {
         if hw.test_rate(sample_rate_hz).is_ok() {
-            return Some(sample_rate_hz);
+            supported |= 1 << index;
         }
     }
-    let min_rate_hz = hw.get_rate_min().ok()?.max(1);
-    if hw.test_rate(min_rate_hz).is_ok() {
-        return Some(min_rate_hz);
-    }
-    let max_rate_hz = hw.get_rate_max().ok()?.max(min_rate_hz);
-    hw.test_rate(max_rate_hz).ok()?;
-    Some(max_rate_hz)
-}
-
-fn supported_sample_rates(hw: &HwParams<'_>, default_rate_hz: u32) -> Vec<u32> {
-    const COMMON_SAMPLE_RATES: [u32; 11] = [
-        11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000, 176400, 192000, 384000,
-    ];
-    let mut sample_rates_hz = Vec::with_capacity(COMMON_SAMPLE_RATES.len() + 3);
-    if default_rate_hz > 0 {
-        sample_rates_hz.push(default_rate_hz);
-    }
-    for sample_rate_hz in COMMON_SAMPLE_RATES {
-        if hw.test_rate(sample_rate_hz).is_ok() {
-            sample_rates_hz.push(sample_rate_hz);
+    let default_rate_hz = if supported != 0 {
+        COMMON_SAMPLE_RATES[supported.trailing_zeros() as usize]
+    } else {
+        let min_rate_hz = hw.get_rate_min().ok()?.max(1);
+        if hw.test_rate(min_rate_hz).is_ok() {
+            min_rate_hz
+        } else {
+            let max_rate_hz = hw.get_rate_max().ok()?.max(min_rate_hz);
+            hw.test_rate(max_rate_hz).ok()?;
+            max_rate_hz
         }
+    };
+    let mut rates = [0; COMMON_SAMPLE_RATES.len() + 3];
+    rates[0] = default_rate_hz;
+    let mut len = usize::from(supported == 0);
+    while supported != 0 {
+        rates[len] = COMMON_SAMPLE_RATES[supported.trailing_zeros() as usize];
+        len += 1;
+        supported &= supported - 1;
     }
     if let Ok(min_rate_hz) = hw.get_rate_min() {
-        sample_rates_hz.push(min_rate_hz);
+        rates[len] = min_rate_hz;
+        len += 1;
     }
     if let Ok(max_rate_hz) = hw.get_rate_max() {
-        sample_rates_hz.push(max_rate_hz);
+        rates[len] = max_rate_hz;
+        len += 1;
     }
-    sample_rates_hz.sort_unstable();
-    sample_rates_hz.dedup();
-    sample_rates_hz
+    let rates = &mut rates[..len];
+    rates.sort_unstable();
+    let mut unique = 1;
+    for index in 1..len {
+        if rates[index] != rates[unique - 1] {
+            rates[unique] = rates[index];
+            unique += 1;
+        }
+    }
+    Some((rates[..unique].to_vec(), default_rate_hz))
 }
 
 pub fn prepare(
@@ -250,6 +294,7 @@ pub fn prepare(
     mode: AlsaAccessMode,
 ) -> Result<AlsaOutputPrep, String> {
     let pcm_id = selected_pcm_id(pcm_id, &device_name, mode)?;
+    let pcm_id = CString::new(pcm_id).unwrap();
     let pcm = open_pcm(&pcm_id)?;
     let actual = configure_probe(&pcm, sample_rate_hz, channels.max(1), mode)?;
     Ok(AlsaOutputPrep {
@@ -294,6 +339,8 @@ pub fn start(
 
 struct AlsaParams {
     sample_rate_hz: u32,
+    sample_rate_reciprocal: u64,
+    sample_rate_shift: u8,
     channels: usize,
     period_frames: u32,
     buffer_frames: u32,
@@ -398,8 +445,18 @@ fn render_thread_inner(
             prep.device_name
         )
     })?;
-    let period_ns = frames_to_nanos(actual.sample_rate_hz, actual.period_frames);
-    let buffer_ns = frames_to_nanos(actual.sample_rate_hz, actual.buffer_frames);
+    let period_ns = frames_to_nanos(
+        actual.sample_rate_hz,
+        actual.period_frames,
+        actual.sample_rate_reciprocal,
+        actual.sample_rate_shift,
+    );
+    let buffer_ns = frames_to_nanos(
+        actual.sample_rate_hz,
+        actual.buffer_frames,
+        actual.sample_rate_reciprocal,
+        actual.sample_rate_shift,
+    );
     info!(
         "ALSA '{}' using {} output with {} timing.",
         prep.device_name,
@@ -425,6 +482,8 @@ fn render_thread_inner(
         let timing_before = playback_status_timing(
             &pcm,
             actual.sample_rate_hz,
+            actual.sample_rate_reciprocal,
+            actual.sample_rate_shift,
             actual.host_clock,
             &mut clock_health,
         );
@@ -448,6 +507,8 @@ fn render_thread_inner(
         let timing_after = playback_status_timing(
             &pcm,
             actual.sample_rate_hz,
+            actual.sample_rate_reciprocal,
+            actual.sample_rate_shift,
             actual.host_clock,
             &mut clock_health,
         );
@@ -474,55 +535,46 @@ fn selected_pcm_id(
     device_name: &str,
     mode: AlsaAccessMode,
 ) -> Result<String, String> {
-    let pcm_id = pcm_id.unwrap_or_else(|| "default".to_string());
+    let mut pcm_id = pcm_id.unwrap_or_else(|| "default".to_string());
     match mode {
-        AlsaAccessMode::Shared => Ok(shared_pcm_id(&pcm_id)),
-        AlsaAccessMode::Exclusive => exclusive_pcm_id(&pcm_id).ok_or_else(|| {
-            format!(
-                "ALSA exclusive output for '{}' requires a direct hw/plughw device or a resolvable hardware-backed alias, got '{}'",
-                device_name, pcm_id
-            )
-        }),
+        AlsaAccessMode::Shared => {
+            if pcm_id.starts_with("hw:") {
+                pcm_id.insert_str(0, "plug");
+            }
+        }
+        AlsaAccessMode::Exclusive => {
+            if pcm_id.starts_with("plughw:") {
+                pcm_id.replace_range(..4, "");
+            } else if !pcm_id.starts_with("hw:") {
+                return resolved_hw_pcm_address(&CString::new(pcm_id.as_str()).unwrap())
+                    .map(|(card, device)| format!("hw:CARD={card},DEV={device}"))
+                    .ok_or_else(|| {
+                    format!(
+                        "ALSA exclusive output for '{}' requires a direct hw/plughw device or a resolvable hardware-backed alias, got '{}'",
+                        device_name, pcm_id
+                    )
+                });
+            }
+        }
     }
+    Ok(pcm_id)
 }
 
-#[inline(always)]
-fn shared_pcm_id(pcm_id: &str) -> String {
-    if let Some(rest) = pcm_id.strip_prefix("hw:") {
-        return format!("plughw:{rest}");
-    }
-    pcm_id.to_string()
-}
-
-#[inline(always)]
-fn exclusive_pcm_id(pcm_id: &str) -> Option<String> {
-    if let Some(pcm_id) = direct_pcm_id(pcm_id) {
-        return Some(pcm_id);
-    }
-    resolved_hw_pcm_id(pcm_id)
-}
-
-#[inline(always)]
-fn direct_pcm_id(pcm_id: &str) -> Option<String> {
-    if pcm_id.starts_with("hw:") {
-        return Some(pcm_id.to_string());
-    }
-    pcm_id
-        .strip_prefix("plughw:")
-        .map(|rest| format!("hw:{rest}"))
-}
-
-fn resolved_hw_pcm_id(pcm_id: &str) -> Option<String> {
-    let pcm = open_pcm(pcm_id).ok()?;
+fn resolved_hw_pcm_address(pcm_id: &CStr) -> Option<(u32, u32)> {
+    let pcm = PCM::open(pcm_id, Direction::Playback, false).ok()?;
     let info = pcm.info().ok()?;
     let card = info.get_card();
-    (card >= 0).then(|| format!("hw:CARD={card},DEV={}", info.get_device()))
+    (card >= 0).then(|| (card as u32, info.get_device()))
 }
 
 #[inline(always)]
-fn open_pcm(pcm_id: &str) -> Result<PCM, String> {
-    PCM::new(pcm_id, Direction::Playback, false)
-        .map_err(|e| format!("failed to open ALSA PCM '{pcm_id}': {e}"))
+fn open_pcm(pcm_id: &CStr) -> Result<PCM, String> {
+    PCM::open(pcm_id, Direction::Playback, false).map_err(|e| {
+        format!(
+            "failed to open ALSA PCM '{}': {e}",
+            pcm_id.to_string_lossy()
+        )
+    })
 }
 
 fn configure_probe(
@@ -613,11 +665,15 @@ fn configure_pcm(
         .map_err(|e| format!("ALSA period size query failed: {e}"))?
         .max(1) as u32;
     let host_clock = apply_sw_params(&sw, pcm, period_frames, buffer_frames)?;
+    let sample_rate_hz = hw_current
+        .get_rate()
+        .unwrap_or(actual_rate_hz.max(1))
+        .max(1);
+    let (sample_rate_reciprocal, sample_rate_shift) = sample_rate_scale(sample_rate_hz);
     Ok(AlsaParams {
-        sample_rate_hz: hw_current
-            .get_rate()
-            .unwrap_or(actual_rate_hz.max(1))
-            .max(1),
+        sample_rate_hz,
+        sample_rate_reciprocal,
+        sample_rate_shift,
         channels: hw_current.get_channels().unwrap_or(channels as u32).max(1) as usize,
         period_frames,
         buffer_frames,
@@ -705,16 +761,31 @@ struct ClockSample {
 fn playback_status_timing(
     pcm: &PCM,
     sample_rate_hz: u32,
+    sample_rate_reciprocal: u64,
+    sample_rate_shift: u8,
     host_clock: AlsaHostClock,
     clock_health: &mut AlsaClockHealth,
 ) -> PlaybackStatusTiming {
     let delay_frames_fallback = current_delay_frames_fallback(pcm);
-    let delay_ns_fallback = frames_to_nanos(sample_rate_hz, delay_frames_fallback);
     let Some(status) = pcm.status().ok() else {
-        return fallback_timing(delay_frames_fallback, delay_ns_fallback, clock_health);
+        return fallback_timing(
+            delay_frames_fallback,
+            frames_to_nanos(
+                sample_rate_hz,
+                delay_frames_fallback,
+                sample_rate_reciprocal,
+                sample_rate_shift,
+            ),
+            clock_health,
+        );
     };
     let delay_frames = status.get_delay().max(0) as u32;
-    let delay_ns = frames_to_nanos(sample_rate_hz, delay_frames);
+    let delay_ns = frames_to_nanos(
+        sample_rate_hz,
+        delay_frames,
+        sample_rate_reciprocal,
+        sample_rate_shift,
+    );
     let Some(sample) = sample_host_clock(host_clock) else {
         return fallback_timing(delay_frames, delay_ns, clock_health);
     };
@@ -833,11 +904,29 @@ fn host_nanos_from_clock(target_nanos: u64, sample: ClockSample) -> u64 {
 }
 
 #[inline(always)]
-fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {
+fn sample_rate_scale(sample_rate_hz: u32) -> (u64, u8) {
+    if sample_rate_hz > 1 {
+        // frames * 1e9 < 2^62. With L = floor(log2(rate)), precision 63 + L
+        // bounds reciprocal error below 1/rate, preserving integer truncation.
+        let shift = (sample_rate_hz.ilog2() - 1) as u8;
+        let reciprocal = (1_u128 << (64 + u32::from(shift))).div_ceil(u128::from(sample_rate_hz));
+        (reciprocal as u64, shift)
+    } else {
+        (0, 0)
+    }
+}
+
+#[inline(always)]
+fn frames_to_nanos(sample_rate_hz: u32, frames: u32, reciprocal: u64, shift: u8) -> u64 {
     if sample_rate_hz == 0 || frames == 0 {
         return 0;
     }
-    (u64::from(frames) * 1_000_000_000) / u64::from(sample_rate_hz)
+    let numerator = u64::from(frames) * 1_000_000_000;
+    if sample_rate_hz == 1 {
+        return numerator;
+    }
+    // Scale is prepared from the same rate; its product fits below 2^125.
+    (((u128::from(numerator) * u128::from(reciprocal)) >> 64) as u64) >> shift
 }
 
 #[inline(always)]
@@ -852,14 +941,33 @@ mod tests {
 
     #[test]
     fn pcm_id_policy_preserves_shared_and_exclusive_routes() {
-        assert_eq!(shared_pcm_id("hw:CARD=2,DEV=1"), "plughw:CARD=2,DEV=1");
-        assert_eq!(shared_pcm_id("default"), "default");
         assert_eq!(
-            direct_pcm_id("hw:CARD=2,DEV=1").as_deref(),
-            Some("hw:CARD=2,DEV=1")
+            selected_pcm_id(
+                Some("hw:CARD=2,DEV=1".into()),
+                "test device",
+                AlsaAccessMode::Shared
+            )
+            .as_deref(),
+            Ok("plughw:CARD=2,DEV=1")
         );
-        assert_eq!(direct_pcm_id("plughw:2,1").as_deref(), Some("hw:2,1"));
-        assert_eq!(direct_pcm_id("default"), None);
+        assert_eq!(
+            selected_pcm_id(
+                Some("default".into()),
+                "test device",
+                AlsaAccessMode::Shared
+            )
+            .as_deref(),
+            Ok("default")
+        );
+        assert_eq!(
+            selected_pcm_id(
+                Some("hw:CARD=2,DEV=1".into()),
+                "test device",
+                AlsaAccessMode::Exclusive
+            )
+            .as_deref(),
+            Ok("hw:CARD=2,DEV=1")
+        );
         assert_eq!(
             selected_pcm_id(
                 Some("plughw:CARD=2,DEV=1".to_string()),
@@ -877,9 +985,25 @@ mod tests {
         assert_eq!(suggested_period_frames(48_000), 240);
         assert_eq!(suggested_period_frames(192_000), 960);
         assert_eq!(suggested_period_frames(384_000), 1024);
-        assert_eq!(frames_to_nanos(48_000, 480), 10_000_000);
-        assert_eq!(frames_to_nanos(44_100, 441), 10_000_000);
-        assert_eq!(frames_to_nanos(0, 480), 0);
+        assert_eq!(
+            frames_to_nanos(
+                48_000,
+                480,
+                sample_rate_scale(48_000).0,
+                sample_rate_scale(48_000).1
+            ),
+            10_000_000
+        );
+        assert_eq!(
+            frames_to_nanos(
+                44_100,
+                441,
+                sample_rate_scale(44_100).0,
+                sample_rate_scale(44_100).1
+            ),
+            10_000_000
+        );
+        assert_eq!(frames_to_nanos(0, 480, 0, 0), 0);
         assert_eq!(timespec_nanos(2, 3), Some(2_000_000_003));
         assert_eq!(timespec_nanos(-1, 0), None);
         assert_eq!(timespec_nanos(0, -1), None);
@@ -914,7 +1038,8 @@ mod tests {
 
     #[test]
     fn null_pcm_preserves_requested_stream_shape() {
-        let pcm = open_pcm("null").expect("ALSA null PCM should be available for regression tests");
+        let pcm =
+            open_pcm(c"null").expect("ALSA null PCM should be available for regression tests");
         let actual = configure_pcm(&pcm, 48_000, 2, AlsaAccessMode::Shared, 240, Some(480))
             .expect("ALSA null PCM should accept the standard stereo stream shape");
 

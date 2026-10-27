@@ -1,0 +1,240 @@
+{
+  "baseline_png_commit": "861a15e0036f1814420e739c529bd058b16484a6",
+  "selected": "Unchanged buffered Vec output loop and streaming inflater",
+  "reason": "The initialized-spare slice trial does not establish a consistent decoder speedup in repeated reference-relative shared-host timings. No performance improvement is claimed.",
+  "production_sources_unchanged": 21,
+  "source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "57984db9d36f37210db69ac28689e18f9ba9ac5f743d90e2a4a5afa7ddd3f570"
+    }
+  ],
+  "reconstruction": [
+    {
+      "experiment": "output-spare",
+      "patch": "experiments/output-spare.patch",
+      "patch_sha256": "0948473c97a3f4c78df93906fcc9db82e63d6a27f408f8d9d388ba04878abff7",
+      "all_21_recorded_source_hashes_reconstructed": true,
+      "destination": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadlib-output-spare-x4cfwx90"
+    }
+  ],
+  "benchmark_groups": [
+    {
+      "manifest": "benchmark-output-spare-before-photos-a-manifest.json",
+      "sha256": "61cc247f51bebf754518a97d865408f3a962fcce9bbdffe686f290aa7a7b5ab5",
+      "variant": "baseline",
+      "binary_sha256": "554dc9c482a1f80e50eacafef1c2742d1c607d05684d944d9b323548500e3948"
+    },
+    {
+      "manifest": "benchmark-output-spare-before-formats-a-manifest.json",
+      "sha256": "2d07e09636ef6dc72483c58b16175257d8ef69f9f76802ebc08d594e85d6d11c",
+      "variant": "baseline",
+      "binary_sha256": "554dc9c482a1f80e50eacafef1c2742d1c607d05684d944d9b323548500e3948"
+    },
+    {
+      "manifest": "benchmark-output-spare-trial-photos-a-manifest.json",
+      "sha256": "f0fde1edee2df6b260e37adbe627335a0c56fda07bc46fc6a47af32f6c71032d",
+      "variant": "trial",
+      "binary_sha256": "cd6fdb43c83c0af47384fcbc9fe073012eca93c7f7f4c75d7d1c378fe7026ad1"
+    },
+    {
+      "manifest": "benchmark-output-spare-trial-formats-a-manifest.json",
+      "sha256": "509fa04669205f0bed0f8f993279550c49cbdf251d29bbd1a40a06f83b8317cd",
+      "variant": "trial",
+      "binary_sha256": "cd6fdb43c83c0af47384fcbc9fe073012eca93c7f7f4c75d7d1c378fe7026ad1"
+    },
+    {
+      "manifest": "benchmark-output-spare-repeat-photos-a-manifest.json",
+      "sha256": "e75dd0aecab4f1791c5801feb230d0c7ccb0a65ebd11a8674a5cc762c43f6349",
+      "variant": "repeat",
+      "binary_sha256": "cd6fdb43c83c0af47384fcbc9fe073012eca93c7f7f4c75d7d1c378fe7026ad1"
+    },
+    {
+      "manifest": "benchmark-output-spare-repeat-formats-a-manifest.json",
+      "sha256": "9a62af2cc2ac8dafe404cd304804714348bc3980a783106ac06ca0df9f7acc41",
+      "variant": "repeat",
+      "binary_sha256": "cd6fdb43c83c0af47384fcbc9fe073012eca93c7f7f4c75d7d1c378fe7026ad1"
+    },
+    {
+      "manifest": "benchmark-output-spare-control-photos-a-manifest.json",
+      "sha256": "64a4300741dda36a84b7050260b8bdb35db5b8dee03c2de0a57e0d5c6f69b1b4",
+      "variant": "baseline",
+      "binary_sha256": "554dc9c482a1f80e50eacafef1c2742d1c607d05684d944d9b323548500e3948"
+    },
+    {
+      "manifest": "benchmark-output-spare-control-formats-a-manifest.json",
+      "sha256": "353a2b8ff39034d4009548a47710222d55519960b2a6d3369fd82dbcc9e50888",
+      "variant": "baseline",
+      "binary_sha256": "554dc9c482a1f80e50eacafef1c2742d1c607d05684d944d9b323548500e3948"
+    }
+  ],
+  "summaries": [
+    {
+      "path": "benchmark-output-spare-photos-summary.json",
+      "sha256": "7a2de60b0230dfce95e29e775189ea167971e09dfea420daa0d55ab3cd83a4ac",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 101.23672394256808,
+          "after_mib_s": 99.03472758359761,
+          "absolute_change_percent": -2.175096420760969,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -2.5858944481482404
+        },
+        "decode-reader": {
+          "before_mib_s": 81.38879414755971,
+          "after_mib_s": 80.45005848458534,
+          "absolute_change_percent": -1.153396696444986,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -1.568485167430711
+        },
+        "inflate": {
+          "before_mib_s": 128.67086591898604,
+          "after_mib_s": 126.07971724501732,
+          "absolute_change_percent": -2.013780396566356,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -2.3155197395779314
+        },
+        "inflate-stream": {
+          "before_mib_s": 87.95283986566571,
+          "after_mib_s": 87.11479216854596,
+          "absolute_change_percent": -0.9528375643125697,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -1.257843980944029
+        }
+      }
+    },
+    {
+      "path": "benchmark-output-spare-formats-summary.json",
+      "sha256": "e0b0260a63d5c5772ac2a2c117660add23fbe9ecae455dd97069f23627252600",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 248.6588721783012,
+          "after_mib_s": 256.61739060149057,
+          "absolute_change_percent": 3.200576900181029,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -3.4487314205917774
+        },
+        "decode-reader": {
+          "before_mib_s": 235.7574545402015,
+          "after_mib_s": 247.05266268837303,
+          "absolute_change_percent": 4.791029055772844,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -1.9607535637841011
+        },
+        "inflate": {
+          "before_mib_s": 904.3541567609763,
+          "after_mib_s": 952.666963047034,
+          "absolute_change_percent": 5.342244067201984,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -5.344635924215635
+        },
+        "inflate-stream": {
+          "before_mib_s": 492.47968776173303,
+          "after_mib_s": 499.1532928964644,
+          "absolute_change_percent": 1.3551026165286473,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -8.927285306493605
+        }
+      }
+    }
+  ],
+  "verifier_sha256": "cc97cbc85fd454a7af7f01e1a3d325a5988b507c136de2620274fd62db60e68e",
+  "final_validation_evidence": [
+    {
+      "path": "animation-fields-validation.json",
+      "sha256": "61a3bd921a030fd5388c1acc75e33bab0560516b0d7bb9fd133d015e6e697249"
+    },
+    {
+      "path": "fuzz/reports/animation-fields-source.json",
+      "sha256": "e13b92b664079131fd1913778c4bb8c7bee1ae11215d1406ff1b2db3d0f78a25"
+    },
+    {
+      "path": "fuzz/reports/animation-fields-seeds.json",
+      "sha256": "559fe934beed633526f3f5e06c9948c82d547dcebe11efc0d5cfa02ce3325d11"
+    },
+    {
+      "path": "fuzz/reports/animation-fields-seed-build.json",
+      "sha256": "d1eae5f44cffb4890db9f965344388175e71923b6832a731133cd9c2e6a972e2"
+    }
+  ]
+}

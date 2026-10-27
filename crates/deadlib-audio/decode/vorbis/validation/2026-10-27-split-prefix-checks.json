@@ -1,0 +1,1229 @@
+{
+  "started_utc": "2026-10-27T08:12:59.210423+00:00",
+  "git_head": "1b70081ae61b3f994e858c8b0d0ce722c8ff5dbd",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "source_sha256": {
+    "ogg/Cargo.toml": "b18d898856a7db1f30299197ed8d053dd49b6825c50571d1b831950265d069eb",
+    "ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+    "ogg/src/crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+    "ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+    "ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+    "ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+    "ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+    "ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+    "ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+    "ogg/tests/compatibility.rs": "46f02ed4fc8f8602e2a71ba5cfc3df49b9b7d2a5295cfe688a0cb44b6c74a721",
+    "ogg/tests/container.rs": "a2537ddef1704beae9050f7e2572b956192f82555b1606971303a8aa260f8981",
+    "ogg/tests/libogg.rs": "3b75b7067c505b0af951babe26a3d3388df6b851f59b4d49843132acbbbc81fe",
+    "ogg/tests/oracle/oracle.c": "2b34426f30872b168e280dc79ee147557d8154f37dcdf2297824f44e999f2234",
+    "ogg/tests/seeking.rs": "d71a0d02a92219b27afbb827200d7e8312144dd84d3de507e8d236bee61a58e2",
+    "scripts/verify_independent.ps1": "6ccf7b374b842bd6b95deb236146719fbb2ab24654b966e2102a25676e5383ad",
+    "vorbis/Cargo.toml": "f43d8776a2408c8a6ac0bff98fac4e9141b2bcccf499ff9f0fa845c918337a9e",
+    "vorbis/src/bitpack.rs": "a76099022e3733090566beac9992fa2f5f049773be3d1e6360b3ee2fe4b3de0e",
+    "vorbis/src/codebook.rs": "56fd5470785103953c3e79cd527ea31242641ca531efadf1913d0572187c4896",
+    "vorbis/src/decoder.rs": "9b8fa6a26d4c05f462e0c20ccbadc2ce0a66be32ab18c57ddef9f5f8b33baa13",
+    "vorbis/src/encoder.rs": "1b43d89f7309a570519891d46fbed40098bc0d4589c2e243c93fde7276878494",
+    "vorbis/src/floor.rs": "4f36467be94caec08a96041d76c9acd00ab5e1d0b477dc82cb43682eadb519c8",
+    "vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "vorbis/src/lib.rs": "63b0f30394af64da60ef7db2214a23830a5caba1d249d6c4d9f04c8bc106a0ee",
+    "vorbis/src/ogg.rs": "c46605ce428141d22de18cccc620e19109847f70a1dc6560c73bc8c43be97c25",
+    "vorbis/src/residue.rs": "d4006ecba1438c2001f0c3503645c2f60e786f15601346df1be81e28f5ecf95a",
+    "vorbis/src/seek.rs": "344116e5da5dfeae02bad7ebe003681daef5573d068d94c95e7315a5891dba24",
+    "vorbis/src/setup.rs": "eb174f67a8c9de51d044b7709ea819bf10e3d8bddd731c307bc43a3fdfe39b90",
+    "vorbis/src/transform.rs": "47be6567edf7a2a324c29cde8eb5cd6afca6680fa79f390caeacdc479929a6a4",
+    "vorbis/tests/allocations.rs": "27e1b4ad7ab7689d5070fe2e895b072d3d23f56b7a6d72d4fbdd3c7df0de9f53",
+    "vorbis/tests/encoding.rs": "9f15800aea5838753a12b71f1354879756a3d5f7949a34c31c647a280331e618",
+    "vorbis/tests/fixtures/eight-channel.ogg": "3e4c0456de37adc014a3aa6b5aebf49f3c66717cf798fd9e6a3b9feff4c1cfb0",
+    "vorbis/tests/fixtures/mono.ogg": "fbff11482b3552dafff0a7ee5b61ba59469296be07e7c27e9cce4c29a45f5e05",
+    "vorbis/tests/fixtures/spanning-prime-v1.ogg": "e1dd28e18c307f3cb3e3b553da5f6d376c3d0e3cb507738d31ce18b63f83c2c0",
+    "vorbis/tests/fixtures/stereo.ogg": "7538eee111f352e5e7d0b003b6ea7acbe2999d38c081d72591e263959bd81c7e",
+    "vorbis/tests/fixtures/surround.libvorbis-pcm": "8da9dd588870c8fd09c670b4c08bc6fc7e76db45afb706178fb233d3ddcb107e",
+    "vorbis/tests/fixtures/surround.ogg": "4fcf854ba1c654b4581e5d98f6df570dd940d716d4f7411712e62491c08cc943",
+    "vorbis/tests/headers.rs": "169133282bc425e6e3cf18362f72efc0ca49b30eb0095ea60aa91a4b7887748e",
+    "vorbis/tests/historical.rs": "cd6b6dcd98ea158809f59ee3e4e6d1936fdf171bef976556acc5f0ccb7866382",
+    "vorbis/tests/legacy.rs": "9ad2fd3f45215fb308efc9a9e8ec7518674a95bc9e78a8f423e2e62d26026379",
+    "vorbis/tests/libvorbis.rs": "bfb62e329755c356db597a3c20629dd026870570ad6cb280b9bc22acc6b1c3cf",
+    "vorbis/tests/lifecycle.rs": "6b2c02140b4115404a86a160126cca4ff50d1a8b13785005589998899218f8b9",
+    "vorbis/tests/ogg_mapping.rs": "e1378aeb7a8cac2006ec3f06929afbf35bf0f40b244842f2e97b4ef22c45fdec",
+    "vorbis/tests/oracle/oracle.c": "1b68022f36365571a83e92094c9ed779b7126ca6777fe0d5e7f9b4254b950538",
+    "vorbis/tests/oracle/retain_vectors.c": "e74135aa290ae8fcc9ac109eabf82e94bb74d2af30523693debda04aecac5b70",
+    "vorbis/tests/oracle/retain_vectors.h": "2337d774ae705bb58c41a65f55fa7d9f8585a02c13d387b64cf7fba84112544d",
+    "vorbis/tests/pcm.rs": "6442d260875e31d5ec6f6823c238261b64262631870355c4e3aaceb566eb00b8",
+    "vorbis/tests/primitives.rs": "0feb8eec0d3627b80c5bbbbb0a3ffe0f28066580ef591a1deb09450cd278298c",
+    "vorbis/tests/seeking.rs": "43507bd42458b0f6e11d87585665eda17d09b4768186ca89915fc33430c4cb5f",
+    "vorbis/tests/support/mod.rs": "7eca3e64ead3aca80679f06af2dd18e472b413257a8812cf0f9bdf39a10a49c6",
+    "vorbis/tests/upstream.rs": "b4fdb058ee5fd7aa7808e5cbfa17bc2be438db750356bd8da30e5438974aef5f"
+  },
+  "assets_input_sha256": {
+    "assets/music/Beanmania IIDX (loop).ogg": "ec8110d9b3bd3f3f3da5d62d7c6c55c55aadfcf3cb7897e95b6269ae814c1e4d",
+    "assets/music/credits.ogg": "6337c95e25405dd4ef1773048aa20b8fd3e64b7a685b92cc026c8cff707a3159",
+    "assets/music/Da Box of Kardboard Too (feat Naoki vs ZigZag) - TaroNuke Remix (loop).ogg": "55ce469a9d1c3c8ac4ac6472de597bc2301c754ce8a65dca441f0ba164592926",
+    "assets/music/ECS15 (loop).ogg": "1dcbe796b53a4aab0aea43a804358ec1a13876797042fe4f285b9c7a9e6a3253",
+    "assets/music/ECS15-GameOver.ogg": "1eddb9fc17c1628ca90083e20782e9597cce116c680a39f3273a687977e2b3ee",
+    "assets/music/halcyon farms (loop).ogg": "15004888f0c1247604a60d29820d652a4dc014d01f62dd808916755ac60abef3",
+    "assets/music/in_two (loop).ogg": "670927f858874d016710bac6b38341045c5b0e06666c7fbb17a33ceaee48df33",
+    "assets/music/Mystical Wheelbarrow Journey (loop).ogg": "f120347c1e424c20b618fcbbbc74bf5da5cdad9c5815a20beeac4751c5568357",
+    "assets/music/Quaq (loop).ogg": "096eb36034032f7c227b72723a35b5df54656ac982f0abf77ecde4bde6dd8bef",
+    "assets/music/select_course (loop).ogg": "03965cba5bc8d08b50e62d2fca3965b20258ef972f51cdc719541ef036395925",
+    "assets/music/Shooting Star - faux VRC6 remix (loop).ogg": "c5886632352d3260a2334a00dfbf5bd763718352486282e3c70c3c3f249ed393",
+    "assets/music/Spooky Scary Chiptunes (loop).ogg": "da76b0cef8b94713dea94145e5a5e4a7df35241835339ad796ccfa8757850b12",
+    "assets/music/SRPG10 (loop).ogg": "e51428c4fcb587085fb193acfd611fac2378a0d1e6fc789e9274300db3585ca4",
+    "assets/music/SRPG10-GameOver.ogg": "743aa95524a33a01ba164c9862e4395d9f8c25daeb06bd67a8a9710776f9e23b",
+    "assets/music/SRPG9 (loop).ogg": "6e5742f941d524bbe065520241bac4ae1fde3dd050ce5d6803123d3ad5101b46",
+    "assets/music/vrtuous faults (loop).ogg": "9a0cd50660534a2af6d40bb46d6e7182ece396d1686fa7cd24155c68bb491dd8",
+    "assets/music/Xuxa fami VRC6 (loop).ogg": "a5d5b08d2a674684dbc79bda44d09e08d9b870724110be3d8fa8ea0016b8d5e7",
+    "assets/sounds/assist_tick.ogg": "d44ee39b43d24fdd6a4f4cfdd7971f756138dca5328a5b44b179b9a1422bb32b",
+    "assets/sounds/boom.ogg": "1ba66ba35e11fc10e2a4f7de2212990448d68bbce04e722c2acbada66e37b6e8",
+    "assets/sounds/change.ogg": "b55b87df7efe726ae81925835764fd29cefefb3020d99a0de3fbbca5d10413e5",
+    "assets/sounds/change_value.ogg": "6754b655aae2650678dc19fe4b6e989c2c52bba5f32fdf3eb9a6021156ed269c",
+    "assets/sounds/common_invalid.ogg": "27e61150fa714efeab30183850b10f83b9dcbade5dc2b27e9cd6b4cb3d2eb5cd",
+    "assets/sounds/easier.ogg": "3681221ab56acac12061941e72fab6df07f59675d6481332206033d3191d6f55",
+    "assets/sounds/ecs15_eval_failed.ogg": "e426c04d1421512708c253253399bb600430549075732e6759cb722723534402",
+    "assets/sounds/ecs15_eval_passed.ogg": "b7352a2b1f035747496c02670730fc04cf7c0d413bac360eec474a149113bffe",
+    "assets/sounds/evaluation_nice/nice.ogg": "0881bffd34000fb52f9d45ebf9429ede641903a2e1409fe55c803d36752b9f8f",
+    "assets/sounds/expand.ogg": "cb7956224f1c80f1a440cab0a9a98909dbc3536e8e095b7bab94c805f0ac53aa",
+    "assets/sounds/harder.ogg": "9d87fb741bf8d936652229bd7de1f7a8b3eca24219a210c4207d5950045f45ac",
+    "assets/sounds/next_row.ogg": "3819c266865ebdee60212bc06ebc10e3a9c8406cd579bd4d302b61aef294562f",
+    "assets/sounds/prev_row.ogg": "d2cbc25759322235f881b41091df808347f938de622d7a269bc9203390fa96b8",
+    "assets/sounds/prompt.ogg": "e67806ffc3083eff5d19f76dcab53c2d7e63bc5a9de1cb0c60c191683909d9e3",
+    "assets/sounds/screen_edit_marker.ogg": "e6745ffb4ceb410d85dfdf9aa38e6de284809ba9994978482c12fabc0a35b691",
+    "assets/sounds/screen_edit_snap.ogg": "85d6b459e28eb1ed3871112f1c681b103924935630d2435a68304481659613fe",
+    "assets/sounds/screenshot.ogg": "9267c4c11dfb0069a47fa599cb5d0f1bfb57a827ccba5e29a7d846450be1e5b7",
+    "assets/sounds/srpg10_eval_failed.ogg": "f0d6a0f830f76dcb261af837b4357982a304a29e7106d40eab13a1916723975a",
+    "assets/sounds/srpg10_eval_passed.ogg": "2d79f1001fe57071e1010612a29825c1b9a4f011f7479002e0279d42e9b1b1fd",
+    "assets/sounds/start.ogg": "5a1d37d17776942b1c87326e9186aaa1287eef02e0d6620444d131c80e6aa320",
+    "assets/sounds/unjoin.ogg": "c34f0758fbf971614badd845dc8f08b849b0518f8c15a4c157b2b5c02fcda290"
+  },
+  "external_inputs": {
+    "floor0/vorbis_floor_type_0.ogg": "1c97545f93cc2afe473066d523f15bb04edc68fe7474bc98408bda452e462ea0",
+    "legacy/Lumme-Badloop.ogg": "ebecc57582463db3346625c1da4a51c594b6a3ec2dbebf9d94c2b9b5f1e72f44",
+    "itgmania/goin-under.ogg": "9d211f2fee8bc5327119ea9b1b6bb77f88226c5a1317628ad2467734fe4cb483",
+    "itgmania/goin-under.ssc": "bc995e4cf36dd6074e85299ed7cfc82400e884f9bb70c164f5e622c6383c17f5",
+    "itgmania/mecha-tribe-assault.ogg": "6eb052cf8081ebb01d4b30e8db34e9eeca692635e2c1ed3ba7f7bd131c1b65c3",
+    "itgmania/mecha-tribe-assault.ssc": "ce6662cb58e3bce72f551e6c7c6a6ae7b3a7f3da85c87cbdc5e4d36a2a4b7831",
+    "ffmpeg/coyote.ogg": "42f09baa7dcdd15af07d0a3312d0eae12a2d6058bc795ca6bc293be04edb0680",
+    "ffmpeg/test6.ogg": "27c5d4cfaeaede1e234542fe0252a7550872605aef35d3a798521541b6b58aa0",
+    "ffmpeg/1sec.ogg": "f3fec39afbd0f03ef5ed077cd73b5642db15f51342149ce73550a88f854f1fb9",
+    "ffmpeg/virginradio-three-consecutive-chains.ogg": "7dfe83e1c7f3c84ea9368be7c191a3b84a3036f3ec4b5a9296cf9e38d639d646",
+    "ffmpeg/mgs1-sample1.ogg": "595af854b994dcf94f2312aeb2ebcf55f3cc76e0edef119ffafecd7a4451ed34",
+    "ffmpeg/mgs1-sample2.ogg": "706b5a96b147a5340356d02dcf8a03099ab2f78ca0ca1edc322141ea0d00a307",
+    "ffmpeg/mgs1-sample3.ogg": "830047fe4bd8d515f41cebfda8dccb2b32c8d7eb60f007d7e5ecef6a9f085514"
+  },
+  "upstream_inputs": {
+    "files": 528,
+    "all_hashes_verified": true,
+    "manifest_sha256": "e298a0a8b65b2f10fb7ad870bab4de6ed6f22c43756153617bea81a091da6308"
+  },
+  "reference_binaries": {
+    "DEADLIB_LIBVORBIS_ORACLE": "acd763718e5a8e17636a9e6b744485858f09e4835816641e19a279e2cf81db20",
+    "DEADLIB_LIBOGG_ORACLE": "92ebe6d2584dec1337bd1355cbe20c0da63c388a0a18cb72000c6ba7711546d6"
+  },
+  "reference_sources": {
+    "ogg": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+    "vorbis": "0657aee69dec8508a0011f47f3b69d7538e9d262"
+  },
+  "commands": [
+    {
+      "name": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--check"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "release",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--release",
+        "--all-features",
+        "--",
+        "--include-ignored",
+        "--skip",
+        "regenerate_surround_pcm_golden",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "passed": 119,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--all-targets",
+        "--all-features",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "clippy-default",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    },
+    {
+      "name": "independent",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\scripts\\verify_independent.ps1",
+        "-ScratchRoot",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\split-prefix-independent-20261027"
+      ],
+      "exit_code": 0,
+      "passed": 92,
+      "failed": 0,
+      "ignored": 28
+    },
+    {
+      "name": "fuzz-tests",
+      "command": [
+        "cargo",
+        "test",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\Cargo.toml",
+        "--lib"
+      ],
+      "exit_code": 0,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "name": "fuzz-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\Cargo.toml",
+        "--all-targets",
+        "--features",
+        "seed",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "completed_utc": "2026-10-27T08:19:39.486145+00:00",
+  "scope": "Inline the bounded Huffman prefix and VQ wrapper, outline the unchanged tree fallback and byte-cache refill; retain public validation and bit/float operation order.",
+  "benchmarks": [
+    {
+      "variant": "direct-vq",
+      "retained": false,
+      "timing_rows": 420,
+      "source_input_adapter_archive_saved_binary_hashes_rechecked": true,
+      "profiles_and_registry_artifacts_match": true,
+      "source_reconstruction": {
+        "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "baseline bytes (raw or LF)",
+        "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "direct-vq-codebook.rs",
+        "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/encoder.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/floor.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/headers.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/lib.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/residue.rs": "baseline bytes (raw or LF)",
+        "crates/deadlib-audio/decode/vorbis/src/seek.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/setup.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/transform.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/capture.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/crc.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/demux.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/index.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/lib.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/page.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/reader.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/validation.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/writer.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/encoding.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/pipeline.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/resources.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/alloc_profile.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/alloc_profile.h": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/benchmark.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/CMakeLists.txt": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/encoding.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/resources.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/seek_support.h": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/alloc.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/codebook_profile.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/huffman.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/io.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/seek.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/synthesis_profile.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/scripts/benchmark.py": "current exact bytes",
+        "Cargo.toml": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/Cargo.toml": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/Cargo.toml": "current exact bytes",
+        ".cargo/config.toml": "current exact bytes"
+      }
+    },
+    {
+      "variant": "stereo-pairs",
+      "retained": false,
+      "timing_rows": 420,
+      "source_input_adapter_archive_saved_binary_hashes_rechecked": true,
+      "profiles_and_registry_artifacts_match": true,
+      "source_reconstruction": {
+        "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "baseline bytes (raw or LF)",
+        "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "baseline bytes (raw or LF)",
+        "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/encoder.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/floor.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/headers.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/lib.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/residue.rs": "stereo-pairs-residue.rs",
+        "crates/deadlib-audio/decode/vorbis/src/seek.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/setup.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/transform.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/capture.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/crc.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/demux.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/index.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/lib.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/page.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/reader.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/validation.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/writer.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/encoding.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/pipeline.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/resources.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/alloc_profile.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/alloc_profile.h": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/benchmark.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/CMakeLists.txt": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/encoding.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/resources.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/seek_support.h": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/alloc.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/codebook_profile.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/huffman.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/io.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/seek.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/synthesis_profile.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/scripts/benchmark.py": "current exact bytes",
+        "Cargo.toml": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/Cargo.toml": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/Cargo.toml": "current exact bytes",
+        ".cargo/config.toml": "current exact bytes"
+      }
+    },
+    {
+      "variant": "inline-vq",
+      "retained": false,
+      "timing_rows": 420,
+      "source_input_adapter_archive_saved_binary_hashes_rechecked": true,
+      "profiles_and_registry_artifacts_match": true,
+      "source_reconstruction": {
+        "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "baseline bytes (raw or LF)",
+        "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "inline-vq-codebook.rs",
+        "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/encoder.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/floor.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/headers.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/lib.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/residue.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/seek.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/setup.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/transform.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/capture.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/crc.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/demux.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/index.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/lib.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/page.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/reader.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/validation.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/writer.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/encoding.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/pipeline.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/resources.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/alloc_profile.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/alloc_profile.h": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/benchmark.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/CMakeLists.txt": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/encoding.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/resources.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/seek_support.h": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/alloc.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/codebook_profile.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/huffman.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/io.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/seek.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/synthesis_profile.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/scripts/benchmark.py": "current exact bytes",
+        "Cargo.toml": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/Cargo.toml": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/Cargo.toml": "current exact bytes",
+        ".cargo/config.toml": "current exact bytes"
+      }
+    },
+    {
+      "variant": "split-prefix",
+      "retained": true,
+      "timing_rows": 420,
+      "source_input_adapter_archive_saved_binary_hashes_rechecked": true,
+      "profiles_and_registry_artifacts_match": true,
+      "source_reconstruction": {
+        "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/encoder.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/floor.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/headers.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/lib.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/residue.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/seek.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/setup.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/src/transform.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/capture.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/crc.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/demux.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/index.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/lib.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/page.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/reader.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/validation.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/src/writer.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/encoding.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/pipeline.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/resources.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/alloc_profile.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/alloc_profile.h": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/benchmark.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/CMakeLists.txt": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/encoding.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/resources.cpp": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/oracle/seek_support.h": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/alloc.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/codebook_profile.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/huffman.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/io.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/seek.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/benches/support/synthesis_profile.rs": "current exact bytes",
+        "crates/deadlib-audio/decode/scripts/benchmark.py": "current exact bytes",
+        "Cargo.toml": "current exact bytes",
+        "crates/deadlib-audio/decode/vorbis/Cargo.toml": "current exact bytes",
+        "crates/deadlib-audio/decode/ogg/Cargo.toml": "current exact bytes",
+        ".cargo/config.toml": "current exact bytes"
+      }
+    }
+  ],
+  "kept_pipeline_timing_rows": 420,
+  "rejected_pipeline_timing_rows": 1260,
+  "resource_rows": 480,
+  "seek_timing_rows": 280,
+  "only_changed_production_sources_after_lf_normalization": [
+    "vorbis/src/bitpack.rs",
+    "vorbis/src/codebook.rs",
+    "vorbis/src/residue.rs"
+  ],
+  "residue_runtime_identical_to_baseline": true,
+  "native_heap_io_exposure_equal_to_baseline_in_every_group": true,
+  "native_warmed_seek_allocations_all_zero": true,
+  "profiles": [
+    {
+      "label": "main",
+      "cases": 7,
+      "raw_channel_samples_bit_compared": 30213120,
+      "pcm_digests_geometry_counters_symbol_tables_equal_to_prior_trace": true,
+      "prior_run": "codebook-profile-checked-20261027",
+      "unchanged_table_sha256": {
+        "books.tsv": "327a567351b32943a04b069af80f29834310c4cb912ba8ecfffb9dfbd605b907",
+        "symbols.tsv": "ec200c478cc994cbe0e3e45da5ee50a0fecda2fcb669b58ebf397f8257bbb7c7",
+        "summary.tsv": "3fa12d48ba9040c70f30d5eae0ad534e340ed8813854d9a3b787a45619d9036d"
+      }
+    },
+    {
+      "label": "floor0",
+      "cases": 1,
+      "raw_channel_samples_bit_compared": 12525696,
+      "pcm_digests_geometry_counters_symbol_tables_equal_to_prior_trace": true,
+      "prior_run": "codebook-profile-floor0-checked-20261027",
+      "unchanged_table_sha256": {
+        "books.tsv": "2035581df348f0420f97b1c87e8d4842bc928a0d5fe724e89aa999354e61aabb",
+        "symbols.tsv": "b641d4ce91924dacc9ff5f631243ab665bacbc2d7637ffdbca2e4890c6c11d1e",
+        "summary.tsv": "cd5238dc1ebdf02d4567f6cda7a8c22c46dd86bc577675d39002274193c283f9"
+      }
+    }
+  ],
+  "measured_worker_text_virtual_bytes_reduction": 13120,
+  "fuzz": {
+    "initial_results": [
+      {
+        "target": "vorbis_headers",
+        "exit_code": 0,
+        "executions": 100643,
+        "coverage": 1827,
+        "features": 4423,
+        "peak_rss_mb": 472,
+        "average_exec_per_second": 334,
+        "binary_sha256": "683b651b539631196cae114e1f244079677e93d30fe33f6c9e01cf975bee64db",
+        "arguments": [
+          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-split-prefix-20261027\\corpus\\vorbis_headers\"",
+          "-max_total_time=300",
+          "-max_len=131073",
+          "-timeout=20",
+          "-rss_limit_mb=2048",
+          "-seed=1337",
+          "-print_final_stats=1",
+          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-split-prefix-20261027/artifacts/vorbis_headers/\"",
+          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+        ],
+        "wall_seconds": 302.1658442
+      },
+      {
+        "target": "vorbis_packets",
+        "exit_code": 0,
+        "executions": 6835,
+        "coverage": 1928,
+        "features": 4017,
+        "peak_rss_mb": 205,
+        "average_exec_per_second": 22,
+        "binary_sha256": "a5e8d06c5431adfd33f51842a3c195f9b4df237583db900d74871e03540b5134",
+        "arguments": [
+          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-split-prefix-20261027\\corpus\\vorbis_packets\"",
+          "-max_total_time=300",
+          "-max_len=131073",
+          "-timeout=20",
+          "-rss_limit_mb=2048",
+          "-seed=1338",
+          "-print_final_stats=1",
+          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-split-prefix-20261027/artifacts/vorbis_packets/\"",
+          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+        ],
+        "wall_seconds": 302.06111569999996
+      },
+      {
+        "target": "vorbis_stream",
+        "exit_code": 70,
+        "executions": 31,
+        "coverage": null,
+        "features": null,
+        "peak_rss_mb": 123,
+        "average_exec_per_second": 0,
+        "binary_sha256": "49609a98a8a27ff717d7288a90964d76668f5a75fa001d8df1fbd60969a5d42d",
+        "arguments": [
+          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-split-prefix-20261027\\corpus\\vorbis_stream\"",
+          "-max_total_time=300",
+          "-max_len=131073",
+          "-timeout=20",
+          "-rss_limit_mb=2048",
+          "-seed=1339",
+          "-print_final_stats=1",
+          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-split-prefix-20261027/artifacts/vorbis_stream/\"",
+          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+        ],
+        "wall_seconds": 56.3979316
+      },
+      {
+        "target": "vorbis_encode",
+        "exit_code": 0,
+        "executions": 2234,
+        "coverage": 2035,
+        "features": 5754,
+        "peak_rss_mb": 445,
+        "average_exec_per_second": 7,
+        "binary_sha256": "c89ca004975dc048c239c711dc052d4adcf72075de1faccd74b2a01e446543b9",
+        "arguments": [
+          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-split-prefix-20261027\\corpus\\vorbis_encode\"",
+          "-max_total_time=300",
+          "-max_len=131073",
+          "-timeout=20",
+          "-rss_limit_mb=2048",
+          "-seed=1340",
+          "-print_final_stats=1",
+          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-split-prefix-20261027/artifacts/vorbis_encode/\"",
+          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+        ],
+        "wall_seconds": 301.6575128
+      }
+    ],
+    "initial_stream_timeout_preserved": true,
+    "timeout_artifact_sha256": "4e9f90f7dbe6a58f233a64e33a0f2de06a3414a42c499075b6a32c79451e1e6d",
+    "current_fixed_input_replay": {
+      "command": [
+        "target\\deadlib-audio-fuzz\\x86_64-pc-windows-msvc\\release\\vorbis_stream.exe",
+        "target\\deadlib-audio-reference\\fuzz-split-prefix-20261027\\artifacts\\vorbis_stream\\timeout-96a983b404038758b05f56633423b0752a664653",
+        "-runs=1",
+        "-timeout=120",
+        "-rss_limit_mb=2048",
+        "-print_final_stats=1"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 47.31963230005931,
+      "artifact_sha256": "4e9f90f7dbe6a58f233a64e33a0f2de06a3414a42c499075b6a32c79451e1e6d",
+      "artifact_bytes": 52302,
+      "initial_seed_matches": [
+        "corpus/vorbis_stream/external-2-255",
+        "corpus/ogg_container/external-2-255"
+      ],
+      "binary_sha256": "49609a98a8a27ff717d7288a90964d76668f5a75fa001d8df1fbd60969a5d42d",
+      "timeout_seconds": 120,
+      "source_unchanged": true
+    },
+    "baseline_fixed_input_replay": {
+      "command": [
+        "target\\deadlib-audio-reference\\split-prefix-timeout-baseline-20261027\\target\\x86_64-pc-windows-msvc\\release\\vorbis_stream.exe",
+        "target\\deadlib-audio-reference\\fuzz-split-prefix-20261027\\artifacts\\vorbis_stream\\timeout-96a983b404038758b05f56633423b0752a664653",
+        "-runs=1",
+        "-timeout=120",
+        "-rss_limit_mb=2048",
+        "-print_final_stats=1"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 43.55482059996575,
+      "artifact_sha256": "4e9f90f7dbe6a58f233a64e33a0f2de06a3414a42c499075b6a32c79451e1e6d",
+      "binary_sha256": "e1969ce7afe4116c43ae4ba503d4065108c09d6b963025af998919e6d02ebf91",
+      "timeout_seconds": 120
+    },
+    "stream_recheck_result": {
+      "target": "vorbis_stream",
+      "exit_code": 0,
+      "executions": 292,
+      "peak_rss_mb": 395,
+      "wall_seconds": 305.113973599975,
+      "binary_sha256": "49609a98a8a27ff717d7288a90964d76668f5a75fa001d8df1fbd60969a5d42d",
+      "arguments": [
+        "target\\deadlib-audio-fuzz\\x86_64-pc-windows-msvc\\release\\vorbis_stream.exe",
+        "target\\deadlib-audio-reference\\fuzz-split-prefix-stream-recheck-20261027\\corpus",
+        "-max_total_time=300",
+        "-max_len=131073",
+        "-timeout=120",
+        "-rss_limit_mb=2048",
+        "-seed=1339",
+        "-print_final_stats=1",
+        "-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-split-prefix-stream-recheck-20261027/artifacts/",
+        "-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict"
+      ]
+    },
+    "successful_three_target_executions": 109712,
+    "stream_successful_campaign_slow_units": [
+      {
+        "name": "slow-unit-96a983b404038758b05f56633423b0752a664653",
+        "sha256": "4e9f90f7dbe6a58f233a64e33a0f2de06a3414a42c499075b6a32c79451e1e6d",
+        "bytes": 52302
+      }
+    ],
+    "scope": "ASan smoke campaigns; initial stream campaign timed out on a known initial seed. Both fixed-input replays succeeded; a separate stream campaign retained all 44 seeds and raised the per-input budget to 120 seconds. Slow-unit diagnostics are retained separately from failures. This is not proof of complete coverage."
+  },
+  "artifacts": {
+    "2026-10-27-split-prefix-rejected-direct-vq.json": "cc29c93ecf68a2d984c3c9ebdde272952f2fde756c4229dabecbf366a537ae26",
+    "2026-10-27-split-prefix-rejected-direct-vq-trials.tsv": "f868c20d7015c50d36805e0941fbca9392e5927d728081c86b6f325774f8c53b",
+    "2026-10-27-split-prefix-rejected-direct-vq-summary.tsv": "48c50fc99d5f997cc7f47a343d7d59a604b6a63539dcbb6cc2d26790ee50862e",
+    "2026-10-27-split-prefix-rejected-direct-vq-saved-binaries.json": "d9fea8031c31c704ce9f1701e140a0d24301ac7090482271a0152eb9fc8ea99c",
+    "2026-10-27-split-prefix-rejected-direct-vq-baseline-build.log": "da7be5f68719df04a0eb1d27ea1db9c37c3f38ecf15965453d114a563610eaf8",
+    "2026-10-27-split-prefix-rejected-direct-vq-c-build.log": "865abac43278eb687739d9d21dc25974d89bc6dfa867751b0955bcbf590b4536",
+    "2026-10-27-split-prefix-rejected-direct-vq-rust-build.log": "a499c385d9c3c1be7c8c942676471f474fdb68f03f790e09e50c1d1e76840dd0",
+    "2026-10-27-split-prefix-rejected-direct-vq-c-configure.log": "62af7e5f7900f8b8eac6cff47edf009bcac44b5530c2de654dd72b352652432b",
+    "2026-10-27-split-prefix-rejected-direct-vq.patch": "92f291af250513df0e4a6429ea47d1d32d720dd9008a6c66d19c10cb74084539",
+    "2026-10-27-split-prefix-rejected-direct-vq-source.rs": "1622e10226eb992b9ca71c13bd746ee91b78aca9affd03969ea1c700db2a70f8",
+    "2026-10-27-split-prefix-rejected-stereo-pairs.json": "6023f2e6a979bd86a20da24ae856632c1b4fb638475c818859d085ea97bb2eb5",
+    "2026-10-27-split-prefix-rejected-stereo-pairs-trials.tsv": "82b501fa6c44ef4f475cf2c9446441f576217d1929414f7f911e6eb46b01fa1b",
+    "2026-10-27-split-prefix-rejected-stereo-pairs-summary.tsv": "66b7bfff93d25e36a2c8391875c24b3bd34914889b53a0edd535efd678745a1b",
+    "2026-10-27-split-prefix-rejected-stereo-pairs-saved-binaries.json": "68c3a61f156b59582122160c75d57f1f95992edfa9dd882f17d262c84bd706a9",
+    "2026-10-27-split-prefix-rejected-stereo-pairs-baseline-build.log": "7d19218e5c5af17d0ca5b559e0826b05c99302fe816501c860d0081b26288c5a",
+    "2026-10-27-split-prefix-rejected-stereo-pairs-c-build.log": "865abac43278eb687739d9d21dc25974d89bc6dfa867751b0955bcbf590b4536",
+    "2026-10-27-split-prefix-rejected-stereo-pairs-rust-build.log": "7bf72dd62ffa9572de6b86e599b59e8f65aea6d66baf39b078957b3990f8cfab",
+    "2026-10-27-split-prefix-rejected-stereo-pairs-c-configure.log": "47ccc96949f4972d21f9317c97da662e0b4d74931280aff9c3eb1d5dcc6813da",
+    "2026-10-27-split-prefix-rejected-stereo-pairs.patch": "2d5c3c8b1a51861317a20ef6bab8fc17b3658ec9dd96aa0b6a09805cd5255e4a",
+    "2026-10-27-split-prefix-rejected-stereo-pairs-source.rs": "543dc61b029e7da6ad2aca240db112e7c49fdd7feabfbd098c8e7210587e4bfa",
+    "2026-10-27-split-prefix-rejected-inline-vq.json": "25939f182413e475fc221c23917cb5fac9f96157fbbd9b0c85766e07f180c07e",
+    "2026-10-27-split-prefix-rejected-inline-vq-trials.tsv": "896b37579dfce9b1b6fdc6a61220e4050a4eec70d5a3fa19302ec700817857d0",
+    "2026-10-27-split-prefix-rejected-inline-vq-summary.tsv": "cd13818561664180927d303cbc8a5e7ece83a6fa390776ab84e7afa431a2b992",
+    "2026-10-27-split-prefix-rejected-inline-vq-saved-binaries.json": "225c50f0041287bcd36f53b5a2e4250dc8b6ca981a2fb9c6529afce8735a6cce",
+    "2026-10-27-split-prefix-rejected-inline-vq-baseline-build.log": "0b0bce261a8925a8b0de73f7a033b11cdbcf8d2ea7c78e564c12d5d4ff40e081",
+    "2026-10-27-split-prefix-rejected-inline-vq-c-build.log": "865abac43278eb687739d9d21dc25974d89bc6dfa867751b0955bcbf590b4536",
+    "2026-10-27-split-prefix-rejected-inline-vq-current-asm-build.log": "06b8a1eb057fea9bce635f2f06e7c41328f50afe80a5d6db8492abff37ecec07",
+    "2026-10-27-split-prefix-rejected-inline-vq-rust-build.log": "036996b4d85367d7033929d63cb93379ec6a28e87606950df78db060b9d59175",
+    "2026-10-27-split-prefix-rejected-inline-vq-c-configure.log": "62af7e5f7900f8b8eac6cff47edf009bcac44b5530c2de654dd72b352652432b",
+    "2026-10-27-split-prefix-rejected-inline-vq.patch": "c46a12fee117f38c0941e2df17835ea2a09fa866b41c1e65e6345bdbed77cb4d",
+    "2026-10-27-split-prefix-rejected-inline-vq-source.rs": "ff04e0eacc914169888d68dfd1a9a183df7b4d1d12ddca4616e822fc12c82149",
+    "2026-10-27-split-prefix-pipeline.json": "7769296f787e41cfde914a66fea362dbfea88261fd9dd26e340f2fe9aeb829f1",
+    "2026-10-27-split-prefix-pipeline-trials.tsv": "adb321e356cde03ab3f4335219145543106c45869a7d0bdfa755ab63a6b46b72",
+    "2026-10-27-split-prefix-pipeline-summary.tsv": "01d16a26dd1c832416f02a8ac43bc8ee7678b95149eae3502ab489ff70b43bd7",
+    "2026-10-27-split-prefix-pipeline-saved-binaries.json": "8dadc80b8a49033ea71a62990c86a388cede874a6fc1fe6c86d988df7090bae7",
+    "2026-10-27-split-prefix-pipeline-baseline-build.log": "218a59c3503b568a056ae810a285ce58d8eeefbee7950d316b09ab5a3601f84b",
+    "2026-10-27-split-prefix-pipeline-c-build.log": "865abac43278eb687739d9d21dc25974d89bc6dfa867751b0955bcbf590b4536",
+    "2026-10-27-split-prefix-pipeline-current-asm-build.log": "4a9fa7e02a641f794deb906cec2f8e89b9d6deb707c8c9a9b23eec66d3034caf",
+    "2026-10-27-split-prefix-pipeline-rust-build.log": "df53ee1fafd9bc192972d2d96a30eff1c0bbb81706accf24f1903723f8a2af4f",
+    "2026-10-27-split-prefix-pipeline-c-configure.log": "1b0bc3bc4f20323778884f06ab917da812771c67eeaff94a3421f53f08c82ddc",
+    "2026-10-27-split-prefix-resources.json": "bcce02dac1db0363e85599d4197c8edecb4a295f145388dcfb810aaa18226941",
+    "2026-10-27-split-prefix-resources.tsv": "06d469c5f7fb7e4cf2d8d6673133b71e621c31964df8fbf063f152992559c389",
+    "2026-10-27-split-prefix-seek-trials.tsv": "792d2cddf57642ca38ce8314468df15ad15994053ba477ac2a743ce2b846732e",
+    "2026-10-27-split-prefix-seek-summary.tsv": "ed575f3b2d4bcbdbde5443fc1642172186f9f0e580c6b8b7f7c3fea4be93d0ed",
+    "2026-10-27-split-prefix-resources-complete.json": "8de23b6d698a42e4cf1eabfb812ca825470057e1ca8a7cc4778fe6c0a4e20c33",
+    "2026-10-27-split-prefix-resources-saved-binaries.json": "a0fa96fc19608846cf741674ffa3a5ee02934436f8e4ceaf451f619fe85b7f3a",
+    "2026-10-27-split-prefix-resources-baseline-build.log": "2db89d0ba3ab58381320a4d677605938a954903e2b3a10494d83cbaa1f592849",
+    "2026-10-27-split-prefix-resources-c-counted-build.log": "9a5967408b60fcc8fa6c55e0f79204509e89c0d9fc7adbfc2225292dd003396e",
+    "2026-10-27-split-prefix-resources-c-memory-build.log": "1734f3bacaadc8a74a13ed5619982828afc75a9d6f07c3e16595777d073b5969",
+    "2026-10-27-split-prefix-resources-oracle-build.log": "e80dd13665a7af2a15ec40859e006aa5b80d428187b78379568b627c573ec792",
+    "2026-10-27-split-prefix-resources-rust_baseline_counted-build.log": "5edd8089a57486037d36754a385712b59355a9ff2939f16b1e338e1648297478",
+    "2026-10-27-split-prefix-resources-rust_baseline_memory-build.log": "31c0cf7b4930c632d2bcf76b29ae22ee1489b48bf49da978758311124c2dfe36",
+    "2026-10-27-split-prefix-resources-rust_counted-build.log": "6fa61640adaabe7143d3dc8161e733e5d2f0cd8931fdf04b192e62d29d220184",
+    "2026-10-27-split-prefix-resources-rust_memory-build.log": "0e89d1f3ecbc44b78f436ff9bb44418aa0e33089a5522908b43b071a526858ba",
+    "2026-10-27-split-prefix-resources-rust_timing-build.log": "51d74bb8f1723bb6660fd592af93d8fceb23efc2b36769b47935b3a3776c4439",
+    "2026-10-27-split-prefix-resources-c-counted-configure.log": "055af4598cb41fe04bf4a5f5beb0ffcfc8dac1e28556d8bf09eac4f0c6fab497",
+    "2026-10-27-split-prefix-resources-c-memory-configure.log": "47ccc96949f4972d21f9317c97da662e0b4d74931280aff9c3eb1d5dcc6813da",
+    "2026-10-27-split-prefix-resources-oracle-configure.log": "4b693eeac58bcd69228d35b6bf9796b3decf74e58bb6ba5612c158f4b8e735ba",
+    "2026-10-27-split-prefix-profile-main-manifest.json": "570d7ac3a3d0a1d93a3ccd9364924761debc1cb1c7603399dfcbceb92bdc8995",
+    "2026-10-27-split-prefix-profile-main-build.log": "c811d67b29f407f30da073973f96a89470f2837e743dd27941ca377035c160a3",
+    "2026-10-27-split-prefix-profile-main-clippy.log": "5f85039f10cdfe22b3cc532a971c22cfbcb07f2342c648a65229fecede6d5a73",
+    "2026-10-27-split-prefix-profile-main-worker-0.log": "f7fd6ec4f1b73f7636a601adb1ac05b78ce58bdc8a690c7e51c73f985209f300",
+    "2026-10-27-split-prefix-profile-main-worker-1.log": "c6483f42e53e6a27e305217381ec9dad9f7af6641752b04f1ecc7edcaf719cd4",
+    "2026-10-27-split-prefix-profile-main-worker-2.log": "714b0f1c69d22ba8e51f91ae3141e7cf388e6c27ccac3fb554cb571dc4f2e8f3",
+    "2026-10-27-split-prefix-profile-main-worker-3.log": "0f74e7b1e1ec29a7fc3fa5a3f3425e1a6d4a8ce8164a5869da1a71c349364864",
+    "2026-10-27-split-prefix-profile-main-worker-4.log": "32ef4341b27f9da81fd20062a55abcbd0157ca6074fc934fd1ff9e9afd43f0b6",
+    "2026-10-27-split-prefix-profile-main-worker-5.log": "f8160ebe1f6b5b051008c4165354e527a40832ea33125be7da1a8c1a096d1357",
+    "2026-10-27-split-prefix-profile-main-worker-6.log": "612bba4985cf7e2f9568cbd8ab386abcecec9ba2d966ff7b703c367bdf62cbe5",
+    "2026-10-27-split-prefix-profile-floor0-manifest.json": "9d4dcfcf8aa3c2a0967e3d16e56b84986300af5bf065cc0b00948bc89fe4fffb",
+    "2026-10-27-split-prefix-profile-floor0-build.log": "09c43822ad8d81ac71695c270ed32a900705eb6a31a1d0c577b2fec1fd0e4ad2",
+    "2026-10-27-split-prefix-profile-floor0-clippy.log": "8d865791326e131d492c4921c834ce8abfedbf9b7233a2981d15a78d4e8fb57a",
+    "2026-10-27-split-prefix-profile-floor0-worker-0.log": "af93c07edb6726f2c51150b0c29bd683bfcf7ad297627f24d09a84999a7f9e57",
+    "2026-10-27-split-prefix-pe-text-sections.json": "6658675ddbf87b7e8c8fedebe4a85290d381a535a1517903b708cfb2841307c3",
+    "2026-10-27-split-prefix-asm-inspection.json": "a822dc71d6d79e541405587e012af8f012ee88385a6168746ff0dd276b693a7a",
+    "2026-10-27-split-prefix-paired-ratios.json": "4ffdc0bb6655bf09393a5bf20f96a6be9fe39ef32fb03e6c64f869a8c91db478",
+    "2026-10-27-split-prefix-rejected-inline-vq-asm-comparison.json": "1b1bab9577d81604763e124ca780a5dc75b32dff321d5ef0312fb40a02bcf68c",
+    "2026-10-27-split-prefix-fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-split-prefix-release.log": "ee79af6ab0e2e1355c3359845a987e35ff2bacc7f546f3943d6c82472f03ca12",
+    "2026-10-27-split-prefix-clippy.log": "42a86a36eead146602a0555ae660355333400fdbe0be6d5a0e59db4827cb4bed",
+    "2026-10-27-split-prefix-clippy-default.log": "a4add7f371ee44f6abdfc40c69745955e0b62b6bb3098b7c74856ca4ca66e77a",
+    "2026-10-27-split-prefix-independent.log": "eb3735360c4f0dcb275372635becd0fecdc943352c4059a8725ad66943a4a29d",
+    "2026-10-27-split-prefix-fuzz-tests.log": "07bfcbce8073035d7f424b4a5cbbf010fcc9bb037700f9da673e5b5495230331",
+    "2026-10-27-split-prefix-fuzz-clippy.log": "e915704acfc1345a005c8a54a771b45bb12b4dd874a213dd7bf1ab9e28b475c5",
+    "2026-10-27-split-prefix-matrix.tsv": "a9d4616b450f950f1f4cac927e27b45aeb60040b26e437cbfcda8ba881c77fdd",
+    "2026-10-27-split-prefix-historical.tsv": "c54166e8b339a8a5c4c10254d1ae043cca67285c2474f2483eb56d219eca7776",
+    "2026-10-27-split-prefix-legacy.tsv": "8ea546898fdb2505c1278086dfbc8670029ad1873218866a3e226f01e07e7739",
+    "2026-10-27-split-prefix-upstream.tsv": "4ecb60b33cd63c3f396a129ac63e719b40ae227516be21b1c618c1d27ca9b36a",
+    "2026-10-27-split-prefix-validation-probe.py": "bebdf1ab954a48564742aca1432bd6c696dc1e045f5c048259080b46a8a33ef8",
+    "2026-10-27-split-prefix-fuzz-vorbis_headers.log": "8f6737737c7dc8d299ba2445b5da1d7214aa5936b6928aaf52bd89ec61909e90",
+    "2026-10-27-split-prefix-fuzz-vorbis_packets.log": "c571e60a19c01b1376ba0bdc93b2da29fbea9925ba0a153985c5bc6a5ac2b01d",
+    "2026-10-27-split-prefix-fuzz-vorbis_stream.log": "18e610ebc49c7effdfa7959860ba599a3db718b58e288af6ccaef0a16f5a1afa",
+    "2026-10-27-split-prefix-fuzz-vorbis_encode.log": "9047263f14d0968a239609b7632124294a4fe0c33ed63b595eac4f609f774aa6",
+    "2026-10-27-split-prefix-fuzz-provenance.json": "729d6aa7869cd7be66c8ddd0e3f2f68292073fbdcc9599b55317287e1924e046",
+    "2026-10-27-split-prefix-fuzz-results.json": "ffb3ecb14e855744aba781b023edfa662531c568d2e144a8646d719b58c07273",
+    "2026-10-27-split-prefix-fuzz-results.tsv": "c9c1373c3115953d22ff7f28e9e53baf0124d8681129ee19528cab8c4f7a073c",
+    "2026-10-27-split-prefix-fuzz-initial-corpus.sha256.json": "00b2cadc05a936d8679b6efb1044210739fc23fe91581b9200ba53a850afde88",
+    "2026-10-27-split-prefix-fuzz-build.log": "d62f25b8702b4fde7f885a668feb4eb63d6578d9086b51b1bc24af9414c10b1b",
+    "2026-10-27-split-prefix-fuzz-seeds.log": "bdb9bdd43d2075990752b3f0c84cf5aaaa02de46e387246b6dad6a4d785c4868",
+    "2026-10-27-split-prefix-fuzz-stream-timeout-replay.json": "9c0e42140c4925514aadd2d9f0e4350118f32398d6b2a9b81f9cfa6027acfc02",
+    "2026-10-27-split-prefix-fuzz-stream-timeout-replay.log": "758c6df247701abebee73fc9a24cf7951b48983946753789d0aebf50ef95827d",
+    "2026-10-27-split-prefix-fuzz-stream-timeout.bin": "4e9f90f7dbe6a58f233a64e33a0f2de06a3414a42c499075b6a32c79451e1e6d",
+    "2026-10-27-split-prefix-fuzz-timeout-baseline-build-command.json": "ced79a88b176df80ccc5030fd5ae692974d13f6725f208fc613c95e7b37d3927",
+    "2026-10-27-split-prefix-fuzz-timeout-baseline-build.log": "ff36a9da3675a58575ab0b5ba5f30f7d9adfee7871f3731c6a3489e2465d59e8",
+    "2026-10-27-split-prefix-fuzz-timeout-baseline-replay.json": "f4a6a278fc2542a58ca8e02543d29945b34b3ea005e228eff92ac73100e9e062",
+    "2026-10-27-split-prefix-fuzz-timeout-baseline-replay.log": "f8bce1c753866c66dcffde5b4f86618ea2c662db3c3bb6b4911c8b6152192b35",
+    "2026-10-27-split-prefix-fuzz-stream-slow-unit-0.bin": "4e9f90f7dbe6a58f233a64e33a0f2de06a3414a42c499075b6a32c79451e1e6d",
+    "2026-10-27-split-prefix-fuzz-stream-recheck-provenance.json": "a1dca9e1265e11bdeb3455905e57ee63293bf3354f75f68f8879fbb3b2bda09c",
+    "2026-10-27-split-prefix-fuzz-stream-recheck-results.json": "bb01e95ba7de7aa57b9b13167b408d7f69b6597ed005230267a7e1da22d880f9",
+    "2026-10-27-split-prefix-fuzz-stream-recheck-initial-corpus.sha256.json": "67bd59c346a03d4175dc5043305b1a50bd8858e6cbb306fd0754a2d78eac7d4b",
+    "2026-10-27-split-prefix-fuzz-stream-recheck-vorbis_stream.log": "5d7f86549c5704c766d24e1b8c3d02f0eab56379605e4fd60836ae82e3e7dd59",
+    "2026-10-27-split-prefix-retention-probe.py": "ab041a57ca2adcbc1bf017cd918636ca539fa984346ba5a186aed076b2af650f",
+    "2026-10-27-split-prefix-rejected-direct-vq-patch-normalization.json": "df72932d72116bef01e2e6d3174d1933b069d4063a346874f67a57837374b99d"
+  },
+  "original_artifacts_before_utf8_lf_normalization": {
+    "2026-10-27-split-prefix-rejected-direct-vq.json": {
+      "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/manifest.json",
+      "sha256": "c83977e7a9b6eee1ca8cc8f92ee7b2b4ee1d67b639694a947630253a860b47bf"
+    },
+    "2026-10-27-split-prefix-rejected-direct-vq-trials.tsv": {
+      "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/trials.tsv",
+      "sha256": "7a3fe400ae91977de01bc6294285709d34e101c0919ac737b2aba76c5f2e89ac"
+    },
+    "2026-10-27-split-prefix-rejected-direct-vq-summary.tsv": {
+      "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/summary.tsv",
+      "sha256": "091a5e0a36089274b6b63e4f101993288600996b200042b99f21e6f43342b86f"
+    },
+    "2026-10-27-split-prefix-rejected-direct-vq-saved-binaries.json": {
+      "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/saved-binaries.json",
+      "sha256": "d9fea8031c31c704ce9f1701e140a0d24301ac7090482271a0152eb9fc8ea99c"
+    },
+    "2026-10-27-split-prefix-rejected-direct-vq-baseline-build.log": {
+      "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/baseline-build.log",
+      "sha256": "f552a5d4e472ec391c12622347732256c1eab4e3663aca261c7901e15b91db13"
+    },
+    "2026-10-27-split-prefix-rejected-direct-vq-c-build.log": {
+      "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/c-build.log",
+      "sha256": "8c3a4802ae0920720d07f6c1ae19166acd6aa5a4d45eaa77dc14929298caefa6"
+    },
+    "2026-10-27-split-prefix-rejected-direct-vq-rust-build.log": {
+      "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/rust-build.log",
+      "sha256": "dc16903c35054be2c96478ff07ee947483f31d2e2470313ffd9464cc3b454ec8"
+    },
+    "2026-10-27-split-prefix-rejected-direct-vq-c-configure.log": {
+      "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/c-configure.log",
+      "sha256": "e83be8fcc706ae50342597f82f9d5509ea9480d488656830f8ee16d14fcb98a0"
+    },
+    "2026-10-27-split-prefix-rejected-direct-vq.patch": {
+      "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/direct-vq.patch",
+      "sha256": "51e10599824b3a9a20521e52ac4153fc4d6544d0a8bb21a832994195661280a8",
+      "equivalent_zero_context_representation": {
+        "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/direct-vq-zero-context.patch",
+        "sha256": "92f291af250513df0e4a6429ea47d1d32d720dd9008a6c66d19c10cb74084539"
+      }
+    },
+    "2026-10-27-split-prefix-rejected-direct-vq-source.rs": {
+      "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/direct-vq-codebook.rs",
+      "sha256": "1622e10226eb992b9ca71c13bd746ee91b78aca9affd03969ea1c700db2a70f8"
+    },
+    "2026-10-27-split-prefix-rejected-stereo-pairs.json": {
+      "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/manifest.json",
+      "sha256": "95335643929cd4247fadabb9f8498214c529b48d6b672b877c3d69f6aafd9ffe"
+    },
+    "2026-10-27-split-prefix-rejected-stereo-pairs-trials.tsv": {
+      "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/trials.tsv",
+      "sha256": "7ee9276f2e0975143e8cecb25ee47218460ffa2afb6d5aadfb6ddd9d016ac3eb"
+    },
+    "2026-10-27-split-prefix-rejected-stereo-pairs-summary.tsv": {
+      "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/summary.tsv",
+      "sha256": "ec82724183e2a6d1eb98a2462ea63520fa4bf90606b4d0fc72a783e5fc287935"
+    },
+    "2026-10-27-split-prefix-rejected-stereo-pairs-saved-binaries.json": {
+      "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/saved-binaries.json",
+      "sha256": "68c3a61f156b59582122160c75d57f1f95992edfa9dd882f17d262c84bd706a9"
+    },
+    "2026-10-27-split-prefix-rejected-stereo-pairs-baseline-build.log": {
+      "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/baseline-build.log",
+      "sha256": "75e0edfa0820e1486403b09e13296501adf07c6a93e387feb961bfd845d5254a"
+    },
+    "2026-10-27-split-prefix-rejected-stereo-pairs-c-build.log": {
+      "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/c-build.log",
+      "sha256": "8c3a4802ae0920720d07f6c1ae19166acd6aa5a4d45eaa77dc14929298caefa6"
+    },
+    "2026-10-27-split-prefix-rejected-stereo-pairs-rust-build.log": {
+      "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/rust-build.log",
+      "sha256": "3faa3e3bc69ac906308c3436c186641c6835045011bba89902c32d1338227a38"
+    },
+    "2026-10-27-split-prefix-rejected-stereo-pairs-c-configure.log": {
+      "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/c-configure.log",
+      "sha256": "69afe1e02080a2eb2b498097069f76a4f7c3b678bab8a410dac66c0522ec2435"
+    },
+    "2026-10-27-split-prefix-rejected-stereo-pairs.patch": {
+      "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/stereo-pairs.patch",
+      "sha256": "2d5c3c8b1a51861317a20ef6bab8fc17b3658ec9dd96aa0b6a09805cd5255e4a"
+    },
+    "2026-10-27-split-prefix-rejected-stereo-pairs-source.rs": {
+      "path": "target/deadlib-audio-reference/stereo-pairs-pipeline-20261027/stereo-pairs-residue.rs",
+      "sha256": "543dc61b029e7da6ad2aca240db112e7c49fdd7feabfbd098c8e7210587e4bfa"
+    },
+    "2026-10-27-split-prefix-rejected-inline-vq.json": {
+      "path": "target/deadlib-audio-reference/inline-vq-pipeline-20261027/manifest.json",
+      "sha256": "a2f783a1f8854ed57b5a725bbadc5360fa31773e827ceff02224893f13f96c10"
+    },
+    "2026-10-27-split-prefix-rejected-inline-vq-trials.tsv": {
+      "path": "target/deadlib-audio-reference/inline-vq-pipeline-20261027/trials.tsv",
+      "sha256": "afc1e729f7d3493a2f702d2a0e23cc09ac0448648aeeba2f30949b391b396e98"
+    },
+    "2026-10-27-split-prefix-rejected-inline-vq-summary.tsv": {
+      "path": "target/deadlib-audio-reference/inline-vq-pipeline-20261027/summary.tsv",
+      "sha256": "cdb7a15af68e92ca3fb3f7e5466bf7007f723d4b87b14145aa37cbbe1ea67b75"
+    },
+    "2026-10-27-split-prefix-rejected-inline-vq-saved-binaries.json": {
+      "path": "target/deadlib-audio-reference/inline-vq-pipeline-20261027/saved-binaries.json",
+      "sha256": "225c50f0041287bcd36f53b5a2e4250dc8b6ca981a2fb9c6529afce8735a6cce"
+    },
+    "2026-10-27-split-prefix-rejected-inline-vq-baseline-build.log": {
+      "path": "target/deadlib-audio-reference/inline-vq-pipeline-20261027/baseline-build.log",
+      "sha256": "dc9e47e4f942c0d67ee12c6ef16021e664e7b450292f30c8d2dc7db269171c5e"
+    },
+    "2026-10-27-split-prefix-rejected-inline-vq-c-build.log": {
+      "path": "target/deadlib-audio-reference/inline-vq-pipeline-20261027/c-build.log",
+      "sha256": "8c3a4802ae0920720d07f6c1ae19166acd6aa5a4d45eaa77dc14929298caefa6"
+    },
+    "2026-10-27-split-prefix-rejected-inline-vq-current-asm-build.log": {
+      "path": "target/deadlib-audio-reference/inline-vq-pipeline-20261027/current-asm-build.log",
+      "sha256": "06b8a1eb057fea9bce635f2f06e7c41328f50afe80a5d6db8492abff37ecec07"
+    },
+    "2026-10-27-split-prefix-rejected-inline-vq-rust-build.log": {
+      "path": "target/deadlib-audio-reference/inline-vq-pipeline-20261027/rust-build.log",
+      "sha256": "8a26a308d5dbe5e02a0884d61d0835a102a31c920d32815daa039c58d243b12d"
+    },
+    "2026-10-27-split-prefix-rejected-inline-vq-c-configure.log": {
+      "path": "target/deadlib-audio-reference/inline-vq-pipeline-20261027/c-configure.log",
+      "sha256": "e83be8fcc706ae50342597f82f9d5509ea9480d488656830f8ee16d14fcb98a0"
+    },
+    "2026-10-27-split-prefix-rejected-inline-vq.patch": {
+      "path": "target/deadlib-audio-reference/inline-vq-pipeline-20261027/inline-vq.patch",
+      "sha256": "c46a12fee117f38c0941e2df17835ea2a09fa866b41c1e65e6345bdbed77cb4d"
+    },
+    "2026-10-27-split-prefix-rejected-inline-vq-source.rs": {
+      "path": "target/deadlib-audio-reference/inline-vq-pipeline-20261027/inline-vq-codebook.rs",
+      "sha256": "4f8f46026e1f24689ab539bc07e4645add020a273fb253e640d597fa889cb651"
+    },
+    "2026-10-27-split-prefix-pipeline.json": {
+      "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/manifest.json",
+      "sha256": "6a43595b9b5d3fcb9461d77e219b33b126a7ba54ea94cf8e891900b326ef56e7"
+    },
+    "2026-10-27-split-prefix-pipeline-trials.tsv": {
+      "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/trials.tsv",
+      "sha256": "cd41ca4de00b228f194944d519ff9060bb1f1c6270aa7e7e8b5a811904cecfa9"
+    },
+    "2026-10-27-split-prefix-pipeline-summary.tsv": {
+      "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/summary.tsv",
+      "sha256": "028daa454335aa6993b1095fd94300d5619f7f106512fa0c4f0617a58261bf8b"
+    },
+    "2026-10-27-split-prefix-pipeline-saved-binaries.json": {
+      "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/saved-binaries.json",
+      "sha256": "8dadc80b8a49033ea71a62990c86a388cede874a6fc1fe6c86d988df7090bae7"
+    },
+    "2026-10-27-split-prefix-pipeline-baseline-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/baseline-build.log",
+      "sha256": "c89a2049fe678732c59850d5170518e6304d9e87f57edd11f27123d8986878f6"
+    },
+    "2026-10-27-split-prefix-pipeline-c-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/c-build.log",
+      "sha256": "8c3a4802ae0920720d07f6c1ae19166acd6aa5a4d45eaa77dc14929298caefa6"
+    },
+    "2026-10-27-split-prefix-pipeline-current-asm-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/current-asm-build.log",
+      "sha256": "36fc20837589cb21b0a901b6971b1b46331cce03f4134c5a2253144938a04c14"
+    },
+    "2026-10-27-split-prefix-pipeline-rust-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/rust-build.log",
+      "sha256": "0e497e77a00a1b44d65cc1b36575dab557bb6ae951666059d5ca8e79e2f8d0e0"
+    },
+    "2026-10-27-split-prefix-pipeline-c-configure.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/c-configure.log",
+      "sha256": "9b110366cfa623677b7b807b32e8404eb0f7192161efa3521a1137c0e10e2df2"
+    },
+    "2026-10-27-split-prefix-resources.json": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/manifest.json",
+      "sha256": "2442e9f9fa8bbf0c030299f8c792657738710f8953d8bdc80485d26938572b5a"
+    },
+    "2026-10-27-split-prefix-resources.tsv": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/resources.tsv",
+      "sha256": "466c9ce8fdfcc2a560bc005c41e11f1008b37c8abcb271150b331b37a1d420cb"
+    },
+    "2026-10-27-split-prefix-seek-trials.tsv": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/seek-trials.tsv",
+      "sha256": "fe69d2d84128bee0e857c15653b5b5155ad70767aa14074a4c44350d2665ed52"
+    },
+    "2026-10-27-split-prefix-seek-summary.tsv": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/seek-summary.tsv",
+      "sha256": "711cf9e2ff635087da08599d02a805469c42ac32a51cc96c0fe8d42b7d94e605"
+    },
+    "2026-10-27-split-prefix-resources-complete.json": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/complete.json",
+      "sha256": "5d073353384b1e52a8d5ce9ad643acd606ab62484a2bd320563a2750a90d5827"
+    },
+    "2026-10-27-split-prefix-resources-saved-binaries.json": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/saved-binaries.json",
+      "sha256": "a0fa96fc19608846cf741674ffa3a5ee02934436f8e4ceaf451f619fe85b7f3a"
+    },
+    "2026-10-27-split-prefix-resources-baseline-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/baseline-build.log",
+      "sha256": "19005ff5ba0aa37c25f3e29717a5ef1166ea8721e89bd4fddb1e36301e7810c8"
+    },
+    "2026-10-27-split-prefix-resources-c-counted-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/c-counted-build.log",
+      "sha256": "e4a70bf57393ab5f652524c0887f6dc66c624a443ce8ad59f3498bbb21632c8a"
+    },
+    "2026-10-27-split-prefix-resources-c-memory-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/c-memory-build.log",
+      "sha256": "2756c0a4b6839d86e9ee4eb33fc680a6e7b8c8ba4ea185164c77b04200866695"
+    },
+    "2026-10-27-split-prefix-resources-oracle-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/oracle-build.log",
+      "sha256": "29260226662f992eabe5b56793c0d816dd963cf50bc13cffc2e2f282e0348a79"
+    },
+    "2026-10-27-split-prefix-resources-rust_baseline_counted-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/rust_baseline_counted-build.log",
+      "sha256": "4f0b6f194751499691b2bacba0223678e92f1fbff2c673d261b8083383a5fea8"
+    },
+    "2026-10-27-split-prefix-resources-rust_baseline_memory-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/rust_baseline_memory-build.log",
+      "sha256": "4b05752573011e014bc4303f834b1e157227e14f81b68ca7631c668a62e1aefa"
+    },
+    "2026-10-27-split-prefix-resources-rust_counted-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/rust_counted-build.log",
+      "sha256": "04e90593715741f98285d9f1d9c7274fec497befa83692158f3087569767c8e0"
+    },
+    "2026-10-27-split-prefix-resources-rust_memory-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/rust_memory-build.log",
+      "sha256": "d248ee1283adb41569d2e624338a594ce96a65e552f5148a6dc713cf652c0607"
+    },
+    "2026-10-27-split-prefix-resources-rust_timing-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/rust_timing-build.log",
+      "sha256": "37e04baecdccc95624e6afc6fbafcb5c136e85a084f7bb8772e8dfceb8626d69"
+    },
+    "2026-10-27-split-prefix-resources-c-counted-configure.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/c-counted-configure.log",
+      "sha256": "c70cac3b9190fbc61787a8037271ad87e82369a50913220b31f515e0f1433a14"
+    },
+    "2026-10-27-split-prefix-resources-c-memory-configure.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/c-memory-configure.log",
+      "sha256": "69afe1e02080a2eb2b498097069f76a4f7c3b678bab8a410dac66c0522ec2435"
+    },
+    "2026-10-27-split-prefix-resources-oracle-configure.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-resources-20261027/oracle-configure.log",
+      "sha256": "4b3913aeee33e16c6a3aae43dd78199bfe9161bebc8bb0cdee7ab83ef1882a73"
+    },
+    "2026-10-27-split-prefix-profile-main-manifest.json": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-main-20261027/manifest.json",
+      "sha256": "570d7ac3a3d0a1d93a3ccd9364924761debc1cb1c7603399dfcbceb92bdc8995"
+    },
+    "2026-10-27-split-prefix-profile-main-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-main-20261027/build.log",
+      "sha256": "c811d67b29f407f30da073973f96a89470f2837e743dd27941ca377035c160a3"
+    },
+    "2026-10-27-split-prefix-profile-main-clippy.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-main-20261027/clippy.log",
+      "sha256": "d23c48e4b6c9adb2d310d9ad935b4c5008fc45ed452110979f20771b19bfcfc9"
+    },
+    "2026-10-27-split-prefix-profile-main-worker-0.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-main-20261027/worker-0.log",
+      "sha256": "f7fd6ec4f1b73f7636a601adb1ac05b78ce58bdc8a690c7e51c73f985209f300"
+    },
+    "2026-10-27-split-prefix-profile-main-worker-1.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-main-20261027/worker-1.log",
+      "sha256": "c6483f42e53e6a27e305217381ec9dad9f7af6641752b04f1ecc7edcaf719cd4"
+    },
+    "2026-10-27-split-prefix-profile-main-worker-2.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-main-20261027/worker-2.log",
+      "sha256": "714b0f1c69d22ba8e51f91ae3141e7cf388e6c27ccac3fb554cb571dc4f2e8f3"
+    },
+    "2026-10-27-split-prefix-profile-main-worker-3.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-main-20261027/worker-3.log",
+      "sha256": "0f74e7b1e1ec29a7fc3fa5a3f3425e1a6d4a8ce8164a5869da1a71c349364864"
+    },
+    "2026-10-27-split-prefix-profile-main-worker-4.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-main-20261027/worker-4.log",
+      "sha256": "32ef4341b27f9da81fd20062a55abcbd0157ca6074fc934fd1ff9e9afd43f0b6"
+    },
+    "2026-10-27-split-prefix-profile-main-worker-5.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-main-20261027/worker-5.log",
+      "sha256": "f8160ebe1f6b5b051008c4165354e527a40832ea33125be7da1a8c1a096d1357"
+    },
+    "2026-10-27-split-prefix-profile-main-worker-6.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-main-20261027/worker-6.log",
+      "sha256": "612bba4985cf7e2f9568cbd8ab386abcecec9ba2d966ff7b703c367bdf62cbe5"
+    },
+    "2026-10-27-split-prefix-profile-floor0-manifest.json": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-floor0-20261027/manifest.json",
+      "sha256": "9d4dcfcf8aa3c2a0967e3d16e56b84986300af5bf065cc0b00948bc89fe4fffb"
+    },
+    "2026-10-27-split-prefix-profile-floor0-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-floor0-20261027/build.log",
+      "sha256": "09c43822ad8d81ac71695c270ed32a900705eb6a31a1d0c577b2fec1fd0e4ad2"
+    },
+    "2026-10-27-split-prefix-profile-floor0-clippy.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-floor0-20261027/clippy.log",
+      "sha256": "f6efec07d8ebc32d4911768b3945f64e64c1be96cb145ced3c4138a180d1ce23"
+    },
+    "2026-10-27-split-prefix-profile-floor0-worker-0.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-profile-floor0-20261027/worker-0.log",
+      "sha256": "af93c07edb6726f2c51150b0c29bd683bfcf7ad297627f24d09a84999a7f9e57"
+    },
+    "2026-10-27-split-prefix-pe-text-sections.json": {
+      "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/pe-text-sections.json",
+      "sha256": "6658675ddbf87b7e8c8fedebe4a85290d381a535a1517903b708cfb2841307c3"
+    },
+    "2026-10-27-split-prefix-asm-inspection.json": {
+      "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/asm-inspection.json",
+      "sha256": "a822dc71d6d79e541405587e012af8f012ee88385a6168746ff0dd276b693a7a"
+    },
+    "2026-10-27-split-prefix-paired-ratios.json": {
+      "path": "target/deadlib-audio-reference/split-prefix-pipeline-20261027/paired-ratios.json",
+      "sha256": "4ffdc0bb6655bf09393a5bf20f96a6be9fe39ef32fb03e6c64f869a8c91db478"
+    },
+    "2026-10-27-split-prefix-rejected-inline-vq-asm-comparison.json": {
+      "path": "target/deadlib-audio-reference/inline-vq-pipeline-20261027/asm-comparison.json",
+      "sha256": "1b1bab9577d81604763e124ca780a5dc75b32dff321d5ef0312fb40a02bcf68c"
+    },
+    "2026-10-27-split-prefix-fmt.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-validation-20261027/fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "2026-10-27-split-prefix-release.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-validation-20261027/release.log",
+      "sha256": "961961fe4961437c4634ef6c286dc0e2b4c3ef49796598a74d15d42350fe73c6"
+    },
+    "2026-10-27-split-prefix-clippy.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-validation-20261027/clippy.log",
+      "sha256": "42a86a36eead146602a0555ae660355333400fdbe0be6d5a0e59db4827cb4bed"
+    },
+    "2026-10-27-split-prefix-clippy-default.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-validation-20261027/clippy-default.log",
+      "sha256": "a4add7f371ee44f6abdfc40c69745955e0b62b6bb3098b7c74856ca4ca66e77a"
+    },
+    "2026-10-27-split-prefix-independent.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-validation-20261027/independent.log",
+      "sha256": "739a424c95a17e4b2ad332e9dc294cc3e5f911ddf4c03015fa0a957ab218a23c"
+    },
+    "2026-10-27-split-prefix-fuzz-tests.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-validation-20261027/fuzz-tests.log",
+      "sha256": "873dd09e0e2b050cf761dc01ca07469d3c36731ec5504dd2f574682c119aa39d"
+    },
+    "2026-10-27-split-prefix-fuzz-clippy.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-validation-20261027/fuzz-clippy.log",
+      "sha256": "e915704acfc1345a005c8a54a771b45bb12b4dd874a213dd7bf1ab9e28b475c5"
+    },
+    "2026-10-27-split-prefix-matrix.tsv": {
+      "path": "target/deadlib-audio-reference/split-prefix-validation-20261027/matrix.tsv",
+      "sha256": "a9d4616b450f950f1f4cac927e27b45aeb60040b26e437cbfcda8ba881c77fdd"
+    },
+    "2026-10-27-split-prefix-historical.tsv": {
+      "path": "target/deadlib-audio-reference/split-prefix-validation-20261027/historical.tsv",
+      "sha256": "c54166e8b339a8a5c4c10254d1ae043cca67285c2474f2483eb56d219eca7776"
+    },
+    "2026-10-27-split-prefix-legacy.tsv": {
+      "path": "target/deadlib-audio-reference/split-prefix-validation-20261027/legacy.tsv",
+      "sha256": "8ea546898fdb2505c1278086dfbc8670029ad1873218866a3e226f01e07e7739"
+    },
+    "2026-10-27-split-prefix-upstream.tsv": {
+      "path": "target/deadlib-audio-reference/split-prefix-validation-20261027/upstream.tsv",
+      "sha256": "4ecb60b33cd63c3f396a129ac63e719b40ae227516be21b1c618c1d27ca9b36a"
+    },
+    "2026-10-27-split-prefix-validation-probe.py": {
+      "path": "target/deadlib-audio-reference/validate_split_prefix.py",
+      "sha256": "bebdf1ab954a48564742aca1432bd6c696dc1e045f5c048259080b46a8a33ef8"
+    },
+    "2026-10-27-split-prefix-fuzz-vorbis_headers.log": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/vorbis_headers.log",
+      "sha256": "d6d2e57a162b7dc85e5e81fd5d402a89247bc7b241db6d0ecdd8317cd79af0ae"
+    },
+    "2026-10-27-split-prefix-fuzz-vorbis_packets.log": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/vorbis_packets.log",
+      "sha256": "395f077c8b3be15692611e5cdd0dda45f8af8de20e189cf92616e028ebc49a74"
+    },
+    "2026-10-27-split-prefix-fuzz-vorbis_stream.log": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/vorbis_stream.log",
+      "sha256": "8ef475940ad6ac8f047c8e5513f622b8ee316c26d980737f07f78882eb848136"
+    },
+    "2026-10-27-split-prefix-fuzz-vorbis_encode.log": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/vorbis_encode.log",
+      "sha256": "735de393c4cdb4558ce0aa2a117fe407f326cb61e37b094f474f3a0dbd6737cb"
+    },
+    "2026-10-27-split-prefix-fuzz-provenance.json": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/provenance.json",
+      "sha256": "e8195a5d2ea2e733c3a38cd80fb8116ef130b6df0ac7de68360363ef3a08d0a7"
+    },
+    "2026-10-27-split-prefix-fuzz-results.json": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/results.json",
+      "sha256": "0eb8413d70d56749ee74d5e28aa98325172d972f92a6841a7111bcaa69cd03df"
+    },
+    "2026-10-27-split-prefix-fuzz-results.tsv": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/results.tsv",
+      "sha256": "9b2291f2031e63d6ec6b8296f9014ff0eb7e38e8ece5528c902914b0334815db"
+    },
+    "2026-10-27-split-prefix-fuzz-initial-corpus.sha256.json": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/initial-corpus.sha256.json",
+      "sha256": "db6c762e99a803240068a19cd121198e4e1e1fc36ca20f70e893df850425fdf7"
+    },
+    "2026-10-27-split-prefix-fuzz-build.log": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/build.log",
+      "sha256": "9685535c736d30bc03c74880f95f05e2260b3fa1a9f918def27f0dcf5ab8fc1f"
+    },
+    "2026-10-27-split-prefix-fuzz-seeds.log": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/seeds.log",
+      "sha256": "41d48147e90087f4de997b5e9eb76a20f53455fb6e9390e2bcbba4c0755c5faf"
+    },
+    "2026-10-27-split-prefix-fuzz-stream-timeout-replay.json": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/stream-timeout-replay.json",
+      "sha256": "9c0e42140c4925514aadd2d9f0e4350118f32398d6b2a9b81f9cfa6027acfc02"
+    },
+    "2026-10-27-split-prefix-fuzz-stream-timeout-replay.log": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/stream-timeout-replay.log",
+      "sha256": "383194bc0f1adfa48e038e4bccafcf479eb3fadc7d77ea4c9f9d0277ecbfad59"
+    },
+    "2026-10-27-split-prefix-fuzz-stream-timeout.bin": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-20261027/artifacts/vorbis_stream/timeout-96a983b404038758b05f56633423b0752a664653",
+      "sha256": "4e9f90f7dbe6a58f233a64e33a0f2de06a3414a42c499075b6a32c79451e1e6d"
+    },
+    "2026-10-27-split-prefix-fuzz-timeout-baseline-build-command.json": {
+      "path": "target/deadlib-audio-reference/split-prefix-timeout-baseline-20261027/build-command.json",
+      "sha256": "ced79a88b176df80ccc5030fd5ae692974d13f6725f208fc613c95e7b37d3927"
+    },
+    "2026-10-27-split-prefix-fuzz-timeout-baseline-build.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-timeout-baseline-20261027/build.log",
+      "sha256": "ff36a9da3675a58575ab0b5ba5f30f7d9adfee7871f3731c6a3489e2465d59e8"
+    },
+    "2026-10-27-split-prefix-fuzz-timeout-baseline-replay.json": {
+      "path": "target/deadlib-audio-reference/split-prefix-timeout-baseline-20261027/replay.json",
+      "sha256": "f4a6a278fc2542a58ca8e02543d29945b34b3ea005e228eff92ac73100e9e062"
+    },
+    "2026-10-27-split-prefix-fuzz-timeout-baseline-replay.log": {
+      "path": "target/deadlib-audio-reference/split-prefix-timeout-baseline-20261027/replay.log",
+      "sha256": "0bb7749626570105478d0778dfc047ca7acc3fa96aa4ef01687c8d35c6fde0e8"
+    },
+    "2026-10-27-split-prefix-fuzz-stream-slow-unit-0.bin": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-stream-recheck-20261027/artifacts/slow-unit-96a983b404038758b05f56633423b0752a664653",
+      "sha256": "4e9f90f7dbe6a58f233a64e33a0f2de06a3414a42c499075b6a32c79451e1e6d"
+    },
+    "2026-10-27-split-prefix-fuzz-stream-recheck-provenance.json": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-stream-recheck-20261027/provenance.json",
+      "sha256": "a1dca9e1265e11bdeb3455905e57ee63293bf3354f75f68f8879fbb3b2bda09c"
+    },
+    "2026-10-27-split-prefix-fuzz-stream-recheck-results.json": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-stream-recheck-20261027/results.json",
+      "sha256": "bb01e95ba7de7aa57b9b13167b408d7f69b6597ed005230267a7e1da22d880f9"
+    },
+    "2026-10-27-split-prefix-fuzz-stream-recheck-initial-corpus.sha256.json": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-stream-recheck-20261027/initial-corpus.sha256.json",
+      "sha256": "67bd59c346a03d4175dc5043305b1a50bd8858e6cbb306fd0754a2d78eac7d4b"
+    },
+    "2026-10-27-split-prefix-fuzz-stream-recheck-vorbis_stream.log": {
+      "path": "target/deadlib-audio-reference/fuzz-split-prefix-stream-recheck-20261027/vorbis_stream.log",
+      "sha256": "798fc379512c405c5325e8aa809f35e02e675223b99b3f01ebf25bb71280eb6d"
+    },
+    "2026-10-27-split-prefix-retention-probe.py": {
+      "path": "target/deadlib-audio-reference/retain_split_prefix.py",
+      "sha256": "ab041a57ca2adcbc1bf017cd918636ca539fa984346ba5a186aed076b2af650f"
+    },
+    "2026-10-27-split-prefix-rejected-direct-vq-patch-normalization.json": {
+      "path": "target/deadlib-audio-reference/direct-vq-pipeline-20261027/patch-normalization.json",
+      "sha256": "df72932d72116bef01e2e6d3174d1933b069d4063a346874f67a57837374b99d"
+    }
+  },
+  "retained_utc": "2026-10-27T08:27:35.581582+00:00",
+  "limitations": [
+    "Shared unlocked machine; native trial ranges overlap and short/startup timings are mixed.",
+    "Matching-profile assembly and complete pipeline-worker PE .text size are diagnostic, not isolated library code size.",
+    "The slow legacy seed exceeds the default fuzz time budget in the unmodified baseline as well; original timeout retained.",
+    "Native throughput still trails Symphonia; broader conformance, sparse codec seeking and encoder quality/rate control remain."
+  ]
+}

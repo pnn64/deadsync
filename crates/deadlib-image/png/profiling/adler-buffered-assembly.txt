@@ -1,0 +1,457 @@
+
+/tmp/deadlib-image-adler-profile-target-20261027-a/release/examples/decode_profile:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+000000000004e6c0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32>:
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32():
+   4e6c0:	48 85 f6             	test   rsi,rsi
+_RNvXs17_NtNtCskADBYZwJmSU_4core5slice4iterINtB6_6ChunkshENtNtNtNtBa_4iter6traits8iterator8Iterator4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/iter.rs:1504
+   4e6c3:	0f 84 dd 04 00 00    	je     4eba6 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x4e6>
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler3211update_bulk():
+   4e6c9:	55                   	push   rbp
+   4e6ca:	41 57                	push   r15
+   4e6cc:	41 56                	push   r14
+   4e6ce:	41 55                	push   r13
+   4e6d0:	41 54                	push   r12
+   4e6d2:	53                   	push   rbx
+   4e6d3:	41 b9 01 00 00 00    	mov    r9d,0x1
+   4e6d9:	31 c0                	xor    eax,eax
+   4e6db:	66 0f ef c0          	pxor   xmm0,xmm0
+   4e6df:	41 be 71 80 07 80    	mov    r14d,0x80078071
+   4e6e5:	eb 4b                	jmp    4e732 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x72>
+   4e6e7:	48 8b 7c 24 e0       	mov    rdi,QWORD PTR [rsp-0x20]
+   4e6ec:	41 be 71 80 07 80    	mov    r14d,0x80078071
+   4e6f2:	48 8b 54 24 c0       	mov    rdx,QWORD PTR [rsp-0x40]
+   4e6f7:	66 0f 1f 84 00 00 00 	nop    WORD PTR [rax+rax*1+0x0]
+   4e6fe:	00 00 
+   4e700:	48 29 d6             	sub    rsi,rdx
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:127
+   4e703:	44 89 c9             	mov    ecx,r9d
+   4e706:	49 0f af ce          	imul   rcx,r14
+   4e70a:	48 c1 e9 2f          	shr    rcx,0x2f
+   4e70e:	69 c9 f1 ff 00 00    	imul   ecx,ecx,0xfff1
+   4e714:	41 29 c9             	sub    r9d,ecx
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:128
+   4e717:	89 c1                	mov    ecx,eax
+   4e719:	49 0f af ce          	imul   rcx,r14
+   4e71d:	48 c1 e9 2f          	shr    rcx,0x2f
+   4e721:	69 c9 f1 ff 00 00    	imul   ecx,ecx,0xfff1
+   4e727:	29 c8                	sub    eax,ecx
+_RNvMNtCskADBYZwJmSU_4core5sliceSh8is_emptyCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:137
+   4e729:	48 85 f6             	test   rsi,rsi
+_RNvXs17_NtNtCskADBYZwJmSU_4core5slice4iterINtB6_6ChunkshENtNtNtNtBa_4iter6traits8iterator8Iterator4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/iter.rs:1504
+   4e72c:	0f 84 63 04 00 00    	je     4eb95 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x4d5>
+   4e732:	49 89 fa             	mov    r10,rdi
+_RNvYjNtNtCskADBYZwJmSU_4core3cmp3Ord3minCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/cmp.rs:1090
+   4e735:	48 81 fe b0 15 00 00 	cmp    rsi,0x15b0
+   4e73c:	ba b0 15 00 00       	mov    edx,0x15b0
+   4e741:	48 0f 42 d6          	cmovb  rdx,rsi
+_RNvMNtNtCskADBYZwJmSU_4core3ptr9const_ptrPh3addCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/ptr/const_ptr.rs:871
+   4e745:	48 01 d7             	add    rdi,rdx
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler3211update_bulk():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:99
+   4e748:	48 83 fe 40          	cmp    rsi,0x40
+   4e74c:	0f 82 6e 01 00 00    	jb     4e8c0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x200>
+_RINvMNtCskADBYZwJmSU_4core5sliceSh9as_chunksKj10_ECsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:1399
+   4e752:	41 89 d3             	mov    r11d,edx
+   4e755:	41 81 e3 f0 1f 00 00 	and    r11d,0x1ff0
+_RNvMNtCskADBYZwJmSU_4core5sliceSh18split_at_uncheckedCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/mod.rs:2062
+   4e75c:	41 89 d0             	mov    r8d,edx
+   4e75f:	41 83 e0 0f          	and    r8d,0xf
+_RNvXsd_NtNtCskADBYZwJmSU_4core3ptr8non_nullINtB5_7NonNullAhj10_ENtNtB9_3cmp9PartialEq2eqCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/ptr/non_null.rs:1663
+   4e763:	4d 85 db             	test   r11,r11
+   4e766:	48 89 7c 24 e0       	mov    QWORD PTR [rsp-0x20],rdi
+   4e76b:	48 89 54 24 c0       	mov    QWORD PTR [rsp-0x40],rdx
+   4e770:	66 0f ef db          	pxor   xmm3,xmm3
+_RNvXs2J_NtNtCskADBYZwJmSU_4core5slice4iterINtB6_4IterAhj10_ENtNtNtNtBa_4iter6traits8iterator8Iterator4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/iter/macros.rs:180
+   4e774:	0f 84 4e 01 00 00    	je     4e8c8 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x208>
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler3211update_bulk():
+   4e77a:	31 c9                	xor    ecx,ecx
+   4e77c:	66 45 0f ef c0       	pxor   xmm8,xmm8
+   4e781:	66 0f ef ff          	pxor   xmm7,xmm7
+   4e785:	66 0f ef f6          	pxor   xmm6,xmm6
+   4e789:	66 0f ef ed          	pxor   xmm5,xmm5
+   4e78d:	66 0f ef e4          	pxor   xmm4,xmm4
+   4e791:	66 0f ef d2          	pxor   xmm2,xmm2
+   4e795:	66 0f ef c9          	pxor   xmm1,xmm1
+   4e799:	0f 1f 80 00 00 00 00 	nop    DWORD PTR [rax+0x0]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:105
+   4e7a0:	f3 45 0f 6f 0c 0a    	movdqu xmm9,XMMWORD PTR [r10+rcx*1]
+_RNvXsX_NtNtCskADBYZwJmSU_4core7convert3nummINtB7_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   4e7a6:	66 45 0f 6f d1       	movdqa xmm10,xmm9
+   4e7ab:	66 44 0f 68 d0       	punpckhbw xmm10,xmm0
+   4e7b0:	66 45 0f 6f da       	movdqa xmm11,xmm10
+   4e7b5:	66 44 0f 69 d8       	punpckhwd xmm11,xmm0
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler3211update_bulk():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:105
+   4e7ba:	66 41 0f fe eb       	paddd  xmm5,xmm11
+_RNvXsX_NtNtCskADBYZwJmSU_4core7convert3nummINtB7_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   4e7bf:	66 44 0f 61 d0       	punpcklwd xmm10,xmm0
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler3211update_bulk():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:105
+   4e7c4:	66 41 0f fe f2       	paddd  xmm6,xmm10
+_RNvXsX_NtNtCskADBYZwJmSU_4core7convert3nummINtB7_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   4e7c9:	66 44 0f 60 c8       	punpcklbw xmm9,xmm0
+   4e7ce:	66 45 0f 6f d1       	movdqa xmm10,xmm9
+   4e7d3:	66 44 0f 69 d0       	punpckhwd xmm10,xmm0
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler3211update_bulk():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:105
+   4e7d8:	66 41 0f fe fa       	paddd  xmm7,xmm10
+_RNvXsX_NtNtCskADBYZwJmSU_4core7convert3nummINtB7_4FromhE4from():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/convert/num.rs:72
+   4e7dd:	66 44 0f 61 c8       	punpcklwd xmm9,xmm0
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler3211update_bulk():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:105
+   4e7e2:	66 45 0f fe c1       	paddd  xmm8,xmm9
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:106
+   4e7e7:	66 0f fe cd          	paddd  xmm1,xmm5
+   4e7eb:	66 0f fe d6          	paddd  xmm2,xmm6
+   4e7ef:	66 0f fe e7          	paddd  xmm4,xmm7
+   4e7f3:	66 41 0f fe d8       	paddd  xmm3,xmm8
+_RNvXsd_NtNtCskADBYZwJmSU_4core3ptr8non_nullINtB5_7NonNullAhj10_ENtNtB9_3cmp9PartialEq2eqCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/ptr/non_null.rs:1663
+   4e7f8:	48 83 c1 10          	add    rcx,0x10
+   4e7fc:	49 39 cb             	cmp    r11,rcx
+_RNvXs2J_NtNtCskADBYZwJmSU_4core5slice4iterINtB6_4IterAhj10_ENtNtNtNtBa_4iter6traits8iterator8Iterator4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/iter/macros.rs:180
+   4e7ff:	75 9f                	jne    4e7a0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0xe0>
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler3211update_bulk():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:117
+   4e801:	66 0f 72 f3 04       	pslld  xmm3,0x4
+   4e806:	66 0f 72 f4 04       	pslld  xmm4,0x4
+   4e80b:	66 0f 72 f2 04       	pslld  xmm2,0x4
+   4e810:	66 0f 72 f1 04       	pslld  xmm1,0x4
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:114
+   4e815:	66 45 0f 7e c6       	movd   r14d,xmm8
+   4e81a:	66 45 0f 70 c8 55    	pshufd xmm9,xmm8,0x55
+   4e820:	66 44 0f 7e c9       	movd   ecx,xmm9
+   4e825:	48 89 4c 24 c8       	mov    QWORD PTR [rsp-0x38],rcx
+   4e82a:	66 45 0f 70 c8 ee    	pshufd xmm9,xmm8,0xee
+   4e830:	66 44 0f 7e c9       	movd   ecx,xmm9
+   4e835:	66 45 0f 70 c0 ff    	pshufd xmm8,xmm8,0xff
+   4e83b:	66 44 0f 7e c7       	movd   edi,xmm8
+   4e840:	66 0f 7e fa          	movd   edx,xmm7
+   4e844:	48 89 54 24 b0       	mov    QWORD PTR [rsp-0x50],rdx
+   4e849:	66 44 0f 70 c7 55    	pshufd xmm8,xmm7,0x55
+   4e84f:	66 44 0f 7e c2       	movd   edx,xmm8
+   4e854:	66 44 0f 70 c7 ee    	pshufd xmm8,xmm7,0xee
+   4e85a:	66 45 0f 7e c4       	movd   r12d,xmm8
+   4e85f:	66 0f 70 ff ff       	pshufd xmm7,xmm7,0xff
+   4e864:	66 0f 7e fb          	movd   ebx,xmm7
+   4e868:	48 89 5c 24 a8       	mov    QWORD PTR [rsp-0x58],rbx
+   4e86d:	66 0f 7e 74 24 a0    	movd   DWORD PTR [rsp-0x60],xmm6
+   4e873:	66 0f 70 fe 55       	pshufd xmm7,xmm6,0x55
+   4e878:	66 0f 7e fb          	movd   ebx,xmm7
+   4e87c:	48 89 5c 24 b8       	mov    QWORD PTR [rsp-0x48],rbx
+   4e881:	66 0f 70 fe ee       	pshufd xmm7,xmm6,0xee
+   4e886:	66 41 0f 7e fd       	movd   r13d,xmm7
+   4e88b:	66 0f 70 f6 ff       	pshufd xmm6,xmm6,0xff
+   4e890:	66 0f 7e 74 24 a4    	movd   DWORD PTR [rsp-0x5c],xmm6
+   4e896:	66 0f 7e eb          	movd   ebx,xmm5
+   4e89a:	48 89 5c 24 d8       	mov    QWORD PTR [rsp-0x28],rbx
+   4e89f:	66 0f 70 f5 55       	pshufd xmm6,xmm5,0x55
+   4e8a4:	66 0f 7e 74 24 98    	movd   DWORD PTR [rsp-0x68],xmm6
+   4e8aa:	66 0f 70 f5 ee       	pshufd xmm6,xmm5,0xee
+   4e8af:	66 0f 7e f5          	movd   ebp,xmm6
+   4e8b3:	66 0f 70 ed ff       	pshufd xmm5,xmm5,0xff
+   4e8b8:	66 0f 7e 6c 24 9c    	movd   DWORD PTR [rsp-0x64],xmm5
+   4e8be:	eb 72                	jmp    4e932 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x272>
+   4e8c0:	49 89 f8             	mov    r8,rdi
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:99
+   4e8c3:	e9 32 02 00 00       	jmp    4eafa <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x43a>
+   4e8c8:	45 31 f6             	xor    r14d,r14d
+   4e8cb:	48 c7 44 24 c8 00 00 	mov    QWORD PTR [rsp-0x38],0x0
+   4e8d2:	00 00 
+   4e8d4:	31 c9                	xor    ecx,ecx
+   4e8d6:	31 ff                	xor    edi,edi
+   4e8d8:	48 c7 44 24 b0 00 00 	mov    QWORD PTR [rsp-0x50],0x0
+   4e8df:	00 00 
+   4e8e1:	31 d2                	xor    edx,edx
+   4e8e3:	45 31 e4             	xor    r12d,r12d
+   4e8e6:	48 c7 44 24 a8 00 00 	mov    QWORD PTR [rsp-0x58],0x0
+   4e8ed:	00 00 
+   4e8ef:	c7 44 24 a0 00 00 00 	mov    DWORD PTR [rsp-0x60],0x0
+   4e8f6:	00 
+   4e8f7:	48 c7 44 24 b8 00 00 	mov    QWORD PTR [rsp-0x48],0x0
+   4e8fe:	00 00 
+   4e900:	45 31 ed             	xor    r13d,r13d
+   4e903:	c7 44 24 a4 00 00 00 	mov    DWORD PTR [rsp-0x5c],0x0
+   4e90a:	00 
+   4e90b:	48 c7 44 24 d8 00 00 	mov    QWORD PTR [rsp-0x28],0x0
+   4e912:	00 00 
+   4e914:	c7 44 24 98 00 00 00 	mov    DWORD PTR [rsp-0x68],0x0
+   4e91b:	00 
+   4e91c:	31 ed                	xor    ebp,ebp
+   4e91e:	66 0f ef e4          	pxor   xmm4,xmm4
+   4e922:	66 0f ef d2          	pxor   xmm2,xmm2
+   4e926:	66 0f ef c9          	pxor   xmm1,xmm1
+   4e92a:	c7 44 24 9c 00 00 00 	mov    DWORD PTR [rsp-0x64],0x0
+   4e931:	00 
+   4e932:	48 8b 5c 24 c0       	mov    rbx,QWORD PTR [rsp-0x40]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:114
+   4e937:	81 e3 f0 1f 00 00    	and    ebx,0x1ff0
+   4e93d:	41 0f af d9          	imul   ebx,r9d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:116
+   4e941:	45 01 ce             	add    r14d,r9d
+   4e944:	4c 8b 4c 24 c8       	mov    r9,QWORD PTR [rsp-0x38]
+   4e949:	48 89 4c 24 f8       	mov    QWORD PTR [rsp-0x8],rcx
+   4e94e:	41 01 c9             	add    r9d,ecx
+   4e951:	45 01 ce             	add    r14d,r9d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:117
+   4e954:	8d 0c 7f             	lea    ecx,[rdi+rdi*2]
+   4e957:	89 4c 24 d4          	mov    DWORD PTR [rsp-0x2c],ecx
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:116
+   4e95b:	03 7c 24 b0          	add    edi,DWORD PTR [rsp-0x50]
+   4e95f:	48 89 54 24 f0       	mov    QWORD PTR [rsp-0x10],rdx
+   4e964:	01 d7                	add    edi,edx
+   4e966:	44 01 f7             	add    edi,r14d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:117
+   4e969:	43 8d 0c 24          	lea    ecx,[r12+r12*1]
+   4e96d:	48 89 4c 24 e8       	mov    QWORD PTR [rsp-0x18],rcx
+   4e972:	4c 8b 7c 24 a8       	mov    r15,QWORD PTR [rsp-0x58]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:116
+   4e977:	45 01 fc             	add    r12d,r15d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:117
+   4e97a:	46 8d 0c fd 00 00 00 	lea    r9d,[r15*8+0x0]
+   4e981:	00 
+   4e982:	45 29 cf             	sub    r15d,r9d
+   4e985:	8b 4c 24 a0          	mov    ecx,DWORD PTR [rsp-0x60]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:116
+   4e989:	41 01 cc             	add    r12d,ecx
+   4e98c:	44 03 64 24 b8       	add    r12d,DWORD PTR [rsp-0x48]
+   4e991:	41 01 fc             	add    r12d,edi
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:117
+   4e994:	42 8d 14 6d 00 00 00 	lea    edx,[r13*2+0x0]
+   4e99b:	00 
+   4e99c:	48 89 54 24 a8       	mov    QWORD PTR [rsp-0x58],rdx
+   4e9a1:	8b 7c 24 a4          	mov    edi,DWORD PTR [rsp-0x5c]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:116
+   4e9a5:	41 01 fd             	add    r13d,edi
+   4e9a8:	48 8b 54 24 d8       	mov    rdx,QWORD PTR [rsp-0x28]
+   4e9ad:	41 01 d5             	add    r13d,edx
+   4e9b0:	44 8b 4c 24 98       	mov    r9d,DWORD PTR [rsp-0x68]
+   4e9b5:	45 01 cd             	add    r13d,r9d
+   4e9b8:	41 01 ed             	add    r13d,ebp
+   4e9bb:	45 01 e5             	add    r13d,r12d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:117
+   4e9be:	45 6b c9 f3          	imul   r9d,r9d,0xfffffff3
+   4e9c2:	6b ed f2             	imul   ebp,ebp,0xfffffff2
+   4e9c5:	44 01 cd             	add    ebp,r9d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:116
+   4e9c8:	45 89 e9             	mov    r9d,r13d
+   4e9cb:	44 8b 64 24 9c       	mov    r12d,DWORD PTR [rsp-0x64]
+   4e9d0:	45 01 e1             	add    r9d,r12d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:117
+   4e9d3:	45 89 e6             	mov    r14d,r12d
+   4e9d6:	41 c1 e6 04          	shl    r14d,0x4
+   4e9da:	45 29 f4             	sub    r12d,r14d
+   4e9dd:	41 01 ec             	add    r12d,ebp
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:114
+   4e9e0:	66 0f 7e dd          	movd   ebp,xmm3
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:117
+   4e9e4:	01 e8                	add    eax,ebp
+   4e9e6:	66 0f 70 eb 55       	pshufd xmm5,xmm3,0x55
+   4e9eb:	66 0f 7e ed          	movd   ebp,xmm5
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:114
+   4e9ef:	01 c5                	add    ebp,eax
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:117
+   4e9f1:	66 0f 70 eb ee       	pshufd xmm5,xmm3,0xee
+   4e9f6:	66 0f 7e e8          	movd   eax,xmm5
+   4e9fa:	01 e8                	add    eax,ebp
+   4e9fc:	66 0f 70 db ff       	pshufd xmm3,xmm3,0xff
+   4ea01:	66 0f 7e dd          	movd   ebp,xmm3
+   4ea05:	01 c5                	add    ebp,eax
+   4ea07:	01 dd                	add    ebp,ebx
+   4ea09:	66 0f 70 dc 55       	pshufd xmm3,xmm4,0x55
+   4ea0e:	66 0f 7e e0          	movd   eax,xmm4
+   4ea12:	66 0f 7e db          	movd   ebx,xmm3
+   4ea16:	01 c3                	add    ebx,eax
+   4ea18:	66 0f 70 dc ee       	pshufd xmm3,xmm4,0xee
+   4ea1d:	66 0f 7e d8          	movd   eax,xmm3
+   4ea21:	01 d8                	add    eax,ebx
+   4ea23:	66 0f 70 dc ff       	pshufd xmm3,xmm4,0xff
+   4ea28:	66 0f 7e db          	movd   ebx,xmm3
+   4ea2c:	01 c3                	add    ebx,eax
+   4ea2e:	66 0f 7e d0          	movd   eax,xmm2
+   4ea32:	01 d8                	add    eax,ebx
+   4ea34:	01 e8                	add    eax,ebp
+   4ea36:	66 0f 70 da 55       	pshufd xmm3,xmm2,0x55
+   4ea3b:	66 0f 70 e2 ee       	pshufd xmm4,xmm2,0xee
+   4ea40:	66 0f 7e db          	movd   ebx,xmm3
+   4ea44:	66 0f 7e e5          	movd   ebp,xmm4
+   4ea48:	01 dd                	add    ebp,ebx
+   4ea4a:	66 0f 70 d2 ff       	pshufd xmm2,xmm2,0xff
+   4ea4f:	66 0f 7e d3          	movd   ebx,xmm2
+   4ea53:	01 eb                	add    ebx,ebp
+   4ea55:	66 0f 7e cd          	movd   ebp,xmm1
+   4ea59:	01 dd                	add    ebp,ebx
+   4ea5b:	66 0f 70 d1 55       	pshufd xmm2,xmm1,0x55
+   4ea60:	66 0f 7e d3          	movd   ebx,xmm2
+   4ea64:	01 eb                	add    ebx,ebp
+   4ea66:	66 0f 70 d1 ee       	pshufd xmm2,xmm1,0xee
+   4ea6b:	66 0f 7e d5          	movd   ebp,xmm2
+   4ea6f:	01 dd                	add    ebp,ebx
+   4ea71:	01 c5                	add    ebp,eax
+   4ea73:	66 0f 70 c9 ff       	pshufd xmm1,xmm1,0xff
+   4ea78:	66 0f 7e c8          	movd   eax,xmm1
+   4ea7c:	01 e8                	add    eax,ebp
+   4ea7e:	2b 44 24 d4          	sub    eax,DWORD PTR [rsp-0x2c]
+   4ea82:	48 8b 5c 24 f8       	mov    rbx,QWORD PTR [rsp-0x8]
+   4ea87:	4c 8b 74 24 c8       	mov    r14,QWORD PTR [rsp-0x38]
+   4ea8c:	41 8d 1c 5e          	lea    ebx,[r14+rbx*2]
+   4ea90:	4c 8b 74 24 b0       	mov    r14,QWORD PTR [rsp-0x50]
+   4ea95:	42 8d 1c b3          	lea    ebx,[rbx+r14*4]
+   4ea99:	29 d8                	sub    eax,ebx
+   4ea9b:	48 8b 5c 24 f0       	mov    rbx,QWORD PTR [rsp-0x10]
+   4eaa0:	8d 1c 9b             	lea    ebx,[rbx+rbx*4]
+   4eaa3:	29 d8                	sub    eax,ebx
+   4eaa5:	48 8b 5c 24 e8       	mov    rbx,QWORD PTR [rsp-0x18]
+   4eaaa:	8d 1c 5b             	lea    ebx,[rbx+rbx*2]
+   4eaad:	29 d8                	sub    eax,ebx
+   4eaaf:	44 01 f8             	add    eax,r15d
+   4eab2:	c1 e1 03             	shl    ecx,0x3
+   4eab5:	29 c8                	sub    eax,ecx
+   4eab7:	48 8b 4c 24 b8       	mov    rcx,QWORD PTR [rsp-0x48]
+   4eabc:	8d 0c c9             	lea    ecx,[rcx+rcx*8]
+   4eabf:	29 c8                	sub    eax,ecx
+   4eac1:	48 8b 4c 24 a8       	mov    rcx,QWORD PTR [rsp-0x58]
+   4eac6:	8d 0c 89             	lea    ecx,[rcx+rcx*4]
+   4eac9:	29 c8                	sub    eax,ecx
+   4eacb:	6b cf f5             	imul   ecx,edi,0xfffffff5
+   4eace:	01 c8                	add    eax,ecx
+   4ead0:	c1 e2 02             	shl    edx,0x2
+   4ead3:	8d 0c 52             	lea    ecx,[rdx+rdx*2]
+   4ead6:	29 c8                	sub    eax,ecx
+   4ead8:	44 01 e0             	add    eax,r12d
+_RNvXsd_NtNtCskADBYZwJmSU_4core3ptr8non_nullINtB5_7NonNullhENtNtB9_3cmp9PartialEq2eqCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/ptr/non_null.rs:1663
+   4eadb:	4d 85 c0             	test   r8,r8
+_RNvXs2J_NtNtCskADBYZwJmSU_4core5slice4iterINtB6_4IterhENtNtNtNtBa_4iter6traits8iterator8Iterator4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/iter/macros.rs:180
+   4eade:	0f 84 03 fc ff ff    	je     4e6e7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x27>
+   4eae4:	4d 01 da             	add    r10,r11
+   4eae7:	4d 01 d0             	add    r8,r10
+   4eaea:	48 8b 7c 24 e0       	mov    rdi,QWORD PTR [rsp-0x20]
+   4eaef:	41 be 71 80 07 80    	mov    r14d,0x80078071
+   4eaf5:	48 8b 54 24 c0       	mov    rdx,QWORD PTR [rsp-0x40]
+   4eafa:	44 89 c3             	mov    ebx,r8d
+   4eafd:	44 29 d3             	sub    ebx,r10d
+   4eb00:	4c 89 d1             	mov    rcx,r10
+   4eb03:	83 e3 07             	and    ebx,0x7
+   4eb06:	74 1a                	je     4eb22 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x462>
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler3211update_bulk():
+   4eb08:	0f 1f 84 00 00 00 00 	nop    DWORD PTR [rax+rax*1+0x0]
+   4eb0f:	00 
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:123
+   4eb10:	44 0f b6 19          	movzx  r11d,BYTE PTR [rcx]
+_RNvMs1_NtNtCskADBYZwJmSU_4core3ptr8non_nullINtB5_7NonNullhE3addCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/ptr/non_null.rs:627
+   4eb14:	48 ff c1             	inc    rcx
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler3211update_bulk():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:124
+   4eb17:	45 01 d9             	add    r9d,r11d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:125
+   4eb1a:	44 01 c8             	add    eax,r9d
+_RNvXs2J_NtNtCskADBYZwJmSU_4core5slice4iterINtB6_4IterhENtNtNtNtBa_4iter6traits8iterator8Iterator4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/iter/macros.rs:180
+   4eb1d:	48 ff cb             	dec    rbx
+   4eb20:	75 ee                	jne    4eb10 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x450>
+   4eb22:	4d 29 c2             	sub    r10,r8
+   4eb25:	49 83 fa f8          	cmp    r10,0xfffffffffffffff8
+   4eb29:	0f 87 d1 fb ff ff    	ja     4e700 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x40>
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler3211update_bulk():
+   4eb2f:	90                   	nop
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:123
+   4eb30:	44 0f b6 11          	movzx  r10d,BYTE PTR [rcx]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:124
+   4eb34:	45 01 d1             	add    r9d,r10d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:125
+   4eb37:	44 01 c8             	add    eax,r9d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:123
+   4eb3a:	44 0f b6 51 01       	movzx  r10d,BYTE PTR [rcx+0x1]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:124
+   4eb3f:	45 01 ca             	add    r10d,r9d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:125
+   4eb42:	44 01 d0             	add    eax,r10d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:123
+   4eb45:	44 0f b6 49 02       	movzx  r9d,BYTE PTR [rcx+0x2]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:124
+   4eb4a:	45 01 d1             	add    r9d,r10d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:125
+   4eb4d:	44 01 c8             	add    eax,r9d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:123
+   4eb50:	44 0f b6 51 03       	movzx  r10d,BYTE PTR [rcx+0x3]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:124
+   4eb55:	45 01 ca             	add    r10d,r9d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:125
+   4eb58:	44 01 d0             	add    eax,r10d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:123
+   4eb5b:	44 0f b6 49 04       	movzx  r9d,BYTE PTR [rcx+0x4]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:124
+   4eb60:	45 01 d1             	add    r9d,r10d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:125
+   4eb63:	44 01 c8             	add    eax,r9d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:123
+   4eb66:	44 0f b6 59 05       	movzx  r11d,BYTE PTR [rcx+0x5]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:124
+   4eb6b:	45 01 cb             	add    r11d,r9d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:125
+   4eb6e:	44 01 d8             	add    eax,r11d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:123
+   4eb71:	44 0f b6 51 06       	movzx  r10d,BYTE PTR [rcx+0x6]
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:124
+   4eb76:	45 01 da             	add    r10d,r11d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:125
+   4eb79:	44 01 d0             	add    eax,r10d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:123
+   4eb7c:	44 0f b6 49 07       	movzx  r9d,BYTE PTR [rcx+0x7]
+_RNvMs1_NtNtCskADBYZwJmSU_4core3ptr8non_nullINtB5_7NonNullhE3addCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/ptr/non_null.rs:627
+   4eb81:	48 83 c1 08          	add    rcx,0x8
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler3211update_bulk():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:124
+   4eb85:	45 01 d1             	add    r9d,r10d
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:125
+   4eb88:	44 01 c8             	add    eax,r9d
+_RNvXsd_NtNtCskADBYZwJmSU_4core3ptr8non_nullINtB5_7NonNullhENtNtB9_3cmp9PartialEq2eqCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/ptr/non_null.rs:1663
+   4eb8b:	4c 39 c1             	cmp    rcx,r8
+_RNvXs2J_NtNtCskADBYZwJmSU_4core5slice4iterINtB6_4IterhENtNtNtNtBa_4iter6traits8iterator8Iterator4nextCsbAPiY69f4r2_17deadlib_image_png():
+/rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/slice/iter/macros.rs:180
+   4eb8e:	75 a0                	jne    4eb30 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x470>
+   4eb90:	e9 6b fb ff ff       	jmp    4e700 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32+0x40>
+_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler326finish():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:132
+   4eb95:	c1 e0 10             	shl    eax,0x10
+   4eb98:	44 09 c8             	or     eax,r9d
+   4eb9b:	5b                   	pop    rbx
+   4eb9c:	41 5c                	pop    r12
+   4eb9e:	41 5d                	pop    r13
+   4eba0:	41 5e                	pop    r14
+   4eba2:	41 5f                	pop    r15
+   4eba4:	5d                   	pop    rbp
+_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32():
+/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs:77
+   4eba5:	c3                   	ret
+   4eba6:	b8 01 00 00 00       	mov    eax,0x1
+   4ebab:	c3                   	ret
+
+Disassembly of section .init:
+
+Disassembly of section .fini:
+
+Disassembly of section .plt:

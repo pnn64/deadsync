@@ -1,0 +1,49 @@
+{
+    "stage":  "deflate",
+    "iterations":  20,
+    "runs":  3,
+    "warmups_per_operation":  3,
+    "rustc":  "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "cargo":  "cargo 1.99.1 (5f94df478 2026-08-27)",
+    "commit":  "684326e55319f2d9f057643db11df54a11a7d88e",
+    "executable":  "C:\\GitHub\\deadsync\\target\\release\\deps\\pipeline-8d3d1b02b33a6175.exe",
+    "executable_sha256":  "8D9F3C21262A13263169A108AC00A76490F2BF70FC2FB705638FB56710BA0F67",
+    "processor":  {
+                      "Name":  "Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz",
+                      "NumberOfCores":  22,
+                      "NumberOfLogicalProcessors":  44
+                  },
+    "eligible_affinity":  17592186044415,
+    "cpu":  0,
+    "affinity":  1,
+    "measurements":  [
+                         {
+                             "run":  1,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-26T17:52:45.6824736Z",
+                             "end_utc":  "2026-10-26T17:52:59.4608117Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-lz-before-deflate-run1.tsv",
+                             "stderr":  ""
+                         },
+                         {
+                             "run":  2,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-26T17:52:59.4748162Z",
+                             "end_utc":  "2026-10-26T17:53:13.3991298Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-lz-before-deflate-run2.tsv",
+                             "stderr":  ""
+                         },
+                         {
+                             "run":  3,
+                             "cpu":  0,
+                             "affinity":  1,
+                             "start_utc":  "2026-10-26T17:53:13.4001303Z",
+                             "end_utc":  "2026-10-26T17:53:33.0105010Z",
+                             "output":  "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-lz-before-deflate-run3.tsv",
+                             "stderr":  ""
+                         }
+                     ],
+    "limits":  "Single logical CPU affinity; shared host, frequency and other workloads are not controlled. Includes each codec\u0027s allocations. Deflate stage uses identical filtered bytes per source."
+}

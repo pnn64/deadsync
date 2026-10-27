@@ -1,0 +1,278 @@
+{
+  "native_production_commit": "5a6747e32",
+  "native_production_source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "33d55ee2eca45b88852d6e2c1feb0390e3894cd5e576df7272a8e304e7dbdea9"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "7965dc182785951ca947a3ee1253b201816d2144128e452424316d766f84264b"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "9269ee9cc1083986a2b507f2e3ead67c8780411c2aae286257b9b8f8c1dbb035"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "1a4431ffdc2d477ea928b8f97f439b0293b31cca599a47dec885d454e4690601"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "cda4227e750c1ccf5a77fd300d541e9d6ff45cbe48f0af2aa60633fbe264495d"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "9de8d5ae51577e8438f8fca56fc7698b16f9e4e68aee0548ea61aa569e304cf7"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "b9d9a6d9b2ca92d56db5b81f17bf6f71a590695d7dbad27276cbad509122ca9a"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "2cea15413f1c402ad19cbd9f712302242e0b7afd94a8629afc6602760b182aa2"
+    }
+  ],
+  "audit_source_sha256": [
+    {
+      "path": "tests/huffman.rs",
+      "sha256": "b0231b1d2044dbfc845fc8d2debf3df098dd69b899b262e18a767a03b7f5bfbd"
+    },
+    {
+      "path": "tests/support/huffman.rs",
+      "sha256": "ed2db27a8fb2f8c324e49cb42862bbbd848d0697d5b1cc559034aac54d8d27c2"
+    },
+    {
+      "path": "tests/support/mod.rs",
+      "sha256": "1580fd6e442fa78ab893ea40a7469d88ef27c9668d967038ca3814390cebc442"
+    },
+    {
+      "path": "tests/oracle/oracle.c",
+      "sha256": "69e39bbc69d1b3a0fbd202b7789a1404ae27af7f5a86b28664583312bf923dba"
+    },
+    {
+      "path": "tests/oracle/CMakeLists.txt",
+      "sha256": "95dde2e123bd4bdb9a76805ff8dad033e7f91fc7f43314a1b14834174adec94a"
+    }
+  ],
+  "zlib_commit": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+  "libpng_commit": "2b978915d82377df13fcbb1fb56660195ded868a",
+  "fixtures": {
+    "total": 19645,
+    "valid": 3091,
+    "malformed": 16554,
+    "dynamic_count_fields": 17423,
+    "complete_code_length_histograms": 1525,
+    "tree_cases": 89,
+    "repeat_cases": 187,
+    "reserved_symbol_cases": 74,
+    "range_cases": 347
+  },
+  "reference_policy": {
+    "published_valid_distance_count_fixtures": 68,
+    "default_zlib_flate2_rustpng_reject_all": true,
+    "compatibility_accepts_invalid_literal_counts": 64,
+    "native_rejects_invalid_literal_counts": true
+  },
+  "release_tests": {
+    "passed": 76,
+    "optional_ignored": 5
+  },
+  "runs": [
+    {
+      "label": "Rust compiler",
+      "command": [
+        "rustc",
+        "--version"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "seconds": 0.158
+    },
+    {
+      "label": "Cargo",
+      "command": [
+        "cargo",
+        "--version"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "seconds": 0.071
+    },
+    {
+      "label": "CMake",
+      "command": [
+        "cmake",
+        "--version"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "seconds": 0.071
+    },
+    {
+      "label": "Configure C default",
+      "command": [
+        "cmake",
+        "-S",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\tests\\oracle",
+        "-B",
+        "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-build",
+        "-DREFERENCE_ROOT=C:\\GitHub\\deadsync\\target\\deadlib-image-reference",
+        "-DDEADLIB_ZLIB_STRICT_WINDOW=OFF",
+        "-DDEADLIB_ZLIB_PKZIP_WORKAROUND=OFF",
+        "-A",
+        "x64"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "seconds": 0.634
+    },
+    {
+      "label": "Build C default",
+      "command": [
+        "cmake",
+        "--build",
+        "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-build",
+        "--config",
+        "Release",
+        "--target",
+        "deadlib_png_oracle",
+        "--parallel",
+        "4"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "seconds": 1.17
+    },
+    {
+      "label": "Huffman C default",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "huffman",
+        "c_zlib_huffman_oracle",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "environment": {
+        "DEADLIB_LIBPNG_ORACLE": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-build\\Release\\deadlib_png_oracle.exe",
+        "DEADLIB_ZLIB_PKZIP_WORKAROUND": "0"
+      },
+      "exit_code": 0,
+      "seconds": 1.305,
+      "binary_sha256": "8264ad9ea017df348a713d21e6ebbc77f8f6c9c8c0b811afc4f51e1428f6b4ed"
+    },
+    {
+      "label": "Configure C strict + compatibility",
+      "command": [
+        "cmake",
+        "-S",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\tests\\oracle",
+        "-B",
+        "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-pkzip-build",
+        "-DREFERENCE_ROOT=C:\\GitHub\\deadsync\\target\\deadlib-image-reference",
+        "-DDEADLIB_ZLIB_STRICT_WINDOW=ON",
+        "-DDEADLIB_ZLIB_PKZIP_WORKAROUND=ON",
+        "-A",
+        "x64"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "seconds": 0.702
+    },
+    {
+      "label": "Build C strict + compatibility",
+      "command": [
+        "cmake",
+        "--build",
+        "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-pkzip-build",
+        "--config",
+        "Release",
+        "--target",
+        "deadlib_png_oracle",
+        "--parallel",
+        "4"
+      ],
+      "environment": {},
+      "exit_code": 0,
+      "seconds": 1.21
+    },
+    {
+      "label": "Huffman C strict + compatibility",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "huffman",
+        "c_zlib_huffman_oracle",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "environment": {
+        "DEADLIB_LIBPNG_ORACLE": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-pkzip-build\\Release\\deadlib_png_oracle.exe",
+        "DEADLIB_ZLIB_PKZIP_WORKAROUND": "1"
+      },
+      "exit_code": 0,
+      "seconds": 1.357,
+      "binary_sha256": "e33d5bbe2e73e70c2bfad27f41c3b8a3a338dcf27e7664dd7a9abc3c5aa9ea12"
+    }
+  ]
+}

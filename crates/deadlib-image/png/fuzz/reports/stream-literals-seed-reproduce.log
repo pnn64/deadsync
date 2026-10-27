@@ -1,0 +1,16 @@
+COMMAND: ["/tmp/deadlib-image-stream-literals-seed-target-20261027-a/release/examples/seed_fuzz", "/tmp/deadlib-image-stream-literals-full-20261027-b"]
+Huffman: 19645 fixtures, 649 seeds
+Streaming follow-up: 3066 language PNG seeds, 130 literal-run raw seeds per target
+APNG control fields: 10740 independent seeds per PNG target
+Primary literals: 644 independent seeds per raw target
+Native resource budgets: 6376 seeds; independent mixed/one-bit prefixes: 2220 seeds per raw corpus
+PNG chunk grammar: 1893 independent seeds
+Scalar PNG fields: 6494 independent seeds per PNG target
+Named PNG metadata: 3710 independent seeds
+Latin-1 text bodies: 512 PNG seeds and 4304 structured seeds
+Independent APNG validity/recovery: 3060 seeds
+APNG fcTL before acTL: 1560 seeds
+Pinned WPT APNG/reference images: 42 seeds
+Independent HDR fields/grammar: 8534 seeds
+COMMAND: ["python3", "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/scripts/archive_native_seeds.py", "--corpus-root", "/tmp/deadlib-image-stream-literals-full-20261027-b", "--targets", "png_stream", "inflate_stream", "--output", "/tmp/deadlib-image-stream-literals-full-20261027-b.zip"]
+{"archive_sha256": "aa9f00512df5de65ec0e3d62463e8072a83d69396ca21307010128153ae2cd6b", "initial_corpora": [{"target": "png_stream", "files": 48167, "bytes": 11230779, "maximum_file_bytes": 63435, "sha256": "1fd95359a58563158f7e93745f9f95078fa74009eb24936c111dc0c50a08db26"}, {"target": "inflate_stream", "files": 6927, "bytes": 4009252, "maximum_file_bytes": 34575, "sha256": "ee7d4ebe3ccdfa5727b2fee81df6f4b9c4c32ca62158777e2b526fcd8e8469e8"}], "runner_sha256": "4f25e780a6dcc610e7bc2572e13d6ca4f75b0b68ec8e7d20bef5d073aa163610", "hash_method": "Ascending literal UTF-8 filename bytes, NUL, file contents", "included_archives": []}

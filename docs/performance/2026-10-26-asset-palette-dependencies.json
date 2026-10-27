@@ -1,0 +1,39 @@
+{
+  "direct_dependencies": {
+    "image": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libimage-69352b289dd119e1.rlib",
+      "sha256": "7307444d694afd07aae96c81b159a55587bcb4602092db76de8aa5cc0122d2d9",
+      "mtime_ns": 1793013437923281400
+    },
+    "gif": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libgif-46df19da9e94392f.rlib",
+      "sha256": "3d055b9f4d6a4e747a2d5e2747c0b4c0f4902c3492d0ff435b56e10065ec2ea5",
+      "mtime_ns": 1792663491130343100
+    },
+    "rustc_hash": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\librustc_hash-211e77caf41ec2ea.rlib",
+      "sha256": "497bf8faa99769bd4245666e6352271b8b43cf43ab7e2583cd62cf27d6f0a019",
+      "mtime_ns": 1792663482106357400
+    },
+    "deadlib_render_core": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libdeadlib_render_core-3be357a064a208af.rlib",
+      "sha256": "ede753f992b988f9dda11b8a008b7593e964187ab5177889d327e65bc6795657",
+      "mtime_ns": 1793013405078956000
+    },
+    "deadlib_video": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libdeadlib_video-e7c518866c026394.rlib",
+      "sha256": "a6cdc602b03686ad815efd4233232522c08e4dafb96024d973b5d04ea77b05c0",
+      "mtime_ns": 1793013432590501900
+    },
+    "memchr": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libmemchr-52fd5f76925b9d5e.rlib",
+      "sha256": "71361e971a86cf1a84d8d4a4107f3510ffa6b7868b1f60ea5e9eb1adf7f56b2a",
+      "mtime_ns": 1792663484659130400
+    },
+    "twox_hash": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libtwox_hash-119180674b661aa0.rlib",
+      "sha256": "3c5af8a1fac211f37a3c1bb1adefc7fcaefcf7711986a80356458400daff10a1",
+      "mtime_ns": 1792663497675951100
+    }
+  }
+}

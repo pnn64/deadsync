@@ -1,0 +1,13 @@
+case	codec	operation	iterations	encoded_bytes	sample_bytes	ns_per_image	MiB_per_second	image_pipeline_bytes
+kodim05	deadlib-image-png	decode	48	785610	1179648	13706366	82.079	0
+kodim05	deadlib-image-png	decode-reader	48	785610	1179648	14797460	76.027	0
+kodim05	png-0.18.1	decode	48	785610	1179648	7309491	153.909	0
+kodim05	deadlib-image-png	inflate	48	785480	1180160	11155666	100.889	0
+kodim05	deadlib-image-png	inflate-stream	48	785480	1180160	13338372	84.380	0
+kodim05	flate2-1.1.10	inflate	48	785480	1180160	10382279	108.405	0
+kodim16	deadlib-image-png	decode	48	534247	1179648	11048216	101.826	0
+kodim16	deadlib-image-png	decode-reader	48	534247	1179648	11599266	96.989	0
+kodim16	png-0.18.1	decode	48	534247	1179648	5205381	216.123	0
+kodim16	deadlib-image-png	inflate	48	534117	1180160	8747350	128.666	0
+kodim16	deadlib-image-png	inflate-stream	48	534117	1180160	10328247	108.972	0
+kodim16	flate2-1.1.10	inflate	48	534117	1180160	8877714	126.777	0

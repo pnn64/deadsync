@@ -1,0 +1,72 @@
+{
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "stages": {
+    "native-buffer-before": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\native-buffer-before\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\native-buffer-before\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "2da8881bda13c8e4f7cdc49ffa364900363b800ef421fa0097f87f368e0c3e5d",
+      "test_source_sha256": "276d128bd00108aff0eb9f9399ce1b679c8a8271596fe83f31494f732428d90d",
+      "binary_sha256": "08fab3b762a227d69e2abd3a2fe7a4f3b2fcdf3fb38cf26b347145633560dee8"
+    },
+    "native-buffer": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\native-buffer\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\native-buffer\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "b59b3684c49893cf9ecf977e619a02c82b7bce0e65572ff6de34d21f11e68157",
+      "test_source_sha256": "c963b78b131dc8e22b6e5b844c48c045c188d0bb13a209d917f5011fd5ea801c",
+      "binary_sha256": "d15b8cd828d0ce2f5389f3d7e79ed095e007143e3f4b6818ebd09592627ce749"
+    },
+    "native-retained": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\native-retained\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\native-retained\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "7a574944e0b9b7b60f71e921104365073c9a12d5d5b53ef52812e509b33faba5",
+      "test_source_sha256": "41bee83fc1407e9f9c57887b443ea2cf8b1b24644e51a36d88c5eec840fa77a1",
+      "binary_sha256": "23b6f908b367e3b18e4af307f1391a07e6b2ffe3c958ebfaac4ff64a7a70eba2"
+    }
+  }
+}

@@ -1,0 +1,117 @@
+-- Building for: Visual Studio 17 2022
+-- The C compiler identification is MSVC 19.44.35229.0
+-- The CXX compiler identification is MSVC 19.44.35229.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+CMake Deprecation Warning at C:/GitHub/deadsync/target/deadlib-audio-reference/ogg/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+-- Configuring ogg 1.3.6
+-- Looking for include file inttypes.h
+-- Looking for include file inttypes.h - found
+-- Looking for include file stdint.h
+-- Looking for include file stdint.h - found
+-- Looking for include file sys/types.h
+-- Looking for include file sys/types.h - found
+-- Looking for sys/types.h
+-- Looking for sys/types.h - found
+-- Looking for stdint.h
+-- Looking for stdint.h - found
+-- Looking for stddef.h
+-- Looking for stddef.h - found
+-- Check size of int16_t
+-- Check size of int16_t - done
+-- Check size of uint16_t
+-- Check size of uint16_t - done
+-- Check size of u_int16_t
+-- Check size of u_int16_t - failed
+-- Check size of int32_t
+-- Check size of int32_t - done
+-- Check size of uint32_t
+-- Check size of uint32_t - done
+-- Check size of u_int32_t
+-- Check size of u_int32_t - failed
+-- Check size of int64_t
+-- Check size of int64_t - done
+-- Check size of short
+-- Check size of short - done
+-- Check size of int
+-- Check size of int - done
+-- Check size of long
+-- Check size of long - done
+-- Check size of long long
+-- Check size of long long - done
+-- Performing Test HAVE_MBSTATE
+-- Performing Test HAVE_MBSTATE - Success
+-- Performing Test DODEFINE_EXTENSIONS
+-- Performing Test DODEFINE_EXTENSIONS - Success
+-- Looking for byteswap.h
+-- Looking for byteswap.h - not found
+-- Looking for inttypes.h
+-- Looking for inttypes.h - found
+-- Looking for stdbool.h
+-- Looking for stdbool.h - found
+-- Looking for arm_neon.h
+-- Looking for arm_neon.h - not found
+-- Looking for intrin.h
+-- Looking for intrin.h - found
+-- Looking for fseeko
+-- Looking for fseeko - not found
+-- Performing Test HAVE_BSWAP16
+-- Performing Test HAVE_BSWAP16 - Failed
+-- Performing Test HAVE_BSWAP32
+-- Performing Test HAVE_BSWAP32 - Failed
+-- Performing Test HAVE_LANGINFO_CODESET
+-- Performing Test HAVE_LANGINFO_CODESET - Failed
+-- Performing Test HAVE_WERROR_FLAG
+-- Performing Test HAVE_WERROR_FLAG - Failed
+-- Performing Test HAVE_DECL_AFTER_STMT_FLAG
+-- Performing Test HAVE_DECL_AFTER_STMT_FLAG - Failed
+-- Performing Test HAVE_STACKREALIGN_FLAG
+-- Performing Test HAVE_STACKREALIGN_FLAG - Failed
+-- Performing Test HAVE_WEFFCXX_FLAG
+-- Performing Test HAVE_WEFFCXX_FLAG - Failed
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Failed
+-- Looking for pthread_create in pthreads
+-- Looking for pthread_create in pthreads - not found
+-- Looking for pthread_create in pthread
+-- Looking for pthread_create in pthread - not found
+-- Found Threads: TRUE
+-- Looking for cpuid.h
+-- Looking for cpuid.h - not found
+-- Looking for sys/param.h
+-- Looking for sys/param.h - not found
+-- Looking for lround
+-- Looking for lround - not found
+-- Check CPU architecture is x64
+-- Check CPU architecture is x64 - yes
+-- Performing Test HAVE_ASSOC_MATH
+-- Performing Test HAVE_ASSOC_MATH - Failed
+-- Looking for string.h
+-- Looking for string.h - found
+-- Configuring done (64.5s)
+CMake Warning (dev) at C:/GitHub/deadsync/target/deadlib-audio-reference/ogg/CMakeLists.txt:89 (add_library):
+  Policy CMP0069 is not set: INTERPROCEDURAL_OPTIMIZATION is enforced when
+  enabled.  Run "cmake --help-policy CMP0069" for policy details.  Use the
+  cmake_policy command to set the policy and suppress this warning.
+
+  INTERPROCEDURAL_OPTIMIZATION property will be ignored for target 'ogg'.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Generating done (0.8s)
+-- Build files have been written to: C:/GitHub/deadsync/target/deadlib-flac-reference/latency-windows-build

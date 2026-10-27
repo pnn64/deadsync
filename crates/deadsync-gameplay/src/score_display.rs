@@ -306,6 +306,7 @@ pub enum GameplayTargetScoreSetting {
     SpecifiedValue,
     MachineBest,
     PersonalBest,
+    GhostData,
 }
 
 #[must_use]
@@ -329,7 +330,8 @@ pub const fn target_score_setting_percent(setting: GameplayTargetScoreSetting) -
         GameplayTargetScoreSetting::Star4 => Some(100.0),
         GameplayTargetScoreSetting::SpecifiedValue
         | GameplayTargetScoreSetting::MachineBest
-        | GameplayTargetScoreSetting::PersonalBest => None,
+        | GameplayTargetScoreSetting::PersonalBest
+        | GameplayTargetScoreSetting::GhostData => None,
     }
 }
 
@@ -346,7 +348,9 @@ pub fn resolve_target_score_percent(
     machine_best: Option<f64>,
 ) -> f64 {
     let percent = match setting {
-        GameplayTargetScoreSetting::SpecifiedValue => Some(specified_percent),
+        GameplayTargetScoreSetting::SpecifiedValue | GameplayTargetScoreSetting::GhostData => {
+            Some(specified_percent)
+        }
         GameplayTargetScoreSetting::MachineBest => machine_best,
         GameplayTargetScoreSetting::PersonalBest => personal_best,
         fixed => target_score_setting_percent(fixed),

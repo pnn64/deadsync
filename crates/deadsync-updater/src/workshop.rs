@@ -425,7 +425,8 @@ fn extract_with_progress(
         let mut entry = zip
             .by_index(index)
             .map_err(|e| UpdaterError::Io(e.to_string()))?;
-        let Some(relative) = archive_path(entry.name())? else {
+        let name = entry.name().map_err(|e| UpdaterError::Io(e.to_string()))?;
+        let Some(relative) = archive_path(&name)? else {
             continue;
         };
         if entry.is_dir() {
@@ -488,7 +489,7 @@ mod tests {
                 "Noteskin-Workshop-Cel-and-Metal-{}/{name}",
                 workshop::COMMIT
             );
-            let opts: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default();
+            let opts = zip::write::SimpleFileOptions::default();
             writer.start_file(name, opts).unwrap();
             writer.write_all(bytes).unwrap();
         }

@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.16)
+project(deadlib_flac_memory_probe C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+add_subdirectory("${REPO_ROOT}/crates/deadlib-audio/decode/flac/tests/oracle" references)
+add_executable(flac_decode_allocations ../benchmark-allocation-probe.cpp ../allocations.cpp)
+target_include_directories(flac_decode_allocations PRIVATE "${FFMPEG_ROOT}")
+target_link_libraries(flac_decode_allocations PRIVATE FLAC
+    "${FFMPEG_ROOT}/libavcodec/libavcodec.a" "${FFMPEG_ROOT}/libavutil/libavutil.a" m pthread dl)
+foreach(name malloc calloc realloc free posix_memalign aligned_alloc strdup strndup)
+    target_link_options(flac_decode_allocations PRIVATE "-Wl,--wrap=${name}")
+endforeach()

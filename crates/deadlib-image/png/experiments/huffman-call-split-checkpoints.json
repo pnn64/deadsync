@@ -1,0 +1,10 @@
+{
+  "baseline_png_commit": "f1b22d891",
+  "selected_change": "Inline the primary Huffman lookup and outline the unchanged canonical/error fallback",
+  "reverse_patch": "huffman-call-split-before.patch",
+  "reverse_patch_sha256": "42ebae6bd2c95f4bd1b35e1c21bbe6f489d01174eb78832305b54a8c342ea0ac",
+  "before_zlib_sha256": "46ad510363bbe080b2401a327a6b9e017b259ec80d2bdb67fdfecb2a0a8b6117",
+  "selected_zlib_sha256": "2c972535e2fe47cd64c6aa7b21c9b7af30cb156350ae172544c7b63a26d1c37b",
+  "reverse_patch_exact_reconstruction_verified": true,
+  "role": "Selected after before/split/split/before saved-binary checks: raw inflation, photo PNG decoding and synthetic decoding improve; exploratory synthetic slowdown did not recur."
+}

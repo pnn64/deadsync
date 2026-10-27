@@ -103,7 +103,10 @@ impl DepthRows<'_> {
             return true;
         }
         let z = if self.unorm16 {
-            (z * 65535.0).round() / 65535.0
+            // Valid depths are nonnegative; widen before the half bias to
+            // retain values just below a tie. Restore negative zero's sign.
+            let rounded = (f64::from(z * 65535.0) + 0.5) as i32;
+            (rounded as f32 / 65535.0).copysign(z)
         } else {
             z
         };
@@ -734,7 +737,7 @@ fn copy_target_pixels<const PRESERVE_ALPHA: bool>(target: &mut OffscreenTarget) 
             .iter_mut()
             .zip(&target.texture.half_pixels)
         {
-            *rgba = unpack_half(pixel).map(|v| (clamp01(v) * 255.0).round() as u8);
+            *rgba = std::array::from_fn(|i| half_to_byte((pixel >> (i * 16)) as u16));
         }
         return;
     }
@@ -1948,7 +1951,10 @@ fn prepare_mesh_triangles(
 #[inline]
 fn clip_tmesh_near(triangle: [ClipVertexTexColor; 3]) -> ([ClipVertexTexColor; 4], usize) {
     let distances = triangle.map(|vertex| vertex.clip.z + vertex.clip.w);
-    if distances.iter().all(|distance| *distance >= 0.0) {
+    if distances
+        .into_iter()
+        .fold(true, |inside, distance| inside & (distance >= 0.0))
+    {
         return ([triangle[0], triangle[1], triangle[2], triangle[0]], 3);
     }
     if distances.iter().all(|distance| *distance < 0.0) {
@@ -2395,7 +2401,7 @@ fn rasterize_environment(
             let sample = |texture: &Texture, sampler: SamplerDesc, uv: [f32; 2]| {
                 let image = texture.texels();
                 if sampler.filter == SamplerFilter::Linear {
-                    sample_tex_linear::<false>(
+                    sample_tex_linear::<false, 4>(
                         image,
                         image.width,
                         image.height,
@@ -2404,7 +2410,7 @@ fn rasterize_environment(
                         sampler,
                     )
                 } else {
-                    sample_tex_nearest::<false>(
+                    sample_tex_nearest::<false, 4>(
                         image,
                         image.width,
                         image.height,
@@ -2933,6 +2939,14 @@ fn wrap_index(i: i32, max: usize, wrap: SamplerWrap) -> usize {
             let m = max as i32;
             if m == 0 {
                 0
+            } else if i >= 0 && i < m {
+                // UVs are already wrapped; ordinary texels are in range.
+                i as usize
+            } else if i == m {
+                0
+            } else if i == -1 && m > 0 {
+                // Bilinear border texels wrap without integer division.
+                (m - 1) as usize
             } else {
                 let mut v = i % m;
                 if v < 0 {
@@ -2945,14 +2959,14 @@ fn wrap_index(i: i32, max: usize, wrap: SamplerWrap) -> usize {
 }
 
 #[inline(always)]
-fn sample_tex_nearest<const OPAQUE: bool>(
+fn sample_tex_nearest<const OPAQUE: bool, const CHANNELS: usize>(
     tex_data: Texels<'_>,
     tex_w: usize,
     tex_h: usize,
     u: f32,
     v: f32,
     sampler: SamplerDesc,
-) -> Option<[f32; 4]> {
+) -> Option<[f32; CHANNELS]> {
     let tx = wrap_index(
         (wrap_uv(u, sampler.wrap) * tex_w as f32) as i32,
         tex_w,
@@ -2963,9 +2977,9 @@ fn sample_tex_nearest<const OPAQUE: bool>(
         tex_h,
         sampler.wrap,
     );
-    let mut color = tex_data.pixel(ty * tex_w + tx)?;
+    let mut color = tex_data.pixel::<CHANNELS>(ty * tex_w + tx)?;
     if OPAQUE {
-        color[3] = 1.0;
+        color[CHANNELS - 1] = 1.0;
     }
     Some(color)
 }
@@ -2979,22 +2993,24 @@ fn sample_alpha_nearest(
     v: f32,
     sampler: SamplerDesc,
 ) -> Option<f32> {
-    sample_tex_nearest::<false>(tex_data, tex_w, tex_h, u, v, sampler).map(|c| c[3])
+    sample_tex_nearest::<false, 1>(tex_data, tex_w, tex_h, u, v, sampler).map(|c| c[0])
 }
 
 #[inline(always)]
-fn sample_tex_linear<const OPAQUE: bool>(
+fn sample_tex_linear<const OPAQUE: bool, const CHANNELS: usize>(
     tex_data: Texels<'_>,
     tex_w: usize,
     tex_h: usize,
     u: f32,
     v: f32,
     sampler: SamplerDesc,
-) -> Option<[f32; 4]> {
+) -> Option<[f32; CHANNELS]> {
     let x = wrap_uv(u, sampler.wrap).mul_add(tex_w as f32, -0.5);
     let y = wrap_uv(v, sampler.wrap).mul_add(tex_h as f32, -0.5);
-    let x0 = x.floor() as i32;
-    let y0 = y.floor() as i32;
+    // Wrapped UVs put x/y in [-0.5, size - 0.5] (or NaN). Truncation
+    // already floors nonnegative values; only the negative edge needs -1.
+    let x0 = x as i32 - i32::from(x < 0.0);
+    let y0 = y as i32 - i32::from(y < 0.0);
     let fx = clamp01(x - x0 as f32);
     let fy = clamp01(y - y0 as f32);
     let ix0 = wrap_index(x0, tex_w, sampler.wrap);
@@ -3002,16 +3018,16 @@ fn sample_tex_linear<const OPAQUE: bool>(
     let iy0 = wrap_index(y0, tex_h, sampler.wrap);
     let iy1 = wrap_index(y0 + 1, tex_h, sampler.wrap);
     let mut colors = [
-        tex_data.pixel(iy0 * tex_w + ix0)?,
-        tex_data.pixel(iy0 * tex_w + ix1)?,
-        tex_data.pixel(iy1 * tex_w + ix0)?,
-        tex_data.pixel(iy1 * tex_w + ix1)?,
+        tex_data.pixel::<CHANNELS>(iy0 * tex_w + ix0)?,
+        tex_data.pixel::<CHANNELS>(iy0 * tex_w + ix1)?,
+        tex_data.pixel::<CHANNELS>(iy1 * tex_w + ix0)?,
+        tex_data.pixel::<CHANNELS>(iy1 * tex_w + ix1)?,
     ];
     if OPAQUE {
         for c in &mut colors {
-            c[3] = 1.0;
+            c[CHANNELS - 1] = 1.0;
         }
-    } else if colors.iter().all(|c| c[3] == 0.0) {
+    } else if colors.iter().all(|c| c[CHANNELS - 1] == 0.0) {
         return None;
     }
     let lerp = |a: f32, b: f32, t: f32| (b - a).mul_add(t, a);
@@ -3033,8 +3049,8 @@ fn sample_alpha_linear(
     v: f32,
     sampler: SamplerDesc,
 ) -> Option<f32> {
-    sample_tex_linear::<false>(tex_data, tex_w, tex_h, u, v, sampler)
-        .map(|c| c[3])
+    sample_tex_linear::<false, 1>(tex_data, tex_w, tex_h, u, v, sampler)
+        .map(|c| c[0])
         .or(Some(0.0))
 }
 
@@ -3067,12 +3083,17 @@ impl<'a> From<&'a RgbaImage> for Texels<'a> {
 }
 
 impl Texels<'_> {
-    fn pixel(self, index: usize) -> Option<[f32; 4]> {
+    // Mask draws decode/interpolate only alpha; color draws retain all RGBA lanes.
+    fn pixel<const CHANNELS: usize>(self, index: usize) -> Option<[f32; CHANNELS]> {
         if self.half.is_empty() {
             let pixel = self.bytes.get(index * 4..index * 4 + 4)?;
-            Some(std::array::from_fn(|i| f32::from(pixel[i]) * U8_TO_F32))
+            Some(std::array::from_fn(|i| {
+                f32::from(pixel[4 - CHANNELS + i]) * U8_TO_F32
+            }))
         } else {
-            self.half.get(index).copied().map(unpack_half)
+            self.half.get(index).map(|&pixel| {
+                std::array::from_fn(|i| decode_half((pixel >> ((4 - CHANNELS + i) * 16)) as u16))
+            })
         }
     }
 }
@@ -3083,40 +3104,55 @@ fn encode_half(value: f32) -> u16 {
     let bits = value.to_bits();
     let sign = ((bits >> 16) & 0x8000) as u16;
     let magnitude = bits & 0x7fff_ffff;
-    if magnitude >= 0x7f80_0000 {
-        return sign | 0x7c00 | if magnitude == 0x7f80_0000 { 0 } else { 0x0200 };
-    }
-    let exponent = ((magnitude >> 23) & 0xff) as i32 - 127;
-    if exponent > 15 {
-        return sign | 0x7c00;
-    }
-    if exponent >= -14 {
+    // One unsigned check covers normal binary16 exponents: [2^-14, 2^16).
+    if magnitude.wrapping_sub(0x3880_0000) < 0x0f00_0000 {
         let rounded = magnitude + 0x0fff + ((magnitude >> 13) & 1);
         return sign | ((rounded >> 13) - 0x1c000) as u16;
     }
-    if exponent < -25 {
+    if magnitude >= 0x4780_0000 {
+        return sign | 0x7c00 | if magnitude > 0x7f80_0000 { 0x0200 } else { 0 };
+    }
+    // Below 2^-25, even rounding cannot reach a subnormal.
+    if magnitude < 0x3300_0000 {
         return sign;
     }
     let mantissa = (magnitude & 0x007f_ffff) | 0x0080_0000;
-    let shift = (-exponent - 1) as u32;
+    let shift = 126 - (magnitude >> 23);
     let rounded = mantissa + ((1 << (shift - 1)) - 1) + ((mantissa >> shift) & 1);
     sign | (rounded >> shift) as u16
 }
 
 fn decode_half(bits: u16) -> f32 {
     let sign = u32::from(bits & 0x8000) << 16;
-    let exponent = u32::from((bits >> 10) & 0x1f);
-    let mantissa = u32::from(bits & 0x03ff);
-    let magnitude = match exponent {
-        0 if mantissa == 0 => 0,
-        0 => {
-            let shift = mantissa.leading_zeros() - 21;
-            ((113 - shift) << 23) | (((mantissa << shift) & 0x03ff) << 13)
-        }
-        31 => 0x7f80_0000 | (mantissa << 13),
-        _ => ((exponent + 112) << 23) | (mantissa << 13),
+    let exponent = bits & 0x7c00;
+    let magnitude = if exponent == 0 {
+        // All binary16 subnormals are normal f32 values: scale the integer
+        // significand exactly, including zero, instead of renormalizing bits.
+        (f32::from(bits & 0x03ff) * (1.0 / 16_777_216.0)).to_bits()
+    } else {
+        let normal = (u32::from(bits & 0x7fff) << 13) + 0x3800_0000;
+        normal | if exponent == 0x7c00 { 0x7f80_0000 } else { 0 }
     };
     f32::from_bits(sign | magnitude)
+}
+
+fn half_to_byte(bits: u16) -> u8 {
+    // Negative values and NaNs cast to zero after clamping; +infinity saturates.
+    if bits > 0x7c00 {
+        return 0;
+    }
+    if bits >= 0x3c00 {
+        return 255;
+    }
+    // Values below 2^-9 cannot round up to one byte, including all subnormals.
+    if bits < 0x1800 {
+        return 0;
+    }
+    // The 11-bit significand times 255 is exact in f32. Round that integer
+    // product directly, removing the float decode, clamp, scale and round.
+    let scaled = (u32::from(bits & 0x03ff) | 0x0400) * 255;
+    let shift = 25 - (bits >> 10);
+    ((scaled + (1 << (shift - 1))) >> shift) as u8
 }
 
 fn pack_half(color: [f32; 4]) -> u64 {
@@ -3187,10 +3223,16 @@ fn raster_bounds(
     stripe_y_start: usize,
     stripe_y_end: usize,
 ) -> Option<(i32, i32, i32, i32, i32)> {
+    let clip_x = (width - 1) as f32;
+    let clip_y = (height - 1) as f32;
+    // A ceiling at or below -1 cannot reach either nonnegative raster axis.
+    if (max_x <= -1.0) | (max_y <= -1.0) {
+        return None;
+    }
     let min_x = min_x.max(0.0) as i32;
-    let max_x = max_x.ceil().min((width - 1) as f32) as i32;
+    let max_x = max_x.ceil().min(clip_x) as i32;
     let mut min_y = min_y.max(0.0) as i32;
-    let mut max_y = max_y.ceil().min((height - 1) as f32) as i32;
+    let mut max_y = max_y.ceil().min(clip_y) as i32;
     if min_x > max_x || min_y > max_y {
         return None;
     }
@@ -3335,9 +3377,9 @@ fn rasterize_triangle_impl<const LINEAR: bool, const MASK: bool, const OPAQUE: b
                     };
                     alpha.map(|alpha| [0.0, 0.0, 0.0, alpha])
                 } else if LINEAR {
-                    sample_tex_linear::<OPAQUE>(tex_data, tex_w, tex_h, u, v, sampler)
+                    sample_tex_linear::<OPAQUE, 4>(tex_data, tex_w, tex_h, u, v, sampler)
                 } else {
-                    sample_tex_nearest::<OPAQUE>(tex_data, tex_w, tex_h, u, v, sampler)
+                    sample_tex_nearest::<OPAQUE, 4>(tex_data, tex_w, tex_h, u, v, sampler)
                 }
             };
             let Some(sampled) = sampled else {
@@ -3417,9 +3459,9 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const MASK: bool, const
                     };
                     alpha.map(|alpha| [0.0, 0.0, 0.0, alpha])
                 } else if LINEAR {
-                    sample_tex_linear::<OPAQUE>(tex_data, tex_w, tex_h, u, v, sampler)
+                    sample_tex_linear::<OPAQUE, 4>(tex_data, tex_w, tex_h, u, v, sampler)
                 } else {
-                    sample_tex_nearest::<OPAQUE>(tex_data, tex_w, tex_h, u, v, sampler)
+                    sample_tex_nearest::<OPAQUE, 4>(tex_data, tex_w, tex_h, u, v, sampler)
                 }
             };
             let Some(sampled) = sampled else {
@@ -3429,14 +3471,8 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const MASK: bool, const
                 continue;
             }
 
-            let cr = v2.color[0].mul_add(w2, v0.color[0].mul_add(w0, v1.color[0] * w1));
-            let cg = v2.color[1].mul_add(w2, v0.color[1].mul_add(w0, v1.color[1] * w1));
-            let cb = v2.color[2].mul_add(w2, v0.color[2].mul_add(w0, v1.color[2] * w1));
             let ca = v2.color[3].mul_add(w2, v0.color[3].mul_add(w0, v1.color[3] * w1));
 
-            let sr = if MASK { cr } else { sampled[0] * cr };
-            let sg = if MASK { cg } else { sampled[1] * cg };
-            let sb = if MASK { cb } else { sampled[2] * cb };
             let sa = sampled[3] * ca;
             if sa <= 1.0 / 256.0 {
                 continue;
@@ -3447,6 +3483,12 @@ fn rasterize_triangle_tex_color_impl<const LINEAR: bool, const MASK: bool, const
             if !depth.test(dst_idx, z) {
                 continue;
             }
+            let cr = v2.color[0].mul_add(w2, v0.color[0].mul_add(w0, v1.color[0] * w1));
+            let cg = v2.color[1].mul_add(w2, v0.color[1].mul_add(w0, v1.color[1] * w1));
+            let cb = v2.color[2].mul_add(w2, v0.color[2].mul_add(w0, v1.color[2] * w1));
+            let sr = if MASK { cr } else { sampled[0] * cr };
+            let sg = if MASK { cg } else { sampled[1] * cg };
+            let sb = if MASK { cb } else { sampled[2] * cb };
             buffer(dst_idx, [sr, sg, sb, sa], blend);
         }
     }
@@ -3512,7 +3554,9 @@ fn covered(weights: [f32; 3], edges: [bool; 3]) -> bool {
     weights
         .into_iter()
         .zip(edges)
-        .all(|(w, edge)| w > 0.0 || (w == 0.0 && edge))
+        .fold(true, |inside, (w, edge)| {
+            inside & ((w > 0.0) | ((w == 0.0) & edge))
+        })
 }
 
 #[inline(always)]
@@ -4669,15 +4713,15 @@ mod tests {
             };
             for [u, v] in coordinates {
                 assert_eq!(
-                    sample_tex_nearest::<true>((&opaque).into(), 8, 8, u, v, sampler),
-                    sample_tex_nearest::<false>((&opaque).into(), 8, 8, u, v, sampler),
+                    sample_tex_nearest::<true, 4>((&opaque).into(), 8, 8, u, v, sampler),
+                    sample_tex_nearest::<false, 4>((&opaque).into(), 8, 8, u, v, sampler),
                 );
                 assert_eq!(
-                    sample_tex_linear::<true>((&opaque).into(), 8, 8, u, v, sampler),
-                    sample_tex_linear::<false>((&opaque).into(), 8, 8, u, v, sampler),
+                    sample_tex_linear::<true, 4>((&opaque).into(), 8, 8, u, v, sampler),
+                    sample_tex_linear::<false, 4>((&opaque).into(), 8, 8, u, v, sampler),
                 );
 
-                let nearest = sample_tex_nearest::<false>((&mixed).into(), 8, 8, u, v, sampler)
+                let nearest = sample_tex_nearest::<false, 4>((&mixed).into(), 8, 8, u, v, sampler)
                     .expect("nonempty image samples");
                 assert_eq!(
                     sample_alpha_nearest((&mixed).into(), 8, 8, u, v, sampler),
@@ -4685,7 +4729,7 @@ mod tests {
                 );
                 let alpha = sample_alpha_linear((&mixed).into(), 8, 8, u, v, sampler)
                     .expect("nonempty image samples");
-                match sample_tex_linear::<false>((&mixed).into(), 8, 8, u, v, sampler) {
+                match sample_tex_linear::<false, 4>((&mixed).into(), 8, 8, u, v, sampler) {
                     Some(sample) => assert_eq!(alpha, sample[3]),
                     None => assert_eq!(alpha, 0.0),
                 }
@@ -4817,7 +4861,7 @@ mod tests {
             };
             for [u, v] in [[0.0, 0.0], [0.5, 0.5], [1.0, 1.0], [-1.25, 2.75]] {
                 assert_eq!(
-                    sample_tex_linear::<false>((&image).into(), 2, 2, u, v, sampler),
+                    sample_tex_linear::<false, 4>((&image).into(), 2, 2, u, v, sampler),
                     None,
                 );
                 assert_eq!(

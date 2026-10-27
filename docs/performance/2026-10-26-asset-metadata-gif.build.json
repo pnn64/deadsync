@@ -1,0 +1,68 @@
+{
+  "argv": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "lto=fat",
+    "-C",
+    "codegen-units=1",
+    "-C",
+    "target-feature=+crt-static",
+    "C:\\GitHub\\deadsync\\target\\asset-metadata\\gif.rs",
+    "-o",
+    "C:\\GitHub\\deadsync\\target\\asset-metadata\\gif.exe",
+    "--extern",
+    "image=C:\\GitHub\\deadsync\\target\\release\\deps\\libimage-69352b289dd119e1.rlib",
+    "-L",
+    "dependency=C:\\GitHub\\deadsync\\target\\release\\deps",
+    "--extern",
+    "gif=C:\\GitHub\\deadsync\\target\\release\\deps\\libgif-46df19da9e94392f.rlib",
+    "-L",
+    "dependency=C:\\GitHub\\deadsync\\target\\release\\deps",
+    "--extern",
+    "memchr=C:\\GitHub\\deadsync\\target\\release\\deps\\libmemchr-52fd5f76925b9d5e.rlib",
+    "-L",
+    "dependency=C:\\GitHub\\deadsync\\target\\release\\deps"
+  ],
+  "dependencies": {
+    "image": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libimage-69352b289dd119e1.rlib",
+      "sha256": "7307444d694afd07aae96c81b159a55587bcb4602092db76de8aa5cc0122d2d9",
+      "mtime_ns": 1793013437923281400
+    },
+    "gif": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libgif-46df19da9e94392f.rlib",
+      "sha256": "3d055b9f4d6a4e747a2d5e2747c0b4c0f4902c3492d0ff435b56e10065ec2ea5",
+      "mtime_ns": 1792663491130343100
+    },
+    "memchr": {
+      "path": "C:\\GitHub\\deadsync\\target\\release\\deps\\libmemchr-52fd5f76925b9d5e.rlib",
+      "sha256": "71361e971a86cf1a84d8d4a4107f3510ffa6b7868b1f60ea5e9eb1adf7f56b2a",
+      "mtime_ns": 1792663484659130400
+    }
+  },
+  "source_sha256": {
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\decode.rs": "6b724846e92242fd2f46babdfec2ba9654d722a2d535e1f81098d2ea47209aa8",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\lib.rs": "c7e22fc530d84fd699071925bb81c2075297ec1b260231eed967da254b419617",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\decode\\metadata_perf.rs": "69d40d0f8311875442505d02d9dfc3f6dc6ee9a1be20f57b90346d849bda96e9",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\decode\\metadata_original.rs": "9e8a8a2ca985af8171a742bfb9105e2d65fc9a1461f511173dbd2f2764932c37",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\perf_fixture.rs": "8fa29e2ceb52b9eb65d64ca0230f3885a1877bcde244c1e08d04a6d05c78f8be",
+    "C:\\GitHub\\deadsync\\tests\\support\\kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+    "C:\\GitHub\\deadsync\\tests\\support\\perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "C:\\GitHub\\deadsync\\scripts\\benchmark_asset_metadata.py": "c67e1238d32ef652588d4421c71b6d59a3e69edc7b8d4992c94c1c65a5480f3e"
+  },
+  "body_sha256": {
+    "image_source": "159ab655f836a1a7d1b77c8154e7ba14d829e2677355d2f245a3ac301dca2ce6",
+    "image_reader": "7730e26006e56985a267d9ed10e52c4b0faad62827c9340450a04418dc3044b3",
+    "texture_source_size": "8a7241e9f7a703f32ff402103d6a8db7c64c3e8f7f0d69b98b7e8c09f117f892",
+    "image_limit": "42d446960e6009db9635851c7e0fb05e2f092aa829ea83902687164b02d04057",
+    "gif_error": "dce81f7da51c57e18a5f32c200d20165c0de147b5868bd8c69ec302c1311fab7",
+    "gif_reader": "90be6e4817c40257915c45644ed74ad04789fe9261a0550952702352d45dad77",
+    "gif_reader_from_reader": "08d2c1e22469ca68659c1e8b6990c706e3af208549e4cab4f4ec8b7b77ae88b0",
+    "texture_filename_has_multiframe_hint": "8c664e2fb91d351a7e6a6cbf0afda845f17d0e03599cad8e0f827319184936fd"
+  },
+  "binary_sha256": "edc51600281a6cbb1485c37468e1dcd6d731a339e845b4d7f61b0cc1b7b3a902"
+}

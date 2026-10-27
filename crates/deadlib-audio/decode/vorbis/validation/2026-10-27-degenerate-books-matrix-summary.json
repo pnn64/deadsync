@@ -1,0 +1,62 @@
+{
+  "empty": {
+    "setups": 276,
+    "batches": 1767,
+    "cases": 35080,
+    "packets": 175400,
+    "discarded": 1380,
+    "finite_samples": 75280336,
+    "nonfinite_samples": 1141760,
+    "maximum_peak_error": 1.430511475e-06,
+    "maximum_batch_rms": 1.766751002e-07,
+    "aggregate_rms": 1.3296289302865074e-07
+  },
+  "scalar": {
+    "setups": 36,
+    "batches": 36,
+    "cases": 36,
+    "packets": 180,
+    "discarded": 0,
+    "finite_samples": 26496,
+    "nonfinite_samples": 0,
+    "maximum_peak_error": 1.430511475e-06,
+    "maximum_batch_rms": 2.388064563e-07,
+    "aggregate_rms": 2.0380593104835275e-07
+  },
+  "nonfinite-reference": {
+    "setups": 1,
+    "batches": 1,
+    "cases": 11,
+    "packets": 55,
+    "discarded": 0,
+    "finite_samples": 40704,
+    "nonfinite_samples": 16256,
+    "maximum_peak_error": 6.705522537e-08,
+    "maximum_batch_rms": 4.526615748e-09,
+    "aggregate_rms": 4.526615748e-09
+  },
+  "floor-zero-later-floor-eof": {
+    "setups": 1,
+    "batches": 5,
+    "cases": 83,
+    "packets": 415,
+    "discarded": 5,
+    "finite_samples": 31056,
+    "nonfinite_samples": 22800,
+    "maximum_peak_error": 1.430511475e-06,
+    "maximum_batch_rms": 2.351091614e-07,
+    "aggregate_rms": 2.190538134677616e-07
+  },
+  "book-golden": {
+    "setups": 11,
+    "batches": 11,
+    "cases": 12,
+    "packets": 60,
+    "discarded": 0,
+    "finite_samples": 10400,
+    "nonfinite_samples": 640,
+    "maximum_peak_error": 1.430511475e-06,
+    "maximum_batch_rms": 2.367973856e-07,
+    "aggregate_rms": 1.753279047794777e-07
+  }
+}

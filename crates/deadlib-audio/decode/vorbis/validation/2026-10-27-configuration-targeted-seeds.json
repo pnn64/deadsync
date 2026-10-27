@@ -1,0 +1,150 @@
+{
+  "scope": "Eight procedural setup regressions. Strict Ogg framing; packet granules from independent libvorbis PCM counts. Inherits prior corpus without modifying it.",
+  "reference_binary_sha256": "5df5f64698c957d0a890db76e2f43e30200539268e289fd93270a93f3e4fe58a",
+  "seeds": [
+    {
+      "path": "vorbis_headers/synthetic-golden-0.bin",
+      "bytes": 119,
+      "sha256": "d3918a63f4c46ec463422be00ccd71d3c99fc370e45ff93791f19dd95b8768a4",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-0.bin",
+      "source_sha256": "3dd1913f8b8f83e598f87b5ed7cd96cb90b44cd4c7b4f7a5c2b0dd9a130d856e",
+      "reference_pcm_sha256": "cdc1fcb2656c2e77132abae60589c8137c011836242548c6b7305f5c19b43df4",
+      "final_granule": 96
+    },
+    {
+      "path": "vorbis_stream/synthetic-golden-0.bin",
+      "bytes": 470,
+      "sha256": "89841291dac1670f55e9820c8ce0fd1419ef64e15b182c78e40341b234a39be5",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-0.bin",
+      "source_sha256": "3dd1913f8b8f83e598f87b5ed7cd96cb90b44cd4c7b4f7a5c2b0dd9a130d856e",
+      "reference_pcm_sha256": "cdc1fcb2656c2e77132abae60589c8137c011836242548c6b7305f5c19b43df4",
+      "final_granule": 96
+    },
+    {
+      "path": "vorbis_headers/synthetic-golden-1.bin",
+      "bytes": 121,
+      "sha256": "5e17cfe0b36940422ded7b39754fa0efeebc79a20986eb982e22e570754b1a09",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-1.bin",
+      "source_sha256": "10bed955936515dd400678743e63745736eafbb77ff60c09961995ce320cad21",
+      "reference_pcm_sha256": "3ff17de7b18f14a116fd7f35b0685eb869d3c942225b983f8c42ac14139bf48d",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_stream/synthetic-golden-1.bin",
+      "bytes": 515,
+      "sha256": "0cfa0a1fdb69bfec3ea1bc8e030317156c9896cfad70e99c6789c1f49fd3c983",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-1.bin",
+      "source_sha256": "10bed955936515dd400678743e63745736eafbb77ff60c09961995ce320cad21",
+      "reference_pcm_sha256": "3ff17de7b18f14a116fd7f35b0685eb869d3c942225b983f8c42ac14139bf48d",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_headers/synthetic-golden-2.bin",
+      "bytes": 141,
+      "sha256": "194edf42c160aaec5e65c8851df67988d5a447516d9048b9e09dbacc8c93b539",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-2.bin",
+      "source_sha256": "87638344c139f7196ad6a12465e3e6477436b3ed6e3585f731a1be50214bb6bd",
+      "reference_pcm_sha256": "ff168c8cebc2452f24561fc4662a3067bdeb8805c1da81086e823ab2bc86776d",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_stream/synthetic-golden-2.bin",
+      "bytes": 506,
+      "sha256": "4b9f3b24f813e329bb0e5276dc00d6a3e181263e0746885327d4430ffdf80309",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-2.bin",
+      "source_sha256": "87638344c139f7196ad6a12465e3e6477436b3ed6e3585f731a1be50214bb6bd",
+      "reference_pcm_sha256": "ff168c8cebc2452f24561fc4662a3067bdeb8805c1da81086e823ab2bc86776d",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_headers/synthetic-golden-3.bin",
+      "bytes": 121,
+      "sha256": "7f97317f35fdfdc82ee81297c9cc5801dfd558bea2fe127b17a9aad1396bac24",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-3.bin",
+      "source_sha256": "6783bd442a65c61e721bc176da4be04e4ffa6fae716683bf3f9121d3abd86c42",
+      "reference_pcm_sha256": "3ff17de7b18f14a116fd7f35b0685eb869d3c942225b983f8c42ac14139bf48d",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_stream/synthetic-golden-3.bin",
+      "bytes": 515,
+      "sha256": "1dcfa2badc4c0bb5b4874cc955b402cac1c03f3f6d5e48652abb740e144f5fa9",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-3.bin",
+      "source_sha256": "6783bd442a65c61e721bc176da4be04e4ffa6fae716683bf3f9121d3abd86c42",
+      "reference_pcm_sha256": "3ff17de7b18f14a116fd7f35b0685eb869d3c942225b983f8c42ac14139bf48d",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_headers/synthetic-golden-4.bin",
+      "bytes": 141,
+      "sha256": "128f3c087f1f471cfaecb625b78e36259e12ff53b8755079f35035e7b73351af",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-4.bin",
+      "source_sha256": "caa250906abe3fb9a6aae0fe6a3576071fbff59dc54ca199f23e314a7eae21cd",
+      "reference_pcm_sha256": "ff168c8cebc2452f24561fc4662a3067bdeb8805c1da81086e823ab2bc86776d",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_stream/synthetic-golden-4.bin",
+      "bytes": 506,
+      "sha256": "4c7b21e21c03a3526cc68c506abcfdd1f9da348c63a7bb6a3b38c0f422148a84",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-4.bin",
+      "source_sha256": "caa250906abe3fb9a6aae0fe6a3576071fbff59dc54ca199f23e314a7eae21cd",
+      "reference_pcm_sha256": "ff168c8cebc2452f24561fc4662a3067bdeb8805c1da81086e823ab2bc86776d",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_headers/synthetic-golden-5.bin",
+      "bytes": 121,
+      "sha256": "3b09393e52347306cc9a5cf6e7b4edd0202ff68bb8cbb1f6d58235342171395d",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-5.bin",
+      "source_sha256": "9438724899ad9b31e46054c8104131e0df6d546c176447c743b1ebf65b54a4b2",
+      "reference_pcm_sha256": "2d2d18d0c15d7920eaeae667f2b1a637cb1fcdeec90cf90ce45f1792c18d044b",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_stream/synthetic-golden-5.bin",
+      "bytes": 478,
+      "sha256": "530244186c1fb74a897bd780cd4e1aec55d3c7b25a06e84292735101fdeac514",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-5.bin",
+      "source_sha256": "9438724899ad9b31e46054c8104131e0df6d546c176447c743b1ebf65b54a4b2",
+      "reference_pcm_sha256": "2d2d18d0c15d7920eaeae667f2b1a637cb1fcdeec90cf90ce45f1792c18d044b",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_headers/synthetic-golden-6.bin",
+      "bytes": 141,
+      "sha256": "72861d845a5d81d8891d6a85c9f570818c23faf34e6bcd4a02f88ff8fa57bc99",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-6.bin",
+      "source_sha256": "104305d10665be79af2216f75d666caef4bc16494ee7a4a3182a9298dab803ae",
+      "reference_pcm_sha256": "ff168c8cebc2452f24561fc4662a3067bdeb8805c1da81086e823ab2bc86776d",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_stream/synthetic-golden-6.bin",
+      "bytes": 506,
+      "sha256": "f859ded3ba7458a2b4ca1c0858757b4d62563080b845f1350a25ab4a3d9a62cc",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-6.bin",
+      "source_sha256": "104305d10665be79af2216f75d666caef4bc16494ee7a4a3182a9298dab803ae",
+      "reference_pcm_sha256": "ff168c8cebc2452f24561fc4662a3067bdeb8805c1da81086e823ab2bc86776d",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_headers/synthetic-golden-7.bin",
+      "bytes": 143,
+      "sha256": "fd4027af6121518cbe60b2adbd90104d4506098be8b58121be9bb3c194dd599c",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-7.bin",
+      "source_sha256": "7897c14a98886137f422af8c95702d849a82ac8008cd89a38aa085b8ade82c8a",
+      "reference_pcm_sha256": "29cd02474dde3ed42c64f147e9943b4f28da55275b12750065e477d31211d4a9",
+      "final_granule": 224
+    },
+    {
+      "path": "vorbis_stream/synthetic-golden-7.bin",
+      "bytes": 595,
+      "sha256": "8dc72217e53f7a64f05ae161c4c47b135c6845e67c8c7cc3c97b9b722c35eff5",
+      "source_request": "target/deadlib-audio-reference/setup-parity-20261027/golden-inputs/golden-7.bin",
+      "source_sha256": "7897c14a98886137f422af8c95702d849a82ac8008cd89a38aa085b8ade82c8a",
+      "reference_pcm_sha256": "29cd02474dde3ed42c64f147e9943b4f28da55275b12750065e477d31211d4a9",
+      "final_granule": 224
+    }
+  ]
+}

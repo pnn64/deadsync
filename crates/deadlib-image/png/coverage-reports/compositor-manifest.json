@@ -1,0 +1,247 @@
+{
+  "baseline_png_commit": "6d64c3383",
+  "target": "compositor",
+  "rustc": "rustc 1.101.0-nightly (76456a688 2026-10-25)\nbinary: rustc\ncommit-hash: 76456a688bc0ed897fa23a677d4ddb5b3fdb575a\ncommit-date: 2026-10-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.101.0-nightly\nLLVM version: 23.1.4\n",
+  "build_and_replay_command": [
+    "rustup",
+    "run",
+    "nightly",
+    "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+    "coverage",
+    "compositor",
+    "/tmp/deadlib-image-compositor-corpus-20261027-a/compositor",
+    "--target-dir",
+    "/tmp/deadlib-image-compositor-coverage-target",
+    "--sanitizer",
+    "none",
+    "--jobs",
+    "4"
+  ],
+  "environment": {
+    "RUSTFLAGS": "-Z coverage-options=branch",
+    "CARGO_BUILD_JOBS": "4",
+    "CC": "/usr/bin/clang",
+    "CXX": "/usr/bin/clang++"
+  },
+  "report_commands": [
+    [
+      "/home/perfecttaste/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-cov",
+      "report",
+      "/tmp/deadlib-image-compositor-coverage-target/x86_64-unknown-linux-gnu/release/compositor",
+      "-instr-profile",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/coverage/compositor/coverage.profdata",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/composite.rs"
+    ],
+    [
+      "/home/perfecttaste/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-cov",
+      "export",
+      "-summary-only",
+      "/tmp/deadlib-image-compositor-coverage-target/x86_64-unknown-linux-gnu/release/compositor",
+      "-instr-profile",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/coverage/compositor/coverage.profdata",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/composite.rs"
+    ],
+    [
+      "/home/perfecttaste/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-cov",
+      "show",
+      "-show-line-counts-or-regions",
+      "-show-branches=count",
+      "/tmp/deadlib-image-compositor-coverage-target/x86_64-unknown-linux-gnu/release/compositor",
+      "-instr-profile",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/coverage/compositor/coverage.profdata",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/composite.rs"
+    ]
+  ],
+  "binary": "/tmp/deadlib-image-compositor-coverage-target/x86_64-unknown-linux-gnu/release/compositor",
+  "binary_sha256": "a336a662da4519ae8f004e507318c9dd6526dc302dd03e2293c701d5acc96a3d",
+  "profile": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/coverage/compositor/coverage.profdata",
+  "profile_sha256": "dc4efff9e902fee57b6aaca0a8d6eaf5c0c26684a401458fc5ba643149e652d3",
+  "replayed_corpus": {
+    "files": 1040,
+    "bytes": 112802,
+    "maximum_file_bytes": 128,
+    "sha256": "8214f417f37ed886caee9e9e607868a11f1f714b23d26edcfe9fb4bb5ebd5abd",
+    "hash_method": "Ascending literal UTF-8 relative filename bytes, each followed by NUL and file contents"
+  },
+  "source_sha256": [
+    {
+      "path": "png/src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "png/src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "png/src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "png/src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "png/src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "png/src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "png/src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "png/src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "png/src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "png/src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "png/src/scanline.rs",
+      "sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e"
+    },
+    {
+      "path": "png/src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "png/src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "png/src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "png/src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "png/src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "png/src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "png/src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "png/src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "png/src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "png/src/zlib.rs",
+      "sha256": "2c972535e2fe47cd64c6aa7b21c9b7af30cb156350ae172544c7b63a26d1c37b"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/compositor.rs",
+      "sha256": "e5e6573589a60ad182e02a713886171c8a0a7ab83f5598e17838b4b1e7de95bf"
+    },
+    {
+      "path": "png/fuzz/Cargo.toml",
+      "sha256": "2b7e9bb40a0dea2ad2b9df81df1dbb5a74ef58a34c2fe09ffefb8247ba2334d1"
+    },
+    {
+      "path": "png/fuzz/Cargo.lock",
+      "sha256": "20af80c405f3569a32505f7fb3f681ff094714961cbc265585c5e2b00b796b49"
+    },
+    {
+      "path": "png/tests/support/compositor.rs",
+      "sha256": "5bb6367253208e9ff62c6885dd9a38c33531ff6eb7590b3d0fbd544e1f858d0d"
+    },
+    {
+      "path": "png/tests/support/chunks.rs",
+      "sha256": "414380bb3ffe06aa356d0d494252cd6a92f95e2830eb167b6b2c658777069077"
+    },
+    {
+      "path": "png/tests/support/apng_recovery.rs",
+      "sha256": "c756dcde80564c51b2d5fd605331db8eee092c85ed9ca3004a73d03d1dbf06ca"
+    }
+  ],
+  "external_reference_codec_symbols_detected": [],
+  "scope": "Native src/composite.rs source coverage only, replaying the final corpus of the 20,000-run ASan compositor campaign. Explicit source operands exclude the rational oracle, helper fixtures, stdlib and any reference codec from the report. Replay is not additional fuzzing and is excluded from historical execution totals. This is not a whole-decoder coverage or conformance proof.",
+  "runner_sha256": {
+    "build": "2e5257c012b2661e56e7fae3d647f4acdac8ef29462573654b032b1f4152920b",
+    "report": "e63dae68092e7a9fb5c4bf4cce1ed6cdcd4fe994db270863e0267b2273b7fae9"
+  },
+  "summary": {
+    "lines": {
+      "count": 182,
+      "covered": 177,
+      "percent": 97.25274725274726
+    },
+    "functions": {
+      "count": 12,
+      "covered": 11,
+      "percent": 91.66666666666666
+    },
+    "instantiations": {
+      "count": 12,
+      "covered": 11,
+      "percent": 91.66666666666666
+    },
+    "regions": {
+      "count": 245,
+      "covered": 231,
+      "notcovered": 14,
+      "percent": 94.28571428571428
+    },
+    "branches": {
+      "count": 46,
+      "covered": 41,
+      "notcovered": 5,
+      "percent": 89.13043478260869
+    },
+    "mcdc": {
+      "count": 0,
+      "covered": 0,
+      "notcovered": 0,
+      "percent": 0
+    }
+  },
+  "retained_artifacts": [
+    {
+      "path": "coverage-reports/compositor-report.txt",
+      "as_run_sha256": "5777b2cae8957794a236e8bb732a23fcfa96ad8f0fc8331fb61a043ca259aace",
+      "sha256": "5777b2cae8957794a236e8bb732a23fcfa96ad8f0fc8331fb61a043ca259aace",
+      "normalization": "CRLF to LF and terminal blank separator lines removed; all source/profile/diagnostic content unchanged"
+    },
+    {
+      "path": "coverage-reports/compositor-summary.json",
+      "as_run_sha256": "73a236d6894014d52fb350a2297e3391e52f5263c99653ff1ff10a13a73abb26",
+      "sha256": "f5e367c7b44e963df1cc9960b15b7bf411d94764ca04f6d24b77c8d024b131a5",
+      "normalization": "CRLF to LF and terminal blank separator lines removed; all source/profile/diagnostic content unchanged"
+    },
+    {
+      "path": "coverage-reports/compositor-zero-count-annotations.json",
+      "as_run_sha256": "cb0152f5e64abd64cd46c5bf252e737861e229ba53612dc5241bcbb1593bc3a3",
+      "sha256": "cb0152f5e64abd64cd46c5bf252e737861e229ba53612dc5241bcbb1593bc3a3",
+      "normalization": "CRLF to LF and terminal blank separator lines removed; all source/profile/diagnostic content unchanged"
+    },
+    {
+      "path": "coverage-reports/compositor-commands.log",
+      "as_run_sha256": "6fdeb32d69e9aa42137d80db1665d06e60dd2cd49648cce38394eb476f641f53",
+      "sha256": "6fdeb32d69e9aa42137d80db1665d06e60dd2cd49648cce38394eb476f641f53",
+      "normalization": "CRLF to LF and terminal blank separator lines removed; all source/profile/diagnostic content unchanged"
+    }
+  ]
+}

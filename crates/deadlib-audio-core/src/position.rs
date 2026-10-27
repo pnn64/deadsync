@@ -467,16 +467,31 @@ pub const fn fallback_stream_position_frames(start_frame: u64, window: CallbackC
     window.total_frames.saturating_sub(start_frame) as f64
 }
 
-#[derive(Default)]
 pub struct PlaybackPosMap {
     queue: VecDeque<MusicMapSeg>,
     backlog_frames: i64,
+    // True only while the corresponding intervals are ordered and disjoint.
+    ordered: bool,
+    music_ordered: bool,
+}
+
+impl Default for PlaybackPosMap {
+    fn default() -> Self {
+        Self {
+            queue: VecDeque::new(),
+            backlog_frames: 0,
+            ordered: true,
+            music_ordered: true,
+        }
+    }
 }
 
 impl PlaybackPosMap {
     pub fn clear(&mut self) {
         self.queue.clear();
         self.backlog_frames = 0;
+        self.ordered = true;
+        self.music_ordered = true;
     }
 
     pub fn insert(&mut self, seg: MusicMapSeg) {
@@ -501,7 +516,17 @@ impl PlaybackPosMap {
                 self.cleanup();
                 return;
             }
+            self.ordered &= last.stream_frame_start as f64 + last.frames as f64
+                <= seg.stream_frame_start as f64;
+            if self.music_ordered {
+                self.music_ordered = seg.music_sec_per_frame >= 0.0
+                    && last
+                        .music_sec_per_frame
+                        .mul_add(last.frames as f64, last.music_start_sec)
+                        <= seg.music_start_sec;
+            }
         }
+        self.music_ordered &= seg.music_sec_per_frame >= 0.0;
         self.backlog_frames = self.backlog_frames.saturating_add(seg.frames);
         self.queue.push_back(seg);
         self.cleanup();
@@ -526,13 +551,38 @@ impl PlaybackPosMap {
                 .mul_add(excess as f64, front.music_start_sec);
             front.frames -= excess;
             self.backlog_frames -= excess;
+            // Trimming can change the rounded floating endpoint at large
+            // stream positions, even though the integer endpoint is unchanged.
+            if self.ordered && self.queue.len() > 1 {
+                let front = &self.queue[0];
+                self.ordered = front.stream_frame_start as f64 + front.frames as f64
+                    <= self.queue[1].stream_frame_start as f64;
+            }
+            if self.music_ordered && self.queue.len() > 1 {
+                let front = &self.queue[0];
+                self.music_ordered = front
+                    .music_sec_per_frame
+                    .mul_add(front.frames as f64, front.music_start_sec)
+                    <= self.queue[1].music_start_sec;
+            }
         }
     }
 
     #[must_use]
     pub fn search(&self, stream_frame: f64) -> Option<(f64, f64)> {
-        if self.queue.is_empty() || !stream_frame.is_finite() {
+        if !stream_frame.is_finite() {
             return None;
+        }
+        if self.ordered
+            && let Some(seg) = self.queue.back()
+        {
+            let start = seg.stream_frame_start as f64;
+            if stream_frame >= start && stream_frame < start + seg.frames as f64 {
+                return Some((
+                    (stream_frame - start).mul_add(seg.music_sec_per_frame, seg.music_start_sec),
+                    seg.music_sec_per_frame,
+                ));
+            }
         }
         let mut closest = None;
         let mut closest_dist = f64::INFINITY;
@@ -576,10 +626,25 @@ impl PlaybackPosMap {
     /// Inverse of [`search`]: given a music position in seconds, return the
     /// track-relative stream frame at which it plays. Prefers the segment that
     /// contains `music_seconds`; otherwise extrapolates from the nearest segment.
+    #[inline]
     #[must_use]
     pub fn invert(&self, music_seconds: f64) -> Option<f64> {
-        if self.queue.is_empty() || !music_seconds.is_finite() {
+        if !music_seconds.is_finite() {
             return None;
+        }
+        if self.music_ordered
+            && self.queue.len() > 1
+            && let Some(seg) = self.queue.back()
+        {
+            let slope = seg.music_sec_per_frame;
+            if slope != 0.0
+                && music_seconds >= seg.music_start_sec
+                && music_seconds < slope.mul_add(seg.frames as f64, seg.music_start_sec)
+            {
+                return Some(
+                    seg.stream_frame_start as f64 + (music_seconds - seg.music_start_sec) / slope,
+                );
+            }
         }
         let mut closest = None;
         let mut closest_dist = f64::INFINITY;

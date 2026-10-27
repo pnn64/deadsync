@@ -3728,6 +3728,32 @@ mod tests {
     }
 
     #[test]
+    fn retrieved_perfect_ex_score_displays_as_a_quint() {
+        let response: ArrowCloudRetrieveScoresResponse = serde_json::from_str(
+            r#"{
+                "scores": {
+                    "quint": {
+                        "3": {"score": "100.00", "grade": "Quad", "playId": 1},
+                        "2": {"score": "100.00", "grade": "Quint", "playId": 2}
+                    },
+                    "quad": {
+                        "3": {"score": "100.00", "grade": "Quad"},
+                        "2": {"score": "99.99", "grade": "Quad"}
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+        let entries = score_cache_entries_from_retrieve_response(response);
+        let quint = entries["quint"].to_cached_itg_score().unwrap();
+        assert_eq!(quint.grade, deadsync_score::Grade::Quint);
+        assert_eq!(quint.lamp_index, Some(0));
+        let quad = entries["quad"].to_cached_itg_score().unwrap();
+        assert_eq!(quad.grade, deadsync_score::Grade::Tier01);
+        assert_eq!(quad.lamp_index, Some(1));
+    }
+
+    #[test]
     fn submit_payload_serializes_miss_and_counts() {
         let mut payload = ArrowCloudPayload {
             song_name: "Test Song".to_string(),

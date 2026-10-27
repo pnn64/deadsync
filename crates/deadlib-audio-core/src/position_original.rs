@@ -2,6 +2,10 @@
 use super::*;
 impl PlaybackPosMap {
     pub(super) fn insert_original(&mut self, seg: MusicMapSeg) {
+        // The frozen insert predates the ordering invariant; keep its queries
+        // on the original full scan instead of the new ordered shortcut.
+        self.ordered = false;
+        self.music_ordered = false;
         if seg.frames <= 0
             || !seg.music_start_sec.is_finite()
             || !seg.music_sec_per_frame.is_finite()

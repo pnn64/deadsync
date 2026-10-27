@@ -1,0 +1,278 @@
+{
+  "timestamp_utc": "2026-10-27T14:38:24Z",
+  "native": "/tmp/deadlib-flac-decode-dispatch",
+  "native_sha256": "0819f033db86fe7800d725390070e510c2ec4300995b52960fb2dd2f2155c02d",
+  "oracle": "/tmp/deadlib-flac-perf-20261027/oracle/flac_decode_benchmark",
+  "oracle_sha256": "f9a28089f468d52cb3663bcdc5979ad283014e9e668abc842f7953846b3a488b",
+  "baseline": "/tmp/deadlib-flac-decode-separated",
+  "baseline_sha256": "2c75e6eed4da63e2765440f1d20703438c7077895c00c3fe772aba5161e01a60",
+  "cpu": 2,
+  "rounds": 5,
+  "target_milliseconds": 80,
+  "cpuinfo": "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 79\nmodel name\t: Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz\nstepping\t: 1\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 2194.917\ncache size\t: 56320 KB\nphysical id\t: 0\nsiblings\t: 44\ncore id\t\t: 0\ncpu cores\t: 22\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 20\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid tsc_known_freq pni pclmulqdq vmx ssse3 fma cx16 pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch pti ssbd ibrs ibpb stibp tpr_shadow ept vpid ept_ad fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm rdseed adx smap xsaveopt vnmi md_clear flush_l1d arch_capabilities\nvmx flags\t: vnmi invvpid ept_x_only ept_ad ept_1gb tsc_offset vtpr ept vpid unrestricted_guest tsc_scaling\nbugs\t\t: cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs taa itlb_multihit mmio_stale_data bhi\nbogomips\t: 4389.83\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 46 bits physical, 48 bits virtual\npower management:",
+  "native_sources": {
+    "src/bitstream.rs": "5f1efbc289c298b1e847f0db972e70c8b97dd9ecd15612c278b3c262af45e828",
+    "src/checksum.rs": "637a38e891604ba0057eda6fb6c86d26d93ccee702ec509d2af6658085c5192b",
+    "src/encode.rs": "7d5a4964f53343ffeb269f958f68872c1137a37071a20185ae72e4c6d45926a6",
+    "src/encoder.rs": "e009f29eb87ece5ca05d26f22030b524f5d247d45939539505ff4826fb77e596",
+    "src/frame.rs": "b59cf06a815633921fa885397d2a4c00a99f13f6e23c4393640fc382251add08",
+    "src/lib.rs": "6be81178dfff639385c8c34c9084ed3372f93f6883e7195a65e9f9833726b1d7",
+    "src/metadata.rs": "088f01f53f6d47f107bef663b24c9256ce55e9673cced1f37e4316363caf48fa",
+    "src/native.rs": "31ba12718a3e997ea08629f1d8e66b4b1dfeff7fb16864649a4d336672b86b59",
+    "src/ogg.rs": "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85",
+    "src/ogg_encode.rs": "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d",
+    "src/ogg_seek.rs": "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1",
+    "src/predictor.rs": "d6d94b6ad91861c229cd79b4fcd580c323133ce42799c1030356f23bc56c46b8"
+  },
+  "driver_sources": {
+    "benches/decode.rs": "0d1795d9c8272c05b2c6bcfdb5cd812fc1f8217c904f0102a6e25d6a24684294",
+    "benches/run.py": "e4dedcdd1c9d8609250104fff5c5f9c37eb4560d5aebb62c34485e553b060894",
+    "benches/build.sh": "5fb5cbc09f7b05962007b20b8fb7a27674b71659597f2e4534c608a776aaf207",
+    "benches/oracle/CMakeLists.txt": "e29b8acc6a9149b4e85345743abae3b455dabdea88524402764fac119e751227",
+    "benches/oracle/benchmark.cpp": "fe724c88bcfac6363dd34ed9b3157909e3af3aa50c7fd87d15fcb4b28caba525"
+  },
+  "cases": [
+    {
+      "case": "subset/01 - blocksize 4096.flac",
+      "sha256": "02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f",
+      "bytes": 549954,
+      "frames": 76,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/03 - blocksize 16.flac",
+      "sha256": "164d0747e8c4855407990182b784fcd7475da228bf20a6cff67e947c683959b3",
+      "bytes": 959681,
+      "frames": 19294,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/06 - blocksize 512.flac",
+      "sha256": "ba705cc365abf5b8bd6b4d4392a2668ae395844f82d04e74be3e19b60cb03260",
+      "bytes": 590669,
+      "frames": 603,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/11 - partition order 8.flac",
+      "sha256": "07596315fc9b297702984deab49041f4695e1482ec3e1d081888d1bf13198e53",
+      "bytes": 510583,
+      "frames": 60,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/12 - qlp precision 15 bit.flac",
+      "sha256": "d33731350269929542c6e0a788c1b9a27eb91dcb3a20f5f960b8569be012c6fa",
+      "bytes": 492334,
+      "frames": 48,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/14 - wasted bits.flac",
+      "sha256": "58fa05681bd646168ea2a19bc9a6f4ee9d6de295fd832c1f70da1bdbf32d74cb",
+      "bytes": 231596,
+      "frames": 426,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/15 - only verbatim subframes.flac",
+      "sha256": "80459f8ad5a9c7edf081a10f9269c55c29136749021e5a55483bc173aaaa82b0",
+      "bytes": 889862,
+      "frames": 54,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/16 - partition order 8 containing escaped partitions.flac",
+      "sha256": "5562cff546a1b0d93cea31c0c375c5df65658311de1fc3d322d14b8a2c5ac930",
+      "bytes": 471502,
+      "frames": 51,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/17 - all fixed orders.flac",
+      "sha256": "d6f082cbbbcb03015f861b8fa30cf16708a62b85520905a126da28db29645feb",
+      "bytes": 589534,
+      "frames": 204,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/22 - 12 bit per sample.flac",
+      "sha256": "d9c385129c4253da4c0de34ed5b163b404523aa971773277b8b74ef92f7d4f44",
+      "bytes": 277942,
+      "frames": 54,
+      "bits": 12,
+      "channels": 2
+    },
+    {
+      "case": "subset/23 - 8 bit per sample.flac",
+      "sha256": "d72ad54e1d0ebe5d65b1b1addd13ee873d38c58cb3357774a1943ced2d984cf9",
+      "bytes": 181470,
+      "frames": 84,
+      "bits": 8,
+      "channels": 2
+    },
+    {
+      "case": "subset/24 - variable blocksize file created with flake revision 264.flac",
+      "sha256": "c6664710c935e4d862ab04f146ddd7f6df9e2278b651c17a432934e61488eaf7",
+      "bytes": 2321064,
+      "frames": 404,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/28 - high resolution audio, default settings.flac",
+      "sha256": "62322a5c7821081bae99cc1a3f398f177a17cf9312131a5fbcfcc2ee38539346",
+      "bytes": 3476937,
+      "frames": 205,
+      "bits": 24,
+      "channels": 2
+    },
+    {
+      "case": "subset/31 - high resolution audio, using only 32nd order predictors.flac",
+      "sha256": "caf84fbf740a98e3371a58df03422722a7d6058289b11a291f0b39103ea20133",
+      "bytes": 3235301,
+      "frames": 94,
+      "bits": 24,
+      "channels": 2
+    },
+    {
+      "case": "subset/38 - 3 channels (3.0).flac",
+      "sha256": "44d14d0efa374049fd9f56aaee3a068a30045e62a571df574c7b824ae596a3cf",
+      "bytes": 63893,
+      "frames": 42,
+      "bits": 16,
+      "channels": 3
+    },
+    {
+      "case": "subset/41 - 6 channels (5.1).flac",
+      "sha256": "c12650fda54a384abf017d4b931491de043eaa7a815ae74c7a9b49d4087d6193",
+      "bytes": 171527,
+      "frames": 88,
+      "bits": 16,
+      "channels": 6
+    },
+    {
+      "case": "subset/43 - 8 channels (7.1).flac",
+      "sha256": "9c39ff436f316b3a8e72200c8f38af2d9ef15418c25be555aa621d0c793a6254",
+      "bytes": 233560,
+      "frames": 108,
+      "bits": 16,
+      "channels": 8
+    },
+    {
+      "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "sha256": "1a0e8c17392ae03b2cb04e8c82fcc1f924580fdc978884101faa3e9cf7ed9197",
+      "bytes": 42264726,
+      "frames": 177,
+      "bits": 24,
+      "channels": 8
+    },
+    {
+      "case": "subset/60 - mono audio.flac",
+      "sha256": "20539fbbd6ae28cea2b2182a4c60c6c70cbb710a136199fc83200c4e5fa00b1c",
+      "bytes": 47782,
+      "frames": 56,
+      "bits": 16,
+      "channels": 1
+    },
+    {
+      "case": "subset/61 - predictor overflow check, 16-bit.flac",
+      "sha256": "9b15791a8b8ca14a6b9a2374ecf7c34be25bc7b9e64fa600eb5f7608194b0b61",
+      "bytes": 117020,
+      "frames": 56,
+      "bits": 16,
+      "channels": 1
+    },
+    {
+      "case": "subset/62 - predictor overflow check, 20-bit.flac",
+      "sha256": "a6b3904e8bcce7a93ad529f9b07e64d06d6647ea7a775ba91490dbacc3c771b7",
+      "bytes": 156871,
+      "frames": 56,
+      "bits": 20,
+      "channels": 1
+    },
+    {
+      "case": "subset/63 - predictor overflow check, 24-bit.flac",
+      "sha256": "d5e072373f2d9e80ca2e49b7dd349ebd4340929143d7e5f2c154a97f04755c38",
+      "bytes": 204107,
+      "frames": 56,
+      "bits": 24,
+      "channels": 1
+    },
+    {
+      "case": "subset/64 - rice partitions with escape code zero.flac",
+      "sha256": "3ad0bf2e9b9c78cd04deb0a8e133f5d088db051e42cbf3ffb15e1b528f009ca6",
+      "bytes": 89138,
+      "frames": 46,
+      "bits": 16,
+      "channels": 1
+    },
+    {
+      "case": "uncommon/05 - 32bps audio.flac",
+      "sha256": "de71cbd81f0be1743fc8264f159a521dfc1d92a5e2056c30a64d66001e055eec",
+      "bytes": 2923933,
+      "frames": 126,
+      "bits": 32,
+      "channels": 2
+    },
+    {
+      "case": "uncommon/07 - 15 bit per sample.flac",
+      "sha256": "7defaacc8d1bcd3201081d7054de5df1665d17f79851c35b3c6360401d30aa71",
+      "bytes": 825693,
+      "frames": 127,
+      "bits": 15,
+      "channels": 2
+    },
+    {
+      "case": "uncommon/08 - blocksize 65535.flac",
+      "sha256": "2c0825fc761db080dbfdc11ea2d2b02ee414c9ed83c6240ffbac62db22d08714",
+      "bytes": 835115,
+      "frames": 8,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "uncommon/09 - Rice partition order 15.flac",
+      "sha256": "33ee6f02cc9d930dd421e02b716bc2d9d520c3facdf98030eb09c303227f8626",
+      "bytes": 168445,
+      "frames": 4,
+      "bits": 16,
+      "channels": 1
+    }
+  ],
+  "unsupported": [
+    {
+      "mode": "symphonia",
+      "file": "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/uncommon/05 - 32bps audio.flac",
+      "exit_code": 101,
+      "stderr": "\nthread 'main' (536542) panicked at crates/deadlib-audio/decode/flac/benches/decode.rs:178:13:\nassertion `left == right` failed: PCM endpoint check\n  left: 1103064073212\n right: 1076370157036\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "arguments": [
+        "/tmp/deadlib-flac-decode-dispatch",
+        "symphonia",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/uncommon/05 - 32bps audio.flac",
+        "1"
+      ]
+    },
+    {
+      "mode": "symphonia-crc",
+      "file": "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/uncommon/05 - 32bps audio.flac",
+      "exit_code": 101,
+      "stderr": "\nthread 'main' (536543) panicked at crates/deadlib-audio/decode/flac/benches/decode.rs:178:13:\nassertion `left == right` failed: PCM endpoint check\n  left: 1103064073212\n right: 1076370157036\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "arguments": [
+        "/tmp/deadlib-flac-decode-dispatch",
+        "symphonia-crc",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/uncommon/05 - 32bps audio.flac",
+        "1"
+      ]
+    }
+  ]
+}

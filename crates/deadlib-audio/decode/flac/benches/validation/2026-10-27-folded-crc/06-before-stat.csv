@@ -1,0 +1,7 @@
+# started on Tue Oct 27 18:56:11 2026
+
+3437093188,,cycles:u,1314426540,100.00,,
+8918309545,,instructions:u,1314426540,100.00,2.59,insn per cycle
+1259181328,,branches:u,1314426540,100.00,,
+12233302,,branch-misses:u,1314426540,100.00,0.97,of all branches
+2220562,,L1-dcache-load-misses:u,1314426540,100.00,,

@@ -1,0 +1,60 @@
+{
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "stages": {
+    "layout-original": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\layout-original\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\layout-original\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "229b4826d200e143114c86b7366d04163377e0f2b544d47e70597e37e814ac9a",
+      "test_source_sha256": "23abec8022b207233d14bcf3a1c9480716667880e7f5c1da59adc836446e386c",
+      "rate_source_sha256": "7120864f7eddbb5ae38d0ce720b82df654dfc2710406a8bd5a4cc3550567d665",
+      "support_sha256": {
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "allocations-source.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac"
+      },
+      "binary_sha256": "d12f81f0fe7804cd7207b7fd79436d71eba4f4bdc7e145341595c3b154db9f61"
+    },
+    "layout-retained": {
+      "command": [
+        "rustc",
+        "--test",
+        "--edition=2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=fat",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\layout-retained\\harness.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\audio-sola\\layout-retained\\sola.exe"
+      ],
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "source_sha256": "31c25442cf5af7252f043b4d0573dc802106bb1b98a83633efdd3db8bd80319d",
+      "test_source_sha256": "23abec8022b207233d14bcf3a1c9480716667880e7f5c1da59adc836446e386c",
+      "rate_source_sha256": "7120864f7eddbb5ae38d0ce720b82df654dfc2710406a8bd5a4cc3550567d665",
+      "support_sha256": {
+        "kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "allocations-source.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac"
+      },
+      "binary_sha256": "89601878c70e0a534d3ce3b8a88e5b246c28ade2b060ea013d99264811ec52be"
+    }
+  }
+}

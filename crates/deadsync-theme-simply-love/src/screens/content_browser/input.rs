@@ -1196,9 +1196,9 @@ pub(super) fn repeat_nav_hold(state: &mut State, dt: f32) {
 /// Typing searches, wherever the reader is. On the SEARCH tab the characters
 /// go straight into the box that is already on screen; anywhere else the first
 /// character carries them to that tab and lands there too, so a keystroke is
-/// never swallowed. Text entry owns the keyboard while the browser is open, so
-/// a WASD-style pad mapping cannot scroll the list out from under someone
-/// mid-word.
+/// never swallowed. While the box is live the keys that type are its own, so
+/// a WASD-style pad mapping cannot scroll the list, or switch tabs and take
+/// the search with it, out from under someone mid-word.
 ///
 /// The Rip Packs tab is the exception: nothing there is a search, so typing
 /// on it goes nowhere -- except into its own prompt, while one is open.
@@ -1247,12 +1247,25 @@ pub fn handle_raw_key_event(
                     state.cursor = 0;
                     return true;
                 }
+                // Escape leaves the box as BACK does, a rung at a time: off the
+                // results up to the tabs with the search kept, and from the
+                // tabs out of the browser -- never a key the box keeps for
+                // itself, which left a reader whose way out is Escape stuck.
                 KeyCode::Escape => {
-                    if edit_query(state, String::clear) {
-                        effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
+                    if state.zone == Zone::Tabs {
+                        return false;
                     }
+                    state.zone = Zone::Tabs;
+                    state.nav_hold = None;
+                    effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
                     return true;
                 }
+                // The character comes on its own, as text; the key is not
+                // also a pad button. Bound to one -- W/A/S/D, or the default
+                // Q/E/Z/C -- it walked the cursor off the results while a word
+                // was typed, and a Left or Right on the tabs then left SEARCH
+                // and cleared it.
+                code if types_text(code) => return true,
                 _ => {}
             }
         }
@@ -1307,6 +1320,66 @@ pub fn handle_raw_key_event(
         effects.push(crate::effects::sfx("assets/sounds/change.ogg"));
     }
     true
+}
+
+/// Whether a key types a character: the letters, digits, space and
+/// punctuation of the main block. The numpad is left out, because it is the
+/// second player's pad, and with Num Lock off it types nothing at all.
+const fn types_text(code: KeyCode) -> bool {
+    matches!(
+        code,
+        KeyCode::KeyA
+            | KeyCode::KeyB
+            | KeyCode::KeyC
+            | KeyCode::KeyD
+            | KeyCode::KeyE
+            | KeyCode::KeyF
+            | KeyCode::KeyG
+            | KeyCode::KeyH
+            | KeyCode::KeyI
+            | KeyCode::KeyJ
+            | KeyCode::KeyK
+            | KeyCode::KeyL
+            | KeyCode::KeyM
+            | KeyCode::KeyN
+            | KeyCode::KeyO
+            | KeyCode::KeyP
+            | KeyCode::KeyQ
+            | KeyCode::KeyR
+            | KeyCode::KeyS
+            | KeyCode::KeyT
+            | KeyCode::KeyU
+            | KeyCode::KeyV
+            | KeyCode::KeyW
+            | KeyCode::KeyX
+            | KeyCode::KeyY
+            | KeyCode::KeyZ
+            | KeyCode::Digit0
+            | KeyCode::Digit1
+            | KeyCode::Digit2
+            | KeyCode::Digit3
+            | KeyCode::Digit4
+            | KeyCode::Digit5
+            | KeyCode::Digit6
+            | KeyCode::Digit7
+            | KeyCode::Digit8
+            | KeyCode::Digit9
+            | KeyCode::Space
+            | KeyCode::Minus
+            | KeyCode::Equal
+            | KeyCode::BracketLeft
+            | KeyCode::BracketRight
+            | KeyCode::Backslash
+            | KeyCode::Semicolon
+            | KeyCode::Quote
+            | KeyCode::Backquote
+            | KeyCode::Comma
+            | KeyCode::Period
+            | KeyCode::Slash
+            | KeyCode::IntlBackslash
+            | KeyCode::IntlRo
+            | KeyCode::IntlYen
+    )
 }
 
 /// The keyboard on the rip tab. With its prompt open every key is the
@@ -1581,6 +1654,7 @@ mod tests {
                     meter: 3,
                     lanes: 4,
                     notes: std::sync::Arc::from(Vec::new()),
+                    holds: std::sync::Arc::from(Vec::new()),
                 },
                 deadsync_online::smo_songs::PreviewChart {
                     doubles: false,
@@ -1588,6 +1662,7 @@ mod tests {
                     meter: 9,
                     lanes: 4,
                     notes: std::sync::Arc::from(Vec::new()),
+                    holds: std::sync::Arc::from(Vec::new()),
                 },
             ]),
             ..Default::default()
@@ -2294,7 +2369,7 @@ mod tests {
         ));
         assert_eq!(state.query, "ky", "straight into the box");
 
-        // backspace edits it, escape empties it
+        // backspace edits it
         let key = raw_key(KeyCode::Backspace);
         assert!(handle_raw_key_event(
             &mut state,
@@ -2303,15 +2378,102 @@ mod tests {
             &mut effects
         ));
         assert_eq!(state.query, "k");
+    }
 
-        let key = raw_key(KeyCode::Escape);
+    /// A key that types is the search box's alone while the box is live. With
+    /// a pad mapped to W/A/S/D, "rosewood" walked the cursor up onto the tabs
+    /// on its W, and its D then left SEARCH and threw the word away -- the box
+    /// ended up holding "d". Off the SEARCH tab the same keys are the pad's,
+    /// and the arrows always are.
+    #[test]
+    fn the_keys_that_type_are_the_search_boxs_alone() {
+        let mut state = browsing(3);
+        state.tab_index = TABS.iter().position(|t| *t == Tab::Search).unwrap();
+        state.zone = Zone::List;
+        let mut effects = Vec::new();
+        // each key, as the shell sends it, then the pad button it is bound to
+        // if the browser left the key alone, then its text
+        for ch in "rosewood".chars() {
+            let code = match ch {
+                'w' => KeyCode::KeyW,
+                'a' => KeyCode::KeyA,
+                's' => KeyCode::KeyS,
+                'd' => KeyCode::KeyD,
+                _ => KeyCode::KeyR,
+            };
+            if !handle_raw_key_event(&mut state, Some(&raw_key(code)), None, &mut effects) {
+                let bound = match ch {
+                    'w' => Some(UP),
+                    'a' => Some(LEFT),
+                    's' => Some(DOWN),
+                    'd' => Some(RIGHT),
+                    _ => None,
+                };
+                if let Some(action) = bound {
+                    press(&mut state, action);
+                }
+            }
+            let text = ch.to_string();
+            assert!(handle_raw_key_event(
+                &mut state,
+                None,
+                Some(&text),
+                &mut effects
+            ));
+        }
+        assert_eq!(state.query, "rosewood", "every letter kept");
+        assert!(search_field_showing(&state), "still on SEARCH");
+
+        for code in [KeyCode::Space, KeyCode::Slash, KeyCode::Digit7] {
+            assert!(
+                handle_raw_key_event(&mut state, Some(&raw_key(code)), None, &mut effects),
+                "{code:?} types"
+            );
+        }
+        for code in [KeyCode::ArrowUp, KeyCode::ArrowRight, KeyCode::Numpad8] {
+            assert!(
+                !handle_raw_key_event(&mut state, Some(&raw_key(code)), None, &mut effects),
+                "{code:?} is the pad's"
+            );
+        }
+        state.tab_index = TABS.iter().position(|t| *t == Tab::Pad).unwrap();
+        assert!(
+            !handle_raw_key_event(
+                &mut state,
+                Some(&raw_key(KeyCode::KeyD)),
+                None,
+                &mut effects
+            ),
+            "off SEARCH a letter is the pad's too"
+        );
+    }
+
+    /// Escape leaves the search box the way BACK does: off the results up to
+    /// the tabs with the search kept, then out of the browser. The box never
+    /// keeps it, so a reader whose way out is Escape is never stuck there.
+    #[test]
+    fn escape_leaves_the_search_box_for_the_tabs() {
+        let mut state = browsing(3);
+        state.tab_index = TABS.iter().position(|t| *t == Tab::Search).unwrap();
+        state.query = "rosewood".to_owned();
+        state.zone = Zone::List;
+        let mut effects = Vec::new();
+        let escape = raw_key(KeyCode::Escape);
         assert!(handle_raw_key_event(
             &mut state,
-            Some(&key),
+            Some(&escape),
             None,
             &mut effects
         ));
-        assert!(state.query.is_empty());
+        assert_eq!(state.zone, Zone::Tabs, "up to the tabs");
+        assert_eq!(state.query, "rosewood", "with the search kept");
+        assert_eq!(state.results.len(), 3);
+
+        assert!(
+            !handle_raw_key_event(&mut state, Some(&escape), None, &mut effects),
+            "left for BACK"
+        );
+        assert_eq!(press(&mut state, BACK), Outcome::Leave, "which leaves");
     }
 
     /// The two network passes wait for the typing to stop. Every keystroke is

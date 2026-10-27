@@ -1,0 +1,101 @@
+{
+  "specification": "https://www.w3.org/TR/2025/REC-png-3-20250624/",
+  "clauses": [
+    "7.1",
+    "11.3.6.1",
+    "11.3.6.2",
+    "11.3.6.3"
+  ],
+  "control_field_files": 80460,
+  "valid_field_files": 5280,
+  "animation_fault_files": 74700,
+  "fatal_resource_files": 480,
+  "field_api_policy_checks": 804600,
+  "delay_word_files": 131072,
+  "delay_api_checks": 262144,
+  "total_files": 211532,
+  "total_api_policy_checks": 1066744,
+  "exact_rust_png_valid_files": 136352,
+  "representative_seeds_per_png_target": 10740,
+  "per_field": [
+    {
+      "field": "blend",
+      "valid": 240,
+      "animation_faults": 30480,
+      "fatal_resource": 0
+    },
+    {
+      "field": "count",
+      "valid": 60,
+      "animation_faults": 360,
+      "fatal_resource": 480
+    },
+    {
+      "field": "delay",
+      "valid": 2400,
+      "animation_faults": 0,
+      "fatal_resource": 0
+    },
+    {
+      "field": "dispose",
+      "valid": 360,
+      "animation_faults": 30360,
+      "fatal_resource": 0
+    },
+    {
+      "field": "empty-data",
+      "valid": 180,
+      "animation_faults": 0,
+      "fatal_resource": 0
+    },
+    {
+      "field": "length",
+      "valid": 180,
+      "animation_faults": 4560,
+      "fatal_resource": 0
+    },
+    {
+      "field": "plays",
+      "valid": 780,
+      "animation_faults": 120,
+      "fatal_resource": 0
+    },
+    {
+      "field": "rectangle",
+      "valid": 900,
+      "animation_faults": 6300,
+      "fatal_resource": 0
+    },
+    {
+      "field": "sequence",
+      "valid": 180,
+      "animation_faults": 2520,
+      "fatal_resource": 0
+    }
+  ],
+  "scope": "Field matrix: fifteen native formats, both interlace flags and both default roles; buffered, reader 1/7, push 1/31, both animation policies. All delay-word values use the first RGB8/plain/nondefault animation frame through buffered and push 31 input. Small canvas 3x2; large positive geometries/composition use prior evidence. Integer edges are varied individually, not every 32-bit Cartesian product.",
+  "production_sources_unchanged_from": "861a15e0036f1814420e739c529bd058b16484a6",
+  "new_successful_sanitizer_executions": 50000,
+  "evidence": [
+    {
+      "path": "animation-fields-validation.json",
+      "sha256": "61a3bd921a030fd5388c1acc75e33bab0560516b0d7bb9fd133d015e6e697249"
+    },
+    {
+      "path": "fuzz/reports/animation-fields-source.json",
+      "sha256": "e13b92b664079131fd1913778c4bb8c7bee1ae11215d1406ff1b2db3d0f78a25"
+    },
+    {
+      "path": "fuzz/reports/animation-fields-seeds.json",
+      "sha256": "559fe934beed633526f3f5e06c9948c82d547dcebe11efc0d5cfa02ce3325d11"
+    },
+    {
+      "path": "fuzz/reports/animation-fields-seed-build.json",
+      "sha256": "d1eae5f44cffb4890db9f965344388175e71923b6832a731133cd9c2e6a972e2"
+    },
+    {
+      "path": "experiments/output-spare-selection.json",
+      "sha256": "81b81dcbef27b036b2a43eb1936ad7c61bd68a64d1f89923b8b0a55d9cd42564"
+    }
+  ]
+}

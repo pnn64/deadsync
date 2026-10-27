@@ -1,0 +1,21 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `release` profile [optimized] target(s) in 13.37s
+     Running tests\codebook_floats.rs (target\release\deps\codebook_floats-2222f385f2a647dd.exe)
+
+running 1 test
+
+thread 'custom_float_boundaries_match_reference_vq' (51316) panicked at crates\deadlib-audio\decode\vorbis\tests\codebook_floats.rs:24:13:
+assertion `left == right` failed: Book { dimensions: 1, entries: 4, lookup: 2, minimum: 1518338049, delta: 0, value_bits: 16, sequence: false, sparse: false }, entry 0, dimension 0: 0.00000000000000000005421011 != 0.00000000000000000010842022
+  left: 528482304
+ right: 536870912
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test custom_float_boundaries_match_reference_vq ... FAILED
+
+failures:
+
+failures:
+    custom_float_boundaries_match_reference_vq
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+error: test failed, to rerun pass `-p deadlib-audio-decode-vorbis --test codebook_floats`

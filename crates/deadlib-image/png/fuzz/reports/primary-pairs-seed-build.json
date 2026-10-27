@@ -1,0 +1,227 @@
+{
+  "sources": [
+    {
+      "path": "png/src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "png/src/checksum.rs",
+      "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+    },
+    {
+      "path": "png/src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "png/src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "png/src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "png/src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "png/src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "png/src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "png/src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "png/src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "png/src/scanline.rs",
+      "sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e"
+    },
+    {
+      "path": "png/src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "png/src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "png/src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "png/src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "png/src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "png/src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "png/src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "png/src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "png/src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "png/src/zlib.rs",
+      "sha256": "57984db9d36f37210db69ac28689e18f9ba9ac5f743d90e2a4a5afa7ddd3f570"
+    },
+    {
+      "path": "png/tests/support/ancillary_order.rs",
+      "sha256": "fc4147849cef800586ab11aed5f856340fad0096d668208c46e5d74430551ba4"
+    },
+    {
+      "path": "png/tests/support/apng_recovery.rs",
+      "sha256": "c756dcde80564c51b2d5fd605331db8eee092c85ed9ca3004a73d03d1dbf06ca"
+    },
+    {
+      "path": "png/tests/support/budgets.rs",
+      "sha256": "0d54c20ecead7dbc072de1c39b9fb8699554a493a5d580b41a5a668b0c5c3776"
+    },
+    {
+      "path": "png/tests/support/chunks.rs",
+      "sha256": "e6800bf3d51a7d3e83bf421a65c391b818b99fb0f7c3bb9119b0e435ec8206e0"
+    },
+    {
+      "path": "png/tests/support/compositor.rs",
+      "sha256": "5bb6367253208e9ff62c6885dd9a38c33531ff6eb7590b3d0fbd544e1f858d0d"
+    },
+    {
+      "path": "png/tests/support/hdr.rs",
+      "sha256": "d365b2a468d5fc815453616a1e1eb0553a692a871593f944a9b68ddb6b904720"
+    },
+    {
+      "path": "png/tests/support/huffman.rs",
+      "sha256": "ed2db27a8fb2f8c324e49cb42862bbbd848d0697d5b1cc559034aac54d8d27c2"
+    },
+    {
+      "path": "png/tests/support/mod.rs",
+      "sha256": "1580fd6e442fa78ab893ea40a7469d88ef27c9668d967038ca3814390cebc442"
+    },
+    {
+      "path": "png/tests/support/named.rs",
+      "sha256": "0e4c993567f273180885e42c8c74bac7f09c6bac0431b556c9b3ba63c7f0eaa3"
+    },
+    {
+      "path": "png/tests/support/prefix.rs",
+      "sha256": "f82165432598200efc28beb20fc398b94f6ad360c3ef48d5b95291166373ca78"
+    },
+    {
+      "path": "png/tests/support/primary_pairs.rs",
+      "sha256": "8daaa28f2e4405c936aff6442613d7c665dfe9710cea3783d60fb4c19a34bd6f"
+    },
+    {
+      "path": "png/tests/support/resource.rs",
+      "sha256": "001ea7a8d0dc4a60498ccc0e23af0d9d922b7be05ce9cef8cc543cc073608d95"
+    },
+    {
+      "path": "png/tests/support/scalar_fields.rs",
+      "sha256": "c5194f70ab4117fa35aa8635b6040a2dea2b7c9aac254a592a2d05dae07c47fa"
+    },
+    {
+      "path": "png/tests/support/text_body.rs",
+      "sha256": "9f0d0a028ba2cb3c942e98352a87f5db8a4eb8f7f35fcc5234aeb348f82b35c4"
+    },
+    {
+      "path": "png/examples/seed_fuzz.rs",
+      "sha256": "b3edbbf1381c21c8337d2c5b6075fe085c0ea482d737eb2aef3c0cad66e06719"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+    },
+    {
+      "path": "png/fuzz/scripts/archive_native_seeds.py",
+      "sha256": "4f25e780a6dcc610e7bc2572e13d6ca4f75b0b68ec8e7d20bef5d073aa163610"
+    }
+  ],
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "build",
+        "--release",
+        "-p",
+        "deadlib-image-png",
+        "--example",
+        "seed_fuzz"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 18.094
+    },
+    {
+      "command": [
+        "/tmp/deadlib-image-primary-pairs-seed-target-20261027-a/release/examples/seed_fuzz",
+        "--primary-pairs-only",
+        "/tmp/deadlib-image-primary-pairs-seeds-20261027-a"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.05
+    },
+    {
+      "command": [
+        "python3",
+        "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/scripts/archive_native_seeds.py",
+        "--corpus-root",
+        "/tmp/deadlib-image-primary-pairs-seeds-20261027-a",
+        "--targets",
+        "inflate_stream",
+        "--include-archive",
+        "/mnt/c/GitHub/deadsync/target/png-adler-native-20261027-a.zip",
+        "--output",
+        "/tmp/deadlib-image-primary-pairs-seeds-20261027-a.zip"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.303
+    },
+    {
+      "command": [
+        "/tmp/deadlib-image-primary-pairs-seed-target-20261027-a/release/examples/seed_fuzz",
+        "/tmp/deadlib-image-primary-pairs-full-20261027-a"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 4.152
+    },
+    {
+      "command": [
+        "python3",
+        "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/scripts/archive_native_seeds.py",
+        "--corpus-root",
+        "/tmp/deadlib-image-primary-pairs-full-20261027-a",
+        "--targets",
+        "inflate_stream",
+        "--output",
+        "/tmp/deadlib-image-primary-pairs-full-20261027-a.zip"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.652
+    }
+  ],
+  "runner_sha256": "d4c5ae204f7f27cc82fc7a62d949f3ebc4c5ab2098d2b158e9913fc7daba6a71",
+  "generator_binary": "/tmp/deadlib-image-primary-pairs-seed-target-20261027-a/release/examples/seed_fuzz",
+  "generator_sha256": "f0d6f04a0eeaf0e5428f66ac04f8d6f6973598f33aa311ea6ff0a96bb129fd75",
+  "final_source_hashes_verified": true,
+  "full_generator_raw_archive_matches_merged_archive": true,
+  "seed_archive": "/tmp/deadlib-image-primary-pairs-seeds-20261027-a.zip",
+  "seed_archive_sha256": "23eb4e821e5159fc2cf1673771f2da620c19c571d74fc2910a9b9ecb3049c33d",
+  "full_archive": "/tmp/deadlib-image-primary-pairs-full-20261027-a.zip",
+  "log_sha256": "ede5eb247b3b60e0c81c1c0371022c9bd24dfa037525a0f6ae633709f911d01d"
+}

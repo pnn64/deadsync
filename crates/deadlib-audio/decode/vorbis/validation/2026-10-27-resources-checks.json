@@ -1,0 +1,51 @@
+{
+  "scope": "Benchmark adapters, accounting, reproducibility, documentation; no production Rust source changes",
+  "commands": [
+    {
+      "command": "cargo test -p deadlib-audio-decode-ogg -p deadlib-audio-decode-vorbis --release --all-features",
+      "result": "passed",
+      "passed": 70,
+      "failed": 0,
+      "ignored_external": 20,
+      "log": "2026-10-27-resources-tests.log"
+    },
+    {
+      "command": "crates/deadlib-audio/decode/scripts/verify_independent.ps1",
+      "result": "passed",
+      "passed": 70,
+      "failed": 0,
+      "ignored_external": 20,
+      "log": "2026-10-27-resources-independent.log"
+    },
+    {
+      "command": "cargo clippy -p deadlib-audio-decode-ogg -p deadlib-audio-decode-vorbis --all-targets --all-features -- -D warnings",
+      "result": "passed",
+      "log": "2026-10-27-resources-clippy-final-all.log"
+    },
+    {
+      "command": "cargo clippy -p deadlib-audio-decode-vorbis --all-targets -- -D warnings",
+      "result": "passed",
+      "log": "2026-10-27-resources-clippy-final-default.log"
+    }
+  ],
+  "benchmark": {
+    "resource_rows": 360,
+    "timing_rows": 150,
+    "summary_rows": 30,
+    "resource_repetitions": 3,
+    "counter_groups": 120,
+    "counter_and_io_values_identical_across_repetitions": true,
+    "all_full_decode_live_heap_deltas_zero": true,
+    "request_count": 500,
+    "all_timed_sample_counts_rechecked": true,
+    "source_input_binary_hashes_rechecked": true
+  },
+  "allocator_self_tests": "passed Rust instrumented global allocator and C instrumented reference-library wrappers",
+  "fuzz": "not repeated: production source unchanged; previous Huffman campaign remains recorded in PERFORMANCE.md",
+  "logs": {
+    "2026-10-27-resources-tests.log": "534b5f020e05f420e8490910e6b86acfbc5b96bd131b62d2ceaf46f63b6cd760",
+    "2026-10-27-resources-independent.log": "32b9fbffafddeec1b6b0804fcbc8b0e16d00177153a37b86e24365bacf65c642",
+    "2026-10-27-resources-clippy-final-all.log": "2c12817f8a495f053be1ad9a000af86ea5a4a9ffff0a776da2cec8d6648c9052",
+    "2026-10-27-resources-clippy-final-default.log": "77b5723bb112c0275084352084154acc4955849e6824f63757959810e083b360"
+  }
+}

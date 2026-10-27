@@ -1,0 +1,40 @@
+[
+  {
+    "feature": "+fma",
+    "command": [
+      "cargo",
+      "+nightly",
+      "miri",
+      "test",
+      "--manifest-path",
+      "target/audio-sola/miri/Cargo.toml",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "dispatched_crossfade_matches_scalar_bits",
+      "--",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "stdout": "\nrunning 1 test\ntest stretch::perf_tests::dispatched_crossfade_matches_scalar_bits ... FMA available: true\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 3.17s\n\n",
+    "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s\n     Running unittests harness.rs (target\\audio-sola\\miri-target\\miri\\x86_64-unknown-linux-gnu\\debug\\build\\sola-safety/93ef013e36544326\\out\\sola_safety-93ef013e36544326)\n"
+  },
+  {
+    "feature": "-fma",
+    "command": [
+      "cargo",
+      "+nightly",
+      "miri",
+      "test",
+      "--manifest-path",
+      "target/audio-sola/miri/Cargo.toml",
+      "--target",
+      "x86_64-unknown-linux-gnu",
+      "dispatched_crossfade_matches_scalar_bits",
+      "--",
+      "--nocapture"
+    ],
+    "exit_code": 0,
+    "stdout": "\nrunning 1 test\ntest stretch::perf_tests::dispatched_crossfade_matches_scalar_bits ... FMA available: false\nok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 3.16s\n\n",
+    "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s\n     Running unittests harness.rs (target\\audio-sola\\miri-target\\miri\\x86_64-unknown-linux-gnu\\debug\\build\\sola-safety/301b319a9238cccf\\out\\sola_safety-301b319a9238cccf)\n"
+  }
+]

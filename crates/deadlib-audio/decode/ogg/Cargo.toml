@@ -1,0 +1,18 @@
+[package]
+name = "deadlib-audio-decode-ogg"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "GPL-3.0"
+description = "Independent pure-Rust Ogg container framing, streaming, and packet assembly"
+repository = "https://github.com/pnn64/deadsync"
+
+[dev-dependencies]
+ogg = "0.9.2"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
+
+[[bench]]
+name = "container"
+harness = false

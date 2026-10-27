@@ -1,0 +1,24 @@
+COMMAND: ["cargo", "test", "-p", "deadlib-image-png", "--release", "--lib", "zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow", "--", "--exact", "--nocapture"]
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 11.65s
+     Running unittests src\lib.rs (target\release\deps\deadlib_image_png-e217eeb2c3bd0973.exe)
+
+running 1 test
+
+thread 'zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow' (42616) panicked at crates\deadlib-image\png\src\zlib.rs:594:17:
+assertion `left == right` failed: pos=2305843009213693952 count=0
+  left: 0
+ right: 2305843009213693952
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow ... FAILED
+
+failures:
+
+failures:
+    zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p deadlib-image-png --lib`
+
+EXIT: 101

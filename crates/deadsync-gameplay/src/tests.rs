@@ -1277,12 +1277,36 @@ mod tests {
                 StepStatsPlayStyle::Single,
                 4,
                 1,
+                640.0,
+                480.0,
+                false,
+                true,
+            ),
+            192.0,
+        );
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Single,
+                4,
+                1,
                 854.0,
                 480.0,
                 true,
                 true,
             ),
             299.0,
+        );
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Single,
+                4,
+                1,
+                640.0,
+                640.0,
+                false,
+                true,
+            ),
+            192.0,
         );
         assert_near(
             step_stats_density_graph_width(
@@ -7808,6 +7832,34 @@ mod tests {
         assert!(song_lua_target_matches_player(Some(1), 0));
         assert!(song_lua_target_matches_player(Some(2), 1));
         assert!(!song_lua_target_matches_player(Some(2), 0));
+    }
+
+    #[test]
+    fn song_lua_window_units_share_rate_scaled_calibration() {
+        let mut timing = TimingData::from_segments(
+            0.0,
+            0.0,
+            &TimingSegments {
+                bpms: vec![(0.0, 120.0)],
+                ..Default::default()
+            },
+            &[],
+        );
+        for rate in [0.5, 1.0, 1.5, 2.0] {
+            for offset in [-0.020, 0.020] {
+                timing.set_global_offset_seconds_with_rate(offset, rate);
+                for (unit, value) in [
+                    (SongLuaRuntimeTimeUnit::Beat, 4.0),
+                    (SongLuaRuntimeTimeUnit::Second, 2.0),
+                    (SongLuaRuntimeTimeUnit::BeatClock, 2.0),
+                ] {
+                    assert_near(
+                        song_lua_time_to_second(unit, value, &timing, offset),
+                        2.0 - offset * rate,
+                    );
+                }
+            }
+        }
     }
 
     #[test]
@@ -14849,7 +14901,6 @@ mod tests {
             },
             0.75,
             2.0,
-            -0.1,
         );
 
         assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(4.25));
@@ -14872,7 +14923,6 @@ mod tests {
                 },
                 ..GameplayAudioSnapshot::default()
             },
-            f32::NAN,
             f32::NAN,
             f32::NAN,
         );
@@ -15043,7 +15093,6 @@ mod tests {
             },
             1.25,
             0.0,
-            0.0,
         );
 
         assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(2.0));
@@ -15064,10 +15113,9 @@ mod tests {
             },
             1.5,
             2.0,
-            -0.1,
         );
 
-        assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(1.45));
+        assert_eq!(snapshot.song_time_ns, song_time_ns_from_seconds(1.5));
         assert_eq!(snapshot.seconds_per_second, 1.5);
         assert!(!snapshot.mapped_audio);
     }
@@ -15194,12 +15242,12 @@ mod tests {
     }
 
     #[test]
-    fn stream_position_to_music_time_applies_lead_in_rate_and_offset_anchor() {
-        assert_near(music_time_from_stream_position(3.0, 2.0, -0.100, 1.5), 1.45);
-        assert_near(music_time_from_stream_position(3.0, -2.0, 0.0, 1.0), 3.0);
-        assert_near(music_time_from_stream_position(3.0, 2.0, -0.100, 0.0), 1.0);
+    fn stream_position_to_music_time_applies_lead_in_and_rate() {
+        assert_near(music_time_from_stream_position(3.0, 2.0, 1.5), 1.5);
+        assert_near(music_time_from_stream_position(3.0, -2.0, 1.0), 3.0);
+        assert_near(music_time_from_stream_position(3.0, 2.0, 0.0), 1.0);
         assert_near(
-            music_time_from_stream_position(3.0, 2.0, -0.100, f32::NAN),
+            music_time_from_stream_position(3.0, 2.0, f32::NAN),
             1.0,
         );
     }

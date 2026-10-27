@@ -1,0 +1,33 @@
+{
+  "baseline_png_commit": "e4f432fb647aa8d5ecd6228bb56bdfa9b7626354",
+  "production_changes": [
+    "src/zlib.rs"
+  ],
+  "all_test_helper_tool_inputs_unchanged": true,
+  "existing_fixture_scope": "Primary lookup all 65,536 two-byte values and independent widths/padding; one-bit literal lengths 0..63; every legal match length/distance at eight bit offsets, fixed/dynamic trees and both padding values; prefix/suffix and exact/short limits; PNG/APNG/Adam7 and metadata in the full release suite.",
+  "c_zlib_batch_cases": 19645,
+  "c_zlib_successful_outputs": 3091,
+  "c_zlib_error_records": 16554,
+  "documented_reference_policy_rejections": 68,
+  "performance_scope": "Direct prefetched literal runs avoid staging copies. Per-coded-block extraction keeps large Huffman frames out of stored-block decoding. Repeated photo decode +2.65% relative to Rust png (unchanged reader +0.89%); format raw inflate +9.43% relative to flate2 (unchanged streaming inflate -0.60%). End-to-end format results are inconclusive. Shared-host measurements do not establish broad parity.",
+  "stored_probe_scope": "4096 iterations per case per process. Gray8 stored-only raw inflate: -5.06% relative to flate2, -2.58% relative to unchanged streaming inflate; both stored cases improve end-to-end relative to both controls. Earlier -10.23% unchanged-control regression is not repeated. Stored-only speedup is not claimed.",
+  "new_successful_sanitizer_executions": 70000,
+  "evidence": [
+    {
+      "path": "literal-block-validation.json",
+      "sha256": "040cc83128fcebeab4ef155bc36162527bdd950ecbdb18eb10930bd8e83ba2f1"
+    },
+    {
+      "path": "fuzz/reports/literal-block-source.json",
+      "sha256": "68bb5cb969c909ee76c75b8b2ccc3f5757df937534866a9eb540b9b5a5389024"
+    },
+    {
+      "path": "fuzz/reports/literal-block-seeds.json",
+      "sha256": "8d6836a6e340a833f3bd7bf607f0aee90a3e5ec7daac3038390dc49e6f86db8b"
+    },
+    {
+      "path": "experiments/literal-selection.json",
+      "sha256": "02205e0ae9be7704d5eaba16a2eb5be387c0b2dbcef1f0d52024f4d0c31448e2"
+    }
+  ]
+}

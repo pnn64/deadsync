@@ -1,4 +1,5 @@
 use crate::song::{SongBackgroundChange, SongBackgroundChangeTarget, SongData};
+use crc32fast::hash as crc32;
 use deadsync_core::timing::{ROWS_PER_BEAT, beat_to_note_row, note_row_to_beat};
 use deadsync_rules::timing::{
     TimeSignatureSegment, TimingData, TimingSegments, default_time_signature,
@@ -354,20 +355,9 @@ impl XorShift64 {
     }
 }
 
-fn crc32(bytes: &[u8]) -> u32 {
-    let mut crc = 0xFFFF_FFFFu32;
-    for &byte in bytes {
-        crc ^= u32::from(byte);
-        for _ in 0..8 {
-            crc = if crc & 1 != 0 {
-                (crc >> 1) ^ 0xEDB8_8320
-            } else {
-                crc >> 1
-            };
-        }
-    }
-    !crc
-}
+#[cfg(test)]
+#[path = "background_perf.rs"]
+mod perf;
 
 #[cfg(test)]
 mod tests {

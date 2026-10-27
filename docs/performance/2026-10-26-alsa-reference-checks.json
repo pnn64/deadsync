@@ -1,0 +1,90 @@
+{
+  "reference_commit": "434ea4029",
+  "original_sha256": "d15cfbbbb1403996b470dafa3db118d1da04ce60d464f2094db58b8ad1788b1d",
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "--crate-name",
+    "deadlib_audio_backend_alsa",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "lto=fat",
+    "-C",
+    "codegen-units=16",
+    "-L",
+    "dependency=/home/perfecttaste/deadsync-alsa-target/release/deps",
+    "--extern",
+    "alsa=/home/perfecttaste/deadsync-alsa-target/release/deps/libalsa-aaa298ecd2748cc4.rlib",
+    "--extern",
+    "deadlib_audio_core=/home/perfecttaste/deadsync-alsa-target/release/deps/libdeadlib_audio_core-97f6fda4d7a9fc54.rlib",
+    "--extern",
+    "deadlib_platform=/home/perfecttaste/deadsync-alsa-target/release/deps/libdeadlib_platform-a9d1af5f04a3c5bd.rlib",
+    "--extern",
+    "libc=/home/perfecttaste/deadsync-alsa-target/release/deps/liblibc-39b69de952e8fbe9.rlib",
+    "--extern",
+    "log=/home/perfecttaste/deadsync-alsa-target/release/deps/liblog-87b07b54fd4f4d37.rlib",
+    "/mnt/c/GitHub/deadsync/target/alsa-performance/reference-verification/lib.rs",
+    "-o",
+    "/mnt/c/GitHub/deadsync/target/alsa-performance/reference-verification/alsa-tests"
+  ],
+  "checks": [
+    {
+      "scenario": "unit",
+      "output": "\nrunning 8 tests\ntest perf_tests::benchmark_alsa ... ignored, performance workload; use scripts/benchmark_alsa.py\ntest perf_tests::fixture_enumeration_preserves_devices ... ignored, requires the deterministic ALSA enumeration fixture\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ignored, requires the deterministic ALSA timing fixture\ntest perf_tests::pcm_selection_preserves_text_and_errors ... ok\ntest tests::clock_health_holds_degraded_quality_after_fallback ... ok\ntest tests::null_pcm_preserves_requested_stream_shape ... ok\ntest tests::pcm_id_policy_preserves_shared_and_exclusive_routes ... ok\ntest tests::period_and_clock_math_remain_stable ... ok\n\ntest result: ok. 5 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\nALSA lib pcm.c:2722:(snd_pcm_open_noupdate) [error.pcm] Unknown PCM deadsync_missing_pcm_benchmark_fixture\n"
+    },
+    {
+      "scenario": "regular",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "empty",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "unmatched_default",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "bad_name",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "probe_error",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_enumeration_preserves_devices ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=-1,error=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=-1,error=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=0,error=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=0,error=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=240,error=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=240,error=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=4294967295,error=False",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    },
+    {
+      "scenario": "delay=4294967295,error=True",
+      "output": "\nrunning 1 test\ntest perf_tests::fixture_timing_preserves_delay_and_fallback ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s\n\n"
+    }
+  ]
+}

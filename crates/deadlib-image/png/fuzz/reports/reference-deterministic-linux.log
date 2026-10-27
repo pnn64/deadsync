@@ -1,0 +1,5 @@
+   Compiling deadlib-image-png-fuzz v0.0.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz)
+    Finished `release` profile [optimized] target(s) in 3.32s
+     Running `/tmp/deadlib-image-reference-check/release/examples/reference_check`
+libdeflate verified 3091 valid fixtures, all 68 extended-distance definitions, and 32 zlib window/level headers
+Native rejected 16554 malformed fixtures; libdeflate accepts these within a 64-byte probe: {"counts-with-body": 64, "unused-code": 1}

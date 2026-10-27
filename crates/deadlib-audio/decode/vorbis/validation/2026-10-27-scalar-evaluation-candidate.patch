@@ -1,0 +1,89 @@
+diff --git a/crates/deadlib-audio/decode/vorbis/src/encoder.rs b/crates/deadlib-audio/decode/vorbis/src/encoder.rs
+index cfcf616..3b62484 100644
+--- a/crates/deadlib-audio/decode/vorbis/src/encoder.rs
++++ b/crates/deadlib-audio/decode/vorbis/src/encoder.rs
+@@ -13,2 +13,2 @@ const PCM_LIMIT: f32 = 4.0;
+-// A complete tree assigns those four pairs three bits, the four corners eight,
+-// and the remaining 248 entries nine: 4/8 + 4/256 + 248/512 = 1.
++// The scalar tree assigns eight one bit, seven two, zero/fifteen five and the
++// remaining twelve digits six: 1/2 + 1/4 + 2/32 + 12/64 = 1.
+@@ -17,3 +17,4 @@ const fn first_length(entry: usize) -> u8 {
+-        119 | 120 | 135 | 136 => 3,
+-        0 | 15 | 240 | 255 => 8,
+-        _ => 9,
++        8 => 1,
++        7 => 2,
++        0 | 15 => 5,
++        _ => 6,
+@@ -22,3 +23,3 @@ const fn first_length(entry: usize) -> u8 {
+-// Entry-order assignment in a nine-bit left-edge domain. This is generated at
+-// compile time, independent of reference books; one shared 512-byte table packs
+-// each LSB-first word and its length. No per-encoder table or initialization.
++// Entry-order assignment in a six-bit left-edge domain, followed by concatenated
++// scalar pairs. The shared 512-byte table emits two words in one writer call.
++// Generation is at compile time, with no per-encoder allocation/initialization.
+@@ -26,2 +27,2 @@ const fn first_words() -> [u16; 256] {
+-    let mut words = [0; 256];
+-    let mut free = [None; 10];
++    let mut words = [0; 16];
++    let mut free = [None; 7];
+@@ -30 +31 @@ const fn first_words() -> [u16; 256] {
+-    while entry < 256 {
++    while entry < 16 {
+@@ -53 +54 @@ const fn first_words() -> [u16; 256] {
+-            free[split] = Some(code | (1 << (9 - split)));
++            free[split] = Some(code | (1 << (6 - split)));
+@@ -56 +57 @@ const fn first_words() -> [u16; 256] {
+-        words[entry] = (code.reverse_bits() >> 7) | ((length as u16) << 12);
++        words[entry] = (code.reverse_bits() >> 10) | ((length as u16) << 12);
+@@ -64 +65,11 @@ const fn first_words() -> [u16; 256] {
+-    words
++    let mut pairs = [0; 256];
++    entry = 0;
++    while entry < 256 {
++        let a = words[entry & 15];
++        let b = words[entry >> 4];
++        let a_length = a >> 12;
++        let length = a_length + (b >> 12);
++        pairs[entry] = (a & 63) | ((b & 63) << a_length) | (length << 12);
++        entry += 1;
++    }
++    pairs
+@@ -77 +88 @@ pub struct EncodeOptions {
+-    /// One to four additive radix-16 stages: 4/8/12/16 bits per nonzero scalar.
++    /// One to four radix-16 stages: 4/8/12/16-bit scalar quantization precision.
+@@ -158 +169 @@ impl PacketEncoder {
+-            + channels * partitions * (9 + 64 * options.residue_passes as usize))
++            + channels * partitions * (33 + 64 * options.residue_passes as usize))
+@@ -580,2 +591,2 @@ fn setup_packet(block: usize, passes: u8) -> Result<Vec<u8>, Error> {
+-    // Classifier {zero, coded}; radix-16^2 VQ books. The leading stage has a
+-    // nonuniform complete tree; later stages retain ordered eight-bit trees.
++    // Classifier {zero, coded}; scalar leading book and radix-16^2 later books.
++    // The leading scalar tree is nonuniform; later trees use eight-bit words.
+@@ -584,2 +595,9 @@ fn setup_packet(block: usize, passes: u8) -> Result<Vec<u8>, Error> {
+-        bits.write(if book == 0 { 1 } else { 2 }, 16)?;
+-        bits.write(if book == 0 { 2 } else { 256 }, 24)?;
++        bits.write(if book <= 1 { 1 } else { 2 }, 16)?;
++        bits.write(
++            match book {
++                0 => 2,
++                1 => 16,
++                _ => 256,
++            },
++            24,
++        )?;
+@@ -589 +607 @@ fn setup_packet(block: usize, passes: u8) -> Result<Vec<u8>, Error> {
+-            for entry in 0..256 {
++            for entry in 0..16 {
+@@ -671 +689 @@ mod tests {
+-    fn first_stage_words_decode_all_entries_with_exact_lengths() {
++    fn first_stage_packed_scalar_pairs_decode_all_entries_with_exact_lengths() {
+@@ -689,2 +707,6 @@ mod tests {
+-            assert_eq!(book.decode_scalar(&mut bits).unwrap(), entry as u32);
+-            assert_eq!(bits.position() - before, first_length(entry) as usize);
++            assert_eq!(book.decode_scalar(&mut bits).unwrap(), (entry & 15) as u32);
++            assert_eq!(book.decode_scalar(&mut bits).unwrap(), (entry >> 4) as u32);
++            assert_eq!(
++                bits.position() - before,
++                (first_length(entry & 15) + first_length(entry >> 4)) as usize
++            );

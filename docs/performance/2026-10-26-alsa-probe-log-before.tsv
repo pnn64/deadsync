@@ -1,0 +1,10 @@
+run	stage	workload	operations	cycles_per_op	instructions_per_op	cpu_ns_per_op	ns_per_op	allocations	reallocations	requested_bytes
+0	stack-rate-list-distinct	enumerate_failed	100000	39014.11793	78308.10443	20222.7	20441.91949	25	9	2816
+0	stack-rate-list-distinct	enumerate_warn	30000	46153.507966666664	93057.7568	23061.0	23126.764166666668	25	9	2816
+0	stack-rate-list-distinct	enumerate	20000	250500.4719	446268.5874	143221.0	145282.58005	25	1	1824
+1	stack-rate-list-distinct	enumerate_failed	100000	42013.08227	78308.0996	21831.5	22111.76365	25	9	2816
+1	stack-rate-list-distinct	enumerate_warn	30000	45036.3528	93057.7218	22330.333333333332	22370.774533333333	25	9	2816
+1	stack-rate-list-distinct	enumerate	20000	253647.70145	446268.57585	144585.5	146656.1529	25	1	1824
+2	stack-rate-list-distinct	enumerate_failed	100000	38134.71223	78308.11206	19717.7	19904.73714	25	9	2816
+2	stack-rate-list-distinct	enumerate_warn	30000	46189.213866666665	93057.73406666667	23264.0	23308.655133333334	25	9	2816
+2	stack-rate-list-distinct	enumerate	20000	257106.5684	446268.6329	146055.0	148339.19405	25	1	1824

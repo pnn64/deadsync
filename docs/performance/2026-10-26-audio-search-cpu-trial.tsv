@@ -1,0 +1,229 @@
+run	stage	workload	cycles_per_op	ns_per_op	fingerprint	allocs	reallocs	frees	allocated_bytes	freed_bytes	peak_bytes	storage_allocs	storage_reallocs	storage_frees	storage_allocated_bytes	storage_freed_bytes	storage_peak_bytes
+0	sad-before	sola/append-6ch	164467.25	75371.09		0	0	0	0	0	0	8	0	0	150012	0	150012
+0	sad-before	sola/append-8ch	228497.8	104578.12		0	0	0	0	0	0	10	0	0	198096	0	198096
+0	sad-before	sola/append-16ch	478317.91	218782.03		0	0	0	0	0	0	18	0	0	390432	0	390432
+0	sad-before	sola/crossfade-256	180.06	81.15		0	0	0	0	0	0						
+0	sad-before	sola/crossfade-1440	645.85	293.46		0	0	0	0	0	0						
+0	sad-before	sola/mono/360	92944.53	42406.25		0	0	0	0	0	0						
+0	sad-before	sola/stereo/360	185882.19	84746.88		0	0	0	0	0	0						
+0	sad-before	sola/left-silent/360	93280.62	42603.12		0	0	0	0	0	0						
+0	sad-before	sola/right-silent/360	93712.81	42718.75		0	0	0	0	0	0						
+0	sad-before	sola/mono/720	357503.78	163115.62		0	0	0	0	0	0						
+0	sad-before	sola/stereo/720	720700.81	329659.38		0	0	0	0	0	0						
+0	sad-before	sola/left-silent/720	352091.72	160681.25		0	0	0	0	0	0						
+0	sad-before	sola/right-silent/720	355439.09	162131.25		0	0	0	0	0	0						
+0	sad-before	sola/stream-1ch-noise-1.2	440207.5	200150.0	b136b3511ed0a703	0	0	0	0	0	0						
+0	sad-before	sola/stream-2ch-noise-0.8	1676650.5	764750.0	af8cf13a71adbea9	0	0	0	0	0	0						
+0	sad-before	sola/stream-2ch-tone-1.2	197001.0	89150.0	5907aac396672cd5	0	0	0	0	0	0						
+0	sad-before	sola/stream-2ch-left-silent-1.2	592211.0	269350.0	11b0c279269ca04b	0	0	0	0	0	0						
+0	sad-before	sola/stream-2ch-silence-1.2	107994.0	48800.0	b40ebf824bb571ed	0	0	0	0	0	0						
+0	sad-before	sola/stream-6ch-noise-1.2	2686131.0	1233450.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+0	search-sse41	sola/append-6ch	166564.51	76275.78		0	0	0	0	0	0	8	0	0	150012	0	150012
+0	search-sse41	sola/append-8ch	225783.2	103459.38		0	0	0	0	0	0	10	0	0	198096	0	198096
+0	search-sse41	sola/append-16ch	477184.44	218373.44		0	0	0	0	0	0	18	0	0	390432	0	390432
+0	search-sse41	sola/crossfade-256	154.34	73.05		0	0	0	0	0	0						
+0	search-sse41	sola/crossfade-1440	659.14	299.41		0	0	0	0	0	0						
+0	search-sse41	sola/mono/360	87676.53	40028.12		0	0	0	0	0	0						
+0	search-sse41	sola/stereo/360	182720.03	83628.12		0	0	0	0	0	0						
+0	search-sse41	sola/left-silent/360	94179.19	43465.62		0	0	0	0	0	0						
+0	search-sse41	sola/right-silent/360	93081.75	42465.62		0	0	0	0	0	0						
+0	search-sse41	sola/mono/720	371249.97	169396.88		0	0	0	0	0	0						
+0	search-sse41	sola/stereo/720	742115.78	338884.38		0	0	0	0	0	0						
+0	search-sse41	sola/left-silent/720	363231.34	165968.75		0	0	0	0	0	0						
+0	search-sse41	sola/right-silent/720	369425.34	168881.25		0	0	0	0	0	0						
+0	search-sse41	sola/stream-1ch-noise-1.2	436915.0	198650.0	b136b3511ed0a703	0	0	0	0	0	0						
+0	search-sse41	sola/stream-2ch-noise-0.8	1666773.5	760000.0	af8cf13a71adbea9	0	0	0	0	0	0						
+0	search-sse41	sola/stream-2ch-tone-1.2	192721.0	87400.0	5907aac396672cd5	0	0	0	0	0	0						
+0	search-sse41	sola/stream-2ch-left-silent-1.2	643025.5	292100.0	11b0c279269ca04b	0	0	0	0	0	0						
+0	search-sse41	sola/stream-2ch-silence-1.2	107884.5	48700.0	b40ebf824bb571ed	0	0	0	0	0	0						
+0	search-sse41	sola/stream-6ch-noise-1.2	2832867.0	1299000.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+0	search-avx2	sola/append-6ch	170867.04	78121.88		0	0	0	0	0	0	8	0	0	150012	0	150012
+0	search-avx2	sola/append-8ch	225889.52	103265.62		0	0	0	0	0	0	10	0	0	198096	0	198096
+0	search-avx2	sola/append-16ch	481332.62	220191.41		0	0	0	0	0	0	18	0	0	390432	0	390432
+0	search-avx2	sola/crossfade-256	195.28	92.19		0	0	0	0	0	0						
+0	search-avx2	sola/crossfade-1440	667.29	303.22		0	0	0	0	0	0						
+0	search-avx2	sola/mono/360	104584.88	48028.12		0	0	0	0	0	0						
+0	search-avx2	sola/stereo/360	216063.47	99140.62		0	0	0	0	0	0						
+0	search-avx2	sola/left-silent/360	111746.09	50996.88		0	0	0	0	0	0						
+0	search-avx2	sola/right-silent/360	105510.91	48103.12		0	0	0	0	0	0						
+0	search-avx2	sola/mono/720	418881.47	192046.88		0	0	0	0	0	0						
+0	search-avx2	sola/stereo/720	840451.78	384153.12		0	0	0	0	0	0						
+0	search-avx2	sola/left-silent/720	425576.25	194906.25		0	0	0	0	0	0						
+0	search-avx2	sola/right-silent/720	421035.28	192059.38		0	0	0	0	0	0						
+0	search-avx2	sola/stream-1ch-noise-1.2	515605.5	234450.0	b136b3511ed0a703	0	0	0	0	0	0						
+0	search-avx2	sola/stream-2ch-noise-0.8	1894175.0	864350.0	af8cf13a71adbea9	0	0	0	0	0	0						
+0	search-avx2	sola/stream-2ch-tone-1.2	203696.0	92350.0	5907aac396672cd5	0	0	0	0	0	0						
+0	search-avx2	sola/stream-2ch-left-silent-1.2	686705.5	315850.0	11b0c279269ca04b	0	0	0	0	0	0						
+0	search-avx2	sola/stream-2ch-silence-1.2	108323.5	48900.0	b40ebf824bb571ed	0	0	0	0	0	0						
+0	search-avx2	sola/stream-6ch-noise-1.2	3107571.5	1418100.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+1	search-sse41	sola/append-6ch	167389.34	76664.06		0	0	0	0	0	0	8	0	0	150012	0	150012
+1	search-sse41	sola/append-8ch	228027.91	104253.12		0	0	0	0	0	0	10	0	0	198096	0	198096
+1	search-sse41	sola/append-16ch	471679.75	216040.62		0	0	0	0	0	0	18	0	0	390432	0	390432
+1	search-sse41	sola/crossfade-256	185.85	83.89		0	0	0	0	0	0						
+1	search-sse41	sola/crossfade-1440	669.65	304.3		0	0	0	0	0	0						
+1	search-sse41	sola/mono/360	94481.03	43018.75		0	0	0	0	0	0						
+1	search-sse41	sola/stereo/360	187048.31	85440.62		0	0	0	0	0	0						
+1	search-sse41	sola/left-silent/360	92663.31	42275.0		0	0	0	0	0	0						
+1	search-sse41	sola/right-silent/360	92059.69	41884.38		0	0	0	0	0	0						
+1	search-sse41	sola/mono/720	363567.47	166293.75		0	0	0	0	0	0						
+1	search-sse41	sola/stereo/720	727429.91	332921.88		0	0	0	0	0	0						
+1	search-sse41	sola/left-silent/720	368869.78	169140.62		0	0	0	0	0	0						
+1	search-sse41	sola/right-silent/720	366839.41	167768.75		0	0	0	0	0	0						
+1	search-sse41	sola/stream-1ch-noise-1.2	469949.5	213500.0	b136b3511ed0a703	0	0	0	0	0	0						
+1	search-sse41	sola/stream-2ch-noise-0.8	1733063.0	802800.0	af8cf13a71adbea9	0	0	0	0	0	0						
+1	search-sse41	sola/stream-2ch-tone-1.2	195025.5	90300.0	5907aac396672cd5	0	0	0	0	0	0						
+1	search-sse41	sola/stream-2ch-left-silent-1.2	601649.5	275200.0	11b0c279269ca04b	0	0	0	0	0	0						
+1	search-sse41	sola/stream-2ch-silence-1.2	107994.0	48800.0	b40ebf824bb571ed	0	0	0	0	0	0						
+1	search-sse41	sola/stream-6ch-noise-1.2	2860085.0	1304300.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+1	search-avx2	sola/append-6ch	169237.94	77370.31		0	0	0	0	0	0	8	0	0	150012	0	150012
+1	search-avx2	sola/append-8ch	227739.82	104135.94		0	0	0	0	0	0	10	0	0	198096	0	198096
+1	search-avx2	sola/append-16ch	484884.06	221950.78		0	0	0	0	0	0	18	0	0	390432	0	390432
+1	search-avx2	sola/crossfade-256	144.05	64.75		0	0	0	0	0	0						
+1	search-avx2	sola/crossfade-1440	668.36	303.71		0	0	0	0	0	0						
+1	search-avx2	sola/mono/360	105428.62	48087.5		0	0	0	0	0	0						
+1	search-avx2	sola/stereo/360	217538.22	99181.25		0	0	0	0	0	0						
+1	search-avx2	sola/left-silent/360	107520.69	49312.5		0	0	0	0	0	0						
+1	search-avx2	sola/right-silent/360	106423.22	48493.75		0	0	0	0	0	0						
+1	search-avx2	sola/mono/720	429465.47	196496.88		0	0	0	0	0	0						
+1	search-avx2	sola/stereo/720	843133.78	385434.38		0	0	0	0	0	0						
+1	search-avx2	sola/left-silent/720	416974.56	190096.88		0	0	0	0	0	0						
+1	search-avx2	sola/right-silent/720	431221.5	197546.88		0	0	0	0	0	0						
+1	search-avx2	sola/stream-1ch-noise-1.2	510776.5	232100.0	b136b3511ed0a703	0	0	0	0	0	0						
+1	search-avx2	sola/stream-2ch-noise-0.8	1866737.5	851550.0	af8cf13a71adbea9	0	0	0	0	0	0						
+1	search-avx2	sola/stream-2ch-tone-1.2	209512.5	95000.0	5907aac396672cd5	0	0	0	0	0	0						
+1	search-avx2	sola/stream-2ch-left-silent-1.2	647964.5	296350.0	11b0c279269ca04b	0	0	0	0	0	0						
+1	search-avx2	sola/stream-2ch-silence-1.2	106128.5	47900.0	b40ebf824bb571ed	0	0	0	0	0	0						
+1	search-avx2	sola/stream-6ch-noise-1.2	3087267.0	1413850.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+1	sad-before	sola/append-6ch	167243.58	76408.59		0	0	0	0	0	0	8	0	0	150012	0	150012
+1	sad-before	sola/append-8ch	227703.8	104083.59		0	0	0	0	0	0	10	0	0	198096	0	198096
+1	sad-before	sola/append-16ch	477301.05	218341.41		0	0	0	0	0	0	18	0	0	390432	0	390432
+1	sad-before	sola/crossfade-256	293.02	132.13		0	0	0	0	0	0						
+1	sad-before	sola/crossfade-1440	698.16	321.29		0	0	0	0	0	0						
+1	sad-before	sola/mono/360	91387.41	41984.38		0	0	0	0	0	0						
+1	sad-before	sola/stereo/360	183762.66	83793.75		0	0	0	0	0	0						
+1	sad-before	sola/left-silent/360	94124.38	43475.0		0	0	0	0	0	0						
+1	sad-before	sola/right-silent/360	91593.22	42056.25		0	0	0	0	0	0						
+1	sad-before	sola/mono/720	361742.88	165693.75		0	0	0	0	0	0						
+1	sad-before	sola/stereo/720	715871.84	327343.75		0	0	0	0	0	0						
+1	sad-before	sola/left-silent/720	372560.09	170443.75		0	0	0	0	0	0						
+1	sad-before	sola/right-silent/720	356221.06	162518.75		0	0	0	0	0	0						
+1	sad-before	sola/stream-1ch-noise-1.2	444048.5	203150.0	b136b3511ed0a703	0	0	0	0	0	0						
+1	sad-before	sola/stream-2ch-noise-0.8	1710344.0	780450.0	af8cf13a71adbea9	0	0	0	0	0	0						
+1	sad-before	sola/stream-2ch-tone-1.2	202818.0	91800.0	5907aac396672cd5	0	0	0	0	0	0						
+1	sad-before	sola/stream-2ch-left-silent-1.2	627550.5	285200.0	11b0c279269ca04b	0	0	0	0	0	0						
+1	sad-before	sola/stream-2ch-silence-1.2	107994.0	48850.0	b40ebf824bb571ed	0	0	0	0	0	0						
+1	sad-before	sola/stream-6ch-noise-1.2	2788527.5	1279550.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+2	search-avx2	sola/append-6ch	163314.86	74726.56		0	0	0	0	0	0	8	0	0	150012	0	150012
+2	search-avx2	sola/append-8ch	222794.21	101862.5		0	0	0	0	0	0	10	0	0	198096	0	198096
+2	search-avx2	sola/append-16ch	480559.26	219896.09		0	0	0	0	0	0	18	0	0	390432	0	390432
+2	search-avx2	sola/crossfade-256	173.2	78.12		0	0	0	0	0	0						
+2	search-avx2	sola/crossfade-1440	687.01	312.11		0	0	0	0	0	0						
+2	search-avx2	sola/mono/360	105442.31	47990.62		0	0	0	0	0	0						
+2	search-avx2	sola/stereo/360	209101.19	95306.25		0	0	0	0	0	0						
+2	search-avx2	sola/left-silent/360	110799.47	50553.12		0	0	0	0	0	0						
+2	search-avx2	sola/right-silent/360	105195.38	48246.88		0	0	0	0	0	0						
+2	search-avx2	sola/mono/720	423916.25	193762.5		0	0	0	0	0	0						
+2	search-avx2	sola/stereo/720	847132.75	387428.12		0	0	0	0	0	0						
+2	search-avx2	sola/left-silent/720	420747.25	192668.75		0	0	0	0	0	0						
+2	search-avx2	sola/right-silent/720	431783.94	197212.5		0	0	0	0	0	0						
+2	search-avx2	sola/stream-1ch-noise-1.2	492338.5	223850.0	b136b3511ed0a703	0	0	0	0	0	0						
+2	search-avx2	sola/stream-2ch-noise-0.8	1864433.5	850500.0	af8cf13a71adbea9	0	0	0	0	0	0						
+2	search-avx2	sola/stream-2ch-tone-1.2	201391.0	91350.0	5907aac396672cd5	0	0	0	0	0	0						
+2	search-avx2	sola/stream-2ch-left-silent-1.2	657183.0	299000.0	11b0c279269ca04b	0	0	0	0	0	0						
+2	search-avx2	sola/stream-2ch-silence-1.2	116554.5	52450.0	b40ebf824bb571ed	0	0	0	0	0	0						
+2	search-avx2	sola/stream-6ch-noise-1.2	3151910.0	1439400.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+2	sad-before	sola/append-6ch	166950.34	76219.53		0	0	0	0	0	0	8	0	0	150012	0	150012
+2	sad-before	sola/append-8ch	228597.23	104489.84		0	0	0	0	0	0	10	0	0	198096	0	198096
+2	sad-before	sola/append-16ch	483640.83	221295.31		0	0	0	0	0	0	18	0	0	390432	0	390432
+2	sad-before	sola/crossfade-256	179.2	80.86		0	0	0	0	0	0						
+2	sad-before	sola/crossfade-1440	787.54	357.91		0	0	0	0	0	0						
+2	sad-before	sola/mono/360	95592.25	43575.0		0	0	0	0	0	0						
+2	sad-before	sola/stereo/360	189353.03	87312.5		0	0	0	0	0	0						
+2	sad-before	sola/left-silent/360	93095.47	42490.62		0	0	0	0	0	0						
+2	sad-before	sola/right-silent/360	88890.62	40465.62		0	0	0	0	0	0						
+2	sad-before	sola/mono/720	356886.41	162784.38		0	0	0	0	0	0						
+2	sad-before	sola/stereo/720	731202.44	334459.38		0	0	0	0	0	0						
+2	sad-before	sola/left-silent/720	348668.91	159259.38		0	0	0	0	0	0						
+2	sad-before	sola/right-silent/720	356173.03	163018.75		0	0	0	0	0	0						
+2	sad-before	sola/stream-1ch-noise-1.2	444268.0	201950.0	b136b3511ed0a703	0	0	0	0	0	0						
+2	sad-before	sola/stream-2ch-noise-0.8	1699588.5	775550.0	af8cf13a71adbea9	0	0	0	0	0	0						
+2	sad-before	sola/stream-2ch-tone-1.2	207537.5	95900.0	5907aac396672cd5	0	0	0	0	0	0						
+2	sad-before	sola/stream-2ch-left-silent-1.2	588699.0	272300.0	11b0c279269ca04b	0	0	0	0	0	0						
+2	sad-before	sola/stream-2ch-silence-1.2	100311.5	45300.0	b40ebf824bb571ed	0	0	0	0	0	0						
+2	sad-before	sola/stream-6ch-noise-1.2	2848232.0	1303600.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+2	search-sse41	sola/append-6ch	169159.08	77284.38		0	0	0	0	0	0	8	0	0	150012	0	150012
+2	search-sse41	sola/append-8ch	220650.66	100998.44		0	0	0	0	0	0	10	0	0	198096	0	198096
+2	search-sse41	sola/append-16ch	476471.05	217934.38		0	0	0	0	0	0	18	0	0	390432	0	390432
+2	search-sse41	sola/crossfade-256	155.84	70.12		0	0	0	0	0	0						
+2	search-sse41	sola/crossfade-1440	706.73	321.19		0	0	0	0	0	0						
+2	search-sse41	sola/mono/360	88499.62	40406.25		0	0	0	0	0	0						
+2	search-sse41	sola/stereo/360	183165.88	83909.38		0	0	0	0	0	0						
+2	search-sse41	sola/left-silent/360	96449.69	43896.88		0	0	0	0	0	0						
+2	search-sse41	sola/right-silent/360	95022.97	43615.62		0	0	0	0	0	0						
+2	search-sse41	sola/mono/720	353936.94	161862.5		0	0	0	0	0	0						
+2	search-sse41	sola/stereo/720	728753.75	333487.5		0	0	0	0	0	0						
+2	search-sse41	sola/left-silent/720	364788.41	166315.62		0	0	0	0	0	0						
+2	search-sse41	sola/right-silent/720	351337.19	160640.62		0	0	0	0	0	0						
+2	search-sse41	sola/stream-1ch-noise-1.2	461279.5	211000.0	b136b3511ed0a703	0	0	0	0	0	0						
+2	search-sse41	sola/stream-2ch-noise-0.8	1633739.0	745550.0	af8cf13a71adbea9	0	0	0	0	0	0						
+2	search-sse41	sola/stream-2ch-tone-1.2	197111.0	89350.0	5907aac396672cd5	0	0	0	0	0	0						
+2	search-sse41	sola/stream-2ch-left-silent-1.2	608564.0	278850.0	11b0c279269ca04b	0	0	0	0	0	0						
+2	search-sse41	sola/stream-2ch-silence-1.2	90544.0	40950.0	b40ebf824bb571ed	0	0	0	0	0	0						
+2	search-sse41	sola/stream-6ch-noise-1.2	2752968.5	1255600.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+3	sad-before	sola/append-6ch	164751.91	75262.5		0	0	0	0	0	0	8	0	0	150012	0	150012
+3	sad-before	sola/append-8ch	227329.97	104082.81		0	0	0	0	0	0	10	0	0	198096	0	198096
+3	sad-before	sola/append-16ch	475195.22	217185.16		0	0	0	0	0	0	18	0	0	390432	0	390432
+3	sad-before	sola/crossfade-256	178.34	80.47		0	0	0	0	0	0						
+3	sad-before	sola/crossfade-1440	581.12	264.16		0	0	0	0	0	0						
+3	sad-before	sola/mono/360	85701.03	39128.12		0	0	0	0	0	0						
+3	sad-before	sola/stereo/360	182130.12	83228.12		0	0	0	0	0	0						
+3	sad-before	sola/left-silent/360	83430.59	38246.88		0	0	0	0	0	0						
+3	sad-before	sola/right-silent/360	88396.78	40340.62		0	0	0	0	0	0						
+3	sad-before	sola/mono/720	368355.31	168156.25		0	0	0	0	0	0						
+3	sad-before	sola/stereo/720	723780.69	330643.75		0	0	0	0	0	0						
+3	sad-before	sola/left-silent/720	353813.41	162150.0		0	0	0	0	0	0						
+3	sad-before	sola/right-silent/720	363389.06	166312.5		0	0	0	0	0	0						
+3	sad-before	sola/stream-1ch-noise-1.2	490034.0	222500.0	b136b3511ed0a703	0	0	0	0	0	0						
+3	sad-before	sola/stream-2ch-noise-0.8	1764231.5	806200.0	af8cf13a71adbea9	0	0	0	0	0	0						
+3	sad-before	sola/stream-2ch-tone-1.2	194696.5	88300.0	5907aac396672cd5	0	0	0	0	0	0						
+3	sad-before	sola/stream-2ch-left-silent-1.2	593748.0	271100.0	11b0c279269ca04b	0	0	0	0	0	0						
+3	sad-before	sola/stream-2ch-silence-1.2	113371.5	51050.0	b40ebf824bb571ed	0	0	0	0	0	0						
+3	sad-before	sola/stream-6ch-noise-1.2	2707423.0	1240350.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+3	search-sse41	sola/append-6ch	165653.9	75687.5		0	0	0	0	0	0	8	0	0	150012	0	150012
+3	search-sse41	sola/append-8ch	225014.95	102860.16		0	0	0	0	0	0	10	0	0	198096	0	198096
+3	search-sse41	sola/append-16ch	480933.09	219818.75		0	0	0	0	0	0	18	0	0	390432	0	390432
+3	search-sse41	sola/crossfade-256	161.84	73.05		0	0	0	0	0	0						
+3	search-sse41	sola/crossfade-1440	668.79	303.81		0	0	0	0	0	0						
+3	search-sse41	sola/mono/360	101367.84	46193.75		0	0	0	0	0	0						
+3	search-sse41	sola/stereo/360	187699.91	86337.5		0	0	0	0	0	0						
+3	search-sse41	sola/left-silent/360	93671.62	43240.62		0	0	0	0	0	0						
+3	search-sse41	sola/right-silent/360	89775.5	40921.88		0	0	0	0	0	0						
+3	search-sse41	sola/mono/720	358457.22	164340.62		0	0	0	0	0	0						
+3	search-sse41	sola/stereo/720	724493.97	331053.12		0	0	0	0	0	0						
+3	search-sse41	sola/left-silent/720	368945.25	168484.38		0	0	0	0	0	0						
+3	search-sse41	sola/right-silent/720	359856.5	164362.5		0	0	0	0	0	0						
+3	search-sse41	sola/stream-1ch-noise-1.2	454474.5	208550.0	b136b3511ed0a703	0	0	0	0	0	0						
+3	search-sse41	sola/stream-2ch-noise-0.8	1770268.0	813800.0	af8cf13a71adbea9	0	0	0	0	0	0						
+3	search-sse41	sola/stream-2ch-tone-1.2	196781.5	89250.0	5907aac396672cd5	0	0	0	0	0	0						
+3	search-sse41	sola/stream-2ch-left-silent-1.2	620307.0	282200.0	11b0c279269ca04b	0	0	0	0	0	0						
+3	search-sse41	sola/stream-2ch-silence-1.2	108103.5	48800.0	b40ebf824bb571ed	0	0	0	0	0	0						
+3	search-sse41	sola/stream-6ch-noise-1.2	2717410.0	1245350.0	5d00c00f1cc77d00	0	0	0	0	0	0						
+3	search-avx2	sola/append-6ch	166660.52	76201.56		0	0	0	0	0	0	8	0	0	150012	0	150012
+3	search-avx2	sola/append-8ch	227362.57	104030.47		0	0	0	0	0	0	10	0	0	198096	0	198096
+3	search-avx2	sola/append-16ch	471666.05	215609.38		0	0	0	0	0	0	18	0	0	390432	0	390432
+3	search-avx2	sola/crossfade-256	143.83	64.65		0	0	0	0	0	0						
+3	search-avx2	sola/crossfade-1440	682.72	314.36		0	0	0	0	0	0						
+3	search-avx2	sola/mono/360	105949.91	48503.12		0	0	0	0	0	0						
+3	search-avx2	sola/stereo/360	218059.53	99887.5		0	0	0	0	0	0						
+3	search-avx2	sola/left-silent/360	107726.47	49500.0		0	0	0	0	0	0						
+3	search-avx2	sola/right-silent/360	106965.09	49106.25		0	0	0	0	0	0						
+3	search-avx2	sola/mono/720	414148.47	188884.38		0	0	0	0	0	0						
+3	search-avx2	sola/stereo/720	844443.94	385943.75		0	0	0	0	0	0						
+3	search-avx2	sola/left-silent/720	417002.0	190965.62		0	0	0	0	0	0						
+3	search-avx2	sola/right-silent/720	413750.62	189246.88		0	0	0	0	0	0						
+3	search-avx2	sola/stream-1ch-noise-1.2	512532.5	232800.0	b136b3511ed0a703	0	0	0	0	0	0						
+3	search-avx2	sola/stream-2ch-noise-0.8	1901748.0	867850.0	af8cf13a71adbea9	0	0	0	0	0	0						
+3	search-avx2	sola/stream-2ch-tone-1.2	204244.5	92600.0	5907aac396672cd5	0	0	0	0	0	0						
+3	search-avx2	sola/stream-2ch-left-silent-1.2	654110.0	303700.0	11b0c279269ca04b	0	0	0	0	0	0						
+3	search-avx2	sola/stream-2ch-silence-1.2	108213.5	48900.0	b40ebf824bb571ed	0	0	0	0	0	0						
+3	search-avx2	sola/stream-6ch-noise-1.2	3085511.0	1406450.0	5d00c00f1cc77d00	0	0	0	0	0	0						

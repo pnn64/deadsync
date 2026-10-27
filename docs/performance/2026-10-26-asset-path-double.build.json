@@ -1,0 +1,15 @@
+{
+  "common_args_file": "2026-10-26-asset-path-build-args.json",
+  "argv_suffix": [
+    "-o",
+    "C:\\GitHub\\deadsync\\target\\asset-path-scans\\double.exe"
+  ],
+  "sources": {
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\lib.rs": "351acfaba4c4fdc7bae9f9f0131d018406a05f11109a61f26b6098657e7e00a3",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\path_scan_perf.rs": "4a1c54edf0b4c8a05d56b0ee98160828e86417141521c8b8f8acd213f3b710cf",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\src\\path_scan_original.rs": "b0807e3c5929b477512903d572884a73f7e74c9fda95f14f31a298a881f74308",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-assets\\tests\\support\\asset_names.txt": "4aa5bbcd0c6360c5b0c77149d1ae7fa45189af27f603a432ed57e9b752cd4be0",
+    "C:\\GitHub\\deadsync\\tests\\support\\kernel_bench.rs": "6217f1f1da020b773964cedea627dcc4468ad04c824b8efef70eeda3c3c6d488",
+    "C:\\GitHub\\deadsync\\tests\\support\\perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+  }
+}

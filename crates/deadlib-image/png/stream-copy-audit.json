@@ -1,0 +1,32 @@
+{
+  "baseline_png_commit": "788659fb452589026ecd393be0822aa60fd87daa",
+  "production_changes": [
+    "src/zlib/inflate.rs"
+  ],
+  "all_recorded_test_helper_inputs_unchanged": true,
+  "existing_fixture_scope": "Every legal match length/distance at eight bit offsets, fixed/dynamic trees, both padding values and multiple input/output fragment shapes; PNG/APNG, limits, malformed fields and literal/history suites are included in the full run.",
+  "c_zlib_batch_cases": 19645,
+  "c_zlib_successful_outputs": 3091,
+  "c_zlib_error_records": 16554,
+  "documented_reference_policy_rejections": 68,
+  "performance_scope": "Repeated photo comparison: reader +6.31% relative to Rust png (unchanged buffered decode -0.02%); streaming inflate +9.76% relative to flate2 (unchanged buffered inflate +1.46%). Format results are mixed and small; no independent format speedup is claimed. Shared-host variation remains and broad decoder parity is unproven.",
+  "new_successful_sanitizer_executions": 70852,
+  "evidence": [
+    {
+      "path": "stream-copy-validation.json",
+      "sha256": "a5dd09719b411f1b0103f613b32523b8e2fe6c94ca8c6f0d136267726dd10ce0"
+    },
+    {
+      "path": "fuzz/reports/stream-copy-source.json",
+      "sha256": "a83cccb4ff59c4ec734d8679d610ad0a0c605b49b0f262b3b2f38fad6d96be60"
+    },
+    {
+      "path": "fuzz/reports/stream-copy-seeds.json",
+      "sha256": "1a5794ca3f6c16877f3ba309dff343b57f6ec5d01d266bcc9d8b1ec432cc3886"
+    },
+    {
+      "path": "experiments/stream-copy-selection.json",
+      "sha256": "5b5798bfb0a30930bc08184d8a797ee1335c42cc7222f1cd8ae4561735477496"
+    }
+  ]
+}

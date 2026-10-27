@@ -1,0 +1,144 @@
+{
+  "native_production_commit": "5a6747e32",
+  "production_source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "33d55ee2eca45b88852d6e2c1feb0390e3894cd5e576df7272a8e304e7dbdea9"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "7965dc182785951ca947a3ee1253b201816d2144128e452424316d766f84264b"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "9269ee9cc1083986a2b507f2e3ead67c8780411c2aae286257b9b8f8c1dbb035"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "1a4431ffdc2d477ea928b8f97f439b0293b31cca599a47dec885d454e4690601"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "cda4227e750c1ccf5a77fd300d541e9d6ff45cbe48f0af2aa60633fbe264495d"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "9de8d5ae51577e8438f8fca56fc7698b16f9e4e68aee0548ea61aa569e304cf7"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "b9d9a6d9b2ca92d56db5b81f17bf6f71a590695d7dbad27276cbad509122ca9a"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "2cea15413f1c402ad19cbd9f712302242e0b7afd94a8629afc6602760b182aa2"
+    }
+  ],
+  "harness_source_sha256": [
+    {
+      "path": "fuzz/fuzz_targets/huffman.rs",
+      "sha256": "6fdefcc712ada80899d8bdd89963aae84da0033c36eb8d7aab8af9f3fe3c393e"
+    },
+    {
+      "path": "tests/support/huffman.rs",
+      "sha256": "ed2db27a8fb2f8c324e49cb42862bbbd848d0697d5b1cc559034aac54d8d27c2"
+    },
+    {
+      "path": "examples/seed_fuzz.rs",
+      "sha256": "5117ee14c6e92d22ca5208354fb574f5eb188efb5c62847e7cafc0ad3c78b167"
+    },
+    {
+      "path": "fuzz/Cargo.toml",
+      "sha256": "199f3d8712981bcd70c1d8f956a513b099dddf16a1620ed713371fee6a3f3c35"
+    },
+    {
+      "path": "fuzz/Cargo.lock",
+      "sha256": "41b456fb7703d2d1dd65b8e64fca5313a24cfb5efae4efefb82ee30680037ad1"
+    }
+  ],
+  "rustc": "rustc 1.101.0-nightly (76456a688 2026-10-25)",
+  "cargo_fuzz": "0.13.2",
+  "sanitizer": "cargo-fuzz default AddressSanitizer; __asan_init verified",
+  "binary": "/tmp/deadlib-image-fuzz-target/x86_64-unknown-linux-gnu/release/huffman",
+  "binary_sha256": "0447944c256b750d4393d951f445a1fd462272ae763cbf57a3d37e2d98e27b98",
+  "campaign": {
+    "target": "huffman",
+    "log": "huffman-linux.log",
+    "runs": 20000,
+    "seconds": 857,
+    "peak_rss_mib": 394,
+    "seed": 782347,
+    "max_len": 64,
+    "timeout_seconds": 10,
+    "rss_limit_mib": 1024,
+    "initial_seed_files": 649,
+    "initial_seed_bytes": 7788,
+    "fresh_corpus": "target/deadlib-image-reference/huffman-fuzz-final",
+    "initial_seed_sha256": "8ced47a4e4a4156b0ca5c367135da86a82004425176c5cccecbfff69b1c25b90",
+    "seed_hash_algorithm": "SHA256 of sorted filenames, each followed by NUL and its file bytes"
+  },
+  "initial_timeout": {
+    "log": "huffman-initial-timeout.log",
+    "executions_not_counted_as_successful_campaign": 697,
+    "harness_sha256": "cf3730416096f50eb7eee2752dce6c0d32bf9a6cf9d74e11e4a09b91328761df",
+    "input": "huffman-timeout-input.bin",
+    "replay": "huffman-timeout-replay.log",
+    "fixed_input_executions": 1,
+    "includes_fixture_creation": true,
+    "reverse_patch": "../../experiments/huffman-harness-timeout.patch",
+    "diagnosis": "Stack resolved to harness line 87: scanning 4 KiB unused sentinel space per one-byte input fragment. Corrected bounded guards; no production change."
+  },
+  "scope": "Structured fixture and mutation smoke campaign, not exhaustive coverage. Reference functions contribute to libFuzzer counters. LLVM integration-test native-only coverage is retained separately.",
+  "shared_source_sha256": {
+    "path": "crates/deadlib-image/src/lib.rs",
+    "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+  }
+}

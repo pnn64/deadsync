@@ -1,0 +1,72 @@
+[
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "seek",
+    "median_ns_per_seek": 115729.89690721649,
+    "min_ns_per_seek": 109589.17525773196,
+    "max_ns_per_seek": 118717.52577319587
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "libflac-seek",
+    "median_ns_per_seek": 202736.0824742268,
+    "min_ns_per_seek": 198225.25773195876,
+    "max_ns_per_seek": 203308.2474226804
+  },
+  {
+    "case": "subset/03 - blocksize 16.flac",
+    "mode": "seek",
+    "median_ns_per_seek": 57662.886597938144,
+    "min_ns_per_seek": 54407.73195876289,
+    "max_ns_per_seek": 58472.16494845361
+  },
+  {
+    "case": "subset/03 - blocksize 16.flac",
+    "mode": "libflac-seek",
+    "median_ns_per_seek": 6333.505154639175,
+    "min_ns_per_seek": 6219.587628865979,
+    "max_ns_per_seek": 7235.051546391753
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "seek",
+    "median_ns_per_seek": 177658.76288659795,
+    "min_ns_per_seek": 174368.04123711342,
+    "max_ns_per_seek": 179995.36082474227
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "libflac-seek",
+    "median_ns_per_seek": 308525.7731958763,
+    "min_ns_per_seek": 306826.80412371136,
+    "max_ns_per_seek": 323094.8453608247
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "seek",
+    "median_ns_per_seek": 3848553.092783505,
+    "min_ns_per_seek": 3726905.6701030927,
+    "max_ns_per_seek": 3914918.0412371135
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "libflac-seek",
+    "median_ns_per_seek": 4313062.37113402,
+    "min_ns_per_seek": 4287842.783505155,
+    "max_ns_per_seek": 4539961.340206185
+  },
+  {
+    "case": "uncommon/08 - blocksize 65535.flac",
+    "mode": "seek",
+    "median_ns_per_seek": 1438492.7835051545,
+    "min_ns_per_seek": 1370539.175257732,
+    "max_ns_per_seek": 1468165.9793814432
+  },
+  {
+    "case": "uncommon/08 - blocksize 65535.flac",
+    "mode": "libflac-seek",
+    "median_ns_per_seek": 2848346.907216495,
+    "min_ns_per_seek": 2780155.154639175,
+    "max_ns_per_seek": 2969330.412371134
+  }
+]

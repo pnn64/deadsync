@@ -1,0 +1,4 @@
+use codec::*;
+fn number(wire:&mut &[u8])->usize{let(v,r)=wire.split_at(8);*wire=r;u64::from_le_bytes(v.try_into().unwrap()) as usize}
+fn packet<'a>(wire:&mut &'a[u8])->&'a[u8]{let n=number(wire);let(v,r)=wire.split_at(n);*wire=r;v}
+fn main(){for name in std::env::args().skip(1){let data=std::fs::read(&name).unwrap();let mut wire=data.as_slice();let id=Identification::parse(packet(&mut wire)).unwrap();packet(&mut wire);let setup=packet(&mut wire);assert!(wire.is_empty());match Setup::parse_with_options(setup,&id,ParseOptions::default()){Ok(s)=>{let r=&s.residues()[0];println!("{}\taccepted\t{}\t{}\t{}",std::path::Path::new(&name).file_name().unwrap().to_string_lossy(),r.begin,r.end,r.partition_size)},Err(e)=>println!("{}\trejected\t{e:?}",std::path::Path::new(&name).file_name().unwrap().to_string_lossy())}}}

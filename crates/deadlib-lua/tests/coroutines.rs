@@ -1,6 +1,13 @@
 use deadlib_lua::{ErrorKind, Value, Vm, compile};
 use lua_reference::{Lua, MultiValue, Value as Ref};
 
+#[test]
+fn generic_for_iterators_keep_native_yield_and_depth_boundaries() {
+    compare(b"local co=coroutine.create(function()for x in function()coroutine.yield(4)end do end end);return coroutine.resume(co)");
+    compare(b"local n=0;local function it()n=n+1;for _ in it do end;return nil end;local ok,e=pcall(function()for _ in it do end end);return n,ok,e");
+    compare(b"local n=0;local function it()n=n+1;for _ in it do end;return nil end;local co=coroutine.create(function()local ok,e=pcall(function()for _ in it do end end);return n,ok,e end);return coroutine.resume(co)");
+}
+
 #[derive(Debug, PartialEq)]
 enum Scalar {
     Nil,

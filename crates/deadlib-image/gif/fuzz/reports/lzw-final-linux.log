@@ -1,0 +1,41 @@
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1327
+INFO: Loaded 1 modules   (845 inline 8-bit counters): 845 [0x64b89b4d2730, 0x64b89b4d2a7d), 
+INFO: Loaded 1 PC tables (845 PCs): 845 [0x64b89b4d2a80,0x64b89b4d5f50), 
+INFO:      170 files found in fuzz/corpus/lzw
+INFO: seed corpus: files: 170 min: 1b max: 11159b total: 214211b rss: 31Mb
+#171	INITED cov: 187 ft: 888 corp: 96/88Kb exec/s: 171 rss: 41Mb
+#767	REDUCE cov: 187 ft: 888 corp: 96/88Kb lim: 11147 exec/s: 767 rss: 47Mb L: 13/11147 MS: 1 EraseBytes-
+#1401	REDUCE cov: 187 ft: 888 corp: 96/88Kb lim: 11147 exec/s: 1401 rss: 51Mb L: 5/11147 MS: 4 CopyPart-EraseBytes-ChangeByte-InsertByte-
+#2048	pulse  cov: 187 ft: 888 corp: 96/88Kb lim: 11147 exec/s: 1024 rss: 55Mb
+#4096	pulse  cov: 187 ft: 888 corp: 96/88Kb lim: 11173 exec/s: 1365 rss: 67Mb
+#4260	REDUCE cov: 187 ft: 888 corp: 96/88Kb lim: 11173 exec/s: 1420 rss: 68Mb L: 593/11147 MS: 3 ChangeByte-ChangeASCIIInt-EraseBytes-
+#5321	REDUCE cov: 187 ft: 888 corp: 96/88Kb lim: 11173 exec/s: 1330 rss: 72Mb L: 10/11147 MS: 1 EraseBytes-
+#6028	REDUCE cov: 187 ft: 888 corp: 96/88Kb lim: 11173 exec/s: 1507 rss: 75Mb L: 227/11147 MS: 2 ChangeByte-EraseBytes-
+#8192	pulse  cov: 187 ft: 888 corp: 96/88Kb lim: 11186 exec/s: 1365 rss: 87Mb
+#14794	REDUCE cov: 187 ft: 888 corp: 96/87Kb lim: 11251 exec/s: 1849 rss: 119Mb L: 1049/11147 MS: 1 EraseBytes-
+#15657	REDUCE cov: 187 ft: 888 corp: 96/87Kb lim: 11251 exec/s: 1739 rss: 125Mb L: 65/11147 MS: 3 ChangeASCIIInt-ShuffleBytes-EraseBytes-
+#16384	pulse  cov: 187 ft: 888 corp: 96/87Kb lim: 11251 exec/s: 1638 rss: 129Mb
+#17814	REDUCE cov: 187 ft: 888 corp: 96/87Kb lim: 11264 exec/s: 1619 rss: 138Mb L: 47/11147 MS: 2 EraseBytes-ChangeBit-
+#18051	REDUCE cov: 187 ft: 888 corp: 96/87Kb lim: 11264 exec/s: 1641 rss: 139Mb L: 209/11147 MS: 2 EraseBytes-InsertByte-
+#23598	REDUCE cov: 187 ft: 888 corp: 96/87Kb lim: 11316 exec/s: 1685 rss: 172Mb L: 546/11147 MS: 1 EraseBytes-
+#24414	REDUCE cov: 187 ft: 888 corp: 96/87Kb lim: 11316 exec/s: 1743 rss: 176Mb L: 9/11147 MS: 1 EraseBytes-
+#25970	REDUCE cov: 187 ft: 888 corp: 96/87Kb lim: 11329 exec/s: 1731 rss: 183Mb L: 46/11147 MS: 1 EraseBytes-
+#28290	REDUCE cov: 187 ft: 888 corp: 96/87Kb lim: 11342 exec/s: 1664 rss: 195Mb L: 81/11147 MS: 5 ChangeBit-ChangeBit-ChangeBit-ChangeByte-EraseBytes-
+#32768	pulse  cov: 187 ft: 888 corp: 96/87Kb lim: 11381 exec/s: 1724 rss: 221Mb
+#34396	REDUCE cov: 187 ft: 888 corp: 96/87Kb lim: 11394 exec/s: 1719 rss: 229Mb L: 35/11147 MS: 1 EraseBytes-
+#34571	REDUCE cov: 187 ft: 888 corp: 96/87Kb lim: 11394 exec/s: 1728 rss: 230Mb L: 911/11147 MS: 5 ChangeBit-InsertRepeatedBytes-ChangeBinInt-InsertByte-EraseBytes-
+#37657	REDUCE cov: 187 ft: 888 corp: 96/87Kb lim: 11420 exec/s: 1711 rss: 245Mb L: 28/11147 MS: 1 EraseBytes-
+#46274	REDUCE cov: 187 ft: 888 corp: 96/87Kb lim: 11498 exec/s: 1779 rss: 291Mb L: 522/11147 MS: 2 ChangeASCIIInt-EraseBytes-
+#54586	NEW    cov: 187 ft: 889 corp: 97/93Kb lim: 11576 exec/s: 1819 rss: 334Mb L: 5605/11147 MS: 2 ChangeByte-InsertRepeatedBytes-
+#59822	REDUCE cov: 187 ft: 889 corp: 97/93Kb lim: 11628 exec/s: 1759 rss: 374Mb L: 215/11147 MS: 1 EraseBytes-
+#60243	REDUCE cov: 187 ft: 889 corp: 97/92Kb lim: 11628 exec/s: 1771 rss: 377Mb L: 1344/11147 MS: 1 EraseBytes-
+#65393	REDUCE cov: 187 ft: 889 corp: 97/92Kb lim: 11667 exec/s: 1767 rss: 394Mb L: 122/11147 MS: 5 InsertRepeatedBytes-EraseBytes-ChangeBinInt-ShuffleBytes-EraseBytes-
+#65536	pulse  cov: 187 ft: 889 corp: 97/92Kb lim: 11667 exec/s: 1771 rss: 394Mb
+#69005	REDUCE cov: 187 ft: 889 corp: 97/92Kb lim: 11693 exec/s: 1725 rss: 397Mb L: 64/11147 MS: 2 ChangeByte-EraseBytes-
+#77115	REDUCE cov: 187 ft: 889 corp: 97/92Kb lim: 11771 exec/s: 1752 rss: 398Mb L: 32/11147 MS: 5 ChangeBit-EraseBytes-ChangeByte-ShuffleBytes-InsertByte-
+#83668	REDUCE cov: 187 ft: 889 corp: 97/92Kb lim: 11836 exec/s: 1743 rss: 398Mb L: 85/11147 MS: 3 EraseBytes-CopyPart-ChangeBit-
+#85489	REDUCE cov: 187 ft: 889 corp: 97/92Kb lim: 11849 exec/s: 1744 rss: 398Mb L: 98/11147 MS: 1 EraseBytes-
+#107360	REDUCE cov: 187 ft: 889 corp: 97/92Kb lim: 12057 exec/s: 1760 rss: 400Mb L: 861/11147 MS: 1 EraseBytes-
+#107360	DONE   cov: 187 ft: 889 corp: 97/92Kb lim: 12057 exec/s: 1760 rss: 400Mb
+Done 107360 runs in 61 second(s)

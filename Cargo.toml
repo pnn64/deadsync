@@ -19,6 +19,9 @@ members = [
     "crates/deadlib-audio-backend-jack",
     "crates/deadsync-audio-analysis",
     "crates/deadlib-audio",
+    "crates/deadlib-audio/decode/ogg",
+    "crates/deadlib-audio/decode/flac",
+    "crates/deadlib-audio/decode/vorbis",
     "crates/deadlib-audio-backend-pipewire",
     "crates/deadlib-audio-backend-pulse",
     "crates/deadlib-audio-backend-wasapi",
@@ -42,6 +45,9 @@ members = [
     "crates/deadsync-online",
     "crates/deadlib-assets",
     "crates/deadlib-bincode",
+    "crates/deadlib-image",
+    "crates/deadlib-image/png",
+    "crates/deadlib-image/gif",
     "crates/deadlib-lua",
     "crates/deadlib-lua-legacy",
     "crates/deadlib-lua-legacy/mlua-sys",
@@ -76,7 +82,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.2373"
+version = "0.5.2478"
 
 [[bin]]
 name = "generate_pseudo"
@@ -127,11 +133,11 @@ deadsync-song-lua = { path = "crates/deadsync-song-lua", features = ["test-suppo
 deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love", features = ["test-support"] }
 image = "0.25.10"
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-sha2 = "0.11.0"
+serde_json = "1.0.154"
+sha2 = "0.11.1"
 tar = "0.4.46"
 tempfile = "3.27.0"
-zstd = "0.14.0"
+zstd = "0.14.3"
 
 [patch.crates-io]
 # Native actor grids exceed Lua 5.1 C-stack storage used by mlua Rust handles.
@@ -222,5 +228,5 @@ inline_always = "allow"
 
 [workspace.dependencies]
 mlua = { package = "deadlib-lua-legacy", version = "=0.12.2", path = "crates/deadlib-lua-legacy" }
-serde_json = "1.0.151"
+serde_json = "1.0.154"
 windows-core = "0.100.0"

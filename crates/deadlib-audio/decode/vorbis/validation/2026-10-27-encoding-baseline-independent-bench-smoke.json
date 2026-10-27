@@ -1,0 +1,22 @@
+{
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\encoding-baseline-independent-20261027\\target\\release\\deps\\encoding-e29c063319d1437e.exe",
+    "encode",
+    "2",
+    "1",
+    "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\encoding-baseline-final-20261027\\input-4.pcm",
+    "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\encoding-baseline-final-20261027\\independent-bench-smoke.ogg"
+  ],
+  "stdout": "native\t2\t1\t13889700\t52100\t126200\t220500\t216856\t432\t4096\t512\t685\n",
+  "source_sha256": "b38b992ba7d845e4ced852cdb8f9e7e95c8bc3b0e3e3d5c888b35f2ba119ad6d",
+  "worker_sha256": "5fcca523b36bbe6472cff10bb07db414d3df867b21d991a6814b15acf8651297",
+  "output_sha256": "cd36c17109a138a9a8394ba51b644e07295ed4de2337b43d5814ceeb72a42625",
+  "current_output_byte_identical": true,
+  "profile": {
+    "opt_level": "3",
+    "debuginfo": 0,
+    "debug_assertions": false,
+    "overflow_checks": false,
+    "test": true
+  }
+}

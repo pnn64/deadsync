@@ -22,6 +22,12 @@ mod perf;
 #[cfg(test)]
 mod perf_fixture;
 
+#[cfg(test)]
+mod path_scan_perf;
+
+#[cfg(test)]
+mod texture_hint_perf;
+
 pub use builtin::{
     BLACK_TEXTURE_KEY, BuiltinTextureImage, WHITE_TEXTURE_KEY, black_texture_image,
     fallback_texture_image, solid_texture_image, white_texture_image,
@@ -93,13 +99,6 @@ impl TextureHints {
     }
 }
 
-#[inline(always)]
-fn has_ascii_case_insensitive_substr(haystack: &[u8], needle: &[u8]) -> bool {
-    haystack
-        .windows(needle.len())
-        .any(|window| window.eq_ignore_ascii_case(needle))
-}
-
 const HINT_16BPP: u16 = 1 << 0;
 const HINT_32BPP: u16 = 1 << 1;
 const HINT_ALPHAMAP: u16 = 1 << 2;
@@ -126,35 +125,29 @@ fn hint_starts_with(bytes: &[u8], start: usize, needle: &[u8]) -> bool {
 fn texture_hint_flags(bytes: &[u8]) -> u16 {
     let mut flags = 0u16;
     for index in 0..bytes.len() {
-        let (first, second) = match bytes[index].to_ascii_lowercase() {
-            b'1' => (b"16bpp".as_slice(), HINT_16BPP),
-            b'3' => (b"32bpp".as_slice(), HINT_32BPP),
-            b'a' => (b"alphamap".as_slice(), HINT_ALPHAMAP),
-            b'c' => (b"clamp".as_slice(), HINT_CLAMP),
-            b'g' => (b"grayscale".as_slice(), HINT_GRAYSCALE),
-            b'l' => (b"linear".as_slice(), HINT_LINEAR),
-            b'm' => (b"mipmaps".as_slice(), HINT_MIPMAPS),
-            b'p' => (b"point".as_slice(), HINT_POINT),
-            b'r' => (b"repeat".as_slice(), HINT_REPEAT),
-            b's' => (b"stretch".as_slice(), HINT_STRETCH),
-            b'w' => (b"wrap".as_slice(), HINT_WRAP),
+        // Keep each needle constant so the compiler can compare packed bytes.
+        flags |= match bytes[index].to_ascii_lowercase() {
+            b'1' => u16::from(hint_starts_with(bytes, index, b"16bpp")) * HINT_16BPP,
+            b'3' => u16::from(hint_starts_with(bytes, index, b"32bpp")) * HINT_32BPP,
+            b'a' => u16::from(hint_starts_with(bytes, index, b"alphamap")) * HINT_ALPHAMAP,
+            b'c' => u16::from(hint_starts_with(bytes, index, b"clamp")) * HINT_CLAMP,
+            b'g' => u16::from(hint_starts_with(bytes, index, b"grayscale")) * HINT_GRAYSCALE,
+            b'l' => u16::from(hint_starts_with(bytes, index, b"linear")) * HINT_LINEAR,
+            b'm' => u16::from(hint_starts_with(bytes, index, b"mipmaps")) * HINT_MIPMAPS,
+            b'p' => u16::from(hint_starts_with(bytes, index, b"point")) * HINT_POINT,
+            b'r' => u16::from(hint_starts_with(bytes, index, b"repeat")) * HINT_REPEAT,
+            b's' => u16::from(hint_starts_with(bytes, index, b"stretch")) * HINT_STRETCH,
+            b'w' => u16::from(hint_starts_with(bytes, index, b"wrap")) * HINT_WRAP,
             b'd' => {
-                if hint_starts_with(bytes, index, b"dither") {
-                    flags |= HINT_DITHER;
-                }
-                (b"doubleres".as_slice(), HINT_DOUBLERES)
+                (u16::from(hint_starts_with(bytes, index, b"dither")) * HINT_DITHER)
+                    | (u16::from(hint_starts_with(bytes, index, b"doubleres")) * HINT_DOUBLERES)
             }
             b'n' => {
-                if hint_starts_with(bytes, index, b"nearest") {
-                    flags |= HINT_NEAREST;
-                }
-                (b"nomipmaps".as_slice(), HINT_NOMIPMAPS)
+                (u16::from(hint_starts_with(bytes, index, b"nearest")) * HINT_NEAREST)
+                    | (u16::from(hint_starts_with(bytes, index, b"nomipmaps")) * HINT_NOMIPMAPS)
             }
-            _ => continue,
+            _ => 0,
         };
-        if hint_starts_with(bytes, index, first) {
-            flags |= second;
-        }
     }
     flags
 }
@@ -254,20 +247,19 @@ fn parse_res_dims(section: &[u8]) -> Option<(u32, u32)> {
 pub fn parse_texture_resolution_hint(raw: &str) -> Option<(u32, u32)> {
     let bytes = raw.as_bytes();
     let mut i = 0usize;
-    while i < bytes.len() {
-        if bytes[i] != b'(' {
-            i += 1;
-            continue;
-        }
+    while let Some(offset) = if bytes.len() - i < 16 {
+        bytes[i..].iter().position(|&b| b == b'(')
+    } else {
+        memchr::memchr(b'(', &bytes[i..])
+    } {
+        i += offset;
         let end = skip_parenthetical(bytes, i);
-        if end <= i + 2 {
-            i = end.max(i + 1);
-            continue;
-        }
-        if let Some(dims) = parse_res_dims(&bytes[i + 1..end - 1]) {
+        if end > i + 2
+            && let Some(dims) = parse_res_dims(&bytes[i + 1..end - 1])
+        {
             return Some(dims);
         }
-        i = end.max(i + 1);
+        i = end;
     }
     None
 }
@@ -283,15 +275,6 @@ pub fn texture_source_dims_from_real(texture_key: &str, real_w: u32, real_h: u32
     (source_w, source_h)
 }
 
-#[inline(always)]
-const fn is_res_tag(bytes: &[u8], idx: usize) -> bool {
-    idx + 4 <= bytes.len()
-        && bytes[idx] == b'('
-        && bytes[idx + 1].eq_ignore_ascii_case(&b'r')
-        && bytes[idx + 2].eq_ignore_ascii_case(&b'e')
-        && bytes[idx + 3].eq_ignore_ascii_case(&b's')
-}
-
 #[must_use]
 pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
     let bytes = filename.as_bytes();
@@ -299,7 +282,19 @@ pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
     let mut i = 0usize;
 
     while i < bytes.len() {
-        if is_res_tag(bytes, i) {
+        if !matches!(bytes[i], b'(' | b'x' | b'X') {
+            let Some(offset) = (if bytes.len() - i < 16 {
+                bytes[i..]
+                    .iter()
+                    .position(|b| matches!(b, b'(' | b'x' | b'X'))
+            } else {
+                memchr::memchr3(b'(', b'x', b'X', &bytes[i..])
+            }) else {
+                break;
+            };
+            i += offset;
+        }
+        if bytes[i] == b'(' && hint_starts_with(bytes, i, b"(res") {
             i = skip_parenthetical(bytes, i);
             continue;
         }
@@ -316,8 +311,7 @@ pub fn parse_sprite_sheet_dims(filename: &str) -> (u32, u32) {
                 right += 1;
             }
 
-            if left < i
-                && i + 1 < right
+            if i + 1 < right
                 && is_sprite_sheet_left_boundary(bytes, left)
                 && is_sprite_sheet_right_boundary(bytes, right)
                 && let (Some(w), Some(h)) = (
@@ -372,7 +366,19 @@ pub fn texture_filename_has_multiframe_hint(filename: &str) -> bool {
     while i < bytes.len() {
         if bytes[i] != b' ' {
             i += 1;
-            continue;
+            if i == bytes.len() {
+                break;
+            }
+            if bytes[i] != b' ' {
+                let Some(offset) = (if bytes.len() - i < 16 {
+                    bytes[i..].iter().position(|&byte| byte == b' ')
+                } else {
+                    memchr::memchr(b' ', &bytes[i..])
+                }) else {
+                    break;
+                };
+                i += offset;
+            }
         }
         let mut left = i + 1;
         while left < bytes.len() && bytes[left].is_ascii_digit() {
@@ -611,7 +617,13 @@ pub fn texture_hint_is_default(raw: &str) -> bool {
 #[inline(always)]
 #[must_use]
 pub fn texture_hint_doubleres(raw: &str) -> bool {
-    has_ascii_case_insensitive_substr(raw.trim().as_bytes(), b"doubleres")
+    raw.as_bytes().windows(9).any(|window| {
+        // All target bytes are ASCII letters: setting bit 5 folds exactly
+        // each letter's uppercase pair, preserving every other byte mismatch.
+        let prefix = u64::from_le_bytes(*window.first_chunk::<8>().expect("nine-byte hint window"));
+        prefix | 0x2020_2020_2020_2020 == u64::from_le_bytes(*b"doublere")
+            && window[8] | 0x20 == b's'
+    })
 }
 
 pub fn canonical_texture_key_with_asset_roots<P>(
@@ -648,14 +660,15 @@ pub fn apply_texture_hints(image: &mut RgbaImage, hints: &TextureHints) {
         return;
     }
 
-    for pixel in image.pixels_mut() {
-        let [r, g, b, a] = pixel.0;
-        let lum = ((u16::from(r) * 30 + u16::from(g) * 59 + u16::from(b) * 11) / 100) as u8;
-        if hints.alphamap {
-            pixel.0 = [255, 255, 255, lum];
+    for pixel in image.as_mut().as_chunks_mut::<4>().0 {
+        let word = u32::from_le_bytes(*pixel);
+        let lum = ((word & 255) * 30 + ((word >> 8) & 255) * 59 + ((word >> 16) & 255) * 11) / 100;
+        let output = if hints.alphamap {
+            0x00ff_ffff | (lum << 24)
         } else {
-            pixel.0 = [lum, lum, lum, a];
-        }
+            (word & 0xff00_0000) | (lum * 0x0001_0101)
+        };
+        *pixel = output.to_le_bytes();
     }
 }
 
@@ -668,8 +681,11 @@ pub fn fix_hidden_alpha(image: &mut RgbaImage) {
         .0
         .iter()
         .find(|pixel| pixel[3] != 0)
-        .map(|pixel| [pixel[0], pixel[1], pixel[2]])
-        .unwrap_or([0; 3]);
+        .map(|pixel| [pixel[0], pixel[1], pixel[2]]);
+    let Some(first) = first else {
+        image.as_mut().as_chunks_mut::<4>().0.fill([0; 4]);
+        return;
+    };
     let last = image
         .as_raw()
         .as_chunks::<4>()
@@ -680,12 +696,13 @@ pub fn fix_hidden_alpha(image: &mut RgbaImage) {
         .map(|pixel| [pixel[0], pixel[1], pixel[2]])
         .unwrap_or([0; 3]);
     let [r, g, b] = if first == last { first } else { [0, 0, 0] };
+    let hidden = u32::from_le_bytes([r, g, b, 0]);
     for pixel in image.as_mut().as_chunks_mut::<4>().0 {
-        if pixel[3] == 0 {
-            pixel[0] = r;
-            pixel[1] = g;
-            pixel[2] = b;
-        }
+        let word = u32::from_le_bytes(*pixel);
+        // Compare packed lanes so LLVM can vectorize the selection. Byte
+        // extraction followed by a boolean-to-word mask inhibits that here.
+        let visible = 0u32.wrapping_sub(u32::from(word & 0xff00_0000 != 0));
+        *pixel = ((word & visible) | (hidden & !visible)).to_le_bytes();
     }
 }
 

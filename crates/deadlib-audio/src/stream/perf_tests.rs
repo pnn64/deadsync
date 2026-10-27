@@ -2,13 +2,15 @@ use super::*;
 use std::hint::black_box;
 
 #[path = "../../../../tests/support/perf.rs"]
-mod allocations;
+pub(super) mod allocations;
 #[path = "../../../../tests/support/paired_bench.rs"]
 mod bench;
 #[path = "perf_original_processing.rs"]
 mod original_processing;
 #[path = "perf_original_sfx.rs"]
 mod original_sfx;
+#[path = "silence_perf_tests.rs"]
+mod silence;
 
 fn samples(frames: usize, channels: usize) -> Vec<i16> {
     (0..frames * channels)

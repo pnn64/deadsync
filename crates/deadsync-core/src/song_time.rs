@@ -16,8 +16,16 @@ pub fn song_time_ns_from_seconds(seconds: f32) -> SongTimeNs {
     if !seconds.is_finite() {
         return INVALID_SONG_TIME_NS;
     }
+    let nanos = f64::from(seconds) * SONG_TIME_NS_PER_SECOND;
+    // This product has at most 45 significant bits, so a signed half cannot
+    // round a sub-half value up to one. At 2^52, f64 values are integral.
+    let rounded = if nanos.abs() < 4_503_599_627_370_496.0 {
+        nanos + 0.5f64.copysign(nanos)
+    } else {
+        nanos
+    };
     // The float-to-integer cast already saturates at the i64 bounds.
-    (f64::from(seconds) * SONG_TIME_NS_PER_SECOND).round() as SongTimeNs
+    rounded as SongTimeNs
 }
 
 #[inline(always)]
@@ -32,7 +40,11 @@ pub fn song_time_ns_to_seconds(time_ns: SongTimeNs) -> f32 {
 #[inline(always)]
 #[must_use]
 pub fn song_time_ns_delta_seconds(lhs: SongTimeNs, rhs: SongTimeNs) -> f32 {
-    ((i128::from(lhs) - i128::from(rhs)) as f64 / SONG_TIME_NS_PER_SECOND) as f32
+    // The full difference fits u64, including MIN..MAX. Convert its magnitude
+    // once, then restore the sign without rounding the timestamps separately.
+    let magnitude = lhs.abs_diff(rhs) as f64;
+    let delta = if lhs < rhs { -magnitude } else { magnitude };
+    (delta / SONG_TIME_NS_PER_SECOND) as f32
 }
 
 #[inline(always)]
@@ -51,7 +63,8 @@ pub fn song_time_ns_add_seconds(time_ns: SongTimeNs, delta_seconds: f32) -> Song
 #[inline(always)]
 #[must_use]
 pub fn normalized_song_rate(seconds_per_second: f32) -> f32 {
-    if seconds_per_second.is_finite() && seconds_per_second > 0.0 {
+    // Positive finite f32 bit patterns occupy 1..0x7f80_0000.
+    if seconds_per_second.to_bits().wrapping_sub(1) < 0x7f7f_ffff {
         seconds_per_second
     } else {
         1.0
@@ -74,7 +87,23 @@ pub fn clamp_song_time_ns(value: i128) -> SongTimeNs {
 #[must_use]
 pub fn scaled_song_delta_ns(delta_host_nanos: i128, seconds_per_second: f32) -> i128 {
     let slope = normalized_song_rate(seconds_per_second);
-    (delta_host_nanos as f64 * f64::from(slope)).round() as i128
+    // Ordinary host deltas fit i64 and convert with one scalar instruction.
+    let delta = if let Ok(nanos) = i64::try_from(delta_host_nanos) {
+        nanos as f64
+    } else {
+        delta_host_nanos as f64
+    };
+    let scaled = delta * f64::from(slope);
+    let magnitude = scaled.abs();
+    if magnitude < 0.5 {
+        0
+    } else if magnitude < 4_503_599_627_370_496.0 {
+        // A sub-half guard prevents a value just below 0.5 from biasing to 1.
+        i128::from((scaled + 0.5f64.copysign(scaled)) as i64)
+    } else {
+        // Every f64 at or above 2^52 is integral; the cast also saturates.
+        scaled as i128
+    }
 }
 
 #[inline(always)]
@@ -86,6 +115,42 @@ pub fn scaled_song_time_ns(seconds: f32, seconds_per_second: f32) -> SongTimeNs 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn timestamp_differences_preserve_all_integer_bits_before_conversion() {
+        let check = |lhs: i64, rhs: i64| {
+            let expected =
+                ((i128::from(lhs) - i128::from(rhs)) as f64 / SONG_TIME_NS_PER_SECOND) as f32;
+            assert_eq!(
+                song_time_ns_delta_seconds(lhs, rhs).to_bits(),
+                expected.to_bits(),
+                "{lhs} - {rhs}"
+            );
+        };
+        let mut values = vec![i64::MIN, i64::MIN + 1, -1, 0, 1, i64::MAX - 1, i64::MAX];
+        for bit in 0..63 {
+            for offset in -2..=2 {
+                if let Some(value) = (1_i64 << bit).checked_add(offset) {
+                    values.push(value);
+                    values.push(-value);
+                }
+            }
+        }
+        for &lhs in &values {
+            for &rhs in &values {
+                check(lhs, rhs);
+            }
+        }
+        let mut state = 0x1234_5678_9abc_def0_u64;
+        for _ in 0..100_000 {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            let lhs = state as i64;
+            state = state.wrapping_mul(0xd134_2543_de82_ef95);
+            check(lhs, state as i64);
+        }
+    }
 
     #[test]
     fn seconds_round_trip_through_integer_nanoseconds() {

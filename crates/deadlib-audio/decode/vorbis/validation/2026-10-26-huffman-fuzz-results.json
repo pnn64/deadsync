@@ -1,0 +1,68 @@
+[
+    {
+        "target":  "vorbis_headers",
+        "exit_code":  0,
+        "executions":  124473,
+        "coverage":  1745,
+        "features":  3933,
+        "peak_rss_mb":  454,
+        "average_exec_per_second":  413,
+        "binary_sha256":  "5e092ea9d307cce98a13f85a5066be4a2ad9e13e8a4b1348c8c0fc58f4717a8f",
+        "arguments":  [
+                          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-c6a408afb7a34204bd6c7bd4eb0cd2dd\\corpus\\vorbis_headers\"",
+                          "-max_total_time=300",
+                          "-max_len=131073",
+                          "-timeout=20",
+                          "-rss_limit_mb=2048",
+                          "-seed=1337",
+                          "-print_final_stats=1",
+                          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-c6a408afb7a34204bd6c7bd4eb0cd2dd/artifacts/vorbis_headers/\"",
+                          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+                      ],
+        "wall_seconds":  301.16625519999997
+    },
+    {
+        "target":  "vorbis_packets",
+        "exit_code":  0,
+        "executions":  9619,
+        "coverage":  1714,
+        "features":  3403,
+        "peak_rss_mb":  232,
+        "average_exec_per_second":  31,
+        "binary_sha256":  "b1173691e2295a0d564af0ff3fab3a97142951c1905808bd608faa62e5e21a2c",
+        "arguments":  [
+                          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-c6a408afb7a34204bd6c7bd4eb0cd2dd\\corpus\\vorbis_packets\"",
+                          "-max_total_time=300",
+                          "-max_len=131073",
+                          "-timeout=20",
+                          "-rss_limit_mb=2048",
+                          "-seed=1338",
+                          "-print_final_stats=1",
+                          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-c6a408afb7a34204bd6c7bd4eb0cd2dd/artifacts/vorbis_packets/\"",
+                          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+                      ],
+        "wall_seconds":  301.2091605
+    },
+    {
+        "target":  "vorbis_stream",
+        "exit_code":  0,
+        "executions":  7870,
+        "coverage":  3124,
+        "features":  9624,
+        "peak_rss_mb":  510,
+        "average_exec_per_second":  26,
+        "binary_sha256":  "c8b3d257439b35cc81b655335b80f388040e87b8323f1d7e6f3d1460fecde77f",
+        "arguments":  [
+                          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-c6a408afb7a34204bd6c7bd4eb0cd2dd\\corpus\\vorbis_stream\"",
+                          "-max_total_time=300",
+                          "-max_len=131073",
+                          "-timeout=20",
+                          "-rss_limit_mb=2048",
+                          "-seed=1339",
+                          "-print_final_stats=1",
+                          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-c6a408afb7a34204bd6c7bd4eb0cd2dd/artifacts/vorbis_stream/\"",
+                          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+                      ],
+        "wall_seconds":  301.41503209999996
+    }
+]

@@ -490,6 +490,7 @@ pub const fn mini_indicator_needs_stream_data(options: GameplayMiniIndicatorOpti
 
 #[derive(Clone, Debug)]
 pub struct GameplayMiniIndicatorData {
+    pub ghost_targets: [GameplayGhostTarget; MAX_PLAYERS],
     pub specified_target_percent: [f64; MAX_PLAYERS],
     pub personal_best_percent: [Option<f64>; MAX_PLAYERS],
     pub machine_best_percent: [Option<f64>; MAX_PLAYERS],
@@ -499,6 +500,7 @@ pub struct GameplayMiniIndicatorData {
 impl Default for GameplayMiniIndicatorData {
     fn default() -> Self {
         Self {
+            ghost_targets: std::array::from_fn(|_| GameplayGhostTarget::default()),
             specified_target_percent: [100.0; MAX_PLAYERS],
             personal_best_percent: [None; MAX_PLAYERS],
             machine_best_percent: [None; MAX_PLAYERS],
@@ -857,7 +859,6 @@ pub fn current_song_clock_snapshot(
     audio_snapshot: GameplayAudioSnapshot,
     music_rate: f32,
     audio_lead_in_seconds: f32,
-    global_offset_seconds: f32,
 ) -> SongClockSnapshot {
     let stream_clock = audio_snapshot.stream_clock;
     if stream_clock.has_music_mapping {
@@ -882,7 +883,6 @@ pub fn current_song_clock_snapshot(
     let song_time = music_time_from_stream_position(
         stream_clock.stream_seconds,
         audio_lead_in_seconds,
-        global_offset_seconds,
         fallback_rate,
     );
     SongClockSnapshot {

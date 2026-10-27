@@ -1,0 +1,3368 @@
+{
+  "scope": "Partial VQ partitions of sizes 1/2/3/5/7/11/12/13/17, inverted/empty ranges and the maximum partition field; all residue kinds and later active/empty submaps. C-derived granules and full PCM initialization/decision/count checks. Header controls preserve separate published/reference choices; stream bit seven selects reference residue behavior with codebook/floor0.",
+  "reference_binary_sha256": "0508d936741fb2fe5ab84ca261cdfffbdec359abad3091d86cd28f9109c09bb2",
+  "probes": [
+    {
+      "case": 0,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/golden-pcm-inputs/residue-tail-golden-0.bin",
+      "source_request_sha256": "758ada96951a0b6c951f1906d2248249701d7d119dc6c3fe934af0be66301ded",
+      "frames": 368,
+      "channels": 1,
+      "request_sha256": "758ada96951a0b6c951f1906d2248249701d7d119dc6c3fe934af0be66301ded",
+      "response_sha256": "3e06fe2e9bf1ae7a061a1af81e1dd793e11dc46404e0a98065114f242d685184",
+      "ogg_sha256": "f9d6304b9a58657d5b176cb7cd4112cf79efec0bbb6a627b02dada639d2bc117"
+    },
+    {
+      "case": 1,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/golden-pcm-inputs/residue-tail-golden-1.bin",
+      "source_request_sha256": "6b1b56444e558a76ef4d740d8213eda9e6f435bd13a8d5b58a02a0e8fb428048",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "6b1b56444e558a76ef4d740d8213eda9e6f435bd13a8d5b58a02a0e8fb428048",
+      "response_sha256": "3f5e6da13b86587ca21435815efbb1f0951815bbfe6ff92419dd865c4a50de80",
+      "ogg_sha256": "9d2740c9c509b270087b6f474f5e5e823ce4909fedc89c91675da126df93bf73"
+    },
+    {
+      "case": 2,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/golden-pcm-inputs/residue-tail-golden-2.bin",
+      "source_request_sha256": "9756540284e32200daedd9986069958d002638397dc0986bb9edd3f1e68784e7",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "9756540284e32200daedd9986069958d002638397dc0986bb9edd3f1e68784e7",
+      "response_sha256": "9833828e86fba6d9ff4c7a2159ea7cd034f4158a695b8996238bfbef2df1b47f",
+      "ogg_sha256": "0ae8ae2b5ad959af5b4b38c21b2589468ada24ce7d47a995fa05496470bee30b"
+    },
+    {
+      "case": 3,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/golden-pcm-inputs/residue-tail-golden-3.bin",
+      "source_request_sha256": "c8633415ddaf9ad3c429f5de5b01d91c2b12b05c1992d05411bcfa9c9cbf20b8",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "c8633415ddaf9ad3c429f5de5b01d91c2b12b05c1992d05411bcfa9c9cbf20b8",
+      "response_sha256": "8487fc50344c78c38d9e01b9c55b995fa9e5bf6146959b7c7b65c0e658ee6f47",
+      "ogg_sha256": "57f692bf54476fb3e5b19d8d120a2106ab6872267469241cbd46522e4ec1bd55"
+    },
+    {
+      "case": 4,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/golden-pcm-inputs/residue-tail-golden-4.bin",
+      "source_request_sha256": "b6b048c6d750c8c25496c4e5122ea74566880cb5d44f13ff7f3b14de0621483c",
+      "frames": 368,
+      "channels": 8,
+      "request_sha256": "b6b048c6d750c8c25496c4e5122ea74566880cb5d44f13ff7f3b14de0621483c",
+      "response_sha256": "66cfdfda626f7fe864fd77f222a2bcc5afe2afbd9a991a356ac4f6767c8c9f18",
+      "ogg_sha256": "fd8d51b0eb221377d113fe8fe3f9b84097f22936db142b9f92b1b3492b87b21a"
+    },
+    {
+      "case": 5,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/golden-pcm-inputs/residue-tail-golden-5.bin",
+      "source_request_sha256": "f4b51faa7ab83aa5422938ba3b39c41ef8e0c589a3b5240380cef88b1a7ce193",
+      "frames": 368,
+      "channels": 8,
+      "request_sha256": "f4b51faa7ab83aa5422938ba3b39c41ef8e0c589a3b5240380cef88b1a7ce193",
+      "response_sha256": "1e40005157f57c0aa1e59512fa960b79e6d0eb61c0fc4ce1cb94a124d5908fae",
+      "ogg_sha256": "0f1c5ef74bf99946a46661c7f83487645b8b43fb0f6ff8c10812a3b234ae115e"
+    },
+    {
+      "case": 6,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-144-batch-0.bin",
+      "source_request_sha256": "01101d5d691c200bc5a955b3a4ec71bec9a0de0dd8095bfb06044f6728f8b1a8",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "be77ef606a3a1db2c9e6b74ced67c21f3812a62365b37254a376e7564e8fc496",
+      "response_sha256": "c4b3e881a1fceb6d9fa336ae200227c2ab7fe0e6fc4c3ed4ccb7a6b4af8c00eb",
+      "ogg_sha256": "56e212f666dc0770ce122abb8512632670300eb09ecaf24f58376d6d33018b96"
+    },
+    {
+      "case": 7,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-145-batch-0.bin",
+      "source_request_sha256": "b9afbc9ff81e6f9ef4bdd43fef05f3c6540936483ee2fc777272d31075b2f65a",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "17c83f7a0ce0088970f4022dfe13349cc2f4fbc576e86939224b47bbad45191a",
+      "response_sha256": "65da482d1e8a0edba12eedc79347256f9cb2006764bc3c4dee92643726738109",
+      "ogg_sha256": "953bd9504111d43c5c80f32e568a8b39e29946d5a9b86d9f9e73b90933c7d170"
+    },
+    {
+      "case": 8,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-146-batch-0.bin",
+      "source_request_sha256": "f92298fdc5d7e939cb66dbc4c15b7a69629248d893562093a90dd5ca6ca267b4",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "fb4bb9e82373fa3e2fe97eef947881e9ced913cb0f308a6888d494e72ea7ba70",
+      "response_sha256": "148c611a6470678e2f9457185b3a20c68960495ccc17a0688236d4a95b64d152",
+      "ogg_sha256": "169ec0d146cd27c8999fecfb2330bd84b223353f4e000c4db6b44e9cc41e43c7"
+    },
+    {
+      "case": 9,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-147-batch-0.bin",
+      "source_request_sha256": "cfcd94c724f0622e48a321ca9b3fc79facc4e4033b84f6e0665ed8fd2cf3d2e2",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "275b077c645bf1bb16df3f02f081b7b3dbc37d80caaeced8b81c717a2ae5bbf6",
+      "response_sha256": "90b762e5051699b859cac5bb68ad737034215fecb314aa82329f4f76a1024afb",
+      "ogg_sha256": "d9782dc2e22196a5d91dc5425b58ac8fe6becb32eca2151cb99aca4e96c60bb4"
+    },
+    {
+      "case": 10,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-148-batch-0.bin",
+      "source_request_sha256": "253c55132dbb5ac8bfa73aa64d74f8cb608848798d65046d5d070734b7b8f535",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "867455794b0818bd2b1cff4c37c2e23304f38f1930efe5a27d4e33a2ddd80a51",
+      "response_sha256": "72ba56944d2e0473f8da0909c1258bf336594c75c77e1521e7af18709a691bc1",
+      "ogg_sha256": "adc33d3cb515501780e4a72127468fe72543b3abb68c09c2aa0e1c59e5d8c0ff"
+    },
+    {
+      "case": 11,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-149-batch-0.bin",
+      "source_request_sha256": "6e1dce740e474ea02f93eddfb50b6e2aeb45b510ed0bacff0faee2a8d0794ca2",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "2e31495638e7a52e03212f058a96702f1ae6ea732ef2356cebd9f8f3364d4e1c",
+      "response_sha256": "f30e6c23a71e48e6b8ce3863f8e037c263427bd766d3f0d7b33782853033f88a",
+      "ogg_sha256": "529118a5c7ed2dd700c358d211feb9818bcdc1304da832ef17c64242318de017"
+    },
+    {
+      "case": 12,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-150-batch-0.bin",
+      "source_request_sha256": "8f48a67dc30d6fd9d6c1662e961f24a7a4d167d538bedfbb8eeacffa253521fa",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "3a4ee9f081c1a8f47361622b9f75bdf226a63d8aa84e2374cdde35526a328eea",
+      "response_sha256": "b0294562880380dd4373dbe75f96fe14a0cc2ee417daba03665146a15a3e6ca5",
+      "ogg_sha256": "8f0fdaa0790b17dac5756e18bfadbc9562b66537c7f75d077b428b6a7e928d8e"
+    },
+    {
+      "case": 13,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-151-batch-0.bin",
+      "source_request_sha256": "3213fa1fbd0e08ffa208713179dc4c9297de0b665e1475db4f26c43f9f2c1b61",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "7136cf7bddcdc08a96c055ab1e6a5908221a82c685517e20cc54cacb21d6931d",
+      "response_sha256": "d96199006e99b71271dd6f4f4771822e0b719a10fdf54bb7feb333c77ce18b2b",
+      "ogg_sha256": "39d12cf5cc0f344c18aa16bf87b7c32b59c6ff40dbb291370c999791455f7ec0"
+    },
+    {
+      "case": 14,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-152-batch-0.bin",
+      "source_request_sha256": "d0793674477ca5017a167a1f839bdca5cc6a2dc0cd3a4e5723436bee3a186f75",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "4fcec8a4a182a91078737bd69f7caddfe92343e054ef6ba859c3e037dddb67f1",
+      "response_sha256": "ff45ec1984650e39a2729efa4995bf3a640f05716651e3265c665cf11dc259db",
+      "ogg_sha256": "3c2b41cc44f8b2aaa9f3c81d4279f6c13748963cd5c5c2f8997da48a519da6ff"
+    },
+    {
+      "case": 15,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-153-batch-0.bin",
+      "source_request_sha256": "88756dd774668f623a1e68cf8879391dd3682818717e026e31694e8db882e7ad",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "cd8bd17caa881920de8c9b74dec1711e66f80bf687024b04522997c2dd398fb0",
+      "response_sha256": "058c4a87812694524435c0e112104e8e61465845254e76eef52f1e129466b20d",
+      "ogg_sha256": "5d76c4b6f91eef7ba7b1f6dc356bbfbf4779208683674114dc920ee448378f7b"
+    },
+    {
+      "case": 16,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-154-batch-0.bin",
+      "source_request_sha256": "d4fa78087046850067b59255066b6274d41d9f9e60b7b06d5f058c97850fbb7d",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "ef7c279684d28602205303ed045df1c8773d628da7c6dcdc0581b379e09d7f77",
+      "response_sha256": "058c4a87812694524435c0e112104e8e61465845254e76eef52f1e129466b20d",
+      "ogg_sha256": "6125331ef4a6eda4ff96b83538c49e6038b92b4d411ed8a4df73b26fce4f39b6"
+    },
+    {
+      "case": 17,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-155-batch-0.bin",
+      "source_request_sha256": "caed47bc9cffc6fd665647dcfb07adcfe06fd044f23a4f6d814612f22f50e81d",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "75919e94df5483bb9673fff9660d21a8a37f24a6110bf805f2d42e28f51be7c4",
+      "response_sha256": "058c4a87812694524435c0e112104e8e61465845254e76eef52f1e129466b20d",
+      "ogg_sha256": "f5bcc163e7f616d100eca7a80e12941fdb24b997f5510172a3d09e67187281d2"
+    },
+    {
+      "case": 18,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-156-batch-0.bin",
+      "source_request_sha256": "350d6150561f5b97b7b2fa4e1f2ac8c0d55ae66a244e8ccaa484046f074f4d54",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "6e26ccaf96f2e5e5c9cff2c5ed5bb6574a7a72f05813dbd12542a972936ebb15",
+      "response_sha256": "126963c69dcf1bedc5496fc399c41b362503470a18682f04b84bbd24b4e560aa",
+      "ogg_sha256": "c246c1c332a88671e42f8681f94244cbdc0559adc9fa21cef0c921ead7eb9847"
+    },
+    {
+      "case": 19,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-157-batch-0.bin",
+      "source_request_sha256": "c4e77a33ec3be2e0ea917ff3d6d6927c632e2d83f427953f6f9641b130ccf5d3",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "c3307a83b2a3a099affc0580d4307ba62b7bfeab0526acf9a2ca2ffbfbaac72a",
+      "response_sha256": "fd42d970c1b886f2099764a6f135cbf8a64c4f2aaac39579bbd071f54e704fc1",
+      "ogg_sha256": "c809512ec14e0e3a1a2c7b3f33badf07f76ac97a57441e5438cae13d2ee8050c"
+    },
+    {
+      "case": 20,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-158-batch-0.bin",
+      "source_request_sha256": "69c019b3139a264c32b5d51444055124bb8cd22f5a6a10e96278583154bf9788",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "a65f681eca3f0cb6899620326f31042a4e3c140064b2319e7e416314e4ea0b25",
+      "response_sha256": "15cf8477762ce861e1c032283c595a5fdef26ce4a21d76018a29220eae760a7a",
+      "ogg_sha256": "47dbfd0421845aadb088ed70e3340b60a172d44a5697461ead6cc41449e7b12e"
+    },
+    {
+      "case": 21,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-159-batch-0.bin",
+      "source_request_sha256": "29f1418c1c08f97df83c7d4ef3bb1120ccd60fc47cb4baa8bab7ecf63ac65796",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "197d87ee7fc9014506ee217d89ae584007d9ff7daf1089124a236fad038aa995",
+      "response_sha256": "3f5e6da13b86587ca21435815efbb1f0951815bbfe6ff92419dd865c4a50de80",
+      "ogg_sha256": "0dd6a54146bc6456b5983854d21f7f42b1fdc7497102444deb8f41c0890d6e60"
+    },
+    {
+      "case": 22,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-160-batch-0.bin",
+      "source_request_sha256": "62f8db2e75fb73f6d979c2593ebda41a2172ef9aed6609dd54d349c4c3251043",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "9756540284e32200daedd9986069958d002638397dc0986bb9edd3f1e68784e7",
+      "response_sha256": "9833828e86fba6d9ff4c7a2159ea7cd034f4158a695b8996238bfbef2df1b47f",
+      "ogg_sha256": "0ae8ae2b5ad959af5b4b38c21b2589468ada24ce7d47a995fa05496470bee30b"
+    },
+    {
+      "case": 23,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-161-batch-0.bin",
+      "source_request_sha256": "324cb1e90e9ea05ae4e502d764fea3a3a5faed80c042dedf04fdd86853859a2b",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "7a50e053364e6eb597262ecc930c125a28d54180a75de1397377e522f13601f8",
+      "response_sha256": "2857db56bc5dc834e0a3ba000c36a2580eb176da364c2530a3a62ff39c683b17",
+      "ogg_sha256": "e9f71457ffe119da060641fc95077f7c532adb7200b40954e2c2f76030b0732b"
+    },
+    {
+      "case": 24,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-162-batch-0.bin",
+      "source_request_sha256": "c14ce16ed43e0d91ab4034a80fd936cfdab674f3a97cffa8b074cb7e956cc499",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "38a5cdac92d8fd68d760ff62235fd24da11b5f1b9839e8e92f1110a75002cde0",
+      "response_sha256": "18893e1f911942f3a44023579ecf38f2cadfe88afd96e643359b5b4e6a884d52",
+      "ogg_sha256": "19f4fceb1f1310bd9bc1bbaa210d9dcb9312a54e98438ceecde44326fb8c950d"
+    },
+    {
+      "case": 25,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-163-batch-0.bin",
+      "source_request_sha256": "a759be6d5a6899d11c13bb422454a3b3b83db4417cd4dc9e191479b14b312404",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "bbfa9fd131c0ccf8eae747de8124dfb6dab4d6917a0e20f62a0b43aac8419edc",
+      "response_sha256": "47164ebe7fcd5627dd4fc997a52998efe1edd2d824afd90b4acf849f0e28c72c",
+      "ogg_sha256": "aaaaa6332f0d40b7125788d4e11bffa82187b84e0176d14f203e47a9690c16ea"
+    },
+    {
+      "case": 26,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-164-batch-0.bin",
+      "source_request_sha256": "68656828f60b3400438fe6aa0df2c17f36fd3e46ff9546921f3d86cbe8131b83",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "5b6ff8695c8292bae50e0baf20b6f54adc4993fedaae98e62ae54455dcdeb652",
+      "response_sha256": "b3428fea8123eeeb6d44331f98957d34f9fbbf6af8238e6af0b7c17e3c418764",
+      "ogg_sha256": "23397ce82bd90dadda70c46d85ed44878bc4cf0528dcd8cd052d9e27b76f2320"
+    },
+    {
+      "case": 27,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-165-batch-0.bin",
+      "source_request_sha256": "7774b7552c5a6bc4fceeda0ee7a609d2196a6a05d167c2ee0490095f88166140",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "cdcbf0b500bf719ce54a10ab9f864f800383f117dfbf4de23c1c436c7143a577",
+      "response_sha256": "8487fc50344c78c38d9e01b9c55b995fa9e5bf6146959b7c7b65c0e658ee6f47",
+      "ogg_sha256": "d5c91e4b17c38c00684bc65cea15d0ab97452e95d00a9ee3b5fce33eb41b13e2"
+    },
+    {
+      "case": 28,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-166-batch-0.bin",
+      "source_request_sha256": "fefd14544f0043d1cc49d093084fc31c2ca05021faba0fa5c3c71323a2c9702d",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "79ebf4cf3f2dcaaaf64afa1dbbd8fd165e7a2b9dde7f4887fa3c9ca2f05254a8",
+      "response_sha256": "8487fc50344c78c38d9e01b9c55b995fa9e5bf6146959b7c7b65c0e658ee6f47",
+      "ogg_sha256": "949762010338993e5307cc30a8ddf90687ba5e89e0bbc2e04444e76831f42467"
+    },
+    {
+      "case": 29,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-167-batch-0.bin",
+      "source_request_sha256": "bcfd410e2afd4faa63652fcb5f533defaa28785a725b0a54e34a3aa31923c17d",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "09857ff822c6371e959e5b33dba623f8cbaf531fc82d4ce4f99cba9615e73fb7",
+      "response_sha256": "8487fc50344c78c38d9e01b9c55b995fa9e5bf6146959b7c7b65c0e658ee6f47",
+      "ogg_sha256": "cca2e6c900585ca97f691273af9115940e61cd7b4412521714091260374b6545"
+    },
+    {
+      "case": 30,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-168-batch-0.bin",
+      "source_request_sha256": "e3c4b2ccc2968ca524d2d8eaeb78aa09ad7178de1abc2dd8b07f795ded1cccac",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "b5de28434f6639b19cf3ae15e48acda878d90619bb8dbdd9ccea3ec47163bf58",
+      "response_sha256": "9947ad0e793765c47f228d6727829c662cf6b385d9381576110153ddb2f47167",
+      "ogg_sha256": "ac033a667a11c98c2f424cb041380d604f7ddd5451fd99de84ff315027348660"
+    },
+    {
+      "case": 31,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-169-batch-0.bin",
+      "source_request_sha256": "da7d9c7aed1795a24c9c5e89554faaad4bce3382d1416c413139ff597dff13ff",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "4eed5c65d19ea974a4b9ae0881c0214d892121a0a217e68e523402f32b50e89e",
+      "response_sha256": "5d719ef1237ef08886da6f477ac7a23c928a560cec858e1cd918b27577be5dac",
+      "ogg_sha256": "c93f61fd6a659744405bd467b426fcd871797d4f531c1133787f612f7dc1b9dc"
+    },
+    {
+      "case": 32,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-170-batch-0.bin",
+      "source_request_sha256": "591a9bda1a725a82de5ecac437c6c829ab6ac8effabb428b0b9c000485ee6f3e",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "cd0d01cad64146164568e5a4bcd866dd6715e4eb113259cc4b17267b8a33ed19",
+      "response_sha256": "2b1af4210a49313db2f08ee415ca76accee01ab4c2aa539ce629f484936730bd",
+      "ogg_sha256": "7f54787468f0e3fb3c54309f2a067284242be67fc4f0c7a1891ba1222344b17c"
+    },
+    {
+      "case": 33,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-171-batch-0.bin",
+      "source_request_sha256": "6d7822ef7df65bc8598ac835aef6b3c2f7496a81575762fee2015fca8d0afd85",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "f3b7b12c1c94b4485aa6b0443b280fe80097168ec14c9710ffc8759c67303371",
+      "response_sha256": "5d77d646db6cf186b4b54783f8b1b408bd80b5db1d068d22ca4f75eb652d1c50",
+      "ogg_sha256": "4011199e8e116ed118af21129eeec35dbc7b4b1f69eaeaf0e79deb5b45365661"
+    },
+    {
+      "case": 34,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-172-batch-0.bin",
+      "source_request_sha256": "7c739b47cf554c46feebf0ad6cce71985e0ed29c1ca4ed7646a2988f91ea39cd",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "13c93535cd48694e77512f215fc7dddb8908db88cf84ec17873335c302182ea4",
+      "response_sha256": "ee2883b7d2e00163267f3ce86eca5e7d13426e6f25f4a807e9ea4c3f786454b7",
+      "ogg_sha256": "f66e734fa338a0b075623e7edfa7671fc0c629cb3c4299fbad3c918b4f532a80"
+    },
+    {
+      "case": 35,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-173-batch-0.bin",
+      "source_request_sha256": "16991eddfe3d71ee78c2ea442883dca984225b1095c5bcaa43ea554325f4ddfa",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "cd12fbd524e59c2874db27b92133878cfc9a0e738d3e0a5de5935805012056f5",
+      "response_sha256": "cbd6d04a01e51381b516a6cac861faa6a27171191ef7027fb997b8f6eb3bb48f",
+      "ogg_sha256": "b6cc8ecc2e9cd75d1ba7aa26c666b197f579a06ac933bff83e52a45e9614c633"
+    },
+    {
+      "case": 36,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-174-batch-0.bin",
+      "source_request_sha256": "8ce06a31ca4eff3f12db5c1e3252ac60cad804d995907f9bf84b2020c4fb714e",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "df44054c697a958e8cb74471f70195566a1b6307240d9eec38ebc4d1b079ad34",
+      "response_sha256": "e814e25a116276cbb1fc9a5698e421b03c7d41cb15b4627f1fbff218f2b6c8b3",
+      "ogg_sha256": "f44c1da3c4729544aba334dbfbe9503ce778318904e88f9f07c61867b2cd7792"
+    },
+    {
+      "case": 37,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-175-batch-0.bin",
+      "source_request_sha256": "180094973aef96cced74627e90930d0ffba136f883f3c8d16ed6625c78cf7a94",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "329f37e5bd42c65bbc1e47df61b19c741e1ca21ca46a103040aa62ca40908d7a",
+      "response_sha256": "e6335bf8bdbb107b7a9c290b331021f173ca56848d11e2871dc42cd7c1db3786",
+      "ogg_sha256": "4b8fbede0b77205009e4f96cfcd9c584139da5daa39f32bfdac0c6e9effe4a9f"
+    },
+    {
+      "case": 38,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-176-batch-0.bin",
+      "source_request_sha256": "8bb2af4745a38f953b705ca395da421347ecea68cf2f89e04155b2c8d0a48cc8",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "5a1b1ef3b7fcdf82f76a0b2708d996bffe9b3c4e9bb8bb7d53c05f40ad2d279b",
+      "response_sha256": "da5cb40a727e34fc0501869f298e2baea2aeb98b8470e1819c6333ba2ea12ade",
+      "ogg_sha256": "47ae37c4fabc572a8e2c89d474e94909910090e5de40a44680e8cfccdd885551"
+    },
+    {
+      "case": 39,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-177-batch-0.bin",
+      "source_request_sha256": "805201470ff425fc70fec8875fa42d9234e3cdd5fb983b87b83c00a7c9425ee9",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "4ab04ba40b6879d2e4fbc6ff970aa394ecb46f070aa728654dca3087cf4a6a15",
+      "response_sha256": "893d9d06bb7de231102f103ffff428491a3b2d49897752add3d24b44a30cab52",
+      "ogg_sha256": "162750c8dca47251052bf65b6f4ad8443ba319a62568fc241daa3bb618556dd2"
+    },
+    {
+      "case": 40,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-178-batch-0.bin",
+      "source_request_sha256": "e582de4bb1754010a8d4a73ce2dc5b164c877a07760d781baf7082c407024769",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "e807016f26a3ab924edbeef4044738845c4550f3c8e57b10ec1b527324133345",
+      "response_sha256": "893d9d06bb7de231102f103ffff428491a3b2d49897752add3d24b44a30cab52",
+      "ogg_sha256": "c5622ad5e61dfce07977ea08550497b01244ee5cb5d221b4e24ad74a09bea552"
+    },
+    {
+      "case": 41,
+      "source_request": "target/deadlib-audio-reference/residue-tails-20261027/packet-inputs/residue-tail-pcm-179-batch-0.bin",
+      "source_request_sha256": "20adc5b33f39e1507f2b630bad6452fa483ad582f6d4f332a52d161e4bdacaa4",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "0c1d1bb2ac9ca8bff2fc8dd76b0c9fcdf7294c595b9556715c551b9764d6ffe8",
+      "response_sha256": "893d9d06bb7de231102f103ffff428491a3b2d49897752add3d24b44a30cab52",
+      "ogg_sha256": "28902770496ee05c6fcd2722ee4095688ffb485aefdad6a3fc4272927e3ea623"
+    }
+  ],
+  "seeds": [
+    {
+      "path": "vorbis_headers/residue-tail-0-control-2.bin",
+      "bytes": 192,
+      "sha256": "4b87919cdcc5fbf11a16f3457a49a40694ecfdce7d3aaf6d7f40b5e0fabe2ee1",
+      "case": 0,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-0-control-128.bin",
+      "bytes": 192,
+      "sha256": "7ffc57eb8e046a5ec1b863a850fd8b3811879886e8684e14d1f9e18e94769af1",
+      "case": 0,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-0-control-134.bin",
+      "bytes": 192,
+      "sha256": "978ff09b48ecb4cfa3543672da515b907bde2e7a052002889dd37e211a11cea7",
+      "case": 0,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-0-control-254.bin",
+      "bytes": 192,
+      "sha256": "4d45dae6e25587971af576c38ed8a8a784d8ea3e74fab1cb7615862d36997c09",
+      "case": 0,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-0-control-0.bin",
+      "bytes": 617,
+      "sha256": "65e7dd04e7ec25f160e59db0b20787aad341e07c659c8e93d548c44ff1942cff",
+      "case": 0,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-0-control-8.bin",
+      "bytes": 617,
+      "sha256": "de99168b43f0d962d863371bb56db67d641f37b840ed7cc654ffdcd54142a50b",
+      "case": 0,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-0-control-128.bin",
+      "bytes": 617,
+      "sha256": "85ac2e1ebb86e4eb5ef5ec0ff1e95b5af563d4932c992b6d8aa3f577002d18f4",
+      "case": 0,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-0-control-136.bin",
+      "bytes": 617,
+      "sha256": "578760567545eb7e84c18737b271b1b34f4d481b79e2fcb3b125d2c3a0caf52d",
+      "case": 0,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-0-control-232.bin",
+      "bytes": 617,
+      "sha256": "e819f299385849ee322c82f04342877fb909583f41f247697b21c9f836f0fdd5",
+      "case": 0,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-0-control-255.bin",
+      "bytes": 617,
+      "sha256": "9423fae99f0324393d569df44fb64266c75110467c3150f7ad34d7fb6fbcb630",
+      "case": 0,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-1-control-2.bin",
+      "bytes": 194,
+      "sha256": "a5ec8666edc9e1fe58660328e872b002774d3cd847ae4ea9814939ac81b65c6f",
+      "case": 1,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-1-control-128.bin",
+      "bytes": 194,
+      "sha256": "abf811f827b7785930f2fd9c3e3962e1930c969de35638bb006d7fd2088abcc3",
+      "case": 1,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-1-control-134.bin",
+      "bytes": 194,
+      "sha256": "40a788acf87913c0500e95d804bc79dd068bb6d3ba6b642a4faecfc44ae6cdfd",
+      "case": 1,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-1-control-254.bin",
+      "bytes": 194,
+      "sha256": "50b49ab12c5f1c901393a713e3d7567919842b002011f87047cb46e3ca539b83",
+      "case": 1,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-1-control-0.bin",
+      "bytes": 1004,
+      "sha256": "c52de1636fa44931f1eea88170df21d8f1d8983c72f6c7f2ce2d26a99f7e0dfc",
+      "case": 1,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-1-control-8.bin",
+      "bytes": 1004,
+      "sha256": "1453fe5e45a3273027d41fa32f25b7763632350356d9cf25f9ae183b17f0fedb",
+      "case": 1,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-1-control-128.bin",
+      "bytes": 1004,
+      "sha256": "3ecde86a1a28a9a5bc592ada21ddfbacce714fb4d8967e656a5bdc542bea5702",
+      "case": 1,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-1-control-136.bin",
+      "bytes": 1004,
+      "sha256": "72594d6698abb949fd968cfc37c7378ad719eb6df6ca56721b374dc274b19a67",
+      "case": 1,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-1-control-232.bin",
+      "bytes": 1004,
+      "sha256": "4ec57ad13d424bc39a1de3f1e4c7baf81ace8ab387c2af93939a29b14786df47",
+      "case": 1,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-1-control-255.bin",
+      "bytes": 1004,
+      "sha256": "efcc53b9951dae9c5cc2e124cdc6b4a9142199e8c6df4487d63459c821456aad",
+      "case": 1,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-2-control-2.bin",
+      "bytes": 241,
+      "sha256": "30980b78b6a648033ef32603ce1a954b9ef7e3c2d8fdf5b28188310ba3398626",
+      "case": 2,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-2-control-128.bin",
+      "bytes": 241,
+      "sha256": "ff18457974c0ed2bdc254483a1f2c570f0005b4500222e5943d08f27ee320932",
+      "case": 2,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-2-control-134.bin",
+      "bytes": 241,
+      "sha256": "f7975b3ef982b84a19f1d284ec51124a224763b59cf686b10a82c09287c26d37",
+      "case": 2,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-2-control-254.bin",
+      "bytes": 241,
+      "sha256": "2eb69912f2301f6d12a9a9058bfac53fb31980f1c29994c8a9d87c9fae1a892a",
+      "case": 2,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-2-control-0.bin",
+      "bytes": 1023,
+      "sha256": "8a62b9533563e71904a86fdd34ebc072df34178d0750f8775cc8fa563eb789f6",
+      "case": 2,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-2-control-8.bin",
+      "bytes": 1023,
+      "sha256": "50d5e4c453f81edd37d2d5234c155c744a9000db84e0f062a0b65df8b6b8c56a",
+      "case": 2,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-2-control-128.bin",
+      "bytes": 1023,
+      "sha256": "28af3b21e2c6bae435d547c637d1a00356ab58a0d1e4a08090cb40506b91c5aa",
+      "case": 2,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-2-control-136.bin",
+      "bytes": 1023,
+      "sha256": "506eb9320856e0959b203746333b683ffc9d89750ad22df5d520473e5e3d63f7",
+      "case": 2,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-2-control-232.bin",
+      "bytes": 1023,
+      "sha256": "134f393436a4e4df1b0955c37562dbd459c1a2846953947dd81db45c582c94de",
+      "case": 2,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-2-control-255.bin",
+      "bytes": 1023,
+      "sha256": "cf30fa14b8fa32ea658540830eea9f6c2fcb25fcae4926a88adcd6bd45348024",
+      "case": 2,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-3-control-2.bin",
+      "bytes": 308,
+      "sha256": "1996430cb3deb25df6a8e4d40d03f47948e2adcaff216926cf6ad06078258943",
+      "case": 3,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-3-control-128.bin",
+      "bytes": 308,
+      "sha256": "ac9ab0964fc50211a03c989d6213f9f61ec6faa580ee500ea93be0c9a67cfc67",
+      "case": 3,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-3-control-134.bin",
+      "bytes": 308,
+      "sha256": "3b40df72edd074f533ff692c733c7bacafd656bf3049b95e42bff24739eef134",
+      "case": 3,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-3-control-254.bin",
+      "bytes": 308,
+      "sha256": "5b937582f15bc2f997c990d72eff8b70626cf4bd4ed088fc6a5b735b92551e88",
+      "case": 3,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-3-control-0.bin",
+      "bytes": 789,
+      "sha256": "976ca93181d9c232c8a7fb35a55eb0f69910b80f111d3b7a4baf34cf852ec31f",
+      "case": 3,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-3-control-8.bin",
+      "bytes": 789,
+      "sha256": "f31f8277a68c009501d336c7420b48fb93d8ecd525d89a64d5af9fbe393c46b1",
+      "case": 3,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-3-control-128.bin",
+      "bytes": 789,
+      "sha256": "06dd2cb578bac767d8c29d429404b3658575ac38d7915683c539c8fbecd60c27",
+      "case": 3,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-3-control-136.bin",
+      "bytes": 789,
+      "sha256": "f975153dcc1284b00a4b9e8f10b720d77d951219970585456e322b67ffa5b737",
+      "case": 3,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-3-control-232.bin",
+      "bytes": 789,
+      "sha256": "d1f94f708ccaea278584b25cab31368bc08b6cbe1115af96eeb5c6d63b836b59",
+      "case": 3,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-3-control-255.bin",
+      "bytes": 789,
+      "sha256": "38b495d5ba1d360dce33adebadbe502684a262e037bd649d3972c08d3b811d2c",
+      "case": 3,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-4-control-2.bin",
+      "bytes": 206,
+      "sha256": "dceba9840af6678fa800e964d0e5c65b8144a070a5c6687c54f2cd8debe5bfe0",
+      "case": 4,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-4-control-128.bin",
+      "bytes": 206,
+      "sha256": "93bb8377fb929f83a855e94d797d462545c24fe03603f3dd9de4f6bad4cb3227",
+      "case": 4,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-4-control-134.bin",
+      "bytes": 206,
+      "sha256": "3f7c3e9b0a6d9be138be272bfb2225a43fe40770190f61780f9f39a4e8af8c2a",
+      "case": 4,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-4-control-254.bin",
+      "bytes": 206,
+      "sha256": "e79bef2aff40ccb3bf096a9791f2812f1c77ba6075ecf19ecdd8b7854aa7bae6",
+      "case": 4,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-4-control-0.bin",
+      "bytes": 554,
+      "sha256": "a7a0daa4540962d5abc32ea1e97f5f7732f18a3699db39cebd6d1d44a2c6a890",
+      "case": 4,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-4-control-8.bin",
+      "bytes": 554,
+      "sha256": "18096318f384d1f88050de7e1d5d107054e63496758aac059de8e9323c58af17",
+      "case": 4,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-4-control-128.bin",
+      "bytes": 554,
+      "sha256": "283a3b9e397b7acb97c96d4fe06c6a6373ec94265a53643891b2b15add37e3aa",
+      "case": 4,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-4-control-136.bin",
+      "bytes": 554,
+      "sha256": "9e7b94d5fe1196aef1d7e8d3e18ef979786e4e2deb06ccf97223dd4e93dec365",
+      "case": 4,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-4-control-232.bin",
+      "bytes": 554,
+      "sha256": "be24daaaef630b675a9d692d07bcf15a8319d8cfce19ba8314ced24cb4ba05f6",
+      "case": 4,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-4-control-255.bin",
+      "bytes": 554,
+      "sha256": "3e3ee9bdfa5e100969f499d416d793a39b062d500e05d39e6b0367a30f22234b",
+      "case": 4,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-5-control-2.bin",
+      "bytes": 352,
+      "sha256": "35276b829a051ad84d5d5278902bd8c8713c60ab65ca58e211e28ff26b4f96cb",
+      "case": 5,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-5-control-128.bin",
+      "bytes": 352,
+      "sha256": "f54fea48e4d8961ce765cd36eedd87347feb59f46436b15554c0227354694c1d",
+      "case": 5,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-5-control-134.bin",
+      "bytes": 352,
+      "sha256": "eb3dd3f98082cf117df13f8486cb06df7e9b8fa1c941d98da1ee16a780ffd8c7",
+      "case": 5,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-5-control-254.bin",
+      "bytes": 352,
+      "sha256": "b19c95c43ab07005800b8b61013251eb6b33302f5b870d1b326c5b3e0bf2afb3",
+      "case": 5,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-5-control-0.bin",
+      "bytes": 1346,
+      "sha256": "2cb296a820cdf0df9bc29e536d008dcbc5f2a8860a283f6cfb5541ebe4e303dc",
+      "case": 5,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-5-control-8.bin",
+      "bytes": 1346,
+      "sha256": "772cb9d3d7aa9ae3dd606ebd9f0ae00717e05e0fdea583741f84b14599dc3624",
+      "case": 5,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-5-control-128.bin",
+      "bytes": 1346,
+      "sha256": "02a4f6cdc4216f78872266f471c2169d268cd062bb071a13ce7dda48f9f715ae",
+      "case": 5,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-5-control-136.bin",
+      "bytes": 1346,
+      "sha256": "836d20c2f70495fc2063abb8acee78a37e530bcb0e31e739f54494fcffdb348a",
+      "case": 5,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-5-control-232.bin",
+      "bytes": 1346,
+      "sha256": "e91fe65f90dc5bd9ef71508318bac8c37ff68bf63ba890aaf034a16d06f441ef",
+      "case": 5,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-5-control-255.bin",
+      "bytes": 1346,
+      "sha256": "1927b40c9495b18804b76bc67cb8cd5f2e40ca98b414a5e4a3d491ba9296f55d",
+      "case": 5,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-6-control-2.bin",
+      "bytes": 233,
+      "sha256": "b59962264981196229049c8491f94e89cb95e5544a85368762bc1067db400093",
+      "case": 6,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-6-control-128.bin",
+      "bytes": 233,
+      "sha256": "40a6221fa5477efafe4be2733bdab10b572324477dda4e64fe977e45ebc1c843",
+      "case": 6,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-6-control-134.bin",
+      "bytes": 233,
+      "sha256": "3aa28b0c362cc6142d321ea5ff1dd1b56564337ed7e31e811a4c803fdb8b7670",
+      "case": 6,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-6-control-254.bin",
+      "bytes": 233,
+      "sha256": "b84a4610667433950943442f794032b41375645e18aa9e610bc49db44c0e21ce",
+      "case": 6,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-6-control-0.bin",
+      "bytes": 1064,
+      "sha256": "24e3c61f719fa52428f64a5f2c6d536ac5c064619dd3fda0011351943672d17a",
+      "case": 6,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-6-control-8.bin",
+      "bytes": 1064,
+      "sha256": "4895cf639c9b62c4940935a2a0f4f3bdc4ef079fd6f78f9b37b8bdd641b06cdd",
+      "case": 6,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-6-control-128.bin",
+      "bytes": 1064,
+      "sha256": "183e14b70799cddcef500a690ead40e1254dde40cb68da2b6a480dd5ab853ca8",
+      "case": 6,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-6-control-136.bin",
+      "bytes": 1064,
+      "sha256": "2e7564213a50d46e20be0e2906ff81f537b12d9bae50dda970b3b3e8008137a8",
+      "case": 6,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-6-control-232.bin",
+      "bytes": 1064,
+      "sha256": "ed1e0cbd0064763bc86fffe9197dd6e98c175e19676fd7d45f77b7b7b3e59ded",
+      "case": 6,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-6-control-255.bin",
+      "bytes": 1064,
+      "sha256": "b0e14140398ac7019df523fc1445ba786a48ede9482df7f8ef25febd08724fe8",
+      "case": 6,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-7-control-2.bin",
+      "bytes": 241,
+      "sha256": "7977d082eb5882dce98d8546afed876d830fe2775bf0f057dbb0baacd4f7afcb",
+      "case": 7,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-7-control-128.bin",
+      "bytes": 241,
+      "sha256": "ee03779d3e0856c28993dba0e96e9f4e8bbff69a4b976413975c6e8252763a2a",
+      "case": 7,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-7-control-134.bin",
+      "bytes": 241,
+      "sha256": "60e5ccd0f1cd89bba1214f88769fa60cdc85203bc953da62f9408168e7e9254d",
+      "case": 7,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-7-control-254.bin",
+      "bytes": 241,
+      "sha256": "e04987a26f4aa7bd967bb444f9907caa190f6e4461a6113bd6e17d8cc0cf9ef0",
+      "case": 7,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-7-control-0.bin",
+      "bytes": 1020,
+      "sha256": "39e50dae77ef0316f88f4d28271eb3de1cf69e992aa40ee15fa39673e0dda80f",
+      "case": 7,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-7-control-8.bin",
+      "bytes": 1020,
+      "sha256": "362569b908cd9977b56d45ea4b71d25465aa2a4921bf4bee5a126f4b2af6ef12",
+      "case": 7,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-7-control-128.bin",
+      "bytes": 1020,
+      "sha256": "dd585bf36905b8d2e4f8c87d233d111043cacc0c66927aa2cb9327928284ad4e",
+      "case": 7,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-7-control-136.bin",
+      "bytes": 1020,
+      "sha256": "26064b84f87a9e0df3e10a688edbaaa40ca3564c789832683573473418f667f8",
+      "case": 7,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-7-control-232.bin",
+      "bytes": 1020,
+      "sha256": "82253532c0217bef6a7c275c8a09e3292b55190a1cdd84f540119de0a07463b0",
+      "case": 7,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-7-control-255.bin",
+      "bytes": 1020,
+      "sha256": "f3ca99091e245e19be7051919da42050c1f5698ccf7371f31ba420f6b89a08fa",
+      "case": 7,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-8-control-2.bin",
+      "bytes": 271,
+      "sha256": "c9f2cc00b46fce40407816c69fcf0fc22949f38b3836b5be0155d59744b86a10",
+      "case": 8,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-8-control-128.bin",
+      "bytes": 271,
+      "sha256": "2ae5a8a6383374ddefdd3d0ff3a8651f9fd20bfa1f1a8abdd58ee474a1d1e311",
+      "case": 8,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-8-control-134.bin",
+      "bytes": 271,
+      "sha256": "af6704f4b1216d2852d79b70925e19b7b894a1657b5f138ee1b1a03477a13ec8",
+      "case": 8,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-8-control-254.bin",
+      "bytes": 271,
+      "sha256": "dd66941204d528b31245ef3e589fc0f71a5cb6abb85c00c67bc70525b9709cd2",
+      "case": 8,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-8-control-0.bin",
+      "bytes": 1023,
+      "sha256": "e793f1097b0df1a80c8d917bb859949ffae4829746ea70e1ef451df0dd6765b6",
+      "case": 8,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-8-control-8.bin",
+      "bytes": 1023,
+      "sha256": "22e07a015e590dc69442bdf4ac01206d1a2edfc837525b065c6c3a095a85358d",
+      "case": 8,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-8-control-128.bin",
+      "bytes": 1023,
+      "sha256": "4845dafa98d758987fb48c2a851ab514e58d774121b28ba2c651df2c8d6c411c",
+      "case": 8,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-8-control-136.bin",
+      "bytes": 1023,
+      "sha256": "727aa7f64b5bef7bb76b93f85f4e88518d47a737c3c2738dd3f29a84e4a16bea",
+      "case": 8,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-8-control-232.bin",
+      "bytes": 1023,
+      "sha256": "737c6ea6e41a9587ea60aee3abce80f14801280efe21a8f81716fd3fcfbe8359",
+      "case": 8,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-8-control-255.bin",
+      "bytes": 1023,
+      "sha256": "bec5e3121e8e79780b405f4bb2f1cb0cd4dd4ab3ba0c8ae8539d817e7e6c1dda",
+      "case": 8,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-9-control-2.bin",
+      "bytes": 233,
+      "sha256": "2ff2122e52d17763e473c14398ade8b92fa597d5541d9aa7e3aef756c7dcf47d",
+      "case": 9,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-9-control-128.bin",
+      "bytes": 233,
+      "sha256": "3f948b5d11d3b53a63f69fabe71ade70cc4e42656f44b71148024340e6a2d6b3",
+      "case": 9,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-9-control-134.bin",
+      "bytes": 233,
+      "sha256": "b6fa231a82931350052dfe9a124baa3b5f22a91e2542e5917ff3bc4df7185118",
+      "case": 9,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-9-control-254.bin",
+      "bytes": 233,
+      "sha256": "eec8f772167e3a4122cd260fe256fceb793461164e10f83bd2594e90f2084c88",
+      "case": 9,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-9-control-0.bin",
+      "bytes": 974,
+      "sha256": "ae5ca5af5500565086c18b8f43da44a0d3a0aaeff3011ad98fa3ce8bbda98f10",
+      "case": 9,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-9-control-8.bin",
+      "bytes": 974,
+      "sha256": "918f96eb4a28b772231d568287d0553b28f293e756c7334883b23e472f9ed946",
+      "case": 9,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-9-control-128.bin",
+      "bytes": 974,
+      "sha256": "ead762d5e53055929ac55b47d012ad6dada3e9b214d6cc63e31dd0a929561492",
+      "case": 9,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-9-control-136.bin",
+      "bytes": 974,
+      "sha256": "69ddd3e741f1044201f140b0599fa97ac0911fe3878484e3623257c2d07f73a2",
+      "case": 9,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-9-control-232.bin",
+      "bytes": 974,
+      "sha256": "b2fc8d0175e075210e632ef99b14f17d69b943f2caeadd7b569e7776bf14bcde",
+      "case": 9,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-9-control-255.bin",
+      "bytes": 974,
+      "sha256": "ebfbcee286b3119f5bce180adb8eb0985e38cbfe6410e463cc8a6de0b12dffb6",
+      "case": 9,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-10-control-2.bin",
+      "bytes": 241,
+      "sha256": "21b062086179ded0b4fabade63e857336832d81fc5a0764cf3ac338bd1452d76",
+      "case": 10,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-10-control-128.bin",
+      "bytes": 241,
+      "sha256": "454efa429ca2c67fa8eff550020295e179a9080ae0df75af2400cd3d770da745",
+      "case": 10,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-10-control-134.bin",
+      "bytes": 241,
+      "sha256": "14423befd48e7803e1b796ad3e8acbb7554bcc48fc35b099cdb654edc3c1754a",
+      "case": 10,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-10-control-254.bin",
+      "bytes": 241,
+      "sha256": "b26c07bc56f67b134e953374f3d218bbdd9a287ca93d533d25566df615c8bf6c",
+      "case": 10,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-10-control-0.bin",
+      "bytes": 972,
+      "sha256": "75f307e8020193259ae1bd8fabdf0f643f041ed56c600df17778a058dddafd8c",
+      "case": 10,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-10-control-8.bin",
+      "bytes": 972,
+      "sha256": "b8e3c9d97d12003213a55185d161f48760ce059c7a9b7ea3115f3ff239db5e47",
+      "case": 10,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-10-control-128.bin",
+      "bytes": 972,
+      "sha256": "372449a4b820ff430f1824fc8140c060345ada838cf2d87b12982c59fb389e65",
+      "case": 10,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-10-control-136.bin",
+      "bytes": 972,
+      "sha256": "9d2c70213ab34dae8a6960430662bc61eed333d5d7007e9fbe5b2aca90117540",
+      "case": 10,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-10-control-232.bin",
+      "bytes": 972,
+      "sha256": "dc1170b1349dc8c78be66ceb3f4bcb24c7e96171b21c9b8cd6adf380ea549c85",
+      "case": 10,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-10-control-255.bin",
+      "bytes": 972,
+      "sha256": "bb04c591b7a05c00c5cb57531f2b445792359b44f0c6da4eb8979ae5b64ecd30",
+      "case": 10,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-11-control-2.bin",
+      "bytes": 271,
+      "sha256": "34ef936f5440241ba6d98434d03472cfb3b60cfed7a9e75d1e770b8e110fa1e7",
+      "case": 11,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-11-control-128.bin",
+      "bytes": 271,
+      "sha256": "f00ea9765a9c464fd4cb0a5a7d23fcd8618e9ce36e66575456e9d7224a72ced0",
+      "case": 11,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-11-control-134.bin",
+      "bytes": 271,
+      "sha256": "615b355cf602929e7d51b1b71b34b35a9be4ff41bbf9b91ad3bfed00cb500060",
+      "case": 11,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-11-control-254.bin",
+      "bytes": 271,
+      "sha256": "8463dcde9216295672190243d62fbe5b81ad043c014acc18d9cad369e721975f",
+      "case": 11,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-11-control-0.bin",
+      "bytes": 982,
+      "sha256": "b56ac4e0e4c9107c4f4be919f0f04defb65ea93dd6cb64f8c980ff438b8fa4a5",
+      "case": 11,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-11-control-8.bin",
+      "bytes": 982,
+      "sha256": "07760bdfeacbee0875753a1170ea1dd5f3d0602a47a8dbcbc38b92d00ac9c7d0",
+      "case": 11,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-11-control-128.bin",
+      "bytes": 982,
+      "sha256": "fab8230823856c074c45b931fee2e97f8ba0507ef8acbff175790a4b8a4f678e",
+      "case": 11,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-11-control-136.bin",
+      "bytes": 982,
+      "sha256": "e19251d81e78873fed99e4d2efcdf607bba0f8a9441f33eac994c08b76122bb6",
+      "case": 11,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-11-control-232.bin",
+      "bytes": 982,
+      "sha256": "f71ab66580843427c596cfa7b76959e7f036b5a84738c05b386dd14a2a85851b",
+      "case": 11,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-11-control-255.bin",
+      "bytes": 982,
+      "sha256": "9df8fd88e31f1b228b18470ab3d8d8cf7a97a0f5e0070e6f3042dcbd572a0ec5",
+      "case": 11,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-12-control-2.bin",
+      "bytes": 233,
+      "sha256": "52a5c6b6cbe0c2806a562c1814a9d0c3a559a7bea1d47c27240a1aa951a8ed8e",
+      "case": 12,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-12-control-128.bin",
+      "bytes": 233,
+      "sha256": "70474969fb035cda63ab0915cf0f6b63d2521196f0a3e7bd67f6d49ec4bbfeeb",
+      "case": 12,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-12-control-134.bin",
+      "bytes": 233,
+      "sha256": "baf5a11b4703321261707a70bc63064ed6af7a8c5fbc2751dc80c5832bb98bd6",
+      "case": 12,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-12-control-254.bin",
+      "bytes": 233,
+      "sha256": "e14a701a4109a0f8498394c741d98aa07e61028a84cdb8ed2ab9da7f3cb646a9",
+      "case": 12,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-12-control-0.bin",
+      "bytes": 960,
+      "sha256": "7e9314ce7032d184da51f875f9de47abd26ce4e10f291e4f8e5eb71e6684c8ec",
+      "case": 12,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-12-control-8.bin",
+      "bytes": 960,
+      "sha256": "600ffcdb4705fb02cc38b1d759628c53b3ce637d9ebaa85ec59a42825fd6aec0",
+      "case": 12,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-12-control-128.bin",
+      "bytes": 960,
+      "sha256": "1525e22b296c6ee94a3e927ef872c5043e09dcbdc8add5b74e210b2030bc411b",
+      "case": 12,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-12-control-136.bin",
+      "bytes": 960,
+      "sha256": "0218b95a6590709d7fbb179d52aee01abada17dd1239b565479199d82edfe0e5",
+      "case": 12,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-12-control-232.bin",
+      "bytes": 960,
+      "sha256": "8d046be00a5d4ff4c891166189cc3bb2e1caa2231a860988f7b4c36afd1eff51",
+      "case": 12,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-12-control-255.bin",
+      "bytes": 960,
+      "sha256": "90360fc79bf35190952eae1598a3d296c74b62693078bc715859e14462b066a9",
+      "case": 12,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-13-control-2.bin",
+      "bytes": 241,
+      "sha256": "55a29acddd179143399f400950d42f7435ee5fb8c31346a6d146550ccbe4ae34",
+      "case": 13,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-13-control-128.bin",
+      "bytes": 241,
+      "sha256": "3419d4f4c922fbaf246d1aafbbd6e495c3a296c667c8d23d14e70fdde63eac47",
+      "case": 13,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-13-control-134.bin",
+      "bytes": 241,
+      "sha256": "f2478f2510ab67f601386a4387c869157319ec0a50eb0acadd31b29b2958cba9",
+      "case": 13,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-13-control-254.bin",
+      "bytes": 241,
+      "sha256": "156c2c74407647778cc20559ec3b11100b25fe27d53bdbf0001efe0a82d69fee",
+      "case": 13,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-13-control-0.bin",
+      "bytes": 956,
+      "sha256": "5bdac37ff621f41f26d202d0c301a4aeee7775b63946045dfe78ca092691f292",
+      "case": 13,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-13-control-8.bin",
+      "bytes": 956,
+      "sha256": "0db1f3658fdde364fb42fe0da8e902a968e37e225a3e5063a6e3f951d53ed557",
+      "case": 13,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-13-control-128.bin",
+      "bytes": 956,
+      "sha256": "9ad813a9b9e9d733f90374f9ae03407b7f8d976568a60a9141fcb4ad5db40a45",
+      "case": 13,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-13-control-136.bin",
+      "bytes": 956,
+      "sha256": "6ea6092219f01039c7f4b0e00792f3dd3da349bd3da7a3b38160b960eac036d8",
+      "case": 13,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-13-control-232.bin",
+      "bytes": 956,
+      "sha256": "1009d810680e7ca4afffa8ef1ccc9b13b6eafaa0325aef4ee960ab27d4a91fde",
+      "case": 13,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-13-control-255.bin",
+      "bytes": 956,
+      "sha256": "60ace34a5b2c8385d5009d301aac922fa63c016698c61ee4939584368dfee0c4",
+      "case": 13,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-14-control-2.bin",
+      "bytes": 271,
+      "sha256": "935f4f9f58712ede7270984acc1c59ce20c551e27572599e06049c9841b89233",
+      "case": 14,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-14-control-128.bin",
+      "bytes": 271,
+      "sha256": "8f6e48e1b0fdf63c6c84a40b265fc453a4d7f944ca4cd8bbfbd5b135482370d7",
+      "case": 14,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-14-control-134.bin",
+      "bytes": 271,
+      "sha256": "1aac9ccea0883c5d84dfa74dfab6ac3a1fec52f5a7a446c373c8703cb7bf7556",
+      "case": 14,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-14-control-254.bin",
+      "bytes": 271,
+      "sha256": "cd7e5c85958a7b150f438be160bed555eb571c4478be0206fbd0edb1e79ce7f8",
+      "case": 14,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-14-control-0.bin",
+      "bytes": 985,
+      "sha256": "1347c18fc9578b2a82de60db32fe0cbbffd483e9292adc658514e17d040230a9",
+      "case": 14,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-14-control-8.bin",
+      "bytes": 985,
+      "sha256": "d636793a33025d533088164307475fc02ee509a9269b25d3e3248eb4960c1cb5",
+      "case": 14,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-14-control-128.bin",
+      "bytes": 985,
+      "sha256": "9cc31f396ddfab959efea76d8633c4cdb8c8f07e38962ec45096533e3a63b609",
+      "case": 14,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-14-control-136.bin",
+      "bytes": 985,
+      "sha256": "aca37c79a75dba89bdfbf3f5d4dfe1c00d3229044dcd58bdd43f87961cddf163",
+      "case": 14,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-14-control-232.bin",
+      "bytes": 985,
+      "sha256": "f329c9f63c9b70dc9b48f39064c7deb6465b142120bea12f14e293343f50da45",
+      "case": 14,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-14-control-255.bin",
+      "bytes": 985,
+      "sha256": "c746956ab5a025340b893daad3d990824505b86a109c08012a8ccbbf4e877453",
+      "case": 14,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-15-control-2.bin",
+      "bytes": 233,
+      "sha256": "acf593db068aadb8d21f35d037a46c0624fb80b008f5738352662695560462a2",
+      "case": 15,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-15-control-128.bin",
+      "bytes": 233,
+      "sha256": "cde2aa32b2e47fce20b9497180b8124e8a1568854cba2bc471ff9be970af984f",
+      "case": 15,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-15-control-134.bin",
+      "bytes": 233,
+      "sha256": "74f730be1ac8787e73a5b7babafa2003e846904d81da0ba5eeadc5c55a0f117d",
+      "case": 15,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-15-control-254.bin",
+      "bytes": 233,
+      "sha256": "29883af8556116c05acb258a284a95fe1943486642417168a7d8f741b175fde4",
+      "case": 15,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-15-control-0.bin",
+      "bytes": 707,
+      "sha256": "ad4299561a24d60c368f40c1d730dfe0c2861d0382d40b5f398bdb0c07380bee",
+      "case": 15,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-15-control-8.bin",
+      "bytes": 707,
+      "sha256": "ebcdf5419ce71b1d46e2321b8232886cdf425f49db6dc0e997aa42b222dffdf0",
+      "case": 15,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-15-control-128.bin",
+      "bytes": 707,
+      "sha256": "e15b80a4a455fe6d3695a3f58b7e08aa636ed3dae7e76dc3d438ca0cf6ca104e",
+      "case": 15,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-15-control-136.bin",
+      "bytes": 707,
+      "sha256": "84c06f95fded222b3e64bdb2a5d05dd6ff1f9a12eeb2e15012e2c05ca033c7da",
+      "case": 15,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-15-control-232.bin",
+      "bytes": 707,
+      "sha256": "86c8bc0f6693b2103580c73f41df63f768b65c18a23c8ff22f0e63f5ff4395db",
+      "case": 15,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-15-control-255.bin",
+      "bytes": 707,
+      "sha256": "9ebaa5f8f6e04dd9966e50716b7f48470a3707e50b295a532a1661de163fdd26",
+      "case": 15,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-16-control-2.bin",
+      "bytes": 241,
+      "sha256": "f65d1b344ad5d235e34db6509e2f4d01e9db019de70309de87de7e32cc6382d9",
+      "case": 16,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-16-control-128.bin",
+      "bytes": 241,
+      "sha256": "9569fe77d2076485625079e4cf73168f1811388641478711357966fc30b83edd",
+      "case": 16,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-16-control-134.bin",
+      "bytes": 241,
+      "sha256": "ee3dd4b58253cad40fed3b2e950bb5ce4912455c444a45e36fada39f26af47b0",
+      "case": 16,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-16-control-254.bin",
+      "bytes": 241,
+      "sha256": "e04dca092ab821ebcd135c25e31993efaceea0a49a437da766f30dd353b2c92e",
+      "case": 16,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-16-control-0.bin",
+      "bytes": 716,
+      "sha256": "87b48d786553d319e87265da3d0d56581c606f3217970e927a1773caa2ec816c",
+      "case": 16,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-16-control-8.bin",
+      "bytes": 716,
+      "sha256": "d4418e0386d4e59705c48aea903b82efb92a33982ee8f0f23e0041a9a07531cd",
+      "case": 16,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-16-control-128.bin",
+      "bytes": 716,
+      "sha256": "18109cb59703246a5dbc6c94dca15df9439e45e1b8364f6606b5c3f36817c491",
+      "case": 16,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-16-control-136.bin",
+      "bytes": 716,
+      "sha256": "98dc47278a12604bc60eaeb51a0b54f0d15676dd405551111baa537490c0cd16",
+      "case": 16,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-16-control-232.bin",
+      "bytes": 716,
+      "sha256": "c077f9fb7729b8df72a881b8aafd948113d7270aee7a20ba8c481a317926aa16",
+      "case": 16,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-16-control-255.bin",
+      "bytes": 716,
+      "sha256": "9926a29a56cc0bc0b0bd187af8d4a7bc739258e411fa0e2dee39cd3e611141e2",
+      "case": 16,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-17-control-2.bin",
+      "bytes": 271,
+      "sha256": "87743f93842e592ff255719c72273f314c1e65b80249afdc7161d3cf54d5b7bc",
+      "case": 17,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-17-control-128.bin",
+      "bytes": 271,
+      "sha256": "c6a7720e7ee8ccd2abd09c712fd535b3bb2176b086349f6c596dd531fd2e7197",
+      "case": 17,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-17-control-134.bin",
+      "bytes": 271,
+      "sha256": "39cda4c2e74f02fb39bcfea1bb7f9fc7463351f1d2de3b0d164c2b6434372d99",
+      "case": 17,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-17-control-254.bin",
+      "bytes": 271,
+      "sha256": "0a7cb2b84f78a9bd3c6d8bcfe1313c05189be16d5d101da613e16ace2cbb72e8",
+      "case": 17,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-17-control-0.bin",
+      "bytes": 746,
+      "sha256": "7f9827b3da79b26a1a1418adfb15a0ef94ab33e84710cbd98a5112b3fafa6d58",
+      "case": 17,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-17-control-8.bin",
+      "bytes": 746,
+      "sha256": "b3d7fe65a80dc64e91ff143829b7dc5685eef3b28c16ff808c214abdcb8eea14",
+      "case": 17,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-17-control-128.bin",
+      "bytes": 746,
+      "sha256": "c7c25e885b31c96c74c50b2f7136f5cbd23488cfd5fb4c6faf82c48c55218ad8",
+      "case": 17,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-17-control-136.bin",
+      "bytes": 746,
+      "sha256": "4efd8a42ac2d6cb536009e55747db5d3f7dea599ee4f16d46ad2a19aff3476fc",
+      "case": 17,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-17-control-232.bin",
+      "bytes": 746,
+      "sha256": "d001fe8b4a1b973856188aa168a021f0dd13bacb82ee4d3a9432b959f9216399",
+      "case": 17,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-17-control-255.bin",
+      "bytes": 746,
+      "sha256": "bcb63f4f0bd719a182d5e5f60b4c063478df5b65d7e9b04af842135395a4c5e5",
+      "case": 17,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-18-control-2.bin",
+      "bytes": 233,
+      "sha256": "6246998a99959eea4fdef2ff60a682d338b4aadb0cb664edf086b791be337bdb",
+      "case": 18,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-18-control-128.bin",
+      "bytes": 233,
+      "sha256": "d312a6ca109096a427008bbf2756058ecbad90c6532b1e3821958b8ed6e7f49a",
+      "case": 18,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-18-control-134.bin",
+      "bytes": 233,
+      "sha256": "929d6222294fb88a307a3f74f8a78f6027bb87128b56ca717a6ac14502458171",
+      "case": 18,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-18-control-254.bin",
+      "bytes": 233,
+      "sha256": "9f8550d1783be9f850daa732e67c3e298d0464b18a18460fc7c5099db36f7e7d",
+      "case": 18,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-18-control-0.bin",
+      "bytes": 1400,
+      "sha256": "eeca71fb676dab0df9754de4c28c5383e0545a604f7e07d61079b6f16f4840a9",
+      "case": 18,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-18-control-8.bin",
+      "bytes": 1400,
+      "sha256": "2c46007d3db70365aa316a5ba5de68cecb4a75571f8715af3779ff2ffc960aa7",
+      "case": 18,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-18-control-128.bin",
+      "bytes": 1400,
+      "sha256": "305581272419f80a4af21705d04841856a706709529f64f542efe56473b169a5",
+      "case": 18,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-18-control-136.bin",
+      "bytes": 1400,
+      "sha256": "3bd007024ed20a04c0774b086faaeefbc172dae566bf76023fc7da261976f301",
+      "case": 18,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-18-control-232.bin",
+      "bytes": 1400,
+      "sha256": "218e36c1b86f2c4409584fdf52f7c1a1898c3d02c2c9358741e56dcfb9cca32e",
+      "case": 18,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-18-control-255.bin",
+      "bytes": 1400,
+      "sha256": "e77ab39817d8e56bfa8d2fd35e3c1da7c626711b0fa9c58f52507ae30b4b97fa",
+      "case": 18,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-19-control-2.bin",
+      "bytes": 241,
+      "sha256": "bc6efa29221812f4698be832b202748ca4ab73a18252a0e594aa3010d69ddb28",
+      "case": 19,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-19-control-128.bin",
+      "bytes": 241,
+      "sha256": "56110c1097b50e6ba2b7048822a51a480aaf9a3029b5a3fac260267b8100eaa6",
+      "case": 19,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-19-control-134.bin",
+      "bytes": 241,
+      "sha256": "4b352d8537a25f811a1089ce1516e1b069be8a5dc05da70ba25f78e1fa84b191",
+      "case": 19,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-19-control-254.bin",
+      "bytes": 241,
+      "sha256": "3f65d5e942049777294b3ad7bb7891a5e33cae4380e8ec1668926708b00740c6",
+      "case": 19,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-19-control-0.bin",
+      "bytes": 1136,
+      "sha256": "b6d71e8bd2d65abcd86b73ae468d864c65ca6fd2cb7be1275e97e7a1f700a3a4",
+      "case": 19,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-19-control-8.bin",
+      "bytes": 1136,
+      "sha256": "772beb19839f61a2ba079b3bd1efc7933a46c31fa4b9f69fd661366aac3a24af",
+      "case": 19,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-19-control-128.bin",
+      "bytes": 1136,
+      "sha256": "a009f4fa66f95f5605fdace72124c85cc1b9d70373a08b81ba673a000e8b6f1f",
+      "case": 19,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-19-control-136.bin",
+      "bytes": 1136,
+      "sha256": "7fd0f02e4f956253fba05af1f54c8ea280f7fe6899d2fe501f0c695519869490",
+      "case": 19,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-19-control-232.bin",
+      "bytes": 1136,
+      "sha256": "0288cf5af52fb075b3a85b9668fb01eb7edd32b0186cd7bc016776e9f6a58e80",
+      "case": 19,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-19-control-255.bin",
+      "bytes": 1136,
+      "sha256": "65266a7e50f79ade006aed074b9baf7dd6b38705498be35b265f3d1be7b4109d",
+      "case": 19,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-20-control-2.bin",
+      "bytes": 271,
+      "sha256": "88d6c9e06af669ccca4a7a590e9c0132c5beab200d9923e9a9598f1dedaf804e",
+      "case": 20,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-20-control-128.bin",
+      "bytes": 271,
+      "sha256": "98b8cad878c4ad7943fd409f623aa3eaccff6a8fd5e8b7fa297bcad92cd08a51",
+      "case": 20,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-20-control-134.bin",
+      "bytes": 271,
+      "sha256": "85f83eadcbd5f8cdcc48ef0d3d1b07dad79931bbd16690f4a1c658a0b11b0d79",
+      "case": 20,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-20-control-254.bin",
+      "bytes": 271,
+      "sha256": "8335752abfe467725a05d5cfcc5e790232c92d7991058ab158e10dd2fb347d86",
+      "case": 20,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-20-control-0.bin",
+      "bytes": 1109,
+      "sha256": "8076cf456c70a48d2007dc0bcf02f3bb33cfce5ed81787973085dc3593e51b9d",
+      "case": 20,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-20-control-8.bin",
+      "bytes": 1109,
+      "sha256": "d88024bcfb6e21d28d58ad7b160ac899d718e93b2886727dbd0e1f0cb276e368",
+      "case": 20,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-20-control-128.bin",
+      "bytes": 1109,
+      "sha256": "6efc1eeee7e2338de37aa2eabc23c17f718bf9e68fa85094adb447c3765b6622",
+      "case": 20,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-20-control-136.bin",
+      "bytes": 1109,
+      "sha256": "274d5ead345abf509747afb01ed04dc91e026bcca594431235548f2c5bad3659",
+      "case": 20,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-20-control-232.bin",
+      "bytes": 1109,
+      "sha256": "0bd21d32481474eeaaca2568ccd6075732903041aedf9a6a3f392a68aaecc4af",
+      "case": 20,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-20-control-255.bin",
+      "bytes": 1109,
+      "sha256": "d245dc737378c543b59aa286473e4c4e6dab2672cd360422f3602eaae779a284",
+      "case": 20,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-21-control-2.bin",
+      "bytes": 233,
+      "sha256": "cd27aa34bde5803c56adc406273f396e0c249c899a792f1579d9bc0ee0ef3ea8",
+      "case": 21,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-21-control-128.bin",
+      "bytes": 233,
+      "sha256": "57b57fa01a5dd3d3f2a2e7aae4506db07d6f55e640638b4f4c820e60e1cf49c5",
+      "case": 21,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-21-control-134.bin",
+      "bytes": 233,
+      "sha256": "fc551f56f8d097a07c3bdbecbd64dd35dc8a646da35e9465c936f7527c0847e3",
+      "case": 21,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-21-control-254.bin",
+      "bytes": 233,
+      "sha256": "7d7a0695dfe04ce5e575e2e639effce65cad9d5a778ae400bdd0bf51103ad340",
+      "case": 21,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-21-control-0.bin",
+      "bytes": 1043,
+      "sha256": "94cfd0a2799c2c8ded0799d1b4b56d6ce9438b01d9ceacf66a63e48a1e62bcf9",
+      "case": 21,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-21-control-8.bin",
+      "bytes": 1043,
+      "sha256": "ffc4176eb32785f394e652e9b33e7100414f144c06c10ea3aac96f9229f681e9",
+      "case": 21,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-21-control-128.bin",
+      "bytes": 1043,
+      "sha256": "6a9d9961adff59bd29386a00fdc14c1cc97502d772f8256e7679f44df7c7067b",
+      "case": 21,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-21-control-136.bin",
+      "bytes": 1043,
+      "sha256": "0e3552e9031783c71313db21af2454a59426f95481dd6923e986f39adaa97a88",
+      "case": 21,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-21-control-232.bin",
+      "bytes": 1043,
+      "sha256": "72902f5e301687bf8cee30263851ed434ce9cce34657d7a61bd151702b0d26f0",
+      "case": 21,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-21-control-255.bin",
+      "bytes": 1043,
+      "sha256": "d4e67a47a946d69a4d2f6ed04d23b4ae558b3488ba4f6414a8af6fa74b9c19ac",
+      "case": 21,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-22-control-2.bin",
+      "bytes": 241,
+      "sha256": "30980b78b6a648033ef32603ce1a954b9ef7e3c2d8fdf5b28188310ba3398626",
+      "case": 22,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-22-control-128.bin",
+      "bytes": 241,
+      "sha256": "ff18457974c0ed2bdc254483a1f2c570f0005b4500222e5943d08f27ee320932",
+      "case": 22,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-22-control-134.bin",
+      "bytes": 241,
+      "sha256": "f7975b3ef982b84a19f1d284ec51124a224763b59cf686b10a82c09287c26d37",
+      "case": 22,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-22-control-254.bin",
+      "bytes": 241,
+      "sha256": "2eb69912f2301f6d12a9a9058bfac53fb31980f1c29994c8a9d87c9fae1a892a",
+      "case": 22,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-22-control-0.bin",
+      "bytes": 1023,
+      "sha256": "8a62b9533563e71904a86fdd34ebc072df34178d0750f8775cc8fa563eb789f6",
+      "case": 22,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-22-control-8.bin",
+      "bytes": 1023,
+      "sha256": "50d5e4c453f81edd37d2d5234c155c744a9000db84e0f062a0b65df8b6b8c56a",
+      "case": 22,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-22-control-128.bin",
+      "bytes": 1023,
+      "sha256": "28af3b21e2c6bae435d547c637d1a00356ab58a0d1e4a08090cb40506b91c5aa",
+      "case": 22,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-22-control-136.bin",
+      "bytes": 1023,
+      "sha256": "506eb9320856e0959b203746333b683ffc9d89750ad22df5d520473e5e3d63f7",
+      "case": 22,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-22-control-232.bin",
+      "bytes": 1023,
+      "sha256": "134f393436a4e4df1b0955c37562dbd459c1a2846953947dd81db45c582c94de",
+      "case": 22,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-22-control-255.bin",
+      "bytes": 1023,
+      "sha256": "cf30fa14b8fa32ea658540830eea9f6c2fcb25fcae4926a88adcd6bd45348024",
+      "case": 22,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-23-control-2.bin",
+      "bytes": 271,
+      "sha256": "83bd31ad8dd6d2bcea28c978234b2e5ae9aab0f300f940330d0edf370a677b7a",
+      "case": 23,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-23-control-128.bin",
+      "bytes": 271,
+      "sha256": "68aeb34cb42c4dc72398bb7bfd2399ea9cba39ed7d033717799f7c33908598fe",
+      "case": 23,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-23-control-134.bin",
+      "bytes": 271,
+      "sha256": "992136c88154c459d3203e3cd778f74b6159cd89868ad39e4ed3689522c8d59b",
+      "case": 23,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-23-control-254.bin",
+      "bytes": 271,
+      "sha256": "e0e78c5635f72f04fc2a0487a8d050815d40d3ab4057867f00bdbbbaffb2173c",
+      "case": 23,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-23-control-0.bin",
+      "bytes": 1016,
+      "sha256": "76440cc743cb3e2adda465784c0a82fc435e5ca8118c22f90b2ce1689da24730",
+      "case": 23,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-23-control-8.bin",
+      "bytes": 1016,
+      "sha256": "65e9d8c19c41b182a250e01801d4ba88f87187fe88ec60b8ba0a61b90165dd13",
+      "case": 23,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-23-control-128.bin",
+      "bytes": 1016,
+      "sha256": "e3c8ce316ad8f34c3d07fafa9de95563e6e67c301061ec8759d6eaf88718b2d0",
+      "case": 23,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-23-control-136.bin",
+      "bytes": 1016,
+      "sha256": "1ae8f5f3cb93d7ee57bb5a59c98600bfee96ed0577bd9fdb5edaa53993e67d3b",
+      "case": 23,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-23-control-232.bin",
+      "bytes": 1016,
+      "sha256": "ce25f5d84832fb7bba9c3bc1d8d923f8ee00f77f23979f9ed635084593a7c3cf",
+      "case": 23,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-23-control-255.bin",
+      "bytes": 1016,
+      "sha256": "0892dff1f4bc29d2e6f0bd00388e3bc7d012724d23b4aa5eabcfd614d3a069c3",
+      "case": 23,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-24-control-2.bin",
+      "bytes": 233,
+      "sha256": "c180ce7fe0d4a997359058a5a9c23f18310e671900e38f7d8f17443f9c9e2452",
+      "case": 24,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-24-control-128.bin",
+      "bytes": 233,
+      "sha256": "2587e69b7235e3848af17f3b23ec2549beb1fa80d69c5695f5d463a8c35f2fb9",
+      "case": 24,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-24-control-134.bin",
+      "bytes": 233,
+      "sha256": "6f1fbcaaf24b67a4017b28dc629c4bd38929a27fddd10d1b4cb81546daa9316a",
+      "case": 24,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-24-control-254.bin",
+      "bytes": 233,
+      "sha256": "c904d80ea57aa4377698ab66716a0cc7f82a16b5387943d1a010e8f6ae9aa483",
+      "case": 24,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-24-control-0.bin",
+      "bytes": 965,
+      "sha256": "67f09acbcf29ae137af4b20504f2dab7bfe69702d984c12894bce0f6a31703cf",
+      "case": 24,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-24-control-8.bin",
+      "bytes": 965,
+      "sha256": "739203ec5906bcba824116561407700400767b82487adf0bca58752480d0e622",
+      "case": 24,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-24-control-128.bin",
+      "bytes": 965,
+      "sha256": "73b50ac832c6c9637c97b693eb84c85ed2971ce6c0b0d70223614c9cefe52bde",
+      "case": 24,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-24-control-136.bin",
+      "bytes": 965,
+      "sha256": "0261df4c338b4d6bb2dffdca7c6d3e5532d01018ab6e80b32b94b9a05065e20c",
+      "case": 24,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-24-control-232.bin",
+      "bytes": 965,
+      "sha256": "63ce93d551b1f264b09a32f149fccb4e3e3993bb0ee296ed767661924f95c869",
+      "case": 24,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-24-control-255.bin",
+      "bytes": 965,
+      "sha256": "a65b7090052e06fb0df5d52d098ba364ab45f54a1dab3f59ea4ee625296bc350",
+      "case": 24,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-25-control-2.bin",
+      "bytes": 241,
+      "sha256": "349c363e0ac1aec6140115a689d5d4501637f5c4fcef899f4e71c206b5dcc53c",
+      "case": 25,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-25-control-128.bin",
+      "bytes": 241,
+      "sha256": "8b52d867b98ded52e4e2387e9636644e51180b4cdf6060542d58355ac931b273",
+      "case": 25,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-25-control-134.bin",
+      "bytes": 241,
+      "sha256": "8cf4df23f240e7e82efc9f82633c20309aa84e79299a6d339b0adeb433cf463e",
+      "case": 25,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-25-control-254.bin",
+      "bytes": 241,
+      "sha256": "ad737e758e197fe7082c21d16ceb63714f923c64f4d004983c13e711dfbacdc4",
+      "case": 25,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-25-control-0.bin",
+      "bytes": 985,
+      "sha256": "639058a2a101be166f6ee91552f606fb2c39108301a9129c0924c780e1e2d088",
+      "case": 25,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-25-control-8.bin",
+      "bytes": 985,
+      "sha256": "338b1e3e1178fc594a17999cdb56791e9f593677147f991ed365284c36ed62e1",
+      "case": 25,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-25-control-128.bin",
+      "bytes": 985,
+      "sha256": "638c69671501ab3fa4dd4e42254b8fe0827a6959568d1d0b4001d285afb4b0b4",
+      "case": 25,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-25-control-136.bin",
+      "bytes": 985,
+      "sha256": "b49f1de1b4fb71bec8758367e1949f83fba5672a6fd6b84c34b12fd27de61caf",
+      "case": 25,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-25-control-232.bin",
+      "bytes": 985,
+      "sha256": "5d823fbb220428fa084b988d2683b14af6a0f81916a527fce1436631618782e3",
+      "case": 25,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-25-control-255.bin",
+      "bytes": 985,
+      "sha256": "7bdbb3abe21a109a5791026d0a43feba99ca50dfeab54695862512cfd72cb70d",
+      "case": 25,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-26-control-2.bin",
+      "bytes": 271,
+      "sha256": "7401758329a7e2725599d8ae6d2a801001f395ce987cca7d6428df730bdf9ca7",
+      "case": 26,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-26-control-128.bin",
+      "bytes": 271,
+      "sha256": "4475aec469a9dddf69e293449bc0509dd4b096c8ce588baf1c969decad1e44f1",
+      "case": 26,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-26-control-134.bin",
+      "bytes": 271,
+      "sha256": "962e3cb7885d7fde200cf27f2a2fbcbb6529b70f35e5b30a7a97bb771f85f6e3",
+      "case": 26,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-26-control-254.bin",
+      "bytes": 271,
+      "sha256": "7a541a434506a34751fa29e188a2ff59301ba0bf25a9d294f8c20963dd75e0e8",
+      "case": 26,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-26-control-0.bin",
+      "bytes": 1006,
+      "sha256": "13c06562f4ffcaaf13df8fa8e480801522e0b18d772fc63f3f2369f56324fbb6",
+      "case": 26,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-26-control-8.bin",
+      "bytes": 1006,
+      "sha256": "64af515c91541d41e62810d5d913e9bec9d9e9416f4c6977c90225c9b9028c82",
+      "case": 26,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-26-control-128.bin",
+      "bytes": 1006,
+      "sha256": "8585d08931343fe4afbd9cd5bb2e7e8380ed95ea6970159cfbe70f3e395f9750",
+      "case": 26,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-26-control-136.bin",
+      "bytes": 1006,
+      "sha256": "a04b40eec1175cc53e5a46800052ca4c1f5d8f58e51e38f23027416905dbef3b",
+      "case": 26,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-26-control-232.bin",
+      "bytes": 1006,
+      "sha256": "9ec3d95406ccd4c255991ed300081437358275fb3791290c0b6ba05c7e429e18",
+      "case": 26,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-26-control-255.bin",
+      "bytes": 1006,
+      "sha256": "3b29d247fe65081e115c343fd1c1f3ff44bcbe62824b5db4e562e1f6090e470f",
+      "case": 26,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-27-control-2.bin",
+      "bytes": 233,
+      "sha256": "c25e9bee7259997d25ef7b791e81e9ae5a8888dc7221c356016e4be78e57fe06",
+      "case": 27,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-27-control-128.bin",
+      "bytes": 233,
+      "sha256": "6d15e8e2d859ee695cd1696b29af3d044d527aa87efb8b71b28d029762692975",
+      "case": 27,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-27-control-134.bin",
+      "bytes": 233,
+      "sha256": "d1cdac0f53f1bf08010e0266b19eb1889d8ec784fe0e9dc318c9157c9797663c",
+      "case": 27,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-27-control-254.bin",
+      "bytes": 233,
+      "sha256": "2ba5437622cfb294181760f1c847df47567429e08d6a18ecd81fd613bd5f2bc4",
+      "case": 27,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-27-control-0.bin",
+      "bytes": 713,
+      "sha256": "225cac229ea3b0175e2b11d5a5dba9082d2f42853e1c06f9664ecb79692d6f3b",
+      "case": 27,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-27-control-8.bin",
+      "bytes": 713,
+      "sha256": "58b5247891b6176f8d31cd1acfb5ee5f81b13849f046143d8882331b1ef85d30",
+      "case": 27,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-27-control-128.bin",
+      "bytes": 713,
+      "sha256": "13e9ad97b2a72ea54a90671f5d5d93162400679cb0cf15cd97f7e907358bc1d0",
+      "case": 27,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-27-control-136.bin",
+      "bytes": 713,
+      "sha256": "f72e112da04255d156bf5e80adf6f6c913fe1c0bd3050b393e7e761c6443a0e4",
+      "case": 27,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-27-control-232.bin",
+      "bytes": 713,
+      "sha256": "c5a9cf2f40c08b62b60900fccae09eb239a4b43004470f5a9bfb2fe1ae07d0a2",
+      "case": 27,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-27-control-255.bin",
+      "bytes": 713,
+      "sha256": "a6928ee4097ff781e1575d26db0da026cb9bce3f365ff54d0593edae6fcdbccc",
+      "case": 27,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-28-control-2.bin",
+      "bytes": 241,
+      "sha256": "8f09a195cae69c3414aa9a7d85d32e8984baafcbd3c768c128800f7c02c02949",
+      "case": 28,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-28-control-128.bin",
+      "bytes": 241,
+      "sha256": "b268a98ccf0af548551d48170e8270aeccdf73760abea08b7de4e55034e6aeb4",
+      "case": 28,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-28-control-134.bin",
+      "bytes": 241,
+      "sha256": "c23efabe686c159a3ef02e6130e587830842a844a514719f1edb02685c10a80f",
+      "case": 28,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-28-control-254.bin",
+      "bytes": 241,
+      "sha256": "66f2da8c58c8c1b3c4e02cc11d6c134490ed6added9d6bb1b15843ca63d7db49",
+      "case": 28,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-28-control-0.bin",
+      "bytes": 723,
+      "sha256": "f1e03cbbcaa48690ba694ba52f5e8fab2194e35e893780eadfc8a697603dfc0d",
+      "case": 28,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-28-control-8.bin",
+      "bytes": 723,
+      "sha256": "a18b8346368953df89000976add1b01993ee7aa814b29a85341ef6f8062c8719",
+      "case": 28,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-28-control-128.bin",
+      "bytes": 723,
+      "sha256": "a801abf8ab9ed80c2b71bdc7a47e3127662dc3baa056401ff1491a611278855c",
+      "case": 28,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-28-control-136.bin",
+      "bytes": 723,
+      "sha256": "6653184ed2f7646e3234ebb920be72409b8a46228577fd7dabfcea7f13a155cc",
+      "case": 28,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-28-control-232.bin",
+      "bytes": 723,
+      "sha256": "83a99da19d0c0694d0bf95e9284cf43e36595e630c01af9f485636ed7359d295",
+      "case": 28,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-28-control-255.bin",
+      "bytes": 723,
+      "sha256": "187deac6063371aa630dc6f4ee2c5ae2f249e15316c8f7d2828ed29ae389d25f",
+      "case": 28,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-29-control-2.bin",
+      "bytes": 271,
+      "sha256": "6519edaa0feabb45835d7c378f0597dd343f6ebc5d872fca3d0e4a0ed243f988",
+      "case": 29,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-29-control-128.bin",
+      "bytes": 271,
+      "sha256": "1fd0928f5c3310370bc5535372d07c3232e0eaf848a411cae473b6dfcfbaa503",
+      "case": 29,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-29-control-134.bin",
+      "bytes": 271,
+      "sha256": "2fcb648d7b7ac48f124f3a5b33d9b6cba3fa1f051eff15fd8c8096999d8df2aa",
+      "case": 29,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-29-control-254.bin",
+      "bytes": 271,
+      "sha256": "589d13bec959f1750c18198c569db4ff29c81c4c881005161e862e329f5d3420",
+      "case": 29,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-29-control-0.bin",
+      "bytes": 753,
+      "sha256": "2094a52a7234abe3ffe8e48123f9b9b70b9e5a1a790f6ae7a0e482d93b1db1d8",
+      "case": 29,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-29-control-8.bin",
+      "bytes": 753,
+      "sha256": "d9b330ce0d96a13aea272db9d73c373500e4ee0b0d6963f4abdc3ea42cceb7a9",
+      "case": 29,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-29-control-128.bin",
+      "bytes": 753,
+      "sha256": "5a73b1beaedc3c4785a57c65c29bf2bd1e30d1449940ce2bef2ba573a6a19d90",
+      "case": 29,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-29-control-136.bin",
+      "bytes": 753,
+      "sha256": "9680b362a45d44dc929c726158e77069fb430e4cdee00221a97b341ae6808ad2",
+      "case": 29,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-29-control-232.bin",
+      "bytes": 753,
+      "sha256": "be3149f8cf5658759cd6de18553ba0dcd8b6527a3f3b9c37e0c28f5c3e5de9b2",
+      "case": 29,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-29-control-255.bin",
+      "bytes": 753,
+      "sha256": "f6db35edc4c9a5a0e570bd238f00a9068be142d108da36c37a7a20c9beca9a19",
+      "case": 29,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-30-control-2.bin",
+      "bytes": 233,
+      "sha256": "3027fef71fbe985f7474688a0710baa100fa6d6da79333e9a5763b7e9e658843",
+      "case": 30,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-30-control-128.bin",
+      "bytes": 233,
+      "sha256": "205d5a66a26e24efbbb8f007bc4fd9286b13a43d8ce64a97aefcc590713fbe75",
+      "case": 30,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-30-control-134.bin",
+      "bytes": 233,
+      "sha256": "fafeae006e437a99e4fbb442cce9efe856d962edfbce3773bd2d88e956024e96",
+      "case": 30,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-30-control-254.bin",
+      "bytes": 233,
+      "sha256": "872ecd7bd2962810c41d2e42d0a50d49db754795a160fa860abfcc528ff5dca4",
+      "case": 30,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-30-control-0.bin",
+      "bytes": 976,
+      "sha256": "bd1bcc6d00eb81d8e7baff1ede77db4cdb1947a07eaafd165b5b14edf94b5b3f",
+      "case": 30,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-30-control-8.bin",
+      "bytes": 976,
+      "sha256": "062763d5d10f42c46f705f2e6acd0cf3f0ae0d2660df1b9f6500c0b35696a492",
+      "case": 30,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-30-control-128.bin",
+      "bytes": 976,
+      "sha256": "6f0538458fbece44bb2815fc423a5c7becf06a7582617840f1a67a9d93bd2ac3",
+      "case": 30,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-30-control-136.bin",
+      "bytes": 976,
+      "sha256": "16dd8070e502849b7d310bd1f2e08344bbafaa7474b6d400afba751412266c0a",
+      "case": 30,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-30-control-232.bin",
+      "bytes": 976,
+      "sha256": "743d720ee4bdcb8507dce052d35963a0af9d74497ba82dda502d1e00e7788b4b",
+      "case": 30,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-30-control-255.bin",
+      "bytes": 976,
+      "sha256": "43ed492b88270d37b240e889a98939a521be4cdfb5399035a02e07b22367f9a4",
+      "case": 30,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-31-control-2.bin",
+      "bytes": 241,
+      "sha256": "5848bb3858c76c9b761a51d386b92ca1b8cdf450f11fd68c22589aca7fcff452",
+      "case": 31,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-31-control-128.bin",
+      "bytes": 241,
+      "sha256": "2de76f1f2ebd11072eb4394885fd649f82b71a0594ba3c4cb84b5a8c76f1bd0a",
+      "case": 31,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-31-control-134.bin",
+      "bytes": 241,
+      "sha256": "65b30744415794a5f8b5ef41554df2231e782b0edf0f81bdf6a9c8d854bc7a28",
+      "case": 31,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-31-control-254.bin",
+      "bytes": 241,
+      "sha256": "0870be80bbf1138e5ebe5d9b4322be543041f44b177e252d4f8d52804b07f351",
+      "case": 31,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-31-control-0.bin",
+      "bytes": 921,
+      "sha256": "754785b8e4bd22af8678a291e787e0288c642f6305ca6cf7c98cef7839b01518",
+      "case": 31,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-31-control-8.bin",
+      "bytes": 921,
+      "sha256": "44085816bed4a6901b0c309b6a864d2563aff1e817d73de88c199c258ac44907",
+      "case": 31,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-31-control-128.bin",
+      "bytes": 921,
+      "sha256": "9125b18677e2007e790209f8e802996338e647b1aa0b5366ab5da4ff22479844",
+      "case": 31,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-31-control-136.bin",
+      "bytes": 921,
+      "sha256": "919728522193638d6a0ccdab4d28c315c563ca6a51b6f79b9d14633cbfde1571",
+      "case": 31,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-31-control-232.bin",
+      "bytes": 921,
+      "sha256": "7b0232108027d959f0af124ff30ce677729046848c6236d9d224937aa533cc8b",
+      "case": 31,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-31-control-255.bin",
+      "bytes": 921,
+      "sha256": "2bb5798fa4b36c0fdfe682ea1dacbef151c5ab3ca02325e981455b1277166d11",
+      "case": 31,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-32-control-2.bin",
+      "bytes": 271,
+      "sha256": "fc2dbcaa73bd5547d7f6bf1cb4d5c3c4559f418cbd0864d569cafec10246c38f",
+      "case": 32,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-32-control-128.bin",
+      "bytes": 271,
+      "sha256": "09f940e7ae300c1e1b89234f85e6d0a38222286a1f64e46cb4baa202bf417788",
+      "case": 32,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-32-control-134.bin",
+      "bytes": 271,
+      "sha256": "33086dc953f9a4f9016091b2dda6fbd99948e302fcd884968e7dd36c7a482599",
+      "case": 32,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-32-control-254.bin",
+      "bytes": 271,
+      "sha256": "728a07f8c354d9a2c92a05cbf7ef0518a3169239d32f89d81be0a8a494b270f3",
+      "case": 32,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-32-control-0.bin",
+      "bytes": 917,
+      "sha256": "c10de77dcfe147947d052087ec619ee0a7986bf340aa930b8240bb602fde4a57",
+      "case": 32,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-32-control-8.bin",
+      "bytes": 917,
+      "sha256": "94aa72ae9aea17e9e9ad75ec6aa5ce802e207aad26a2fb7b96791d80ac285da1",
+      "case": 32,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-32-control-128.bin",
+      "bytes": 917,
+      "sha256": "a81b2eb48c902428eec5fdae3da0ce69cbb7c93d288b40fb77167c843acd10f1",
+      "case": 32,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-32-control-136.bin",
+      "bytes": 917,
+      "sha256": "2472a20dda8e0d1f5a5c1bd28fa826816ed76b481c1dda88632aae172b91b5b1",
+      "case": 32,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-32-control-232.bin",
+      "bytes": 917,
+      "sha256": "78f6bc3b01092e3d451242ceb2510cbff795a30d0afa3cf94030028727be0438",
+      "case": 32,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-32-control-255.bin",
+      "bytes": 917,
+      "sha256": "051e7027b892c869c2e7f04ae345ebcee6be50b6f1eb51dca6cba1f85ba77812",
+      "case": 32,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-33-control-2.bin",
+      "bytes": 233,
+      "sha256": "7e9720a01be04f0cba75ddd2aca6da2461b2071bd137db1403e38049af3c70de",
+      "case": 33,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-33-control-128.bin",
+      "bytes": 233,
+      "sha256": "81872472e74f9fcf33f4d5a25f6588e10ffb5dacc92ce8677ee98607e86fd89c",
+      "case": 33,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-33-control-134.bin",
+      "bytes": 233,
+      "sha256": "42a68069d9dc9a64979f4f191bb72ba2f640c88abe2391a275a1f605029a459b",
+      "case": 33,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-33-control-254.bin",
+      "bytes": 233,
+      "sha256": "176572b2dd7de5891cd33418218d00c756ddf0213c7919bff6f1242adf0c4407",
+      "case": 33,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-33-control-0.bin",
+      "bytes": 851,
+      "sha256": "4364bb72ed7af3f5792cff1fd83aeea1158074ece19cd0a0e69c93deebd4a52d",
+      "case": 33,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-33-control-8.bin",
+      "bytes": 851,
+      "sha256": "a47d6a90fd911f4f5fa3e6474c4ea82551275f737760b199e5c41e794882daa0",
+      "case": 33,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-33-control-128.bin",
+      "bytes": 851,
+      "sha256": "8770d88912c259ed2d183b2f57b4672893a78b9f5303201c4d88d43dc9d27ad4",
+      "case": 33,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-33-control-136.bin",
+      "bytes": 851,
+      "sha256": "d29116bd93b0580cefbf0c9a7dabdd3834c16ac285fdae8dc54d76fad2c67ee1",
+      "case": 33,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-33-control-232.bin",
+      "bytes": 851,
+      "sha256": "18af25934329c9c8c31131cf9b890ee9f024bd43bc3597f591608141cfe165da",
+      "case": 33,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-33-control-255.bin",
+      "bytes": 851,
+      "sha256": "000fec430db14f70651714564b9c2a69d1f33403061c650520de7248f3903286",
+      "case": 33,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-34-control-2.bin",
+      "bytes": 241,
+      "sha256": "6d7c216bc4a4646ece165a0bbdc8df49b29eadf7ce9bb7567ac97b4cad83a518",
+      "case": 34,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-34-control-128.bin",
+      "bytes": 241,
+      "sha256": "6b6f7df0d65bd1d7a4503a09c8da22dcc94060495e9e3e2b0c8236137f4d06b0",
+      "case": 34,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-34-control-134.bin",
+      "bytes": 241,
+      "sha256": "dcf14926a87eed61f496d8691a1655a554c1c5da1d82c93f1a936238dcfa4665",
+      "case": 34,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-34-control-254.bin",
+      "bytes": 241,
+      "sha256": "2e6507843624c9dd756b32f38d0191614684104c32ef7c079bc67c469bffb20e",
+      "case": 34,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-34-control-0.bin",
+      "bytes": 850,
+      "sha256": "205f7b4bfe461c9075417aee68c14c8fefd1215d28af8c327efe900a725d7cdf",
+      "case": 34,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-34-control-8.bin",
+      "bytes": 850,
+      "sha256": "fe5d7e54c742b4fe0b1ee07dd3ee4ee8b51a28f67e1846588dabb005df8b4fd2",
+      "case": 34,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-34-control-128.bin",
+      "bytes": 850,
+      "sha256": "35355aab409dd593cab4d433b4443df7817b31ffdfd7d636de108c9cc2bd90cb",
+      "case": 34,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-34-control-136.bin",
+      "bytes": 850,
+      "sha256": "6ea0eaf5e60bd1681c31a058fdffb06b3b75c116359f71e1845c108bdf53a1fe",
+      "case": 34,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-34-control-232.bin",
+      "bytes": 850,
+      "sha256": "61f65b157874fa16f9dc33fa66f7c1dfdf1b65bd028977922a9418e94638ae43",
+      "case": 34,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-34-control-255.bin",
+      "bytes": 850,
+      "sha256": "22b5f4308c2bbf4beddd63809d155c0e6ccd61dc3e79f40d60cb2c031a09a249",
+      "case": 34,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-35-control-2.bin",
+      "bytes": 271,
+      "sha256": "138776f64d0d63906994f2585c9f41ab6e89054c9fbd8d6be3597c469f6e5d67",
+      "case": 35,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-35-control-128.bin",
+      "bytes": 271,
+      "sha256": "e8c374610ba32f6ebf57fd11cd76f0114e39bcb6cc06411a4d8afda0216c53cf",
+      "case": 35,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-35-control-134.bin",
+      "bytes": 271,
+      "sha256": "14acf57d3999c3dd51b935870cad0910a642cb91542641c2b747ceda3100ad5a",
+      "case": 35,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-35-control-254.bin",
+      "bytes": 271,
+      "sha256": "0b67eafeeb273faef4b5aae74020f73d268b47e4e0a75464429faef332334f8d",
+      "case": 35,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-35-control-0.bin",
+      "bytes": 861,
+      "sha256": "c229342a825c74bb4421920208ccee2b9f3a9519a910617db253ac8158931879",
+      "case": 35,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-35-control-8.bin",
+      "bytes": 861,
+      "sha256": "a5959b34305667a02df8d9a7057afe97a509f67d26c1cd06105b663234ca294b",
+      "case": 35,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-35-control-128.bin",
+      "bytes": 861,
+      "sha256": "c6920cbe7b4b0171ae668895d530f3b32644994cb64a89d3441412ac08fb7257",
+      "case": 35,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-35-control-136.bin",
+      "bytes": 861,
+      "sha256": "ee4716d669477fa7548b28090df5234f5de531feca12145289ed48c23c4a54de",
+      "case": 35,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-35-control-232.bin",
+      "bytes": 861,
+      "sha256": "b3b58e0d883155042a49ec92a3fbde81555944065d7b0ec506b8b8df4de3b66d",
+      "case": 35,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-35-control-255.bin",
+      "bytes": 861,
+      "sha256": "a4697be76a484a027d56bdf6e656de56d51c80e86ab7a00063f6657ab775a6a6",
+      "case": 35,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-36-control-2.bin",
+      "bytes": 233,
+      "sha256": "e8c0de36c12f802114d01aff3cfcab0fa8f840bc58a6c972088c8302b0fb755f",
+      "case": 36,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-36-control-128.bin",
+      "bytes": 233,
+      "sha256": "3c359326468178bc7612582016a7e0540cdbdd9137a69f2fcdf0e28504fa3fff",
+      "case": 36,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-36-control-134.bin",
+      "bytes": 233,
+      "sha256": "6cf69543f0a8f65017e857a3d69826dcf8a5fe33e17346d72b6e4a9fc3611619",
+      "case": 36,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-36-control-254.bin",
+      "bytes": 233,
+      "sha256": "a362ff0c74493ac2fbf62514354517fcde6eac3788f02b9535ad69de10da1cbf",
+      "case": 36,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-36-control-0.bin",
+      "bytes": 822,
+      "sha256": "24e6af894ba59e5aa4474f6d86561fc0dfaa54cd6715b76aa7190a7097996896",
+      "case": 36,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-36-control-8.bin",
+      "bytes": 822,
+      "sha256": "b07a73c0e86e77321141d633f93b5bd7128efe11afe3f98efb3192b7b897dee8",
+      "case": 36,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-36-control-128.bin",
+      "bytes": 822,
+      "sha256": "ac4e34c9d4cc3a77dd20595819f0876c37a018e5b4200b4c0b9ab33a2973066e",
+      "case": 36,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-36-control-136.bin",
+      "bytes": 822,
+      "sha256": "73970706b281c2afc99760d3b4ea0528ad5a11f8341ac530f4344d8f667e9c30",
+      "case": 36,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-36-control-232.bin",
+      "bytes": 822,
+      "sha256": "23601515bab2560da2f9f9370da175d1d4edcc90bd8bba075d8e98bf606efd72",
+      "case": 36,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-36-control-255.bin",
+      "bytes": 822,
+      "sha256": "0fa89dc12d5e38a36055f40951def4c1d900c829938439e5deadc52dc1160514",
+      "case": 36,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-37-control-2.bin",
+      "bytes": 241,
+      "sha256": "93d26c9cdc9c907e6e4d0745e37ea5c5a017e979a2602d147ec5570df29c9da5",
+      "case": 37,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-37-control-128.bin",
+      "bytes": 241,
+      "sha256": "19de15922a0d59d103132c99c917a23b37936275f5f7771305bb40d41ef8425e",
+      "case": 37,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-37-control-134.bin",
+      "bytes": 241,
+      "sha256": "55f1a53f31c8fe729fe9f002db152d92ed0aa5ee2594c05e8f30f32d59723762",
+      "case": 37,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-37-control-254.bin",
+      "bytes": 241,
+      "sha256": "7a492211442dc9a7a8c5be023077722c017051f903486b2567602b48384780c9",
+      "case": 37,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-37-control-0.bin",
+      "bytes": 830,
+      "sha256": "246f27736182e8cf10a255376bcdba185b0ab0d1cf564e4f93590ae851d43547",
+      "case": 37,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-37-control-8.bin",
+      "bytes": 830,
+      "sha256": "263b7a21cdac87fa33002032ca240f64282273b61545b0b927a9cd6ac9a362b4",
+      "case": 37,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-37-control-128.bin",
+      "bytes": 830,
+      "sha256": "97daf55673062878587ef1ae0c923e4a5a9f8a46006e87bb0b8ccecc567642cd",
+      "case": 37,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-37-control-136.bin",
+      "bytes": 830,
+      "sha256": "39130fbdb3709a860905ae711322a739a3d7cafb37539a74b2df5d30509d0272",
+      "case": 37,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-37-control-232.bin",
+      "bytes": 830,
+      "sha256": "4a41411a312fbf606b4f2a31f733c52b12dc167bd0859197222b4cc682ff342f",
+      "case": 37,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-37-control-255.bin",
+      "bytes": 830,
+      "sha256": "9e8c546233182dfb7e8038c7cad26585655964eeb6103105b70525be1908be63",
+      "case": 37,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-38-control-2.bin",
+      "bytes": 271,
+      "sha256": "88ea5ab178247c6f51a072d5b8c82f6bf9539495d5ef45a54df310980dd4942f",
+      "case": 38,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-38-control-128.bin",
+      "bytes": 271,
+      "sha256": "666cc356b2f09e2a30cbc41d7bbeadaae3ace5853dc5fde544f75f555549cb13",
+      "case": 38,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-38-control-134.bin",
+      "bytes": 271,
+      "sha256": "5c761db7459e5c252593167de0f2db32a16d9a3931b35568d830024da8a749d3",
+      "case": 38,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-38-control-254.bin",
+      "bytes": 271,
+      "sha256": "dfabd63468bf829ba8b0a449ff5db87ff2a1b727cb6ec75e82f8b615e669ec9e",
+      "case": 38,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-38-control-0.bin",
+      "bytes": 864,
+      "sha256": "e61eeb29546720c86a053ac05e40af673f51de596dc13d03f2dccf4401b67a2d",
+      "case": 38,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-38-control-8.bin",
+      "bytes": 864,
+      "sha256": "bc0f48684ba57b1b86724aa4b13a9af1b501c1c6e715795932550eb078a6f1dc",
+      "case": 38,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-38-control-128.bin",
+      "bytes": 864,
+      "sha256": "42889eefc87dfcb680f5a1031f902047ac714695c4b6763040816ea068b85e5c",
+      "case": 38,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-38-control-136.bin",
+      "bytes": 864,
+      "sha256": "ccb4100330de5b29ed90263d0a76e08c4154e644ab366c5893b79ad4f29277e8",
+      "case": 38,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-38-control-232.bin",
+      "bytes": 864,
+      "sha256": "ad24600ed90b9e2f50e2f928d883104f1265dd2840607c1b534429da557b6dc1",
+      "case": 38,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-38-control-255.bin",
+      "bytes": 864,
+      "sha256": "0b0f80368b8cca5a8fc484204773036c9d8dadb6bc7fa61dcf0880d7f1ec0510",
+      "case": 38,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-39-control-2.bin",
+      "bytes": 233,
+      "sha256": "be3d04686dda11f09a91988c5f80dcfa7b0f9db537b346bbb1a04a0869362d29",
+      "case": 39,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-39-control-128.bin",
+      "bytes": 233,
+      "sha256": "8a580d9d4ee5db7333fb1af0c9a437da4ff4a3f6baa93e08ecc894936683081b",
+      "case": 39,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-39-control-134.bin",
+      "bytes": 233,
+      "sha256": "a8f785655cbbc787b2a2f967ec7354f9144b5b940793b8af55f598fbe1340b25",
+      "case": 39,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-39-control-254.bin",
+      "bytes": 233,
+      "sha256": "f81ca917fd8764133fa0f48fab40b05516883e9b7a3cab325559b7d4c3f03aab",
+      "case": 39,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-39-control-0.bin",
+      "bytes": 674,
+      "sha256": "6f546fb742e553f6aea86e6887066c0d1f6bf2caba5418e1723dd1365c0a6669",
+      "case": 39,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-39-control-8.bin",
+      "bytes": 674,
+      "sha256": "c7bd4f9dfaa54daae3591fe4b96300e677b2f7d2d02d6216f3bce6de2c6085ad",
+      "case": 39,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-39-control-128.bin",
+      "bytes": 674,
+      "sha256": "c9ceea7d7b28ce69b07bbe2c70720a1d6a5dc4aed1bcf346797883bdc3383d94",
+      "case": 39,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-39-control-136.bin",
+      "bytes": 674,
+      "sha256": "a148af76b463394f552e77023e718742946fccd41c815f4cc107bb764ce7428b",
+      "case": 39,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-39-control-232.bin",
+      "bytes": 674,
+      "sha256": "badc9577850b57f25b9a1aa0a89f6179e34a9d41dc725de8964d8e3ad27efc9e",
+      "case": 39,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-39-control-255.bin",
+      "bytes": 674,
+      "sha256": "d96aa8500a4c8731ad61a7aab9349b5fcef35d1587c698e8ef17a58ec46f19c7",
+      "case": 39,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-40-control-2.bin",
+      "bytes": 241,
+      "sha256": "3a192ce4ebe40b13618620750028135a47658e30983530232b696b0452757d67",
+      "case": 40,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-40-control-128.bin",
+      "bytes": 241,
+      "sha256": "b1884b73397f13ce7c887eb3dd9bc19ba7e3a1524263ea133a18992ba032e19b",
+      "case": 40,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-40-control-134.bin",
+      "bytes": 241,
+      "sha256": "55555a231fd52a5b90502bae6e4d245d7abcaf12789b9371480465eb8240352a",
+      "case": 40,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-40-control-254.bin",
+      "bytes": 241,
+      "sha256": "629912780837deca49d849a7f10034511490a558993474c7f72919c70780c967",
+      "case": 40,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-40-control-0.bin",
+      "bytes": 684,
+      "sha256": "dcbfea49d4b90bfa75415759e0d3d41ada36669c6b3d408a27d6df609fe50e11",
+      "case": 40,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-40-control-8.bin",
+      "bytes": 684,
+      "sha256": "d9838810cface294626322971b6048a5d71b5ba55fb92718ec4657dc8558e058",
+      "case": 40,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-40-control-128.bin",
+      "bytes": 684,
+      "sha256": "31adc846484491dccafa76b0ee814f472c091b6d433fdfe4bcaf14e5be3ef555",
+      "case": 40,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-40-control-136.bin",
+      "bytes": 684,
+      "sha256": "be44ebfa918b9ac559ff9ee9ca108faf38dec69bc63a27e2508d21f88b60de6c",
+      "case": 40,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-40-control-232.bin",
+      "bytes": 684,
+      "sha256": "b215b3b5ae93cc63e412cf72e1ac3d0c3cbb94b3dece7bc5b13061347738073c",
+      "case": 40,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-40-control-255.bin",
+      "bytes": 684,
+      "sha256": "6b8a728a3e863c9e5ab16ea7e158ea0f03fdd821d20e59225293c582be7c93ee",
+      "case": 40,
+      "control": 255
+    },
+    {
+      "path": "vorbis_headers/residue-tail-41-control-2.bin",
+      "bytes": 271,
+      "sha256": "72563f8df35e46ba8ea056b7d5cf507a912b22d37cb06367d55422ed32989f36",
+      "case": 41,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/residue-tail-41-control-128.bin",
+      "bytes": 271,
+      "sha256": "6923fd306e268c3a62284ad0e22418ca04b63357cdc8ef52986b490a13b9468a",
+      "case": 41,
+      "control": 128
+    },
+    {
+      "path": "vorbis_headers/residue-tail-41-control-134.bin",
+      "bytes": 271,
+      "sha256": "1e992ff98c09f820c322de842d518eface3121b7c06e374b3bddd9b91ba3692d",
+      "case": 41,
+      "control": 134
+    },
+    {
+      "path": "vorbis_headers/residue-tail-41-control-254.bin",
+      "bytes": 271,
+      "sha256": "d2203fcb0ae5bed5925770fa1bbbe9e65ef7748fb600a867e91ece7621ab988f",
+      "case": 41,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/residue-tail-41-control-0.bin",
+      "bytes": 715,
+      "sha256": "8f519b7c837e302408de51b789ca08dd578bda824b8cda00019f6e19a1771fd9",
+      "case": 41,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/residue-tail-41-control-8.bin",
+      "bytes": 715,
+      "sha256": "c81cc95a82ad1971021d43ad05ab37608aa04969bbba4d86d3377f3e33ab2a73",
+      "case": 41,
+      "control": 8
+    },
+    {
+      "path": "vorbis_stream/residue-tail-41-control-128.bin",
+      "bytes": 715,
+      "sha256": "3fdd3ec110c220cb092699debf6755d578f8710a6ab920759e97b2e8eb1adaaf",
+      "case": 41,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/residue-tail-41-control-136.bin",
+      "bytes": 715,
+      "sha256": "06498224e7812555d5c486dcabdc5b88f800b4de498f5d4873fe5b4e12ae5bca",
+      "case": 41,
+      "control": 136
+    },
+    {
+      "path": "vorbis_stream/residue-tail-41-control-232.bin",
+      "bytes": 715,
+      "sha256": "2d71b1dc38b2265b2e13c3d3ab8d0cfafb4aa72bbc348df94fc98d3680f1872e",
+      "case": 41,
+      "control": 232
+    },
+    {
+      "path": "vorbis_stream/residue-tail-41-control-255.bin",
+      "bytes": 715,
+      "sha256": "daa00c4f5e7174cbb6bea20f8a45be6ea576445e44cfee69239916e875008bc7",
+      "case": 41,
+      "control": 255
+    }
+  ]
+}

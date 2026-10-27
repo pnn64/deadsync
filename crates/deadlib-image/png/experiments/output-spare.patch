@@ -1,0 +1,81 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index a0aa49649..09c42a2dc 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -243,6 +243,56 @@ fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
+     ))
+ }
+ 
++// Decode into already allocated, initialized spare capacity. A full DEFLATE
++// match is at most 258 bytes, so the slice bound subsumes per-token output
++// budget/capacity checks. `written` separates history from the writable tail.
++fn inflate_spare(
++    lit: &Huffman,
++    dist: &Huffman,
++    bits: &mut Bits<'_>,
++    output: &mut [u8],
++    mut written: usize,
++    window: usize,
++) -> Result<(usize, bool), Error> {
++    while output.len() - written >= 258 {
++        match lit.decode(bits)? {
++            literal @ 0..=255 => {
++                output[written] = literal as u8;
++                written += 1;
++            }
++            256 => return Ok((written, true)),
++            symbol @ 257..=285 => {
++                let index = symbol - 257;
++                let len = LENGTH_BASE[index] + bits.read(LENGTH_EXTRA[index])? as usize;
++                let symbol = dist.decode(bits)?;
++                if symbol >= 30 {
++                    return Err(Error::Invalid("reserved distance symbol"));
++                }
++                let distance = DIST_BASE[symbol] + bits.read(DIST_EXTRA[symbol])? as usize;
++                if distance > written || distance > window {
++                    return Err(Error::Invalid("distance outside history window"));
++                }
++                let start = written - distance;
++                if distance == 1 {
++                    let value = output[start];
++                    output[written..written + len].fill(value);
++                    written += len;
++                } else {
++                    let mut left = len;
++                    while left != 0 {
++                        let count = (written - start).min(left);
++                        output.copy_within(start..start + count, written);
++                        written += count;
++                        left -= count;
++                    }
++                }
++            }
++            _ => return Err(Error::Invalid("reserved literal symbol")),
++        }
++    }
++    Ok((written, false))
++}
++
+ /// Decode exactly one zlib stream, rejecting trailing data. `limit` bounds output.
+ pub fn decompress(input: &[u8], limit: usize) -> Result<Vec<u8>, Error> {
+     let (output, used) = decompress_prefix(input, limit)?;
+@@ -297,6 +347,19 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+                 dynamic(&mut bits)?
+             };
+             loop {
++                let end = output.capacity().min(limit);
++                if end - output.len() >= 258 {
++                    let written = output.len();
++                    // No allocation: end is within existing capacity and the
++                    // caller's limit. Only initialized history is read.
++                    output.resize(end, 0);
++                    let (written, done) =
++                        inflate_spare(&lit, &dist, &mut bits, &mut output, written, window)?;
++                    output.truncate(written);
++                    if done {
++                        break;
++                    }
++                }
+                 match lit.decode(&mut bits)? {
+                     literal @ 0..=255 => {
+                         if output.len() == limit {

@@ -140,15 +140,24 @@ pub fn chart_ix_for_steps_index(
 
 #[inline]
 fn lowercase_cmp(left: &str, right: &str) -> Ordering {
-    if left.is_ascii() && right.is_ascii() {
-        return left
-            .bytes()
-            .map(|byte| byte.to_ascii_lowercase())
-            .cmp(right.bytes().map(|byte| byte.to_ascii_lowercase()));
+    let mut offset = 0;
+    for (&a, &b) in left.as_bytes().iter().zip(right.as_bytes()) {
+        if !a.is_ascii() || !b.is_ascii() {
+            break;
+        }
+        match a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()) {
+            Ordering::Equal => offset += 1,
+            different => return different,
+        }
     }
-    left.chars()
+    if offset == left.len().min(right.len()) {
+        return left.len().cmp(&right.len());
+    }
+    // The skipped prefix is ASCII on both sides, so these are UTF-8 boundaries.
+    left[offset..]
+        .chars()
         .flat_map(char::to_lowercase)
-        .cmp(right.chars().flat_map(char::to_lowercase))
+        .cmp(right[offset..].chars().flat_map(char::to_lowercase))
 }
 
 #[inline]
@@ -161,8 +170,11 @@ fn edit_chart_cmp(left: &ChartData, right: &ChartData) -> Ordering {
 
 #[inline(always)]
 fn is_edit_chart(chart: &ChartData, chart_type: &str) -> bool {
-    chart.chart_type.eq_ignore_ascii_case(chart_type)
-        && chart.difficulty.eq_ignore_ascii_case("edit")
+    // Reject unequal types cheaply, then test the fixed four-letter marker.
+    chart.chart_type.len() == chart_type.len()
+        && matches!(chart.difficulty.as_bytes(), [a, b, c, d]
+            if [a | 0x20, b | 0x20, c | 0x20, d | 0x20] == *b"edit")
+        && chart.chart_type.eq_ignore_ascii_case(chart_type)
 }
 
 #[derive(Clone, Debug)]
@@ -321,8 +333,7 @@ impl SongData {
     #[inline(always)]
     fn is_video_path(path: &Path) -> bool {
         path.extension()
-            .and_then(|ext| ext.to_str())
-            .is_some_and(is_video_extension)
+            .is_some_and(|ext| is_video_extension(ext.as_encoded_bytes()))
     }
 
     #[inline(always)]
@@ -419,7 +430,28 @@ impl SongData {
     /// it. Used by the player-options "No `CMod` alternative" auto-switch.
     #[must_use]
     pub fn is_no_cmod(&self) -> bool {
-        title_subtitle_contains_ignore_ascii_case(&self.title, &self.subtitle, "no cmod")
+        let contains = |text: &str| {
+            text.as_bytes()
+                .windows(b"no cmod".len())
+                .any(|window| window.eq_ignore_ascii_case(b"no cmod"))
+        };
+        if contains(&self.title) {
+            return true;
+        }
+        if self.subtitle.trim().is_empty() {
+            return false;
+        }
+        contains(&self.subtitle)
+            || (self
+                .title
+                .as_bytes()
+                .get(self.title.len().wrapping_sub(2)..)
+                .is_some_and(|tail| tail.eq_ignore_ascii_case(b"no"))
+                && self
+                    .subtitle
+                    .as_bytes()
+                    .get(..4)
+                    .is_some_and(|head| head.eq_ignore_ascii_case(b"cmod")))
     }
 
     #[must_use]
@@ -435,13 +467,20 @@ impl SongData {
 
     #[must_use]
     pub fn edit_charts_sorted(&self, chart_type: &str) -> Vec<&ChartData> {
-        let mut edits: Vec<&ChartData> = self
+        let mut edits = self
             .charts
             .iter()
-            .filter(|chart| is_edit_chart(chart, chart_type))
-            .collect();
-        edits.sort_by(|left, right| edit_chart_cmp(left, right));
-        edits
+            .filter(|chart| is_edit_chart(chart, chart_type));
+        let Some(first) = edits.next() else {
+            return Vec::new();
+        };
+        let Some(second) = edits.next() else {
+            return vec![first];
+        };
+        let mut sorted = smallvec::SmallVec::<[&ChartData; 8]>::from_slice(&[first, second]);
+        sorted.extend(edits);
+        sorted.sort_by(|left, right| edit_chart_cmp(left, right));
+        sorted.into_vec()
     }
 
     #[must_use]
@@ -795,62 +834,27 @@ impl SongData {
 }
 
 #[inline(always)]
-fn is_video_extension(extension: &str) -> bool {
-    let bytes = extension.as_bytes();
-    if !(3..=4).contains(&bytes.len()) {
-        return false;
+fn is_video_extension(bytes: &[u8]) -> bool {
+    match bytes {
+        [a, b, c] => matches!(
+            &[
+                a.to_ascii_lowercase(),
+                b.to_ascii_lowercase(),
+                c.to_ascii_lowercase()
+            ],
+            b"mp4" | b"avi" | b"f4v" | b"flv" | b"m4v" | b"mov" | b"ogv" | b"mkv" | b"mpg" | b"wmv"
+        ),
+        [a, b, c, d] => matches!(
+            &[
+                a.to_ascii_lowercase(),
+                b.to_ascii_lowercase(),
+                c.to_ascii_lowercase(),
+                d.to_ascii_lowercase()
+            ],
+            b"webm" | b"mpeg"
+        ),
+        _ => false,
     }
-
-    let mut lowercase = [0_u8; 4];
-    for (target, source) in lowercase.iter_mut().zip(bytes) {
-        *target = source.to_ascii_lowercase();
-    }
-    matches!(
-        &lowercase[..bytes.len()],
-        b"mp4"
-            | b"avi"
-            | b"f4v"
-            | b"flv"
-            | b"m4v"
-            | b"mov"
-            | b"ogv"
-            | b"webm"
-            | b"mkv"
-            | b"mpg"
-            | b"mpeg"
-            | b"wmv"
-    )
-}
-
-#[inline]
-fn title_subtitle_contains_ignore_ascii_case(title: &str, subtitle: &str, needle: &str) -> bool {
-    let subtitle = (!subtitle.trim().is_empty()).then_some(subtitle);
-    let joined_len = title
-        .len()
-        .saturating_add(subtitle.map_or(0, |value| value.len().saturating_add(1)));
-    let needle = needle.as_bytes();
-    if needle.is_empty() {
-        return true;
-    }
-    if needle.len() > joined_len {
-        return false;
-    }
-
-    let title = title.as_bytes();
-    let subtitle = subtitle.map(str::as_bytes).unwrap_or_default();
-    (0..=joined_len - needle.len()).any(|start| {
-        needle.iter().enumerate().all(|(offset, expected)| {
-            let index = start + offset;
-            let actual = if index < title.len() {
-                title[index]
-            } else if index == title.len() {
-                b' '
-            } else {
-                subtitle[index - title.len() - 1]
-            };
-            actual.eq_ignore_ascii_case(expected)
-        })
-    })
 }
 
 #[cfg(test)]
@@ -1292,3 +1296,11 @@ mod tests {
 #[cfg(test)]
 #[path = "metadata_perf.rs"]
 mod metadata_perf;
+
+#[cfg(test)]
+#[path = "song_sort_shortcuts.rs"]
+mod song_sort_shortcuts;
+
+#[cfg(test)]
+#[path = "metadata_dispatch.rs"]
+mod metadata_dispatch;

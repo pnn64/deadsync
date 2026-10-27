@@ -1,0 +1,1132 @@
+{
+  "date": "2026-10-26",
+  "pass_number": 3,
+  "baseline_commit": "ef61bf9fc",
+  "retained_commits_before_final_stage": [
+    "277649443",
+    "9de28d013"
+  ],
+  "scope": "Exact WASAPI frame-to-nanosecond arithmetic, minimum shared period rounding, and reciprocal construction.",
+  "environment": {
+    "cpu": "Intel Xeon E5-2696 v4, 22 cores/44 logical processors",
+    "os": "Windows 11 Pro build 26100",
+    "compiler": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1"
+  },
+  "method": {
+    "profile": "cargo test --release --lib, opt-level=3, LTO, static MSVC runtime",
+    "primary_metric": "QueryThreadCycleTime: scheduled current-thread CPU cycles including kernel execution; not a user-only PMU counter",
+    "affinity": "logical processor 2",
+    "processes_per_stage": 5,
+    "iterations_per_batch": 1000000,
+    "batches_per_process": 12,
+    "warmup_batches_discarded": 1,
+    "aggregation": "Median of 11 measured batches per process, then median of five process medians; alternating process order.",
+    "allocation_scope": "Current-thread Rust GlobalAlloc/System counts. All measured arithmetic paths have zero allocation churn.",
+    "reproduction": "Archive the release lib test executable, lib.rs and init.rs for each stage. Build with cargo test -p deadlib-audio-backend-wasapi --release --lib --locked --no-run --message-format=json. Run scripts/benchmark_wasapi_setup.py --archive before=executable --archive after=executable --runs 5 --output results.tsv, selecting --test performance_tests::benchmark_frame_conversion, --test performance_tests::benchmark_frame_setup, or --test init::tests::benchmark_periods."
+  },
+  "comparisons": [
+    {
+      "change": "Frame conversion without remainder correction",
+      "data": "2026-10-26-wasapi-direct-frame-time.tsv",
+      "results": [
+        {
+          "workload": "wasapi/frame_convert_0_4294967295",
+          "before": {
+            "median_cycles_per_op": 1.65,
+            "min_process_median_cycles_per_op": 1.64,
+            "max_process_median_cycles_per_op": 1.76,
+            "median_ns_per_op": 0.75,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 1.55,
+            "min_process_median_cycles_per_op": 1.44,
+            "max_process_median_cycles_per_op": 1.69,
+            "median_ns_per_op": 0.71,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.064516129032258
+        },
+        {
+          "workload": "wasapi/frame_convert_192000_512",
+          "before": {
+            "median_cycles_per_op": 3.39,
+            "min_process_median_cycles_per_op": 2.89,
+            "max_process_median_cycles_per_op": 3.58,
+            "median_ns_per_op": 1.55,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 2.74,
+            "min_process_median_cycles_per_op": 2.51,
+            "max_process_median_cycles_per_op": 2.98,
+            "median_ns_per_op": 1.25,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.2372262773722627
+        },
+        {
+          "workload": "wasapi/frame_convert_1_4294967295",
+          "before": {
+            "median_cycles_per_op": 1.62,
+            "min_process_median_cycles_per_op": 1.36,
+            "max_process_median_cycles_per_op": 1.71,
+            "median_ns_per_op": 0.74,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 1.53,
+            "min_process_median_cycles_per_op": 1.36,
+            "max_process_median_cycles_per_op": 1.71,
+            "median_ns_per_op": 0.7,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.0588235294117647
+        },
+        {
+          "workload": "wasapi/frame_convert_44100_441",
+          "before": {
+            "median_cycles_per_op": 3.2,
+            "min_process_median_cycles_per_op": 2.88,
+            "max_process_median_cycles_per_op": 3.42,
+            "median_ns_per_op": 1.46,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 2.7,
+            "min_process_median_cycles_per_op": 2.4,
+            "max_process_median_cycles_per_op": 2.93,
+            "median_ns_per_op": 1.23,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.1851851851851851
+        },
+        {
+          "workload": "wasapi/frame_convert_48000_128",
+          "before": {
+            "median_cycles_per_op": 3.39,
+            "min_process_median_cycles_per_op": 2.98,
+            "max_process_median_cycles_per_op": 3.55,
+            "median_ns_per_op": 1.55,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 2.74,
+            "min_process_median_cycles_per_op": 2.39,
+            "max_process_median_cycles_per_op": 3.02,
+            "median_ns_per_op": 1.25,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.2372262773722627
+        },
+        {
+          "workload": "wasapi/frame_convert_96000_4294967295",
+          "before": {
+            "median_cycles_per_op": 3.39,
+            "min_process_median_cycles_per_op": 3.05,
+            "max_process_median_cycles_per_op": 3.66,
+            "median_ns_per_op": 1.55,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 2.68,
+            "min_process_median_cycles_per_op": 2.28,
+            "max_process_median_cycles_per_op": 2.88,
+            "median_ns_per_op": 1.22,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.2649253731343284
+        }
+      ]
+    },
+    {
+      "change": "Initial reciprocal setup cost of the new precision",
+      "data": "2026-10-26-wasapi-direct-frame-setup.tsv",
+      "results": [
+        {
+          "workload": "wasapi/frame_setup_192000",
+          "before": {
+            "median_cycles_per_op": 71.73,
+            "min_process_median_cycles_per_op": 71.44,
+            "max_process_median_cycles_per_op": 72.41,
+            "median_ns_per_op": 34.61,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 79.42,
+            "min_process_median_cycles_per_op": 78.87,
+            "max_process_median_cycles_per_op": 80.25,
+            "median_ns_per_op": 38.55,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 0.9031730042810375
+        },
+        {
+          "workload": "wasapi/frame_setup_4294967295",
+          "before": {
+            "median_cycles_per_op": 71.6,
+            "min_process_median_cycles_per_op": 71.13,
+            "max_process_median_cycles_per_op": 72.97,
+            "median_ns_per_op": 34.49,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 78.93,
+            "min_process_median_cycles_per_op": 78.38,
+            "max_process_median_cycles_per_op": 80.6,
+            "median_ns_per_op": 37.53,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 0.907132902571899
+        },
+        {
+          "workload": "wasapi/frame_setup_44100",
+          "before": {
+            "median_cycles_per_op": 71.84,
+            "min_process_median_cycles_per_op": 71.46,
+            "max_process_median_cycles_per_op": 72.24,
+            "median_ns_per_op": 34.62,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 78.82,
+            "min_process_median_cycles_per_op": 76.3,
+            "max_process_median_cycles_per_op": 79.74,
+            "median_ns_per_op": 36.83,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 0.9114437959908653
+        },
+        {
+          "workload": "wasapi/frame_setup_48000",
+          "before": {
+            "median_cycles_per_op": 71.74,
+            "min_process_median_cycles_per_op": 71.1,
+            "max_process_median_cycles_per_op": 72.69,
+            "median_ns_per_op": 34.44,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 79.54,
+            "min_process_median_cycles_per_op": 79.06,
+            "max_process_median_cycles_per_op": 81.45,
+            "median_ns_per_op": 38.1,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 0.9019361327633894
+        },
+        {
+          "workload": "wasapi/frame_setup_65536",
+          "before": {
+            "median_cycles_per_op": 71.75,
+            "min_process_median_cycles_per_op": 71.46,
+            "max_process_median_cycles_per_op": 71.98,
+            "median_ns_per_op": 34.62,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 78.07,
+            "min_process_median_cycles_per_op": 77.46,
+            "max_process_median_cycles_per_op": 79.07,
+            "median_ns_per_op": 37.63,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 0.9190470090944025
+        },
+        {
+          "workload": "wasapi/frame_setup_96000",
+          "before": {
+            "median_cycles_per_op": 71.89,
+            "min_process_median_cycles_per_op": 71.55,
+            "max_process_median_cycles_per_op": 72.97,
+            "median_ns_per_op": 34.67,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 79.68,
+            "min_process_median_cycles_per_op": 78.34,
+            "max_process_median_cycles_per_op": 80.16,
+            "median_ns_per_op": 37.75,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 0.9022339357429718
+        }
+      ]
+    },
+    {
+      "change": "Period rounding from the remainder",
+      "data": "2026-10-26-wasapi-remainder-periods.tsv",
+      "results": [
+        {
+          "workload": "wasapi/period_aligned",
+          "before": {
+            "median_cycles_per_op": 15.87,
+            "min_process_median_cycles_per_op": 15.75,
+            "max_process_median_cycles_per_op": 16.01,
+            "median_ns_per_op": 7.24,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 13.47,
+            "min_process_median_cycles_per_op": 13.39,
+            "max_process_median_cycles_per_op": 13.69,
+            "median_ns_per_op": 6.15,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.178173719376392
+        },
+        {
+          "workload": "wasapi/period_large",
+          "before": {
+            "median_cycles_per_op": 15.83,
+            "min_process_median_cycles_per_op": 15.77,
+            "max_process_median_cycles_per_op": 15.98,
+            "median_ns_per_op": 7.23,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 13.46,
+            "min_process_median_cycles_per_op": 13.41,
+            "max_process_median_cycles_per_op": 13.57,
+            "median_ns_per_op": 6.14,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.1760772659732541
+        },
+        {
+          "workload": "wasapi/period_nonpower",
+          "before": {
+            "median_cycles_per_op": 15.89,
+            "min_process_median_cycles_per_op": 15.76,
+            "max_process_median_cycles_per_op": 15.97,
+            "median_ns_per_op": 7.25,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 13.5,
+            "min_process_median_cycles_per_op": 13.41,
+            "max_process_median_cycles_per_op": 13.58,
+            "median_ns_per_op": 6.16,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.177037037037037
+        },
+        {
+          "workload": "wasapi/period_overflow",
+          "before": {
+            "median_cycles_per_op": 15.03,
+            "min_process_median_cycles_per_op": 14.98,
+            "max_process_median_cycles_per_op": 15.6,
+            "median_ns_per_op": 6.86,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 11.88,
+            "min_process_median_cycles_per_op": 11.82,
+            "max_process_median_cycles_per_op": 12.11,
+            "median_ns_per_op": 5.42,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.265151515151515
+        },
+        {
+          "workload": "wasapi/period_rounded",
+          "before": {
+            "median_cycles_per_op": 15.91,
+            "min_process_median_cycles_per_op": 15.77,
+            "max_process_median_cycles_per_op": 15.99,
+            "median_ns_per_op": 7.25,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 13.39,
+            "min_process_median_cycles_per_op": 13.39,
+            "max_process_median_cycles_per_op": 13.54,
+            "median_ns_per_op": 6.11,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.188200149365198
+        },
+        {
+          "workload": "wasapi/period_unit",
+          "before": {
+            "median_cycles_per_op": 15.84,
+            "min_process_median_cycles_per_op": 15.76,
+            "max_process_median_cycles_per_op": 16.27,
+            "median_ns_per_op": 7.22,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 13.47,
+            "min_process_median_cycles_per_op": 13.39,
+            "max_process_median_cycles_per_op": 13.71,
+            "median_ns_per_op": 6.15,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.175946547884187
+        }
+      ]
+    },
+    {
+      "change": "Reciprocal setup using 64-bit divisions",
+      "data": "2026-10-26-wasapi-u64-frame-setup.tsv",
+      "results": [
+        {
+          "workload": "wasapi/frame_setup_192000",
+          "before": {
+            "median_cycles_per_op": 78.98,
+            "min_process_median_cycles_per_op": 73.97,
+            "max_process_median_cycles_per_op": 80.66,
+            "median_ns_per_op": 36.05,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 43.06,
+            "min_process_median_cycles_per_op": 42.69,
+            "max_process_median_cycles_per_op": 43.57,
+            "median_ns_per_op": 19.65,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.8341848583372038
+        },
+        {
+          "workload": "wasapi/frame_setup_4294967295",
+          "before": {
+            "median_cycles_per_op": 78.38,
+            "min_process_median_cycles_per_op": 76.04,
+            "max_process_median_cycles_per_op": 80.73,
+            "median_ns_per_op": 35.76,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 35.81,
+            "min_process_median_cycles_per_op": 35.76,
+            "max_process_median_cycles_per_op": 37.37,
+            "median_ns_per_op": 16.35,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 2.188774085450991
+        },
+        {
+          "workload": "wasapi/frame_setup_44100",
+          "before": {
+            "median_cycles_per_op": 78.2,
+            "min_process_median_cycles_per_op": 77.52,
+            "max_process_median_cycles_per_op": 79.68,
+            "median_ns_per_op": 35.7,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 36.79,
+            "min_process_median_cycles_per_op": 36.35,
+            "max_process_median_cycles_per_op": 37.35,
+            "median_ns_per_op": 16.79,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 2.125577602609405
+        },
+        {
+          "workload": "wasapi/frame_setup_48000",
+          "before": {
+            "median_cycles_per_op": 78.39,
+            "min_process_median_cycles_per_op": 71.12,
+            "max_process_median_cycles_per_op": 79.5,
+            "median_ns_per_op": 35.77,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 36.62,
+            "min_process_median_cycles_per_op": 36.4,
+            "max_process_median_cycles_per_op": 36.93,
+            "median_ns_per_op": 16.71,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 2.140633533588203
+        },
+        {
+          "workload": "wasapi/frame_setup_65536",
+          "before": {
+            "median_cycles_per_op": 78.04,
+            "min_process_median_cycles_per_op": 77.58,
+            "max_process_median_cycles_per_op": 79.78,
+            "median_ns_per_op": 35.6,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 36.57,
+            "min_process_median_cycles_per_op": 36.46,
+            "max_process_median_cycles_per_op": 37.76,
+            "median_ns_per_op": 16.69,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 2.1339896089691006
+        },
+        {
+          "workload": "wasapi/frame_setup_96000",
+          "before": {
+            "median_cycles_per_op": 78.68,
+            "min_process_median_cycles_per_op": 70.26,
+            "max_process_median_cycles_per_op": 79.55,
+            "median_ns_per_op": 35.91,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 36.85,
+            "min_process_median_cycles_per_op": 36.4,
+            "max_process_median_cycles_per_op": 36.93,
+            "median_ns_per_op": 16.82,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 2.1351424694708276
+        }
+      ]
+    },
+    {
+      "change": "Final frame conversion against the pass baseline",
+      "data": "2026-10-26-wasapi-pass3-final-convert.tsv",
+      "results": [
+        {
+          "workload": "wasapi/frame_convert_0_4294967295",
+          "before": {
+            "median_cycles_per_op": 1.44,
+            "min_process_median_cycles_per_op": 1.35,
+            "max_process_median_cycles_per_op": 1.49,
+            "median_ns_per_op": 0.66,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 1.35,
+            "min_process_median_cycles_per_op": 1.31,
+            "max_process_median_cycles_per_op": 1.46,
+            "median_ns_per_op": 0.61,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.0666666666666667
+        },
+        {
+          "workload": "wasapi/frame_convert_192000_512",
+          "before": {
+            "median_cycles_per_op": 2.98,
+            "min_process_median_cycles_per_op": 2.86,
+            "max_process_median_cycles_per_op": 3.5,
+            "median_ns_per_op": 1.36,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 2.37,
+            "min_process_median_cycles_per_op": 2.24,
+            "max_process_median_cycles_per_op": 2.63,
+            "median_ns_per_op": 1.11,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.2573839662447257
+        },
+        {
+          "workload": "wasapi/frame_convert_1_4294967295",
+          "before": {
+            "median_cycles_per_op": 1.36,
+            "min_process_median_cycles_per_op": 1.35,
+            "max_process_median_cycles_per_op": 1.55,
+            "median_ns_per_op": 0.62,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 1.35,
+            "min_process_median_cycles_per_op": 1.31,
+            "max_process_median_cycles_per_op": 1.57,
+            "median_ns_per_op": 0.62,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.0074074074074073
+        },
+        {
+          "workload": "wasapi/frame_convert_44100_441",
+          "before": {
+            "median_cycles_per_op": 3.16,
+            "min_process_median_cycles_per_op": 2.85,
+            "max_process_median_cycles_per_op": 3.46,
+            "median_ns_per_op": 1.44,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 2.25,
+            "min_process_median_cycles_per_op": 2.24,
+            "max_process_median_cycles_per_op": 2.54,
+            "median_ns_per_op": 1.03,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.4044444444444446
+        },
+        {
+          "workload": "wasapi/frame_convert_48000_128",
+          "before": {
+            "median_cycles_per_op": 3.09,
+            "min_process_median_cycles_per_op": 2.92,
+            "max_process_median_cycles_per_op": 3.21,
+            "median_ns_per_op": 1.41,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 2.24,
+            "min_process_median_cycles_per_op": 2.24,
+            "max_process_median_cycles_per_op": 2.37,
+            "median_ns_per_op": 1.02,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.3794642857142856
+        },
+        {
+          "workload": "wasapi/frame_convert_96000_4294967295",
+          "before": {
+            "median_cycles_per_op": 2.85,
+            "min_process_median_cycles_per_op": 2.81,
+            "max_process_median_cycles_per_op": 3.19,
+            "median_ns_per_op": 1.3,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "after": {
+            "median_cycles_per_op": 2.24,
+            "min_process_median_cycles_per_op": 2.24,
+            "max_process_median_cycles_per_op": 2.41,
+            "median_ns_per_op": 1.02,
+            "rust_heap_churn_per_op": {
+              "allocs": 0,
+              "reallocs": 0,
+              "frees": 0,
+              "allocated_bytes": 0,
+              "freed_bytes": 0,
+              "peak_bytes": 0
+            }
+          },
+          "cpu_throughput_ratio": 1.2723214285714284
+        }
+      ]
+    }
+  ],
+  "source_and_binary_snapshots": {
+    "baseline": {
+      "binary_sha256": "33b68da7065b00dabcf96078d2f7f5cd7e9f864fbe4241289d7ea47948ec2342",
+      "local_archive": "C:\\target\\deadsync-wasapi-perf\\archives\\pass3-baseline",
+      "production_sources_lf_sha256": {
+        "lib.rs": "f5b69bc3c60ea77981bd04bb60c5fbd84e10a7ec95b0640b725ca42ac280f589",
+        "init.rs": "5d1c8b4bf8e366e490f269410c6d45bcc38993212e7930dfac87445dc2f99ff8"
+      }
+    },
+    "direct-frame-time": {
+      "binary_sha256": "a5fb6a720615d8e9cc0129f7f0d9fcbcd4d99be0aca1d99b839d5841bebdd9ff",
+      "local_archive": "C:\\target\\deadsync-wasapi-perf\\archives\\direct-frame-time",
+      "production_sources_lf_sha256": {
+        "lib.rs": "c88883f6732df68a39b2d3cfa37e92ed43dd2e981066b3c365142da59dc52aa0",
+        "init.rs": "5d1c8b4bf8e366e490f269410c6d45bcc38993212e7930dfac87445dc2f99ff8"
+      }
+    },
+    "remainder-periods": {
+      "binary_sha256": "2c1bc9fd67b79d1b1886122aaccc6f97d4fe6e6a240e13069025c31cc5d212d7",
+      "local_archive": "C:\\target\\deadsync-wasapi-perf\\archives\\remainder-periods",
+      "production_sources_lf_sha256": {
+        "lib.rs": "c88883f6732df68a39b2d3cfa37e92ed43dd2e981066b3c365142da59dc52aa0",
+        "init.rs": "4b09010859543f1818c95554c91b67d21c3b906301797d271346b1ce2ae0c586"
+      }
+    },
+    "u64-frame-setup": {
+      "binary_sha256": "98f524916a8b7532de8ecc020cb1095ad42ffe59bcb9cc4bd9efc492b072bf60",
+      "local_archive": "C:\\target\\deadsync-wasapi-perf\\archives\\u64-frame-setup",
+      "production_sources_lf_sha256": {
+        "lib.rs": "b4f42d3a8c17ddf938cd2fa941ba616d18983db0984f6753840342c273a06c00",
+        "init.rs": "4b09010859543f1818c95554c91b67d21c3b906301797d271346b1ce2ae0c586"
+      }
+    }
+  },
+  "frame_metadata_layout": {
+    "old_size": 16,
+    "old_alignment": 8,
+    "new_size": 16,
+    "new_alignment": 8,
+    "diagnostic_source": "C:\\target\\deadsync-wasapi-perf\\frame-layout.rs"
+  },
+  "arithmetic_proofs": [
+    "Let d > 1, 0 < n = u32_frames * 1e9 < 2^62, s = max(ceil(log2(d)) - 2, 0), P = 2^(64+s), and m = ceil(P/d). P >= 2^62*d, so 0 <= n*m/P - n/d < n/P < 1/d. Fractions n/d lie on a grid spaced 1/d apart, so this error cannot cross the next integer: floor(n*m/P) = floor(n/d). The product fits u128, and m fits u64. Zero/unit rates and zero frames retain their existing branches.",
+    "For reciprocal construction, q = u64::MAX / d and r = u64::MAX % d + 1 give 2^64 = q*d + r, with 0 < r <= d. Therefore ceil(2^(64+s)/d) = (q << s) + ceil((r << s)/d). Here d <= u32::MAX and s <= 30, so r << s fits u64 and the sum is at most 2^63. This replaces u128 division without changing the reciprocal.",
+    "For minimum-period rounding, min % fundamental determines padding in [0, fundamental-1]. Adding that padding produces exactly ceil(min/fundamental)*fundamental. A checked addition fails precisely when the old checked product exceeded u32::MAX. Zero and invalid range guards and the final maximum-period test are preserved."
+  ],
+  "code_simplified": [
+    "Remove the frame conversion correction multiply, remainder subtraction, comparison and increment. Use the high product and a right shift instead; pack the u32 divisor and u32 shift into the previous u64 divisor space.",
+    "Remove period quotient increment/reconstruction and checked multiplication. Reuse the division remainder to add only the missing padding.",
+    "Remove u128 division from reciprocal setup. Compute the identical coefficient with bounded u64 quotient/remainder arithmetic. No production unsafe code was added."
+  ],
+  "retention_basis": [
+    "Frame conversion improves 1.185-1.265x at representative audio rates in its immediate comparison; the final artifact remains faster than the original pass baseline.",
+    "Period rounding improves 1.176-1.265x across aligned, rounded, large and overflow fixtures.",
+    "Reciprocal setup improves 1.834-2.189x compared with the intermediate wide setup. This recovers the initial roughly eight-cycle setup increase; at 48000 Hz the separately measured original/intermediate/final setup medians are about 72/79/37 cycles.",
+    "Converter metadata remains 16 bytes with 8-byte alignment, verified by compiling the exact old/new type definitions. Arithmetic paths retain zero heap churn."
+  ],
+  "limitations": [
+    "These are component CPU-throughput microbenchmarks. They do not establish a measurable change in full application startup, audio latency, or complete render callback CPU usage.",
+    "The exact reciprocal bound depends on the existing u32 frame-count domain and the 1e9 nanoseconds-per-second scale. Widening that domain requires re-deriving the precision.",
+    "Initial standalone profiling samples were not used in the retained comparisons; all committed before/after comparisons run the archived binaries serially in alternating process order.",
+    "Windows 7 was compile-checked and exercised through legacy COM mocks, not run on Windows 7 hardware. Nightly emits an unrelated unused windows-core workspace dependency warning from its standard-library build."
+  ],
+  "validation": [
+    {
+      "command": "cargo test -p deadlib-audio-backend-wasapi --locked",
+      "result": "passed: 26 regression tests; 10 lib tests ignored by default (seven manual benchmarks and three endpoint checks), separate hardware integration test also ignored"
+    },
+    {
+      "command": "final release lib test executable --test-threads=1",
+      "result": "passed: 26 regression tests"
+    },
+    {
+      "command": "frame_time_matches_integer_division_across_rates_and_frame_counts",
+      "result": "362523 cases match direct u64 division: common/zero/unit/max rates, all rates 1..65536 at rounding boundaries, power-of-two neighbors and 100000 generated pairs"
+    },
+    {
+      "command": "reciprocal_setup_matches_wide_precision",
+      "result": "165631 cases match the original u128 coefficient calculation, including rates 0..65536, power-of-two neighbors, u32::MAX and 100000 generated rates"
+    },
+    {
+      "command": "legal_period_is_the_smallest_supported_multiple; legal_period_matches_wide_rounding_at_integer_boundaries",
+      "result": "passed: exhaustive small periods, u32 boundary cases and 100000 generated fundamental/minimum pairs at two maxima"
+    },
+    {
+      "command": "cargo test -p deadlib-audio-backend-wasapi --lib native_tests -- --ignored --nocapture --test-threads=1",
+      "result": "passed: legacy shared renders; modern shared selects 128-frame minimum"
+    },
+    {
+      "command": "cargo test -p deadlib-audio-backend-wasapi --lib preparation_keeps_mix_bytes -- --ignored --nocapture --test-threads=1",
+      "result": "passed: byte-for-byte fallback, accepted rate updates and allocation counts"
+    },
+    {
+      "command": "cargo test -p deadlib-audio-backend-wasapi --test hardware -- --ignored --nocapture --test-threads=1",
+      "result": "passed: shared/exclusive/shared at 48000 Hz; 280-frame shared and 128-frame exclusive buffers; advancing clocks and prompt shutdown"
+    },
+    {
+      "command": "cargo clippy -p deadlib-audio-backend-wasapi --all-targets --no-deps -- -D warnings",
+      "result": "passed"
+    },
+    {
+      "command": "cargo +nightly check -p deadlib-audio-backend-wasapi -Z build-std=std,panic_abort --target x86_64-win7-windows-msvc --locked",
+      "result": "passed"
+    },
+    {
+      "command": "cargo fmt -p deadlib-audio-backend-wasapi --check; git diff --check",
+      "result": "passed"
+    },
+    {
+      "command": "dumpbin /imports final release executable",
+      "result": "CoTaskMemFree provider remains ole32.dll"
+    }
+  ]
+}

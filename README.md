@@ -286,13 +286,18 @@ This master switch reveals the golf options below. Turning it off hides them
 and disables golf scoring, displays, and online boards while preserving saved
 player and Select Music choices.
 
-- **Player Options > Advanced Modifiers > Gameplay Extras > Golf Score** enables
-  the native stroke counter. Its **Golf Display** setting selects golf charts only
-  (charts with an authored par) or all charts. **Stroke Feedback** enables ACE and
-  penalty flashes. Each player saves these choices independently.
+- **Player Options > Advanced Modifiers > Gameplay Extras > Golf Score** shows
+  the native stroke counter. It is on by default, so golf packs score as golf as
+  soon as the master switch is enabled. Its **Golf Display** setting selects golf
+  charts only (charts with an authored par, the default) or all charts. **Stroke
+  Feedback** enables ACE and penalty flashes. Each player saves these choices
+  independently.
 - **Player Options > Advanced Modifiers > Results Extras > Golf Results** adds a
-  golf evaluation pane, independently of the gameplay counter.
+  golf evaluation pane, independently of the gameplay counter. It is also on by
+  default and follows the same **Golf Display** choice.
 - **Options > Select Music Options > Show Golf Pars** enables wheel par badges.
+  Turning the master switch on also turns this on, so pars appear right away;
+  switch it off here if you would rather not see them.
 - **Options > Select Music Options > GS Box Leaderboards > Golf (ArrowCloud)**
   enables the online event board alongside the other selectable leaderboards.
 
@@ -316,8 +321,9 @@ Par=4
 
 Section names use the actual song folder name; a difficulty-specific entry takes
 precedence over the song-wide entry. Pars are already in displayed strokes.
-`Golf.ini` never enables a feature by itself. Metadata refreshes when the library
-reloads and when entering Select Music with golf extras enabled.
+`Golf.ini` never enables a feature by itself: the master switch does, after which
+every chart with an authored par scores as golf. Metadata refreshes when the
+library reloads and when entering Select Music with golf extras enabled.
 
 ### Custom sound packs
 

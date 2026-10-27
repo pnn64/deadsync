@@ -1,0 +1,9 @@
+cargo :     Checking deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+At line:2 char:36
++ ... 'Continue'; cargo clippy -p deadlib-audio-decode-ogg -p deadlib-audio ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Checking de...dio\decode\ogg):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+    Checking deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.22s

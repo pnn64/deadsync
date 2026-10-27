@@ -13,7 +13,7 @@ fn pixels(width: u32, height: u32) -> RgbaImage {
     })
 }
 
-fn write_gif(path: &Path, width: u16, height: u16, offset: bool) {
+pub(super) fn write_gif(path: &Path, width: u16, height: u16, offset: bool) {
     let palette: Vec<u8> = (0..=255u8).flat_map(|i| [i, i ^ 0x55, i ^ 0xaa]).collect();
     let file = std::fs::File::create(path).unwrap();
     let mut encoder = gif::Encoder::new(file, width + 2, height + 3, &palette).unwrap();
@@ -60,7 +60,7 @@ fn png_and_gif_match_original_pixels_and_errors() {
     let mut checked = 0;
     type Decoder = fn(&Path, bool) -> image::ImageResult<RgbaImage>;
     for path in paths {
-        let signature = image_signature(&path).unwrap();
+        let signature = image_source(&path).unwrap().0;
         let (before, after): (Decoder, Decoder) = if signature == *b"\x89PNG\r\n\x1a\n" {
             (decode_png_original, decode_png)
         } else if &signature[..3] == b"GIF" {
@@ -104,6 +104,46 @@ fn png_and_gif_match_original_pixels_and_errors() {
             );
         }
     }
+}
+
+#[test]
+fn packed_half_resize_preserves_byte_lanes_and_rounding() {
+    // Every ordered byte pair, with independent values in neighboring channels.
+    let input = RgbaImage::from_fn(1024, 256, |x, y| {
+        let pair = x / 2 + (y / 2) * 512;
+        let a = pair as u8;
+        let b = (pair >> 8) as u8;
+        let pixel = match (x & 1, y & 1) {
+            (0, 0) => [a, b, 255 - a, 255 - b],
+            (1, 0) => [b, a, 255 - b, 255 - a],
+            (0, 1) => [255, a, 0, b],
+            _ => [b, 0, a, 255],
+        };
+        image::Rgba(pixel)
+    });
+    assert_eq!(
+        zoom_image(input.clone(), [512, 128]),
+        zoom_image_original(input.clone(), [512, 128])
+    );
+    assert_eq!(
+        zoom_image(input.clone(), [32, 8]),
+        zoom_image_original(input, [32, 8])
+    );
+}
+
+#[test]
+fn wide_half_resize_preserves_float_coordinate_failure() {
+    // Above 2^23, the native f32 center +/- 0.5 can span different texels.
+    let width = (1 << 23) + 2;
+    let input = RgbaImage::from_fn(width, 2, |x, y| {
+        image::Rgba((x.wrapping_mul(1664525) ^ y.wrapping_mul(1013904223)).to_le_bytes())
+    });
+    // The original coordinates step past the last texel for this width.
+    // Preserve that existing failure rather than silently changing its pixels.
+    assert!(
+        std::panic::catch_unwind(|| zoom_image_original(input.clone(), [width / 2, 1])).is_err()
+    );
+    assert!(std::panic::catch_unwind(|| zoom_image(input, [width / 2, 1])).is_err());
 }
 
 #[test]

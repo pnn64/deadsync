@@ -1,0 +1,17 @@
+case	codec	operation	iterations	encoded_bytes	sample_bytes	ns_per_image	MiB_per_second
+gradient-rgba8	deadlib-image-png	decode	20	3558	1048576	6322245	158.172
+gradient-rgba8	png-0.18.1	decode	20	3558	1048576	755095	1324.337
+gradient-rgba8	deadlib-image-png	encode	20	30757	1048576	24604505	40.643
+gradient-rgba8	png-0.18.1	encode	20	3558	1048576	6151665	162.558
+noise-rgba8	deadlib-image-png	decode	20	1049321	1048576	11972375	83.526
+noise-rgba8	png-0.18.1	decode	20	1049321	1048576	1203420	830.965
+noise-rgba8	deadlib-image-png	encode	20	1106612	1048576	47805395	20.918
+noise-rgba8	png-0.18.1	encode	20	1049321	1048576	46218620	21.636
+gradient-rgba16	deadlib-image-png	decode	20	18574	2097152	9943560	201.135
+gradient-rgba16	png-0.18.1	decode	20	18574	2097152	2761955	724.125
+gradient-rgba16	deadlib-image-png	encode	20	500892	2097152	53488180	37.391
+gradient-rgba16	png-0.18.1	encode	20	18574	2097152	12480245	160.253
+noise-rgba16	deadlib-image-png	decode	20	2098062	2097152	24423750	81.888
+noise-rgba16	png-0.18.1	decode	20	2098062	2097152	2940360	680.189
+noise-rgba16	deadlib-image-png	encode	20	2212414	2097152	88933910	22.489
+noise-rgba16	png-0.18.1	encode	20	2098062	2097152	89797910	22.272

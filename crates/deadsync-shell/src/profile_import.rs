@@ -197,7 +197,7 @@ where
 {
     let (base_singles, base_doubles) = profile::default_local_profile_options();
     let packs = get_song_cache();
-    import_itg_profile_dir(
+    let summary = import_itg_profile_dir(
         dir,
         &base_singles,
         &base_doubles,
@@ -226,7 +226,14 @@ where
         profile::write_imported_favorites,
         profile::write_imported_profile_stats,
         scores::import_itl_json,
-    )
+    )?;
+    if !summary.canceled && summary.already_imported_as.is_none() {
+        let destination = deadsync_profile::app_runtime::local_profile_dir(&summary.profile_id);
+        if let Err(error) = deadsync_score::ghost::import_directory(dir, &destination) {
+            log::warn!("Could not import all ghost histories: {error}");
+        }
+    }
+    Ok(summary)
 }
 
 fn import_summary(summary: ImportSummary) -> SimplyLoveItgImportSummary {

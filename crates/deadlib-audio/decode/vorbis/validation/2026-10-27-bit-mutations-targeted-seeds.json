@@ -1,0 +1,88 @@
+{
+  "source": "target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg",
+  "source_sha256": "1c97545f93cc2afe473066d523f15bb04edc68fe7474bc98408bda452e462ea0",
+  "raw_fixture_control": 4,
+  "requires_floor_zero_environment": true,
+  "seeds": [
+    {
+      "name": "rounding",
+      "audio_packet": 25,
+      "bit": 1,
+      "raw": {
+        "path": "target/deadlib-audio-reference/bit-mutations-fuzz-seeds-20261027/vorbis_packets/floor0-rounding.bin",
+        "sha256": "0cce6388d931dd730d4ca284265a541641da1a325d74d48680e311fccfc8966a",
+        "bytes": 1055
+      },
+      "stream": {
+        "path": "target/deadlib-audio-reference/bit-mutations-fuzz-seeds-20261027/vorbis_stream/floor0-rounding.bin",
+        "sha256": "a1da60c512fe5b0e052ebba94a79d42009839cbae522eef13d40c8374f33ad51",
+        "bytes": 15862
+      },
+      "stream_scope": "Original complete-page prefix through recovery packets; repaired changed-page CRC, explicit zero-span policy, no invented EOS."
+    },
+    {
+      "name": "selector",
+      "audio_packet": 25,
+      "bit": 13,
+      "raw": {
+        "path": "target/deadlib-audio-reference/bit-mutations-fuzz-seeds-20261027/vorbis_packets/floor0-selector.bin",
+        "sha256": "bf1531970932248ff30c7c07f9c217720fde1ca7ac0b7fbb2e6590bf267dc0bc",
+        "bytes": 1055
+      },
+      "stream": {
+        "path": "target/deadlib-audio-reference/bit-mutations-fuzz-seeds-20261027/vorbis_stream/floor0-selector.bin",
+        "sha256": "598b6d84198c06c5e63990867a43ff13cff6fe7177db1d2998d6879df889b155",
+        "bytes": 15862
+      },
+      "stream_scope": "Original complete-page prefix through recovery packets; repaired changed-page CRC, explicit zero-span policy, no invented EOS."
+    },
+    {
+      "name": "sequence",
+      "audio_packet": 26,
+      "bit": 32,
+      "raw": {
+        "path": "target/deadlib-audio-reference/bit-mutations-fuzz-seeds-20261027/vorbis_packets/floor0-sequence.bin",
+        "sha256": "1ff0938517f1ed0d31fe043ac9dfe235a5408b9e27a52c325bdad0ce8be72a6e",
+        "bytes": 1845
+      },
+      "stream": {
+        "path": "target/deadlib-audio-reference/bit-mutations-fuzz-seeds-20261027/vorbis_stream/floor0-sequence.bin",
+        "sha256": "14ce94f663f2d977cc53572812f360602849f4fe232f553e7eeb975bc9766b08",
+        "bytes": 15862
+      },
+      "stream_scope": "Original complete-page prefix through recovery packets; repaired changed-page CRC, explicit zero-span policy, no invented EOS."
+    },
+    {
+      "name": "nonfinite",
+      "audio_packet": 27,
+      "bit": 16,
+      "raw": {
+        "path": "target/deadlib-audio-reference/bit-mutations-fuzz-seeds-20261027/vorbis_packets/floor0-nonfinite.bin",
+        "sha256": "99dc7bd0b1174b92f988de590cf20c443944935ce2c9f23a7dd70ec52149806b",
+        "bytes": 2638
+      },
+      "stream": {
+        "path": "target/deadlib-audio-reference/bit-mutations-fuzz-seeds-20261027/vorbis_stream/floor0-nonfinite.bin",
+        "sha256": "d24244b318af5f9cd1da0fda2d5d4f7da3d9f9f23d067527772debe54c275a4f",
+        "bytes": 15862
+      },
+      "stream_scope": "Original complete-page prefix through recovery packets; repaired changed-page CRC, explicit zero-span policy, no invented EOS."
+    },
+    {
+      "name": "discard",
+      "audio_packet": 27,
+      "bit": 0,
+      "raw": {
+        "path": "target/deadlib-audio-reference/bit-mutations-fuzz-seeds-20261027/vorbis_packets/floor0-discard.bin",
+        "sha256": "064c3b509b5a46d2f8350b5d52608b75cbaab28c360db31783d1dffd1de7e35c",
+        "bytes": 2638
+      },
+      "stream": {
+        "path": "target/deadlib-audio-reference/bit-mutations-fuzz-seeds-20261027/vorbis_stream/floor0-discard.bin",
+        "sha256": "4b3e0a7f766b0aad5cdee1cec36031873d3f5138b8a8c915b0d7c9dfa0513ebc",
+        "bytes": 15862
+      },
+      "stream_scope": "Original complete-page prefix through recovery packets; repaired changed-page CRC, explicit zero-span policy, no invented EOS."
+    }
+  ]
+}

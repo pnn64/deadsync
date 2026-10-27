@@ -92,9 +92,7 @@ impl<'a> Iterator for BgChangeSets<'a> {
 
 #[inline]
 fn next_bgchange_delimiter(changes: &str, start: usize) -> Option<(usize, u8)> {
-    changes.as_bytes()[start..]
-        .iter()
-        .position(|byte| matches!(byte, b'=' | b','))
+    memchr::memchr2(b'=', b',', &changes.as_bytes()[start..])
         .map(|offset| {
             let index = start + offset;
             (index, changes.as_bytes()[index])
@@ -191,10 +189,18 @@ fn skip_newline_sequence(input: &[u8], index: &mut usize) {
 
 #[must_use]
 pub fn bgchange_field_rejects_non_media(field: &str) -> bool {
-    field.as_bytes().windows(4).any(|window| {
-        window[0] == b'.'
-            && (window[1..].eq_ignore_ascii_case(b"ini")
-                || window[1..].eq_ignore_ascii_case(b"xml"))
+    let bytes = field.as_bytes();
+    if bytes.len() < 32 {
+        return bytes.windows(4).any(|window| {
+            window[0] == b'.'
+                && (window[1..].eq_ignore_ascii_case(b"ini")
+                    || window[1..].eq_ignore_ascii_case(b"xml"))
+        });
+    }
+    memchr::memchr_iter(b'.', bytes).any(|index| {
+        bytes.get(index + 1..index + 4).is_some_and(|suffix| {
+            suffix.eq_ignore_ascii_case(b"ini") || suffix.eq_ignore_ascii_case(b"xml")
+        })
     })
 }
 
@@ -421,3 +427,6 @@ mod tests {
 mod parse_perf {
     include!("bgchanges_parse_perf.rs");
 }
+
+#[cfg(test)]
+mod delimiter_perf;

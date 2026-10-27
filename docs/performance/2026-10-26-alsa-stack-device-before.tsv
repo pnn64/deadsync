@@ -1,0 +1,10 @@
+run	stage	workload	operations	cycles_per_op	instructions_per_op	cpu_ns_per_op	ns_per_op	allocations	reallocations	requested_bytes
+0	stack-control-name	enumerate	20000	272260.98495	450792.7356	150736.0	152173.98915	35	1	2170
+0	stack-control-name	enumerate_failed	100000	40091.83228	81904.74196	20894.499999999996	21076.86806	35	9	3066
+0	stack-control-name	probe_null	20000	55573.10535	101172.2481	26676.0	26595.03995	2	0	61
+1	stack-control-name	enumerate	20000	257067.7	450792.72425	145180.5	147065.3721	35	1	2170
+1	stack-control-name	enumerate_failed	100000	39790.56743	81904.73546	20500.4	20676.847	35	9	3066
+1	stack-control-name	probe_null	20000	56643.12995	101172.2279	27579.5	27480.14445	2	0	61
+2	stack-control-name	enumerate	20000	263993.5065	450792.7791	150943.0	152643.01655	35	1	2170
+2	stack-control-name	enumerate_failed	100000	39907.77599	81904.73349	20798.1	20913.99571	35	9	3066
+2	stack-control-name	probe_null	20000	53445.1065	101172.2355	25761.5	25645.97615	2	0	61

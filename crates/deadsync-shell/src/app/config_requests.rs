@@ -405,6 +405,12 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
         Request::EnableGolf(enabled) => {
             if config::runtime::get().enable_golf != enabled {
                 config::runtime_update::update_enable_golf(enabled);
+                if enabled {
+                    // Turning golf on should change something visible: default the
+                    // wheel par badges to on. Turning it off leaves saved choices
+                    // alone, since the master switch already hides every golf display.
+                    config::runtime_update::update_select_music_show_golf_pars(true);
+                }
                 deadsync_score::runtime_invalidate_golf_leaderboards();
             }
         }

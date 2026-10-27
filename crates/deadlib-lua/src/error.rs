@@ -24,6 +24,9 @@ pub struct Error {
     kind: ErrorKind,
     line: u32,
     message: Box<str>,
+    bytes: Option<Box<[u8]>>,
+    pub(crate) near: bool,
+    pub(crate) bypass_handler: bool,
     value: Option<Value>,
 }
 
@@ -33,6 +36,9 @@ impl Error {
             kind,
             line,
             message: message.into(),
+            bytes: None,
+            near: false,
+            bypass_handler: false,
             value: None,
         }
     }
@@ -42,6 +48,9 @@ impl Error {
             kind: ErrorKind::Runtime,
             line: 0,
             message: message.into(),
+            bytes: None,
+            near: false,
+            bypass_handler: false,
             value: Some(value),
         }
     }
@@ -53,9 +62,41 @@ impl Error {
         self
     }
 
+    pub(crate) fn from_bytes(kind: ErrorKind, line: u32, bytes: Vec<u8>) -> Self {
+        match String::from_utf8(bytes) {
+            Ok(message) => Self::new(kind, line, message),
+            Err(error) => {
+                let bytes = error.into_bytes();
+                Self {
+                    kind,
+                    line,
+                    message: String::from_utf8_lossy(&bytes)
+                        .into_owned()
+                        .into_boxed_str(),
+                    bytes: Some(bytes.into_boxed_slice()),
+                    near: false,
+                    bypass_handler: false,
+                    value: None,
+                }
+            }
+        }
+    }
+
+    /// Return diagnostic bytes, preserving non-UTF-8 source/token bytes.
+    /// [`Self::message`] and display replace invalid UTF-8 for Rust callers.
+    pub fn message_bytes(&self) -> &[u8] {
+        self.bytes.as_deref().unwrap_or(self.message.as_bytes())
+    }
+
     pub(crate) fn with_value(mut self, value: Value) -> Self {
         self.value = Some(value);
         self
+    }
+
+    pub(crate) fn handling(value: Value) -> Self {
+        let mut error = Self::raised(value, "error in error handling");
+        error.bypass_handler = true;
+        error
     }
 
     /// Return an explicitly raised Lua error value, owned by its originating VM.

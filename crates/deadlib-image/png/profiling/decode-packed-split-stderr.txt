@@ -1,0 +1,3 @@
+Profiling inflate: 24 files, 60 corpus passes
+[ perf record: Woken up 107 times to write data ]
+[ perf record: Captured and wrote 26.594 MB /tmp/deadlib-image-decode-packed-split.data (6414 samples) ]

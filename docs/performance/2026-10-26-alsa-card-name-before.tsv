@@ -1,0 +1,4 @@
+run	stage	workload	operations	cycles_per_op	instructions_per_op	cpu_ns_per_op	ns_per_op	allocations	reallocations	requested_bytes
+0	single-rate-pass	enumerate	20000	270138.9318	453143.29255	123953.0	124888.03745	41	9	2390
+1	single-rate-pass	enumerate	20000	260314.29235	453143.3087	115989.0	116882.5127	41	9	2390
+2	single-rate-pass	enumerate	20000	261319.1965	453143.318	122008.0	122963.23725	41	9	2390

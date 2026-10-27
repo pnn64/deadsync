@@ -1,0 +1,17 @@
+INFO: found LLVMFuzzerCustomMutator (00007FF6C0221000). Disabling -len_control by default.
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 3773807152
+INFO: Loaded 1 modules   (14386 inline 8-bit counters): 14386 [00007FF6C040F348, 00007FF6C0412B7A),
+INFO: Loaded 1 PC tables (14386 PCs): 14386 [00007FF6C036EE08,00007FF6C03A7128),
+target\deadlib-audio-fuzz\x86_64-pc-windows-msvc\release\vorbis_stream.exe: Running 1 inputs 1 time(s) each.
+Running: target\deadlib-audio-reference\fuzz-split-prefix-20261027\artifacts\vorbis_stream\timeout-96a983b404038758b05f56633423b0752a664653
+Executed target\deadlib-audio-reference\fuzz-split-prefix-20261027\artifacts\vorbis_stream\timeout-96a983b404038758b05f56633423b0752a664653 in 47141 ms
+***
+*** NOTE: fuzzing was not performed, you have only
+***       executed the target code on a fixed set of inputs.
+***
+stat::number_of_executed_units: 2
+stat::average_exec_per_sec:     0
+stat::new_units_added:          0
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              47

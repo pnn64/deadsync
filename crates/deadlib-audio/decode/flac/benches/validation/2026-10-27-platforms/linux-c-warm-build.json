@@ -1,0 +1,20 @@
+{
+  "timestamp_utc": "2026-10-27T19:53:49Z",
+  "command": [
+    "cmake",
+    "--build",
+    "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle",
+    "--config",
+    "Release",
+    "--target",
+    "flac_latency_benchmark",
+    "--parallel",
+    "4"
+  ],
+  "sources": {
+    "/mnt/c/GitHub/deadsync/crates/deadlib-audio/decode/flac/benches/libflac/benchmark.cpp": "b985804274f3619a8160d95849a2d22d21eb9aae5647df0d31579d1a332eeb99",
+    "/mnt/c/GitHub/deadsync/crates/deadlib-audio/decode/flac/benches/libflac/CMakeLists.txt": "a79066abb6d6173cb6b9ce250abaa14fcf672e716cabd38640b405e8ef1887aa",
+    "/mnt/c/GitHub/deadsync/crates/deadlib-audio/decode/flac/benches/libflac/opaque.c": "28bfb8fb9c458c872596930c3da1c56e4158cad7ca5d15f4f3438501fac7deef"
+  },
+  "binary_sha256": "c54787f2edd6cf287fcf00ef02bcc850af7bd0194c11dd26592033753972c2a6"
+}

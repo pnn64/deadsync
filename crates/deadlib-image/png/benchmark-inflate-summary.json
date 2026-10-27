@@ -1,0 +1,704 @@
+{
+  "method": "Sum native/filtered bytes divided by sum of per-case medians of run-average nanoseconds. All runs have three warmups per operation. Reference-relative ratios are an inference on a shared host, not a controlled causal estimate.",
+  "groups": {
+    "before": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 93.160895,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 70.172415,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 143.223468,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "wide-trial": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 103.827487,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 73.981084,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 142.103546,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 10
+      }
+    ],
+    "canonical-trial": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 104.339121,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 77.150171,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 156.765901,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 10
+      }
+    ],
+    "combined-trial": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 114.687921,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 84.532608,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 155.550584,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 10
+      }
+    ],
+    "final": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 102.72193,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 74.563157,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 137.817204,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "before-confirm": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 97.80699,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 74.149456,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 150.665668,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "before-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 68.191985,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 198.019686,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 56.687045,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 26.174161,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 9.542298,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 26.026897,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 27.063608,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      }
+    ],
+    "final-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 78.979561,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 202.579391,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 64.028062,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 27.358569,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 10.383846,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 26.910361,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 28.011475,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      }
+    ],
+    "before-confirm-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 70.806512,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 204.232051,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 58.539027,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 26.92808,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 10.092642,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 27.043437,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 27.811168,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      }
+    ],
+    "final-synthetic": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 672.554508,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 598.793431,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 263.463073,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 910.663874,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 347.175812,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 434.330967,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 42.633015,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 42.660069,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 51.448,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 53.414314,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "before-confirm-synthetic": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 578.74222,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 557.390299,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 237.350973,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 873.023148,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 319.141297,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 386.595945,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 39.838265,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 40.226073,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 47.765551,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 49.57229,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      }
+    ]
+  },
+  "comparisons": [
+    {
+      "operation": "inflate",
+      "baseline": "before",
+      "observed_ratio": 1.102629,
+      "reference_relative_ratio": 1.145883
+    },
+    {
+      "operation": "inflate",
+      "baseline": "before-confirm",
+      "observed_ratio": 1.050251,
+      "reference_relative_ratio": 1.148165
+    },
+    {
+      "operation": "inflate-stream",
+      "baseline": "before",
+      "observed_ratio": 1.062571,
+      "reference_relative_ratio": 1.104253
+    },
+    {
+      "operation": "inflate-stream",
+      "baseline": "before-confirm",
+      "observed_ratio": 1.005579,
+      "reference_relative_ratio": 1.099328
+    },
+    {
+      "operation": "decode",
+      "baseline": "before-pipeline",
+      "observed_ratio": 1.158194,
+      "reference_relative_ratio": 1.132125
+    },
+    {
+      "operation": "decode",
+      "baseline": "before-confirm-pipeline",
+      "observed_ratio": 1.115428,
+      "reference_relative_ratio": 1.124528
+    },
+    {
+      "operation": "decode-reader",
+      "baseline": "before-pipeline",
+      "observed_ratio": 1.129501,
+      "reference_relative_ratio": 1.104078
+    },
+    {
+      "operation": "decode-reader",
+      "baseline": "before-confirm-pipeline",
+      "observed_ratio": 1.093767,
+      "reference_relative_ratio": 1.10269
+    }
+  ],
+  "artifact_sha256": [
+    {
+      "path": "benchmark-inflate-before-manifest.json",
+      "sha256": "2de29ff7c41ec1e5f1f7da3595b72991d025bdd2e26891ce8987eec30c7108b2"
+    },
+    {
+      "path": "benchmark-inflate-before-run1.tsv",
+      "sha256": "b651492a085ec6a4aec8e6e9db15541032317d701450e09b4d583dceb9061c12"
+    },
+    {
+      "path": "benchmark-inflate-before-run2.tsv",
+      "sha256": "b9412790e94cc75bd2e42dc50f2f6c7243ec82a4883f513da07438402cdb27be"
+    },
+    {
+      "path": "benchmark-inflate-before-run3.tsv",
+      "sha256": "c81f022a158e031cdca02b42c51025049f070377d53e4fc13d19970751f122f7"
+    },
+    {
+      "path": "benchmark-inflate-wide-trial-manifest.json",
+      "sha256": "cbc213ea67cd1a21882618d5b4ac24415fb57bf6fec36e077da35a38d048cbfc"
+    },
+    {
+      "path": "benchmark-inflate-wide-trial-run1.tsv",
+      "sha256": "11932d9706789a518e9a76f14a3703f0352a026a9bd60f91bf7c1dde4998cd29"
+    },
+    {
+      "path": "benchmark-inflate-canonical-trial-manifest.json",
+      "sha256": "cd454b97e1e21757fab87d21d8be0ea69118c211a8294443046a525f929df40f"
+    },
+    {
+      "path": "benchmark-inflate-canonical-trial-run1.tsv",
+      "sha256": "f595cda5f03540b7f15ae6b34eb99d5db4236dc4189ce12cc0902b56796f4b38"
+    },
+    {
+      "path": "benchmark-inflate-combined-trial-manifest.json",
+      "sha256": "4d2bd9aa66eb242bd7490bb42f124c7c89368d317d7d9046efddcfb1b1ab5440"
+    },
+    {
+      "path": "benchmark-inflate-combined-trial-run1.tsv",
+      "sha256": "177c5d23c339d73ca6f4a5ed987cd76ab6657f59c86a12710243c7fd414da5ed"
+    },
+    {
+      "path": "benchmark-inflate-final-manifest.json",
+      "sha256": "3e05074bdc2488e12a635d96113b0327081b7003eb02874578c23cb34678654a"
+    },
+    {
+      "path": "benchmark-inflate-final-run1.tsv",
+      "sha256": "07a6a3fcf177db6e0147e77d7d96619eab9cd229cce78dd3cf01a4122fd5ff78"
+    },
+    {
+      "path": "benchmark-inflate-final-run2.tsv",
+      "sha256": "f0fb0849534d74433aeb603d66b64b1af484ae0bd153475a12b3c3ed009be983"
+    },
+    {
+      "path": "benchmark-inflate-final-run3.tsv",
+      "sha256": "1c4ef81764e90b4dd34e72c6ea776e8f3fbd6d529bda100a4b662a65406945ec"
+    },
+    {
+      "path": "benchmark-inflate-before-confirm-manifest.json",
+      "sha256": "e27893725a424ffbf44a979d57c3d9eff4306ccfb92894694eb30e45400436e2"
+    },
+    {
+      "path": "benchmark-inflate-before-confirm-run1.tsv",
+      "sha256": "3e9e6583a0c1dcf1d63d39b8d913d7958febb7a2647bd89f648a8524f9c0c003"
+    },
+    {
+      "path": "benchmark-inflate-before-confirm-run2.tsv",
+      "sha256": "9086c5b1d237d3ab6aad5cfff8f3e16ffd8db29422ecdb9249934e4e26cea0b0"
+    },
+    {
+      "path": "benchmark-inflate-before-confirm-run3.tsv",
+      "sha256": "64a6aef0afe036a9e386c13d26db547ae416e907911166f4d0d31648984a9ae1"
+    },
+    {
+      "path": "benchmark-inflate-before-pipeline-manifest.json",
+      "sha256": "236b3b6f2b3b546653c8f15ac39d834a31e74b6dcd47ead1d5c763884eaae50d"
+    },
+    {
+      "path": "benchmark-inflate-before-pipeline-run1.tsv",
+      "sha256": "3e4192ce966768faa1be778c1402278fcb326483e4787cf5194271db87451984"
+    },
+    {
+      "path": "benchmark-inflate-before-pipeline-run2.tsv",
+      "sha256": "582b672747f44c94289531fab1b678ae5040b200dd1e6b3c89ee65a4902c583a"
+    },
+    {
+      "path": "benchmark-inflate-before-pipeline-run3.tsv",
+      "sha256": "7ef2c4d5e32d8f9b870c81840575b284128c87cb96ed03abcefaf1b3bffd3659"
+    },
+    {
+      "path": "benchmark-inflate-final-pipeline-manifest.json",
+      "sha256": "46ef09a33546c2ee602344f815f5dec31d153de80f381340ed70989bfd138eb3"
+    },
+    {
+      "path": "benchmark-inflate-final-pipeline-run1.tsv",
+      "sha256": "a4a1cce4d3b573bf0f0058b24b8a9db4fea2f8eb5a332dcc6e357c931559cb01"
+    },
+    {
+      "path": "benchmark-inflate-final-pipeline-run2.tsv",
+      "sha256": "cd9227986d575b7b8d7b966b2dd5de0b4266f08bec0145528f69054ae49fe204"
+    },
+    {
+      "path": "benchmark-inflate-final-pipeline-run3.tsv",
+      "sha256": "891e1a1432557f4bdd490409e26d060793db3b5c0226f4a874f43c75af63d013"
+    },
+    {
+      "path": "benchmark-inflate-before-confirm-pipeline-manifest.json",
+      "sha256": "7fce0ac9dc1f74d5470b4c054554034809e75a6fedb52116f734befdf8b5e399"
+    },
+    {
+      "path": "benchmark-inflate-before-confirm-pipeline-run1.tsv",
+      "sha256": "74a5b10a7cb1942e3b3f86186fe05b1f526a07cafe2c745f4e98c6272a0181bd"
+    },
+    {
+      "path": "benchmark-inflate-before-confirm-pipeline-run2.tsv",
+      "sha256": "4e927a61b4d6d731060f910b5f395beb29597e5c0523e1c89a2be50c2e82df73"
+    },
+    {
+      "path": "benchmark-inflate-before-confirm-pipeline-run3.tsv",
+      "sha256": "880a5ca0b22b0449d39805a701be3c4ceb6baa6574b37710ed505b4c8981fea7"
+    },
+    {
+      "path": "benchmark-inflate-final-synthetic-manifest.json",
+      "sha256": "1accd2baa21e02e00913b868ac6ab6c9a4fb4537b01c05fc945aec195d026dfb"
+    },
+    {
+      "path": "benchmark-inflate-final-synthetic-run1.tsv",
+      "sha256": "334b0e49f2839444bbbc45d3fe93607fee64678fc952a57479dc5f298b331e9b"
+    },
+    {
+      "path": "benchmark-inflate-final-synthetic-run2.tsv",
+      "sha256": "4398639578ad427cb039f3df46e2ad72dd3e76558f6b357d3061a45c1654aaab"
+    },
+    {
+      "path": "benchmark-inflate-final-synthetic-run3.tsv",
+      "sha256": "0a38a9cbf90623fa0aa46dac5e11ddf1e5505ac2fdca543e1004adaf4bd8d5e1"
+    },
+    {
+      "path": "benchmark-inflate-before-confirm-synthetic-manifest.json",
+      "sha256": "fe06f232014b5794cad3519b4077833203c68ca7f64ecc0a4f63a7a657a47420"
+    },
+    {
+      "path": "benchmark-inflate-before-confirm-synthetic-run1.tsv",
+      "sha256": "42b7c81f5e2c7f2461eca5b6b06ea9e1d98ea1c6688fc64c64e79b831368e4da"
+    },
+    {
+      "path": "benchmark-inflate-before-confirm-synthetic-run2.tsv",
+      "sha256": "16f1dcdc5b71a0b1ff44dfafc65cffc9c616db90b4dd97e58022337b0266799c"
+    },
+    {
+      "path": "benchmark-inflate-before-confirm-synthetic-run3.tsv",
+      "sha256": "64395c17e4255edbae5b856b521d48cd52a521855365e304e198badd35182156"
+    }
+  ],
+  "analysis_sha256": "f0ed3886765fded9323bb4e27caa52bc51c41d870e13787e8fa5b188466cf90d"
+}

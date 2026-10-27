@@ -136,7 +136,8 @@ impl Color {
     /// Format as `#RRGGBB` when opaque, otherwise `#AARRGGBB`.
     #[must_use]
     pub fn to_hex(self) -> String {
-        let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        // Widen before the half bias; the u8 cast also clamps and maps NaN to zero.
+        let channel = |v: f32| (f64::from(v * 255.0) + 0.5) as u8;
         let (r, g, b) = (channel(self.r), channel(self.g), channel(self.b));
         let a = channel(self.a);
         const HEX: &[u8; 16] = b"0123456789ABCDEF";

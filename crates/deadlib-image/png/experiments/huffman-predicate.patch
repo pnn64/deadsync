@@ -1,0 +1,14 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index a0aa49649..eb68464d1 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -160,7 +160,8 @@ impl Huffman {
+         bits.fill_huffman(9);
+         let entry = self.fast[(bits.word & 511) as usize];
+         let n = (entry & 15) as u8;
+-        if n != 0 && n <= bits.count {
++        // A zero length wraps to 255; all other lengths need n buffered bits.
++        if n.wrapping_sub(1) < bits.count {
+             bits.word >>= n;
+             bits.count -= n;
+             return Ok((entry >> 4) as usize);

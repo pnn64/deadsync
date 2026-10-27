@@ -204,40 +204,57 @@ fn png_error(error: png::DecodingError) -> image::ImageError {
     ))
 }
 
-fn image_signature(path: &Path) -> image::ImageResult<[u8; 8]> {
+fn image_source(path: &Path) -> image::ImageResult<([u8; 8], std::fs::File)> {
     let mut signature = [0; 8];
-    std::fs::File::open(path)?.read_exact(&mut signature)?;
-    Ok(signature)
+    let mut input = std::fs::File::open(path)?;
+    input.read_exact(&mut signature)?;
+    Ok((signature, input))
+}
+
+fn image_reader(
+    mut input: std::fs::File,
+    path: &Path,
+) -> image::ImageResult<BufReader<std::fs::File>> {
+    // Reproduce the original reopen if this source cannot rewind.
+    if input.rewind().is_err() {
+        drop(input);
+        input = std::fs::File::open(path)?;
+    }
+    Ok(BufReader::new(input))
 }
 
 /// Raw native texture dimensions before resolution hints or image preparation.
 /// GIF textures use the logical canvas, including the first frame's offsets.
 pub fn texture_source_size(path: &Path) -> image::ImageResult<(u32, u32)> {
-    let signature = image_signature(path)?;
+    let (signature, input) = image_source(path)?;
     if &signature[..6] == b"GIF87a" || &signature[..6] == b"GIF89a" {
-        let reader = gif_reader(path)?;
+        let reader = gif_reader_from_reader(image_reader(input, path)?)?;
         if reader.width() == 0 || reader.height() == 0 {
             return Err(image_limit());
         }
         return Ok((u32::from(reader.width()), u32::from(reader.height())));
     }
+    drop(input);
     image::ImageReader::open(path)?
         .with_guessed_format()?
         .into_dimensions()
 }
 
 fn decode_image(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
-    let signature = image_signature(path)?;
+    let (signature, input) = image_source(path)?;
     if signature == *b"\x89PNG\r\n\x1a\n" {
-        return decode_png(path, color_key);
+        return decode_png_from_reader(image_reader(input, path)?, color_key);
     }
     if &signature[..6] == b"GIF87a" || &signature[..6] == b"GIF89a" {
-        return decode_gif(path, color_key);
+        return decode_gif_from_reader(image_reader(input, path)?, color_key);
     }
     if &signature[..2] == b"BM" {
-        if let Some(image) = decode_indexed_bmp(path, color_key)? {
+        if let Some(image) = decode_indexed_bmp_from_reader(image_reader(input, path)?, color_key)?
+        {
             return Ok(image);
         }
+    } else {
+        drop(input);
     }
     let mut image = open_image_fallback(path)?.into_rgba8();
     if color_key {
@@ -257,47 +274,60 @@ fn gif_error(error: gif::DecodingError) -> image::ImageError {
     ))
 }
 
+#[cfg(test)]
 fn gif_reader(path: &Path) -> image::ImageResult<gif::Decoder<BufReader<std::fs::File>>> {
+    gif_reader_from_reader(BufReader::new(std::fs::File::open(path)?))
+}
+
+fn gif_reader_from_reader(
+    input: BufReader<std::fs::File>,
+) -> image::ImageResult<gif::Decoder<BufReader<std::fs::File>>> {
     let mut options = gif::DecodeOptions::new();
     options.set_color_output(gif::ColorOutput::Indexed);
     let limit = std::num::NonZeroU64::new(image::Limits::default().max_alloc.unwrap_or(u64::MAX))
         .ok_or_else(image_limit)?;
     options.set_memory_limit(gif::MemoryLimit::Bytes(limit));
-    options
-        .read_info(BufReader::new(std::fs::File::open(path)?))
-        .map_err(gif_error)
+    options.read_info(input).map_err(gif_error)
 }
 
+#[cfg(test)]
 fn decode_gif(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
-    let mut reader = gif_reader(path)?;
+    decode_gif_from_reader(BufReader::new(std::fs::File::open(path)?), color_key)
+}
+
+fn decode_gif_from_reader(
+    input: BufReader<std::fs::File>,
+    color_key: bool,
+) -> image::ImageResult<RgbaImage> {
+    let mut reader = gif_reader_from_reader(input)?;
     let canvas = [u32::from(reader.width()), u32::from(reader.height())];
     check_image_alloc(canvas)?;
-    let global = reader.global_palette().map(<[u8]>::to_vec);
     let frame = reader
         .next_frame_info()
         .map_err(gif_error)?
         .ok_or_else(|| decode_error(image::ImageFormat::Gif, "GIF has no frame"))?;
     let size = [u32::from(frame.width), u32::from(frame.height)];
     let origin = [u32::from(frame.left), u32::from(frame.top)];
-    if size.contains(&0) || canvas.contains(&0)
-        || origin[0] + size[0] > canvas[0] || origin[1] + size[1] > canvas[1] {
+    if size.contains(&0)
+        || canvas.contains(&0)
+        || origin[0] + size[0] > canvas[0]
+        || origin[1] + size[1] > canvas[1]
+    {
         return Err(image_limit());
     }
     check_image_alloc(size)?;
     // The primary stb loader starts with a transparent logical canvas and
     // leaves transparent first-frame pixels unwritten.
     let mut colors = [[0; 4]; 256];
-    for (color, rgb) in colors.iter_mut().zip(
-        frame
-            .palette
-            .as_deref()
-            .or(global.as_deref())
-            .unwrap_or_default()
-            .chunks_exact(3),
-    ) {
+    let transparent = frame.transparent;
+    let palette = match frame.palette.as_deref() {
+        Some(palette) => palette,
+        None => reader.global_palette().unwrap_or_default(),
+    };
+    for (color, rgb) in colors.iter_mut().zip(palette.chunks_exact(3)) {
         *color = [rgb[0], rgb[1], rgb[2], 255];
     }
-    if let Some(index) = frame.transparent {
+    if let Some(index) = transparent {
         colors[index as usize] = [0; 4];
     }
     let mut indices = vec![0; size[0] as usize * size[1] as usize];
@@ -322,11 +352,18 @@ fn decode_gif(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
     Ok(image)
 }
 
+#[cfg(test)]
+fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option<RgbaImage>> {
+    decode_indexed_bmp_from_reader(BufReader::new(std::fs::File::open(path)?), color_key)
+}
+
 // Native indexed BMP parsing stays together: DIB12/DIB40 headers, palette,
 // padded bottom-up rows and bit unpacking share the file offset contract.
 // Other BMP formats retain the existing decoder pending native mask validation.
-fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option<RgbaImage>> {
-    let mut input = BufReader::new(std::fs::File::open(path)?);
+fn decode_indexed_bmp_from_reader(
+    mut input: BufReader<std::fs::File>,
+    color_key: bool,
+) -> image::ImageResult<Option<RgbaImage>> {
     let mut header = [0; 54];
     input.read_exact(&mut header[..18])?;
     let le32 = |offset| {
@@ -362,7 +399,13 @@ fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option
         )
     } else {
         let height = le32(22) as i32;
-        ([le32(18), height.unsigned_abs()], height < 0, le16(26), le16(28), le32(30))
+        (
+            [le32(18), height.unsigned_abs()],
+            height < 0,
+            le16(26),
+            le16(28),
+            le32(30),
+        )
     };
     if !matches!(bits, 1 | 4 | 8) || compression != 0 {
         return Ok(None);
@@ -375,7 +418,8 @@ fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option
     // biClrUsed. Preserve safe palette handling for minimal OS/2 files too;
     // the primary decoder's negative-size palette path has undefined pixels.
     let entry_size = if header_size == 12 { 3 } else { 4 };
-    let color_count = data_offset.checked_sub(14 + header_size)
+    let color_count = data_offset
+        .checked_sub(14 + header_size)
         .ok_or_else(|| decode_error(image::ImageFormat::Bmp, "invalid bitmap pixel offset"))?
         / entry_size;
     if planes != 1 || color_count == 0 || color_count > 256 {
@@ -385,31 +429,50 @@ fn decode_indexed_bmp(path: &Path, color_key: bool) -> image::ImageResult<Option
         ));
     }
     let mut colors = [[0; 4]; 256];
-    for color in &mut colors[..color_count as usize] {
-        let mut entry = [0; 4];
-        input.read_exact(&mut entry[..if header_size == 12 { 3 } else { 4 }])?;
+    // A palette has at most 256 four-byte entries. Reuse those bytes for rows.
+    let mut scratch = [0; 1024];
+    let palette = &mut scratch[..color_count as usize * entry_size as usize];
+    input.read_exact(palette)?;
+    for (color, entry) in colors
+        .iter_mut()
+        .zip(palette.chunks_exact(entry_size as usize))
+    {
         *color = [entry[2], entry[1], entry[0], 255];
     }
     let pitch = usize::try_from((u64::from(size[0]) * u64::from(bits)).div_ceil(32) * 4)
         .map_err(|_| image_limit())?;
-    let mut row = vec![0; pitch];
+    let mut heap;
+    let row = if pitch <= scratch.len() {
+        &mut scratch[..pitch]
+    } else {
+        heap = vec![0; pitch];
+        heap.as_mut_slice()
+    };
     input.seek(SeekFrom::Start(u64::from(data_offset)))?;
     let mut image = RgbaImage::new(size[0], size[1]);
     let stride = size[0] as usize * 4;
     for row_index in 0..size[1] {
-        let y = if top_down { row_index } else { size[1] - 1 - row_index };
-        input.read_exact(&mut row)?;
-        let destination = &mut image.as_mut()[y as usize * stride..][..stride];
-        for (x, pixel) in destination.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-            let index = match bits {
-                1 => (row[x / 8] >> (7 - x % 8)) & 1,
-                4 => (row[x / 2] >> (4 * (1 - x % 2))) & 15,
-                _ => row[x],
-            };
-            if u32::from(index) >= color_count {
-                return Err(decode_error(image::ImageFormat::Bmp, "bitmap palette index out of range"));
-            }
-            *pixel = colors[index as usize];
+        let y = if top_down {
+            row_index
+        } else {
+            size[1] - 1 - row_index
+        };
+        input.read_exact(row)?;
+        let pixels = image.as_mut()[y as usize * stride..][..stride]
+            .as_chunks_mut::<4>()
+            .0;
+        match bits {
+            1 => unpack_palette::<8>(row, pixels, &colors),
+            4 => unpack_palette::<2>(row, pixels, &colors),
+            _ => unpack_palette::<1>(row, pixels, &colors),
+        }
+        // Valid BMP palette entries have alpha 255; missing entries retain 0.
+        // A complete palette needs no validation, and padding is never decoded.
+        if color_count < (1 << bits) && pixels.iter().any(|pixel| pixel[3] == 0) {
+            return Err(decode_error(
+                image::ImageFormat::Bmp,
+                "bitmap palette index out of range",
+            ));
         }
     }
     if color_key {
@@ -426,11 +489,35 @@ fn key_palette(colors: &mut [[u8; 4]; 256]) {
     }
 }
 
+// A byte holds N palette indices, most-significant first. The final chunk
+// can be short: unused low bits in a padded scanline must not produce pixels.
+fn unpack_palette<const N: usize>(row: &[u8], pixels: &mut [[u8; 4]], colors: &[[u8; 4]; 256]) {
+    let index = |byte: u8, i| (byte >> (8 - (i + 1) * (8 / N))) & (u8::MAX >> (8 - 8 / N));
+    let (groups, tail) = pixels.as_chunks_mut::<N>();
+    for (pixels, &byte) in groups.iter_mut().zip(row) {
+        *pixels = std::array::from_fn(|i| colors[index(byte, i) as usize]);
+    }
+    if !tail.is_empty() {
+        let byte = row[groups.len()];
+        for (i, pixel) in tail.iter_mut().enumerate() {
+            *pixel = colors[index(byte, i) as usize];
+        }
+    }
+}
+
 // PNG indexed entries must remain distinct: native palette color keying
 // changes the first matching entry, even when another entry has identical RGB.
 // Native PNG loading strips 16-bit channels rather than rescaling their values.
+#[cfg(test)]
 fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
-    let mut decoder = png::Decoder::new(BufReader::new(std::fs::File::open(path)?));
+    decode_png_from_reader(BufReader::new(std::fs::File::open(path)?), color_key)
+}
+
+fn decode_png_from_reader(
+    input: BufReader<std::fs::File>,
+    color_key: bool,
+) -> image::ImageResult<RgbaImage> {
+    let mut decoder = png::Decoder::new(input);
     // Match the image loader's allocation limit instead of png's smaller default.
     decoder.set_limits(png::Limits {
         bytes: image::Limits::default()
@@ -450,8 +537,6 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
             },
     );
     let mut reader = decoder.read_info().map_err(png_error)?;
-    let palette = reader.info().palette.clone();
-    let alpha = reader.info().trns.clone();
     let mut bytes = vec![0; reader.output_buffer_size().ok_or_else(image_limit)?];
     let info = reader.next_frame(&mut bytes).map_err(png_error)?;
     if info.color_type == png::ColorType::Rgba {
@@ -466,22 +551,16 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
     }
     let mut image = RgbaImage::new(info.width, info.height);
     if indexed {
+        // Indexed palettes are fixed before IDAT; borrow the decoder's storage.
+        let palette = reader.info().palette.as_deref();
+        let alpha = reader.info().trns.as_deref();
         let mut colors = [[0, 0, 0, 255]; 256];
-        for (i, rgb) in palette
-            .as_deref()
-            .unwrap_or_default()
-            .chunks_exact(3)
-            .enumerate()
-        {
+        for (i, rgb) in palette.unwrap_or_default().chunks_exact(3).enumerate() {
             colors[i] = [
                 rgb[0],
                 rgb[1],
                 rgb[2],
-                alpha
-                    .as_deref()
-                    .and_then(|a| a.get(i))
-                    .copied()
-                    .unwrap_or(255),
+                alpha.and_then(|a| a.get(i)).copied().unwrap_or(255),
             ];
         }
         if color_key {
@@ -494,32 +573,39 @@ fn decode_png(path: &Path, color_key: bool) -> image::ImageResult<RgbaImage> {
                 *pixel = colors[index as usize];
             }
         } else {
-            let mask = ((1u16 << bits) - 1) as u8;
             for (pixels, row) in pixels
                 .chunks_exact_mut(info.width as usize)
                 .zip(bytes.chunks_exact(info.line_size))
             {
-                for (x, pixel) in pixels.iter_mut().enumerate() {
-                    let bit = x * bits;
-                    let index = (row[bit / 8] >> (8 - bits - bit % 8)) & mask;
-                    *pixel = colors[index as usize];
+                match bits {
+                    1 => unpack_palette::<8>(row, pixels, &colors),
+                    2 => unpack_palette::<4>(row, pixels, &colors),
+                    _ => unpack_palette::<2>(row, pixels, &colors),
                 }
             }
         }
     } else {
-        let channels = info.color_type.samples();
-        for (pixel, source) in image
-            .pixels_mut()
-            .zip(bytes[..info.buffer_size()].chunks_exact(channels))
-        {
-            pixel.0 = match info.color_type {
-                png::ColorType::Rgb => [source[0], source[1], source[2], 255],
-                png::ColorType::Grayscale => [source[0], source[0], source[0], 255],
-                png::ColorType::GrayscaleAlpha => [source[0], source[0], source[0], source[1]],
-                png::ColorType::Rgba | png::ColorType::Indexed => {
-                    unreachable!("RGBA and indexed branches handled above")
+        let pixels = image.as_mut().as_chunks_mut::<4>().0;
+        let bytes = &bytes[..info.buffer_size()];
+        match info.color_type {
+            png::ColorType::Rgb => {
+                for (pixel, rgb) in pixels.iter_mut().zip(bytes.as_chunks::<3>().0) {
+                    *pixel = [rgb[0], rgb[1], rgb[2], 255];
                 }
-            };
+            }
+            png::ColorType::Grayscale => {
+                for (pixel, &gray) in pixels.iter_mut().zip(bytes) {
+                    *pixel = [gray, gray, gray, 255];
+                }
+            }
+            png::ColorType::GrayscaleAlpha => {
+                for (pixel, ga) in pixels.iter_mut().zip(bytes.as_chunks::<2>().0) {
+                    *pixel = [ga[0], ga[0], ga[0], ga[1]];
+                }
+            }
+            png::ColorType::Rgba | png::ColorType::Indexed => {
+                unreachable!("RGBA and indexed branches handled above")
+            }
         }
         if color_key {
             key_rgba(&mut image);
@@ -543,20 +629,10 @@ fn key_rgba(image: &mut RgbaImage) {
     };
     let key = u32::from_ne_bytes(key);
     let length = image.width() as usize * image.height() as usize * 4;
-    // Scan 16 RGBA pixels per block, avoiding writes to blocks without the key.
-    for block in image.as_mut()[..length].chunks_mut(64) {
-        let pixels = block.as_chunks_mut::<4>().0;
-        let mut has_key = false;
-        for pixel in &*pixels {
-            has_key |= u32::from_ne_bytes(*pixel) == key;
-        }
-        if has_key {
-            for pixel in pixels {
-                let value = u32::from_ne_bytes(*pixel);
-                let keep = u32::from(value != key).wrapping_neg();
-                *pixel = (value & keep).to_ne_bytes();
-            }
-        }
+    for pixel in image.as_mut()[..length].as_chunks_mut::<4>().0 {
+        let value = u32::from_ne_bytes(*pixel);
+        let keep = u32::from(value != key).wrapping_neg();
+        *pixel = (value & keep).to_ne_bytes();
     }
 }
 
@@ -586,31 +662,57 @@ fn key_rgba(image: &mut RgbaImage) {
  */
 // RageSurfaceUtils_Zoom uses float coordinates and 24-bit fixed-point weights;
 // it floors horizontal interpolation and rounds the final vertical blend.
-fn zoom_axis(source: u32, destination: u32) -> Vec<(u32, u32, u32)> {
+fn zoom_axis(source: u32, destination: u32) -> impl Iterator<Item = (u32, u32, u32)> {
     let ratio = source as f32 / destination as f32;
-    (0..destination)
-        .map(|x| {
-            if source >= destination {
-                let center = ratio * x as f32 + ratio / 2.0;
-                let left = (center - ratio / 4.0) as u32;
-                let right = (center + ratio / 4.0) as u32;
-                let weight = if left == right {
-                    1 << 24
-                } else {
-                    ((1.0 - (center - (left as f32 + 0.5)) / (right - left) as f32) * 16777216.0)
-                        as u32
-                };
-                (left, right, weight)
+    (0..destination).map(move |x| {
+        if source >= destination {
+            let center = ratio * x as f32 + ratio / 2.0;
+            let left = (center - ratio / 4.0) as u32;
+            let right = (center + ratio / 4.0) as u32;
+            let weight = if left == right {
+                1 << 24
             } else {
-                let center = (source - 1) as f32 / (destination - 1) as f32 * x as f32;
-                (
-                    (center as u32).min(source - 1),
-                    ((center + 1.0) as u32).min(source - 1),
-                    ((1.0 - (center - center.floor())) * 16777216.0) as u32,
-                )
-            }
-        })
-        .collect()
+                ((1.0 - (center - (left as f32 + 0.5)) / (right - left) as f32) * 16777216.0) as u32
+            };
+            (left, right, weight)
+        } else {
+            let center = (source - 1) as f32 / (destination - 1) as f32 * x as f32;
+            (
+                (center as u32).min(source - 1),
+                ((center + 1.0) as u32).min(source - 1),
+                ((1.0 - (center - center.floor())) * 16777216.0) as u32,
+            )
+        }
+    })
+}
+
+// At exactly 2:1 both fixed-point weights are 1/2. Average all four
+// byte lanes together: horizontal blends floor, then the vertical blend rounds.
+#[inline(never)]
+fn zoom_half(image: &RgbaImage, size: [u32; 2]) -> RgbaImage {
+    let mut output = RgbaImage::new(size[0], size[1]);
+    let source = image.as_raw().as_chunks::<4>().0;
+    for (rows, row) in source.chunks_exact(image.width() as usize * 2).zip(
+        output
+            .as_mut()
+            .as_chunks_mut::<4>()
+            .0
+            .chunks_exact_mut(size[0] as usize),
+    ) {
+        let (top, bottom) = rows.split_at(image.width() as usize);
+        for ((pixel, top), bottom) in row
+            .iter_mut()
+            .zip(top.as_chunks::<2>().0)
+            .zip(bottom.as_chunks::<2>().0)
+        {
+            let [a, b] = top.map(u32::from_le_bytes);
+            let [c, d] = bottom.map(u32::from_le_bytes);
+            let upper = (a & b) + (((a ^ b) & 0xfefe_fefe) >> 1);
+            let lower = (c & d) + (((c ^ d) & 0xfefe_fefe) >> 1);
+            *pixel = ((upper | lower) - (((upper ^ lower) & 0xfefe_fefe) >> 1)).to_le_bytes();
+        }
+    }
+    output
 }
 
 fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
@@ -620,31 +722,47 @@ fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
             let ratio = (size[axis] as f32 / current as f32).clamp(0.5, 2.0);
             (current as f32 * ratio).round_ties_even() as u32
         });
-        let xs = zoom_axis(image.width(), next[0]);
+        // Beyond 2^23, f32 coordinates no longer preserve half-pixel steps.
+        if image.width().max(image.height()) <= 1 << 23
+            && [next[0] * 2, next[1] * 2] == [image.width(), image.height()]
+        {
+            image = zoom_half(&image, next);
+            continue;
+        }
+        let xs: Vec<_> = zoom_axis(image.width(), next[0]).collect();
         let ys = zoom_axis(image.height(), next[1]);
         let mut output = RgbaImage::new(next[0], next[1]);
         let width = image.width() as usize;
         let source = image.as_raw().as_chunks::<4>().0;
-        for (row, &(top, bottom, wy)) in output
+        for (row, (top, bottom, wy)) in output
             .as_mut()
             .as_chunks_mut::<4>()
             .0
             .chunks_exact_mut(next[0] as usize)
-            .zip(&ys)
+            .zip(ys)
         {
             let upper_row = &source[top as usize * width..(top as usize + 1) * width];
             let lower_row = &source[bottom as usize * width..(bottom as usize + 1) * width];
             for (pixel, &(left, right, wx)) in row.iter_mut().zip(&xs) {
-                let c00 = upper_row[left as usize];
-                let c01 = upper_row[right as usize];
-                let c10 = lower_row[left as usize];
-                let c11 = lower_row[right as usize];
-                for c in 0..4 {
-                    let upper =
-                        (u32::from(c00[c]) * wx + u32::from(c01[c]) * (16777216 - wx)) >> 24;
-                    let lower =
-                        (u32::from(c10[c]) * wx + u32::from(c11[c]) * (16777216 - wx)) >> 24;
-                    pixel[c] = ((upper * wy + lower * (16777216 - wy) + 8388608) >> 24) as u8;
+                // Two 32-bit lanes hold independent 8-bit channels and their
+                // 24-bit products. Complementary weights cannot carry between lanes.
+                let spread = |p: [u8; 4]| [
+                    u64::from(p[0]) | (u64::from(p[2]) << 32),
+                    u64::from(p[1]) | (u64::from(p[3]) << 32),
+                ];
+                let c00 = spread(upper_row[left as usize]);
+                let c01 = spread(upper_row[right as usize]);
+                let c10 = spread(lower_row[left as usize]);
+                let c11 = spread(lower_row[right as usize]);
+                for c in 0..2 {
+                    let upper = ((c00[c] * u64::from(wx) + c01[c] * u64::from(16777216 - wx)) >> 24)
+                        & 0x0000_00ff_0000_00ff;
+                    let lower = ((c10[c] * u64::from(wx) + c11[c] * u64::from(16777216 - wx)) >> 24)
+                        & 0x0000_00ff_0000_00ff;
+                    let pair = (upper * u64::from(wy) + lower * u64::from(16777216 - wy)
+                        + 0x0080_0000_0080_0000) >> 24;
+                    pixel[c] = pair as u8;
+                    pixel[c + 2] = (pair >> 32) as u8;
                 }
             }
         }
@@ -935,3 +1053,27 @@ mod texture_pixels_perf;
 #[cfg(test)]
 #[path = "indexed_pixels_perf.rs"]
 mod indexed_pixels_perf;
+
+#[cfg(test)]
+mod preparation_perf;
+
+#[cfg(test)]
+mod direct_media_perf;
+
+#[cfg(test)]
+mod resize_kernel;
+
+#[cfg(test)]
+mod key_kernel;
+
+#[cfg(test)]
+mod palette_perf;
+
+#[cfg(test)]
+mod open_perf;
+
+#[cfg(test)]
+mod open_seek;
+
+#[cfg(test)]
+mod metadata_perf;

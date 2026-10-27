@@ -1,0 +1,4 @@
+mode	iterations	ns	units	checksum	bytes	frames	bits	channels	case	trial	ns_per_unit	ns_per_iteration	unit
+libflac-frames	1572	115465	0	0	42	0	0	0	subset/99 - empty.flac	0	73.45101781170483	73.45101781170483	iteration
+frames	14085	405966	0	0	42	0	16	2	subset/99 - empty.flac	0	28.822577209797657	28.822577209797657	iteration
+stream	1422	736342	0	0	42	0	16	2	subset/99 - empty.flac	0	517.8213783403656	517.8213783403656	iteration

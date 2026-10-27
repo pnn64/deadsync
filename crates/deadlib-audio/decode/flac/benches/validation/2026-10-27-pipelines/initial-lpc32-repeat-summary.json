@@ -1,0 +1,18 @@
+[
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 20.014282849652144,
+    "min_ns_per_unit": 18.405757526266704,
+    "max_ns_per_unit": 22.005496421637364,
+    "median_ns_per_iteration": 463716043.0
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 21.24402583319896,
+    "min_ns_per_unit": 18.608642072926294,
+    "max_ns_per_unit": 29.450911846284576,
+    "median_ns_per_iteration": 492208273.0
+  }
+]

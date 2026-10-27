@@ -1,0 +1,8 @@
+{
+  "adapter_sha256": "a6f0adb9b1d6606f9a662db210791ec84eb1e7b885509069f13fe876d4b8e940",
+  "base_sha256": "44155cbfa8086822c79dae986bacafecc2e11826125630f09d2a0a26885f5360",
+  "executed_source_sha256": "d69b23c3d31d40678830e8b61030841e65ba570ea4e79088064a342ee7b72ca1",
+  "cpu": 2,
+  "affinity": "Windows SetProcessAffinityMask; children inherit the mask",
+  "changes": "Only process affinity and CPU-description collection differ from benches/run.py."
+}

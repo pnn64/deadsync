@@ -430,40 +430,31 @@ fn marker_value(spec: &str) -> Option<char> {
 #[must_use]
 pub fn replace_markers(text: &str) -> Cow<'_, str> {
     let bytes = text.as_bytes();
-    let Some(mut marker_start) = bytes.iter().position(|&byte| byte == b'&') else {
+    let Some(mut marker_start) = text.find('&') else {
         return Cow::Borrowed(text);
     };
 
     let mut copied_through = 0usize;
     let mut out = None::<String>;
 
-    while marker_start < bytes.len() {
-        let mut marker_end = marker_start + 1;
-        while marker_end < bytes.len() {
-            match bytes[marker_end] {
-                b'&' => break,
-                b';' => {
-                    if let Some(value) = marker_value(&text[marker_start + 1..marker_end]) {
-                        let output = out.get_or_insert_with(|| String::with_capacity(text.len()));
-                        output.push_str(&text[copied_through..marker_start]);
-                        output.push(value);
-                        copied_through = marker_end + 1;
-                    }
-                    break;
-                }
-                _ => marker_end += 1,
-            }
-        }
-
-        if marker_end == bytes.len() {
+    loop {
+        let search_from = marker_start + 1;
+        let Some(end) = memchr::memchr2(b'&', b';', &bytes[search_from..]) else {
             break;
-        }
-        let search_from = if bytes[marker_end] == b'&' {
-            marker_end
-        } else {
-            marker_end + 1
         };
-        let Some(next) = bytes[search_from..].iter().position(|&byte| byte == b'&') else {
+        let marker_end = search_from + end;
+        if bytes[marker_end] == b'&' {
+            marker_start = marker_end;
+            continue;
+        }
+        if let Some(value) = marker_value(&text[search_from..marker_end]) {
+            let output = out.get_or_insert_with(|| String::with_capacity(text.len()));
+            output.push_str(&text[copied_through..marker_start]);
+            output.push(value);
+            copied_through = marker_end + 1;
+        }
+        let search_from = marker_end + 1;
+        let Some(next) = memchr::memchr(b'&', &bytes[search_from..]) else {
             break;
         };
         marker_start = search_from + next;
@@ -2249,7 +2240,10 @@ fn split_import_specs(value: Option<&str>) -> impl Iterator<Item = &str> {
 }
 
 fn import_specs<'a>(ini: &'a ParsedFontIni<'a>) -> impl Iterator<Item = &'a str> {
-    split_import_specs(ini.get("main").and_then(|section| section.value("import")))
+    // ITGmania renames the legacy section before reading imports, provided
+    // there is no explicit main section.
+    let main = ini.get("main").or_else(|| ini.get("char widths"));
+    split_import_specs(main.and_then(|section| section.value("import")))
 }
 
 fn import_path_candidates(base_ini: &Path, spec: &str) -> Option<[Option<PathBuf>; 2]> {
@@ -2960,9 +2954,10 @@ pub fn measure_line_width_logical(font: &Font, text: &str, all_fonts: &FontMap) 
 
 #[inline(always)]
 fn apply_space_nbsp_symmetry<S: BuildHasher>(char_to_frame: &mut HashMap<char, usize, S>) {
-    // If SPACE exists but NBSP doesn't, map NBSP -> SPACE frame.
+    // ITGmania always maps NBSP to an authored SPACE, even when the page
+    // also explicitly maps NBSP to another frame.
     if let Some(&space_idx) = char_to_frame.get(&' ') {
-        char_to_frame.entry('\u{00A0}').or_insert(space_idx);
+        char_to_frame.insert('\u{00A0}', space_idx);
     } else if let Some(&nbsp_idx) = char_to_frame.get(&'\u{00A0}') {
         // SPACE is absent: map it to NBSP's frame. (Wendy relies on this)
         char_to_frame.entry(' ').or_insert(nbsp_idx);
@@ -3042,7 +3037,7 @@ mod tests {
     }
 
     #[test]
-    fn space_nbsp_symmetry_fills_only_missing_mappings() {
+    fn space_nbsp_symmetry_prefers_authored_space() {
         for (space, nbsp) in [
             (None, None),
             (Some(3), None),
@@ -3058,7 +3053,7 @@ mod tests {
             }
             apply_space_nbsp_symmetry(&mut frames);
             assert_eq!(frames.get(&' ').copied(), space.or(nbsp));
-            assert_eq!(frames.get(&'\u{00A0}').copied(), nbsp.or(space));
+            assert_eq!(frames.get(&'\u{00A0}').copied(), space.or(nbsp));
             assert_eq!(frames[&'A'], 11);
             let once = frames.clone();
             apply_space_nbsp_symmetry(&mut frames);
@@ -3147,6 +3142,21 @@ mod tests {
         }
         assert_eq!(split_import_specs(None).count(), 0);
         assert_eq!(split_import_specs(Some(" , , ")).count(), 0);
+    }
+
+    #[test]
+    fn import_specs_accept_legacy_section_without_overriding_main() {
+        for (source, expected) in [
+            ("[Char Widths]\nimport=Buttons\n", vec!["Buttons"]),
+            (
+                "[Char Widths]\nimport=Buttons\n[main]\nimport=Explicit\n",
+                vec!["Explicit"],
+            ),
+            ("[Char Widths]\nimport=Buttons\n[main]\n0=12\n", vec![]),
+        ] {
+            let ini = parse_font_ini(source);
+            assert_eq!(import_specs(&ini).collect::<Vec<_>>(), expected);
+        }
     }
 
     #[test]
@@ -3425,3 +3435,7 @@ mod tests {
 #[cfg(test)]
 #[path = "font_discovery_perf.rs"]
 mod discovery_perf;
+
+#[cfg(test)]
+#[path = "marker_checks.rs"]
+mod marker_checks;

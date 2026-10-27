@@ -57,12 +57,33 @@ impl FromStr for NoteScrollClock {
     type Err = ();
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "rawaudio" | "raw" | "off" | "0" | "false" => Ok(Self::RawAudio),
-            "framestable" | "frame-stable" | "frame_stable" | "frame stable" | "smooth"
-            | "smoothed" | "itgdestep" | "itg-destep" | "itgdestepped" | "itg-de-stepped"
-            | "itg_de_stepped" | "itg" | "on" | "1" | "true" => Ok(Self::FrameStable),
-            _ => Err(()),
+        let value = value.trim();
+        if value.eq_ignore_ascii_case("rawaudio")
+            || value.eq_ignore_ascii_case("raw")
+            || value.eq_ignore_ascii_case("off")
+            || value == "0"
+            || value.eq_ignore_ascii_case("false")
+        {
+            Ok(Self::RawAudio)
+        } else if value.eq_ignore_ascii_case("framestable")
+            || value.eq_ignore_ascii_case("frame-stable")
+            || value.eq_ignore_ascii_case("frame_stable")
+            || value.eq_ignore_ascii_case("frame stable")
+            || value.eq_ignore_ascii_case("smooth")
+            || value.eq_ignore_ascii_case("smoothed")
+            || value.eq_ignore_ascii_case("itgdestep")
+            || value.eq_ignore_ascii_case("itg-destep")
+            || value.eq_ignore_ascii_case("itgdestepped")
+            || value.eq_ignore_ascii_case("itg-de-stepped")
+            || value.eq_ignore_ascii_case("itg_de_stepped")
+            || value.eq_ignore_ascii_case("itg")
+            || value.eq_ignore_ascii_case("on")
+            || value == "1"
+            || value.eq_ignore_ascii_case("true")
+        {
+            Ok(Self::FrameStable)
+        } else {
+            Err(())
         }
     }
 }

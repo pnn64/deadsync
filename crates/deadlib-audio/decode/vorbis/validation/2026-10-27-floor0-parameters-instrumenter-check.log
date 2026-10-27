@@ -1,0 +1,6 @@
+     Locking 2 packages to highest Rust 1.99.1 compatible versions
+    Checking deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+    Checking deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Checking deadlib-profiled-vorbis v0.0.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\floor0-parameters-instrumenter-verified-20261027\profiled-vorbis)
+    Checking deadlib-vorbis-synthesis-probe v0.0.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\floor0-parameters-instrumenter-verified-20261027)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.37s

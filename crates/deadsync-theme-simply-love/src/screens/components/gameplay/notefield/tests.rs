@@ -25,7 +25,7 @@ fn song_plan_preserves_profile_derived_notefield_behavior() {
     profile.combo_offset_y = profile_data::HUD_OFFSET_MIN - 10;
     profile.measure_lines = profile_data::MeasureLines::Eighth;
     profile.hide_combo = true;
-    profile.combo_font = profile_data::ComboFont::SourceCode;
+    profile.combo_font = profile_data::ComboFont::Unprofessional;
     profile.error_bar_active_mask =
         profile_data::ErrorBarMask::COLORFUL | profile_data::ErrorBarMask::TEXT;
     profile.text_error_bar_centered = true;
@@ -56,8 +56,8 @@ fn song_plan_preserves_profile_derived_notefield_behavior() {
     assert!(plan.options.frame_features.error_bar_text);
     assert!(plan.options.text_error_bar_centered);
     assert_eq!(plan.options.blue_fantastic_window_s, 0.012_345);
-    assert_eq!(plan.small_combo_font, "combo_source_code");
-    assert_eq!(plan.combo_font, Some("combo_source_code"));
+    assert_eq!(plan.small_combo_font, "combo_unprofessional");
+    assert_eq!(plan.combo_font, Some("combo_unprofessional"));
     assert_eq!(
         plan.tap_explosion_noteskin_visible,
         !profile.tap_explosion_noteskin_hidden()

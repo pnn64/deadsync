@@ -1,0 +1,35 @@
+INFO: found LLVMFuzzerCustomMutator (00007FF723FC1000). Disabling -len_control by default.
+Dictionary: 8 entries
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1339
+INFO: Loaded 1 modules   (15082 inline 8-bit counters): 15082 [00007FF7241BB988, 00007FF7241BF472),
+INFO: Loaded 1 PC tables (15082 PCs): 15082 [00007FF724117E08,00007FF724152CA8),
+INFO:     2376 files found in C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-eos-clamping-final-20261027\corpus\vorbis_stream
+INFO: seed corpus: files: 2376 min: 54b max: 99237b total: 14710338b rss: 50Mb
+#256	pulse  cov: 3081 ft: 7456 corp: 107/49Kb exec/s: 128 rss: 73Mb
+#512	pulse  cov: 3176 ft: 8299 corp: 178/92Kb exec/s: 85 rss: 102Mb
+#1024	pulse  cov: 3311 ft: 9232 corp: 273/182Kb exec/s: 53 rss: 162Mb
+#2048	pulse  cov: 4104 ft: 12762 corp: 576/1641Kb exec/s: 13 rss: 618Mb
+#2378	INITED cov: 4197 ft: 13589 corp: 701/5087Kb exec/s: 9 rss: 655Mb
+#2406	REDUCE cov: 4197 ft: 13589 corp: 701/5084Kb lim: 131073 exec/s: 9 rss: 657Mb L: 95148/99237 MS: 6 CopyPart-Custom-ChangeASCIIInt-Custom-CrossOver-Custom-
+#2407	REDUCE cov: 4197 ft: 13589 corp: 701/5082Kb lim: 131073 exec/s: 9 rss: 657Mb L: 4621/99237 MS: 2 EraseBytes-Custom-
+#2418	REDUCE cov: 4197 ft: 13589 corp: 701/5082Kb lim: 131073 exec/s: 8 rss: 661Mb L: 407/99237 MS: 2 EraseBytes-Custom-
+#2470	NEW    cov: 4198 ft: 13590 corp: 702/5082Kb lim: 131073 exec/s: 9 rss: 672Mb L: 591/99237 MS: 4 ChangeBit-Custom-ChangeBinInt-Custom-
+#2475	REDUCE cov: 4198 ft: 13590 corp: 702/5082Kb lim: 131073 exec/s: 9 rss: 672Mb L: 1953/99237 MS: 10 ShuffleBytes-Custom-ShuffleBytes-Custom-InsertRepeatedBytes-Custom-ManualDict-Custom-EraseBytes-Custom- DE: "\000\000\000\000"-
+#2481	NEW    cov: 4198 ft: 13592 corp: 703/5095Kb lim: 131073 exec/s: 9 rss: 672Mb L: 13134/99237 MS: 2 CrossOver-Custom-
+#2557	NEW    cov: 4198 ft: 13593 corp: 704/5101Kb lim: 131073 exec/s: 9 rss: 686Mb L: 6460/99237 MS: 2 InsertByte-Custom-
+#2563	REDUCE cov: 4198 ft: 13593 corp: 704/5101Kb lim: 131073 exec/s: 9 rss: 686Mb L: 348/99237 MS: 2 EraseBytes-Custom-
+#2599	REDUCE cov: 4198 ft: 13593 corp: 704/5098Kb lim: 131073 exec/s: 9 rss: 693Mb L: 4572/99237 MS: 2 EraseBytes-Custom-
+#2615	NEW    cov: 4198 ft: 13597 corp: 705/5099Kb lim: 131073 exec/s: 9 rss: 693Mb L: 1198/99237 MS: 2 CopyPart-Custom-
+#2763	REDUCE cov: 4198 ft: 13597 corp: 705/5099Kb lim: 131073 exec/s: 9 rss: 703Mb L: 1890/99237 MS: 6 CopyPart-Custom-ShuffleBytes-Custom-EraseBytes-Custom-
+#2800	NEW    cov: 4232 ft: 13671 corp: 706/5101Kb lim: 131073 exec/s: 9 rss: 710Mb L: 1782/99237 MS: 4 ManualDict-Custom-PersAutoDict-Custom- DE: "\000\000\000\000"-"\000\000\000\000"-
+#2842	NEW    cov: 4232 ft: 13672 corp: 707/5101Kb lim: 131073 exec/s: 9 rss: 717Mb L: 797/99237 MS: 4 ChangeBinInt-Custom-EraseBytes-Custom-
+#3093	REDUCE cov: 4232 ft: 13672 corp: 707/5101Kb lim: 131073 exec/s: 10 rss: 719Mb L: 484/99237 MS: 2 EraseBytes-Custom-
+#3149	REDUCE cov: 4232 ft: 13672 corp: 707/5099Kb lim: 131073 exec/s: 10 rss: 719Mb L: 29419/99237 MS: 2 EraseBytes-Custom-
+#3165	DONE   cov: 4232 ft: 13672 corp: 707/5099Kb lim: 131073 exec/s: 10 rss: 719Mb
+Done 3165 runs in 301 second(s)
+stat::number_of_executed_units: 3165
+stat::average_exec_per_sec:     10
+stat::new_units_added:          15
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              719

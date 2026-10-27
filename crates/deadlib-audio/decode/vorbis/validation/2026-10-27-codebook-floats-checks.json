@@ -1,0 +1,695 @@
+{
+  "completed_utc": "2026-10-27T17:09:23.016821+00:00",
+  "scope": "Explicit reference codebook custom-float exponent clamps and whole-byte array guards. Published range and exact-bit policy remain default. Exact values/decisions/counts/positions with original PCM tolerances. No application integration or performance measurement.",
+  "validation": {
+    "started_utc": "2026-10-27T16:43:54.584848+00:00",
+    "git_head": "4c926cd5243d9eafe560d916d44492b0237accc9",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "source_sha256": {
+      "fuzz/src/lib.rs": "637ce25e8f936a059458e80faf7c46da1358b88722a6c06f71725be5f5a26ece",
+      "ogg/Cargo.toml": "b18d898856a7db1f30299197ed8d053dd49b6825c50571d1b831950265d069eb",
+      "ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+      "ogg/src/crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+      "ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+      "ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+      "ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+      "ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+      "ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+      "ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+      "ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+      "ogg/tests/compatibility.rs": "46f02ed4fc8f8602e2a71ba5cfc3df49b9b7d2a5295cfe688a0cb44b6c74a721",
+      "ogg/tests/container.rs": "a2537ddef1704beae9050f7e2572b956192f82555b1606971303a8aa260f8981",
+      "ogg/tests/libogg.rs": "3b75b7067c505b0af951babe26a3d3388df6b851f59b4d49843132acbbbc81fe",
+      "ogg/tests/oracle/oracle.c": "2b34426f30872b168e280dc79ee147557d8154f37dcdf2297824f44e999f2234",
+      "ogg/tests/seeking.rs": "d71a0d02a92219b27afbb827200d7e8312144dd84d3de507e8d236bee61a58e2",
+      "scripts/verify_independent.ps1": "6ccf7b374b842bd6b95deb236146719fbb2ab24654b966e2102a25676e5383ad",
+      "vorbis/Cargo.toml": "f43d8776a2408c8a6ac0bff98fac4e9141b2bcccf499ff9f0fa845c918337a9e",
+      "vorbis/src/bitpack.rs": "bbc8ce498143d87f40f04cbe3bf2e8af69caf11d9b697617feb5894fc5a94497",
+      "vorbis/src/codebook.rs": "897b378913883fac388ced320d948e390f2624f4e7ad0c50ad6628e9c28944f1",
+      "vorbis/src/decoder.rs": "9d7c403cc9005d4aebbe87140e76b74fca344aeb0750687a403e9fbf8a013dd4",
+      "vorbis/src/encoder.rs": "8fac02bb876bde74196ef8d5149ec9c0f56fb84c39566a3438278d38fc258222",
+      "vorbis/src/floor.rs": "8712e4dfdd78ea4c6ab68a67b06a81825cd278c65dd0e106e308e2b7fbdc9133",
+      "vorbis/src/floor_reference.rs": "a95a5343398f350102e847db69136408da5268b2d191c4843df2f96a43b1583d",
+      "vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+      "vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+      "vorbis/src/lib.rs": "a921e05f215b8df89aaec8f2afc14dbd0576e3f4a456ef073c9211583ebb32ae",
+      "vorbis/src/ogg.rs": "d1a6832927a7e2ff3a9902212787fe0fd2575056ca3b4748ba652dff7e77bdab",
+      "vorbis/src/residue.rs": "4581655db4d773d3a4a4fecf5f4f3ba2ea66e033bc3f9d85ca25d34c47376c0a",
+      "vorbis/src/seek.rs": "e24b8a0d312ca1fe173787bac9f74bfe00ee5542d80cf9dfb77dee8209dbfc90",
+      "vorbis/src/setup.rs": "732b6d347a2f0bc46b3f06543d487fd564ca5a6e866ed21a8f7efaa208331ead",
+      "vorbis/src/transform.rs": "257918b47b792cc44acb02e4bfaaf863d4078f6063af3b9b5c201b8a2d06edda",
+      "vorbis/tests/allocations.rs": "27e1b4ad7ab7689d5070fe2e895b072d3d23f56b7a6d72d4fbdd3c7df0de9f53",
+      "vorbis/tests/book_limit_streams.rs": "984b4f321f31a29703e3e7e4e741022e015a4d3b88959cceed37b9a8c5d00841",
+      "vorbis/tests/book_limits.rs": "5a3f35a31a9a50fe32f80cbf3c968214532892855ffe57a1131fc715f6f225fd",
+      "vorbis/tests/codebook_compatibility.rs": "f9d8e993a2772af4ca9ab495013d6c38fd3cf68c7d8825cc1ec248dab93fe59d",
+      "vorbis/tests/codebook_float_packets.rs": "efd1bcb38bc1190a2c66a49a2578e40baab355667faf2267ca8d57c4ba73eb7a",
+      "vorbis/tests/codebook_floats.rs": "99d97820cd07a5987db114d0ada172017860f2aa5482faf6b9e864497ff9c8ae",
+      "vorbis/tests/concealment.rs": "fcbe9617bd2b39155cae9c878b7461793ede093f825ed4fc5f86ae16a9c7e89f",
+      "vorbis/tests/configuration_parity.rs": "78d3fad99e846e16d5e7739a4cb170d207f722a5b3e66432b9b9036fb1baa3b7",
+      "vorbis/tests/encoding.rs": "9f15800aea5838753a12b71f1354879756a3d5f7949a34c31c647a280331e618",
+      "vorbis/tests/fixtures/codebook-extents-v1.libvorbis-headers": "996c82e467390409834115f78a924112e70100c758aedacc5b37bdfc8da36053",
+      "vorbis/tests/fixtures/codebook-float-pcm-v1.libvorbis-pcm": "82e262b4e7acfaed05d33c91840d11af4f7343bce2618775f81a5667627137b2",
+      "vorbis/tests/fixtures/codebook-floats-v1.libvorbis": "183b4a69df3d03b5207de9f5e942fcf01c48420b39a0044f3ad0425d65b39289",
+      "vorbis/tests/fixtures/degenerate-books-v1.libvorbis-pcm": "6b4615db3c606000482307cc37e03e945a116dfb9d68d99ba1c7f142fb6850cf",
+      "vorbis/tests/fixtures/discarded-window-v1.libvorbis-pcm": "4dcfe5c6f93fa8a05bef655ccf779b2fb16558166cd8800ffe692185b0a7c965",
+      "vorbis/tests/fixtures/eight-channel.ogg": "3e4c0456de37adc014a3aa6b5aebf49f3c66717cf798fd9e6a3b9feff4c1cfb0",
+      "vorbis/tests/fixtures/floor0-bark-v1.libvorbis": "86d98084a0a375654641b61913ec57563375424a9b14cdeebc8a5cf3218ef52b",
+      "vorbis/tests/fixtures/floor0-components-v1.libvorbis": "3d6fbe7bf8bfc0bc3475cccdda7714374296bf15f8a69a551df97bf02a3d6c5a",
+      "vorbis/tests/fixtures/floor0-parameters-v1.libvorbis-pcm": "337578d91287d6bc811399ce14ef9b0fdb0f9f6d22bec6d405d5f2ef1103a708",
+      "vorbis/tests/fixtures/mono.ogg": "fbff11482b3552dafff0a7ee5b61ba59469296be07e7c27e9cce4c29a45f5e05",
+      "vorbis/tests/fixtures/residue-layout-v1.libvorbis-pcm": "92b5e01f6a1df2496d8e67fb77ac6b9b9f0192750a3b85897db17ae728ce3fda",
+      "vorbis/tests/fixtures/spanning-prime-v1.ogg": "e1dd28e18c307f3cb3e3b553da5f6d376c3d0e3cb507738d31ce18b63f83c2c0",
+      "vorbis/tests/fixtures/stereo.ogg": "7538eee111f352e5e7d0b003b6ea7acbe2999d38c081d72591e263959bd81c7e",
+      "vorbis/tests/fixtures/surround.libvorbis-pcm": "8da9dd588870c8fd09c670b4c08bc6fc7e76db45afb706178fb233d3ddcb107e",
+      "vorbis/tests/fixtures/surround.ogg": "4fcf854ba1c654b4581e5d98f6df570dd940d716d4f7411712e62491c08cc943",
+      "vorbis/tests/fixtures/synthetic-setup-v1.libvorbis-pcm": "516245b6fb4f166abb48bf30df2bd3da5ea5fcee96115c0893f5891e7e9fd553",
+      "vorbis/tests/floor_zero_parameters.rs": "f438809699af0ce5a0472c86ba10d70db6cb0f2d22d8a601dddd8a71fa1dd2ee",
+      "vorbis/tests/headers.rs": "169133282bc425e6e3cf18362f72efc0ca49b30eb0095ea60aa91a4b7887748e",
+      "vorbis/tests/historical.rs": "cd6b6dcd98ea158809f59ee3e4e6d1936fdf171bef976556acc5f0ccb7866382",
+      "vorbis/tests/legacy.rs": "9ad2fd3f45215fb308efc9a9e8ec7518674a95bc9e78a8f423e2e62d26026379",
+      "vorbis/tests/libvorbis.rs": "bfb62e329755c356db597a3c20629dd026870570ad6cb280b9bc22acc6b1c3cf",
+      "vorbis/tests/lifecycle.rs": "6b2c02140b4115404a86a160126cca4ff50d1a8b13785005589998899218f8b9",
+      "vorbis/tests/ogg_mapping.rs": "e1378aeb7a8cac2006ec3f06929afbf35bf0f40b244842f2e97b4ef22c45fdec",
+      "vorbis/tests/oracle/oracle.c": "9f639e68818a1f54450b322d1673f60973638739b29030bd730e08bcae2e837a",
+      "vorbis/tests/oracle/retain_vectors.c": "e74135aa290ae8fcc9ac109eabf82e94bb74d2af30523693debda04aecac5b70",
+      "vorbis/tests/oracle/retain_vectors.h": "2337d774ae705bb58c41a65f55fa7d9f8585a02c13d387b64cf7fba84112544d",
+      "vorbis/tests/pcm.rs": "c278ca09477f9ef06b54062c1ac811b2fc00502e66c1bf7184d85c8ff2aa0246",
+      "vorbis/tests/primitives.rs": "c7af555eb484da554671ab0445167dde9b0a61f49e8a0abd2a5922d472be8693",
+      "vorbis/tests/residue_geometry.rs": "23c215634671175e9e053dbdbdcdf7fb6c7b896bcc1075144014909a542e140d",
+      "vorbis/tests/seeking.rs": "c775ca71cf02b7d565120a8988362cde4713798655304aeef9a68ae7ecb732be",
+      "vorbis/tests/support/book_extents.rs": "54c9d32e95c71fc8edbff0d9e5d69c3dd5dd3738645c3de2bdaa6e6c8e7ecc72",
+      "vorbis/tests/support/degenerate_books.rs": "179266ba9e915f930cac442182d3c2dbf6ac1149e7b9b0b1668687caeb76fe87",
+      "vorbis/tests/support/float_vectors.rs": "eb94df63b86994f69ef36fcee2d716b306ef0a20e92213bba651d88094914e7d",
+      "vorbis/tests/support/floor0_vectors.rs": "d5c0a1e48b44c9f6cf90bf94ee9cea153f5cabdf8c64a3111bbd6df1cf7d9492",
+      "vorbis/tests/support/mod.rs": "7eca3e64ead3aca80679f06af2dd18e472b413257a8812cf0f9bdf39a10a49c6",
+      "vorbis/tests/support/raw_cases.rs": "ea941e2ce0bee50704663601f016c08ee703520c017deeacd87fadeb959bd3a9",
+      "vorbis/tests/support/residue_vectors.rs": "49d7adadf385f38a4c2d5cc44c2f3444f8985534d50936f4cdd0875d6bac3c7b",
+      "vorbis/tests/support/synthetic.rs": "36d473e8390774e8df3049f6726fc63eb367e2a3865abdd0273cacde79cd78cf",
+      "vorbis/tests/upstream.rs": "b4fdb058ee5fd7aa7808e5cbfa17bc2be438db750356bd8da30e5438974aef5f"
+    },
+    "assets_input_sha256": {
+      "assets/music/Beanmania IIDX (loop).ogg": "ec8110d9b3bd3f3f3da5d62d7c6c55c55aadfcf3cb7897e95b6269ae814c1e4d",
+      "assets/music/credits.ogg": "6337c95e25405dd4ef1773048aa20b8fd3e64b7a685b92cc026c8cff707a3159",
+      "assets/music/Da Box of Kardboard Too (feat Naoki vs ZigZag) - TaroNuke Remix (loop).ogg": "55ce469a9d1c3c8ac4ac6472de597bc2301c754ce8a65dca441f0ba164592926",
+      "assets/music/ECS15 (loop).ogg": "1dcbe796b53a4aab0aea43a804358ec1a13876797042fe4f285b9c7a9e6a3253",
+      "assets/music/ECS15-GameOver.ogg": "1eddb9fc17c1628ca90083e20782e9597cce116c680a39f3273a687977e2b3ee",
+      "assets/music/halcyon farms (loop).ogg": "15004888f0c1247604a60d29820d652a4dc014d01f62dd808916755ac60abef3",
+      "assets/music/in_two (loop).ogg": "670927f858874d016710bac6b38341045c5b0e06666c7fbb17a33ceaee48df33",
+      "assets/music/Mystical Wheelbarrow Journey (loop).ogg": "f120347c1e424c20b618fcbbbc74bf5da5cdad9c5815a20beeac4751c5568357",
+      "assets/music/Quaq (loop).ogg": "096eb36034032f7c227b72723a35b5df54656ac982f0abf77ecde4bde6dd8bef",
+      "assets/music/select_course (loop).ogg": "03965cba5bc8d08b50e62d2fca3965b20258ef972f51cdc719541ef036395925",
+      "assets/music/Shooting Star - faux VRC6 remix (loop).ogg": "c5886632352d3260a2334a00dfbf5bd763718352486282e3c70c3c3f249ed393",
+      "assets/music/Spooky Scary Chiptunes (loop).ogg": "da76b0cef8b94713dea94145e5a5e4a7df35241835339ad796ccfa8757850b12",
+      "assets/music/SRPG10 (loop).ogg": "e51428c4fcb587085fb193acfd611fac2378a0d1e6fc789e9274300db3585ca4",
+      "assets/music/SRPG10-GameOver.ogg": "743aa95524a33a01ba164c9862e4395d9f8c25daeb06bd67a8a9710776f9e23b",
+      "assets/music/SRPG9 (loop).ogg": "6e5742f941d524bbe065520241bac4ae1fde3dd050ce5d6803123d3ad5101b46",
+      "assets/music/vrtuous faults (loop).ogg": "9a0cd50660534a2af6d40bb46d6e7182ece396d1686fa7cd24155c68bb491dd8",
+      "assets/music/Xuxa fami VRC6 (loop).ogg": "a5d5b08d2a674684dbc79bda44d09e08d9b870724110be3d8fa8ea0016b8d5e7",
+      "assets/sounds/assist_tick.ogg": "d44ee39b43d24fdd6a4f4cfdd7971f756138dca5328a5b44b179b9a1422bb32b",
+      "assets/sounds/boom.ogg": "1ba66ba35e11fc10e2a4f7de2212990448d68bbce04e722c2acbada66e37b6e8",
+      "assets/sounds/change.ogg": "b55b87df7efe726ae81925835764fd29cefefb3020d99a0de3fbbca5d10413e5",
+      "assets/sounds/change_value.ogg": "6754b655aae2650678dc19fe4b6e989c2c52bba5f32fdf3eb9a6021156ed269c",
+      "assets/sounds/common_invalid.ogg": "27e61150fa714efeab30183850b10f83b9dcbade5dc2b27e9cd6b4cb3d2eb5cd",
+      "assets/sounds/easier.ogg": "3681221ab56acac12061941e72fab6df07f59675d6481332206033d3191d6f55",
+      "assets/sounds/ecs15_eval_failed.ogg": "e426c04d1421512708c253253399bb600430549075732e6759cb722723534402",
+      "assets/sounds/ecs15_eval_passed.ogg": "b7352a2b1f035747496c02670730fc04cf7c0d413bac360eec474a149113bffe",
+      "assets/sounds/evaluation_nice/nice.ogg": "0881bffd34000fb52f9d45ebf9429ede641903a2e1409fe55c803d36752b9f8f",
+      "assets/sounds/expand.ogg": "cb7956224f1c80f1a440cab0a9a98909dbc3536e8e095b7bab94c805f0ac53aa",
+      "assets/sounds/harder.ogg": "9d87fb741bf8d936652229bd7de1f7a8b3eca24219a210c4207d5950045f45ac",
+      "assets/sounds/next_row.ogg": "3819c266865ebdee60212bc06ebc10e3a9c8406cd579bd4d302b61aef294562f",
+      "assets/sounds/prev_row.ogg": "d2cbc25759322235f881b41091df808347f938de622d7a269bc9203390fa96b8",
+      "assets/sounds/prompt.ogg": "e67806ffc3083eff5d19f76dcab53c2d7e63bc5a9de1cb0c60c191683909d9e3",
+      "assets/sounds/screen_edit_marker.ogg": "e6745ffb4ceb410d85dfdf9aa38e6de284809ba9994978482c12fabc0a35b691",
+      "assets/sounds/screen_edit_snap.ogg": "85d6b459e28eb1ed3871112f1c681b103924935630d2435a68304481659613fe",
+      "assets/sounds/screenshot.ogg": "9267c4c11dfb0069a47fa599cb5d0f1bfb57a827ccba5e29a7d846450be1e5b7",
+      "assets/sounds/srpg10_eval_failed.ogg": "f0d6a0f830f76dcb261af837b4357982a304a29e7106d40eab13a1916723975a",
+      "assets/sounds/srpg10_eval_passed.ogg": "2d79f1001fe57071e1010612a29825c1b9a4f011f7479002e0279d42e9b1b1fd",
+      "assets/sounds/start.ogg": "5a1d37d17776942b1c87326e9186aaa1287eef02e0d6620444d131c80e6aa320",
+      "assets/sounds/unjoin.ogg": "c34f0758fbf971614badd845dc8f08b849b0518f8c15a4c157b2b5c02fcda290"
+    },
+    "external_inputs": {
+      "floor0/vorbis_floor_type_0.ogg": "1c97545f93cc2afe473066d523f15bb04edc68fe7474bc98408bda452e462ea0",
+      "legacy/Lumme-Badloop.ogg": "ebecc57582463db3346625c1da4a51c594b6a3ec2dbebf9d94c2b9b5f1e72f44",
+      "itgmania/goin-under.ogg": "9d211f2fee8bc5327119ea9b1b6bb77f88226c5a1317628ad2467734fe4cb483",
+      "itgmania/goin-under.ssc": "bc995e4cf36dd6074e85299ed7cfc82400e884f9bb70c164f5e622c6383c17f5",
+      "itgmania/mecha-tribe-assault.ogg": "6eb052cf8081ebb01d4b30e8db34e9eeca692635e2c1ed3ba7f7bd131c1b65c3",
+      "itgmania/mecha-tribe-assault.ssc": "ce6662cb58e3bce72f551e6c7c6a6ae7b3a7f3da85c87cbdc5e4d36a2a4b7831",
+      "ffmpeg/coyote.ogg": "42f09baa7dcdd15af07d0a3312d0eae12a2d6058bc795ca6bc293be04edb0680",
+      "ffmpeg/test6.ogg": "27c5d4cfaeaede1e234542fe0252a7550872605aef35d3a798521541b6b58aa0",
+      "ffmpeg/1sec.ogg": "f3fec39afbd0f03ef5ed077cd73b5642db15f51342149ce73550a88f854f1fb9",
+      "ffmpeg/virginradio-three-consecutive-chains.ogg": "7dfe83e1c7f3c84ea9368be7c191a3b84a3036f3ec4b5a9296cf9e38d639d646",
+      "ffmpeg/mgs1-sample1.ogg": "595af854b994dcf94f2312aeb2ebcf55f3cc76e0edef119ffafecd7a4451ed34",
+      "ffmpeg/mgs1-sample2.ogg": "706b5a96b147a5340356d02dcf8a03099ab2f78ca0ca1edc322141ea0d00a307",
+      "ffmpeg/mgs1-sample3.ogg": "830047fe4bd8d515f41cebfda8dccb2b32c8d7eb60f007d7e5ecef6a9f085514"
+    },
+    "upstream_inputs": {
+      "files": 528,
+      "all_hashes_verified": true,
+      "manifest_sha256": "e298a0a8b65b2f10fb7ad870bab4de6ed6f22c43756153617bea81a091da6308"
+    },
+    "reference_binaries": {
+      "DEADLIB_LIBVORBIS_ORACLE": "3f10dfffa755fcefbc384f000d9df984b21d6f4266ca7bc3d7d7ab2bce58b092",
+      "DEADLIB_LIBOGG_ORACLE": "92ebe6d2584dec1337bd1355cbe20c0da63c388a0a18cb72000c6ba7711546d6"
+    },
+    "reference_sources": {
+      "ogg": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+      "vorbis": "0657aee69dec8508a0011f47f3b69d7538e9d262"
+    },
+    "commands": [
+      {
+        "name": "fmt",
+        "command": [
+          "cargo",
+          "fmt",
+          "-p",
+          "deadlib-audio-decode-ogg",
+          "-p",
+          "deadlib-audio-decode-vorbis",
+          "--check"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "release",
+        "command": [
+          "cargo",
+          "test",
+          "-p",
+          "deadlib-audio-decode-ogg",
+          "-p",
+          "deadlib-audio-decode-vorbis",
+          "--release",
+          "--all-features",
+          "--",
+          "--include-ignored",
+          "--skip",
+          "regenerate_surround_pcm_golden",
+          "--skip",
+          "regenerate_synthetic_setup_golden",
+          "--skip",
+          "regenerate_residue_geometry_golden",
+          "--skip",
+          "regenerate_degenerate_book_golden",
+          "--skip",
+          "regenerate_codebook_extent_golden",
+          "--skip",
+          "regenerate_floor0_reference_goldens",
+          "--skip",
+          "regenerate_floor0_pcm_golden",
+          "--skip",
+          "regenerate_codebook_float_golden",
+          "--skip",
+          "regenerate_codebook_float_pcm_golden",
+          "--nocapture"
+        ],
+        "exit_code": 0,
+        "passed": 175,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "clippy",
+        "command": [
+          "cargo",
+          "clippy",
+          "-p",
+          "deadlib-audio-decode-ogg",
+          "-p",
+          "deadlib-audio-decode-vorbis",
+          "--all-targets",
+          "--all-features",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "clippy-default",
+        "command": [
+          "cargo",
+          "clippy",
+          "-p",
+          "deadlib-audio-decode-ogg",
+          "-p",
+          "deadlib-audio-decode-vorbis",
+          "--all-targets",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0
+      },
+      {
+        "name": "independent",
+        "command": [
+          "powershell",
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\scripts\\verify_independent.ps1",
+          "-ScratchRoot",
+          "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\codebook-floats-independent-verified-20261027"
+        ],
+        "exit_code": 0,
+        "passed": 123,
+        "failed": 0,
+        "ignored": 61
+      },
+      {
+        "name": "fuzz-tests",
+        "command": [
+          "cargo",
+          "test",
+          "--manifest-path",
+          "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\Cargo.toml",
+          "--lib"
+        ],
+        "exit_code": 0,
+        "passed": 2,
+        "failed": 0,
+        "ignored": 0
+      },
+      {
+        "name": "fuzz-clippy",
+        "command": [
+          "cargo",
+          "clippy",
+          "--manifest-path",
+          "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\Cargo.toml",
+          "--all-targets",
+          "--features",
+          "seed",
+          "--",
+          "-D",
+          "warnings"
+        ],
+        "exit_code": 0
+      }
+    ],
+    "completed_utc": "2026-10-27T17:07:40.108811+00:00"
+  },
+  "custom_float_words": 20480,
+  "vq_books": 2208,
+  "vq_exact_values": 6338688,
+  "bound_cases": 83968,
+  "bound_accepted_initialized": 77048,
+  "bound_rejected": 6920,
+  "fresh_bound_records": 1016,
+  "unpack_cross_mode_checks": 2048,
+  "packet_configurations": 420,
+  "packet_cases": 23460,
+  "packet_decisions": 117300,
+  "packet_discards": 840,
+  "packet_finite_values": 25894160,
+  "packet_nonfinite_classes": 1328400,
+  "native_seek_checks": 336,
+  "reference_ogg_streams": 6,
+  "reference_ogg_seeks": 84,
+  "reference_helper_pcm_regressions": 28,
+  "before_after": {
+    "source_commit": "b5953ce158c79d75d3cfae5bb62333fbab00e804",
+    "input_sha256": "7f3bbd70a513f4c36aa2fdfc0cb6bb4bb0628a486e359d953b8bac96818fc0e0",
+    "same_frames": 368,
+    "before_scaled_peak_error": 1.0000003158165924,
+    "after_scaled_peak_error": 1.6654390612541283e-07,
+    "after_scaled_rms_error": 2.3327704927691508e-08
+  },
+  "earlier_suites_rechecked": {
+    "configuration_cases": 31606,
+    "prefix_cases": 7014,
+    "finite_bit_cases": 55845,
+    "explicit_nonfinite_cases": 11,
+    "empty_book_cases": 35080,
+    "residue_geometry_cases": 332832,
+    "residue_geometry_pcm_values": 1836059120,
+    "codebook_extent_declarations_and_setups": 475,
+    "floor0_component_cases": 39946,
+    "floor0_packet_cases": 31209,
+    "floor0_bark_indices": 1436160,
+    "isolated_nonfinite_spectra": 24480
+  },
+  "fuzz": {
+    "targets": 3,
+    "seconds_each": 300,
+    "executions": 280752,
+    "failure_artifacts": 0,
+    "slow_units": 0,
+    "all_source_inputs_identical": true,
+    "results": [
+      {
+        "target": "vorbis_headers",
+        "exit_code": 0,
+        "executions": 266003,
+        "coverage": 2655,
+        "features": 8243,
+        "peak_rss_mb": 498,
+        "average_exec_per_second": 880,
+        "binary_sha256": "b353c33e5c44e3242859818f71870d13d1509be067b6b3176a4376cf149d09a0",
+        "arguments": [
+          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-codebook-floats-20261027\\corpus\\vorbis_headers\"",
+          "-max_total_time=300",
+          "-max_len=131073",
+          "-timeout=20",
+          "-rss_limit_mb=2048",
+          "-seed=1337",
+          "-print_final_stats=1",
+          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-codebook-floats-20261027/artifacts/vorbis_headers/\"",
+          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+        ],
+        "wall_seconds": 302.5877182
+      },
+      {
+        "target": "vorbis_packets",
+        "exit_code": 0,
+        "executions": 10412,
+        "coverage": 1978,
+        "features": 4392,
+        "peak_rss_mb": 183,
+        "average_exec_per_second": 34,
+        "binary_sha256": "bf5f3ef23afd525c5d2e6f8ee46dc45f051e8b5d1ad037a9ee9a8f42d5c40b46",
+        "arguments": [
+          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-codebook-floats-20261027\\corpus\\vorbis_packets\"",
+          "-max_total_time=300",
+          "-max_len=131073",
+          "-timeout=20",
+          "-rss_limit_mb=2048",
+          "-seed=1338",
+          "-print_final_stats=1",
+          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-codebook-floats-20261027/artifacts/vorbis_packets/\"",
+          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+        ],
+        "wall_seconds": 302.3479781
+      },
+      {
+        "target": "vorbis_stream",
+        "exit_code": 0,
+        "executions": 4337,
+        "coverage": 3811,
+        "features": 12125,
+        "peak_rss_mb": 647,
+        "average_exec_per_second": 14,
+        "binary_sha256": "573cbf83f0edec31ff6d417bb03734004a3cc12002e55ea579d1796d01260987",
+        "arguments": [
+          "\"C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\fuzz-codebook-floats-20261027\\corpus\\vorbis_stream\"",
+          "-max_total_time=300",
+          "-max_len=131073",
+          "-timeout=20",
+          "-rss_limit_mb=2048",
+          "-seed=1339",
+          "-print_final_stats=1",
+          "\"-artifact_prefix=C:/GitHub/deadsync/target/deadlib-audio-reference/fuzz-codebook-floats-20261027/artifacts/vorbis_stream/\"",
+          "\"-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\fuzz\\ogg-vorbis.dict\""
+        ],
+        "wall_seconds": 301.8148381
+      }
+    ]
+  },
+  "instrumenter": {
+    "scope": "Generate and lint the diagnostic decoder copy only; no timing run. Copied modules share a complete isolated crate privacy boundary.",
+    "command": [
+      "cargo",
+      "clippy",
+      "--manifest-path",
+      "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\codebook-floats-instrumenter-verified-20261027\\Cargo.toml",
+      "--",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0,
+    "source_sha256": "9d7c403cc9005d4aebbe87140e76b74fca344aeb0750687a403e9fbf8a013dd4",
+    "script_sha256": "ea9d517a18bea505799b393060f13f8f85276cf4d30fcea69ef698d55c9fb91a",
+    "generated_sha256": {
+      "profiled-vorbis/src/bitpack.rs": "a07db230b94472dacfd43ba1cd28e84c188fcb54cd0627d057e88462dc0656fd",
+      "profiled-vorbis/src/codebook.rs": "897b378913883fac388ced320d948e390f2624f4e7ad0c50ad6628e9c28944f1",
+      "profiled-vorbis/src/decoder.rs": "822a677ab3be07d86bee70f885b12862ab8bf1a261327f7663e85e9f08822442",
+      "profiled-vorbis/src/encoder.rs": "8fac02bb876bde74196ef8d5149ec9c0f56fb84c39566a3438278d38fc258222",
+      "profiled-vorbis/src/floor.rs": "8712e4dfdd78ea4c6ab68a67b06a81825cd278c65dd0e106e308e2b7fbdc9133",
+      "profiled-vorbis/src/floor_reference.rs": "a95a5343398f350102e847db69136408da5268b2d191c4843df2f96a43b1583d",
+      "profiled-vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+      "profiled-vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+      "profiled-vorbis/src/lib.rs": "a921e05f215b8df89aaec8f2afc14dbd0576e3f4a456ef073c9211583ebb32ae",
+      "profiled-vorbis/src/ogg.rs": "d1a6832927a7e2ff3a9902212787fe0fd2575056ca3b4748ba652dff7e77bdab",
+      "profiled-vorbis/src/residue.rs": "4581655db4d773d3a4a4fecf5f4f3ba2ea66e033bc3f9d85ca25d34c47376c0a",
+      "profiled-vorbis/src/seek.rs": "e24b8a0d312ca1fe173787bac9f74bfe00ee5542d80cf9dfb77dee8209dbfc90",
+      "profiled-vorbis/src/setup.rs": "732b6d347a2f0bc46b3f06543d487fd564ca5a6e866ed21a8f7efaa208331ead",
+      "profiled-vorbis/src/transform.rs": "257918b47b792cc44acb02e4bfaaf863d4078f6063af3b9b5c201b8a2d06edda",
+      "src/main.rs": "4bf9d26d98820187b564f9ab40295044df23328444be9e2073719073cd6903b6"
+    }
+  },
+  "artifacts_sha256": {
+    "2026-10-27-codebook-floats-fmt.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-codebook-floats-release.log": "a64bcad5956792bf28038934cb36a0593dc9fb556021946d1bc151e695be7b23",
+    "2026-10-27-codebook-floats-clippy.log": "a7642a0867425c6137f6fda230ee0c5445d5148745ccd7b4f5b0b4f2b4540d91",
+    "2026-10-27-codebook-floats-clippy-default.log": "68d11aa039cc586da2de264d44c557b4ef26ebfd204e4e07c067b63f349bd27d",
+    "2026-10-27-codebook-floats-independent.log": "fe07ed24db90002ddac0667cc898350e3d02bf55960a3c30d2290b0ca28651ac",
+    "2026-10-27-codebook-floats-fuzz-tests.log": "aafbb553bea69705d1c7ededf85809fc74035b1562b71cb9ae362461d30f50e4",
+    "2026-10-27-codebook-floats-fuzz-clippy.log": "1b3b57bfc27ca976a15e64a1e37fa6816717b69a39ad18e5bae6fdd5bca7693c",
+    "2026-10-27-codebook-floats-matrix.tsv": "86d974d410091ddcba25cd29c7d0a2202188ca7db188c0a3c24d63655bab0d5f",
+    "2026-10-27-codebook-floats-historical.tsv": "a63d14307a6b73bd66b2825e654de27b5b63a7699dc62b89933ff25512ba3f54",
+    "2026-10-27-codebook-floats-legacy.tsv": "63de1bf66b200b5f162f6dd2305364942f69245e069a75d851d6d41470118ad9",
+    "2026-10-27-codebook-floats-upstream.tsv": "29b8211667722f0e30d8fa9a372885ebc72277d274a73a2f3cee118cede36efc",
+    "2026-10-27-codebook-floats-independent-reference.json": "52fe67486b3f0819d708da7c979b3b36c430f37b344332d5a64a4028b57a0120",
+    "2026-10-27-codebook-floats-baseline-source.json": "83eac2a28c8b3945f211da292987e02879e2c07b564026d3b83ae2508b778b29",
+    "2026-10-27-codebook-floats-baseline.log": "5a386ea1dbeec18df08fc1c736ab1d3237610bd2e7a21d75d9fdfa89b4db040a",
+    "2026-10-27-codebook-floats-oracle-before.c": "3520dde5ecf9c93ec9658d1459089e484fd6ff6174d1db7b6dc68ac60ca728c6",
+    "2026-10-27-codebook-floats-oracle-build.log": "df81ef7c8d67324ba16e53bc486fae3cbea44a4bf5ff5afce14ebeabe43c6bcc",
+    "2026-10-27-codebook-floats-float-baseline-724.bin": "94c2ac6ad61149f9072e17f02952b27be5a0ccd0a4863c3709aee3956676c5f6",
+    "2026-10-27-codebook-floats-float-baseline-724.out": "7b06f03d0a4b6f2d4173d89b4c1626ad9f570867bbc7d820c49327d914ddf1ae",
+    "2026-10-27-codebook-floats-before-probe.rs": "dbebc44d2b1d2b43964885d7f5ea788730e6c94c8dbbe7451af7197d1de5df42",
+    "2026-10-27-codebook-floats-before-build.log": "e6dd41ab07bc9603aab3738b58495e9685c301548b94ea24a70b8853d292fbc2",
+    "2026-10-27-codebook-floats-before.out": "2c12401025f586366e2c7034d08c5dd9f9117bf50216cbbd4a711197cadcdbe4",
+    "2026-10-27-codebook-floats-after-probe.rs": "21650d55e7cdd31db57ccc2c8ec7ace5563c39f048429db4d0bdeacdfae420bd",
+    "2026-10-27-codebook-floats-after-build.log": "7ee60712e8cc2e2f51fc16dd7f6fe8a04339f09fe054f85a4950cb80924910c5",
+    "2026-10-27-codebook-floats-after.out": "a25504275c72321f3169b1a961bd70bfe945066842502d08482c64fc5649d139",
+    "2026-10-27-codebook-floats-before-after.json": "ba66b238ad14167bd94e65dede872e4f7c393fb87ada8e8c5efea195a3502615",
+    "2026-10-27-codebook-floats-before-after.bin": "7f3bbd70a513f4c36aa2fdfc0cb6bb4bb0628a486e359d953b8bac96818fc0e0",
+    "2026-10-27-codebook-floats-before-after-reference.out": "bb2df19c6b9c9d109574f48fc362bc39fbc6489b070d577ce85bb4f3d677d81c",
+    "2026-10-27-codebook-floats-guard-witness.bin": "2246135d42a19f9e50ff1cb2a033c48900d5fe53df3fac774480fe79e33afb1d",
+    "2026-10-27-codebook-floats-guard-witness.out": "6b151e10a4d0f47d73683bdb27807c9933ee42d54c32ca2d652d4804fc8def00",
+    "2026-10-27-codebook-floats-vorbis_headers.log": "294cbb6f608a02cb7e639b8e1df029759d911dfeeafbd9eecf375537020aaf69",
+    "2026-10-27-codebook-floats-vorbis_headers.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-codebook-floats-vorbis_packets.log": "b1604954ec5aafb0637347af10b165d64accdf3a271b4bd9ad96ec57ef4109c3",
+    "2026-10-27-codebook-floats-vorbis_packets.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-codebook-floats-vorbis_stream.log": "be4c29a0b46249d6f50c112c8540f0b76a58ab3c6cc9ce281a61d574b26c60aa",
+    "2026-10-27-codebook-floats-vorbis_stream.stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "2026-10-27-codebook-floats-fuzz-provenance.json": "0c9ffddcd735503dc4de1f564e98c17131c375412913ff74a61889b35f8e4245",
+    "2026-10-27-codebook-floats-fuzz-results.json": "f6900478c06a7d1d16d8d123fcc05205512a08d3c4bf9c0e44b5f882fae80b15",
+    "2026-10-27-codebook-floats-fuzz-results.tsv": "4585ca64bcc56a76a491ce3a2911fe1bad9f1284f99e7bb55a40ac6ddaad4ba3",
+    "2026-10-27-codebook-floats-fuzz-initial-corpus.sha256.json": "3732037685717206f4e95da697977c6b655f77003bad43e839013422832666c4",
+    "2026-10-27-codebook-floats-fuzz-build.log": "c6bf3489694a618c53a3381c1b24fc3c763b1738f5609962c44970710df0539a",
+    "2026-10-27-codebook-floats-fuzz-seeds.log": "0240eae90216083010f799fab42f0267f8c5c560dfb33831b2ca0a8e0fdb09e6",
+    "2026-10-27-codebook-floats-targeted-seeds.json": "4a47a06fa58e318aae23eeec98fd80e1d10bd39ce499d32eab3c37c08fea3de1",
+    "2026-10-27-codebook-floats-instrumenter-check.log": "e3fdb0978ec134a91be51754b64675205a0831ee110274391da162252961852e",
+    "2026-10-27-codebook-floats-instrumenter-check.json": "f6224e0358479222494cc61d4dfd347f0cc5d2bc99beb4177094905cb119a03e",
+    "2026-10-27-codebook-floats-validation-probe.py": "cecebd336a19eb3f2d9cbf6a2d55a1790a529586925b59bd8b10d69cf7cc5bd5",
+    "2026-10-27-codebook-floats-reference-probe.py": "7c2e42bf3868e73971af92c8d5d66dbb90400f50e1df1f929e36c1e55b2c5e3a",
+    "2026-10-27-codebook-floats-seed-probe.py": "5ec8b2beb5030043fa4835d2a44f4eda8bcd40d22bddd852ec4f7f4e087f2a03",
+    "2026-10-27-codebook-floats-before-after-probe.py": "3e670f08f8710a5c58e9c6570ba0b3b131f122d3cda2ff992a280f0d55cf57b3",
+    "2026-10-27-codebook-floats-instrumenter-probe.py": "22e42abcaedd1cd4580a158016dc8178661f6dae26113a8b385f6ddd2449c3e8",
+    "2026-10-27-codebook-floats-retention-probe.py": "7a883894aa7c3ab0dfeba485157b29cd8956ca7a1640d29911dcfe3999aa0397"
+  },
+  "raw_artifact_origins": {
+    "2026-10-27-codebook-floats-fmt.log": {
+      "path": "target/deadlib-audio-reference/codebook-floats-validation-verified-20261027/fmt.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "2026-10-27-codebook-floats-release.log": {
+      "path": "target/deadlib-audio-reference/codebook-floats-validation-verified-20261027/release.log",
+      "sha256": "95574cd85ae90a9d81136ed9afbf128ef783a684f56c330be3791e3703f6599a"
+    },
+    "2026-10-27-codebook-floats-clippy.log": {
+      "path": "target/deadlib-audio-reference/codebook-floats-validation-verified-20261027/clippy.log",
+      "sha256": "a7642a0867425c6137f6fda230ee0c5445d5148745ccd7b4f5b0b4f2b4540d91"
+    },
+    "2026-10-27-codebook-floats-clippy-default.log": {
+      "path": "target/deadlib-audio-reference/codebook-floats-validation-verified-20261027/clippy-default.log",
+      "sha256": "68d11aa039cc586da2de264d44c557b4ef26ebfd204e4e07c067b63f349bd27d"
+    },
+    "2026-10-27-codebook-floats-independent.log": {
+      "path": "target/deadlib-audio-reference/codebook-floats-validation-verified-20261027/independent.log",
+      "sha256": "1db9ffab64579f9da5cb04c1a4fa54f1379eb73bac05704c82f58520d70f9d28"
+    },
+    "2026-10-27-codebook-floats-fuzz-tests.log": {
+      "path": "target/deadlib-audio-reference/codebook-floats-validation-verified-20261027/fuzz-tests.log",
+      "sha256": "837bf983a6e97f214027f216e753d13177f7c0f52b85e9b9187eccdb86b8dd45"
+    },
+    "2026-10-27-codebook-floats-fuzz-clippy.log": {
+      "path": "target/deadlib-audio-reference/codebook-floats-validation-verified-20261027/fuzz-clippy.log",
+      "sha256": "1b3b57bfc27ca976a15e64a1e37fa6816717b69a39ad18e5bae6fdd5bca7693c"
+    },
+    "2026-10-27-codebook-floats-matrix.tsv": {
+      "path": "target/deadlib-audio-reference/codebook-floats-validation-verified-20261027/matrix.tsv",
+      "sha256": "86d974d410091ddcba25cd29c7d0a2202188ca7db188c0a3c24d63655bab0d5f"
+    },
+    "2026-10-27-codebook-floats-historical.tsv": {
+      "path": "target/deadlib-audio-reference/codebook-floats-validation-verified-20261027/historical.tsv",
+      "sha256": "a63d14307a6b73bd66b2825e654de27b5b63a7699dc62b89933ff25512ba3f54"
+    },
+    "2026-10-27-codebook-floats-legacy.tsv": {
+      "path": "target/deadlib-audio-reference/codebook-floats-validation-verified-20261027/legacy.tsv",
+      "sha256": "63de1bf66b200b5f162f6dd2305364942f69245e069a75d851d6d41470118ad9"
+    },
+    "2026-10-27-codebook-floats-upstream.tsv": {
+      "path": "target/deadlib-audio-reference/codebook-floats-validation-verified-20261027/upstream.tsv",
+      "sha256": "29b8211667722f0e30d8fa9a372885ebc72277d274a73a2f3cee118cede36efc"
+    },
+    "2026-10-27-codebook-floats-independent-reference.json": {
+      "path": "target/deadlib-audio-reference/codebook-floats-20261027/independent-reference.json",
+      "sha256": "52fe67486b3f0819d708da7c979b3b36c430f37b344332d5a64a4028b57a0120"
+    },
+    "2026-10-27-codebook-floats-baseline-source.json": {
+      "path": "target/deadlib-audio-reference/codebook-floats-20261027/baseline-source.json",
+      "sha256": "83eac2a28c8b3945f211da292987e02879e2c07b564026d3b83ae2508b778b29"
+    },
+    "2026-10-27-codebook-floats-baseline.log": {
+      "path": "target/deadlib-audio-reference/codebook-floats-20261027/baseline.log",
+      "sha256": "5a386ea1dbeec18df08fc1c736ab1d3237610bd2e7a21d75d9fdfa89b4db040a"
+    },
+    "2026-10-27-codebook-floats-oracle-before.c": {
+      "path": "target/deadlib-audio-reference/codebook-floats-20261027/oracle-before.c",
+      "sha256": "3520dde5ecf9c93ec9658d1459089e484fd6ff6174d1db7b6dc68ac60ca728c6"
+    },
+    "2026-10-27-codebook-floats-oracle-build.log": {
+      "path": "target/deadlib-audio-reference/codebook-floats-20261027/oracle-build.log",
+      "sha256": "b8f40bdc2a1914d3ab4cdd050d80458edb6a9d822c380dc3c7a0707ba15561e8"
+    },
+    "2026-10-27-codebook-floats-float-baseline-724.bin": {
+      "path": "target/deadlib-audio-reference/codebook-floats-20261027/baseline-inputs/float-baseline-724.bin",
+      "sha256": "94c2ac6ad61149f9072e17f02952b27be5a0ccd0a4863c3709aee3956676c5f6"
+    },
+    "2026-10-27-codebook-floats-float-baseline-724.out": {
+      "path": "target/deadlib-audio-reference/codebook-floats-20261027/baseline-inputs/float-baseline-724.out",
+      "sha256": "7b06f03d0a4b6f2d4173d89b4c1626ad9f570867bbc7d820c49327d914ddf1ae"
+    },
+    "2026-10-27-codebook-floats-before-probe.rs": {
+      "path": "target/deadlib-audio-reference/codebook-floats-before-after-verified-20261027/before/src/main.rs",
+      "sha256": "dbebc44d2b1d2b43964885d7f5ea788730e6c94c8dbbe7451af7197d1de5df42"
+    },
+    "2026-10-27-codebook-floats-before-build.log": {
+      "path": "target/deadlib-audio-reference/codebook-floats-before-after-verified-20261027/before-build.log",
+      "sha256": "e6dd41ab07bc9603aab3738b58495e9685c301548b94ea24a70b8853d292fbc2"
+    },
+    "2026-10-27-codebook-floats-before.out": {
+      "path": "target/deadlib-audio-reference/codebook-floats-before-after-verified-20261027/before.out",
+      "sha256": "2c12401025f586366e2c7034d08c5dd9f9117bf50216cbbd4a711197cadcdbe4"
+    },
+    "2026-10-27-codebook-floats-after-probe.rs": {
+      "path": "target/deadlib-audio-reference/codebook-floats-before-after-verified-20261027/after/src/main.rs",
+      "sha256": "21650d55e7cdd31db57ccc2c8ec7ace5563c39f048429db4d0bdeacdfae420bd"
+    },
+    "2026-10-27-codebook-floats-after-build.log": {
+      "path": "target/deadlib-audio-reference/codebook-floats-before-after-verified-20261027/after-build.log",
+      "sha256": "7ee60712e8cc2e2f51fc16dd7f6fe8a04339f09fe054f85a4950cb80924910c5"
+    },
+    "2026-10-27-codebook-floats-after.out": {
+      "path": "target/deadlib-audio-reference/codebook-floats-before-after-verified-20261027/after.out",
+      "sha256": "a25504275c72321f3169b1a961bd70bfe945066842502d08482c64fc5649d139"
+    },
+    "2026-10-27-codebook-floats-before-after.json": {
+      "path": "target/deadlib-audio-reference/codebook-floats-before-after-verified-20261027/checks.json",
+      "sha256": "ba66b238ad14167bd94e65dede872e4f7c393fb87ada8e8c5efea195a3502615"
+    },
+    "2026-10-27-codebook-floats-before-after.bin": {
+      "path": "target/deadlib-audio-reference/codebook-floats-before-after-verified-20261027/input.bin",
+      "sha256": "7f3bbd70a513f4c36aa2fdfc0cb6bb4bb0628a486e359d953b8bac96818fc0e0"
+    },
+    "2026-10-27-codebook-floats-before-after-reference.out": {
+      "path": "target/deadlib-audio-reference/codebook-floats-before-after-verified-20261027/reference.out",
+      "sha256": "bb2df19c6b9c9d109574f48fc362bc39fbc6489b070d577ce85bb4f3d677d81c"
+    },
+    "2026-10-27-codebook-floats-guard-witness.bin": {
+      "path": "target/deadlib-audio-reference/codebook-floats-20261027/guard-witness.bin",
+      "sha256": "2246135d42a19f9e50ff1cb2a033c48900d5fe53df3fac774480fe79e33afb1d"
+    },
+    "2026-10-27-codebook-floats-guard-witness.out": {
+      "path": "target/deadlib-audio-reference/codebook-floats-20261027/guard-witness.out",
+      "sha256": "6b151e10a4d0f47d73683bdb27807c9933ee42d54c32ca2d652d4804fc8def00"
+    },
+    "2026-10-27-codebook-floats-vorbis_headers.log": {
+      "path": "target/deadlib-audio-reference/fuzz-codebook-floats-20261027/vorbis_headers.log",
+      "sha256": "a062aac85707c45fd250a7c3c3f011f189713e991198de9b7e1636fd3191c69c"
+    },
+    "2026-10-27-codebook-floats-vorbis_headers.stdout.log": {
+      "path": "target/deadlib-audio-reference/fuzz-codebook-floats-20261027/vorbis_headers.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "2026-10-27-codebook-floats-vorbis_packets.log": {
+      "path": "target/deadlib-audio-reference/fuzz-codebook-floats-20261027/vorbis_packets.log",
+      "sha256": "c331df60de2fc947ed13f536eb7b2a6cf5f6d9bbe592bcb4adee4e923231f6cd"
+    },
+    "2026-10-27-codebook-floats-vorbis_packets.stdout.log": {
+      "path": "target/deadlib-audio-reference/fuzz-codebook-floats-20261027/vorbis_packets.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "2026-10-27-codebook-floats-vorbis_stream.log": {
+      "path": "target/deadlib-audio-reference/fuzz-codebook-floats-20261027/vorbis_stream.log",
+      "sha256": "3a668015ba22fb696973a0de7f4b2152ecb6fca10ce8a8f01f0080756b2e6d93"
+    },
+    "2026-10-27-codebook-floats-vorbis_stream.stdout.log": {
+      "path": "target/deadlib-audio-reference/fuzz-codebook-floats-20261027/vorbis_stream.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "2026-10-27-codebook-floats-fuzz-provenance.json": {
+      "path": "target/deadlib-audio-reference/fuzz-codebook-floats-20261027/provenance.json",
+      "sha256": "99ffab77a7a96e5978a305b9b7507047ee80c16252c72fd724b8781e9985de3e"
+    },
+    "2026-10-27-codebook-floats-fuzz-results.json": {
+      "path": "target/deadlib-audio-reference/fuzz-codebook-floats-20261027/results.json",
+      "sha256": "4a009915dcbba8563a3de169e38a37f98259e105ce228cb87e2231c411d63fe1"
+    },
+    "2026-10-27-codebook-floats-fuzz-results.tsv": {
+      "path": "target/deadlib-audio-reference/fuzz-codebook-floats-20261027/results.tsv",
+      "sha256": "7ee2756b9ec8d06c0f40322a8899ee598eb4e6cd2368a34db4aab3c1ea958518"
+    },
+    "2026-10-27-codebook-floats-fuzz-initial-corpus.sha256.json": {
+      "path": "target/deadlib-audio-reference/fuzz-codebook-floats-20261027/initial-corpus.sha256.json",
+      "sha256": "c39de52c5eabad27576e5f46f2e54c752041ff4de1a97da60f492f4c4f43aa0a"
+    },
+    "2026-10-27-codebook-floats-fuzz-build.log": {
+      "path": "target/deadlib-audio-reference/fuzz-codebook-floats-20261027/build.log",
+      "sha256": "897368e0478069d0121630c4c541d77701c530b25e7f488874d19301f038651d"
+    },
+    "2026-10-27-codebook-floats-fuzz-seeds.log": {
+      "path": "target/deadlib-audio-reference/fuzz-codebook-floats-20261027/seeds.log",
+      "sha256": "7c2c9473fbe3a3a7848d5c8759a85c1efa3887e7811e386c1a8f4d1d2c19cff5"
+    },
+    "2026-10-27-codebook-floats-targeted-seeds.json": {
+      "path": "target/deadlib-audio-reference/codebook-floats-seeds-verified-20261027/targeted.json",
+      "sha256": "4a47a06fa58e318aae23eeec98fd80e1d10bd39ce499d32eab3c37c08fea3de1"
+    },
+    "2026-10-27-codebook-floats-instrumenter-check.log": {
+      "path": "target/deadlib-audio-reference/codebook-floats-instrumenter-verified-20261027/check.log",
+      "sha256": "e3fdb0978ec134a91be51754b64675205a0831ee110274391da162252961852e"
+    },
+    "2026-10-27-codebook-floats-instrumenter-check.json": {
+      "path": "target/deadlib-audio-reference/codebook-floats-instrumenter-verified-20261027/check.json",
+      "sha256": "f6224e0358479222494cc61d4dfd347f0cc5d2bc99beb4177094905cb119a03e"
+    },
+    "2026-10-27-codebook-floats-validation-probe.py": {
+      "path": "target/deadlib-audio-reference/validate_codebook_floats.py",
+      "sha256": "cecebd336a19eb3f2d9cbf6a2d55a1790a529586925b59bd8b10d69cf7cc5bd5"
+    },
+    "2026-10-27-codebook-floats-reference-probe.py": {
+      "path": "target/deadlib-audio-reference/check_codebook_floats_reference.py",
+      "sha256": "7c2e42bf3868e73971af92c8d5d66dbb90400f50e1df1f929e36c1e55b2c5e3a"
+    },
+    "2026-10-27-codebook-floats-seed-probe.py": {
+      "path": "target/deadlib-audio-reference/seed_codebook_floats.py",
+      "sha256": "5ec8b2beb5030043fa4835d2a44f4eda8bcd40d22bddd852ec4f7f4e087f2a03"
+    },
+    "2026-10-27-codebook-floats-before-after-probe.py": {
+      "path": "target/deadlib-audio-reference/check_codebook_float_before_after.py",
+      "sha256": "3e670f08f8710a5c58e9c6570ba0b3b131f122d3cda2ff992a280f0d55cf57b3"
+    },
+    "2026-10-27-codebook-floats-instrumenter-probe.py": {
+      "path": "target/deadlib-audio-reference/check_float_instrumenter.py",
+      "sha256": "22e42abcaedd1cd4580a158016dc8178661f6dae26113a8b385f6ddd2449c3e8"
+    },
+    "2026-10-27-codebook-floats-retention-probe.py": {
+      "path": "target/deadlib-audio-reference/retain_codebook_floats.py",
+      "sha256": "7a883894aa7c3ab0dfeba485157b29cd8956ca7a1640d29911dcfe3999aa0397"
+    }
+  }
+}

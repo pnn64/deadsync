@@ -6,11 +6,14 @@ pub fn push_section(content: &mut String, name: &str) {
 }
 
 pub fn push_line(content: &mut String, key: &str, value: impl Display) {
-    writeln!(content, "{key}={value}").expect("writing into String cannot fail");
+    content.push_str(key);
+    content.push('=');
+    writeln!(content, "{value}").expect("writing into String cannot fail");
 }
 
 pub fn push_bool(content: &mut String, key: &str, enabled: bool) {
-    push_line(content, key, if enabled { 1 } else { 0 });
+    content.push_str(key);
+    content.push_str(if enabled { "=1\n" } else { "=0\n" });
 }
 
 #[cfg(test)]

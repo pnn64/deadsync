@@ -7,7 +7,7 @@ license = "GPL-3.0"
 [dependencies]
 bincode = { package = "deadlib-bincode", version = "=2.0.1", path = "../deadlib-bincode" }
 deadlib-audio-decode = { path = "../deadlib-audio-decode" }
-ebur128 = "0.1.10"
+ebur128 = "0.1.11"
 rustc-hash = "2.1.3"
 twox-hash = "2.1.5"
 

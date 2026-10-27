@@ -1,0 +1,225 @@
+// Deterministic virtual device inventory for ALSA performance/regression tests.
+// Open real libasound null PCMs; enumeration rate lists and queued delays are fixtures.
+#define _GNU_SOURCE
+#include <alsa/asoundlib.h>
+#include <dlfcn.h>
+#include <errno.h>
+#include <stdint.h>
+#include <limits.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static int override_delay;
+static snd_pcm_sframes_t fixture_delay;
+static const char *fixture_layout;
+static int status_error;
+static int rate_matrix;
+static unsigned int rate_mask;
+static unsigned int rate_probe;
+static int rate_override;
+static const char *rate_edge;
+static int force_monotonic;
+static int last_card;
+static int last_device;
+static const char *probe_failure;
+static const char *close_log;
+__attribute__((constructor)) static void init_delay(void) {
+    const char *delay = getenv("ALSA_FIXTURE_DELAY");
+    override_delay = delay != NULL;
+    if (delay) fixture_delay = strtol(delay, NULL, 10);
+    fixture_layout = getenv("ALSA_FIXTURE_LAYOUT");
+    status_error = getenv("ALSA_FIXTURE_STATUS_ERROR") != NULL;
+    rate_matrix = getenv("ALSA_FIXTURE_RATE_MATRIX") != NULL;
+    rate_edge = getenv("ALSA_FIXTURE_RATE_EDGE");
+    const char *mask = getenv("ALSA_FIXTURE_RATE_MASK");
+    rate_override = rate_matrix || rate_edge || mask;
+    if (mask) rate_mask = strtoul(mask, NULL, 10);
+    force_monotonic = getenv("ALSA_FIXTURE_MONOTONIC") != NULL;
+    probe_failure = getenv("ALSA_FIXTURE_PROBE_FAILURE");
+    close_log = getenv("ALSA_FIXTURE_CLOSE_LOG");
+}
+static int failing_probe(const char *phase) { return probe_failure && strcmp(probe_failure, phase) == 0; }
+
+int snd_pcm_close(snd_pcm_t *pcm) {
+    static int (*real_close)(snd_pcm_t *);
+    if (!real_close) real_close = dlsym(RTLD_NEXT, "snd_pcm_close");
+    int result = real_close(pcm);
+    if (close_log) {
+        FILE *file = fopen(close_log, "a");
+        if (file) { fputs("closed\n", file); fclose(file); }
+    }
+    return result;
+}
+
+int snd_pcm_hw_params_any(snd_pcm_t *pcm, snd_pcm_hw_params_t *params) {
+    if (failing_probe("hw")) return -EIO;
+    static int (*real_any)(snd_pcm_t *, snd_pcm_hw_params_t *);
+    if (!real_any) real_any = dlsym(RTLD_NEXT, "snd_pcm_hw_params_any");
+    return real_any(pcm, params);
+}
+int snd_pcm_hw_params_test_access(snd_pcm_t *pcm, snd_pcm_hw_params_t *params, snd_pcm_access_t access) {
+    if (failing_probe("access")) return -EINVAL;
+    static int (*real_test)(snd_pcm_t *, snd_pcm_hw_params_t *, snd_pcm_access_t);
+    if (!real_test) real_test = dlsym(RTLD_NEXT, "snd_pcm_hw_params_test_access");
+    return real_test(pcm, params, access);
+}
+int snd_pcm_hw_params_test_format(snd_pcm_t *pcm, snd_pcm_hw_params_t *params, snd_pcm_format_t format) {
+    if (failing_probe("format")) return -EINVAL;
+    static int (*real_test)(snd_pcm_t *, snd_pcm_hw_params_t *, snd_pcm_format_t);
+    if (!real_test) real_test = dlsym(RTLD_NEXT, "snd_pcm_hw_params_test_format");
+    return real_test(pcm, params, format);
+}
+int snd_pcm_hw_params_test_channels(snd_pcm_t *pcm, snd_pcm_hw_params_t *params, unsigned int channels) {
+    if (failing_probe("channels")) return -EINVAL;
+    static int (*real_test)(snd_pcm_t *, snd_pcm_hw_params_t *, unsigned int);
+    if (!real_test) real_test = dlsym(RTLD_NEXT, "snd_pcm_hw_params_test_channels");
+    return real_test(pcm, params, channels);
+}
+int snd_pcm_hw_params_get_channels_min(const snd_pcm_hw_params_t *params, unsigned int *channels) {
+    if (failing_probe("channels")) return -EIO;
+    static int (*real_get)(const snd_pcm_hw_params_t *, unsigned int *);
+    if (!real_get) real_get = dlsym(RTLD_NEXT, "snd_pcm_hw_params_get_channels_min");
+    return real_get(params, channels);
+}
+int snd_pcm_sw_params_set_tstamp_type(snd_pcm_t *pcm, snd_pcm_sw_params_t *params, snd_pcm_tstamp_type_t type) {
+    if (force_monotonic && type == SND_PCM_TSTAMP_TYPE_MONOTONIC_RAW) return -EINVAL;
+    static int (*real_set)(snd_pcm_t *, snd_pcm_sw_params_t *, snd_pcm_tstamp_type_t);
+    if (!real_set) real_set = dlsym(RTLD_NEXT, "snd_pcm_sw_params_set_tstamp_type");
+    return real_set(pcm, params, type);
+}
+int snd_pcm_status(snd_pcm_t *pcm, snd_pcm_status_t *status) {
+    if (status_error) return -EIO;
+    static int (*real_status)(snd_pcm_t *, snd_pcm_status_t *);
+    if (!real_status) real_status = dlsym(RTLD_NEXT, "snd_pcm_status");
+    return real_status(pcm, status);
+}
+int snd_pcm_delay(snd_pcm_t *pcm, snd_pcm_sframes_t *delay) {
+    if (override_delay) { *delay = fixture_delay; return 0; }
+    static int (*real_delay)(snd_pcm_t *, snd_pcm_sframes_t *);
+    if (!real_delay) real_delay = dlsym(RTLD_NEXT, "snd_pcm_delay");
+    return real_delay(pcm, delay);
+}
+snd_pcm_sframes_t snd_pcm_status_get_delay(const snd_pcm_status_t *status) {
+    if (override_delay) return fixture_delay;
+    static snd_pcm_sframes_t (*real_delay)(const snd_pcm_status_t *);
+    if (!real_delay) real_delay = dlsym(RTLD_NEXT, "snd_pcm_status_get_delay");
+    return real_delay(status);
+}
+
+int snd_card_next(int *card) {
+    if (fixture_layout && strcmp(fixture_layout, "empty") == 0) { *card = -1; return 0; }
+    if (fixture_layout && (strcmp(fixture_layout, "large_ids") == 0 || strcmp(fixture_layout, "large_default") == 0))
+        *card = *card < 0 ? 0 : *card == 0 ? 10 : *card == 10 ? INT_MAX : -1;
+    else
+        *card = *card < 1 ? *card + 1 : -1;
+    last_card = *card;
+    return 0;
+}
+int snd_ctl_open(snd_ctl_t **ctl, const char *name, int mode) {
+    (void)mode;
+    char expected[32];
+    snprintf(expected, sizeof(expected), "hw:%u", (unsigned int)last_card);
+    if (strcmp(name, expected) != 0) return -EINVAL;
+    *ctl = (snd_ctl_t *)(uintptr_t)(strcmp(name, "hw:0") == 0 ? 1 : 2);
+    return 0;
+}
+int snd_ctl_close(snd_ctl_t *ctl) { (void)ctl; return 0; }
+int snd_ctl_card_info(snd_ctl_t *ctl, snd_ctl_card_info_t *info) {
+    if (fixture_layout && strcmp(fixture_layout, "bad_card_info") == 0) return -EIO;
+    (void)ctl; (void)info; return 0;
+}
+#define MUSIC4 "音楽音楽音楽音楽"
+const char *snd_ctl_card_info_get_name(const snd_ctl_card_info_t *info) {
+    if (fixture_layout && (strcmp(fixture_layout, "bad_card_name") == 0 ||
+                           strcmp(fixture_layout, "missing_card_name") == 0)) return "\xff";
+    if (fixture_layout && strcmp(fixture_layout, "long_names") == 0)
+        return MUSIC4 MUSIC4 MUSIC4 MUSIC4 MUSIC4 MUSIC4 MUSIC4 MUSIC4;
+    if (fixture_layout && strcmp(fixture_layout, "empty_names") == 0) return "";
+    (void)info; return "Fixture card 音楽";
+}
+int snd_card_get_name(int card, char **name) {
+    (void)card;
+    if (fixture_layout && strcmp(fixture_layout, "missing_card_name") == 0) return -EIO;
+    *name = strdup("Fallback card 音楽");
+    return *name ? 0 : -ENOMEM;
+}
+int snd_ctl_pcm_next_device(snd_ctl_t *ctl, int *device) {
+    (void)ctl;
+    if (fixture_layout && (strcmp(fixture_layout, "large_ids") == 0 || strcmp(fixture_layout, "large_default") == 0))
+        *device = *device < 0 ? 0 : *device == 0 ? 10 : *device == 10 ? INT_MAX : -1;
+    else
+        *device = *device < 3 ? *device + 1 : -1;
+    last_device = *device;
+    return 0;
+}
+int snd_ctl_pcm_info(snd_ctl_t *ctl, snd_pcm_info_t *info) {
+    (void)ctl; (void)info; return 0;
+}
+const char *snd_pcm_info_get_name(const snd_pcm_info_t *info) {
+    if (fixture_layout && strcmp(fixture_layout, "bad_name") == 0) return "\xff";
+    if (fixture_layout && strcmp(fixture_layout, "long_names") == 0)
+        return MUSIC4 MUSIC4 MUSIC4 MUSIC4;
+    if (fixture_layout && strcmp(fixture_layout, "empty_names") == 0) return "";
+    (void)info; return "Fixture playback";
+}
+int snd_pcm_open(snd_pcm_t **pcm, const char *name, snd_pcm_stream_t stream, int mode) {
+    int (*real_open)(snd_pcm_t **, const char *, snd_pcm_stream_t, int) =
+        dlsym(RTLD_NEXT, "snd_pcm_open");
+    if (fixture_layout && strcmp(fixture_layout, "unresolvable_default") == 0 &&
+        (strcmp(name, "default") == 0 || strcmp(name, "sysdefault") == 0)) return -ENOENT;
+    if (rate_matrix) rate_mask = rate_probe++;
+    if (strncmp(name, "hw:CARD=", 8) == 0) {
+        char expected[64];
+        snprintf(expected, sizeof(expected), "hw:CARD=%u,DEV=%u", (unsigned int)last_card, (unsigned int)last_device);
+        if (strcmp(name, expected) != 0) return -ENODEV;
+    }
+    if (((fixture_layout && strcmp(fixture_layout, "probe_error") == 0) || failing_probe("open")) && strncmp(name, "hw:", 3) == 0)
+        return -ENODEV;
+    if (strncmp(name, "hw:", 3) == 0 || strcmp(name, "default") == 0 || strcmp(name, "sysdefault") == 0)
+        name = "null";
+    return real_open(pcm, name, stream, mode);
+}
+int snd_pcm_info_get_card(const snd_pcm_info_t *info) {
+    (void)info;
+    if (fixture_layout && strcmp(fixture_layout, "unbacked_default") == 0) return -1;
+    if (fixture_layout && strcmp(fixture_layout, "large_default") == 0) return INT_MAX;
+    return fixture_layout && strcmp(fixture_layout, "unmatched_default") == 0 ? 2 : 1;
+}
+unsigned int snd_pcm_info_get_device(const snd_pcm_info_t *info) {
+    (void)info;
+    return fixture_layout && strcmp(fixture_layout, "large_default") == 0 ? INT_MAX : 1;
+}
+int snd_pcm_hw_params_test_rate(snd_pcm_t *pcm, snd_pcm_hw_params_t *params, unsigned int rate, int dir) {
+    (void)pcm; (void)params; (void)dir;
+    if (failing_probe("rates")) return -EINVAL;
+    if (rate_override) {
+        static const unsigned int priority[] = {48000, 44100, 96000, 88200, 192000,
+            176400, 32000, 22050, 16000, 11025, 384000};
+        for (unsigned int index = 0; index < 11; index++)
+            if (rate == priority[index]) return rate_mask & (1U << index) ? 0 : -EINVAL;
+        if (rate_edge && strcmp(rate_edge, "reject_edges") == 0) return -EINVAL;
+        if (rate_edge && strcmp(rate_edge, "reject_min") == 0 && rate == 8000) return -EINVAL;
+        return rate == 8000 || rate == 500000 ? 0 : -EINVAL;
+    }
+    return 0;
+}
+int snd_pcm_hw_params_get_rate_min(const snd_pcm_hw_params_t *params, unsigned int *rate, int *dir) {
+    (void)params;
+    if (failing_probe("rates")) return -EIO;
+    if (rate_edge && strcmp(rate_edge, "min_error") == 0) return -EIO;
+    *rate = rate_override ? 8000 : 11025;
+    if (rate_edge && strcmp(rate_edge, "min_zero") == 0) *rate = 0;
+    if (rate_edge && strcmp(rate_edge, "min_max_reversed") == 0) *rate = 600000;
+    if (rate_edge && strcmp(rate_edge, "duplicate_bounds") == 0) *rate = 48000;
+    if (dir) *dir = 0;
+    return 0;
+}
+int snd_pcm_hw_params_get_rate_max(const snd_pcm_hw_params_t *params, unsigned int *rate, int *dir) {
+    (void)params;
+    if (rate_edge && strcmp(rate_edge, "max_error") == 0) return -EIO;
+    *rate = rate_override ? 500000 : 384000;
+    if (rate_edge && strcmp(rate_edge, "duplicate_bounds") == 0) *rate = 48000;
+    if (dir) *dir = 0;
+    return 0;
+}

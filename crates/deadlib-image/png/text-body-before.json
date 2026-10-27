@@ -1,0 +1,27 @@
+{
+  "baseline_commit": "4adad99dd",
+  "command": [
+    "cargo",
+    "test",
+    "--manifest-path",
+    "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-image-independent-a949a16ad0774bbbbe2e1092fe00a1b7\\Cargo.toml",
+    "-p",
+    "deadlib-image-png",
+    "--offline",
+    "--release",
+    "--test",
+    "text_body",
+    "encoders_reject_text_controls_before_output",
+    "--",
+    "--nocapture"
+  ],
+  "expected_exit_code": 101,
+  "actual_exit_code": 101,
+  "source_sha256": "1a4431ffdc2d477ea928b8f97f439b0293b31cca599a47dec885d454e4690601",
+  "test_source_sha256": "835470b8333598aad7a31435f5ee425b74692cd1c832841f68f43d8c969f4266",
+  "failure": "Old buffered encoder accepts ESC in tEXt; regression requires rejection.",
+  "baseline_workspace": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-image-independent-a949a16ad0774bbbbe2e1092fe00a1b7",
+  "fixture_source_sha256": "9f0d0a028ba2cb3c942e98352a87f5db8a4eb8f7f35fcc5234aeb348f82b35c4",
+  "description": "Final regression test copied into retained isolated 4adad99dd production source. Old metadata.rs hash verified before execution.",
+  "all_baseline_png_library_source_hashes_verified_against_keywords_manifest": true
+}

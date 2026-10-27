@@ -1,0 +1,11 @@
+MSBuild version 17.14.60+43b635718 for .NET Framework
+
+  1>Checking Build System
+  Building Custom Rule C:/GitHub/deadsync/target/deadlib-audio-reference/ogg/CMakeLists.txt
+  bitwise.c
+  framing.c
+  Generating Code...
+  ogg.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\ogg-benchmark-build\ogg\Release\ogg.lib
+  Building Custom Rule C:/GitHub/deadsync/crates/deadlib-audio/decode/ogg/benches/oracle/CMakeLists.txt
+  benchmark.cpp
+  deadlib_ogg_benchmark.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\ogg-benchmark-build\Release\deadlib_ogg_benchmark.exe

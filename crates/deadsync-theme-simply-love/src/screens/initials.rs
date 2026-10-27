@@ -1004,7 +1004,7 @@ fn build_wheel(
     let headline_font = machine_font_key(machine_font, FontRole::Headline);
     // zmod's AlphabetCharacterMT.lua compensates for Mega's smaller authored glyphs.
     let zoom = match machine_font {
-        MachineFont::Wendy => 0.5,
+        MachineFont::Wendy | MachineFont::Unprofessional => 0.5,
         MachineFont::Mega => 0.812,
     };
 
@@ -1185,7 +1185,7 @@ fn build_player_frame(side: profile_data::PlayerSide, state: &State) -> Actor {
     let headline_font = machine_font_key(state.runtime.machine_font, FontRole::Headline);
     // zmod's PlayerNameAndDecorations.lua uses a separate zoom for the entered name.
     let name_zoom = match state.runtime.machine_font {
-        MachineFont::Wendy => 0.75,
+        MachineFont::Wendy | MachineFont::Unprofessional => 0.75,
         MachineFont::Mega => 1.22,
     };
 

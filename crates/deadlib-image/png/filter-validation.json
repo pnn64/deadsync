@@ -1,0 +1,481 @@
+{
+  "baseline_png_commit": "8c5713343",
+  "change": "Exact Paeth regions; fixed-stride pixel carry with scalar two-byte recurrence",
+  "commands": [
+    {
+      "label": "Full release suite including all twelve optional checks",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--",
+        "--include-ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 474.476,
+      "environment": {
+        "CARGO_BUILD_JOBS": "4",
+        "DEADLIB_LIBPNG_ORACLE": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-build\\Release\\deadlib_png_oracle.exe",
+        "DEADLIB_PNG_CORPUS": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak",
+        "DEADLIB_ZLIB_STRICT_WINDOW": "0",
+        "DEADLIB_ZLIB_PKZIP_WORKAROUND": "0"
+      }
+    },
+    {
+      "label": "Strict fuzz harness Clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\fuzz\\Cargo.toml",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.544,
+      "environment": {
+        "CARGO_BUILD_JOBS": "4",
+        "DEADLIB_LIBPNG_ORACLE": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-build\\Release\\deadlib_png_oracle.exe",
+        "DEADLIB_PNG_CORPUS": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak",
+        "DEADLIB_ZLIB_STRICT_WINDOW": "0",
+        "DEADLIB_ZLIB_PKZIP_WORKAROUND": "0"
+      }
+    },
+    {
+      "label": "Strict-window C zlib audit",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "zlib_headers",
+        "c_zlib_header_and_history_oracle",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.827,
+      "environment": {
+        "CARGO_BUILD_JOBS": "4",
+        "DEADLIB_LIBPNG_ORACLE": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-strict-build\\Release\\deadlib_png_oracle.exe",
+        "DEADLIB_PNG_CORPUS": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak",
+        "DEADLIB_ZLIB_STRICT_WINDOW": "1",
+        "DEADLIB_ZLIB_PKZIP_WORKAROUND": "0"
+      }
+    },
+    {
+      "label": "Compatibility C Huffman audit",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "huffman",
+        "c_zlib_huffman_oracle",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.353,
+      "environment": {
+        "CARGO_BUILD_JOBS": "4",
+        "DEADLIB_LIBPNG_ORACLE": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-pkzip-build\\Release\\deadlib_png_oracle.exe",
+        "DEADLIB_PNG_CORPUS": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak",
+        "DEADLIB_ZLIB_STRICT_WINDOW": "0",
+        "DEADLIB_ZLIB_PKZIP_WORKAROUND": "1"
+      }
+    },
+    {
+      "label": "Independent offline source copy",
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\verify_independent.ps1",
+        "-LogPath",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\filter-independent.log"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 217.16,
+      "environment": {
+        "CARGO_BUILD_JOBS": "4",
+        "DEADLIB_LIBPNG_ORACLE": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-build\\Release\\deadlib_png_oracle.exe",
+        "DEADLIB_PNG_CORPUS": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak",
+        "DEADLIB_ZLIB_STRICT_WINDOW": "0",
+        "DEADLIB_ZLIB_PKZIP_WORKAROUND": "0"
+      }
+    }
+  ],
+  "production_source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "A7776F11D43D8DD4A9802E4D354689978D819CDF56308369020D07A8EB6DA412"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "548EC2169B7C2C6D8ABE4715F284F65FE9BD70189C670F320D6E2F244FCB2919"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "5FAD4314C55583E8A743215081FDB98809F73AA48D7D0FCDA233D564130B2E0E"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "C8E1725049CE5AF49FA3D4BAC24926BD758920DD548C27B0CAC18D30BD5EDD79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "67E57FCB942E9813593DF8C3F36B98F23F215CC1FF99A31E87AD39A5CFA4D8AB"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "B664D12E18EFB201DD9F033E132AD99C2A62C7A92CB6CE4543AD0E30624BEA0B"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3B97FCF0DA4BB275883B1D2C31653BEF733939F0C9A867A177207AAA2C38F7CB"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9AC990B5A00EF5EACA278B8012B98434EBE31DA96EA7313CA2DC1E463D1B88F4"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9A0FAE073E45227763EDEFCE53AF4AE07AE79FF7D0BCE38CA66C8D6075ADFF1B"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "A8EB599EF3AB866B01A0129EB1F8BB6462CA2845B0ED1BD1C3DEE26F4614207E"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "2108E0114B57620CE3FFF41174377548CC49214D783F637BEE9E72ABDA6B4C30"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "EAB412202BD525F1A969500B13894FA0008600DA9B34C1F42A78421D121CF447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8C7B0A66F345402BBD804D345D1C9815161E84A632A6E82F1530679A669F017B"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4B0E6E9A1C1863757D28521254F3E4613A6929280972922B6A0FD9DED216E46D"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "D648E905E12ACD1319F459E15FA605DBE59E51404B4F0C93B18E67293F270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "BE5AA900A1BBDC206D6EA32444E322CF2B89ECE631A03B5A54E05062C891A463"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "2C972535E2FE47CD64C6AA7B21C9B7AF30CB156350AE172544C7B63A26D1C37B"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9BD571140A43B90F75B8031F342B5E51FEB1FF61DEA8E4C417A079280C7DA0E4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "F9DB3D3CBF32FB492ED524205E2C0699CC8A116B89B3C03E98B2C9C6253F576E"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582C0A4FA53C020D02B697DDEB3388C3253C4B30A1352AEDFF905977F46AE19"
+    }
+  ],
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "scope": "Full final source correctness, independent native sample/rendered oracles, strict lint and isolated offline package build; performance evidence is separate.",
+  "preflight_checks": [
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 3.342,
+      "environment": "Inherited process environment; no compiler/profile overrides"
+    }
+  ],
+  "runner_sha256": "9b1e55a8acbc354f1674bcf1db631e4ceca6f9f0297b50e19b7bb4c69f5a62fb",
+  "test_source_sha256": [
+    {
+      "path": "tests/apng.rs",
+      "sha256": "71334f42986e02aee9a7b186801b98eb34b78be52c92ae39f53926760492b9c9"
+    },
+    {
+      "path": "tests/apng_recovery.rs",
+      "sha256": "7ff2684839663f5eabe97c01b06f1238bdd9425f601e868adbca7fd7f561554e"
+    },
+    {
+      "path": "tests/apng_rendered.rs",
+      "sha256": "3739de3c13a88f4356b7de2ccd24deeb3b54ee73a450e2488110d97e2d545463"
+    },
+    {
+      "path": "tests/chunks.rs",
+      "sha256": "fcc32b5dd03500c701772ed0aac0675a3965bd3a77e2387ee95b24cb242e6a74"
+    },
+    {
+      "path": "tests/cicp.rs",
+      "sha256": "97e555a5a49c4f078a3eb8a2934719933ce77e11886b07d278abd792d576fb78"
+    },
+    {
+      "path": "tests/compositing.rs",
+      "sha256": "c40e51769cf0693c0a8def9eac6015908fc43d93db61c8b75a20d9986e603bef"
+    },
+    {
+      "path": "tests/compression.rs",
+      "sha256": "ee200fe43fd6699602ac9c45dcb3c3094a8019d947105946eac31cfc8efa8836"
+    },
+    {
+      "path": "tests/deflate_stream.rs",
+      "sha256": "8858b445b48996e7f90a51ea90da10deb2b7370c40b2290aada623b6004fe121"
+    },
+    {
+      "path": "tests/hdr.rs",
+      "sha256": "b917cc0630e15c655908c5e3f571f49a800f2700cb750d956582deb1bc80eab0"
+    },
+    {
+      "path": "tests/huffman.rs",
+      "sha256": "b0231b1d2044dbfc845fc8d2debf3df098dd69b899b262e18a767a03b7f5bfbd"
+    },
+    {
+      "path": "tests/inflate_stream.rs",
+      "sha256": "a44545c1528c6c4064311e7d96820f2ea0b9eba904edc95a74001e4bb7a57178"
+    },
+    {
+      "path": "tests/keywords.rs",
+      "sha256": "6c079a602d64d442ab3a0d7039cfde050b0173ca9b3b48e4e76114a391413a12"
+    },
+    {
+      "path": "tests/language_registry.rs",
+      "sha256": "7dfaf5764f9c489bb369610219a595b4b1127cbf40055f136f086f14fb46ce28"
+    },
+    {
+      "path": "tests/libpng.rs",
+      "sha256": "1b0cd193901555eb033eefd3de20fc793936813175570babbfaab5b3b67bb8d9"
+    },
+    {
+      "path": "tests/malformed.rs",
+      "sha256": "22fbcd61a1d3bcc58a41e2f7ef37a6ca946fb1187c8ccf44afe730f18686d79c"
+    },
+    {
+      "path": "tests/metadata.rs",
+      "sha256": "00d534872c76207c058f2d540af730e5ce28c8f28075bb0e0d202023ed9106f3"
+    },
+    {
+      "path": "tests/metadata_fields.rs",
+      "sha256": "77156d0da0d780fefc763429f3a6821fca8e4376b2c2e7ef0fc5e4bcc5b1f685"
+    },
+    {
+      "path": "tests/palette.rs",
+      "sha256": "3792c08735a7ecb2c9552cfd5a94a469da3d24645b9a82dcd02b0e609645b141"
+    },
+    {
+      "path": "tests/png_stream.rs",
+      "sha256": "dee94e79a175c77bf9f9f0f72b1499e34b1a4f205c16ec4f66e28f28bd4f417f"
+    },
+    {
+      "path": "tests/png_write.rs",
+      "sha256": "599d318ee504d03eec8da648ae1366cff8f7142ec855b6e6f0f5b13f22391e40"
+    },
+    {
+      "path": "tests/pngsuite.rs",
+      "sha256": "7b7868f8f7d1b1bc220029360c2608e5413d18491d43ae66215713a8512d6038"
+    },
+    {
+      "path": "tests/profiles.rs",
+      "sha256": "894358c70ea125563ed5ff00dddf593a395f0d6caa8dd20d61b95e8222d97747"
+    },
+    {
+      "path": "tests/static_png.rs",
+      "sha256": "5a6c261e7b9c8ed04bbf5cf720e6a1305204f7e535928903b496f70cf07f01ba"
+    },
+    {
+      "path": "tests/support/apng_recovery.rs",
+      "sha256": "c756dcde80564c51b2d5fd605331db8eee092c85ed9ca3004a73d03d1dbf06ca"
+    },
+    {
+      "path": "tests/support/chunks.rs",
+      "sha256": "414380bb3ffe06aa356d0d494252cd6a92f95e2830eb167b6b2c658777069077"
+    },
+    {
+      "path": "tests/support/hdr.rs",
+      "sha256": "d365b2a468d5fc815453616a1e1eb0553a692a871593f944a9b68ddb6b904720"
+    },
+    {
+      "path": "tests/support/huffman.rs",
+      "sha256": "ed2db27a8fb2f8c324e49cb42862bbbd848d0697d5b1cc559034aac54d8d27c2"
+    },
+    {
+      "path": "tests/support/mod.rs",
+      "sha256": "1580fd6e442fa78ab893ea40a7469d88ef27c9668d967038ca3814390cebc442"
+    },
+    {
+      "path": "tests/support/named.rs",
+      "sha256": "0e4c993567f273180885e42c8c74bac7f09c6bac0431b556c9b3ba63c7f0eaa3"
+    },
+    {
+      "path": "tests/support/text_body.rs",
+      "sha256": "9f0d0a028ba2cb3c942e98352a87f5db8a4eb8f7f35fcc5234aeb348f82b35c4"
+    },
+    {
+      "path": "tests/text.rs",
+      "sha256": "cbee7a82cdfe9f3421fb7fdc8e22241ff8f885bd37ef1a1f162da9b6ecbc5521"
+    },
+    {
+      "path": "tests/text_body.rs",
+      "sha256": "835470b8333598aad7a31435f5ee425b74692cd1c832841f68f43d8c969f4266"
+    },
+    {
+      "path": "tests/zlib_headers.rs",
+      "sha256": "5082c3855a5dc1816cb2ec62bda5939d13cee2ed871af2aabb546b5f6a30b8e4"
+    },
+    {
+      "path": "examples/decode_profile.rs",
+      "sha256": "bc0766b89c2fc30cb40b84092b4c9444306d89eaa434be396b8441d1f1405f71"
+    },
+    {
+      "path": "examples/filter_bench.rs",
+      "sha256": "5c4c937b5dd482e64bc6e33b5dadaaaa7e2bdbf6f86077b4a8ba8ff69643a7a2"
+    },
+    {
+      "path": "scripts/profile_decode.py",
+      "sha256": "c3e871137f1f933a4dc75d369912f5e6760d82802c0d566cdc21417a9ee127b0"
+    },
+    {
+      "path": "scripts/benchmark_pipeline.ps1",
+      "sha256": "ea2061c7a0a28caa964126f4461dcba009e62242df7a4cd8593b12232c977cb9"
+    },
+    {
+      "path": "scripts/benchmark_saved.ps1",
+      "sha256": "beac97f3709f3a3356c988aced8882b85ff3f1085757b8b91926ec534facf569"
+    },
+    {
+      "path": "scripts/verify_independent.ps1",
+      "sha256": "8f1d1b1fa31b20d2c501e249104450114fa35130eb5cd14a3d0bfd8d6a853d0a"
+    }
+  ],
+  "final_production_hashes_verified": true,
+  "oracle_binary_sha256": [
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-build\\Release\\deadlib_png_oracle.exe",
+      "sha256": "018b3b93823771114741c6218af723b01bf2c8ff120262429aecb975586a70f6"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-strict-build\\Release\\deadlib_png_oracle.exe",
+      "sha256": "bd381720ba21be2b99d639faa5f45fa2c69688579d964d9da1c0c1d4c9490e07"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\oracle-pkzip-build\\Release\\deadlib_png_oracle.exe",
+      "sha256": "e33d5bbe2e73e70c2bfad27f41c3b8a3a338dcf27e7664dd7a9abc3c5aa9ea12"
+    }
+  ],
+  "independent_benchmark_smoke": {
+    "scope": "Standalone offline execution/fixture correctness only; default isolated release profile differs from workspace bench profile; do not use its timing fields for before/after claims.",
+    "command": [
+      "cargo",
+      "run",
+      "--manifest-path",
+      "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-image-independent-c6035cd109c940a693e9b762cdd8dbf0\\png\\Cargo.toml",
+      "-p",
+      "deadlib-image-png",
+      "--offline",
+      "--release",
+      "--example",
+      "filter_bench",
+      "--target-dir",
+      "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-image-independent-c6035cd109c940a693e9b762cdd8dbf0\\target"
+    ],
+    "environment": {
+      "DEADLIB_PNG_BENCH_ITERS": "1",
+      "CARGO_BUILD_JOBS": "4"
+    },
+    "exit_code": 0,
+    "wall_seconds": 10.05,
+    "rows": 240,
+    "fixtures": 80,
+    "output": "filter-independent-benchmark.tsv",
+    "output_sha256": "9b180a05b2ff8b2421aa48b57f25de948c4284da5290d755ef8f2fd08f7b3387",
+    "binary_sha256": "e7507ae214c90fcdbc7ba32ff2469c90b480fbe8df2c47ff1873ae9146c11d25"
+  },
+  "log_artifacts": [
+    {
+      "path": "filter-validation.log",
+      "as_run_sha256": "e935a5a3d168b9196ac03a49b155d47fa9a9e5d398dbfb38b64e94004e05c80e",
+      "sha256": "75966e9d711a92ef1aa0bde9c3440958e7c6c5df04f7e8f34e953204f911e2cd",
+      "normalization": "CRLF to LF and terminal blank separator lines removed; no compiled source or diagnostic content changed"
+    },
+    {
+      "path": "filter-independent.log",
+      "as_run_sha256": "b04d727677a4ed63ac19efb1073b465bc1e4284a101437280a8a2ebfc75db60e",
+      "sha256": "b04d727677a4ed63ac19efb1073b465bc1e4284a101437280a8a2ebfc75db60e",
+      "normalization": "CRLF to LF and terminal blank separator lines removed; no compiled source or diagnostic content changed"
+    },
+    {
+      "path": "filter-independent-benchmark-build.log",
+      "as_run_sha256": "1a4bfb729fffbfa32ef955cbf959abb3d5335ccf940e730d32e1a73f99ba21b9",
+      "sha256": "1a4bfb729fffbfa32ef955cbf959abb3d5335ccf940e730d32e1a73f99ba21b9",
+      "normalization": "CRLF to LF and terminal blank separator lines removed; no compiled source or diagnostic content changed"
+    }
+  ],
+  "full_release_counts": {
+    "passed": 117,
+    "failed": 0,
+    "ignored": 0
+  },
+  "independent_counts": {
+    "passed": 105,
+    "failed": 0,
+    "ignored": 12
+  },
+  "independent_source_copy": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-image-independent-c6035cd109c940a693e9b762cdd8dbf0",
+  "isolated_production_hashes_verified": true,
+  "additional_checks": [
+    {
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "--config",
+        "skip_children=true",
+        "crates/deadlib-image/png/src/scanline.rs",
+        "crates/deadlib-image/png/examples/filter_bench.rs"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "predictor_triplets": 16777216,
+  "independent_filter_rows": 2550,
+  "invalid_filter_bytes": 251,
+  "isolated_normal_dependency_tree": [
+    "deadlib-image-png v0.1.0 (C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-image-independent-c6035cd109c940a693e9b762cdd8dbf0\\png)",
+    "\u2514\u2500\u2500 deadlib-image v0.1.0 (C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-image-independent-c6035cd109c940a693e9b762cdd8dbf0)"
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "command": [
+    "cargo",
+    "clippy",
+    "--offline",
+    "--release",
+    "--manifest-path",
+    "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\bit-mutations-instrumenter-check-20261027\\Cargo.toml",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit_code": 0,
+  "performance_measurements_run": false,
+  "source_sha256": {
+    "crates/deadlib-audio/decode/scripts/profile_synthesis.py": "c27ab5b9f3ce5060df55c450fa9cb89b592c76b924f3efd1d9da8699f3650935",
+    "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "a76099022e3733090566beac9992fa2f5f049773be3d1e6360b3ee2fe4b3de0e",
+    "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "ad61b3fa2ae163e607565c4620437f8a581cfb313b1bfb09d38245f486f9a9fc",
+    "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "3adb84c0573330ac0718c1be344c94c58cf84b3fa3a446a81feb984ddc40f13c",
+    "crates/deadlib-audio/decode/vorbis/src/encoder.rs": "1b43d89f7309a570519891d46fbed40098bc0d4589c2e243c93fde7276878494",
+    "crates/deadlib-audio/decode/vorbis/src/floor.rs": "d20864a0f4c73c51ae5f98390d5230130c95c9619fb42be0eb051dd50f1025ec",
+    "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "crates/deadlib-audio/decode/vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "crates/deadlib-audio/decode/vorbis/src/lib.rs": "63b0f30394af64da60ef7db2214a23830a5caba1d249d6c4d9f04c8bc106a0ee",
+    "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "c46605ce428141d22de18cccc620e19109847f70a1dc6560c73bc8c43be97c25",
+    "crates/deadlib-audio/decode/vorbis/src/residue.rs": "3096d7f39702dadb056085407c4bdacfd63977ba91314b4445694b3973fc961f",
+    "crates/deadlib-audio/decode/vorbis/src/seek.rs": "ae51dcef2601264ec8d517dd213ec01b57be090bce4eeda3cb4872523b6b8b21",
+    "crates/deadlib-audio/decode/vorbis/src/setup.rs": "eb174f67a8c9de51d044b7709ea819bf10e3d8bddd731c307bc43a3fdfe39b90",
+    "crates/deadlib-audio/decode/vorbis/src/transform.rs": "47be6567edf7a2a324c29cde8eb5cd6afca6680fa79f390caeacdc479929a6a4"
+  },
+  "generated_sha256": {
+    "src/main.rs": "19bf3ea0142f33e6d67d1b278f1a440e00b664031a29bcebe99b2d4952b8d8f3",
+    "src/profiled_decoder.rs": "5f89faa89b8ad2856f55951ea6da477450c9b05365ba52a33251e3d2f8fd9ffd",
+    "src/profile_setup.rs": "c6d5b2a9c4d0dcd6058632c15331046b282439aedc31ad7cfe30652f8c0dff96"
+  }
+}

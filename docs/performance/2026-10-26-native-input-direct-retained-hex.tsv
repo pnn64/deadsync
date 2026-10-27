@@ -1,0 +1,17 @@
+run	stage	workload	cycles_per_op	ns_per_op	allocs	reallocs	frees	allocated_bytes	freed_bytes	peak_bytes	sha256
+0	direct-host-before	native/hex/uuid	66692.22	30482.2	64	0	64	2048	2048	32	2387c9a540547767a343e09da650d3ef79ce1df5efa5f6740916dd5d6eb14764
+0	direct-dispatch-after	native/hex/uuid	13978.86	6390.7	64	0	64	2048	2048	32	df3ea24310928736f11f7462c1cffc29dbe5fdcab110fab1ae1315cc1d4dfc5a
+1	direct-dispatch-after	native/hex/uuid	13838.6	6329.5	64	0	64	2048	2048	32	df3ea24310928736f11f7462c1cffc29dbe5fdcab110fab1ae1315cc1d4dfc5a
+1	direct-host-before	native/hex/uuid	67763.38	30968.5	64	0	64	2048	2048	32	2387c9a540547767a343e09da650d3ef79ce1df5efa5f6740916dd5d6eb14764
+2	direct-host-before	native/hex/uuid	69048.77	31576.2	64	0	64	2048	2048	32	2387c9a540547767a343e09da650d3ef79ce1df5efa5f6740916dd5d6eb14764
+2	direct-dispatch-after	native/hex/uuid	13177.9	6020.3	64	0	64	2048	2048	32	df3ea24310928736f11f7462c1cffc29dbe5fdcab110fab1ae1315cc1d4dfc5a
+3	direct-dispatch-after	native/hex/uuid	14080.92	6437.7	64	0	64	2048	2048	32	df3ea24310928736f11f7462c1cffc29dbe5fdcab110fab1ae1315cc1d4dfc5a
+3	direct-host-before	native/hex/uuid	67304.18	30741.4	64	0	64	2048	2048	32	2387c9a540547767a343e09da650d3ef79ce1df5efa5f6740916dd5d6eb14764
+4	direct-host-before	native/hex/uuid	68349.67	31251.7	64	0	64	2048	2048	32	2387c9a540547767a343e09da650d3ef79ce1df5efa5f6740916dd5d6eb14764
+4	direct-dispatch-after	native/hex/uuid	13933.64	6352.8	64	0	64	2048	2048	32	df3ea24310928736f11f7462c1cffc29dbe5fdcab110fab1ae1315cc1d4dfc5a
+5	direct-dispatch-after	native/hex/uuid	13266.36	6066.0	64	0	64	2048	2048	32	df3ea24310928736f11f7462c1cffc29dbe5fdcab110fab1ae1315cc1d4dfc5a
+5	direct-host-before	native/hex/uuid	66555.7	30415.2	64	0	64	2048	2048	32	2387c9a540547767a343e09da650d3ef79ce1df5efa5f6740916dd5d6eb14764
+6	direct-host-before	native/hex/uuid	66498.62	30380.1	64	0	64	2048	2048	32	2387c9a540547767a343e09da650d3ef79ce1df5efa5f6740916dd5d6eb14764
+6	direct-dispatch-after	native/hex/uuid	13732.36	6279.8	64	0	64	2048	2048	32	df3ea24310928736f11f7462c1cffc29dbe5fdcab110fab1ae1315cc1d4dfc5a
+7	direct-dispatch-after	native/hex/uuid	13477.52	6145.6	64	0	64	2048	2048	32	df3ea24310928736f11f7462c1cffc29dbe5fdcab110fab1ae1315cc1d4dfc5a
+7	direct-host-before	native/hex/uuid	68581.24	31347.0	64	0	64	2048	2048	32	2387c9a540547767a343e09da650d3ef79ce1df5efa5f6740916dd5d6eb14764

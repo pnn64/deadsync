@@ -121,7 +121,7 @@ fn percent_text(value: f64) -> TextContent {
 #[inline(always)]
 const fn choose_score_zoom(machine_font: MachineFont, wendy: f32, mega: f32) -> f32 {
     match machine_font {
-        MachineFont::Wendy => wendy,
+        MachineFont::Wendy | MachineFont::Unprofessional => wendy,
         MachineFont::Mega => mega,
     }
 }

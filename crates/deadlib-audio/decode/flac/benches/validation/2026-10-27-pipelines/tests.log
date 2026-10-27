@@ -1,0 +1,125 @@
+   Compiling deadlib-audio-decode-flac v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\flac)
+    Finished `release` profile [optimized] target(s) in 51.90s
+     Running unittests src\lib.rs (target\deadlib-flac\release\deps\deadlib_audio_decode_flac-41beca1456deb62a.exe)
+
+running 10 tests
+test bitstream::tests::fused_rice_matches_separate_reads_and_every_truncated_tail ... ok
+test bitstream::tests::fused_rice_rejects_forbidden_magnitude ... ok
+test bitstream::tests::rice_dispatch_matches_portable_cache_and_tails ... ok
+test frame::tests::biased_range_check_covers_signed_and_wrapping_extremes ... ok
+test frame::tests::packed_md5_covers_every_width_channel_count_batch_tail_and_trim ... ok
+test frame::tests::resumable_planes_match_full_decode_at_every_prefix_and_reset ... ok
+test predictor::tests::dispatched_lpc_matches_scalar_at_every_order_and_width ... ok
+test predictor::tests::dispatched_lpc_rejects_reconstructed_overflow ... ok
+test predictor::tests::invalid_batch_cannot_overflow_before_range_rejection ... ok
+test predictor::tests::maximum_precision_coefficients_and_signed_samples ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests\conformance.rs (target\deadlib-flac\release\deps\conformance-f5c2a7fbde5f38ff.exe)
+
+running 2 tests
+test faulty_corpus_finishes_without_panic_or_unbounded_reads ... ok
+test official_corpus_against_libflac_and_symphonia ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 25.50s
+
+     Running tests\decoder_parity.rs (target\deadlib-flac\release\deps\decoder_parity-7756d07a81a94260.exe)
+
+running 4 tests
+test accepted_fuzz_frames_match_independent_decoders ... ok
+test explicit_wire_families_decode_exactly ... ok
+test explicit_wire_families_match_independent_decoders ... ok
+test official_ffmpeg_exact_pcm_and_ogg_remux ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 184.74s
+
+     Running tests\encoding.rs (target\deadlib-flac\release\deps\encoding-b0efd125aa8f3f01.exe)
+
+running 7 tests
+test all_block_sizes_rates_empty_stream_and_metadata ... ok
+test all_four_stereo_choices_are_selected_by_cost ... ok
+test exact_roundtrips_all_depths_channels_levels ... ok
+test forward_only_and_write_failures_have_explicit_integrity ... ok
+test generated_matrix_against_libflac ... ok
+test lpc_compression_and_raw_frame_number_boundaries ... ok
+test streaming_chunks_interleaving_seektable_and_nonzero_origin ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 35.96s
+
+     Running tests\frames.rs (target\deadlib-flac\release\deps\frames-db9524c19765094b.exe)
+
+running 7 tests
+test all_depths_channels_stereo_assignments_and_wasted_bits ... ok
+test every_header_rate_block_and_depth_code ... ok
+test fixed_orders_and_all_lpc_orders_with_rice_and_escape ... ok
+test fixed_predictors_reject_reconstructed_overflow ... ok
+test frame_numbers_checksums_and_all_truncations ... ok
+test signed_rice_partition_boundaries_and_extremes ... ok
+test stereo_decorrelation_rejects_out_of_range_pcm ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\ogg_mapping.rs (target\deadlib-flac\release\deps\ogg_mapping-d0a5490910571f3b.exe)
+
+running 8 tests
+test byte_boundaries_multiframe_first_page_and_broadcast_origin ... ok
+test every_depth_and_channel_count_roundtrip ... ok
+test indexed_seeks_keep_nonzero_granule_origin ... ok
+test mapping_errors_crc_truncation_limits_and_terminal_state ... ok
+test multiplex_chains_unknown_codecs_and_empty_streams ... ok
+test native_remux_preserves_metadata_md5_and_unknown_blocks ... ok
+test partial_broadcast_numbering_nil_pages_and_integrity ... ok
+test spanning_metadata_and_audio_packets ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests\ogg_reference.rs (target\deadlib-flac\release\deps\ogg_reference-f2b690167080f03a.exe)
+
+running 2 tests
+test generated_ogg_matrix ... ok
+test official_corpus_remux_and_seek ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 76.74s
+
+     Running tests\primitives.rs (target\deadlib-flac\release\deps\primitives-e0e63ff5c38afa72.exe)
+
+running 6 tests
+test checksum_known_answers_and_chunking ... ok
+test comments_preserve_duplicates_and_binary_fields ... ok
+test crc16_matches_wire_polynomial_at_chunk_and_tail_boundaries ... ok
+test metadata_precision_preservation_and_limits ... ok
+test packed_fields_at_every_bit_offset ... ok
+test picture_cuesheet_and_seektable_boundaries ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\seeking.rs (target\deadlib-flac\release\deps\seeking-fe2c58df336b61fe.exe)
+
+running 4 tests
+test every_sample_short_reads_seektable_and_nonzero_origin ... ok
+test invalid_seektable_targets_fall_back_without_wrong_pcm ... ok
+test unknown_totals_empty_stream_limits_and_error_recovery ... ok
+test validated_table_skips_source_reads_and_can_be_disabled ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests\streaming.rs (target\deadlib-flac\release\deps\streaming-2ba6d2b5ae1ef7d3.exe)
+
+running 3 tests
+test all_short_read_sizes_and_seeks_are_sample_exact ... ok
+test headerless_resynchronization_checks_full_frame_crc ... ok
+test truncations_count_digest_and_terminal_errors ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests deadlib_audio_decode_flac
+
+running 3 tests
+test crates\deadlib-audio\decode\flac\src\lib.rs - (line 39) ... ok
+test crates\deadlib-audio\decode\flac\src\lib.rs - (line 67) ... ok
+test crates\deadlib-audio\decode\flac\src\ogg.rs - ogg (line 53) ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+all doctests ran in 6.01s; merged doctests compilation took 5.68s

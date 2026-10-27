@@ -1,0 +1,473 @@
+{
+  "baseline_png_commit": "b19a1d1b339f0ae77a1c0d0a6e6869198ec36954",
+  "selected": "Unchanged decoder from b19a1d1b339f0ae77a1c0d0a6e6869198ec36954",
+  "reason": "All three marker-buffer candidates fail to establish a consistent decoder benefit. The arithmetic refill outlines the primary lookup; forcing that lookup inline recovers part of the buffered loss but still regresses photo and buffered format paths. Retain the explicit bit-count representation.",
+  "production_sources_unchanged": 21,
+  "source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "57984db9d36f37210db69ac28689e18f9ba9ac5f743d90e2a4a5afa7ddd3f570"
+    }
+  ],
+  "reconstruction": [
+    {
+      "experiment": "sentinel-bits",
+      "patch": "experiments/sentinel-bits.patch",
+      "patch_sha256": "77918824202c2349c00c4227ae3590ff5643a0cf97d45c29781652e6e7960ba0",
+      "all_21_source_hashes_reconstructed": true,
+      "destination": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\png-sentinel-bits-jr5ten4z"
+    },
+    {
+      "experiment": "sentinel-add",
+      "patch": "experiments/sentinel-add.patch",
+      "patch_sha256": "dba20e6e1f4bbc41fc8ccf43f0cc09be599c9458e0db8f82145e9760b9e4f6d0",
+      "all_21_source_hashes_reconstructed": true,
+      "destination": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\png-sentinel-add-_0tlvtby"
+    },
+    {
+      "experiment": "sentinel-inline",
+      "patch": "experiments/sentinel-inline.patch",
+      "patch_sha256": "a1bf268b7411f479a4b7fde8e463e060a6ff78bd3d9c854e258236bdf20c32f3",
+      "all_21_source_hashes_reconstructed": true,
+      "destination": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\png-sentinel-inline-a0wuh7t8"
+    }
+  ],
+  "benchmark_groups": [
+    {
+      "manifest": "benchmark-sentinel-bits-before-photos-a-manifest.json",
+      "sha256": "d848c5d91f30a3bdd210b36cfbac9b4836d28670df4a1d1943c2345792e197ee",
+      "source_variant": "baseline",
+      "binary_sha256": "f1ea88e03f07e49f96a0ad961d59bd6550ece43b01a849fc6e20d0e63c562c2e"
+    },
+    {
+      "manifest": "benchmark-sentinel-bits-before-formats-a-manifest.json",
+      "sha256": "aa72e5e398aac779aaf00ae8c85ef080e03f12fb2eaf613c18e24474d5c8e0a4",
+      "source_variant": "baseline",
+      "binary_sha256": "f1ea88e03f07e49f96a0ad961d59bd6550ece43b01a849fc6e20d0e63c562c2e"
+    },
+    {
+      "manifest": "benchmark-sentinel-bits-trial-photos-a-manifest.json",
+      "sha256": "2186da01ff8dbf91f8ed765729ab9413fa2b985d4b164236915d41078c7dd983",
+      "source_variant": "sentinel-bits",
+      "binary_sha256": "a1d098a2d721dd6e5faf69a92740ba4251a46f78c892e6a4fae7c9719572d282"
+    },
+    {
+      "manifest": "benchmark-sentinel-bits-trial-formats-a-manifest.json",
+      "sha256": "99e08674cf31e14ab6316b2c3571139593fac3824afe1972561bfcb3e5cebddc",
+      "source_variant": "sentinel-bits",
+      "binary_sha256": "a1d098a2d721dd6e5faf69a92740ba4251a46f78c892e6a4fae7c9719572d282"
+    },
+    {
+      "manifest": "benchmark-sentinel-bits-control-photos-a-manifest.json",
+      "sha256": "6136eb74369811d0151c7db285b489cd34415de1ba3a23f0cd8c1b7047bab5f9",
+      "source_variant": "baseline",
+      "binary_sha256": "f1ea88e03f07e49f96a0ad961d59bd6550ece43b01a849fc6e20d0e63c562c2e"
+    },
+    {
+      "manifest": "benchmark-sentinel-bits-control-formats-a-manifest.json",
+      "sha256": "e7259c7e8369d849144976a354c3536766f709e33df5ae210f4e7e03b62d2d79",
+      "source_variant": "baseline",
+      "binary_sha256": "f1ea88e03f07e49f96a0ad961d59bd6550ece43b01a849fc6e20d0e63c562c2e"
+    },
+    {
+      "manifest": "benchmark-sentinel-add-trial-photos-a-manifest.json",
+      "sha256": "3e138db30b12f0e9ae791f2d3ac7115defc220db428d780d41d978266a0897d4",
+      "source_variant": "sentinel-add",
+      "binary_sha256": "6a0697aa07dfbd33f3aeddd943ae65e5e26112030f8715784c32353a3ac43de2"
+    },
+    {
+      "manifest": "benchmark-sentinel-add-trial-formats-a-manifest.json",
+      "sha256": "4f9640bd24193d31ed1b21e51283e7ee9bbe34993d1def038e9e4afe51fc25fe",
+      "source_variant": "sentinel-add",
+      "binary_sha256": "6a0697aa07dfbd33f3aeddd943ae65e5e26112030f8715784c32353a3ac43de2"
+    },
+    {
+      "manifest": "benchmark-sentinel-add-control-photos-a-manifest.json",
+      "sha256": "c83223dbe66405760ccac27e48ea0c333d511c3ba6b1a4b0d3df8f186cd89627",
+      "source_variant": "baseline",
+      "binary_sha256": "f1ea88e03f07e49f96a0ad961d59bd6550ece43b01a849fc6e20d0e63c562c2e"
+    },
+    {
+      "manifest": "benchmark-sentinel-add-control-formats-a-manifest.json",
+      "sha256": "8545cd7c4e7a2a35850b6e6ca51901949160a0f4a17eaa4974a19299c22905bb",
+      "source_variant": "baseline",
+      "binary_sha256": "f1ea88e03f07e49f96a0ad961d59bd6550ece43b01a849fc6e20d0e63c562c2e"
+    },
+    {
+      "manifest": "benchmark-sentinel-inline-trial-photos-a-manifest.json",
+      "sha256": "4858fe30737583b20a320b6d53251770776d81e35533bdf50126b22547ec273b",
+      "source_variant": "sentinel-inline",
+      "binary_sha256": "f34c5500f9585fecb847fe22865bf237240ef1072f37323f43d0a1af6d3f8885"
+    },
+    {
+      "manifest": "benchmark-sentinel-inline-trial-formats-a-manifest.json",
+      "sha256": "086013278e18746c3b0a09c47aec26fd6dec59377890e82f893b37c25fc2513c",
+      "source_variant": "sentinel-inline",
+      "binary_sha256": "f34c5500f9585fecb847fe22865bf237240ef1072f37323f43d0a1af6d3f8885"
+    },
+    {
+      "manifest": "benchmark-sentinel-inline-control-photos-a-manifest.json",
+      "sha256": "26b1e563aaa0b5632aa139d299f6dc6c2dd506e3dad692c2606d92c79e7b78e4",
+      "source_variant": "baseline",
+      "binary_sha256": "f1ea88e03f07e49f96a0ad961d59bd6550ece43b01a849fc6e20d0e63c562c2e"
+    },
+    {
+      "manifest": "benchmark-sentinel-inline-control-formats-a-manifest.json",
+      "sha256": "c7650052e142e4a88afe7e33fbb137254b24449bf003a93082092c40db2126ae",
+      "source_variant": "baseline",
+      "binary_sha256": "f1ea88e03f07e49f96a0ad961d59bd6550ece43b01a849fc6e20d0e63c562c2e"
+    }
+  ],
+  "summaries": [
+    {
+      "path": "benchmark-sentinel-bits-photos-summary.json",
+      "sha256": "1b68f5228907c0f7fd33af772e823226d86d1cb7f837ed4f194f7d7055f98009",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 97.10715309308455,
+          "after_mib_s": 90.18306199632593,
+          "absolute_change_percent": -7.130361540021002,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -3.142641710698846
+        },
+        "decode-reader": {
+          "before_mib_s": 96.24226667989963,
+          "after_mib_s": 90.18338852178164,
+          "absolute_change_percent": -6.2954441610043705,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -2.2718739004394473
+        },
+        "inflate": {
+          "before_mib_s": 124.60146658637977,
+          "after_mib_s": 113.64238604995575,
+          "absolute_change_percent": -8.79530621642135,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -3.425420900115228
+        },
+        "inflate-stream": {
+          "before_mib_s": 105.43054287686296,
+          "after_mib_s": 98.208206285457,
+          "absolute_change_percent": -6.850326664675577,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -1.365926220889102
+        }
+      }
+    },
+    {
+      "path": "benchmark-sentinel-bits-formats-summary.json",
+      "sha256": "b41e34ef2ba9140c6863284804764027e9e3277e51a4024f244dbb8c65999fda",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 259.53381059984713,
+          "after_mib_s": 240.71604612753288,
+          "absolute_change_percent": -7.250602312208077,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -3.069389260872224
+        },
+        "decode-reader": {
+          "before_mib_s": 263.8075571984304,
+          "after_mib_s": 244.6588419463989,
+          "absolute_change_percent": -7.258592382790708,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -3.077739529884549
+        },
+        "inflate": {
+          "before_mib_s": 954.4320253997794,
+          "after_mib_s": 828.8052174574096,
+          "absolute_change_percent": -13.162467792271414,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -6.882731241234685
+        },
+        "inflate-stream": {
+          "before_mib_s": 597.5691673701642,
+          "after_mib_s": 543.4111790881079,
+          "absolute_change_percent": -9.063049306978066,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -2.486859512215922
+        }
+      }
+    },
+    {
+      "path": "benchmark-sentinel-add-photos-summary.json",
+      "sha256": "ff0fc0d3f92b8703b757e27d6a2fa8f651cf519e8d56255140b09e15edb3a9ce",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 96.61879174522251,
+          "after_mib_s": 83.50482130858958,
+          "absolute_change_percent": -13.572898397667421,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -11.090765873326113
+        },
+        "decode-reader": {
+          "before_mib_s": 95.514711739262,
+          "after_mib_s": 91.55264620988117,
+          "absolute_change_percent": -4.148120700187574,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -1.3953144308763488
+        },
+        "inflate": {
+          "before_mib_s": 124.01670512326798,
+          "after_mib_s": 102.7319875014055,
+          "absolute_change_percent": -17.1627827079475,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -13.889862736330649
+        },
+        "inflate-stream": {
+          "before_mib_s": 104.60295304234273,
+          "after_mib_s": 98.83107011336813,
+          "absolute_change_percent": -5.517896733410743,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -1.7848842922594366
+        }
+      }
+    },
+    {
+      "path": "benchmark-sentinel-add-formats-summary.json",
+      "sha256": "d0b9e55f8e58a33d24adcc4e77aa7a8ba09e7e7400ecef3312427d157a453269",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 245.22164322913383,
+          "after_mib_s": 232.91263427769798,
+          "absolute_change_percent": -5.019544274048593,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -2.3511917700643314
+        },
+        "decode-reader": {
+          "before_mib_s": 253.27027832367233,
+          "after_mib_s": 248.736242431084,
+          "absolute_change_percent": -1.7901965925879226,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 0.9688802389035134
+        },
+        "inflate": {
+          "before_mib_s": 910.0507775910345,
+          "after_mib_s": 761.093649563464,
+          "absolute_change_percent": -16.36800184071816,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -12.1436471049172
+        },
+        "inflate-stream": {
+          "before_mib_s": 558.4761126004412,
+          "after_mib_s": 553.1702330541546,
+          "absolute_change_percent": -0.9500638302291531,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 4.0530698524391395
+        }
+      }
+    },
+    {
+      "path": "benchmark-sentinel-inline-photos-summary.json",
+      "sha256": "278b994fc47296470b2ecec54c198d01d4358fd0031f2238af4218743ecd625e",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 97.26144620248951,
+          "after_mib_s": 88.59480488726744,
+          "absolute_change_percent": -8.910664660670275,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -5.927714050219091
+        },
+        "decode-reader": {
+          "before_mib_s": 95.87878501167862,
+          "after_mib_s": 90.25615991856515,
+          "absolute_change_percent": -5.864305740241282,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -2.781594404042176
+        },
+        "inflate": {
+          "before_mib_s": 124.53073744199224,
+          "after_mib_s": 112.61215316016681,
+          "absolute_change_percent": -9.57079715951834,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -2.3227938495468115
+        },
+        "inflate-stream": {
+          "before_mib_s": 104.87971847493867,
+          "after_mib_s": 96.83377118625386,
+          "absolute_change_percent": -7.671595047814151,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -0.27136853162659236
+        }
+      }
+    },
+    {
+      "path": "benchmark-sentinel-inline-formats-summary.json",
+      "sha256": "ed6e86d1dbd74d4bf066f30f725a9d21e17848bdfbe3fecbf411492e1e1c3509",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 244.40063394076904,
+          "after_mib_s": 246.7422069249751,
+          "absolute_change_percent": 0.9580879339181836,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -3.786561000980404
+        },
+        "decode-reader": {
+          "before_mib_s": 252.45837606234358,
+          "after_mib_s": 255.61051933935184,
+          "absolute_change_percent": 1.2485793999680306,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -3.5097215369959467
+        },
+        "inflate": {
+          "before_mib_s": 911.297479368734,
+          "after_mib_s": 836.9940396674383,
+          "absolute_change_percent": -8.15358775630176,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -8.413534299054747
+        },
+        "inflate-stream": {
+          "before_mib_s": 564.0468309245509,
+          "after_mib_s": 580.3616301828015,
+          "absolute_change_percent": 2.892454733148364,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 2.6012453409700154
+        }
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "path": "profiling/decode-b19a1d1b3.json",
+      "sha256": "f5bb023bc0bceea90b1a559c57764a7332596d084e2a5595f8ad94987804df69",
+      "captured_samples": 5936,
+      "lost_samples": 0
+    },
+    {
+      "path": "profiling/inflate-b19a1d1b3.json",
+      "sha256": "6a3a6942fed41741306315e3f81890064775d120c03e810643a63497f96ed7de",
+      "captured_samples": 4016,
+      "lost_samples": 0
+    }
+  ],
+  "candidate_validation": "Both reservoir/refill algorithms pass 29 focused tests; the arithmetic candidate also passes strict main all-target Clippy. The third differs only in its inline annotation and agrees with references on 84 benchmark files. No full candidate regression suite or new sanitizer campaign is claimed.",
+  "restored_validation": {
+    "prior_validation": "stream-copy-validation.json",
+    "full_release_passed": 134,
+    "prior_decoder_asan_executions": 70852,
+    "all_885_copied_source_fixture_example_benchmark_files_match": true,
+    "independent_workspace": "C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-image-independent-0d9d38914dae4065bda93b784c52c6ad"
+  },
+  "new_successful_sanitizer_executions": 0,
+  "evidence": [
+    {
+      "path": "stream-copy-validation.json",
+      "sha256": "a5dd09719b411f1b0103f613b32523b8e2fe6c94ca8c6f0d136267726dd10ce0"
+    },
+    {
+      "path": "fuzz/reports/stream-copy-source.json",
+      "sha256": "a83cccb4ff59c4ec734d8679d610ad0a0c605b49b0f262b3b2f38fad6d96be60"
+    },
+    {
+      "path": "sentinel-bits-focused.json",
+      "sha256": "0602650ea30bdba38ea36270d24354ce2614dc919a6ac1cfb63e226267205e0d"
+    },
+    {
+      "path": "sentinel-bits-focused.log",
+      "sha256": "1093d8b408d7d245a90826f1461844e3684712789753f1e29e7039745a9d35b8"
+    },
+    {
+      "path": "sentinel-add-focused.json",
+      "sha256": "bb00f70c1375752f4fa89a682bf455e9fdd699661cc34245dae315dce532ef40"
+    },
+    {
+      "path": "sentinel-add-focused.log",
+      "sha256": "1f86465c4d9e738f32d0a068fd168397b692cfb1acbd6d557978e8db4a62453f"
+    },
+    {
+      "path": "experiments/sentinel-add-codegen.json",
+      "sha256": "4f2f43bbe6ffa300db87526ecbcda3481d8897544dc9a8c0beaebfdae523007c"
+    },
+    {
+      "path": "experiments/sentinel-inline-codegen.json",
+      "sha256": "3e4455dc1c991a8f842257b6ca019f28ec39732785ac5e176dc22cfcefa33507"
+    },
+    {
+      "path": "profiling/decode-b19a1d1b3.json",
+      "sha256": "f5bb023bc0bceea90b1a559c57764a7332596d084e2a5595f8ad94987804df69"
+    },
+    {
+      "path": "profiling/inflate-b19a1d1b3.json",
+      "sha256": "6a3a6942fed41741306315e3f81890064775d120c03e810643a63497f96ed7de"
+    }
+  ],
+  "verifier_sha256": "57ba23061c1aed159adec4f9d8b083b9ef61e4129e5328f28f92dde4d5652228"
+}

@@ -1,0 +1,127 @@
+{
+  "checked_at": "2026-10-26T12:55:09.367714+00:00",
+  "source_sha256": {
+    "crates/deadlib-audio-decode/src/flac.rs": "974f677d66f1106f42acfcc40d2c55e3269c19aed8653b991b0b01efcdfbd63d",
+    "crates/deadlib-audio-decode/src/lib.rs": "6fe7e71e4efca4329a9900e2a9dbbd6562bee51ed2604b86a0411f8d5c66d509",
+    "crates/deadlib-audio-decode/src/mp3.rs": "872859d4eaf84b0e0373eb356e5ce12f4143b4d47f6dc19ef559de5d78fb8947",
+    "crates/deadlib-audio-decode/src/ogg_vorbis.rs": "a1ae5847e34a4bd8768e53661dba168f84ed9ce3b96b69b1f67fb4d756b290c9",
+    "crates/deadlib-audio-decode/src/opus.rs": "dce1110172ccc335ea7b9a996a8662d54a5b72d36c8ec5d8562455fae42c1920",
+    "crates/deadlib-audio-decode/src/resample.rs": "84db908dce20fdbb89a229c10068a7683fad99aa265c85991d6491d3ad39dcc7",
+    "crates/deadlib-audio-decode/src/resample_perf_tests.rs": "3f9090e6876b5ba6492b7693c6dd49b753154d745855f853acfc8a99bb96a0e4",
+    "crates/deadlib-audio-decode/src/wav.rs": "3ee9a833330060016c12b7669a232ba47607a90dd93db321272c0182182d510b",
+    "crates/deadlib-audio-decode/src/wav_original.rs": "4f96fcf23ed04630ecbf6b0864b4b032d75d6229b58c13b54c4430ad7c3104fb",
+    "crates/deadlib-audio-decode/src/wav_performance.rs": "8917f170962cbdf4f4cd7a501ab257bead536c5d7f068705b1c83f8fb3e13087",
+    "crates/deadlib-audio-decode/tests/fade_equivalence.rs": "e883eb6df371950b7f26e63f5ea19159eb05c0846d5778708180f6e6e5285b9c",
+    "crates/deadlib-audio-decode/tests/mapped_output_kernel.rs": "9cef29fb3d3dbfa803eff7b454a45f23f9049dd8068ff84da62a263e5387670c",
+    "crates/deadlib-audio-decode/tests/planar_kernel.rs": "aea6dc01c592efdc3c0397430bd8e2a5da2c98b469f0120cb54b74b4dbb39caa",
+    "crates/deadlib-audio-decode/tests/resampler_output_kernel.rs": "d38872db7fe1c0801955f8baf48d6db751558ab5fb093720d84dd1aa8da2f0c1",
+    "crates/deadlib-audio-decode/tests/slice_kernels.rs": "905af72b8fbdd656b4e968279afba13b3ac4f0396fe88ff676b15f66e3ab2421",
+    "crates/deadlib-audio-decode/tests/wav_float_kernel.rs": "7111e95e9a576f982bd841aac3ee273a3ef5dca88aeb739f98fac4184ea34771",
+    "crates/deadlib-audio-decode/tests/wav_format_kernel.rs": "8f6d93c11b9e04a161d682cad2ff978a6c54415fc42f991a1d63f103c2129969",
+    "crates/deadlib-audio-decode/tests/support/wav_format_original.rs": "5d0c6601e4bafd18bdb6287dd31283febb8606dcafcf00dcae42366b35e6a6a6",
+    "Cargo.lock": "e6874b1159561b22f63dcd6151625b07a98f4cbdbaad7b522cfbb70534743167",
+    "Cargo.toml": "b887572a8dc7ddbb357a54b0ce575e275e0a98fde922f60340fee70573235d4b",
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+    "tests/support/kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+    "tests/support/perf.rs": "19ae11c182701f3e2c8f1d9d1f975999ab7c8adb3e429660166d8b369a153d47"
+  },
+  "checks": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-decode",
+        "--",
+        "--test-threads=1"
+      ],
+      "return_code": 0,
+      "stdout_sha256": "3c1d83b95a77d35123fd57743510380aa0d0b2f89139517016bdb51b13e9c1fc",
+      "stderr_sha256": "132a18af69ba7f64495251ec2ddea8c12dcf50d3cb2a4643e35609401956a862",
+      "test_results": [
+        "test result: ok. 32 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 10.08s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s",
+        "test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.11s",
+        "test result: ok. 2 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.07s",
+        "test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.04s",
+        "test result: ok. 2 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+        "test result: ok. 6 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.82s",
+        "test result: ok. 6 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.75s",
+        "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ],
+      "warnings": []
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-decode",
+        "--all-targets"
+      ],
+      "return_code": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e43113e7719426d395ac8193cacc95f07ef67ca8b8393ac181d4dfc752ce5dab",
+      "test_results": [],
+      "warnings": [
+        "warning: file is loaded as a module multiple times: `crates\\deadlib-audio-decode\\src\\..\\..\\..\\tests\\support\\paired_bench.rs`",
+        "warning: very complex type used. Consider factoring parts into `type` definitions",
+        "warning: very complex type used. Consider factoring parts into `type` definitions",
+        "warning: `deadlib-audio-decode` (lib) generated 2 warnings",
+        "warning: `deadlib-audio-decode` (lib test) generated 3 warnings (2 duplicates)",
+        "warning: very complex type used. Consider factoring parts into `type` definitions",
+        "warning: `deadlib-audio-decode` (test \"wav_float_kernel\") generated 1 warning (1 duplicate)",
+        "warning: `deadlib-audio-decode` (test \"wav_format_kernel\") generated 1 warning"
+      ]
+    },
+    {
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "crates/deadlib-audio-decode/src/resample.rs",
+        "crates/deadlib-audio-decode/tests/planar_kernel.rs"
+      ],
+      "return_code": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "test_results": [],
+      "warnings": []
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "crates/deadlib-audio-decode",
+        "scripts/benchmark_audio_decode.py"
+      ],
+      "return_code": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr_sha256": "a59c16870fea925a1784cc4c0c2fdb6970586cdb889454a878ed52a4b35492c0",
+      "test_results": [],
+      "warnings": [
+        "warning: in the working copy of 'crates/deadlib-audio-decode/src/resample.rs', LF will be replaced by CRLF the next time Git touches it",
+        "warning: in the working copy of 'crates/deadlib-audio-decode/tests/planar_kernel.rs', LF will be replaced by CRLF the next time Git touches it"
+      ]
+    }
+  ],
+  "audit": {
+    "measurement_rows": 3360,
+    "unique_workloads": 140,
+    "stages": [
+      "before-common",
+      "mono-slices",
+      "repeat-slices",
+      "after-slices"
+    ],
+    "process_runs": 6,
+    "zero_churn_probes": 3360,
+    "archive_tests_passed_per_stage": 53,
+    "checked_process_logs": 96,
+    "final_crate_sources_match_archive": true,
+    "runner_sha256": "227111b1d2ebf366e225aee67949f61356321aaadf37f6da6b4a8e8f6f7e691f"
+  }
+}

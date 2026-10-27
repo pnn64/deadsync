@@ -26,7 +26,7 @@ pub struct EffectAssets {
     pub combo_1000milestone_swoosh: &'static str,
 }
 
-pub const FONT_ASSETS: [FontAssetSpec; 20] = [
+pub const FONT_ASSETS: [FontAssetSpec; 27] = [
     FontAssetSpec {
         name: "wendy",
         ini_path: "assets/fonts/wendy/_wendy small.ini",
@@ -125,6 +125,41 @@ pub const FONT_ASSETS: [FontAssetSpec; 20] = [
     FontAssetSpec {
         name: "mega_game",
         ini_path: "assets/fonts/Mega/_game chars 36px 4x1.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "miso_unprofessional",
+        ini_path: "assets/fonts/miso/_miso unprof.ini",
+        fallback_font_name: Some("game"),
+    },
+    FontAssetSpec {
+        name: "unprofessional_small",
+        ini_path: "assets/fonts/Unprofessional/_unprofessional small.ini",
+        fallback_font_name: Some("miso_unprofessional"),
+    },
+    FontAssetSpec {
+        name: "unprofessional_monospace_numbers",
+        ini_path: "assets/fonts/Unprofessional/_unprofessional monospace numbers.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "unprofessional_screenevaluation",
+        ini_path: "assets/fonts/Unprofessional/_ScreenEvaluation numbers.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "unprofessional_game",
+        ini_path: "assets/fonts/Unprofessional/_game chars 36px 4x1.ini",
+        fallback_font_name: None,
+    },
+    FontAssetSpec {
+        name: "unprofessional_white",
+        ini_path: "assets/fonts/Unprofessional/_unprofessional white.ini",
+        fallback_font_name: Some("miso_unprofessional"),
+    },
+    FontAssetSpec {
+        name: "combo_unprofessional",
+        ini_path: "assets/fonts/_combo/Unprofessional/Unprofessional.ini",
         fallback_font_name: None,
     },
 ];
@@ -311,20 +346,21 @@ pub const SUBMIT_TEXTURE_ASSETS: &[TextureAssetSpec] = &[
 ///
 /// Mirrors the Simply Love `<ThemeFont> <Role>.redir` table:
 ///
-/// | Role         | Wendy (default)             | Mega                     |
-/// | ------------ | --------------------------- | ------------------------ |
-/// | `Normal`     | `miso`                      | `miso`                   |
-/// | `Bold`       | `wendy`                     | `mega_alpha`             |
-/// | `Header`     | `wendy`                     | `mega_alpha`             |
-/// | `Footer`     | `wendy`                     | `mega_alpha`             |
-/// | `Numbers`    | `wendy_monospace_numbers`   | `mega_monospace_numbers` |
-/// | `ScreenEval` | `wendy_screenevaluation`    | `mega_screenevaluation`  |
-/// | `Headline`   | `wendy_white`               | `mega_alpha`             |
+/// | Role         | Wendy (default)            | Mega                     | Unprofessional                     |
+/// | ------------ | -------------------------- | ------------------------ | ---------------------------------- |
+/// | `Normal`     | `miso`                     | `miso`                   | `miso_unprofessional`              |
+/// | `Bold`       | `wendy`                    | `mega_alpha`             | `unprofessional_small`             |
+/// | `Header`     | `wendy`                    | `mega_alpha`             | `unprofessional_small`             |
+/// | `Footer`     | `wendy`                    | `mega_alpha`             | `unprofessional_small`             |
+/// | `Numbers`    | `wendy_monospace_numbers`  | `mega_monospace_numbers` | `unprofessional_monospace_numbers` |
+/// | `ScreenEval` | `wendy_screenevaluation`   | `mega_screenevaluation`  | `unprofessional_screenevaluation`  |
+/// | `Headline`   | `wendy_white`              | `mega_alpha`             | `unprofessional_white`             |
 #[must_use]
 pub const fn machine_font_key(machine_font: MachineFont, role: FontRole) -> &'static str {
-    use MachineFont::{Mega, Wendy};
+    use MachineFont::{Mega, Unprofessional, Wendy};
     match (machine_font, role) {
-        (_, FontRole::Normal) => "miso",
+        (Wendy | Mega, FontRole::Normal) => "miso",
+        (Unprofessional, FontRole::Normal) => "miso_unprofessional",
         (Wendy, FontRole::Bold | FontRole::Header | FontRole::Footer) => "wendy",
         (Mega, FontRole::Bold | FontRole::Header | FontRole::Footer) => "mega_alpha",
         (Wendy, FontRole::Numbers) => "wendy_monospace_numbers",
@@ -333,6 +369,12 @@ pub const fn machine_font_key(machine_font: MachineFont, role: FontRole) -> &'st
         (Mega, FontRole::ScreenEval) => "mega_screenevaluation",
         (Wendy, FontRole::Headline) => "wendy_white",
         (Mega, FontRole::Headline) => "mega_alpha",
+        (Unprofessional, FontRole::Bold | FontRole::Header | FontRole::Footer) => {
+            "unprofessional_small"
+        }
+        (Unprofessional, FontRole::Numbers) => "unprofessional_monospace_numbers",
+        (Unprofessional, FontRole::ScreenEval) => "unprofessional_screenevaluation",
+        (Unprofessional, FontRole::Headline) => "unprofessional_white",
     }
 }
 
@@ -830,7 +872,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn machine_font_key_normal_is_always_miso() {
+    fn machine_font_key_normal_matches_the_selected_family() {
         assert_eq!(
             machine_font_key(MachineFont::Wendy, FontRole::Normal),
             "miso"
@@ -839,6 +881,47 @@ mod tests {
             machine_font_key(MachineFont::Mega, FontRole::Normal),
             "miso"
         );
+        assert_eq!(
+            machine_font_key(MachineFont::Unprofessional, FontRole::Normal),
+            "miso_unprofessional"
+        );
+    }
+
+    #[test]
+    fn unprofessional_roles_load_the_original_font_pages() {
+        let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let asset_roots = [project_root.join("assets")];
+        let specs = FONT_ASSETS
+            .iter()
+            .copied()
+            .filter(|spec| spec.name.contains("unprofessional"));
+        let parsed = deadlib_assets::parse_font_asset_specs(specs, &asset_roots, |path| {
+            project_root.join(path)
+        })
+        .expect("parse original Unprofessional font assets and imports");
+        assert_eq!(parsed.len(), 7);
+        for role in [
+            FontRole::Normal,
+            FontRole::Bold,
+            FontRole::Header,
+            FontRole::Footer,
+            FontRole::Numbers,
+            FontRole::ScreenEval,
+            FontRole::Headline,
+        ] {
+            let key = machine_font_key(MachineFont::Unprofessional, role);
+            let font = parsed
+                .iter()
+                .find(|font| font.name == key)
+                .expect("registered role");
+            let glyph = font.font.glyph_map.get(&'1').expect("authored digit");
+            assert!(
+                glyph.texture_key.contains("Unprofessional/")
+                    || glyph.texture_key.contains("miso/_miso unprof"),
+                "{role:?} must use the original Unprofessional sheet"
+            );
+            assert!(font.required_textures.iter().all(|path| path.is_file()));
+        }
     }
 
     #[test]
@@ -1133,6 +1216,11 @@ mod tests {
         assert_eq!(fallback("game"), Some("cjk"));
         assert_eq!(fallback("cjk"), Some("emoji"));
         assert_eq!(fallback("mega_alpha"), Some("miso"));
+        assert_eq!(fallback("miso_unprofessional"), Some("game"));
+        assert_eq!(
+            fallback("unprofessional_small"),
+            Some("miso_unprofessional")
+        );
     }
 
     #[test]

@@ -1,0 +1,15 @@
+{"bit_exact":true,"raw_channel_samples":8890624,"audio_packets":10349,"discarded_packets":0,"truncated_packets":0,"zero_span_granules":0,"channels":2,"block_sizes":[256, 2048],"residue_setup_kinds":[0, 0, 2],"floor_setup_kinds":[0, 2],"pcm_bits_fnv1a64":"b89c576a60b38387"}
+{"engine":"production","trial":0,"iterations":1,"elapsed_ns":299886000,"samples":8890624,"packets":10349,"profile_ns":[0, 0, 0, 0, 0, 0, 0, 0]}
+{"engine":"profiled","trial":0,"iterations":1,"elapsed_ns":309441700,"samples":8890624,"packets":10349,"profile_ns":[1007800, 35693200, 151012200, 7179700, 7606300, 77624800, 3643600, 19232000]}
+{"engine":"production","trial":1,"iterations":1,"elapsed_ns":336425300,"samples":8890624,"packets":10349,"profile_ns":[0, 0, 0, 0, 0, 0, 0, 0]}
+{"engine":"profiled","trial":1,"iterations":1,"elapsed_ns":332059200,"samples":8890624,"packets":10349,"profile_ns":[1068400, 38219200, 161728600, 7664900, 8077700, 83932200, 3977700, 20608200]}
+{"engine":"production","trial":2,"iterations":1,"elapsed_ns":291155500,"samples":8890624,"packets":10349,"profile_ns":[0, 0, 0, 0, 0, 0, 0, 0]}
+{"engine":"profiled","trial":2,"iterations":1,"elapsed_ns":301391000,"samples":8890624,"packets":10349,"profile_ns":[986800, 34680100, 147045000, 7025600, 7363800, 75729000, 3659200, 18709300]}
+{"engine":"profiled","trial":3,"iterations":1,"elapsed_ns":295117500,"samples":8890624,"packets":10349,"profile_ns":[941900, 33893400, 144353300, 6839100, 7177800, 74165900, 3440700, 18277200]}
+{"engine":"production","trial":3,"iterations":1,"elapsed_ns":279228300,"samples":8890624,"packets":10349,"profile_ns":[0, 0, 0, 0, 0, 0, 0, 0]}
+{"engine":"production","trial":4,"iterations":1,"elapsed_ns":279172700,"samples":8890624,"packets":10349,"profile_ns":[0, 0, 0, 0, 0, 0, 0, 0]}
+{"engine":"profiled","trial":4,"iterations":1,"elapsed_ns":302401800,"samples":8890624,"packets":10349,"profile_ns":[965400, 34920100, 147623500, 7072200, 7262800, 76083200, 3565800, 18734200]}
+{"engine":"profiled","trial":5,"iterations":1,"elapsed_ns":295043000,"samples":8890624,"packets":10349,"profile_ns":[960000, 34335000, 143883900, 6872800, 7113200, 73867200, 3535700, 18304000]}
+{"engine":"production","trial":5,"iterations":1,"elapsed_ns":296539400,"samples":8890624,"packets":10349,"profile_ns":[0, 0, 0, 0, 0, 0, 0, 0]}
+{"engine":"production","trial":6,"iterations":1,"elapsed_ns":339414400,"samples":8890624,"packets":10349,"profile_ns":[0, 0, 0, 0, 0, 0, 0, 0]}
+{"engine":"profiled","trial":6,"iterations":1,"elapsed_ns":361604200,"samples":8890624,"packets":10349,"profile_ns":[1163600, 41774100, 176680900, 8402000, 8649600, 90908300, 4263200, 22321000]}

@@ -856,7 +856,6 @@ pub fn visible_notefield_time_ns(
 pub fn music_time_from_stream_position(
     stream_position_seconds: f32,
     lead_in_seconds: f32,
-    global_offset_seconds: f32,
     rate: f32,
 ) -> f32 {
     let rate = if rate.is_finite() && rate > 0.0 {
@@ -865,8 +864,9 @@ pub fn music_time_from_stream_position(
         1.0
     };
     let lead_in = lead_in_seconds.max(0.0);
-    let anchor = -global_offset_seconds;
-    (stream_position_seconds - lead_in).mul_add(rate, anchor * (1.0 - rate))
+    // Both clock paths report source music time. Hardware calibration belongs
+    // to the rate-scaled note timing, including before an audio map is ready.
+    (stream_position_seconds - lead_in) * rate
 }
 
 #[inline(always)]

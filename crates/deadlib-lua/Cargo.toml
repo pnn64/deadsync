@@ -16,5 +16,13 @@ lua_reference = { package = "deadlib-lua-legacy", path = "../deadlib-lua-legacy"
 name = "baseline"
 harness = false
 
+[[bench]]
+name = "cache"
+harness = false
+
+[[bench]]
+name = "host_functions"
+harness = false
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

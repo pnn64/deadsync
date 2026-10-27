@@ -1,0 +1,101 @@
+{
+  "checks": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-core",
+        "--release",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "stdout": "\nrunning 58 tests\ntest mixer::tests::f32_to_i16_clamps_full_scale ... ok\ntest mixer::tests::f32_to_i16_maps_midpoint_samples ... ok\ntest mixer::tests::i16_to_f32_maps_full_range ... ok\ntest mixer::tests::menu_sounds_keep_independent_overlapping_voices ... ok\ntest mixer::tests::mine_retrigger_rewinds_one_player_without_stopping_other_players ... ok\ntest mixer::tests::mine_retrigger_works_when_32_voice_pool_is_full ... ok\ntest mixer::tests::mix_controls_keep_bus_policy_outside_the_mixer ... ok\ntest mixer::tests::reset_bus_reclaims_stale_voices_before_accepting_new_sfx ... ok\ntest mixer::tests::scheduled_onset_drops_when_implausibly_far_ahead ... ok\ntest mixer::tests::scheduled_onset_fires_when_target_already_passed ... ok\ntest mixer::tests::scheduled_onset_immediate_when_target_zero ... ok\ntest mixer::tests::scheduled_onset_pending_when_beyond_buffer ... ok\ntest mixer::tests::scheduled_onset_starts_at_offset_within_buffer ... ok\ntest mixer::tests::stopping_one_bus_only_invalidates_that_bus ... ok\ntest mixer::tests::two_player_mines_pan_to_separate_sides_using_native_balance ... ok\ntest position::perf::benchmark_runtime_audio_insert ... ignored, paired release benchmark\ntest position::perf::mixed_insertions_preserve_coalescing_thresholds_and_cleanup ... ok\ntest position::perf::short_circuit_insert_preserves_mapping_bits ... ok\ntest position::tests::callback_position_preserves_boundary_arithmetic ... ok\ntest position::tests::fallback_music_position_rate_scales_negative_lead_in ... ok\ntest position::tests::fallback_music_position_sanitizes_invalid_inputs ... ok\ntest position::tests::fallback_music_position_uses_positive_cut_origin ... ok\ntest position::tests::music_clock_seed_is_enabled_for_nonzero_cuts ... ok\ntest position::tests::music_nanos_from_seconds_rounds_saturates_and_rejects_non_finite ... ok\ntest position::tests::normalized_music_rate_uses_unity_for_invalid_rate ... ok\ntest position::tests::playback_pos_map_extrapolates_past_last_segment ... ok\ntest position::tests::playback_pos_map_invert_extrapolates_past_last_segment ... ok\ntest position::tests::playback_pos_map_invert_rejects_empty_and_non_finite ... ok\ntest position::tests::playback_pos_map_invert_round_trips_within_segment ... ok\ntest position::tests::playback_pos_map_trims_large_segment_without_emptying ... ok\ntest position::tests::playback_pos_map_validates_slopes_on_insert ... ok\ntest position::tests::stream_clock_extrapolates_back_before_future_callback_anchor ... ok\ntest render::perf_tests::benchmark_music_gain_ramp ... ignored, paired release benchmark; run alone with --ignored --nocapture --test-threads=1\ntest render::perf_tests::ramp_conversion_matches_original_sample_bits_and_final_gain ... ok\ntest render::tests::callback_larger_than_scratch_buffer_is_chunked_without_data_loss ... ok\ntest render::tests::first_played_span_starts_at_zero_after_decode_delay ... ok\ntest render::tests::gain_ramp_still_advances_once_per_device_frame ... ok\ntest render::tests::generation_reset_discards_active_and_queued_old_audio ... ok\ntest render::tests::generation_reset_keeps_old_audio_until_replacement_is_published ... ok\ntest render::tests::mixes_across_callback_and_block_boundaries ... ok\ntest render::tests::reset_reaches_current_audio_behind_a_full_stale_backlog ... ok\ntest render::tests::sfx_in_later_chunk_clamps_the_whole_f32_callback ... ok\ntest render::tests::silent_i16_callback_overwrites_the_whole_device_buffer ... ok\ntest render::tests::silent_i16_fast_path_matches_sample_conversion ... ok\ntest render::tests::stopped_track_does_not_render_an_unpublished_stale_generation ... ok\ntest render::tests::target_block_is_retained_while_transition_batch_is_primed ... ok\ntest render::tests::underrun_reporting_counts_only_complete_frames ... ok\ntest render::tests::underrun_zeroes_whole_frames_and_unaligned_tail ... ok\ntest ring::tests::concurrent_transfer_preserves_order_and_checksum ... ok\ntest ring::tests::partial_pushes_preserve_samples_and_timing ... ok\ntest ring::tests::pool_duration_does_not_shrink_with_channel_count ... ok\ntest ring::tests::pool_survives_saturation_and_recycling ... ok\ntest ring::tests::saturated_played_map_counts_dropped_records ... ok\ntest sfx_ring::tests::sfx_transport_preserves_fifo_and_reuses_capacity ... ok\ntest telemetry::tests::backend_diagnostic_ids_round_trip_on_every_target ... ok\ntest telemetry::tests::clean_callbacks_do_not_read_the_host_clock ... ok\ntest telemetry::tests::diagnostics_read_the_host_clock_at_most_once_per_callback ... ok\ntest telemetry::tests::untraced_underruns_do_not_read_the_host_clock ... ok\n\ntest result: ok. 56 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.31s\n\n\nrunning 6 tests\ntest pushes_preserve_complete_frames_samples_and_timing ... ok\ntest transport::tests::concurrent_transfer_preserves_order_and_checksum ... ok\ntest transport::tests::partial_pushes_preserve_samples_and_timing ... ok\ntest transport::tests::pool_duration_does_not_shrink_with_channel_count ... ok\ntest transport::tests::pool_survives_saturation_and_recycling ... ok\ntest transport::tests::saturated_played_map_counts_dropped_records ... ok\n\ntest result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s\n\n\nrunning 29 tests\ntest mode_parser::benchmark_callback_kernels_mode_parser ... ignored, release CPU-cycle and allocation benchmark\ntest mode_parser::modes_preserve_ascii_case_and_unicode_trimming ... ok\ntest quantization::benchmark_callback_kernels_quantization ... ignored, release CPU-cycle and allocation benchmark\ntest quantization::pcm_conversion_preserves_saturation_truncation_and_nan ... ok\ntest render::kernels::benchmark_callback_kernels ... ignored, release CPU-cycle and allocation benchmark\ntest render::kernels::gain_steps_preserve_fused_reference_bits ... ok\ntest render::kernels::pcm_batches_preserve_samples_and_unmatched_output_tails ... ok\ntest render::kernels::steady_conversion_preserves_bits_at_every_gain_exponent ... ok\ntest render::perf_tests::benchmark_music_gain_ramp ... ignored, paired release benchmark; run alone with --ignored --nocapture --test-threads=1\ntest render::perf_tests::ramp_conversion_matches_original_sample_bits_and_final_gain ... ok\ntest render::tests::callback_larger_than_scratch_buffer_is_chunked_without_data_loss ... ok\ntest render::tests::first_played_span_starts_at_zero_after_decode_delay ... ok\ntest render::tests::gain_ramp_still_advances_once_per_device_frame ... ok\ntest render::tests::generation_reset_discards_active_and_queued_old_audio ... ok\ntest render::tests::generation_reset_keeps_old_audio_until_replacement_is_published ... ok\ntest render::tests::mixes_across_callback_and_block_boundaries ... ok\ntest render::tests::reset_reaches_current_audio_behind_a_full_stale_backlog ... ok\ntest render::tests::sfx_in_later_chunk_clamps_the_whole_f32_callback ... ok\ntest render::tests::silent_i16_callback_overwrites_the_whole_device_buffer ... ok\ntest render::tests::silent_i16_fast_path_matches_sample_conversion ... ok\ntest render::tests::stopped_track_does_not_render_an_unpublished_stale_generation ... ok\ntest render::tests::target_block_is_retained_while_transition_batch_is_primed ... ok\ntest render::tests::underrun_reporting_counts_only_complete_frames ... ok\ntest render::tests::underrun_zeroes_whole_frames_and_unaligned_tail ... ok\ntest ring::tests::concurrent_transfer_preserves_order_and_checksum ... ok\ntest ring::tests::partial_pushes_preserve_samples_and_timing ... ok\ntest ring::tests::pool_duration_does_not_shrink_with_channel_count ... ok\ntest ring::tests::pool_survives_saturation_and_recycling ... ok\ntest ring::tests::saturated_played_map_counts_dropped_records ... ok\n\ntest result: ok. 25 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.49s\n\n\nrunning 2 tests\ntest benchmark_panned_mix ... ignored, release CPU and allocation benchmark\ntest panning_matches_fused_reference_bits_and_voice_progress ... ok\n\ntest result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 18.29s\n\n\nrunning 17 tests\ntest mixer::kernel::benchmark_panned_mixing ... ignored, release CPU benchmark\ntest mixer::kernel::panned_mixing_preserves_every_sample_and_exceptional_float_bits ... ok\ntest mixer::tests::f32_to_i16_clamps_full_scale ... ok\ntest mixer::tests::f32_to_i16_maps_midpoint_samples ... ok\ntest mixer::tests::i16_to_f32_maps_full_range ... ok\ntest mixer::tests::menu_sounds_keep_independent_overlapping_voices ... ok\ntest mixer::tests::mine_retrigger_rewinds_one_player_without_stopping_other_players ... ok\ntest mixer::tests::mine_retrigger_works_when_32_voice_pool_is_full ... ok\ntest mixer::tests::mix_controls_keep_bus_policy_outside_the_mixer ... ok\ntest mixer::tests::reset_bus_reclaims_stale_voices_before_accepting_new_sfx ... ok\ntest mixer::tests::scheduled_onset_drops_when_implausibly_far_ahead ... ok\ntest mixer::tests::scheduled_onset_fires_when_target_already_passed ... ok\ntest mixer::tests::scheduled_onset_immediate_when_target_zero ... ok\ntest mixer::tests::scheduled_onset_pending_when_beyond_buffer ... ok\ntest mixer::tests::scheduled_onset_starts_at_offset_within_buffer ... ok\ntest mixer::tests::stopping_one_bus_only_invalidates_that_bus ... ok\ntest mixer::tests::two_player_mines_pan_to_separate_sides_using_native_balance ... ok\n\ntest result: ok. 16 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.12s\n\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n\n",
+      "stderr": "    Finished `release` profile [optimized] target(s) in 0.48s\n     Running unittests src\\lib.rs (target\\audio-core-kernels\\build\\release\\deps\\deadlib_audio_core-b1d86e676b6d43a3.exe)\n     Running tests\\block_alignment.rs (target\\audio-core-kernels\\build\\release\\deps\\block_alignment-c14d3ac544cc8e5b.exe)\n     Running tests\\callback_kernels.rs (target\\audio-core-kernels\\build\\release\\deps\\callback_kernels-150719dd056b4f3c.exe)\n     Running tests\\panned_kernel.rs (target\\audio-core-kernels\\build\\release\\deps\\panned_kernel-8353139a5073b4d3.exe)\n     Running tests\\panned_mixer.rs (target\\audio-core-kernels\\build\\release\\deps\\panned_mixer-c573f86f6442cca1.exe)\n   Doc-tests deadlib_audio_core\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-core",
+        "--lib",
+        "--",
+        "--test-threads=1"
+      ],
+      "exit_code": 0,
+      "stdout": "\nrunning 58 tests\ntest mixer::tests::f32_to_i16_clamps_full_scale ... ok\ntest mixer::tests::f32_to_i16_maps_midpoint_samples ... ok\ntest mixer::tests::i16_to_f32_maps_full_range ... ok\ntest mixer::tests::menu_sounds_keep_independent_overlapping_voices ... ok\ntest mixer::tests::mine_retrigger_rewinds_one_player_without_stopping_other_players ... ok\ntest mixer::tests::mine_retrigger_works_when_32_voice_pool_is_full ... ok\ntest mixer::tests::mix_controls_keep_bus_policy_outside_the_mixer ... ok\ntest mixer::tests::reset_bus_reclaims_stale_voices_before_accepting_new_sfx ... ok\ntest mixer::tests::scheduled_onset_drops_when_implausibly_far_ahead ... ok\ntest mixer::tests::scheduled_onset_fires_when_target_already_passed ... ok\ntest mixer::tests::scheduled_onset_immediate_when_target_zero ... ok\ntest mixer::tests::scheduled_onset_pending_when_beyond_buffer ... ok\ntest mixer::tests::scheduled_onset_starts_at_offset_within_buffer ... ok\ntest mixer::tests::stopping_one_bus_only_invalidates_that_bus ... ok\ntest mixer::tests::two_player_mines_pan_to_separate_sides_using_native_balance ... ok\ntest position::perf::benchmark_runtime_audio_insert ... ignored, paired release benchmark\ntest position::perf::mixed_insertions_preserve_coalescing_thresholds_and_cleanup ... ok\ntest position::perf::short_circuit_insert_preserves_mapping_bits ... ok\ntest position::tests::callback_position_preserves_boundary_arithmetic ... ok\ntest position::tests::fallback_music_position_rate_scales_negative_lead_in ... ok\ntest position::tests::fallback_music_position_sanitizes_invalid_inputs ... ok\ntest position::tests::fallback_music_position_uses_positive_cut_origin ... ok\ntest position::tests::music_clock_seed_is_enabled_for_nonzero_cuts ... ok\ntest position::tests::music_nanos_from_seconds_rounds_saturates_and_rejects_non_finite ... ok\ntest position::tests::normalized_music_rate_uses_unity_for_invalid_rate ... ok\ntest position::tests::playback_pos_map_extrapolates_past_last_segment ... ok\ntest position::tests::playback_pos_map_invert_extrapolates_past_last_segment ... ok\ntest position::tests::playback_pos_map_invert_rejects_empty_and_non_finite ... ok\ntest position::tests::playback_pos_map_invert_round_trips_within_segment ... ok\ntest position::tests::playback_pos_map_trims_large_segment_without_emptying ... ok\ntest position::tests::playback_pos_map_validates_slopes_on_insert ... ok\ntest position::tests::stream_clock_extrapolates_back_before_future_callback_anchor ... ok\ntest render::perf_tests::benchmark_music_gain_ramp ... ignored, paired release benchmark; run alone with --ignored --nocapture --test-threads=1\ntest render::perf_tests::ramp_conversion_matches_original_sample_bits_and_final_gain ... ok\ntest render::tests::callback_larger_than_scratch_buffer_is_chunked_without_data_loss ... ok\ntest render::tests::first_played_span_starts_at_zero_after_decode_delay ... ok\ntest render::tests::gain_ramp_still_advances_once_per_device_frame ... ok\ntest render::tests::generation_reset_discards_active_and_queued_old_audio ... ok\ntest render::tests::generation_reset_keeps_old_audio_until_replacement_is_published ... ok\ntest render::tests::mixes_across_callback_and_block_boundaries ... ok\ntest render::tests::reset_reaches_current_audio_behind_a_full_stale_backlog ... ok\ntest render::tests::sfx_in_later_chunk_clamps_the_whole_f32_callback ... ok\ntest render::tests::silent_i16_callback_overwrites_the_whole_device_buffer ... ok\ntest render::tests::silent_i16_fast_path_matches_sample_conversion ... ok\ntest render::tests::stopped_track_does_not_render_an_unpublished_stale_generation ... ok\ntest render::tests::target_block_is_retained_while_transition_batch_is_primed ... ok\ntest render::tests::underrun_reporting_counts_only_complete_frames ... ok\ntest render::tests::underrun_zeroes_whole_frames_and_unaligned_tail ... ok\ntest ring::tests::concurrent_transfer_preserves_order_and_checksum ... ok\ntest ring::tests::partial_pushes_preserve_samples_and_timing ... ok\ntest ring::tests::pool_duration_does_not_shrink_with_channel_count ... ok\ntest ring::tests::pool_survives_saturation_and_recycling ... ok\ntest ring::tests::saturated_played_map_counts_dropped_records ... ok\ntest sfx_ring::tests::sfx_transport_preserves_fifo_and_reuses_capacity ... ok\ntest telemetry::tests::backend_diagnostic_ids_round_trip_on_every_target ... ok\ntest telemetry::tests::clean_callbacks_do_not_read_the_host_clock ... ok\ntest telemetry::tests::diagnostics_read_the_host_clock_at_most_once_per_callback ... ok\ntest telemetry::tests::untraced_underruns_do_not_read_the_host_clock ... ok\n\ntest result: ok. 56 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 3.91s\n\n",
+      "stderr": "    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.46s\n     Running unittests src\\lib.rs (target\\audio-core-kernels\\build\\debug\\deps\\deadlib_audio_core-2b69d4901316770b.exe)\n"
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-core",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings",
+        "-A",
+        "clippy::chunks_exact_to_as_chunks",
+        "-A",
+        "clippy::too_many_arguments"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.61s\n"
+    },
+    {
+      "command": [
+        "rustfmt",
+        "--check",
+        "--edition",
+        "2024",
+        "--config",
+        "skip_children=true",
+        "crates/deadlib-audio-core/tests/callback_kernels.rs",
+        "crates/deadlib-audio-core/tests/panned_kernel.rs",
+        "crates/deadlib-audio-core/src/output.rs"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "python",
+        "-m",
+        "py_compile",
+        "scripts/benchmark_audio_core.py"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "git",
+        "diff",
+        "--check",
+        "--",
+        "crates/deadlib-audio-core/src/mixer.rs",
+        "crates/deadlib-audio-core/src/output.rs",
+        "crates/deadlib-audio-core/src/render.rs",
+        "crates/deadlib-audio-core/tests/callback_kernels.rs",
+        "crates/deadlib-audio-core/tests/panned_kernel.rs"
+      ],
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": "warning: in the working copy of 'crates/deadlib-audio-core/src/mixer.rs', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'crates/deadlib-audio-core/src/output.rs', LF will be replaced by CRLF the next time Git touches it\nwarning: in the working copy of 'crates/deadlib-audio-core/tests/panned_kernel.rs', LF will be replaced by CRLF the next time Git touches it\n"
+    }
+  ],
+  "source_sha256": {
+    "crates/deadlib-audio-core/src/mixer.rs": "ccb92c469e2da9d1cdcad9eb76b84b23cf3e5917ddafb00a730497fa57e3bc5e",
+    "crates/deadlib-audio-core/src/output.rs": "2b5e56292324d3e1781bb991121e1d822176ee6433d88d946266d0ed12bb019a",
+    "crates/deadlib-audio-core/src/render.rs": "12d8b190aa530a7a24df84ed881702be7244a6611d251fbc63932087a649169e",
+    "crates/deadlib-audio-core/tests/callback_kernels.rs": "1aa70136da263794b2c240fb9c6fd0dd54fe0a084b638359198128be0e695e28",
+    "crates/deadlib-audio-core/tests/panned_kernel.rs": "0a78f07a694bde5bb4d657c6e8428e26f8b71ab5e8529bcd2eda35281589f42a"
+  }
+}

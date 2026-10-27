@@ -105,8 +105,12 @@ impl TapJudgmentHudFrame<'_> {
     /// Whether a retained gameplay judgment can still produce a tap actor.
     #[inline]
     #[must_use]
-    pub fn render_active(render: &JudgmentRenderInfo, elapsed_screen: f32) -> bool {
-        crate::judgment_feedback::tap_judgment_active(render, elapsed_screen)
+    pub fn render_active(
+        render: &JudgmentRenderInfo,
+        elapsed_screen: f32,
+        animation: crate::TapJudgmentAnimation,
+    ) -> bool {
+        crate::judgment_feedback::tap_judgment_active(render, elapsed_screen, animation)
     }
 }
 
@@ -227,7 +231,7 @@ pub fn compose_notefield_hud<S>(
                 position: request.options.mini_indicator_position,
                 counter_left: request.options.counter_left,
                 playfield_center_x: prepared.field.playfield_center_x,
-                field_zoom: prepared.field_zoom,
+                column_width: zmod_hud_column_width(prepared.frame_plan.num_cols),
                 layout_add_x: layout.subtractive_scoring_addx,
                 y: layout.subtractive_scoring_y,
                 zoom: request.options.mini_indicator_zoom,
@@ -478,6 +482,7 @@ fn compose_judgment<S>(
         draws,
         JudgmentFeedbackRequest {
             style: request.hud_style.judgment_feedback,
+            judgment_animation: options.judgment_animation,
             blind: prepared.blind_active,
             elapsed_screen: request.visual.elapsed_screen_s,
             tap,

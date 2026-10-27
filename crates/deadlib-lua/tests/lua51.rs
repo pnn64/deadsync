@@ -582,7 +582,6 @@ fn deterministic_expression_differential_fuzz() {
 fn adversarial_input_has_bounded_nesting() {
     let sources = [
         format!("return {}1{}", "(".repeat(1000), ")".repeat(1000)),
-        format!("return {}1", "x+".repeat(10000)),
         format!("{}{}", "do ".repeat(1000), "end ".repeat(1000)),
     ];
     for source in sources {
@@ -591,6 +590,12 @@ fn adversarial_input_has_bounded_nesting() {
             ErrorKind::Limit
         );
     }
+    let chain = format!("local x=1;return {}1", "x+".repeat(10000));
+    assert_eq!(
+        rust(&mut Vm::new(), chain.as_bytes()),
+        official(&Lua::new(), chain.as_bytes())
+    );
+    assert!(compile(chain.as_bytes()).unwrap().register_count() <= 4);
     let folded = format!("return {}1", "1+".repeat(10000));
     assert_eq!(
         Vm::new()
@@ -627,4 +632,26 @@ fn arbitrary_bytes_and_generated_constructor_boundaries() {
             format!("local t={{{fields},[1]=999,[{length}]=999}}; return #t,t[1],t[{length}]");
         check(source.as_bytes());
     }
+}
+
+#[test]
+fn hash_table_keys_preserve_the_first_zero_sign_while_zeros_compare_equal() {
+    check(
+        br#"
+local observations={}
+for _,sign in ipairs({-1,1}) do
+ local first=sign/math.huge
+ local opposite=-first
+ local t={[first]='original'}
+ t[opposite]='updated'
+ observations[#observations+1]=1/next(t)
+ assert(t[first]=='updated' and t[opposite]=='updated')
+ local k=next(t)
+ assert(next(t,k)==nil and next(t,-k)==nil)
+ collectgarbage()
+ observations[#observations+1]=1/next(t)
+end
+return unpack(observations)
+"#,
+    );
 }

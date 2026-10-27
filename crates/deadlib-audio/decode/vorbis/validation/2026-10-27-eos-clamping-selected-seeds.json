@@ -1,0 +1,2378 @@
+{
+  "scope": "Select 336 representative EOS controls from 5040 verified variants for mutation time, retaining the complete prior corpus. Add two C-verified signed-counter-wrap container seeds. All 1260 layouts remain covered by exact differential tests.",
+  "source_manifest_sha256": "106851326d9424c34e3ee18b11857f5f644f55645401e9ddc102def37f9875a0",
+  "reference_binary_sha256": "3f43c80a840124489521db2f32a0df3a9b4b416d7aa9acd94e6bf4a62231359b",
+  "counter_wrap": {
+    "ogg_sha256": "79720fb41fa6b473b9655fc2bb502cf1f815928ff55970ebaf43f7318a503d7d",
+    "response_sha256": "a23d561e6a33afee1f32c2c52e43603d291b3847cf88d1a7d3f2df1adc39985b",
+    "frames": 1600
+  },
+  "seeds": [
+    {
+      "path": "vorbis_stream/eos-0-control-0.bin",
+      "sha256": "73bd126cc4f8609f552857d2b19cdd514ac19ab356e5d89d59bef9e913e9cd82",
+      "bytes": 4060,
+      "case": 0,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-0-control-128.bin",
+      "sha256": "1e1378a83d5fe4443ddff21f26756d15eb0fed7a6db8ffc36f749d2071ba54fb",
+      "bytes": 4060,
+      "case": 0,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-0-control-130.bin",
+      "sha256": "37776b6c71a9ba80ee8096ce1d79aabc67009cff5b64c0fd171c0bb77d38f84c",
+      "bytes": 4060,
+      "case": 0,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-0-control-255.bin",
+      "sha256": "ff2924f342c987a7e4260d6d01fb104811b24518babf950b06809071c76c6d29",
+      "bytes": 4060,
+      "case": 0,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-45-control-0.bin",
+      "sha256": "d348d552d044d0caa2c5ea668ef8c4f105b62c0accfa37690ff7f6d0679ce9a6",
+      "bytes": 4109,
+      "case": 45,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-45-control-128.bin",
+      "sha256": "1c02de54d466457ac2464a7d8fd505bf77f5556fdd6ec4a1b047fa92a31da7e2",
+      "bytes": 4109,
+      "case": 45,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-45-control-130.bin",
+      "sha256": "8f977f88b95a17eb4f42ab571b163a62db7ebf0013e580a7c815d801639788a9",
+      "bytes": 4109,
+      "case": 45,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-45-control-255.bin",
+      "sha256": "fbad403cd4192aab684b3217ac867e4f39389f89d0d2a2568d75c53c1419f704",
+      "bytes": 4109,
+      "case": 45,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-90-control-0.bin",
+      "sha256": "15d6e31f0c820701d07dcb9c6b9fb0dbff0e2045a77c7a916da8ae3dcd5d4930",
+      "bytes": 4254,
+      "case": 90,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-90-control-128.bin",
+      "sha256": "19b4a8e4fb49e1b6b6288777481878d96ac2fe610417ed79b5ef46a20be4140c",
+      "bytes": 4254,
+      "case": 90,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-90-control-130.bin",
+      "sha256": "24df4616012da4f5aba9789c649cd1c9ce762521a446d1d7fd7fe88378188ae1",
+      "bytes": 4254,
+      "case": 90,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-90-control-255.bin",
+      "sha256": "8dbfdf8d49dc0ed6820bfb825306d0d8120e08de954922f352b94b3e5003e3d6",
+      "bytes": 4254,
+      "case": 90,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-91-control-0.bin",
+      "sha256": "e6628d1c8382b021037b760c4e3569c5e7d7cd6e724112a5614a6fd3a0471885",
+      "bytes": 4254,
+      "case": 91,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-91-control-128.bin",
+      "sha256": "76555f961f1f0ef7c9893e58dea80262ea6bcc099abcf421e12bad66e8d50a1e",
+      "bytes": 4254,
+      "case": 91,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-91-control-130.bin",
+      "sha256": "7d003cb87bd30ccdbb0afeae89e188b1e6900dfaaa440f78ea01982dd3a1809e",
+      "bytes": 4254,
+      "case": 91,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-91-control-255.bin",
+      "sha256": "06b037b2fccdcfdc63a59e2644b51c0710703ca07a78a5a26a8217683b507ff0",
+      "bytes": 4254,
+      "case": 91,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-94-control-0.bin",
+      "sha256": "7a68144e224c5be04e75e27a4921fad5ff3f381565feaf70c22694521258e5e9",
+      "bytes": 4254,
+      "case": 94,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-94-control-128.bin",
+      "sha256": "28c2c3a170e3499e5bbbcc07bcbd2a3ea8ebcddae31c667b0600da90c026cc10",
+      "bytes": 4254,
+      "case": 94,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-94-control-130.bin",
+      "sha256": "2e01cdc5ee50ea037fc7735c809c6cfa8fdcee5cf081415a64d18311f1a7401e",
+      "bytes": 4254,
+      "case": 94,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-94-control-255.bin",
+      "sha256": "ec9f101086915666b1d8eacf26fbfb81c83b82d56de47ae9e0202bf1e664cd9a",
+      "bytes": 4254,
+      "case": 94,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-115-control-0.bin",
+      "sha256": "1a61c5a462404b29463687e8d0b2345a88a300d01f490a66b11a5c1037e01fd7",
+      "bytes": 4283,
+      "case": 115,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-115-control-128.bin",
+      "sha256": "d6e73bd22a93da5bc3c77f7572bb3eb9501d03b3ae6adf421b3f893eab3c506e",
+      "bytes": 4283,
+      "case": 115,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-115-control-130.bin",
+      "sha256": "cc2268d6fb0d3827b64688067fbf45eae3a7835fef6944ded85130f606cc6d73",
+      "bytes": 4283,
+      "case": 115,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-115-control-255.bin",
+      "sha256": "16d91d37944eaf20ad8e0a769b18631e918fdf36d70a26a88e6d86ec4f8bc0ed",
+      "bytes": 4283,
+      "case": 115,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-180-control-0.bin",
+      "sha256": "19e41920c88d1da47b8eff467a4adb79e00528ef7181e5321712da7c8c31dbb4",
+      "bytes": 5086,
+      "case": 180,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-180-control-128.bin",
+      "sha256": "aaa25ff5f66416ca4a80c9155c96c1e92f47ad55b23f64c6c0cc400e46ae074a",
+      "bytes": 5086,
+      "case": 180,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-180-control-130.bin",
+      "sha256": "7096be9d0ccb14e984c3b4a413254a263a44de8f8501a01432201573289fec94",
+      "bytes": 5086,
+      "case": 180,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-180-control-255.bin",
+      "sha256": "7d234b5e929d7ff5eb1713124188240d941220cd86265e990896fc0e81b8686b",
+      "bytes": 5086,
+      "case": 180,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-181-control-0.bin",
+      "sha256": "662c3617503f18d4222e2fdbeda101f7420700db176155c2bc66cd25f37a99c6",
+      "bytes": 5086,
+      "case": 181,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-181-control-128.bin",
+      "sha256": "1bb3ab228d02281d583a61f96f576b966da4f565300a796443f9f819ac698b8e",
+      "bytes": 5086,
+      "case": 181,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-181-control-130.bin",
+      "sha256": "39bd0bd07fd65d111f31d541d93049e98bddd4767149c4e305b3c4afff63e9fb",
+      "bytes": 5086,
+      "case": 181,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-181-control-255.bin",
+      "sha256": "e206ad1ee3356867a69ea036db16e909d4a9bf5d10a7c37128ad5c979e25b3d2",
+      "bytes": 5086,
+      "case": 181,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-182-control-0.bin",
+      "sha256": "3845e14e9bcbbe570dc882da7e0b904ac532ef5f27b8a0a8c55b8b4f9962c97a",
+      "bytes": 5086,
+      "case": 182,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-182-control-128.bin",
+      "sha256": "887fe78ea97adcb4c65345e8b78587321f4586a174144ce9d58d7c93f1111958",
+      "bytes": 5086,
+      "case": 182,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-182-control-130.bin",
+      "sha256": "3d9737870433a204cb5b425558c505a9197e54b9f67a1881dcd7c8f4927592e3",
+      "bytes": 5086,
+      "case": 182,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-182-control-255.bin",
+      "sha256": "28c10621184ba29d47fcca32ebe1d4ef92b8fd445c30c301fb04d9d354373ba0",
+      "bytes": 5086,
+      "case": 182,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-183-control-0.bin",
+      "sha256": "5dbb650d6a3b207a2fff1cdb37138034adc9f4a9011fa1e869deacf365d936a3",
+      "bytes": 5086,
+      "case": 183,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-183-control-128.bin",
+      "sha256": "be7559c84e6499763d32b378e65e8bc7ce6668e44810c1a8670e8e77b293b573",
+      "bytes": 5086,
+      "case": 183,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-183-control-130.bin",
+      "sha256": "cf1030859af6fda957cce89abbd4ec643892148d441251ea0be79c142dc42c6c",
+      "bytes": 5086,
+      "case": 183,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-183-control-255.bin",
+      "sha256": "991edbb6fb204a80326d8ed131fc9469944ecb21c7eefb7c0678c5fab7029b63",
+      "bytes": 5086,
+      "case": 183,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-184-control-0.bin",
+      "sha256": "cf9b3ad7b26ff3ad8dca7f53bc92ac3868097939af22b0f8184774f44022f2d7",
+      "bytes": 5086,
+      "case": 184,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-184-control-128.bin",
+      "sha256": "8524176f071f716a65e88d2f5ab273e7d1c984fd37939067ce7ea442c420310e",
+      "bytes": 5086,
+      "case": 184,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-184-control-130.bin",
+      "sha256": "857aa100993a556dd2f182f6cf610b7224fd00359495775132f50ff2c685ef47",
+      "bytes": 5086,
+      "case": 184,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-184-control-255.bin",
+      "sha256": "958a28b06096b3a0a3926d1a27d615464655193e2bde3e863df804e23ee40e3d",
+      "bytes": 5086,
+      "case": 184,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-185-control-0.bin",
+      "sha256": "bf2976a56ed6f94cd8e052194615c17772661212fbc7a70e1e6cb6afc8a48c9f",
+      "bytes": 5086,
+      "case": 185,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-185-control-128.bin",
+      "sha256": "fa128e4ebef2af5a8ec837ec125e8aa252d4c3a7927774163d1c69f31fd00609",
+      "bytes": 5086,
+      "case": 185,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-185-control-130.bin",
+      "sha256": "d154579a8ca57a22e399cbb878de7a39add68bb31cf5e4430bf1c019291d0bfb",
+      "bytes": 5086,
+      "case": 185,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-185-control-255.bin",
+      "sha256": "c1d27c7a3904507126ecce099734238d1390b1f044f71bed79517018586e544f",
+      "bytes": 5086,
+      "case": 185,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-186-control-0.bin",
+      "sha256": "2b96780a364a8d7f7a9f118c6d343156b8922b1b3b0699ceec9e554e60863bd1",
+      "bytes": 5086,
+      "case": 186,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-186-control-128.bin",
+      "sha256": "aad7431f7395cac6c62c75c57db93756c20111b801ee324efe034e767db9a9c6",
+      "bytes": 5086,
+      "case": 186,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-186-control-130.bin",
+      "sha256": "7ea96b233082177c7b022a7ad0b0245d086512f5bbbb8ef2c246bb8eaed4d87c",
+      "bytes": 5086,
+      "case": 186,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-186-control-255.bin",
+      "sha256": "c7a9b7766229aabf1dde1270c859fff29e3b916f8099cc95f12538261c7a95f2",
+      "bytes": 5086,
+      "case": 186,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-187-control-0.bin",
+      "sha256": "563c36246e4e979e54afd2014fc383b0ac3a9ee1162d8f9492423d3cefdb3f07",
+      "bytes": 5086,
+      "case": 187,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-187-control-128.bin",
+      "sha256": "b1c4be95ca525aa0494a50dbce8530931709b73f5bd919e4f4a9ac95883b999c",
+      "bytes": 5086,
+      "case": 187,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-187-control-130.bin",
+      "sha256": "b1cdb2f38c93e7c8dbebeda0b3bc855341da0d2e593b7718fa5d15da3035986c",
+      "bytes": 5086,
+      "case": 187,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-187-control-255.bin",
+      "sha256": "c7bfe96d49e33fda3c3638a5eb8c32b24260c26f768fe4dbbe5d47a59694425c",
+      "bytes": 5086,
+      "case": 187,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-188-control-0.bin",
+      "sha256": "51bcb4794a024ef2948b31f6f27fda2e8e1c42eba9063b7ac57dc8de1630a0d1",
+      "bytes": 5086,
+      "case": 188,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-188-control-128.bin",
+      "sha256": "f93ad2909c51bad7e84021e29bc18fcd5e3f9b27eabcf178b038a6bc816b8ec7",
+      "bytes": 5086,
+      "case": 188,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-188-control-130.bin",
+      "sha256": "ef7255e57737ffb5fbf4ed5dd0afc9c9a3e4a177ddd583905d5ab40e2e4affc0",
+      "bytes": 5086,
+      "case": 188,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-188-control-255.bin",
+      "sha256": "06c32466861d9ea3ffc5c58f933923e3cd2fefb7ab6a65dd6f48aebd9109dbdc",
+      "bytes": 5086,
+      "case": 188,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-189-control-0.bin",
+      "sha256": "1b1494c0763c79874f238323845d0b9f82d8f805794feb37ee7b422183711891",
+      "bytes": 5113,
+      "case": 189,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-189-control-128.bin",
+      "sha256": "bf0e97452d8c109b2c001aaea181527c08fe7ae605fbde40d6eaaeed661ec258",
+      "bytes": 5113,
+      "case": 189,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-189-control-130.bin",
+      "sha256": "2bf7e6901dfd14638482a80818e9bd067136fcf543b4706ab1072e56bbc4158d",
+      "bytes": 5113,
+      "case": 189,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-189-control-255.bin",
+      "sha256": "b12375b8a606c1af1c5129858c5f4a97be67c2521fa331df28763aa90fbe3c3a",
+      "bytes": 5113,
+      "case": 189,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-190-control-0.bin",
+      "sha256": "3a7a8115026ff4f3f3dd1ec50020696b4810a4b3dc4730e0d1dfc18ad80abfc6",
+      "bytes": 5113,
+      "case": 190,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-190-control-128.bin",
+      "sha256": "6ed83fd736b9857a7a6c9048a7e0fa53bc88c55fffcd7c50e0b4a60ab783235f",
+      "bytes": 5113,
+      "case": 190,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-190-control-130.bin",
+      "sha256": "3ee4dd7d5b2dedb760cee452d31a850cdc3194acaf74871827801d2fa86cae0c",
+      "bytes": 5113,
+      "case": 190,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-190-control-255.bin",
+      "sha256": "72aa3e226b4b4585e54daed419a02ed08c645df4661b42469c45d1a6dcd08230",
+      "bytes": 5113,
+      "case": 190,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-198-control-0.bin",
+      "sha256": "fbc76f717914d7ebec68b51ebe930364df68af2a78c9a6c9412ace0fccf777fd",
+      "bytes": 5114,
+      "case": 198,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-198-control-128.bin",
+      "sha256": "61f14bd5d279959fa68da0dd7013d5ecc6ebde8d1a188c9cbaea2c1e2003e97d",
+      "bytes": 5114,
+      "case": 198,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-198-control-130.bin",
+      "sha256": "4ab4c99ad61368e5a2d2276ad92bbdc75d2e8d65b465f19f24adaae6e600e4ee",
+      "bytes": 5114,
+      "case": 198,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-198-control-255.bin",
+      "sha256": "497f94e6391694782f0ee1827dcd925fef1e25ad28cb27d1564977152e519d48",
+      "bytes": 5114,
+      "case": 198,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-225-control-0.bin",
+      "sha256": "71976b842943d641e3f20228227b43375741b3065698bf6fdbf3ab0706f1f1f6",
+      "bytes": 5005,
+      "case": 225,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-225-control-128.bin",
+      "sha256": "f90f7c39d3e4fc0b964b4a67960a538754b6eeb7cf72fb4f9a0bfd909b0865fe",
+      "bytes": 5005,
+      "case": 225,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-225-control-130.bin",
+      "sha256": "e0fe02626ca715d8b37e82ab97d6dda3e5ec400398ff7c04f9472edcefad341b",
+      "bytes": 5005,
+      "case": 225,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-225-control-255.bin",
+      "sha256": "8bc0f3b3fa4f61bbc54698a1f9d7331971c4a99bb06afeaafea72df3b2f3baaa",
+      "bytes": 5005,
+      "case": 225,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-270-control-0.bin",
+      "sha256": "f054f173562efa5c33cf3582c1746ae7631c7d5fd997ac7307cae311031a8c6c",
+      "bytes": 4951,
+      "case": 270,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-270-control-128.bin",
+      "sha256": "12d65b9b94934d008c52449f7fba6345da18f861da2552b023f0941909d32f03",
+      "bytes": 4951,
+      "case": 270,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-270-control-130.bin",
+      "sha256": "73a553601d73a495f5fc5300430eac2c883633af76679f538d752623b2136446",
+      "bytes": 4951,
+      "case": 270,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-270-control-255.bin",
+      "sha256": "d7a18d8d337307e6e8a62f0ba8939a9bd01cebcb5a9cf55443d31539c264e9cc",
+      "bytes": 4951,
+      "case": 270,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-314-control-0.bin",
+      "sha256": "7d2d4b83d18a827ef91043234582cba19dd1899d905ec8ed61b858b391fb67e0",
+      "bytes": 4953,
+      "case": 314,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-314-control-128.bin",
+      "sha256": "c1710ee915b139f8c8b1f5386cd7ab6e88fc40bdf332dc2f337151250975da79",
+      "bytes": 4953,
+      "case": 314,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-314-control-130.bin",
+      "sha256": "1d38874c2389325071fe523ca8abe2042a9de3919ab2349b30ddd6719db7d60c",
+      "bytes": 4953,
+      "case": 314,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-314-control-255.bin",
+      "sha256": "481f583bede91e55573e33674f56926d6db51d60264ce6218874c4f65b02e005",
+      "bytes": 4953,
+      "case": 314,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-315-control-0.bin",
+      "sha256": "b3e17857d40ba3bfd1fd41c88c3b7851cd5a0df1a2a48277f3806cab60d75027",
+      "bytes": 2663,
+      "case": 315,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-315-control-128.bin",
+      "sha256": "e5980ab762bc82cb1688efd1e1114c3ab1651e333c8476909bb80ddeaeea3ebc",
+      "bytes": 2663,
+      "case": 315,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-315-control-130.bin",
+      "sha256": "e033422c4ddeda365293845c5eb9703a17df4e64175f078135d3413402173511",
+      "bytes": 2663,
+      "case": 315,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-315-control-255.bin",
+      "sha256": "ec96753480b3e421f1fdb5d644d514309d453f11b5f9569fd469a5e73ae93298",
+      "bytes": 2663,
+      "case": 315,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-360-control-0.bin",
+      "sha256": "9514b2a140c1c5bb3bd8bd4acc42d0bd19f72aa55179cb0e071a24d911aa426c",
+      "bytes": 2682,
+      "case": 360,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-360-control-128.bin",
+      "sha256": "c0dea0e5c6e64f8f21028e6b15f47328d87c22758aefb08fc437af6420bc4ce2",
+      "bytes": 2682,
+      "case": 360,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-360-control-130.bin",
+      "sha256": "d1b72b31eea7e94671f91298221772c1239c77e9e36802683c34bf4197465de1",
+      "bytes": 2682,
+      "case": 360,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-360-control-255.bin",
+      "sha256": "2fd931a440e7a282296260be64c9bfa3bf18737acbeeb24d4a2cd6afb9e42e18",
+      "bytes": 2682,
+      "case": 360,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-405-control-0.bin",
+      "sha256": "ee5af3eadf0b92ca734a323db8d84f2bb8a8e3bb8fc713f1c1b60cc9a32de2fc",
+      "bytes": 2726,
+      "case": 405,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-405-control-128.bin",
+      "sha256": "4b68f7d6edd87d419ba989c23d18f4cfcadb8e01f04185c0c8ea708faf40793c",
+      "bytes": 2726,
+      "case": 405,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-405-control-130.bin",
+      "sha256": "9e72556056748431763b2e41d18e9a5e14ed3b0768e7919ef3edce1993f71dec",
+      "bytes": 2726,
+      "case": 405,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-405-control-255.bin",
+      "sha256": "8e3392515d0412c0cfcf0bb6e498954fcac03646685e715aeead4e69ac3cf854",
+      "bytes": 2726,
+      "case": 405,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-406-control-0.bin",
+      "sha256": "e1d6d74cb99ce63bec08b77614a95c28b9f09c625ccc29e12b90a5413e3ff7fe",
+      "bytes": 2726,
+      "case": 406,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-406-control-128.bin",
+      "sha256": "0728f7dbac143168f9f956ef66c047e38206f6b149454c7ef15dc99fd5c9fafa",
+      "bytes": 2726,
+      "case": 406,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-406-control-130.bin",
+      "sha256": "856b825db772b2597489e56b1813480a460e6cb7a47ed1e280aa77c6b3e5eae6",
+      "bytes": 2726,
+      "case": 406,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-406-control-255.bin",
+      "sha256": "de479f8b27bf0132d44451a6fc504795c07b11d528711109d7eb878ef8418149",
+      "bytes": 2726,
+      "case": 406,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-409-control-0.bin",
+      "sha256": "67810ca54f65ab5061ba43eb5e0ecd5f449fec57dd592d8879abfc560870198c",
+      "bytes": 2726,
+      "case": 409,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-409-control-128.bin",
+      "sha256": "cb570409b48de337923db351849f7c14bcbf9546ae78338273fde88e95d870e4",
+      "bytes": 2726,
+      "case": 409,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-409-control-130.bin",
+      "sha256": "67aa1aa2e9b3ff05fa3ea80aba4674019e2a4f146fc0c9dd262bac2f6ebc0b2e",
+      "bytes": 2726,
+      "case": 409,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-409-control-255.bin",
+      "sha256": "34d10944f915db822005d00f0146d56dcf521b3892f8c87c82617e3e713cb8d6",
+      "bytes": 2726,
+      "case": 409,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-430-control-0.bin",
+      "sha256": "8ddebb7770132edf923da171a31ef5100ad7872b37f6f57cb1ea3674cbc97ade",
+      "bytes": 2755,
+      "case": 430,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-430-control-128.bin",
+      "sha256": "e6ee096818e3d2981b0fb4f458f31e370a8fc324b30a8fbed5032cbaffc419db",
+      "bytes": 2755,
+      "case": 430,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-430-control-130.bin",
+      "sha256": "ad8188f329de2b4cace88bc5b5a198486008209b5746ee18d238d2f5e432dce1",
+      "bytes": 2755,
+      "case": 430,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-430-control-255.bin",
+      "sha256": "0de01faddb389224eaf2cefd6a90f19fdcb0bcaf13adec35c95afcfe65757371",
+      "bytes": 2755,
+      "case": 430,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-495-control-0.bin",
+      "sha256": "389b6a072fc75d3cf47692a6558728b45672d83d41b2b7c4f7713e54feea3cf2",
+      "bytes": 2811,
+      "case": 495,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-495-control-128.bin",
+      "sha256": "e06b1585e8fd9c2b4c616f67a9c8052c560dc0f39831a3c711968d2e65e9c08d",
+      "bytes": 2811,
+      "case": 495,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-495-control-130.bin",
+      "sha256": "442021f012c33465b602c29ff8a7629ec7666467c01849eda21e87a04a2afffa",
+      "bytes": 2811,
+      "case": 495,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-495-control-255.bin",
+      "sha256": "ee13cae7f166c5cb0e1911c610b34476860e519a903f651a1e83e36efb76d3c5",
+      "bytes": 2811,
+      "case": 495,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-496-control-0.bin",
+      "sha256": "ee2d44fe4e73ee83e5d61880e02b736e8e4f42b361af1f64389dd9075ad69af6",
+      "bytes": 2811,
+      "case": 496,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-496-control-128.bin",
+      "sha256": "90165908131e2eb588b359ef21f0c4e4a09e8188f4954308e73475eb1d2f6b2f",
+      "bytes": 2811,
+      "case": 496,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-496-control-130.bin",
+      "sha256": "ae35e50dbf159845f7e8011a61a678e2ed2a449af5152a7f3ceeb20b846566b8",
+      "bytes": 2811,
+      "case": 496,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-496-control-255.bin",
+      "sha256": "35b00486d96516b8dcc452d99515593e8fbd726a70da2caaa9fc833f46c8b46c",
+      "bytes": 2811,
+      "case": 496,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-497-control-0.bin",
+      "sha256": "9c75f82685e8d3624f8f58588218d89d0035d097cb2bb7e07ca449097d473e65",
+      "bytes": 2811,
+      "case": 497,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-497-control-128.bin",
+      "sha256": "e867121f25600f8c0bb1da160ffb2688d39c88856d46bba2ecf0a31a1b110aef",
+      "bytes": 2811,
+      "case": 497,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-497-control-130.bin",
+      "sha256": "ae24fd60b678b5f0b392804aba261647139c2a8fcd1e364d678ab2d024541332",
+      "bytes": 2811,
+      "case": 497,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-497-control-255.bin",
+      "sha256": "310e243eba65470b09e8436d1e2b478d8a8dadabec030b84e16cf17964da6b27",
+      "bytes": 2811,
+      "case": 497,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-498-control-0.bin",
+      "sha256": "6595e041e841b4803cd0e3987c7752033b30a1285eb86c256e22952afe0f1162",
+      "bytes": 2811,
+      "case": 498,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-498-control-128.bin",
+      "sha256": "5ba1f6316b79b3188e9c68abf9e4b43650d41edfd5982f962c828cf1a7a58894",
+      "bytes": 2811,
+      "case": 498,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-498-control-130.bin",
+      "sha256": "76d36eef80de7599556a85d0dfe058ce982f260409d07a94ea33aa20d00f1eca",
+      "bytes": 2811,
+      "case": 498,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-498-control-255.bin",
+      "sha256": "e1e1d25fb65d18f7e14350c74c61d1742a37f5fbb0ef976d5c2f39575232a5a3",
+      "bytes": 2811,
+      "case": 498,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-499-control-0.bin",
+      "sha256": "08c30e47cb9f6e95ce1737a9497c0c81618dbdb6a38de367c6e6d842e75e2e3e",
+      "bytes": 2811,
+      "case": 499,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-499-control-128.bin",
+      "sha256": "0488ae738e8007ec515099b36c17d773e2b52c6c9a59c1578d970032672a6f6a",
+      "bytes": 2811,
+      "case": 499,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-499-control-130.bin",
+      "sha256": "8aeaa107e9d7e4428439b90d0271104fcfd485b7c17809a685c4703d129c8347",
+      "bytes": 2811,
+      "case": 499,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-499-control-255.bin",
+      "sha256": "2aa05fe690ce1585bc181c7f2e6c97b4844d2d51785055be817f8e91230e3621",
+      "bytes": 2811,
+      "case": 499,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-500-control-0.bin",
+      "sha256": "46ca9e6bd8c1a6795d797f1977db876d1f188709a5d2857a7c4f363a4264ef09",
+      "bytes": 2811,
+      "case": 500,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-500-control-128.bin",
+      "sha256": "a4224634e0a037a124076f0b10b2d3b8cb57492bbe193136a66c14807ee282f0",
+      "bytes": 2811,
+      "case": 500,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-500-control-130.bin",
+      "sha256": "0e02bf7567ef53522949ad8a9c26586861b8d211760eb559fb690826a95ebb2e",
+      "bytes": 2811,
+      "case": 500,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-500-control-255.bin",
+      "sha256": "2fa238aab4cb0f13a1b1650da0ccc4cc78a703a5e13f9a8ac64653ba6a5242c1",
+      "bytes": 2811,
+      "case": 500,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-501-control-0.bin",
+      "sha256": "4e95dca8793c1f2cc9066348d9b2809a2ca74407c1fd9fa50a9e3359358588a8",
+      "bytes": 2811,
+      "case": 501,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-501-control-128.bin",
+      "sha256": "a5e5a4ae7b367415b2464af0de3d851e5e9222eabad568297564af197cc97275",
+      "bytes": 2811,
+      "case": 501,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-501-control-130.bin",
+      "sha256": "9972f155a1d712c83818aaa54634b1fa457674c2894f6fe2e979c92e4be19944",
+      "bytes": 2811,
+      "case": 501,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-501-control-255.bin",
+      "sha256": "fa27d7eb411d785bef8cc3c2f5174de89a54b5e2754ce4d23499905a0d95f269",
+      "bytes": 2811,
+      "case": 501,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-502-control-0.bin",
+      "sha256": "cf03f4902d9b915ccf211f2d4b65bd622696eadcb30981bdfe8f9222ecdc9630",
+      "bytes": 2811,
+      "case": 502,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-502-control-128.bin",
+      "sha256": "760df4ea7d0726d38ab86108d931fbf3555f852e0638a06a8b58ed62d051acb1",
+      "bytes": 2811,
+      "case": 502,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-502-control-130.bin",
+      "sha256": "b1b701f9febdab99993387666d71dd02229cae499340d22c06983417ce84363f",
+      "bytes": 2811,
+      "case": 502,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-502-control-255.bin",
+      "sha256": "348e580080e9f88268b53b7b949969d8ee55cf5fbc7ae904a784fde87bbb709c",
+      "bytes": 2811,
+      "case": 502,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-503-control-0.bin",
+      "sha256": "8503e6b07ae8ce63eff736731ba7bea9f5f39b16187f952c845a0f428e68ad20",
+      "bytes": 2811,
+      "case": 503,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-503-control-128.bin",
+      "sha256": "b72fe440896811c686935613cc72a21764d9dfa193991cc997a37928b1cb065c",
+      "bytes": 2811,
+      "case": 503,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-503-control-130.bin",
+      "sha256": "a6f174580c89fa7982cd166d13cfe6da14f73f1fe91d1e0d2d93ce7d8d025e2a",
+      "bytes": 2811,
+      "case": 503,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-503-control-255.bin",
+      "sha256": "06f628426826542ab3a23e00f640f40b7eae5a4c029a437c7116642a28340d1a",
+      "bytes": 2811,
+      "case": 503,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-504-control-0.bin",
+      "sha256": "9df68a459b441a0670202f1364c2a95029e17c403349e7fa84814783bd3c3383",
+      "bytes": 2838,
+      "case": 504,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-504-control-128.bin",
+      "sha256": "95108c1e6c364ce602f834148e199e36c3931ba8f50dd072f5623a070876798c",
+      "bytes": 2838,
+      "case": 504,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-504-control-130.bin",
+      "sha256": "823062627b266ecb3caa00dcfc1e9bd43b677845003c5debd42524f8addc59d0",
+      "bytes": 2838,
+      "case": 504,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-504-control-255.bin",
+      "sha256": "89066cce5d58875f0040bdfa4b73b03940827250c14639c21060fe2392acc195",
+      "bytes": 2838,
+      "case": 504,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-505-control-0.bin",
+      "sha256": "9ae6b8c985db83e00c7c8d20f8e6019986d6ba5d61581c858ab9408dc0bc7021",
+      "bytes": 2838,
+      "case": 505,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-505-control-128.bin",
+      "sha256": "497a66697b942b92d48ab642482a14088433819723e83860ccbeda2210138cdd",
+      "bytes": 2838,
+      "case": 505,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-505-control-130.bin",
+      "sha256": "aaa25a3c988a610fefe7960772c61eafb20d3a89dc45bda60281ef272ca76248",
+      "bytes": 2838,
+      "case": 505,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-505-control-255.bin",
+      "sha256": "850abd9004fc145add5ae088fd3c2ee510165e8b40e8999f354b018d33f143fe",
+      "bytes": 2838,
+      "case": 505,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-513-control-0.bin",
+      "sha256": "17c14c4a6be86693fcefd46abf3e58901a641f8664086d6cf75b3b9b5ef326f4",
+      "bytes": 2839,
+      "case": 513,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-513-control-128.bin",
+      "sha256": "9ac1b03b294214f94f75227592a03ad32fb615683c67ed2cc671e0cffb42aeba",
+      "bytes": 2839,
+      "case": 513,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-513-control-130.bin",
+      "sha256": "67b293c77aba1c8bfd01ab3db034686a866292d110f2f76b76af181fe91ec26c",
+      "bytes": 2839,
+      "case": 513,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-513-control-255.bin",
+      "sha256": "01b789d16dbe853277835aac38a0090dbef83796609c3f16693ad5ccb765622a",
+      "bytes": 2839,
+      "case": 513,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-540-control-0.bin",
+      "sha256": "70ddc7e854ef96e45bf05a7471b8adf2f78cb27e414983c62ee278d211062553",
+      "bytes": 2757,
+      "case": 540,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-540-control-128.bin",
+      "sha256": "cc8cc79d5fe6fa6d1a299f4f46e6804552db1593e9a85b2e43f66f6d0099097b",
+      "bytes": 2757,
+      "case": 540,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-540-control-130.bin",
+      "sha256": "031d772313cc26ce5aa7ffc63a48354477bdffa577476d5b65577fb36b1f18b1",
+      "bytes": 2757,
+      "case": 540,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-540-control-255.bin",
+      "sha256": "30464ecdd73f7a9b1d014db320175d6a97976925a5323eee5d4ceb120937d817",
+      "bytes": 2757,
+      "case": 540,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-585-control-0.bin",
+      "sha256": "7a094e635c5eb90b197750f07b5fa4fcb3cadc8dbcf469ac0ddc9d45e197d97c",
+      "bytes": 2730,
+      "case": 585,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-585-control-128.bin",
+      "sha256": "9e1fa17d987169549903989502a380d183b9084efb851efbfe72b37747170d39",
+      "bytes": 2730,
+      "case": 585,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-585-control-130.bin",
+      "sha256": "b0598d0196211964ad1dc2d50b2724daec2dd9d4985a404f258019a465600030",
+      "bytes": 2730,
+      "case": 585,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-585-control-255.bin",
+      "sha256": "06ca47bb545356ce6a19f99f84cd2f75f9ed0a1e5f5d3211fb6d87aed15bf4a1",
+      "bytes": 2730,
+      "case": 585,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-629-control-0.bin",
+      "sha256": "45c04eff714d3bd05a79dbd6df0a771b3599c7926ce245579c0721fbcfbac5c7",
+      "bytes": 2732,
+      "case": 629,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-629-control-128.bin",
+      "sha256": "b6a0902ccf2e462799ccbae8c546f32d710bd17c339d801095c7812893a07d37",
+      "bytes": 2732,
+      "case": 629,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-629-control-130.bin",
+      "sha256": "0915cdaa4fccf59c7e18fe8a3c988a4f83650dd094f608e4611dcdfcbd8a6bcc",
+      "bytes": 2732,
+      "case": 629,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-629-control-255.bin",
+      "sha256": "611dd0d9857f70c4ef600b7ca7c08f95cbd81dad674b53ee88f8067952ea13a2",
+      "bytes": 2732,
+      "case": 629,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-630-control-0.bin",
+      "sha256": "326adf8654a3f029db3376230dcb229efa8b284bbd976c6e2abaa4d22ac59c57",
+      "bytes": 3379,
+      "case": 630,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-630-control-128.bin",
+      "sha256": "5079d8b3d6d2e4169cb1c790c4a4e61583940a613b72c0c19ffe0d569daf7d08",
+      "bytes": 3379,
+      "case": 630,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-630-control-130.bin",
+      "sha256": "b106fc176c24f788e5be04302be87e06d3fd5914e03779eeb3f8ce5f35c0b26d",
+      "bytes": 3379,
+      "case": 630,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-630-control-255.bin",
+      "sha256": "ab4f1ddf7b83543407d7629b431f53a2d1750dfa5f13d0a93fc123155b6ebce8",
+      "bytes": 3379,
+      "case": 630,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-675-control-0.bin",
+      "sha256": "603e57372eede99870febd609dd57b6f822ac613c1ed18af38d5b880b49f0187",
+      "bytes": 3603,
+      "case": 675,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-675-control-128.bin",
+      "sha256": "2869e3549ef9a01bb9dbbbc3830882f0ef45156f04e1e91d16d948bea1b816b9",
+      "bytes": 3603,
+      "case": 675,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-675-control-130.bin",
+      "sha256": "e9e2397b25ed7fa2ccb88ad75e4c03e7e887ddae5b859364ad3edc09423be2d4",
+      "bytes": 3603,
+      "case": 675,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-675-control-255.bin",
+      "sha256": "351300e8cad82e351ff2c54d5c7b3a36b68b7aca0d669b463ac8edc792319a69",
+      "bytes": 3603,
+      "case": 675,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-720-control-0.bin",
+      "sha256": "821225fd23279d2d084176aa9fe0a61d52e10a9cc8ede2f29b457cab235965dd",
+      "bytes": 4093,
+      "case": 720,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-720-control-128.bin",
+      "sha256": "bca5b391bc1bb2b04cfa156d3ae008dc03b7e0c1daa01b241637b6cc4f2052a9",
+      "bytes": 4093,
+      "case": 720,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-720-control-130.bin",
+      "sha256": "9b12d41afa3c2968af8c0121c901a7229fb29d19fe4381b334607e4c785a6af5",
+      "bytes": 4093,
+      "case": 720,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-720-control-255.bin",
+      "sha256": "d6f15ec862a081172e272485c748bef59a1f598f1fa0ead9945b94d2f2070a9f",
+      "bytes": 4093,
+      "case": 720,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-721-control-0.bin",
+      "sha256": "b4774e27e0591d81c794945f57acb4391f7927fe932f6834f26189c23ba2c4c7",
+      "bytes": 4093,
+      "case": 721,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-721-control-128.bin",
+      "sha256": "ac1494c0f207725e7b737ba73d00a6191ead0dc9eb9f4d80c7cad79d5c27272b",
+      "bytes": 4093,
+      "case": 721,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-721-control-130.bin",
+      "sha256": "56f985acbed40846773adffedc887b455bc6631f122851c353480577463a22eb",
+      "bytes": 4093,
+      "case": 721,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-721-control-255.bin",
+      "sha256": "a7009ce7f9e4cf887410d4813a0a18efbcf0f509c5a5c34e49cb59dacb303fde",
+      "bytes": 4093,
+      "case": 721,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-724-control-0.bin",
+      "sha256": "fc8b5abb6a33e46897a2190e68356fa2e1f77061983cfd685f36ff88e19ce37c",
+      "bytes": 4093,
+      "case": 724,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-724-control-128.bin",
+      "sha256": "d4c22793f5db212b3665a884102f19ffc9b5cea48fe799fb2831bc46468d1451",
+      "bytes": 4093,
+      "case": 724,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-724-control-130.bin",
+      "sha256": "6dccf235d6282583fa245c739d51950dec31b279855864774ae7a9df665c74f5",
+      "bytes": 4093,
+      "case": 724,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-724-control-255.bin",
+      "sha256": "0ecce516929f0c4b79ed62c848c370adeb377b6cc847c25ce02b275816049a45",
+      "bytes": 4093,
+      "case": 724,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-745-control-0.bin",
+      "sha256": "fe1476799a16a95b5d73febf2f795655262dfed70ee3400a6245e9b7ca2b8e9d",
+      "bytes": 4122,
+      "case": 745,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-745-control-128.bin",
+      "sha256": "3eb6ed631462fd9344687440e94c979942d2ab6941f32d4046e808d9bec78940",
+      "bytes": 4122,
+      "case": 745,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-745-control-130.bin",
+      "sha256": "39bc0b806215bd02585304d6075bb67c66ef39a35c2d0e4fda8db3da17b33100",
+      "bytes": 4122,
+      "case": 745,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-745-control-255.bin",
+      "sha256": "d167b746512e5d4b9a02056a6ad3086aa19b98ab1ebc1173a6cf9881c72a1320",
+      "bytes": 4122,
+      "case": 745,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-810-control-0.bin",
+      "sha256": "c91c6bcd65f75571fa0a376c6da043eac327d994735cc9aaeed02e9ac4c0d399",
+      "bytes": 6563,
+      "case": 810,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-810-control-128.bin",
+      "sha256": "fd69b3a111b2ad04bc9776bf5c721638d8e42a215e7b1874981945e06d2c6e57",
+      "bytes": 6563,
+      "case": 810,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-810-control-130.bin",
+      "sha256": "29b1a79d96ce69d42f472a0eadf36d726027c01fc7ed5b47ee357e3a59b47eb2",
+      "bytes": 6563,
+      "case": 810,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-810-control-255.bin",
+      "sha256": "3b8747984edebe8324ff576356e6b6198e8d6290dc81e8f738b9e676e11d1269",
+      "bytes": 6563,
+      "case": 810,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-811-control-0.bin",
+      "sha256": "88f6a0514257ba2a0ed0f4faa7dc9a260cd13a6cf1b48826263d9d83507552ab",
+      "bytes": 6563,
+      "case": 811,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-811-control-128.bin",
+      "sha256": "5ccc9c8d1fb3c7d5efd4d3eb9349b710579d1bdf7156334340ad37a1acbf77e1",
+      "bytes": 6563,
+      "case": 811,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-811-control-130.bin",
+      "sha256": "f10ceba241b7657e436fc26eae84dbe60a20f93c91325f89c14b2d4712d8bb92",
+      "bytes": 6563,
+      "case": 811,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-811-control-255.bin",
+      "sha256": "42bac497130b318f2b5470bd5abf45b05ffad0200aa92fb67fceec0d980ab2ab",
+      "bytes": 6563,
+      "case": 811,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-812-control-0.bin",
+      "sha256": "34cae991ff0b3c182a37d353ec01ca31104603c54907e579330bd7f5fa4bac5b",
+      "bytes": 6563,
+      "case": 812,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-812-control-128.bin",
+      "sha256": "62c839fa0f9fd569c1e8f45967b01bcc0cb6ff3e91be99744978ff514359842f",
+      "bytes": 6563,
+      "case": 812,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-812-control-130.bin",
+      "sha256": "48c1c6106e79c01484bb8347b1382022d5281228923b2ce38defef76b34ee524",
+      "bytes": 6563,
+      "case": 812,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-812-control-255.bin",
+      "sha256": "b46b2660b77fb203e328073413eb863bc6c1555440b727c1298ad26c9bdfc7be",
+      "bytes": 6563,
+      "case": 812,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-813-control-0.bin",
+      "sha256": "5e72bee08c87531e2132bea848ba32f8f3bd8c0eebd4a996203038e0215d9ce2",
+      "bytes": 6563,
+      "case": 813,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-813-control-128.bin",
+      "sha256": "0e4af75f2db7131da322c43094770c5e510cf37ac130f1ca97b197a8ec338c82",
+      "bytes": 6563,
+      "case": 813,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-813-control-130.bin",
+      "sha256": "11ef2ad2dbd6c9ca9aec6cde30475b2fb7daa71d460ae3784f5070a69db9b307",
+      "bytes": 6563,
+      "case": 813,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-813-control-255.bin",
+      "sha256": "3ff381c4a031eb364f5be7ee9be9888bb09c2c2b55fbd3c31eb69b820f85b8af",
+      "bytes": 6563,
+      "case": 813,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-814-control-0.bin",
+      "sha256": "f7e1c8e7c59ed7ff45bc74badf9c6053ff14464a036b6dca9f62fd9c3c210056",
+      "bytes": 6563,
+      "case": 814,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-814-control-128.bin",
+      "sha256": "1cc322d68e3646c6df6c62a2445cd468de074f2e26c8b189d89130725f62c534",
+      "bytes": 6563,
+      "case": 814,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-814-control-130.bin",
+      "sha256": "a276e5b1399a77faccfec8291f0e2702adf1c366ca5d60abe15048ecc100daf0",
+      "bytes": 6563,
+      "case": 814,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-814-control-255.bin",
+      "sha256": "945c044e743ca675b56fb5375649ed0353866499a46ac38773846f3be57b9369",
+      "bytes": 6563,
+      "case": 814,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-815-control-0.bin",
+      "sha256": "0bdef26fd30c19d8fc595178b51c743288eb87e0fdd60c1cca1204436f1880d3",
+      "bytes": 6563,
+      "case": 815,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-815-control-128.bin",
+      "sha256": "87339e12b81b8c7d6505edad62ef34f2ce38b96ae53face28b8e66641a9ea1d7",
+      "bytes": 6563,
+      "case": 815,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-815-control-130.bin",
+      "sha256": "2b86c82d2430ccdea6ea6053d8358af35cbb737dafb7aded5716feb80ace5480",
+      "bytes": 6563,
+      "case": 815,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-815-control-255.bin",
+      "sha256": "26fee170753e292402d0a31a0bd3bcdb8f2207e23a8f61974f66e23e68d43c71",
+      "bytes": 6563,
+      "case": 815,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-816-control-0.bin",
+      "sha256": "311faac45837e878c7b84148878e67b466f4da02055c209556f107f8363fa46e",
+      "bytes": 6563,
+      "case": 816,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-816-control-128.bin",
+      "sha256": "55a3fe1598bb36ee4e866e11f178206ba4a698b49e5f05067c2278a5e086bb26",
+      "bytes": 6563,
+      "case": 816,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-816-control-130.bin",
+      "sha256": "ba98d62af4d5eb716b90cd589d76f1e1d271ac49bcff23279fa9b9dc3b46c37b",
+      "bytes": 6563,
+      "case": 816,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-816-control-255.bin",
+      "sha256": "5947ed8f3544b274d05dbbba2015d70f13d9009206eaf1e914230a28bfda319c",
+      "bytes": 6563,
+      "case": 816,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-817-control-0.bin",
+      "sha256": "b3de0fc64c590b65d9d5abadcf93e7946b55d62ac66f2749ba884af38c060a07",
+      "bytes": 6563,
+      "case": 817,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-817-control-128.bin",
+      "sha256": "e6539d4f370b99f78b6f9f6a4ea49453ea79705d22726d3d24dde983c14b1725",
+      "bytes": 6563,
+      "case": 817,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-817-control-130.bin",
+      "sha256": "e7dfdc72f4e415782ae1a28013fe43e270bd77d28cfbf8a99d6cdd9a5f419798",
+      "bytes": 6563,
+      "case": 817,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-817-control-255.bin",
+      "sha256": "d901f804d3d2f1e23d8453eca408aa2be8f76006ea6ade84ae9b198f97ca7dee",
+      "bytes": 6563,
+      "case": 817,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-818-control-0.bin",
+      "sha256": "ae0312f5e1a0af610c8927037097fea4cf2485aeabad3362be0238167dba52f0",
+      "bytes": 6563,
+      "case": 818,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-818-control-128.bin",
+      "sha256": "dfdfb2b47ad9716033f6239b454f1e3ed1e106da030558ac9b7730da28969875",
+      "bytes": 6563,
+      "case": 818,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-818-control-130.bin",
+      "sha256": "32e3aa4e12c580d2ccd41829ba1a459dca58495e23df6093d856195cfff24b98",
+      "bytes": 6563,
+      "case": 818,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-818-control-255.bin",
+      "sha256": "90b2d0f2521f07adef4a1e142701563b5e48f2213d378b13b53355485d70437b",
+      "bytes": 6563,
+      "case": 818,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-819-control-0.bin",
+      "sha256": "6e540df9ab04570bb760a87459777969a467c9ef9b850572fde0b451c6287d27",
+      "bytes": 6590,
+      "case": 819,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-819-control-128.bin",
+      "sha256": "ee8363bf7954d1636be41d60a082ff48cbcd5580d07ffe97dff931b2e1dd0491",
+      "bytes": 6590,
+      "case": 819,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-819-control-130.bin",
+      "sha256": "d7ee2db3b0e8fbdae1d172c7364d004e4add1a033bb57348d55799f2e6994a89",
+      "bytes": 6590,
+      "case": 819,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-819-control-255.bin",
+      "sha256": "65884ede96bae02712c5ba2aba5cf424a5f0849104ba0e1368a775c43cea4c8e",
+      "bytes": 6590,
+      "case": 819,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-820-control-0.bin",
+      "sha256": "4e1b3ae2afb96975e398efc98658e0cfe8b41b37da822ca154ee3d8480a3f6d3",
+      "bytes": 6590,
+      "case": 820,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-820-control-128.bin",
+      "sha256": "fdfb75f8a75a49d9ae4d443f1e111192c7a233d99708ce9259c5e1d53ff212e8",
+      "bytes": 6590,
+      "case": 820,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-820-control-130.bin",
+      "sha256": "08d0478d0cc956ca3056d07aec2e702f87a65951a8f72ea142e8c07d85f8e8be",
+      "bytes": 6590,
+      "case": 820,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-820-control-255.bin",
+      "sha256": "7ae921d7235ce91b8b997ae1beae9d9f55c9eb457ce01731a9d1d64b12446647",
+      "bytes": 6590,
+      "case": 820,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-828-control-0.bin",
+      "sha256": "3523234e9e2d3c82279c494e73ff51240f53007a03c02494b7c9c8ac877cc4c7",
+      "bytes": 6591,
+      "case": 828,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-828-control-128.bin",
+      "sha256": "5ec16880d172a2344002f3f63a3fc3e34a62a15c3b7767d95f930eefdb8d4266",
+      "bytes": 6591,
+      "case": 828,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-828-control-130.bin",
+      "sha256": "205e03264275f9879bb614a07c8e880a7579a953aa9b939422e6c1be614205fc",
+      "bytes": 6591,
+      "case": 828,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-828-control-255.bin",
+      "sha256": "32ffd80761a54de27fcbb1c1c9113e00eaa98f2bcd1c48a5c5d1755a88d15da6",
+      "bytes": 6591,
+      "case": 828,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-855-control-0.bin",
+      "sha256": "799b9eee8eba9bb39120743ebe0f723988eed61cd94bf3a74d17f07d2d02315f",
+      "bytes": 6509,
+      "case": 855,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-855-control-128.bin",
+      "sha256": "58003a438bf8ad8364ce087d3c40c00bd2d7b3ddabfe1a5ce0c68c43e6bad5d7",
+      "bytes": 6509,
+      "case": 855,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-855-control-130.bin",
+      "sha256": "68bd3e4ed77e327dc279ce35c58b053d4602524685309fc21794be965a55806e",
+      "bytes": 6509,
+      "case": 855,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-855-control-255.bin",
+      "sha256": "1819484be4d4acb99a6af70a9d5e247e6439fc46169a85d5bf35be17ce35d90c",
+      "bytes": 6509,
+      "case": 855,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-900-control-0.bin",
+      "sha256": "e6e2eb6be3d5e09a25ad1285820a6576242321f0189806c989ca4f27e3ab4e69",
+      "bytes": 6455,
+      "case": 900,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-900-control-128.bin",
+      "sha256": "23f34c0aa8cc6a1d7e05977aa178f223767125e4b50dbbdb0f0abb14665fd9c9",
+      "bytes": 6455,
+      "case": 900,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-900-control-130.bin",
+      "sha256": "80b8ce988f18017407d4708999382c1f51531aeddbf015a38a015a0826fbaaaf",
+      "bytes": 6455,
+      "case": 900,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-900-control-255.bin",
+      "sha256": "a0eae604ad04f5bd94c18a6d5f40596e3c07de48e9b07030225073c984db5b5f",
+      "bytes": 6455,
+      "case": 900,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-944-control-0.bin",
+      "sha256": "a900c0373000219ee756a58e04e335903f0a78ed6a838f680f25a959509769f7",
+      "bytes": 6457,
+      "case": 944,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-944-control-128.bin",
+      "sha256": "566e1267bd593362604019bfcc9b868fae655ae33ab514ce337f5a263c641c95",
+      "bytes": 6457,
+      "case": 944,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-944-control-130.bin",
+      "sha256": "cb1d6bad5ffc9c013a5f056a6b918ce3137234e4a20b019699dec4c2091f4f62",
+      "bytes": 6457,
+      "case": 944,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-944-control-255.bin",
+      "sha256": "685ac8ff90b08777d6abe7ef01299af0ac59357d22414b8630276a0a42755da4",
+      "bytes": 6457,
+      "case": 944,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-945-control-0.bin",
+      "sha256": "407184f5268394d8663baecd6e67c1f4dc2882408cc3fdae761f12f9e67cfc60",
+      "bytes": 3195,
+      "case": 945,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-945-control-128.bin",
+      "sha256": "b8864c2d83f8406b7989eb2a12223adf48020c86b677c75f61f9590afd36491d",
+      "bytes": 3195,
+      "case": 945,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-945-control-130.bin",
+      "sha256": "18c8b7caa17a72fb5e03412b95d0e345e45d6755e75e3332087097016421d9b9",
+      "bytes": 3195,
+      "case": 945,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-945-control-255.bin",
+      "sha256": "6669db9de2a3e5a4b8224a8fb697b92bec34a47ab4381f8adfac8f9e2e15e8a3",
+      "bytes": 3195,
+      "case": 945,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-990-control-0.bin",
+      "sha256": "4cb60bd77365d447cb4f35af86c7ebcf2127a43cd64158b23eec28409891e76a",
+      "bytes": 3198,
+      "case": 990,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-990-control-128.bin",
+      "sha256": "f11d2a4ad200e11610a6128aeca880308adde57adf62fd3e1cb7cfe10392b68c",
+      "bytes": 3198,
+      "case": 990,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-990-control-130.bin",
+      "sha256": "16cf1596c566a369fc69fe961ad3abe54787653e89294b2fbc1874925ac0de34",
+      "bytes": 3198,
+      "case": 990,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-990-control-255.bin",
+      "sha256": "209a284407fdbcd9ee7ac2cc334876e49f67eb11de0b6ff6b765261ee4120555",
+      "bytes": 3198,
+      "case": 990,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1035-control-0.bin",
+      "sha256": "b0aa956c59a97d6b4d1193c1f0512b4ea03acb231a4ffa50d75f520cfd5339b8",
+      "bytes": 3228,
+      "case": 1035,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1035-control-128.bin",
+      "sha256": "93ff193c30ccecf32bc229c1438b54c203cef57d04221dba2eeae6f4de251ba5",
+      "bytes": 3228,
+      "case": 1035,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1035-control-130.bin",
+      "sha256": "5571d45e95831f56fb9fd0b4490bb245121122d09d7cd4de2e4e11379600a8e6",
+      "bytes": 3228,
+      "case": 1035,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1035-control-255.bin",
+      "sha256": "d0638e7667ed47007a6f07e4cc6627d8b91bb802374dea83d1113fc0830620cf",
+      "bytes": 3228,
+      "case": 1035,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1036-control-0.bin",
+      "sha256": "976c0cfca8e083ed75ee6206a6216e6e9a87522e14ce334637ab3d75df991d1e",
+      "bytes": 3228,
+      "case": 1036,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1036-control-128.bin",
+      "sha256": "0a0e69e519a9a715f3c8638a8a76de3026d7cca7342e0e4c56e9c71f91fad89f",
+      "bytes": 3228,
+      "case": 1036,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1036-control-130.bin",
+      "sha256": "ba6b0cb2f33093e092f5b34a5e43dd36f83b54a0861073b0f87a45565f7e7418",
+      "bytes": 3228,
+      "case": 1036,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1036-control-255.bin",
+      "sha256": "a3f46183eb3a3e7e5117b10e6603c1e897a4bc5ebe702990850121c46f5949d9",
+      "bytes": 3228,
+      "case": 1036,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1039-control-0.bin",
+      "sha256": "8b5f2bf93c01e60d68544577077e888ba5f72580042523959df53f2e7ae5f45a",
+      "bytes": 3228,
+      "case": 1039,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1039-control-128.bin",
+      "sha256": "8c450db6e5b1c08ae22b8da1de834ff36f4fd2dcb3c005e9331ca09347c79160",
+      "bytes": 3228,
+      "case": 1039,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1039-control-130.bin",
+      "sha256": "eb23470848554967afe04b5078e337f6ada9d4b817fefdb173c5bbcbac2ba5df",
+      "bytes": 3228,
+      "case": 1039,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1039-control-255.bin",
+      "sha256": "cc595a8f4e26d4240dfa6034fe0f482ce700c1999081bd97961e7a59510e5db1",
+      "bytes": 3228,
+      "case": 1039,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1060-control-0.bin",
+      "sha256": "0be58c70231df3ca44a81924fbf0a4b26229c91acd6e25d7bea3944136781b72",
+      "bytes": 3257,
+      "case": 1060,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1060-control-128.bin",
+      "sha256": "e4cd7e667eccf2c134f52a8a5fe1b7e6e462286c65003fe05c0a1d161528fe19",
+      "bytes": 3257,
+      "case": 1060,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1060-control-130.bin",
+      "sha256": "f4e5c32d44625ea34738380a93c9604855e20062870636c34030b215f80e8a5b",
+      "bytes": 3257,
+      "case": 1060,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1060-control-255.bin",
+      "sha256": "67d3b32a9e3e3ebf8da42fe9197e21f396bf29bedbc22af3e7c7720d8fa5710d",
+      "bytes": 3257,
+      "case": 1060,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1125-control-0.bin",
+      "sha256": "97a6330ce668cc2e3e857df5143963caf140801f7dd8528adfdf1b3299d29be3",
+      "bytes": 3258,
+      "case": 1125,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1125-control-128.bin",
+      "sha256": "ddff6275740b0bfbf4d965a416ce06a9b6a70dd58fb827b401433a3ab94deb0b",
+      "bytes": 3258,
+      "case": 1125,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1125-control-130.bin",
+      "sha256": "7953e5b847bfc88b17930d2de880ac51abe53211da5b311cf48139c36f5e85e0",
+      "bytes": 3258,
+      "case": 1125,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1125-control-255.bin",
+      "sha256": "ae34a17a9dfdea445763c18920f8e3b11d4e4bf28aa7eb9e1235d2d1f3a3b2a7",
+      "bytes": 3258,
+      "case": 1125,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1126-control-0.bin",
+      "sha256": "d9d5f0d6554e20fe0e5c8502e0c3f75f3041c2fba6cca58c3716f03ba0291ee7",
+      "bytes": 3258,
+      "case": 1126,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1126-control-128.bin",
+      "sha256": "518003a135253040024d81510248c00cd4a4f50df0b55bee8cb05d8eafddc5f8",
+      "bytes": 3258,
+      "case": 1126,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1126-control-130.bin",
+      "sha256": "8768839d8a3d3b74ed8a48fe7e5d15fc3dc92faab493952425840a2b36ca268a",
+      "bytes": 3258,
+      "case": 1126,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1126-control-255.bin",
+      "sha256": "661fc8ce620ced1cb4856dbba011477ad4753fff673f630bb4493c18c79477b5",
+      "bytes": 3258,
+      "case": 1126,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1127-control-0.bin",
+      "sha256": "8ffdecf73d731a991174cfc019f0d6f1136176a5cefa10aaceae9ff8e35e9f28",
+      "bytes": 3258,
+      "case": 1127,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1127-control-128.bin",
+      "sha256": "354b14ce30b87c26d41d5dd323c8352938cc9dced8a7804f42a9744165785895",
+      "bytes": 3258,
+      "case": 1127,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1127-control-130.bin",
+      "sha256": "f4874d75aade365b3cad70e89714725627713e9338a5901c920e35b56500b957",
+      "bytes": 3258,
+      "case": 1127,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1127-control-255.bin",
+      "sha256": "bc2a4963a9d61bdc005932603ab73e6e7598c20c7939f360933521de1f777f73",
+      "bytes": 3258,
+      "case": 1127,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1128-control-0.bin",
+      "sha256": "19deb996ee7b436e2bed2d2c3f8ba5c9bc15290ad35457be5905f2b9828657a4",
+      "bytes": 3258,
+      "case": 1128,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1128-control-128.bin",
+      "sha256": "13f6d0d745d882a6f3411ead583bb690c36d6637a91ec37836be5f969d4a2e83",
+      "bytes": 3258,
+      "case": 1128,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1128-control-130.bin",
+      "sha256": "3d2f28fe0dd69d4691634cfadb0733ad6f64f36ca56277abc32b53d9ec240db7",
+      "bytes": 3258,
+      "case": 1128,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1128-control-255.bin",
+      "sha256": "e5a4f6b061878c4cb789c4e41d68a89edbf02cbee5f74ce89332d09aaba10592",
+      "bytes": 3258,
+      "case": 1128,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1129-control-0.bin",
+      "sha256": "0e54c128702adc1576a614d57c95bcf856df288a19f544f898be979a1b922478",
+      "bytes": 3258,
+      "case": 1129,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1129-control-128.bin",
+      "sha256": "8981bd2bebdc36d98a6b362ec7ca795862185c2122aad9551c1060c8d824c312",
+      "bytes": 3258,
+      "case": 1129,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1129-control-130.bin",
+      "sha256": "60b803455f3dca454afb2458f0165dbccc81e9ad4f622d8398e5d8c9634155c6",
+      "bytes": 3258,
+      "case": 1129,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1129-control-255.bin",
+      "sha256": "79dd61898ab1e9de50928acd192f3fc7355345816590aad2b67b91aedcaf2748",
+      "bytes": 3258,
+      "case": 1129,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1130-control-0.bin",
+      "sha256": "eea23b67245495e8c0b463f455fd3c1d1fb6df56626a05f9a530d3b55b2b6a51",
+      "bytes": 3258,
+      "case": 1130,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1130-control-128.bin",
+      "sha256": "1d4bf647cf4acb57714d029200a400bab89b11e14fefb171051de2dcf9da880f",
+      "bytes": 3258,
+      "case": 1130,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1130-control-130.bin",
+      "sha256": "22b7cd639c132481d7194c03ed9582cb30a97a8c9fac3ca3d70c685cbf49ed59",
+      "bytes": 3258,
+      "case": 1130,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1130-control-255.bin",
+      "sha256": "2f6a12e7fe6c466679331c29bc702cf674975ac978ca418c10f7404920520214",
+      "bytes": 3258,
+      "case": 1130,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1131-control-0.bin",
+      "sha256": "922edb63d5b38cc31972c77ea73edb0326be5f89cc21775c5978fba55f41e0b2",
+      "bytes": 3258,
+      "case": 1131,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1131-control-128.bin",
+      "sha256": "298389b9293ccb33cbcb4e0fc5ddcb96d47ebb1a3f1fa24936f4e1bd213ca8d9",
+      "bytes": 3258,
+      "case": 1131,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1131-control-130.bin",
+      "sha256": "fc4acc5c95049378653ee24dbd47044b77c37e70253d112f7db42f619d4606c0",
+      "bytes": 3258,
+      "case": 1131,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1131-control-255.bin",
+      "sha256": "81780a07e65fc597f15d548eb853b24dc4d5dab3a4c47c363261012abe197ebe",
+      "bytes": 3258,
+      "case": 1131,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1132-control-0.bin",
+      "sha256": "97245c24a2a6f24a9db81b78b372d2e16ad5bcf5638cf77975fca3af149ac5d4",
+      "bytes": 3258,
+      "case": 1132,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1132-control-128.bin",
+      "sha256": "626dbf19d50e33e72d5da4e4759c8a87c9a88e33c9783a1d58539f5e2e69effc",
+      "bytes": 3258,
+      "case": 1132,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1132-control-130.bin",
+      "sha256": "4505c74786aa9ac1c2d486222234b255a4560d438135d13ff6892840cfaf587d",
+      "bytes": 3258,
+      "case": 1132,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1132-control-255.bin",
+      "sha256": "6df1aa1aa3825a7d131f2ba0ff8f9fe112e72e8d7cf536a2293125cc6899ab09",
+      "bytes": 3258,
+      "case": 1132,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1133-control-0.bin",
+      "sha256": "e8f040310616977d276981a19499c231434304909bb453afdf3054cbd0056a75",
+      "bytes": 3258,
+      "case": 1133,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1133-control-128.bin",
+      "sha256": "a0630d9416d3ee184fe9df3cd2e248a399e61a909d21c89d3520a4a2d3055721",
+      "bytes": 3258,
+      "case": 1133,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1133-control-130.bin",
+      "sha256": "751ff8192da8a45cb83dd4c78710adc9fdb71dfe6ad8ed4bf110a6ca13984cdb",
+      "bytes": 3258,
+      "case": 1133,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1133-control-255.bin",
+      "sha256": "1b0180c687f2eb0f07a7b16a7a845b204a65026292879defa46a3dc39e60e076",
+      "bytes": 3258,
+      "case": 1133,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1134-control-0.bin",
+      "sha256": "bad8f1533b61a9bc9de2dd31e1e6c0c4e0daf1167f531ef6350f81d118e1dde7",
+      "bytes": 3285,
+      "case": 1134,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1134-control-128.bin",
+      "sha256": "b5ddf38c8622cbb4dcb94c2ee292fa654ed73f8860bb1837df43deeb803923dd",
+      "bytes": 3285,
+      "case": 1134,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1134-control-130.bin",
+      "sha256": "dbf929e5c8cd069131532eedb247883d10f47b7de08bda57e27ea4818e39733a",
+      "bytes": 3285,
+      "case": 1134,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1134-control-255.bin",
+      "sha256": "ffa694f917aa83fc70205581fdb540ae9ba6268ba97f9ea42e5da7a348d44167",
+      "bytes": 3285,
+      "case": 1134,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1135-control-0.bin",
+      "sha256": "05ec620e99164f66255b948c40df09e2d51a970401f64b6336d58e12a014fdb5",
+      "bytes": 3285,
+      "case": 1135,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1135-control-128.bin",
+      "sha256": "cf132cf8d7c3142f201e1507b45994ff04005d3b00ffd283ea8bb9ab340654a1",
+      "bytes": 3285,
+      "case": 1135,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1135-control-130.bin",
+      "sha256": "e96ae84e78022d835260e0000a32e3908b1ec470a498a5cef7cfbf7e215f5104",
+      "bytes": 3285,
+      "case": 1135,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1135-control-255.bin",
+      "sha256": "e037f4fcdb38eed240ffb96e016330c3f72f468ea84601691ca8bf657699ea71",
+      "bytes": 3285,
+      "case": 1135,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1143-control-0.bin",
+      "sha256": "60a44a717bedfc3331425b4146d8251c22e2f25d6e11da049fc988b2a97f36da",
+      "bytes": 3286,
+      "case": 1143,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1143-control-128.bin",
+      "sha256": "277aed0ec5b004ad31b7a262ae45c94c3c8468456ade5bf19ba0fad869bbe2c0",
+      "bytes": 3286,
+      "case": 1143,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1143-control-130.bin",
+      "sha256": "5242dddbf4c7e74149a84aa9e4b935e9405718e14d0ab4a4deb17262e3373f5b",
+      "bytes": 3286,
+      "case": 1143,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1143-control-255.bin",
+      "sha256": "73ad630e63036b34263ec606d4c7061d1e412954449ae72afc735b244b989f87",
+      "bytes": 3286,
+      "case": 1143,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1170-control-0.bin",
+      "sha256": "ba35d1f4d2007a44e7b72686ce3cf6c2f41187be6736d9adbe8758e120221865",
+      "bytes": 3231,
+      "case": 1170,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1170-control-128.bin",
+      "sha256": "20505d12bff73b9eaee99c21a07ef24f00f901cff0994b02904d28e030db9fe8",
+      "bytes": 3231,
+      "case": 1170,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1170-control-130.bin",
+      "sha256": "0d09381d43a1b47a4ab7af84ee877c157561fdb283da8e4db227cd952c95b0cc",
+      "bytes": 3231,
+      "case": 1170,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1170-control-255.bin",
+      "sha256": "f46cea6fe7a38f0fe1ba3de708b63ab2095d5eb04bd0814010f4050516b1b381",
+      "bytes": 3231,
+      "case": 1170,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1215-control-0.bin",
+      "sha256": "3cc8eecea464515d3344586793894dc7f969526bd58b1173952314fa57c34247",
+      "bytes": 3204,
+      "case": 1215,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1215-control-128.bin",
+      "sha256": "d1d40271a6f67e17c9dcb79985e11ba20c0ab8d2dc6f6b65ed7ddc93111d7b51",
+      "bytes": 3204,
+      "case": 1215,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1215-control-130.bin",
+      "sha256": "fc7428805d23d3c1c575c7f2e0c8a85f91e8133e9145d28a69e9cc625cc71c4f",
+      "bytes": 3204,
+      "case": 1215,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1215-control-255.bin",
+      "sha256": "05136db06616923451f4d7598f8a05d8558f7d6181f220ba17178ade1ed9a980",
+      "bytes": 3204,
+      "case": 1215,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/eos-1259-control-0.bin",
+      "sha256": "ed3776d64ba911c934b2eecc14d4fa50711bc484e9e14bfc6188791c7e00280c",
+      "bytes": 3206,
+      "case": 1259,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/eos-1259-control-128.bin",
+      "sha256": "530fd75fdb95239a481e12020842ca075d7dc2ef7674eeea0d1b9ea11ae5f188",
+      "bytes": 3206,
+      "case": 1259,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/eos-1259-control-130.bin",
+      "sha256": "a975dcff868b3aebd380599bf2451eadc9bfbab2c1da3ba4e4f490d2fb36c45b",
+      "bytes": 3206,
+      "case": 1259,
+      "control": 130
+    },
+    {
+      "path": "vorbis_stream/eos-1259-control-255.bin",
+      "sha256": "7044101b5bd04d117ba96444d4489eff5fa12a540b6c1e48531b1d47ec3a5fb8",
+      "bytes": 3206,
+      "case": 1259,
+      "control": 255
+    },
+    {
+      "path": "vorbis_stream/counter-wrap-128.bin",
+      "sha256": "5089b4101348cbc99270815a5a4be8d0dfb620d91ec294f3c71feb7498001f47",
+      "bytes": 4394,
+      "control": 128,
+      "case": "counter-wrap"
+    },
+    {
+      "path": "vorbis_stream/counter-wrap-255.bin",
+      "sha256": "7088ddb7f38d3324a68f29cea3397a4b06da073c0642157fa18badc2c522da4d",
+      "bytes": 4394,
+      "control": 255,
+      "case": "counter-wrap"
+    }
+  ]
+}

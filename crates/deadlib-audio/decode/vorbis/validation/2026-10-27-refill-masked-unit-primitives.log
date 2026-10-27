@@ -1,0 +1,54 @@
+   Compiling autocfg v1.5.1
+   Compiling bytemuck v1.25.2
+   Compiling log v0.4.34
+   Compiling smallvec v1.16.3
+   Compiling bitflags v2.13.2
+   Compiling lazy_static v1.5.1
+   Compiling regex-lite v0.1.9
+   Compiling byteorder v1.5.0
+   Compiling deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\refill-variants-check-final-20261027\masked\ogg)
+   Compiling ogg v0.9.2
+   Compiling num-traits v0.2.19
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\refill-variants-check-final-20261027\masked\vorbis)
+   Compiling num-complex v0.4.6
+   Compiling symphonia-core v0.6.1
+   Compiling symphonia-metadata v0.6.1
+   Compiling symphonia-common v0.6.1
+   Compiling symphonia-format-ogg v0.6.1
+   Compiling symphonia-codec-vorbis v0.6.1
+   Compiling symphonia v0.6.1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.97s
+     Running unittests src\lib.rs (target\deadlib-audio-reference\refill-variants-check-final-20261027\masked\target\debug\deps\deadlib_audio_decode_vorbis-9dd90bcfcb6cfe11.exe)
+
+running 13 tests
+test decoder::tests::inverse_coupling_covers_all_signs_and_channel_orders ... ok
+test codebook::prefix_tests::prefix_memory_is_optional_and_logical_node_limits_are_unchanged ... ok
+test decoder::tests::windows_obey_complementary_slopes_and_hybrid_bounds ... ok
+test floor::tests::floor0_odd_even_products_match_closed_form_at_dc ... ok
+test residue::tests::residue_interleaves_clips_and_propagates_truncation ... ok
+test floor::tests::render_integer_line_and_prediction_use_spec_rounding ... ok
+test residue::tests::residue_two_cursor_crosses_vector_channel_and_partition_edges_before_truncation ... ok
+test setup::tests::floor1_sixty_five_point_limit_is_a_format_constraint ... ok
+test encoder::tests::first_stage_words_decode_all_entries_with_exact_lengths ... ok
+test transform::tests::analysis_window_and_synthesis_overlap_reconstruct_unquantized_pcm ... ok
+test codebook::prefix_tests::lookup_matches_tree_at_every_prefix_alignment_and_packet_tail ... ok
+test transform::tests::fft_imdct_matches_direct_cosine_for_all_vorbis_sizes ... ok
+test transform::tests::fft_mdct_matches_direct_analysis_at_every_legal_size ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests\primitives.rs (target\deadlib-audio-reference\refill-variants-check-final-20261027\masked\target\debug\deps\primitives-05dd54f01bdfd77d.exe)
+
+running 10 tests
+test bitpacking_known_wire_values_and_sticky_end_of_packet ... ok
+test codebook_lookup_types_and_sequence_vectors ... ok
+test huffman_sparse_singleton_deep_and_invalid_trees ... ok
+test huffman_entry_order_matches_specification_example ... ok
+test comments_preserve_duplicates_binary_vectors_and_limits ... ok
+test identification_ranges_hints_and_channel_order ... ok
+test bitpacking_matches_independent_bit_indexer_for_all_widths_and_alignments ... ok
+test setup_both_floors_all_residues_modes_and_truncation ... ok
+test huffman_assignment_matches_exhaustive_prefix_oracle ... ok
+test mixed_lookahead_and_reads_preserve_cache_carries_and_every_packet_tail ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s

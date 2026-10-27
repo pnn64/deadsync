@@ -1,0 +1,5772 @@
+{
+  "scope": "Six independent PCM golden setups plus 64 independently patched extreme-exponent/sign/field cases, C-verified full initialization/decoding/counts. Header controls isolate reference codebooks and full compatibility combinations; stream controls select published/reference codebook and floor behavior with separate IEEE/layout choices. Eight private byte-guard inputs retain both outcomes as deliberately incomplete setup fuzz inputs. Container granules derive from C frame counts.",
+  "reference_binary_sha256": "3f10dfffa755fcefbc384f000d9df984b21d6f4266ca7bc3d7d7ab2bce58b092",
+  "probes": [
+    {
+      "case": 0,
+      "label": "golden-0",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "d046587bc76ef220923bdda6050ab7cdba15c1f973ba5486da11324585abc81f",
+      "response_sha256": "bb2df19c6b9c9d109574f48fc362bc39fbc6489b070d577ce85bb4f3d677d81c",
+      "ogg_sha256": "7a6c12706a653927dbd68b60b263de75de3dbcde8d6daeb0c9d5e74ba9fa6542",
+      "source_request_sha256": "d046587bc76ef220923bdda6050ab7cdba15c1f973ba5486da11324585abc81f"
+    },
+    {
+      "case": 1,
+      "label": "golden-1",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "9a18208bc3c56e63df4ebc92fb816894529a547f3965d5fd18d22a21c969a51b",
+      "response_sha256": "001a35e74b3ea7972645e9ff9f08c52aa65f0b5255f619cf46b9356a9e38f26b",
+      "ogg_sha256": "d49c75d9b9b4e71268a6781a2fe60029aae036cbd65d87d6c08894fd1e33f878",
+      "source_request_sha256": "9a18208bc3c56e63df4ebc92fb816894529a547f3965d5fd18d22a21c969a51b"
+    },
+    {
+      "case": 2,
+      "label": "golden-2",
+      "frames": 368,
+      "channels": 8,
+      "request_sha256": "035239b12bb5f139831d58929c39aa71e04e15e542c84d72f63f89f6bdd9351b",
+      "response_sha256": "324fb1b9c6eeb199893ccc8e41f49f147a8e783d7386507a85615654ec54fc5b",
+      "ogg_sha256": "651cdac94295a8f57ad6f033bdce5a461d0a246655da757d9a84b508549b39d4",
+      "source_request_sha256": "035239b12bb5f139831d58929c39aa71e04e15e542c84d72f63f89f6bdd9351b"
+    },
+    {
+      "case": 3,
+      "label": "golden-3",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "8b23d17f4fc7ae9361c82c3658f060bd224fc9f586acc6d42e26befa11f7ccb2",
+      "response_sha256": "e017285c9152c250ba2cd2c603765a88faf5709683a4251bf135cb40784c59ff",
+      "ogg_sha256": "b36ea3fd2e391ba63a37e3706289cda4bc18167ded667266f1cb3e869fb53cea",
+      "source_request_sha256": "8b23d17f4fc7ae9361c82c3658f060bd224fc9f586acc6d42e26befa11f7ccb2"
+    },
+    {
+      "case": 4,
+      "label": "golden-4",
+      "frames": 368,
+      "channels": 3,
+      "request_sha256": "31ccc416a2c09698ab5e91dacfb157986e584c3ee933152c1cffb85794bf21cc",
+      "response_sha256": "0244f09c8307bfd657cec8f432cc6b2f5535d97cd5316ba64f7155218584a8ba",
+      "ogg_sha256": "ee77eb1e8fc802a67236a5b66c619d5a0f8ea7b20e1c8187a0b96653159f22f4",
+      "source_request_sha256": "31ccc416a2c09698ab5e91dacfb157986e584c3ee933152c1cffb85794bf21cc"
+    },
+    {
+      "case": 5,
+      "label": "golden-5",
+      "frames": 368,
+      "channels": 8,
+      "request_sha256": "a2a9a3321fb32cd82d7426cadb67fdab866ad623fe7ce887c89ede72e3e2df15",
+      "response_sha256": "66de450f7e797ca1d2678c97f3727b27058175c9e349bba0f4f56756de9e395f",
+      "ogg_sha256": "5bd1a6f1e67523b2311003858e17908e7d6d602d0ba92ef7394a66259f783f4e",
+      "source_request_sha256": "a2a9a3321fb32cd82d7426cadb67fdab866ad623fe7ce887c89ede72e3e2df15"
+    },
+    {
+      "case": 6,
+      "label": "exponent-0-sign-0-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "bc322fdb5d01b70fa096e6c407a860f7e9e2fed8363433c041613f49b9c39bbb",
+      "response_sha256": "51b458ffa49cf74a41be363a70562a1e94359a5fb9b91f7d7b5b3da5186c4a25",
+      "ogg_sha256": "0df00db74a0567800ae13bda8020eab90d59ef19b96d879c17492388cab141be",
+      "source_request_sha256": null
+    },
+    {
+      "case": 7,
+      "label": "exponent-0-sign-0-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "af982f950f08c9b9fde967e164b62e059459ad78c3d99f5558cba161518ad240",
+      "response_sha256": "e35e11651a34c56d6c3bd818b03cee142f085f00b2d6d38308df875064ecd796",
+      "ogg_sha256": "69d1a30ce11b78f257b12a42f9b5e4d76e9a053dfecbf8e1d1985dfa2788dcf0",
+      "source_request_sha256": null
+    },
+    {
+      "case": 8,
+      "label": "exponent-0-sign-0-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "824f348933937c980730ef3865ab18ddb8fba8feff59c84705a049da4787cc88",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "2b5e7d111c7cd07aa3e25efa98ff584701aafa358975e71451c70837da6156df",
+      "source_request_sha256": null
+    },
+    {
+      "case": 9,
+      "label": "exponent-0-sign-0-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "2a384d12fcf4d55f6abc781bd87bbde05d7782bc16b55bd40cc5242caa1b8d38",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "07c226fd9bcaf93f3d64e639187570f97938e94303946d67bbd455f39fdb41b0",
+      "source_request_sha256": null
+    },
+    {
+      "case": 10,
+      "label": "exponent-0-sign-2147483648-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "982efbcfbee57c492871e21e4ca458490ee1cf26b0edd0ed6dd9324020309ac7",
+      "response_sha256": "a0d728cdd2d50df74339a4c4b80e6490f98c51364a8e65c2a4b9d519a802dd0f",
+      "ogg_sha256": "eb00f389fd9801c7571198ba8328186aee1ad6d33ac5b60fb790e9e502ba037e",
+      "source_request_sha256": null
+    },
+    {
+      "case": 11,
+      "label": "exponent-0-sign-2147483648-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "129420019fbcbac2c9ce75ee578a28edf6af3f6583dd274cbff227a3fd777a8e",
+      "response_sha256": "c7f0744b6eaeaa2ef8464abb744d6b28b9a6eed69c766e2c940cd75b10599325",
+      "ogg_sha256": "8a18d771ed96b67be50570faf1987567308ef8a939cbd6c77f0b0d40b385bf54",
+      "source_request_sha256": null
+    },
+    {
+      "case": 12,
+      "label": "exponent-0-sign-2147483648-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "e75a5988b9d123255520dee3c36de88a4dbf6de51d5064d588f7b1b88e845f8e",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "0658c8c2fdbbb4ba884f1874f078b2dcc4b12d81325818fa90ea43f3d4b063bc",
+      "source_request_sha256": null
+    },
+    {
+      "case": 13,
+      "label": "exponent-0-sign-2147483648-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "7cc02c9ebcfaac486911268f774a3e1b1e03039b3484e6efe1587092037df3ce",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "3db09de3e1833ed86ed54edacdd829469b9ac2b3eb56f478797a4cd7f1496702",
+      "source_request_sha256": null
+    },
+    {
+      "case": 14,
+      "label": "exponent-724-sign-0-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "3e4e92a7845ab54c6b74f01c9921c5023d8340ad9414c2aa9f3e85dbcb78325a",
+      "response_sha256": "51b458ffa49cf74a41be363a70562a1e94359a5fb9b91f7d7b5b3da5186c4a25",
+      "ogg_sha256": "b22427f238ddaadfe6849e8b7efeb2be3fad8e25970b03e7688009cf9106da73",
+      "source_request_sha256": null
+    },
+    {
+      "case": 15,
+      "label": "exponent-724-sign-0-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "04bd5ed3bf076deb383fbb04190b578ae05b22dca80ecf48129cd974f50d73db",
+      "response_sha256": "e35e11651a34c56d6c3bd818b03cee142f085f00b2d6d38308df875064ecd796",
+      "ogg_sha256": "bb643085de4a4ab1b9359cfbe04ffb4b82fe0b0da1e91be6976e734712e85e7e",
+      "source_request_sha256": null
+    },
+    {
+      "case": 16,
+      "label": "exponent-724-sign-0-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "4582e85b3bbcbfee6eb0aac62647c76bac3569b58d3ca941d33d71aa62f7c42a",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "64e2a8e664a2afeb579f32903963a60fb1ddd31b0c2773f1637bd76d1b8b6da1",
+      "source_request_sha256": null
+    },
+    {
+      "case": 17,
+      "label": "exponent-724-sign-0-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "c174dee61825ccb4ea7612fb11a80461f8dfb0d90535aad492aa5635b91a9ebc",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "9582bb6cbe61ff0e0d175f717b8f6505449d072a7bdde92e390aec6695319665",
+      "source_request_sha256": null
+    },
+    {
+      "case": 18,
+      "label": "exponent-724-sign-2147483648-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "7eb05f703f779290379e2a01ae9776f2969568138b84c71e84f0581fc6db3418",
+      "response_sha256": "a0d728cdd2d50df74339a4c4b80e6490f98c51364a8e65c2a4b9d519a802dd0f",
+      "ogg_sha256": "58211c57f9f96ad0bbba73f18ce1b35be88413c7cbaf4d472c92dc06196737b9",
+      "source_request_sha256": null
+    },
+    {
+      "case": 19,
+      "label": "exponent-724-sign-2147483648-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "1d3e5473ec8a39ae82b0283fe6f0a1faa0f17c149b741af8b442f2fcec42003a",
+      "response_sha256": "c7f0744b6eaeaa2ef8464abb744d6b28b9a6eed69c766e2c940cd75b10599325",
+      "ogg_sha256": "d2235d8fb8bddbb7379b4983b3d9b3ec56b51d78acb81ce6032bfe3bab21d507",
+      "source_request_sha256": null
+    },
+    {
+      "case": 20,
+      "label": "exponent-724-sign-2147483648-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "c7adcf467b9173ebafab8cc3de392e0adcabea0e147337fc46facc06eb48ccc1",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "ae4d910d30c1f514421d14d7a2653cdd67460d1b7f07ff2e46e64f0b308ba0d3",
+      "source_request_sha256": null
+    },
+    {
+      "case": 21,
+      "label": "exponent-724-sign-2147483648-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "14aebbe99f6c66869354311a56f46c2b8ad3d5197aa144cb53c607104de87e60",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "2e95741f2bdf74bf1565aa3c8b936494e7c737ee29bc28a93a7606cd72667085",
+      "source_request_sha256": null
+    },
+    {
+      "case": 22,
+      "label": "exponent-725-sign-0-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "2ba6ca22ee50ff4646385f89f89cb368cfaa9653776e929b39a15167bd4dc52d",
+      "response_sha256": "51b458ffa49cf74a41be363a70562a1e94359a5fb9b91f7d7b5b3da5186c4a25",
+      "ogg_sha256": "a8c8cc71c38ee636d2d477c381f755d2c695ade7389c89dc07dd0d1c4c4f0f9f",
+      "source_request_sha256": null
+    },
+    {
+      "case": 23,
+      "label": "exponent-725-sign-0-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "c6fde8fb4315a9d8ae5a2d7fbea2272c503c7b24021e6562f8ec2f13f46ba766",
+      "response_sha256": "e35e11651a34c56d6c3bd818b03cee142f085f00b2d6d38308df875064ecd796",
+      "ogg_sha256": "678c3e30afa438d3475c27f0bae3ad7efa9678e8bbef600b8588119e2ee2e207",
+      "source_request_sha256": null
+    },
+    {
+      "case": 24,
+      "label": "exponent-725-sign-0-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "d341469b966c5323a75281d3d7fedc798e3fbf1472fdf4701fb67c4e13a958a6",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "593722fd0973daa1078cb4dd0e7031896b3bf718a6b2c6c11aef283bb33d0a52",
+      "source_request_sha256": null
+    },
+    {
+      "case": 25,
+      "label": "exponent-725-sign-0-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "fe96c6e0d9d5f63b38d2c7f55d0a004a3a2a5513c61cbe91dde6342b60f537be",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "d50b3136c687a07e2031572b23aacf7909d125a2844adb15174474380f10ba1b",
+      "source_request_sha256": null
+    },
+    {
+      "case": 26,
+      "label": "exponent-725-sign-2147483648-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "de152e70cc7f54dc02ab37a1f1dd99110382af9d6234acfd6a237f48f313267b",
+      "response_sha256": "a0d728cdd2d50df74339a4c4b80e6490f98c51364a8e65c2a4b9d519a802dd0f",
+      "ogg_sha256": "157fe2d35721c2fafe482ec11bffd28a410872d7b955c72f350ba45169049fd3",
+      "source_request_sha256": null
+    },
+    {
+      "case": 27,
+      "label": "exponent-725-sign-2147483648-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "9d7f8933b1fad4b064194ef367819c656e0bce8f77f5610028510d14fde01d34",
+      "response_sha256": "c7f0744b6eaeaa2ef8464abb744d6b28b9a6eed69c766e2c940cd75b10599325",
+      "ogg_sha256": "8d23b055caa5bd434c27a4263f22e1191e91959391365404860b1074068a7228",
+      "source_request_sha256": null
+    },
+    {
+      "case": 28,
+      "label": "exponent-725-sign-2147483648-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "e7fa6f85e68f99816933b68a8da84f14abeed414eb044ee8087684a3d7e12ede",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "f54004fabefe734e6e2d34574410aea5a62118d98ff6f7690d4a29bb6850aebc",
+      "source_request_sha256": null
+    },
+    {
+      "case": 29,
+      "label": "exponent-725-sign-2147483648-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "09a27db7e21c2422ed87e83d14da9b78c1a023005999fc431841a5183299d51f",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "e68d456d7b3d0cfe93b59b3165b19c613f9639e8536b2946dd3d0e46451136ab",
+      "source_request_sha256": null
+    },
+    {
+      "case": 30,
+      "label": "exponent-726-sign-0-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "f7efd48efd01e71f16383ab0c9f14df19cd97dae754b0372473025f6dd0db47d",
+      "response_sha256": "65c9ee7c38150cc71ae83efe6e05e09325974e4ceafaea26e6a7c5a6a4ee7648",
+      "ogg_sha256": "0c7262d1f3f0b594aa1e210e68ff3c4f05a40df09bbe19df0d7ab53664fa9d02",
+      "source_request_sha256": null
+    },
+    {
+      "case": 31,
+      "label": "exponent-726-sign-0-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "f8ebe5229b06a3938c92b064d03d880030d38ed9ae143fd3a09cd7457ef8187f",
+      "response_sha256": "d955a6ca119113df3891bc5c86ff9e2a37efe9f6cfda9e67a92cbf3957a29ae9",
+      "ogg_sha256": "e58dd5385deed173d136b3efc0ce387ec37944fab5462c94f83de99cc058b8b7",
+      "source_request_sha256": null
+    },
+    {
+      "case": 32,
+      "label": "exponent-726-sign-0-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "6021f4739c23ccc99319dce104af2087486eefcca03c61ef4e588e9caf1daf78",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "282e81b4873649ce8d68d77b6c619003eeb0016384e0cf48deb7d89f3f914e18",
+      "source_request_sha256": null
+    },
+    {
+      "case": 33,
+      "label": "exponent-726-sign-0-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "c758aba5307155045df4f941680c78840a20bd178db5692ab8bccae26fed1494",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "1686ff41406dc69ec3fdd437e7aed83194a683f88e8a0b88b06d0995923c9935",
+      "source_request_sha256": null
+    },
+    {
+      "case": 34,
+      "label": "exponent-726-sign-2147483648-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "97d2eb78d256e145316baafc764a959fa0627cd05b17baa3007cf17d71f45d68",
+      "response_sha256": "43cfc3d23095b7fffd27e831f4a96dbfe3890528535d784fe3fc9c22f31da632",
+      "ogg_sha256": "43a53c59b6d2a0bc956c4100ed9b30955d9103f3c18a2801686245d4c8f7e9b3",
+      "source_request_sha256": null
+    },
+    {
+      "case": 35,
+      "label": "exponent-726-sign-2147483648-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "8e746d91537377a297e84c7ecf3924930ce08012d3939c3f7c002d591e3454c0",
+      "response_sha256": "49fe086045cc4eace13ff8261441c316caaf6bb2e25877dc23bb1afba857b9ce",
+      "ogg_sha256": "23164f2b620f793b6b74de5b108f81569f8bc3728158c30bd42810da70152493",
+      "source_request_sha256": null
+    },
+    {
+      "case": 36,
+      "label": "exponent-726-sign-2147483648-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "1bec8b3b9ec07ee29f31e6fe936c7ca31ade4fda49d346782602e3bebf70884a",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "0a4bfd2c768ae913f38324e988defb489f0c2253441863cb0f3a5a978f9e4961",
+      "source_request_sha256": null
+    },
+    {
+      "case": 37,
+      "label": "exponent-726-sign-2147483648-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "d5eba4b590272870d2b00a79ef29b26d3641720eae6e05517dfded3618a1c23f",
+      "response_sha256": "cf8247c2ea54a2f0caaa10a950493e8be68081d4355cbbd21eda2fe014040639",
+      "ogg_sha256": "0876bb1bc0dee31c8c7b99f391ab80154c75fb80ea866e6a93e5a58719906152",
+      "source_request_sha256": null
+    },
+    {
+      "case": 38,
+      "label": "exponent-850-sign-0-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "6f878d4171b4920be780ca157a5767633db2e6683f1cb78370193cd17250612b",
+      "response_sha256": "5c573168bc2adeab5d9218c2f9f89cfa977614ecc86c954d9202e574ee7467da",
+      "ogg_sha256": "ff5b993ba747d0895df7c9097f15e129213e8ab865727ebdfb1cc00b8cda415f",
+      "source_request_sha256": null
+    },
+    {
+      "case": 39,
+      "label": "exponent-850-sign-0-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "1b57ebf02335ccffc13dcc0acdfbcc13e4cdb10d0483153d2b6066a86e15e5e8",
+      "response_sha256": "47e6424b25724159261a034a0df40867212d12da52e926b96035fc64488482b6",
+      "ogg_sha256": "867f364b529b502487472de3a0f6faec105d4e1e191c558e81fa9453f28eea92",
+      "source_request_sha256": null
+    },
+    {
+      "case": 40,
+      "label": "exponent-850-sign-0-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "aa2940f1c792ed4bc40d83c671d25faa11949813c94ff19e3fc002ac4a3b52bd",
+      "response_sha256": "5cc95ac3a52101b50fcac54260a38536498551acb38ccf3f6ad35c353c190873",
+      "ogg_sha256": "d5c17aee83bb523a02a50b759fac69f2c129cd30fa5e3357f14757751449585c",
+      "source_request_sha256": null
+    },
+    {
+      "case": 41,
+      "label": "exponent-850-sign-0-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "d33a04824f8c3ab0f57b06875f16580e2524d51810e91c57da9c47f3953ddbd0",
+      "response_sha256": "af4b413e265dc1e594c6752e4177a33f1ab33d2ba9b16b61ba20304f192f2683",
+      "ogg_sha256": "40f35e9c0197e7d2ca298f0faba1728746a4c7c9f7233542e5ba4ba7df716ed6",
+      "source_request_sha256": null
+    },
+    {
+      "case": 42,
+      "label": "exponent-850-sign-2147483648-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "5ffec057768439a1ee08062ed9322b7373d76305f8ac740784465a855fb1e62e",
+      "response_sha256": "1a035263a965880dd66bc286c5ff3240c1ea881b5353514862f08c710ea3753c",
+      "ogg_sha256": "5414dae69f8100571900286e0c0297508d32f4efc5f6b77675e4722a0f52531c",
+      "source_request_sha256": null
+    },
+    {
+      "case": 43,
+      "label": "exponent-850-sign-2147483648-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "aa62a48c0ef4e0498a1a71ec455023228805750bc03a1787bec83eca56ea7ed8",
+      "response_sha256": "30f576a2611b10f970a5b6bb3566878b1965c8e9f173d19efcb9dbf709974ebb",
+      "ogg_sha256": "9c55afe84482916a1f22ffe47228340f64416a71b20002d3aeae2b65214a3bd7",
+      "source_request_sha256": null
+    },
+    {
+      "case": 44,
+      "label": "exponent-850-sign-2147483648-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "ef99033d893d3bc2d5811b84238612b524f01500a0d50515c4c2039028f4838e",
+      "response_sha256": "fca2e7b4ff5f79b1ee85787c742d96a556e7c665b743ca525e3a8c27e25c5c55",
+      "ogg_sha256": "3f38583371e9c5f18435ff207e33838e362f77951005ebd60c463cbae55dac79",
+      "source_request_sha256": null
+    },
+    {
+      "case": 45,
+      "label": "exponent-850-sign-2147483648-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "6d707f1bb2b7db7229956588cd6230b65375e74f97931853179ce2eafc0cadc4",
+      "response_sha256": "48a548389bf00b66d4b7a7d2e4fcd4321d200d0624c86bfc2b6bf2d4b7b637aa",
+      "ogg_sha256": "7242129b045c74bf2ce99883520d92a79bf590d3578ed96c335ddce2779ab1b1",
+      "source_request_sha256": null
+    },
+    {
+      "case": 46,
+      "label": "exponent-851-sign-0-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "e292ee56b917a8597c943dcfeb13f0a5452d62618415bf9f25e56c2a01292d3b",
+      "response_sha256": "bb2df19c6b9c9d109574f48fc362bc39fbc6489b070d577ce85bb4f3d677d81c",
+      "ogg_sha256": "0e1ecf2157a8576182187e1128e7a7411f1827d0de791f25bfd9ef4ddbb91649",
+      "source_request_sha256": null
+    },
+    {
+      "case": 47,
+      "label": "exponent-851-sign-0-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "928a85383e7421a677a054f9bbb2aae31bec1bf174d96cc265b5118ca41b25ff",
+      "response_sha256": "af5771dfb497166c901f8ff9132eb607b110c3835bfefe3b319c38fcf8bc8c3a",
+      "ogg_sha256": "e2af1ad424c136793f6277c3e792d4c40def3f73e91f4204a0cfa5e1329aa900",
+      "source_request_sha256": null
+    },
+    {
+      "case": 48,
+      "label": "exponent-851-sign-0-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "a1c689436b9115b90ace9a9aac78a72d297b92858ab666292ef5916afd52e992",
+      "response_sha256": "15902466c6acc2fdafd7306aba0cab21dcdbe84efe5aedf08db627bb2c2df1ae",
+      "ogg_sha256": "a664ba3b981166ea4d8b8b830f328e42cfeb0d4245808f7ae5ee1e3571825f13",
+      "source_request_sha256": null
+    },
+    {
+      "case": 49,
+      "label": "exponent-851-sign-0-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "b48cbe3780dcd67e13a6f2442b5f35c4b8199b17f8f1a651edf66f0481589ede",
+      "response_sha256": "811c82f173e0c70e2c50fbef86ab510e3a9aa04f757ee75850600f51f199e75e",
+      "ogg_sha256": "64b8295e7a25e52c303d65f5722c1bc43fa03cdf56dc7eb9ffb33c8c58f78b88",
+      "source_request_sha256": null
+    },
+    {
+      "case": 50,
+      "label": "exponent-851-sign-2147483648-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "86ccfca50b476bc1df577089e3b3470583a0105c6fb8954acd4ca9f53199df65",
+      "response_sha256": "d5f09671e42b1272050b15811e25112914286c97f8d4a2a04b64f7ee8c1b6833",
+      "ogg_sha256": "188b84a1ec77875db84f902dbf4cf255818146754f743467ca412dfc3c4c14f4",
+      "source_request_sha256": null
+    },
+    {
+      "case": 51,
+      "label": "exponent-851-sign-2147483648-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "a541b781d07df81c58c4bdd9e40c803ac7ec0530cda54001ccd1a50b5a7851b5",
+      "response_sha256": "d93a061f8ade4e7d1d3745a7a7fcda66f08ad6be07192d4d3343f80e5bffbe8c",
+      "ogg_sha256": "364e5c162b006c26b472f375b3a5779241889dde1c353554b9d8705dd4114c06",
+      "source_request_sha256": null
+    },
+    {
+      "case": 52,
+      "label": "exponent-851-sign-2147483648-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "f6a1b231cc05ffe539fbc4655f82939712899d8510992cb1b1975e4ff346fc6c",
+      "response_sha256": "7655ac9a7d9480c1f6f3267998c917f3525d85579d08f08627f3a0587629e78e",
+      "ogg_sha256": "056683113b813f8a91bfe0f83fa0ca03df398368863d9f99df6f59fd2cfdeee2",
+      "source_request_sha256": null
+    },
+    {
+      "case": 53,
+      "label": "exponent-851-sign-2147483648-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "bc9d1b36c4fbd2a7fc1ca0a132a8baec9fb7377ee171e6488157a811348671fe",
+      "response_sha256": "f84cb40ad69168b1c7f5667de84c197cead4c901b668e81a1def2ec22d86567d",
+      "ogg_sha256": "096a72476fb7072d08310e081fe97b794023caa2b3343c463c1bfeb1a58afce6",
+      "source_request_sha256": null
+    },
+    {
+      "case": 54,
+      "label": "exponent-852-sign-0-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "7f3bbd70a513f4c36aa2fdfc0cb6bb4bb0628a486e359d953b8bac96818fc0e0",
+      "response_sha256": "bb2df19c6b9c9d109574f48fc362bc39fbc6489b070d577ce85bb4f3d677d81c",
+      "ogg_sha256": "8d594c876aadf73f8182f0e2d28034c8cf1810baaaa9dea85994dafb5c6e0cf8",
+      "source_request_sha256": null
+    },
+    {
+      "case": 55,
+      "label": "exponent-852-sign-0-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "42ff3532785c10f78b6a0dbe47d697331ad1382d0e0afd9a3d0dd2cc992d81dc",
+      "response_sha256": "af5771dfb497166c901f8ff9132eb607b110c3835bfefe3b319c38fcf8bc8c3a",
+      "ogg_sha256": "f33672542681afc005327df6e9f039f2d8de16f267c91a880eedeeea7d933892",
+      "source_request_sha256": null
+    },
+    {
+      "case": 56,
+      "label": "exponent-852-sign-0-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "f7cb559961c8a7477f7c002e993b8f1a9f07b02b87d39f4a0f87ca40fb968072",
+      "response_sha256": "15902466c6acc2fdafd7306aba0cab21dcdbe84efe5aedf08db627bb2c2df1ae",
+      "ogg_sha256": "c6f90357a35da20e39cb9b6b81e7602d676deee2fb3359c2601371503b0a562e",
+      "source_request_sha256": null
+    },
+    {
+      "case": 57,
+      "label": "exponent-852-sign-0-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "b184236aa25f8b066d360abe0b77f4bd7b2e8528e6d7f97a0a740c42f3e481e6",
+      "response_sha256": "811c82f173e0c70e2c50fbef86ab510e3a9aa04f757ee75850600f51f199e75e",
+      "ogg_sha256": "8a53c086130ad23fadcec8dd81984b882a95e147eec5479398c12060f7a7e58b",
+      "source_request_sha256": null
+    },
+    {
+      "case": 58,
+      "label": "exponent-852-sign-2147483648-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "629ae69e9aa16340dfb763f0a1ec3b3f716481e159f000f3ee5ae7e9541f3b0b",
+      "response_sha256": "d5f09671e42b1272050b15811e25112914286c97f8d4a2a04b64f7ee8c1b6833",
+      "ogg_sha256": "9bd41a3428bc4564e0fe62cd851700458e7ebf349cbb25225509a72aaa118e9a",
+      "source_request_sha256": null
+    },
+    {
+      "case": 59,
+      "label": "exponent-852-sign-2147483648-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "1516bd606e99227c16594fb1ade85e2b3dd6ba6a10ae666eaab107fbe20c7f97",
+      "response_sha256": "d93a061f8ade4e7d1d3745a7a7fcda66f08ad6be07192d4d3343f80e5bffbe8c",
+      "ogg_sha256": "b0179c6991fbdf2f6532c62573409ce3f5b5be08cefe252b231e835f1c52ae7a",
+      "source_request_sha256": null
+    },
+    {
+      "case": 60,
+      "label": "exponent-852-sign-2147483648-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "cb3f9a5423984b3bca18495074c1393179efe4a7090489cebe51f942ce64b376",
+      "response_sha256": "7655ac9a7d9480c1f6f3267998c917f3525d85579d08f08627f3a0587629e78e",
+      "ogg_sha256": "66aba65469756400ae15497b9758f42ebd11e8d5a3f8b247388c053e7d9e4015",
+      "source_request_sha256": null
+    },
+    {
+      "case": 61,
+      "label": "exponent-852-sign-2147483648-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "bbe3e36cb8aa42e9461d3c813e22000f2a1c32b81d88025f023c5f5b70a06054",
+      "response_sha256": "f84cb40ad69168b1c7f5667de84c197cead4c901b668e81a1def2ec22d86567d",
+      "ogg_sha256": "652a856a5c383fa4be40b729ce79f68a6b2bc64a4f3dfae961b490e7290de182",
+      "source_request_sha256": null
+    },
+    {
+      "case": 62,
+      "label": "exponent-1023-sign-0-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "d046587bc76ef220923bdda6050ab7cdba15c1f973ba5486da11324585abc81f",
+      "response_sha256": "bb2df19c6b9c9d109574f48fc362bc39fbc6489b070d577ce85bb4f3d677d81c",
+      "ogg_sha256": "7a6c12706a653927dbd68b60b263de75de3dbcde8d6daeb0c9d5e74ba9fa6542",
+      "source_request_sha256": null
+    },
+    {
+      "case": 63,
+      "label": "exponent-1023-sign-0-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "f2ae8cdcc6a6723518cd892d683b3c4a2ee9c258d01c16dfd049a9ca94e2b895",
+      "response_sha256": "af5771dfb497166c901f8ff9132eb607b110c3835bfefe3b319c38fcf8bc8c3a",
+      "ogg_sha256": "1c2e549607a13f9e8c433894c04516d8f3ebe5b0a6956b94a52e6a13e376564e",
+      "source_request_sha256": null
+    },
+    {
+      "case": 64,
+      "label": "exponent-1023-sign-0-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "8f04f61464ef69bfdfc156e18e3cf9fdc85163b987d2ecf8ebfa70be8830f25b",
+      "response_sha256": "15902466c6acc2fdafd7306aba0cab21dcdbe84efe5aedf08db627bb2c2df1ae",
+      "ogg_sha256": "8f7efe9c3845950f81b56a1f869e2201088f4c549e3ef687461cb1ef0fc3e423",
+      "source_request_sha256": null
+    },
+    {
+      "case": 65,
+      "label": "exponent-1023-sign-0-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "6ba5fc8e21dab4906160110168c5a591480e386db9722d31b8ee254bab4917ce",
+      "response_sha256": "811c82f173e0c70e2c50fbef86ab510e3a9aa04f757ee75850600f51f199e75e",
+      "ogg_sha256": "4937814572dd6025f3329448c0990dcf33140166ad263efd6bb413715978ac46",
+      "source_request_sha256": null
+    },
+    {
+      "case": 66,
+      "label": "exponent-1023-sign-2147483648-role-minimum-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "9d7c0e3bba48273f1ef1b75685c36f77e33d2fae377239915787032517d131dc",
+      "response_sha256": "d5f09671e42b1272050b15811e25112914286c97f8d4a2a04b64f7ee8c1b6833",
+      "ogg_sha256": "d6bd9094e246d0ee1e06fb5c15769d7743c3ebb149a16c01b77d3c4f5e4e34a6",
+      "source_request_sha256": null
+    },
+    {
+      "case": 67,
+      "label": "exponent-1023-sign-2147483648-role-minimum-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "70a8caed359869d673cbf7e5f1e85b09c28d1869f98e9b5722bccc4941bd3d66",
+      "response_sha256": "d93a061f8ade4e7d1d3745a7a7fcda66f08ad6be07192d4d3343f80e5bffbe8c",
+      "ogg_sha256": "3ece5c35552f16e4450fc1cc4bacc5b3c54835a644701bdaba9b155c06dc06d3",
+      "source_request_sha256": null
+    },
+    {
+      "case": 68,
+      "label": "exponent-1023-sign-2147483648-role-delta-mantissa-1",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "90b827076db9474c7c361d3206166105715a9d27a26eaccb4dc4b433ba22d63a",
+      "response_sha256": "7655ac9a7d9480c1f6f3267998c917f3525d85579d08f08627f3a0587629e78e",
+      "ogg_sha256": "5517c486a5e68e823c173dd783986a4252e9ebc5ef2bbf8d80b048326b1c8708",
+      "source_request_sha256": null
+    },
+    {
+      "case": 69,
+      "label": "exponent-1023-sign-2147483648-role-delta-mantissa-2097151",
+      "frames": 368,
+      "channels": 2,
+      "request_sha256": "6e88e867aaa8c3cfb64dc7ebb92eea1a25e3805fb11cb509266af257a5fe47e7",
+      "response_sha256": "f84cb40ad69168b1c7f5667de84c197cead4c901b668e81a1def2ec22d86567d",
+      "ogg_sha256": "0b4189b09a1b4da0d10a774fbae9129aba28cf7b8c155c8cbd91dc2f06836553",
+      "source_request_sha256": null
+    }
+  ],
+  "guard_source_request_sha256": "eaf12684a3f6df4a27e35dbe13650b92b903313bc67382b419408abf5fa0f1b1",
+  "guard_source_response_sha256": "c5d1bd2688649005ede837f25cf13d300663ebe39ccb7a2377e121e4c31133c6",
+  "guard_cases": [
+    {
+      "case": 0,
+      "bare_book_accepted": true,
+      "consumed_bits": 75,
+      "book_sha256": "79d1dd576c0ad92a80d8f339049787a982e3810a4b4cab6258dbd1c2d94d08d1"
+    },
+    {
+      "case": 1,
+      "bare_book_accepted": true,
+      "consumed_bits": 75,
+      "book_sha256": "f91a845636cf637752bcfed1ce051be6e8ceea02a2bf701689af29e1e15f3fdc"
+    },
+    {
+      "case": 16,
+      "bare_book_accepted": true,
+      "consumed_bits": 76,
+      "book_sha256": "8f53cff9d061f1857ed71743fcbdff7ff8980a00ed2875401e275174c4401137"
+    },
+    {
+      "case": 17,
+      "bare_book_accepted": true,
+      "consumed_bits": 76,
+      "book_sha256": "c3fbb0af9a94681cacdec347e504c1375ba36072543967bb21000b93da841344"
+    },
+    {
+      "case": 208,
+      "bare_book_accepted": false,
+      "consumed_bits": 145,
+      "book_sha256": "8e5a7f7cc0ec71b469960ac103c87af6de81ffa44f4b21134c66d82b7bc9dcde"
+    },
+    {
+      "case": 240,
+      "bare_book_accepted": false,
+      "consumed_bits": 145,
+      "book_sha256": "f649b8bb669d1cd662d42f274475db022aeb8728e0864e0c6f3bd442a05c0801"
+    },
+    {
+      "case": 336,
+      "bare_book_accepted": false,
+      "consumed_bits": 145,
+      "book_sha256": "c1a3e03b755032ca05fa5be4eed546fe30d1f57314bc41b1f6e8a267683bdb01"
+    },
+    {
+      "case": 368,
+      "bare_book_accepted": false,
+      "consumed_bits": 145,
+      "book_sha256": "13a7a3025105b485138a46e7cd185173c8d195896b131a6e82011db367b3a8ba"
+    }
+  ],
+  "seeds": [
+    {
+      "path": "vorbis_headers/float-0-control-2.bin",
+      "bytes": 199,
+      "sha256": "d7dcf3fe24d1fde46866b8b5df4f9774715f867e4e55f837cf825814b6d17c04",
+      "case": 0,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-0-control-5.bin",
+      "bytes": 199,
+      "sha256": "4adfcbefdb482bf0d0000d6ce35ca464deb88f05e06a3e103f72010ee9660063",
+      "case": 0,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-0-control-233.bin",
+      "bytes": 199,
+      "sha256": "546acf61df5acaaf04ff431e9f25013b43e03dd410b87fc98456306c73f77237",
+      "case": 0,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-0-control-236.bin",
+      "bytes": 199,
+      "sha256": "564b1d1ec5b24f64b64c29459b3f31049574a8a003f801f58d609a16ac387237",
+      "case": 0,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-0-control-248.bin",
+      "bytes": 199,
+      "sha256": "39e1b29c0211171e7f189c4449136b846a274180a72c901749fb9a5369589b69",
+      "case": 0,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-0-control-254.bin",
+      "bytes": 199,
+      "sha256": "aed4f23b5b657f5256a148bb3046fdeb1ba8ceb124a807ab5a82a358bc742027",
+      "case": 0,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-0-control-0.bin",
+      "bytes": 676,
+      "sha256": "11589d7c06ccb2145d3f1234edede8bd0dd0846b08d3470315d214dd1a97f309",
+      "case": 0,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-0-control-32.bin",
+      "bytes": 676,
+      "sha256": "8b795a88f01e16cb3dadcf90a49e3e56f36716044bbf7f45713ebcf1e726c244",
+      "case": 0,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-0-control-128.bin",
+      "bytes": 676,
+      "sha256": "46f629899a2417d45645ac6b15335cb90347037a50bcbd289f653f3ff50b4d67",
+      "case": 0,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-0-control-168.bin",
+      "bytes": 676,
+      "sha256": "8f1579dc63093f280b796f10137e8dde5daf09d7e0c4b40931db5e4b5c87b16b",
+      "case": 0,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-1-control-2.bin",
+      "bytes": 241,
+      "sha256": "480aeceeb9f3f4e4d215d2b6fe9fdf145713de84ba221f4d577bb1c64fe0b83c",
+      "case": 1,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-1-control-5.bin",
+      "bytes": 241,
+      "sha256": "17544a739a0d349d53c20a61aad29f2b75ece0a376492a683d06c71466a012db",
+      "case": 1,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-1-control-233.bin",
+      "bytes": 241,
+      "sha256": "eaeb1e4a3843258c40bf9ccac36f16fe3f0b32efed76f06a8d0ae7a4bcfdac95",
+      "case": 1,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-1-control-236.bin",
+      "bytes": 241,
+      "sha256": "168b4e38aa2c14dc14b2d4e5056ca4b28c37ac60130705d002b9b8f3b0f31b6f",
+      "case": 1,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-1-control-248.bin",
+      "bytes": 241,
+      "sha256": "520f28d5c52d8de13d5a7999cd37d59676fda325496aa0ab9ddcd913fac6283b",
+      "case": 1,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-1-control-254.bin",
+      "bytes": 241,
+      "sha256": "5eea823d7dfec77c00cfa32f3a1b5e9e46c6ee18cf6d4da2b51255bdfacba82a",
+      "case": 1,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-1-control-0.bin",
+      "bytes": 949,
+      "sha256": "976f5be1d9f70e24da7dc6ccbbe54a660e55102c70307faf64c5f8e3a32bb84e",
+      "case": 1,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-1-control-32.bin",
+      "bytes": 949,
+      "sha256": "23fafcc6bb96899e9e9891dcaab5cd8243f4e3470e86aef98a434961f065ae71",
+      "case": 1,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-1-control-128.bin",
+      "bytes": 949,
+      "sha256": "d4e069631f8d730337798a4cff7aea077306359f773ac60995a6824956f81af4",
+      "case": 1,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-1-control-168.bin",
+      "bytes": 949,
+      "sha256": "6d0d2478f57ab4ca7c404a51b8c3deded545b602cbdff71db2eaf0b5c7688b45",
+      "case": 1,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-2-control-2.bin",
+      "bytes": 199,
+      "sha256": "5eb789f4db660d89240bcc918822a5ad736f05c694be4510fe74453aed301f6a",
+      "case": 2,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-2-control-5.bin",
+      "bytes": 199,
+      "sha256": "92554b9008cea661784a97d37315113dccb89712c0dbf2be3c83de781ca3e3b7",
+      "case": 2,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-2-control-233.bin",
+      "bytes": 199,
+      "sha256": "d245818f254f87e842eb1921c7053aa3808d024016640ae667aa83ba28e4cb33",
+      "case": 2,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-2-control-236.bin",
+      "bytes": 199,
+      "sha256": "ad13d202449b94e9e5b0b334d6a218bd8905320529cac1fb51fd68ad207a0c21",
+      "case": 2,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-2-control-248.bin",
+      "bytes": 199,
+      "sha256": "96e37a6db20c830bf0929399225dbfd869cec210faea194a6fc53ae3e89417d7",
+      "case": 2,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-2-control-254.bin",
+      "bytes": 199,
+      "sha256": "ae1a8cf3c9c94c05c5aef0f191992f0e20061bda97d9c6835c3e9e5b1515d15c",
+      "case": 2,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-2-control-0.bin",
+      "bytes": 1206,
+      "sha256": "6c2125971ab6955b1df3482999f5bfe0dd70ba2280c8eb20432c38c75f68f8a2",
+      "case": 2,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-2-control-32.bin",
+      "bytes": 1206,
+      "sha256": "3a223415981fc6bafd334c40223a070408a370eef9a0b292e74a81b8de9efff8",
+      "case": 2,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-2-control-128.bin",
+      "bytes": 1206,
+      "sha256": "ad465aa89d27c500b9c878a47def35aff1acb437a160a37ea0a218b5109eb4b9",
+      "case": 2,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-2-control-168.bin",
+      "bytes": 1206,
+      "sha256": "9849547e4e2d8919ed0d7a2c3b68d4ef9c3c6917b7abcf1980044727a308af8d",
+      "case": 2,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-3-control-2.bin",
+      "bytes": 164,
+      "sha256": "ea27a8c8b661b9da2fc11d9c516e6d7cc4a1e5598c1005d0e3be2c3a6a5b3bd2",
+      "case": 3,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-3-control-5.bin",
+      "bytes": 164,
+      "sha256": "f8cf9a7952c55595a1a9c8927dcb5a884285dda829fa5b74328cb76284b80629",
+      "case": 3,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-3-control-233.bin",
+      "bytes": 164,
+      "sha256": "54bc5faf549d960a80734f29db7ab8474e58f630ca406ff7497157f9bddf7283",
+      "case": 3,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-3-control-236.bin",
+      "bytes": 164,
+      "sha256": "ac20d9f6440a3abedd7e07da6f4691d990e150ad719c140201731ac3f53e1a92",
+      "case": 3,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-3-control-248.bin",
+      "bytes": 164,
+      "sha256": "8eb7169d9b26585bfec7176a972c80d48ae3ee70af812c1de9a954cca6398ef8",
+      "case": 3,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-3-control-254.bin",
+      "bytes": 164,
+      "sha256": "51182479991d274672ce249fe557bde03efb3fdbf0b30e5c0ad0a67252829888",
+      "case": 3,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-3-control-0.bin",
+      "bytes": 577,
+      "sha256": "cbde12194d396c75684d1525c06f50dd26c8b33fe96698f99d5c01d4754dd303",
+      "case": 3,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-3-control-32.bin",
+      "bytes": 577,
+      "sha256": "b23a5b6e4064061e609662bf02a87ab3dd80b66eeae07ff84e732f5408ce0c4f",
+      "case": 3,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-3-control-128.bin",
+      "bytes": 577,
+      "sha256": "bb35270256eba1d20845e60c856028d74fb1c58518e64635dda2fd930b7c2d91",
+      "case": 3,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-3-control-168.bin",
+      "bytes": 577,
+      "sha256": "657b70fb686a1391fc65f59b9d7a110467a5b8c02ebdf3eb94b20202fddcf556",
+      "case": 3,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-4-control-2.bin",
+      "bytes": 166,
+      "sha256": "faef201609fc0342eb2a3e4bb6e169b07f812c40abaf9001e29e89217983d6aa",
+      "case": 4,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-4-control-5.bin",
+      "bytes": 166,
+      "sha256": "4f15008da2b5a3cd8f5a1f61844390b2dd0c949e0362d61311c0f4130a61d23f",
+      "case": 4,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-4-control-233.bin",
+      "bytes": 166,
+      "sha256": "7573d477b9f8c85a19967cf0a0b5f5a3eae8b0cac64daca4fdab0064eeb3d4c8",
+      "case": 4,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-4-control-236.bin",
+      "bytes": 166,
+      "sha256": "bd8005452aa1cbd3b514e40331f355a48c232d617b14c35e38363d05a54e40f9",
+      "case": 4,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-4-control-248.bin",
+      "bytes": 166,
+      "sha256": "b61b87b8d71605f8ec1323891c8bbfa4e3507226b4743235d4c21976c9677fe2",
+      "case": 4,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-4-control-254.bin",
+      "bytes": 166,
+      "sha256": "a6123234ee6a046cc3128bb5b2a1325165f934ee6228a1dc19d916a1da8a2e13",
+      "case": 4,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-4-control-0.bin",
+      "bytes": 656,
+      "sha256": "a4bf77d846a2042c85b7674bf5c0ece4bdea910c8d7e3c39ab944072b730f33c",
+      "case": 4,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-4-control-32.bin",
+      "bytes": 656,
+      "sha256": "86eb346f54337c6d1e3f07f81e0dd1a0117a48b92c3969e51d5d064b0bfea0e9",
+      "case": 4,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-4-control-128.bin",
+      "bytes": 656,
+      "sha256": "4e60a51738840b2272266ac3c7648eb385a17460ed575ad6fe6987de23158571",
+      "case": 4,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-4-control-168.bin",
+      "bytes": 656,
+      "sha256": "8c560675c1839d1b675af2d5c12f23bfb6788a737c2eaf6d5e9cbf3e6aa5819a",
+      "case": 4,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-5-control-2.bin",
+      "bytes": 177,
+      "sha256": "23dbab57077a145f37b3aca7aad3860abeb3e331d3a547af2f92f09cde6b2338",
+      "case": 5,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-5-control-5.bin",
+      "bytes": 177,
+      "sha256": "7df77b123b4ce05cba1dd44ed61a57595b02d7af21a151f4fd422c6bd4bf231b",
+      "case": 5,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-5-control-233.bin",
+      "bytes": 177,
+      "sha256": "7c518684a24c34d66db62306dfabb42973f09978d9d11264c8b1ba3212012265",
+      "case": 5,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-5-control-236.bin",
+      "bytes": 177,
+      "sha256": "4500c80d62bcd9a1ccccbfed1c14610075e779e1934beb203deb8530e37d48dd",
+      "case": 5,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-5-control-248.bin",
+      "bytes": 177,
+      "sha256": "0d3b525434eae64918c1f39ed5b38c957f1da3d89b911ed8aadf4611eb2c1d65",
+      "case": 5,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-5-control-254.bin",
+      "bytes": 177,
+      "sha256": "9a7e72487b43409b7aa99cdc3e2b0d7173b911d9e7349a457dff15448a6cc17c",
+      "case": 5,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-5-control-0.bin",
+      "bytes": 940,
+      "sha256": "346179317e2362696ca9f18ca0f4a2c1b11848e48f842543dd362e7ba72d21b6",
+      "case": 5,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-5-control-32.bin",
+      "bytes": 940,
+      "sha256": "87902ca026b1fa4146e409d4dd270306d5569352399e5c998f85debda9341efa",
+      "case": 5,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-5-control-128.bin",
+      "bytes": 940,
+      "sha256": "30e8969f89301e20878e1e08d85488644cfa6262f7438d90a37f9e167657e8dc",
+      "case": 5,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-5-control-168.bin",
+      "bytes": 940,
+      "sha256": "5bc296c78ab3518ed003a629fb9e8470f77f8aee896323c459a9e20fed4dd8aa",
+      "case": 5,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-6-control-2.bin",
+      "bytes": 199,
+      "sha256": "a6cd91bc20b352a35b5d88df4f70241fc3118b840f0db7d4cee04d25414b1f56",
+      "case": 6,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-6-control-5.bin",
+      "bytes": 199,
+      "sha256": "8d266d6e8c5c86743aa1faff035e52e68698fd1f396a7930d424fb9df9dbbeed",
+      "case": 6,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-6-control-233.bin",
+      "bytes": 199,
+      "sha256": "0b4be81f3a7f8d93974a3b4d78116dbc7841e297aaff6771a2a534c2c10ee72c",
+      "case": 6,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-6-control-236.bin",
+      "bytes": 199,
+      "sha256": "a38886afc599dac502f5d0d8e8683cb9f18a1fa969cfa060a1ecf22ea0203ae3",
+      "case": 6,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-6-control-248.bin",
+      "bytes": 199,
+      "sha256": "c574b34a03e0a8527013817a1818251c901d7def17f0b0aba7f605b4f16923fb",
+      "case": 6,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-6-control-254.bin",
+      "bytes": 199,
+      "sha256": "b2a6f10bac7d53e6790698688672214f1f92caafca6646ce5391827933be2812",
+      "case": 6,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-6-control-0.bin",
+      "bytes": 676,
+      "sha256": "3cd224386b523b0ce3152b1b57998b11c8951a19af3dd4c0b2d11ccf5e94b807",
+      "case": 6,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-6-control-32.bin",
+      "bytes": 676,
+      "sha256": "29b134af2d04a543b7f861b659e4c43771bdce9a09e8491c896dc62084f8932d",
+      "case": 6,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-6-control-128.bin",
+      "bytes": 676,
+      "sha256": "2341511ee01b58f1ab75c85c22f299c8f619f30f2a984cc8829b487993448edf",
+      "case": 6,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-6-control-168.bin",
+      "bytes": 676,
+      "sha256": "dae810692f20d4b38c50e70b1bcddd1daab2b9f3078c83d46ad99b9dd0f7cb2b",
+      "case": 6,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-7-control-2.bin",
+      "bytes": 199,
+      "sha256": "582033bc2db6fc8401efaaeb26217b6c36eac741d59df4eadafcadfc7bfff297",
+      "case": 7,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-7-control-5.bin",
+      "bytes": 199,
+      "sha256": "2e5fedd4f4ce1f2722098ab776a0e6ce6c7d15683020466e2a08fdf415d2fba2",
+      "case": 7,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-7-control-233.bin",
+      "bytes": 199,
+      "sha256": "f43685da3a7bc8f0624c964d528007b1b56e5616dd38323b5a46014fc626d8ee",
+      "case": 7,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-7-control-236.bin",
+      "bytes": 199,
+      "sha256": "74b2fd4afdd587bbe0adaa4ec682e35ae725c7dc5df6314a1b78815b3f5e8736",
+      "case": 7,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-7-control-248.bin",
+      "bytes": 199,
+      "sha256": "de980e9a09f7d1eae70a7b316d330b375b1768674681fd36f7588c1b89ebe286",
+      "case": 7,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-7-control-254.bin",
+      "bytes": 199,
+      "sha256": "b7960ffc96673ec6c10f22fa36ffba46ff868449dd88e4b16e41e3376a38fbc1",
+      "case": 7,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-7-control-0.bin",
+      "bytes": 676,
+      "sha256": "a0887c0236a26afcd78f914e46bb01d81f1457f1c88954847dd6bc445a492510",
+      "case": 7,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-7-control-32.bin",
+      "bytes": 676,
+      "sha256": "40107a037cda362a2b8dc8f8abbcd787665ec84fc266f15301189c2f99948023",
+      "case": 7,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-7-control-128.bin",
+      "bytes": 676,
+      "sha256": "6e6bbb6966083039ad7dfb2f78bf2d5a1f49e7c3861ba3e635839f28b8927f61",
+      "case": 7,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-7-control-168.bin",
+      "bytes": 676,
+      "sha256": "036369e96c60e2c0d7647fb331f90c07aa4fb33badc1a123b6ab581790d03836",
+      "case": 7,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-8-control-2.bin",
+      "bytes": 199,
+      "sha256": "f73ed0cc949a1c2db731433ed659337f7b03123c5abd23cc67a5b39080c0687c",
+      "case": 8,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-8-control-5.bin",
+      "bytes": 199,
+      "sha256": "f9fd2b224294ae8fc0419158bbaebc5fcaeb76fe85cd2dc03d5824ffc1dbc4d8",
+      "case": 8,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-8-control-233.bin",
+      "bytes": 199,
+      "sha256": "9fb02aa473cb4de7eda63161708532542e9efb4b3c0133c83c143a6f71f0afaf",
+      "case": 8,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-8-control-236.bin",
+      "bytes": 199,
+      "sha256": "212ae53d257880589d5f34d725a0f629cec11b9d93bc37bb64cc9b5ac51d1653",
+      "case": 8,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-8-control-248.bin",
+      "bytes": 199,
+      "sha256": "f5c6ec80e9dbcd0edaad577de0e9c3d943b85ebddf4f48584076eb6fbe348810",
+      "case": 8,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-8-control-254.bin",
+      "bytes": 199,
+      "sha256": "6dade442f6ee8c1791d5855d4cddf18445376c7b8dbf3db97e4520b1d1f701c1",
+      "case": 8,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-8-control-0.bin",
+      "bytes": 676,
+      "sha256": "19dd32cd3dbb53507e4f9441079d54f31f668e38fbb997fc200f18c0ee508b48",
+      "case": 8,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-8-control-32.bin",
+      "bytes": 676,
+      "sha256": "e8995905f55e9e546c086991920f473cae7e0a6a1f49e49b1790b5c675354788",
+      "case": 8,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-8-control-128.bin",
+      "bytes": 676,
+      "sha256": "7a9acbe338376a2f7246328740df6bc6f8e0116860107ffd8c0f07e769619e26",
+      "case": 8,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-8-control-168.bin",
+      "bytes": 676,
+      "sha256": "9df78e654f29b2d360a1419c3d7a1dd50cdbe2f033bfb722639c635ea284c91b",
+      "case": 8,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-9-control-2.bin",
+      "bytes": 199,
+      "sha256": "dd1061adf278f21ae0c0943f056cd7e06b8c2563c6340bfc0addb7dce5bf6627",
+      "case": 9,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-9-control-5.bin",
+      "bytes": 199,
+      "sha256": "a1749ed7ea2a0fbc5127602ca432b3569d1198597e4656ee3ab92cff363d512f",
+      "case": 9,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-9-control-233.bin",
+      "bytes": 199,
+      "sha256": "bb25771dccd0830120507f82476473e8060cd8d658473a2510bb26287ebcaa19",
+      "case": 9,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-9-control-236.bin",
+      "bytes": 199,
+      "sha256": "69303b282289643744a3f861ff8b2a5a5c8837e60fa56f76044dbc73f9afa12b",
+      "case": 9,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-9-control-248.bin",
+      "bytes": 199,
+      "sha256": "e802e92e3c8480c557c6f424fbac74ed9d2698e413e23ff76d626ed10e739e7b",
+      "case": 9,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-9-control-254.bin",
+      "bytes": 199,
+      "sha256": "c48e1c2009c095d24bfc4cf78b84a7f572be324a69b68f55ef7921d58a5afebd",
+      "case": 9,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-9-control-0.bin",
+      "bytes": 676,
+      "sha256": "f82cbd32052ddfa64b68005abce3e2c523082d40a270d6af3afb449eef59d007",
+      "case": 9,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-9-control-32.bin",
+      "bytes": 676,
+      "sha256": "d9fbbff91d4132c1517e0bb3e40d3a2ea8994426733aaaa9b15895fe4f5e1f0c",
+      "case": 9,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-9-control-128.bin",
+      "bytes": 676,
+      "sha256": "cece486d5d531e23f725c4e69f25f9388e8f70606b30f6273c1c9b3ecb96948d",
+      "case": 9,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-9-control-168.bin",
+      "bytes": 676,
+      "sha256": "1439160cfa5d6955ce0ab23a33eb109ceec9c2f0ef08c8a0d719e83785d65a8f",
+      "case": 9,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-10-control-2.bin",
+      "bytes": 199,
+      "sha256": "6d29f7aa0a22d5e295dc61bc6a28a4edff2b04ef81df37a45dd18df3cf6d8d5f",
+      "case": 10,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-10-control-5.bin",
+      "bytes": 199,
+      "sha256": "6f9f167d25a6b484d3887cf4ffda7bc0b00e1709a815cd9a234331c60c437a85",
+      "case": 10,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-10-control-233.bin",
+      "bytes": 199,
+      "sha256": "e9a85986f623640ee66c76430483ee8f1276892d2763ef14913c292d03aa9c97",
+      "case": 10,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-10-control-236.bin",
+      "bytes": 199,
+      "sha256": "5a908f456351ce6df9087a734c8e8997e92a168d198726d4dd66aa4f51fa10b7",
+      "case": 10,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-10-control-248.bin",
+      "bytes": 199,
+      "sha256": "071ae99020f3d55a93ced2bb12cf52f08e858cc12bc1267bda6e26ce52416c45",
+      "case": 10,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-10-control-254.bin",
+      "bytes": 199,
+      "sha256": "c47c843ae8cba766a0c5e5b2e030c64158b74b57835990e34c48d9676bdfe3c4",
+      "case": 10,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-10-control-0.bin",
+      "bytes": 676,
+      "sha256": "fcb3f2ed39ac05530546c7e26deb34c9761b0bedf8bbfd6cdd90dc2a6682cbc5",
+      "case": 10,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-10-control-32.bin",
+      "bytes": 676,
+      "sha256": "fe0a6854cf9d65775959cd1f8043ee157ae9091be9bce01c41e74730d64ce8c1",
+      "case": 10,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-10-control-128.bin",
+      "bytes": 676,
+      "sha256": "31959b276b02749763af0df2d9e9256651f0937d40ece89f0551952e2ca73124",
+      "case": 10,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-10-control-168.bin",
+      "bytes": 676,
+      "sha256": "681eff35af8ce583a0da05aec217183af7190edef9352b1084bc31fca5e4c5c4",
+      "case": 10,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-11-control-2.bin",
+      "bytes": 199,
+      "sha256": "d250ec72a2d9fb474989a7b4abb4f3184dd166c1c7c973ba415b2de61436fec3",
+      "case": 11,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-11-control-5.bin",
+      "bytes": 199,
+      "sha256": "add2c05db09fab8aad3e1431fd0af28dc1a98908b003d1300a1469971bb7ddd7",
+      "case": 11,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-11-control-233.bin",
+      "bytes": 199,
+      "sha256": "1afcd07cdba222364c1146e68bf4bf508ca04d2eb64a8d06f4c13ee1e7db3f80",
+      "case": 11,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-11-control-236.bin",
+      "bytes": 199,
+      "sha256": "1211332290d538da50d08be13285f72d7f091589686a683c4aab5687e1aea46d",
+      "case": 11,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-11-control-248.bin",
+      "bytes": 199,
+      "sha256": "e6308aba454e0e4f23bf082349fd42c925958ee41d13c3252f7044ddb5be4772",
+      "case": 11,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-11-control-254.bin",
+      "bytes": 199,
+      "sha256": "a29bc95d91e5a50e2734e0d90fc261924927de2602283e356144c745c28beb8a",
+      "case": 11,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-11-control-0.bin",
+      "bytes": 676,
+      "sha256": "ee79f31fbf694a1d97d15b0df4111ebde8e93c5a087dd4ad32032a019273f11a",
+      "case": 11,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-11-control-32.bin",
+      "bytes": 676,
+      "sha256": "5f2b713af41cc338ecb55c966eead0105bf1b37235b4c2d14765dc3294306b7b",
+      "case": 11,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-11-control-128.bin",
+      "bytes": 676,
+      "sha256": "a99ff3e1c94375774adc058bcd9806db098ba644c8fcafd0e360ecf6165a5812",
+      "case": 11,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-11-control-168.bin",
+      "bytes": 676,
+      "sha256": "e687cbd5d7c1c8b16651da42bd2da13ef6879cd90e489f619fa370f734eb7a17",
+      "case": 11,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-12-control-2.bin",
+      "bytes": 199,
+      "sha256": "4e5c2c794c37068fd9fd86c1cabd4f49bea69e59ed1695bd4f466e9f6a289cba",
+      "case": 12,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-12-control-5.bin",
+      "bytes": 199,
+      "sha256": "bf13125e6bc8ee63f2d4e48da5805f76ce8f19609a863092a7efb86bd73b1711",
+      "case": 12,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-12-control-233.bin",
+      "bytes": 199,
+      "sha256": "fe9c20bee01aa267257742cb736f1dd0805de59a69f4824afdb5662e6881e876",
+      "case": 12,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-12-control-236.bin",
+      "bytes": 199,
+      "sha256": "95253c84d3ae283c5f7dfdb62702e396c4f86eb594a07d542a3a1cc10d709401",
+      "case": 12,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-12-control-248.bin",
+      "bytes": 199,
+      "sha256": "49ad49dd6d9e50c5a21bfdbcaf8ae2dc21b6c9e18977f115e9646352a8ab4654",
+      "case": 12,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-12-control-254.bin",
+      "bytes": 199,
+      "sha256": "95803739a92f3b9a0b52804ae9e27771b0856ffb3ab5dd49c614094a39d141ab",
+      "case": 12,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-12-control-0.bin",
+      "bytes": 676,
+      "sha256": "4ea3b2174310ed928abaef4b0bd77149000b78a3cd1404d2ae1dab7c3e37b3e6",
+      "case": 12,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-12-control-32.bin",
+      "bytes": 676,
+      "sha256": "0a0a062291ca36a6b1d66f5f0ff6969f01118c66768798490586acea43bbcfe9",
+      "case": 12,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-12-control-128.bin",
+      "bytes": 676,
+      "sha256": "964780dc85cd2f06c60a80d7d4f849d1334bad0be4d4ed896035399e8230786a",
+      "case": 12,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-12-control-168.bin",
+      "bytes": 676,
+      "sha256": "284085539362bd708335ea1398f3d7570004b14dc5b63c59601e80a38f2f3e49",
+      "case": 12,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-13-control-2.bin",
+      "bytes": 199,
+      "sha256": "f38cf0d772ca28fb90933f9984aec185526474527512edcd4af14145d720f5c9",
+      "case": 13,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-13-control-5.bin",
+      "bytes": 199,
+      "sha256": "f43d72e49de52dc8a179e25cbbd0d82c01487745b7dfc65897f54135dafbe83d",
+      "case": 13,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-13-control-233.bin",
+      "bytes": 199,
+      "sha256": "75966ee0ae444e88b51b8258bd376d204597e93dcd38a4162fde80d227fe6bd0",
+      "case": 13,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-13-control-236.bin",
+      "bytes": 199,
+      "sha256": "970ab743095a96f9362d7b6813877233dec8bdcf5c387540d92de6d443974aba",
+      "case": 13,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-13-control-248.bin",
+      "bytes": 199,
+      "sha256": "5a406292c92ed5dbfa04a4baa693113130fed8582abeb6ee047f9414337c95c0",
+      "case": 13,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-13-control-254.bin",
+      "bytes": 199,
+      "sha256": "1fa179236cd1bc3e56562923f5b2c3c667c4159c2f553f18a39211e33fd66d07",
+      "case": 13,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-13-control-0.bin",
+      "bytes": 676,
+      "sha256": "47b9d8403defb0a27582f7d0657aea4fcec76081590dccdf7e5df964411ce9ed",
+      "case": 13,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-13-control-32.bin",
+      "bytes": 676,
+      "sha256": "ffd2b5809adb092239c8186ca970511e2c76cc9b5b27af50aa2fa8f12aa8f456",
+      "case": 13,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-13-control-128.bin",
+      "bytes": 676,
+      "sha256": "f7a5ae8c72602ac5838e2ead8f02caa7444077df4eedd745705b3f1c0b604506",
+      "case": 13,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-13-control-168.bin",
+      "bytes": 676,
+      "sha256": "d2c5077c6ecd2873ece0aa92ca8ce8fabafb32af893c326886ed52bc862d6803",
+      "case": 13,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-14-control-2.bin",
+      "bytes": 199,
+      "sha256": "6006abe84a474e0a3b8ab573b195e086342ae4a4700710e966e1f2a31330cd07",
+      "case": 14,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-14-control-5.bin",
+      "bytes": 199,
+      "sha256": "e178885a6a7afec28268345de002e5c4faafdc6363455563fd259fda44737c44",
+      "case": 14,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-14-control-233.bin",
+      "bytes": 199,
+      "sha256": "8502e40cd98ec4f3d2639ee8b8bb5d508b626e6219872b54497bc767bf44d9ec",
+      "case": 14,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-14-control-236.bin",
+      "bytes": 199,
+      "sha256": "f07cc5cb000188342873ecb5dec5f0d66c9fa4e7c395afb1b2f5b23aff0090dc",
+      "case": 14,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-14-control-248.bin",
+      "bytes": 199,
+      "sha256": "b74966ed9b830ccc9708712a4786f6ffa2f2d60a6cae50b5d5ff5cf1d97fa1d9",
+      "case": 14,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-14-control-254.bin",
+      "bytes": 199,
+      "sha256": "9fcf118c9cbd353c4c6cbaf65e46dd990a749043fb466e2dabbc86be867a530a",
+      "case": 14,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-14-control-0.bin",
+      "bytes": 676,
+      "sha256": "7a8a99451555b7df0a75e791374e88ff7d52db9f37410b342493f1974f05a5b8",
+      "case": 14,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-14-control-32.bin",
+      "bytes": 676,
+      "sha256": "d75927d13ada417a69311981f3a1e519cf350b99a1be8138748e1d01a968c442",
+      "case": 14,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-14-control-128.bin",
+      "bytes": 676,
+      "sha256": "eb2f85b06219db47ddfe8fe465dd01fde370f01a23133fe6c1530f043e8cdec3",
+      "case": 14,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-14-control-168.bin",
+      "bytes": 676,
+      "sha256": "7b61c0068fd5e1a035dd320bc67d2957ee534293f72d32cfcf29829dbb7a5fae",
+      "case": 14,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-15-control-2.bin",
+      "bytes": 199,
+      "sha256": "58be2546dcb276d17d8814f290e56faf7d057a87bcc7594c035691d2eae6f2b3",
+      "case": 15,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-15-control-5.bin",
+      "bytes": 199,
+      "sha256": "75e4bc42e60e4c67723e066a45a8ce3632c10885d20379742746be17b827c999",
+      "case": 15,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-15-control-233.bin",
+      "bytes": 199,
+      "sha256": "38868cb880e8ae53d6c426b31336df5a15d44d62cd30a9b5ee26dfc3f92d65b5",
+      "case": 15,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-15-control-236.bin",
+      "bytes": 199,
+      "sha256": "9ad561ac7c8351f30af6f2bf66cf648a4700619e6c409aafb55acda2e7adca52",
+      "case": 15,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-15-control-248.bin",
+      "bytes": 199,
+      "sha256": "4c701da4f02139c6b7403b8dc408ed39e30d03f22273ef1ffbbf197cf9820378",
+      "case": 15,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-15-control-254.bin",
+      "bytes": 199,
+      "sha256": "23ff4443bdbc1e18370b8a3e80208634d0b8e25397e0c7c1b02603a641d367f4",
+      "case": 15,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-15-control-0.bin",
+      "bytes": 676,
+      "sha256": "6812115e6ad4096b43878b3be555a680be5cd3ee9bb148df3afc4b783bb08905",
+      "case": 15,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-15-control-32.bin",
+      "bytes": 676,
+      "sha256": "5b3840074b09ad53bbfb2a0d18fb4b9edd01c864ab10b4c79ee2cd5c107321bf",
+      "case": 15,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-15-control-128.bin",
+      "bytes": 676,
+      "sha256": "4c0e625103363842cdaef81f099b44b98f92204ebcbed00844037310f6269222",
+      "case": 15,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-15-control-168.bin",
+      "bytes": 676,
+      "sha256": "212991aa00a63aeecb9545f670f434a8762156c034b37b455eda7bcacf20f3a4",
+      "case": 15,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-16-control-2.bin",
+      "bytes": 199,
+      "sha256": "5ad641b280f32493e443e2b74203bd060a0e6191c2b3f36a04dba5ee58f7207d",
+      "case": 16,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-16-control-5.bin",
+      "bytes": 199,
+      "sha256": "dde68cade47e2888e43d1389e662331706be5c9cfdb39bcaaf8ca3d6d4c9d6c5",
+      "case": 16,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-16-control-233.bin",
+      "bytes": 199,
+      "sha256": "4eae713a6a043638162fadc0c11137bd25a0b84c1160ad94460ea062b62df9bf",
+      "case": 16,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-16-control-236.bin",
+      "bytes": 199,
+      "sha256": "0a194b135d9a02b9c872510dbfaec527b93f81c81f1a417e5cce3b9a1bc75844",
+      "case": 16,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-16-control-248.bin",
+      "bytes": 199,
+      "sha256": "c72b5bd8cd46b2c083f0dc89944a85b46e2557bc1ae84ac43796435cb919fbd5",
+      "case": 16,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-16-control-254.bin",
+      "bytes": 199,
+      "sha256": "34adbb420e043df728e84b01ec31cb9d7b819aa4852db7a393e97a594c201a6e",
+      "case": 16,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-16-control-0.bin",
+      "bytes": 676,
+      "sha256": "5f6c1077371a7217bca834c5f75900c7fcb0927b64371d93d72a114dbb4eac83",
+      "case": 16,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-16-control-32.bin",
+      "bytes": 676,
+      "sha256": "c01b726c75f53c4f0c21bdefb82880630f2c8b90c2f178fb6d41f4f7bfe59f9f",
+      "case": 16,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-16-control-128.bin",
+      "bytes": 676,
+      "sha256": "8aa7a68d9d8861d0a14cfd02d2e5e6e4a0e104bc792d994eaf00dda91954b4b2",
+      "case": 16,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-16-control-168.bin",
+      "bytes": 676,
+      "sha256": "121975451c719b9af67c8a075b09cf41089c4df5ac203147e151b1fb38f4caf0",
+      "case": 16,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-17-control-2.bin",
+      "bytes": 199,
+      "sha256": "ecbc68dd2807030d950eb05efce8f074af376f3c2e4580bfe97a8909a5caf1a1",
+      "case": 17,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-17-control-5.bin",
+      "bytes": 199,
+      "sha256": "8702304aa892f18d917358914ff839f297545dfe5bc43aca9131b5f7d781885d",
+      "case": 17,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-17-control-233.bin",
+      "bytes": 199,
+      "sha256": "aa231a0452a3a466f563646ca13520d0eb416c4481fb821d87307c26201e0828",
+      "case": 17,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-17-control-236.bin",
+      "bytes": 199,
+      "sha256": "bd253057a76226b047b3e63552fca836f3e64d61bddd87490df14c6a4de4ed3b",
+      "case": 17,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-17-control-248.bin",
+      "bytes": 199,
+      "sha256": "0232fcf726f54ce5f91fd93346218580a5a703831a8d049922167b87c8fac7a6",
+      "case": 17,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-17-control-254.bin",
+      "bytes": 199,
+      "sha256": "bb6dc9ea38f0e4b757540b07180f81c7731f7d713eebf7d31cdba301a758b5b1",
+      "case": 17,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-17-control-0.bin",
+      "bytes": 676,
+      "sha256": "e6efd1d240907bbf466785e3d6d4f91d17bd7a0a52395500c3a2bee7a188635b",
+      "case": 17,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-17-control-32.bin",
+      "bytes": 676,
+      "sha256": "0b36d5f6b2c0350624e49e8390c2604ce935d966f1800bde098f47a899148f78",
+      "case": 17,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-17-control-128.bin",
+      "bytes": 676,
+      "sha256": "509bea3ca71e5a25be0beec12db9d91cde6ff0d5e1ac83f4db2b7c9dec9e5270",
+      "case": 17,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-17-control-168.bin",
+      "bytes": 676,
+      "sha256": "0ddba849feadfae1299bd82a9028d9bc40475ebc0a19203757babc93a50cd700",
+      "case": 17,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-18-control-2.bin",
+      "bytes": 199,
+      "sha256": "a2f8e8b4ef018f0788625ced2a947782c676cbcc32a69327cf32b82bddcf1d56",
+      "case": 18,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-18-control-5.bin",
+      "bytes": 199,
+      "sha256": "daf825728262ffd4e2b46f1092d9a196f946cebe9cb6d397d8810caabc3cf52d",
+      "case": 18,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-18-control-233.bin",
+      "bytes": 199,
+      "sha256": "121fecbd91717cfa183d4df0831f5fe6de1076e4e0662c804f9b1c60f3258c0c",
+      "case": 18,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-18-control-236.bin",
+      "bytes": 199,
+      "sha256": "ab208b40a2258c20199ba118cc2e9d1888dafb0607cfccc464b073c9f06af3fd",
+      "case": 18,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-18-control-248.bin",
+      "bytes": 199,
+      "sha256": "8d4555c2dce6e8a3221e928d351010f8d5cf39fbcb5ccd990e7ff843f2353637",
+      "case": 18,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-18-control-254.bin",
+      "bytes": 199,
+      "sha256": "13386967d06b2ec9b0e4b4e61d9e4ef48d2a83fca0e4ebd78f5594f9209d4587",
+      "case": 18,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-18-control-0.bin",
+      "bytes": 676,
+      "sha256": "7cac256c0eff29dd9ce849f328d28beb11019ada10a35f9bc9357738ff83e3db",
+      "case": 18,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-18-control-32.bin",
+      "bytes": 676,
+      "sha256": "126aaf0d4480099a21b456be2f4142df719c076fbe9e96e65bda8d47b071bbc6",
+      "case": 18,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-18-control-128.bin",
+      "bytes": 676,
+      "sha256": "0c9c13f4701b6496aced1f91119d65a19bfa10eee93c85bac74609ae920ce393",
+      "case": 18,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-18-control-168.bin",
+      "bytes": 676,
+      "sha256": "4f86f50d9c0db2e0a4830ebd0315d4ede7ba0cddf86d9a5a24e0ac07c2ec860e",
+      "case": 18,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-19-control-2.bin",
+      "bytes": 199,
+      "sha256": "082ea629943e742daae849fb2fc420e3008f9a83f8183413c8cd9c5b11e88faf",
+      "case": 19,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-19-control-5.bin",
+      "bytes": 199,
+      "sha256": "a17f60dadb106abd91c7a597530c2f3a46189790c61147f483ab13b579229d46",
+      "case": 19,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-19-control-233.bin",
+      "bytes": 199,
+      "sha256": "0044dedf5f6c9d45a8a0ba3be86617cb7e651a30ffe4773fa1a1d5df31e3abd4",
+      "case": 19,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-19-control-236.bin",
+      "bytes": 199,
+      "sha256": "06075970689914502c669bf0f7a04ee4e79c93a592c9604c3fb58ed1f325c039",
+      "case": 19,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-19-control-248.bin",
+      "bytes": 199,
+      "sha256": "73f8ed18a9a3fdfca32ccd4d67f19fe25e161a43aa3ffea3f93a4b95d87fe690",
+      "case": 19,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-19-control-254.bin",
+      "bytes": 199,
+      "sha256": "760121ed76b3d99404a9af469d967f57c31520b004152a17ed351c1a14a288e8",
+      "case": 19,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-19-control-0.bin",
+      "bytes": 676,
+      "sha256": "74b60ac0873da4f0eb65e0ef9ab3cdc419d0c4b7493aa0992b6040404a5d30a9",
+      "case": 19,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-19-control-32.bin",
+      "bytes": 676,
+      "sha256": "ec2fd901dd73a0115622b6f61f17ec5bad10dee1181ca40bfc419ccf47bf1031",
+      "case": 19,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-19-control-128.bin",
+      "bytes": 676,
+      "sha256": "0c6774bc64d06353d99446a04a3b1c4bda6e9a2aac33698ea93fb234cd01ed22",
+      "case": 19,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-19-control-168.bin",
+      "bytes": 676,
+      "sha256": "32648bb896ccfe3ac7ce65d9e5a4ee2d18429a4221f6619b870ccbdb98ce7fa0",
+      "case": 19,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-20-control-2.bin",
+      "bytes": 199,
+      "sha256": "ec901f8d9cce68eaa42e70d7a7f62af2db6cd53e2d047d868ca2da1c1229f99a",
+      "case": 20,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-20-control-5.bin",
+      "bytes": 199,
+      "sha256": "4c16c49570c96b24ae0ee0b74f962fcdb964afd2370058615089e42e293c895c",
+      "case": 20,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-20-control-233.bin",
+      "bytes": 199,
+      "sha256": "3b00e698e8da7bd01279e0a84bdfd5a4d4684c0fd09168266eb6b280b1fe42fe",
+      "case": 20,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-20-control-236.bin",
+      "bytes": 199,
+      "sha256": "04c52597daa92b8cd45c8441668cfe8f4bec0394f2256885c1b0a017d03eb609",
+      "case": 20,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-20-control-248.bin",
+      "bytes": 199,
+      "sha256": "dc32cdc049b7c70a0a9a405a5c8c2434529cc6b32276bc93ef8cb0cbe629d3ee",
+      "case": 20,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-20-control-254.bin",
+      "bytes": 199,
+      "sha256": "f7b39d23e5ccb945c1d27bb8de8741882c082c86f81d41e5b447be1802762e9a",
+      "case": 20,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-20-control-0.bin",
+      "bytes": 676,
+      "sha256": "cb4c44f51aca3a0ced0088d554174b5f1a400bc5fba8e0368cb65b81f6026f57",
+      "case": 20,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-20-control-32.bin",
+      "bytes": 676,
+      "sha256": "96d0aaa449621f258d6f38f3937eb779f097f3344b6dcc84de116d4a6fffe9f4",
+      "case": 20,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-20-control-128.bin",
+      "bytes": 676,
+      "sha256": "d4f5e1f030bdf950dcfd972473c0dc48016d4d01936fe8827f814ca85f39d679",
+      "case": 20,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-20-control-168.bin",
+      "bytes": 676,
+      "sha256": "47fd79b174282e55a2873fb671d9d7d40516c5a1f1ca06bdef8abf15b9620cf5",
+      "case": 20,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-21-control-2.bin",
+      "bytes": 199,
+      "sha256": "dfa3f7dabbc598aba8b76821e7c6aa379e3c1f280e13b566d348dff77a94dd39",
+      "case": 21,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-21-control-5.bin",
+      "bytes": 199,
+      "sha256": "f81852d56b440c27084080604e6df06b72e126eed6b226b11ccdd8c4b667bf0c",
+      "case": 21,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-21-control-233.bin",
+      "bytes": 199,
+      "sha256": "27a8f3649380275927ae48803b822429ecefb62da47a6ad4b6da48aaa9250a28",
+      "case": 21,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-21-control-236.bin",
+      "bytes": 199,
+      "sha256": "7ee4519af97a92e54b5e25b4a862b005468520def4c345d55e0e24d2d0192c3e",
+      "case": 21,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-21-control-248.bin",
+      "bytes": 199,
+      "sha256": "a8d51101ee240cb95ab7737ff95b0b8d4450b5e46a8eb9da42edbc7ab5cb4f54",
+      "case": 21,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-21-control-254.bin",
+      "bytes": 199,
+      "sha256": "b4de4cf5cff8a60054e6f766aeac18879e2b0a13603073274b3e317d7d28d809",
+      "case": 21,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-21-control-0.bin",
+      "bytes": 676,
+      "sha256": "755267491a765799b550ecd4888922bcc7cbdc0b360684a190a92728cc29cb78",
+      "case": 21,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-21-control-32.bin",
+      "bytes": 676,
+      "sha256": "5c7a92752858d49c50adfda872ffd29b2fd2d2f895450d9acf335f9d3d5210aa",
+      "case": 21,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-21-control-128.bin",
+      "bytes": 676,
+      "sha256": "d2ccad7764287472477f2a8335cb1b31bec38d2da2c41d22bce39e35a504ab58",
+      "case": 21,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-21-control-168.bin",
+      "bytes": 676,
+      "sha256": "4718dc519c3be476b1c385896c1d0968a640b849c20fc81059b92ac6241f8299",
+      "case": 21,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-22-control-2.bin",
+      "bytes": 199,
+      "sha256": "a8fb57449a10c15a8694d07850e029cdf92e5bb2160ec2cacb954fedc5ed17b3",
+      "case": 22,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-22-control-5.bin",
+      "bytes": 199,
+      "sha256": "010a55fe7861f82047c5f6fbd01f02b7ebea8dd5745c4671c81ccac50e98a512",
+      "case": 22,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-22-control-233.bin",
+      "bytes": 199,
+      "sha256": "012b89b20b1f159715c637653c4c91ca191c41b478f1ca981e2e62c3537a6353",
+      "case": 22,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-22-control-236.bin",
+      "bytes": 199,
+      "sha256": "7286e6eb879b18a1a8dc72eb4772430c80bd9907f29eddc6f1111eba297c13a9",
+      "case": 22,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-22-control-248.bin",
+      "bytes": 199,
+      "sha256": "dbea62458b7d36830517cca9bf95137d08437f91ceb26d0a658116f8acd760b1",
+      "case": 22,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-22-control-254.bin",
+      "bytes": 199,
+      "sha256": "90772cb6b695184f7eb6e3ad4dcdb1e4be1b0e9a3191237b7cbdd640c44041b4",
+      "case": 22,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-22-control-0.bin",
+      "bytes": 676,
+      "sha256": "20faee677f1af44c4c540376e72343227a782d6a8ef6623bf9a36dcc42f46c32",
+      "case": 22,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-22-control-32.bin",
+      "bytes": 676,
+      "sha256": "e9c409c052909f40ad96608be95c513886ea92edbf4d44e2066b3391274bc5be",
+      "case": 22,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-22-control-128.bin",
+      "bytes": 676,
+      "sha256": "0f1a4f6e6528abb9ab13924160857a5b86936934a5ba63e72434c2e214e86ff0",
+      "case": 22,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-22-control-168.bin",
+      "bytes": 676,
+      "sha256": "1f6bb718bb34e9085375ef40cde2f40a3cd476a8aa3b9bd62e5d6ec1b8ee9645",
+      "case": 22,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-23-control-2.bin",
+      "bytes": 199,
+      "sha256": "8f2a1c06b2a6947a1867cbc4d57b2b1410fae3fc78e48e79e6c032d0dd1f6d29",
+      "case": 23,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-23-control-5.bin",
+      "bytes": 199,
+      "sha256": "a8c0ad25fb33b6503586ea2a705e8ec963bcea35cad9e0f048c3bbae37290e06",
+      "case": 23,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-23-control-233.bin",
+      "bytes": 199,
+      "sha256": "675d0ce9247f76dff12be11864140c6a338c69ce9869f293d3aa6a9b4e3490f4",
+      "case": 23,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-23-control-236.bin",
+      "bytes": 199,
+      "sha256": "4c81d70cc44b5f6afc98aeebfe9d01522583ce7a217ff9e28c8eab0f0e7a8996",
+      "case": 23,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-23-control-248.bin",
+      "bytes": 199,
+      "sha256": "537556a858eec08eabe33ea750ea5176241365df1edb11d385bfde68ec2ab118",
+      "case": 23,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-23-control-254.bin",
+      "bytes": 199,
+      "sha256": "25609f96d5adfaf3e313b4ee1973d4001f5b58b618276f08e3c34c24a18c883f",
+      "case": 23,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-23-control-0.bin",
+      "bytes": 676,
+      "sha256": "ce18c1a6a60a73a9b719debe9cb3cce78be5ef1a3bfafea7fcc0a9734d5d7fb3",
+      "case": 23,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-23-control-32.bin",
+      "bytes": 676,
+      "sha256": "b501d63075dbec9a2a43da034f28adfe62ef3119f94e46a78c76d684adf200f3",
+      "case": 23,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-23-control-128.bin",
+      "bytes": 676,
+      "sha256": "ef0e81a59ef2d8b44d234a0ae0c88d9983fc22bd8daee43f5685d73f5c1977e9",
+      "case": 23,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-23-control-168.bin",
+      "bytes": 676,
+      "sha256": "6e44c711122eac31cd7139d73f977ac1ec8bb14bc026305581cb87b98efab7ce",
+      "case": 23,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-24-control-2.bin",
+      "bytes": 199,
+      "sha256": "efa7fa00a307d8545dc56f62ee9342f392cfd8796aa1ee5f5aa219e0f6dbf9e6",
+      "case": 24,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-24-control-5.bin",
+      "bytes": 199,
+      "sha256": "d66d547e324b9a40941a69e3751c7869e51e372b28399d364ad4ccd4812620c3",
+      "case": 24,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-24-control-233.bin",
+      "bytes": 199,
+      "sha256": "06fc520f0fb537f14a388ae3e427d78900aa2b1ff6952dbc7e0e62ea73d6ddab",
+      "case": 24,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-24-control-236.bin",
+      "bytes": 199,
+      "sha256": "9c2ce26de5a78845cdfd8a180d46be2aaa5d6b9be9433fcb9897ba37cbad33af",
+      "case": 24,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-24-control-248.bin",
+      "bytes": 199,
+      "sha256": "fe3ab2074f6c80d8385ba9967e7a93c8ac4545d2b99ec12def8af624eb1a023d",
+      "case": 24,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-24-control-254.bin",
+      "bytes": 199,
+      "sha256": "c1300e3078aa23ff3f47ab18d063577bbfb9dab56d097b7232c92ccc2dd1fbeb",
+      "case": 24,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-24-control-0.bin",
+      "bytes": 676,
+      "sha256": "3215c74eee88041eb92e266b211c647df976b042558ac08a440fec9985dba11b",
+      "case": 24,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-24-control-32.bin",
+      "bytes": 676,
+      "sha256": "0cd82aff95fc92877d22470877b710974602b0e88a77cd4cb9faed6c5c05309d",
+      "case": 24,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-24-control-128.bin",
+      "bytes": 676,
+      "sha256": "47e5cc23a38e22c9cb874d9c84a39afc8979c82a79590bc320ca8079549c6b03",
+      "case": 24,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-24-control-168.bin",
+      "bytes": 676,
+      "sha256": "15c79befd2c87bfb4fc554fab24f5109f30b2848641c1529250bb58cd430125b",
+      "case": 24,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-25-control-2.bin",
+      "bytes": 199,
+      "sha256": "338a4cab7e96928f3c09cd616e265dd34a9cba5dc8d9933351ddcab4c1a7d237",
+      "case": 25,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-25-control-5.bin",
+      "bytes": 199,
+      "sha256": "080bf50eecebd21a0f4b0dd719af183e354d8d88aee2992d5f94e516b4bfa08c",
+      "case": 25,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-25-control-233.bin",
+      "bytes": 199,
+      "sha256": "7e51d62a75620b53c9c745dd762488f8f6211a259485375a28eaaca90476f017",
+      "case": 25,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-25-control-236.bin",
+      "bytes": 199,
+      "sha256": "227b0f50c93c2ac51818e446c90f54648729182c9dcd48d858e8cbea51cfdfff",
+      "case": 25,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-25-control-248.bin",
+      "bytes": 199,
+      "sha256": "96e6d81cad2293d266b0aa6aa7516e2dbbd3c6a1fae9f1848047dca47494e90a",
+      "case": 25,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-25-control-254.bin",
+      "bytes": 199,
+      "sha256": "0e9adffa46848e54a94b87b6f78793421b0d530b0bb334817fe9c04f77a33955",
+      "case": 25,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-25-control-0.bin",
+      "bytes": 676,
+      "sha256": "6ebb3ec3115d831c0185dfb40c5af69961e1a59b20e97356271357f42b2b8d65",
+      "case": 25,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-25-control-32.bin",
+      "bytes": 676,
+      "sha256": "1541390ff817f6e49b4ff7e94ea5480de6fde8a4469fb1094a713ffff9f9ccf9",
+      "case": 25,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-25-control-128.bin",
+      "bytes": 676,
+      "sha256": "b3165a832915a940ed2e04d4526c5c32266e43f9b750ea447e7e7b29d8b9681b",
+      "case": 25,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-25-control-168.bin",
+      "bytes": 676,
+      "sha256": "8a7b4eb696c4cf8a79b44253178c5d15bed75f233e3864ac1f80c5254aa1436f",
+      "case": 25,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-26-control-2.bin",
+      "bytes": 199,
+      "sha256": "cbcb436c0b5de1bbbfdab667c4aef5116e38da468c9fcd59b4b6c27df41a6204",
+      "case": 26,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-26-control-5.bin",
+      "bytes": 199,
+      "sha256": "cbca020c9b91144e9346e8eda44a0ddb257326f0324ca87e1d3a727e4dd50fa8",
+      "case": 26,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-26-control-233.bin",
+      "bytes": 199,
+      "sha256": "25d67991d5c0930ca1b682e81a407257a349236f6499350ca12f47a17d79e776",
+      "case": 26,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-26-control-236.bin",
+      "bytes": 199,
+      "sha256": "c8b07b6f7b22a0043598324e230a1460393141bc4056e176cdf92544e06b0d6c",
+      "case": 26,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-26-control-248.bin",
+      "bytes": 199,
+      "sha256": "4591b953df4d6a0e463af55ad70387322a6f9a98ee9bd10b3f6106dbb27c5fa7",
+      "case": 26,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-26-control-254.bin",
+      "bytes": 199,
+      "sha256": "95c3b2f4520fe82e5e26875b13786174e482d13eac2e61202dc735ee20d50d23",
+      "case": 26,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-26-control-0.bin",
+      "bytes": 676,
+      "sha256": "d9cde3823ec98328726a9f652290e99dd780babae560d69cc1de99e9d79ccc4d",
+      "case": 26,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-26-control-32.bin",
+      "bytes": 676,
+      "sha256": "49835d8cd7067c25af1090a2fc8c72cbd46fc31e50f3369b9c0d88648d98676b",
+      "case": 26,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-26-control-128.bin",
+      "bytes": 676,
+      "sha256": "6af05ac90560ac4978ee926ed5018929ed513e9e301088c5bb4573d8656a56d8",
+      "case": 26,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-26-control-168.bin",
+      "bytes": 676,
+      "sha256": "38b308f5f575a6eee3bde10ee3ebd4c86a9a422ce873cf666fc3546ab9dd854e",
+      "case": 26,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-27-control-2.bin",
+      "bytes": 199,
+      "sha256": "899782d2540d5019cd34dd3b3d66b9c272bac3ebee4d3caebb14de943d8e4787",
+      "case": 27,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-27-control-5.bin",
+      "bytes": 199,
+      "sha256": "3128cea59f2ed544a5b5c30345e0399c8d3f6aa2f43642cb7789a2c205102b7d",
+      "case": 27,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-27-control-233.bin",
+      "bytes": 199,
+      "sha256": "145746ce1eaf1c406b66ddb8eb7375eaa2f6675bfff9818f59cbd7bfa6a13cd4",
+      "case": 27,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-27-control-236.bin",
+      "bytes": 199,
+      "sha256": "af2ca3ed1e435c653c3aca6aff281ba10ac5640d20fbd3ee4141c414720db97d",
+      "case": 27,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-27-control-248.bin",
+      "bytes": 199,
+      "sha256": "b86b3addf3dcc4114e6dcc7653d416a92d127bc2aa53bf529dca9440a761a6e0",
+      "case": 27,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-27-control-254.bin",
+      "bytes": 199,
+      "sha256": "68669154032a2e9df4a93c2bb24935d46bf2432bb021e75f8320addce22bc2e9",
+      "case": 27,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-27-control-0.bin",
+      "bytes": 676,
+      "sha256": "7cb18b9049c955cf4833f5393f93a09b157cdce76c2377c0e929b8abb4224b36",
+      "case": 27,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-27-control-32.bin",
+      "bytes": 676,
+      "sha256": "8629aa61c60a84a9874de68334a91431570ed3df05145a5322e24758bbff6430",
+      "case": 27,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-27-control-128.bin",
+      "bytes": 676,
+      "sha256": "77ee7381a5db5ae928c67da1a986b9e93f47c7ee77643ee463a49d31b87af529",
+      "case": 27,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-27-control-168.bin",
+      "bytes": 676,
+      "sha256": "4c06d3d1241f429bce81f1e236d9f343ff223436e3445477df637e5fc57beb4d",
+      "case": 27,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-28-control-2.bin",
+      "bytes": 199,
+      "sha256": "c1cec2b9dff8859d410970e94e7e431bf8c2c3298eb451cec85908d1f04cdfb5",
+      "case": 28,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-28-control-5.bin",
+      "bytes": 199,
+      "sha256": "65884d9044c4b6c157061f626eb325d3930d21c5b1440bbc92cfaae156fcdefd",
+      "case": 28,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-28-control-233.bin",
+      "bytes": 199,
+      "sha256": "18e5648dd4ef8ac409bf5df47d92eab57587ffca691458e471dc42080607e766",
+      "case": 28,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-28-control-236.bin",
+      "bytes": 199,
+      "sha256": "89c96d5e917d69de9612a332a0cfc3fe4291de02bbb9a0d0c562d7cc1ffba8ed",
+      "case": 28,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-28-control-248.bin",
+      "bytes": 199,
+      "sha256": "bfd5a0c9d5c72a0e6130ac5c2a3b13c2b9b7eabe5eef47b5ddfc50b6cda005c6",
+      "case": 28,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-28-control-254.bin",
+      "bytes": 199,
+      "sha256": "5ccfce5754d260388bb5e6a5d6442bbccea35170e5bb770988a53e8916bb2417",
+      "case": 28,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-28-control-0.bin",
+      "bytes": 676,
+      "sha256": "971aa8fd8ea0ec735eba8af6f3fe64b34543d1a96fc2b8dc30fd541eb482bae9",
+      "case": 28,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-28-control-32.bin",
+      "bytes": 676,
+      "sha256": "62afe1df70f4f21cd82b66a204b1c9cf8d46aa2ce1855be2036688935a30dd51",
+      "case": 28,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-28-control-128.bin",
+      "bytes": 676,
+      "sha256": "cf27ca5268abf7523f6507146159eea24eacf527c064f829728eaa5f4d887f43",
+      "case": 28,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-28-control-168.bin",
+      "bytes": 676,
+      "sha256": "a585273d7759d741a8674897cfc3ac2d3076fbca081dc4bb1a0950b9cc3c6d4b",
+      "case": 28,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-29-control-2.bin",
+      "bytes": 199,
+      "sha256": "aea7c7bde1386375ad73bebe21c3a9abb2c113edb44f8a7c6158ee50c61fbfdf",
+      "case": 29,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-29-control-5.bin",
+      "bytes": 199,
+      "sha256": "634347ce958688e22031e909fe4cc90f2ecc8d75391d9aa12264462267a4f60f",
+      "case": 29,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-29-control-233.bin",
+      "bytes": 199,
+      "sha256": "1468372f15b903b5767cf366065f1c755ff445f757c33a4a9599ba0b47f8f9ee",
+      "case": 29,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-29-control-236.bin",
+      "bytes": 199,
+      "sha256": "b9438e8c3a23444e66e11d1a6c42a4d4ba5140a710773789f621834ab2a393cc",
+      "case": 29,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-29-control-248.bin",
+      "bytes": 199,
+      "sha256": "3755e81b8069275a0957d334382292aab7ed8135167fff220dca8fa790c6d8f8",
+      "case": 29,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-29-control-254.bin",
+      "bytes": 199,
+      "sha256": "7dfa8aa2e8110b5702dd04f56f1236079919154aa870181fe37c3d38ec127d6f",
+      "case": 29,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-29-control-0.bin",
+      "bytes": 676,
+      "sha256": "2662d594280eb309dc6146e0e39eda3962ba5682a591475c4b0009e672b84719",
+      "case": 29,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-29-control-32.bin",
+      "bytes": 676,
+      "sha256": "806105a3dfc544d275b1ea62567f372bd6fb722b8740917ae2fef5d6985c4fb1",
+      "case": 29,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-29-control-128.bin",
+      "bytes": 676,
+      "sha256": "2ca1e2e626a0baa8df629b56f68bee93a33ec1c6acdafbb4a7d1cc1476006a12",
+      "case": 29,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-29-control-168.bin",
+      "bytes": 676,
+      "sha256": "99e4015d49b96cb2dabc3eb052b0bd138b7d3a0a8438d62ac7e92b7fb436583f",
+      "case": 29,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-30-control-2.bin",
+      "bytes": 199,
+      "sha256": "4dad8beae75a28f7c695aa99f90b1117f19335f32a14404a0b607a109cf1b5b5",
+      "case": 30,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-30-control-5.bin",
+      "bytes": 199,
+      "sha256": "6c18ab0ad8ee6eaaa4ea0451cdd8d79a41d1d4f09ee1b74346016a678cbfed3b",
+      "case": 30,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-30-control-233.bin",
+      "bytes": 199,
+      "sha256": "112ce935c7bc297af1330588d53fe7f3bf3d92ceb744c3d1999d069d1f039feb",
+      "case": 30,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-30-control-236.bin",
+      "bytes": 199,
+      "sha256": "3b4c5664d30479068d590ec4005a7bcea6d458f9e607630879436564d995c6c8",
+      "case": 30,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-30-control-248.bin",
+      "bytes": 199,
+      "sha256": "1f005fd54f5ca3c6ece09f5e032e9d8fc4afcdd5319c1e9243febea676d33f25",
+      "case": 30,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-30-control-254.bin",
+      "bytes": 199,
+      "sha256": "b16424357962e7aedf41e1137557cf9430c4cdfc45910a466dea93e09527840b",
+      "case": 30,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-30-control-0.bin",
+      "bytes": 676,
+      "sha256": "860cfc24d7fedf7a8fcb7c186916fd47ac26d1c009085c44b7eb7bec8dcb99e0",
+      "case": 30,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-30-control-32.bin",
+      "bytes": 676,
+      "sha256": "9519a2506bbb3f9a87a4ea4d96f38a242ee889639ef4adb86a667de0f0b4b9ab",
+      "case": 30,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-30-control-128.bin",
+      "bytes": 676,
+      "sha256": "151369908484788cacd7093b27cee8cd8a1b00f50b2fa1af5048930c379b580d",
+      "case": 30,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-30-control-168.bin",
+      "bytes": 676,
+      "sha256": "2776626ffc5bcb6e1d3dd9308da48265a393b383aadd72f0a3ef3fc27df71184",
+      "case": 30,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-31-control-2.bin",
+      "bytes": 199,
+      "sha256": "6b8d035a678a077e854584a73294ceb275268595f9d625647ffd373b8aebcbff",
+      "case": 31,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-31-control-5.bin",
+      "bytes": 199,
+      "sha256": "f4c25b28b1ccd40373c88d6d2aed19ef3a164c5aedbc4b4c2374d799a962af89",
+      "case": 31,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-31-control-233.bin",
+      "bytes": 199,
+      "sha256": "1003c7453829d197cf7e10bc15e9fab33f8ce85403f36b5bff6c2147193e8224",
+      "case": 31,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-31-control-236.bin",
+      "bytes": 199,
+      "sha256": "90c16d9e57a2ece0938359f566839eea52c4487612157e65e8e53169538dcae9",
+      "case": 31,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-31-control-248.bin",
+      "bytes": 199,
+      "sha256": "91284661cef8ce0b0eda3fa07a79a18b4f5d2b99f4090929ded8a537e58835c2",
+      "case": 31,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-31-control-254.bin",
+      "bytes": 199,
+      "sha256": "50915571feccdf0324f3f131bf89607a5d76a03106edf2c17d3da7ac0a304f9c",
+      "case": 31,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-31-control-0.bin",
+      "bytes": 676,
+      "sha256": "fa3d9e6affa762be89875191a56145171cedbe29c0c684ea06285c98e350e35e",
+      "case": 31,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-31-control-32.bin",
+      "bytes": 676,
+      "sha256": "c9322cd47d7df9fd3d82b45a564b2709eb02da662bdb8e5cb4abb1f11f8f713b",
+      "case": 31,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-31-control-128.bin",
+      "bytes": 676,
+      "sha256": "52d1f8f3e782698010ebeda3597d45ca268568f24809a8fc27c218354ff5ad81",
+      "case": 31,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-31-control-168.bin",
+      "bytes": 676,
+      "sha256": "75e4092f758c094cb17aa10350fde70ee46f13e5d80abe8e64fd2f6c35e34796",
+      "case": 31,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-32-control-2.bin",
+      "bytes": 199,
+      "sha256": "695642b999171555aff554ce41df68cfbf1219647beba895c5e630db0969bd39",
+      "case": 32,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-32-control-5.bin",
+      "bytes": 199,
+      "sha256": "446aa98012d975e714c5230079a36d89030a9c8f91e62e745e4cbeef6ec3409a",
+      "case": 32,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-32-control-233.bin",
+      "bytes": 199,
+      "sha256": "bedc7d7e4bfd6d88baa3126222a821bad3e3ceff6593b8c6399a1a3a27f0056f",
+      "case": 32,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-32-control-236.bin",
+      "bytes": 199,
+      "sha256": "d82f40c1fd945667041c395643a40fc37e2132317cff226cb3b1db9d6a2c7da5",
+      "case": 32,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-32-control-248.bin",
+      "bytes": 199,
+      "sha256": "22871b9de48e58c656f80e00f2ce92ec3771f3e03b6fcb5eb699c5f5097aa44c",
+      "case": 32,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-32-control-254.bin",
+      "bytes": 199,
+      "sha256": "c37cabd16b8abc44684396bb18b6a887dd2f30aff9b269e0eeed03ca44dcae6c",
+      "case": 32,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-32-control-0.bin",
+      "bytes": 676,
+      "sha256": "b66b17fa2831f999c304916aef3b3c229a18ff845965c8a387fdb1e62b30d20c",
+      "case": 32,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-32-control-32.bin",
+      "bytes": 676,
+      "sha256": "a908402ba4d738e2fb4ce7b5159979811d4d0b7798916162361802da058d62d6",
+      "case": 32,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-32-control-128.bin",
+      "bytes": 676,
+      "sha256": "d5d1ead5c41b0c6b5a45bc6d9b6a46f1366312f2ca4f7d4be69ed5679f5ce5d2",
+      "case": 32,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-32-control-168.bin",
+      "bytes": 676,
+      "sha256": "5c79b7077b30813998552939b7ddc2726248ef040af949cc6075f8eee078ca2c",
+      "case": 32,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-33-control-2.bin",
+      "bytes": 199,
+      "sha256": "c698cbeb9eb3536099c5802f510b7aef2e8f6a0e31685ae4e4210d82d66820e0",
+      "case": 33,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-33-control-5.bin",
+      "bytes": 199,
+      "sha256": "1830f454d7e5339bca7860d6a425a98222b1b36c384b4057c84081a8b49f6cda",
+      "case": 33,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-33-control-233.bin",
+      "bytes": 199,
+      "sha256": "1e2f7b02449c96e34625f6bff2996d9e94be8709b78a4db76622357cd6c614a7",
+      "case": 33,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-33-control-236.bin",
+      "bytes": 199,
+      "sha256": "88e0219adcf8478d16612903e373db4cf35fbcc86a8ea2edbbb8116deed9802b",
+      "case": 33,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-33-control-248.bin",
+      "bytes": 199,
+      "sha256": "3793efaac9950fcd33a7577cefe409ce6247ba1896647ed540139e0258b65fe4",
+      "case": 33,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-33-control-254.bin",
+      "bytes": 199,
+      "sha256": "bcb8890183f5489b87d16fba67f6d9ecc00ae14ce253fe1bbc7e4bd0f70f1bcc",
+      "case": 33,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-33-control-0.bin",
+      "bytes": 676,
+      "sha256": "47909f07f2b2100a3d7e9c0746c0b29a379d9ec5c065ea752afc3ff35a96c92b",
+      "case": 33,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-33-control-32.bin",
+      "bytes": 676,
+      "sha256": "ab6b7a904fb617507e0d7ecaf730476ed08066e6e0a3d18b77bd440fa58c4253",
+      "case": 33,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-33-control-128.bin",
+      "bytes": 676,
+      "sha256": "1ec2560c25b7bdbf7ed4ad5b6d3d102453ceaf7b04c3427c544164666a58def9",
+      "case": 33,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-33-control-168.bin",
+      "bytes": 676,
+      "sha256": "b361b5015805a30db621798451bbca7f2d8dcbdc42dccb6a59b623d3710d14c0",
+      "case": 33,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-34-control-2.bin",
+      "bytes": 199,
+      "sha256": "ac8818f9ccbdfd91a05651d073c702ad1f3dfac62614b33cdfd5dfdf8eace04b",
+      "case": 34,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-34-control-5.bin",
+      "bytes": 199,
+      "sha256": "90d2cceff491e49cea4ed861809de6693831ead54e183f9d3c46e11b8cf53c6b",
+      "case": 34,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-34-control-233.bin",
+      "bytes": 199,
+      "sha256": "da25944bbecfb72101d069219e912e7c081e1e7292e23cec0de8ebfe20a1b2fe",
+      "case": 34,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-34-control-236.bin",
+      "bytes": 199,
+      "sha256": "80b33d52bbcc6c698a08b9923daa5749e3a693b013651a2fa941e2325e825f87",
+      "case": 34,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-34-control-248.bin",
+      "bytes": 199,
+      "sha256": "992cd7fd8c4bb067ddc5aab38b17ce069128af4fb3345d46c27e3a465a451624",
+      "case": 34,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-34-control-254.bin",
+      "bytes": 199,
+      "sha256": "fd8e7f8e3ee48d671b4a1df2635636f7609252e63c4d966d6f5ab1fe947627cb",
+      "case": 34,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-34-control-0.bin",
+      "bytes": 676,
+      "sha256": "6d5e0c28040c7ef4c2dbb3962a1a32317cc16dfc1b279aa6d0a5ba7747ccf1fa",
+      "case": 34,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-34-control-32.bin",
+      "bytes": 676,
+      "sha256": "13d3b00d1d022e14229d56b5652770056d3f35af0d9dcb29e4e84f4b289e976b",
+      "case": 34,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-34-control-128.bin",
+      "bytes": 676,
+      "sha256": "063a5191f2bafaf4a3e17a01da83609b685e3867fcf61c246e4d984717ffc3f8",
+      "case": 34,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-34-control-168.bin",
+      "bytes": 676,
+      "sha256": "1a9a85c9dc4afcb99f2c479cf23dcf04f22670801b13ab8b60365ac5504fd910",
+      "case": 34,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-35-control-2.bin",
+      "bytes": 199,
+      "sha256": "e44daec0f37188a8126d7101530b6dd68c06db977f7a7eff1425966de1f70ab5",
+      "case": 35,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-35-control-5.bin",
+      "bytes": 199,
+      "sha256": "2273edcf92ac504171dcc6692de0eaaea62b0bedaf128ca3ec4d7424075c89da",
+      "case": 35,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-35-control-233.bin",
+      "bytes": 199,
+      "sha256": "8ae48b3cf7aa653616326c7b35055a79943b5887f65a72c3af2c2f4ac9977f2e",
+      "case": 35,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-35-control-236.bin",
+      "bytes": 199,
+      "sha256": "141fa7b12fa0932d9f950f7987a75a1f19188205621d631f9e52e3cc5b993428",
+      "case": 35,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-35-control-248.bin",
+      "bytes": 199,
+      "sha256": "9c2c638edfce1190082eff836f8225dc0278242eaf95518f292e4bc6c88a0065",
+      "case": 35,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-35-control-254.bin",
+      "bytes": 199,
+      "sha256": "b69d73e4b55c25d701a44780352df725d9b8cc20ad155e5c10df3af8f611975c",
+      "case": 35,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-35-control-0.bin",
+      "bytes": 676,
+      "sha256": "f40e834086f6b8986283b1778f941eb6c24206a24793ec4361c306b7c2c0d529",
+      "case": 35,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-35-control-32.bin",
+      "bytes": 676,
+      "sha256": "b9b34b3502d3e137697188b475f3815ea00b93b3f1b9e7c68ed4e612687a5428",
+      "case": 35,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-35-control-128.bin",
+      "bytes": 676,
+      "sha256": "840f45c196d9d5f774c17cbc7adf2d183a71473db3b4a92516a6ab34f0a2b190",
+      "case": 35,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-35-control-168.bin",
+      "bytes": 676,
+      "sha256": "549eb86d0d70a4d5fc8e4d688421b3e9ee4a8ade7d494e092dad40c0c32f3603",
+      "case": 35,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-36-control-2.bin",
+      "bytes": 199,
+      "sha256": "fbd81bfb089b6b7a9a36cf61faec75b38523cf03ecbaae5c4739caf2de324e3e",
+      "case": 36,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-36-control-5.bin",
+      "bytes": 199,
+      "sha256": "3274db50c453ab851aa6230fc10d1222de5c42f8b7516e08e51933f13f9055e9",
+      "case": 36,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-36-control-233.bin",
+      "bytes": 199,
+      "sha256": "57ff37561584eaec18b398e31bfcbc340130b1164b2370b471308e1e7d5049c9",
+      "case": 36,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-36-control-236.bin",
+      "bytes": 199,
+      "sha256": "4318836a799c421d20ac3629fdc21731652d43705d78b41dd5fc824fe33ca9c0",
+      "case": 36,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-36-control-248.bin",
+      "bytes": 199,
+      "sha256": "bdc5b57c5fa7f187880078c359202799311eebb9ca72308be8f3196558c3d8a4",
+      "case": 36,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-36-control-254.bin",
+      "bytes": 199,
+      "sha256": "f2637acf2e62f46af3ec5f607dea37e44f4e8b24e206e92755489f7d2464dfbb",
+      "case": 36,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-36-control-0.bin",
+      "bytes": 676,
+      "sha256": "9de4bf11b24fd3c88ae1104b70c52c790b2e76a6a793b12f65057b99542a3d26",
+      "case": 36,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-36-control-32.bin",
+      "bytes": 676,
+      "sha256": "796ee3a0b56e30dfcb5444ead5e15c8fa32de78f80eb71d88f6ba462c7bb00b7",
+      "case": 36,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-36-control-128.bin",
+      "bytes": 676,
+      "sha256": "bbe4199e7cfa65ba291015a3dd72649f33002bec42c5942571e06123b475cac2",
+      "case": 36,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-36-control-168.bin",
+      "bytes": 676,
+      "sha256": "53f416da4646a8b060495c9c89b2355c18aea66b4a64e997529fbc96fb7f8b72",
+      "case": 36,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-37-control-2.bin",
+      "bytes": 199,
+      "sha256": "cebf85f0e989fe46638e1f9319272c23b286a8e1be50953df72768c445d855f2",
+      "case": 37,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-37-control-5.bin",
+      "bytes": 199,
+      "sha256": "c3111f70bfeb65269e83fa9e8fad030ec64149e35f97bc6e7476246fcc6a89b7",
+      "case": 37,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-37-control-233.bin",
+      "bytes": 199,
+      "sha256": "bd03b6dbef7c44db32072c9e0e8a74dd90e1c929e5bcd627b418a10c06472191",
+      "case": 37,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-37-control-236.bin",
+      "bytes": 199,
+      "sha256": "49b2a58bce9b525f9f20acba64380c944b479e0e3078adfb5a82e586281d51c8",
+      "case": 37,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-37-control-248.bin",
+      "bytes": 199,
+      "sha256": "99c4ef2aa818511388f8e4da9ef3e4d850dc2fc47f6b383ac8060b23119a876e",
+      "case": 37,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-37-control-254.bin",
+      "bytes": 199,
+      "sha256": "02fe33401acc5359f6d3013f4055a5305ca8e441c53d42bac2f123b118485b86",
+      "case": 37,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-37-control-0.bin",
+      "bytes": 676,
+      "sha256": "344926347b541fd97391d18fb84cceb1fed71542292eb2bdcdd3fdc72782088a",
+      "case": 37,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-37-control-32.bin",
+      "bytes": 676,
+      "sha256": "787e51bacf6ddcca4f721174104fd7292c876f0187a6857b07435732d1840bbc",
+      "case": 37,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-37-control-128.bin",
+      "bytes": 676,
+      "sha256": "4b8b62a0aecb6b06ae270d93063a8379ff24ce2d06742aadb752b70ce8bc37fd",
+      "case": 37,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-37-control-168.bin",
+      "bytes": 676,
+      "sha256": "ddaace151e71f5103ef6617d96fda0f2f46e15fb164cb5599cb6ee1c5dec4c25",
+      "case": 37,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-38-control-2.bin",
+      "bytes": 199,
+      "sha256": "eb9f00829c6c5e4840bfc7652b1f29e5bda81fa7594be19e1f9635652616df16",
+      "case": 38,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-38-control-5.bin",
+      "bytes": 199,
+      "sha256": "38d528495d5e4af7e771016ac0569747ee5d890c301f8f39f1cd92931ece7f43",
+      "case": 38,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-38-control-233.bin",
+      "bytes": 199,
+      "sha256": "877d499182085e1c99a50dadfb4d1347c497c8cb00bae6d8d33f29c3a2b955fb",
+      "case": 38,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-38-control-236.bin",
+      "bytes": 199,
+      "sha256": "12564ef029016a7ef9a28a6c147cc4f3d9923782f57505dbc019872efad689ea",
+      "case": 38,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-38-control-248.bin",
+      "bytes": 199,
+      "sha256": "8e3ec140d91534f3eb64a018d86e1e3b283e138cc71cd9c7c5260e0f6766223b",
+      "case": 38,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-38-control-254.bin",
+      "bytes": 199,
+      "sha256": "0a17d5233e417ff2cd956bba7f92f1b64be2ef914a5b55f1988d7f96e93afea4",
+      "case": 38,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-38-control-0.bin",
+      "bytes": 676,
+      "sha256": "4cfe3839f6f08c020c919384b535efe0b731cf793c51ee88240ca87bc5c388b3",
+      "case": 38,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-38-control-32.bin",
+      "bytes": 676,
+      "sha256": "54c16b605cfacdadbaef5491072b7ba5c64d671429f1a482c304f89023ab964a",
+      "case": 38,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-38-control-128.bin",
+      "bytes": 676,
+      "sha256": "46aa2919918c62f191d1308a491d8d46fb4d7f4970809eed22af059a1d842751",
+      "case": 38,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-38-control-168.bin",
+      "bytes": 676,
+      "sha256": "70fbb2d8cfc3665f42c28fb316d889ee9efe38f44f2b996e2e49753778d9766f",
+      "case": 38,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-39-control-2.bin",
+      "bytes": 199,
+      "sha256": "bbe4769ffb3e7bdac5be096a3d1550a9c76addef7f82dd2d22b3694e7ee43e3f",
+      "case": 39,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-39-control-5.bin",
+      "bytes": 199,
+      "sha256": "69f7f29b395b665afe72884601a2264f959062ee049cc35a1cfbf1307a9ff86e",
+      "case": 39,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-39-control-233.bin",
+      "bytes": 199,
+      "sha256": "f302f7ec49a7412c1219b515db58eb9c346d3c64d1d9ddfde136e1bf7e963e3f",
+      "case": 39,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-39-control-236.bin",
+      "bytes": 199,
+      "sha256": "715b12157fe4b60dc1fcd8e98e33dd4d192964b76f64f3788087115d5ade8fd5",
+      "case": 39,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-39-control-248.bin",
+      "bytes": 199,
+      "sha256": "8e4306521a71b63a51fc3c3ee525e6969ef7872b8591f0b2dc66e8e27d477850",
+      "case": 39,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-39-control-254.bin",
+      "bytes": 199,
+      "sha256": "2ca495ffb4caf607f90c272a98de308b148bee59d6e6878089c3c7fdd457bf67",
+      "case": 39,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-39-control-0.bin",
+      "bytes": 676,
+      "sha256": "aa67383b3157dd39e73611801f9b5c3a4e1bfc91e4896ab4f5450a8945cddb01",
+      "case": 39,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-39-control-32.bin",
+      "bytes": 676,
+      "sha256": "773012505bf2f4c4049ab49d47422e0e7291ddece480985038c56c8a22ee2efd",
+      "case": 39,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-39-control-128.bin",
+      "bytes": 676,
+      "sha256": "19a36c839a691a4d25a08e831f5e11e5f399fcbd889d95d5d02f87629c920db4",
+      "case": 39,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-39-control-168.bin",
+      "bytes": 676,
+      "sha256": "c0d0180ad5347056a965a351453f6b1ec07d61343b6b1019adbd8ff40d39e795",
+      "case": 39,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-40-control-2.bin",
+      "bytes": 199,
+      "sha256": "355fb0c3d7fdd42e47813eace3c1f732de0710f831a97c8b11ddc53b90789bf6",
+      "case": 40,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-40-control-5.bin",
+      "bytes": 199,
+      "sha256": "e17c709b039213db0a8331667446969ebcede76fc075a238b7b1b3c33a0ae601",
+      "case": 40,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-40-control-233.bin",
+      "bytes": 199,
+      "sha256": "895df890c72a6dc2dbe64e8d1fea353b3e8d388da7d8a6f9995faa0bca03ec5d",
+      "case": 40,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-40-control-236.bin",
+      "bytes": 199,
+      "sha256": "7620b5629528c094a4deb5b24dcb5b669ded0b314b999d3dd85d256332130319",
+      "case": 40,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-40-control-248.bin",
+      "bytes": 199,
+      "sha256": "2966cf72e044d0c78c693c23979f61db8fe9ece89dd6a314749487d1244db4af",
+      "case": 40,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-40-control-254.bin",
+      "bytes": 199,
+      "sha256": "91c3a1542cf7fc60581e5b7a9e1572181f894c36d1d00cc29bed383c321ec2d3",
+      "case": 40,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-40-control-0.bin",
+      "bytes": 676,
+      "sha256": "11ddf5c5653f1096ee99aa318c1a22b1548d39e0143a758d836549860e1b3a55",
+      "case": 40,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-40-control-32.bin",
+      "bytes": 676,
+      "sha256": "cd3483ff7a8b8e33e6e1890e0abc796af300f40462085d580505bbbb3ca14e03",
+      "case": 40,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-40-control-128.bin",
+      "bytes": 676,
+      "sha256": "4f01264ab77e1e27b96bd4f9e80b1773e818d643d61a00c8707fccb9fc2db651",
+      "case": 40,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-40-control-168.bin",
+      "bytes": 676,
+      "sha256": "aa11e89124e43c869dc7682f04d4cd2c29c2924aa8e65c16dc075fc661a3d008",
+      "case": 40,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-41-control-2.bin",
+      "bytes": 199,
+      "sha256": "5797cca295c9d874df906b7cb42c04037c940febfbe53d9c52994386da6015bf",
+      "case": 41,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-41-control-5.bin",
+      "bytes": 199,
+      "sha256": "a219ecf9d9dc10a13bb1dd0e1a5f5936aed9b528bb15c474557b21c0ebc07f13",
+      "case": 41,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-41-control-233.bin",
+      "bytes": 199,
+      "sha256": "c054ad6829e96841ebc155752550a695db37f0313a60d0dc772c802360361b1d",
+      "case": 41,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-41-control-236.bin",
+      "bytes": 199,
+      "sha256": "fe494f313d7aef4d80a309180c3e24140c26dc8e31d72e07d60404e363e5ca16",
+      "case": 41,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-41-control-248.bin",
+      "bytes": 199,
+      "sha256": "c69a79025d6a3ab16f64c16248432d8798844e3177d6a1556a083f7569b4671c",
+      "case": 41,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-41-control-254.bin",
+      "bytes": 199,
+      "sha256": "d4ecb3917759a38df4dc083924515e5f1e6c65eb176ad5870aa3670e4baecf91",
+      "case": 41,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-41-control-0.bin",
+      "bytes": 676,
+      "sha256": "3df8d20b772bacb4fb28fb58441c492fd442c13cbfe6c9fb7f0467305f6ea60a",
+      "case": 41,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-41-control-32.bin",
+      "bytes": 676,
+      "sha256": "4001b93a952f5b6bee05031bcd70f80ccc49b7f4c0f522db69ea693ca617a42f",
+      "case": 41,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-41-control-128.bin",
+      "bytes": 676,
+      "sha256": "8239c7698cac3d75299bed085975739c9c6cb35cf03efd9f998653cabe81aa94",
+      "case": 41,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-41-control-168.bin",
+      "bytes": 676,
+      "sha256": "6c187485336a42e808f4dd5b905815256739980d72dc59a90531a857df025f72",
+      "case": 41,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-42-control-2.bin",
+      "bytes": 199,
+      "sha256": "12d342dea266749201fd6a9fd273ad1b55ea7d758add3c211ccf1ecd662f5721",
+      "case": 42,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-42-control-5.bin",
+      "bytes": 199,
+      "sha256": "ee9209b8ccab2c0b6796284f91bc5d5724a7e460605cfd98a93e9f45d7cd2df4",
+      "case": 42,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-42-control-233.bin",
+      "bytes": 199,
+      "sha256": "90b9187c0f4aa8d47e9650bf5f93b532bd83ccf5deb6f3dc77bea06dfaef8be3",
+      "case": 42,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-42-control-236.bin",
+      "bytes": 199,
+      "sha256": "1bcaba518451da329dd642d0f5b2e827ef90d89907c4ad08736130fcb321c2ac",
+      "case": 42,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-42-control-248.bin",
+      "bytes": 199,
+      "sha256": "774c2e1f62105eb6a943ded6ae130531ac5edc00f63f58d503830a622e0462c6",
+      "case": 42,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-42-control-254.bin",
+      "bytes": 199,
+      "sha256": "94973c540f7e7f3c9cc0cf98bcb5660738551405aeb1ade3a05cd9793bb3e416",
+      "case": 42,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-42-control-0.bin",
+      "bytes": 676,
+      "sha256": "35ddcd5de05b3542c78818a72f5973bda48bdb0d68299c2ccf0c911e75e22d3f",
+      "case": 42,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-42-control-32.bin",
+      "bytes": 676,
+      "sha256": "ab97f990360abad95ffa9a34ac5fc916e0026d5788d33abc2916df0b00494472",
+      "case": 42,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-42-control-128.bin",
+      "bytes": 676,
+      "sha256": "010a088acd99a7e2429dec5e90c6d7eaf2841e0330accab0a72aae869def4e76",
+      "case": 42,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-42-control-168.bin",
+      "bytes": 676,
+      "sha256": "9d6f35c37a480e997295c2ebec8a3f54808b03d583ed4d1ff6b889820afeaa37",
+      "case": 42,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-43-control-2.bin",
+      "bytes": 199,
+      "sha256": "0e31466d26820f06d042a479dab5af5ff923e05d668ff8cdb091008dc99f6e47",
+      "case": 43,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-43-control-5.bin",
+      "bytes": 199,
+      "sha256": "f07a9d4f1ecbde787e61dcd773ad768b2e5de004c2ff1cd875c08c44ca1e910a",
+      "case": 43,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-43-control-233.bin",
+      "bytes": 199,
+      "sha256": "ced3da10b1db4a46aec6e1501d6946d3254a3267170cb15bd90101f26907acf0",
+      "case": 43,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-43-control-236.bin",
+      "bytes": 199,
+      "sha256": "1e073abb7c537302b552bd2c255a74ff4a210270d6ab90e3e982c09fdadd4bc0",
+      "case": 43,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-43-control-248.bin",
+      "bytes": 199,
+      "sha256": "4ae9f6ed2b68d4f073d841987ed1ec326141078ccbeb22b5507bc3def662ff34",
+      "case": 43,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-43-control-254.bin",
+      "bytes": 199,
+      "sha256": "9c633dbe85352972678579d51e6be9c93d238147fbac570f143b9e6fe7619e23",
+      "case": 43,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-43-control-0.bin",
+      "bytes": 676,
+      "sha256": "e78774c823e025503bc9b2db2ae11ab32ea55a835bbf38e5f0eccfac50c6420a",
+      "case": 43,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-43-control-32.bin",
+      "bytes": 676,
+      "sha256": "b47a7e4a525e8f79069c5380506b3d05d32852171a1b4dd621624b85c1039204",
+      "case": 43,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-43-control-128.bin",
+      "bytes": 676,
+      "sha256": "1f6920bfdb969ec7edf46a21d2e29becb22c1e2dfd3df9f29910424974cf2b6f",
+      "case": 43,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-43-control-168.bin",
+      "bytes": 676,
+      "sha256": "1987f3e0c24293ff5975207bc80bbc9b25ea43af438e9101f9f04db33774c750",
+      "case": 43,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-44-control-2.bin",
+      "bytes": 199,
+      "sha256": "ecfa0bc55f556e65528949894244234991b8626129d450203e1f396a9ae8ee59",
+      "case": 44,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-44-control-5.bin",
+      "bytes": 199,
+      "sha256": "6e943eea67e61f954021e0b441801b3702cc2b2ae659cec379c5bf8ef950f175",
+      "case": 44,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-44-control-233.bin",
+      "bytes": 199,
+      "sha256": "861f1e0640aa4c86fc4a002d14ef6b788b4a3d5bf6a0881752bb880551f4ef4c",
+      "case": 44,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-44-control-236.bin",
+      "bytes": 199,
+      "sha256": "085879d2aa6ade2be5f8bdc98768c2a6c669441a591a2883153b2feb6f7bd5bd",
+      "case": 44,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-44-control-248.bin",
+      "bytes": 199,
+      "sha256": "42fbc403a6a44f006a4f32ea302eb2f0688a7f00b6b14c2aa0c52bf5f501c4ab",
+      "case": 44,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-44-control-254.bin",
+      "bytes": 199,
+      "sha256": "091d03800daa0fea6dd63c2519342f3fef5cf971ebc512610a5e3349fab6f0f1",
+      "case": 44,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-44-control-0.bin",
+      "bytes": 676,
+      "sha256": "253121a99f2dfed61d2cbe7562bca862ccf5eb2e2d21a7205f636120de534d6c",
+      "case": 44,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-44-control-32.bin",
+      "bytes": 676,
+      "sha256": "9b27ab31037489626daf3ca61a484e2defc6765a2425271fbc9dadc36e9da0f7",
+      "case": 44,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-44-control-128.bin",
+      "bytes": 676,
+      "sha256": "c3777a39b76bfa3a4b604ba5576eda08b564e1ac5526a151e8600a881b027660",
+      "case": 44,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-44-control-168.bin",
+      "bytes": 676,
+      "sha256": "4f7dc87f5d690d64ccd7e6c66f0189ae82ab1494033e6fc6d26aa68dd7ea17c4",
+      "case": 44,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-45-control-2.bin",
+      "bytes": 199,
+      "sha256": "1dfc7dbb7822cd0172ca6c37f7a22e31843e8bb9dc30bfb154c3af221235352d",
+      "case": 45,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-45-control-5.bin",
+      "bytes": 199,
+      "sha256": "f85dcab37c1f6432d8c40dbf28f85770ee5ecf8285e3f0873705088de515a8b7",
+      "case": 45,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-45-control-233.bin",
+      "bytes": 199,
+      "sha256": "f8506b23b5e12cbfab4025d8330c3157ad30d7239297fdd917a45db2e096822f",
+      "case": 45,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-45-control-236.bin",
+      "bytes": 199,
+      "sha256": "ce63094337eee522045e227b8bad05afa09f72165654aafb30ff0b937c4be45b",
+      "case": 45,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-45-control-248.bin",
+      "bytes": 199,
+      "sha256": "873fd9da6c70543fc932068c0d08a598768b5ee27e3bb20cb3adb72346bc548d",
+      "case": 45,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-45-control-254.bin",
+      "bytes": 199,
+      "sha256": "739fd953cec235cbbb231a000f32fdb7077d4e32ba3a372a89ac1ec21bc56842",
+      "case": 45,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-45-control-0.bin",
+      "bytes": 676,
+      "sha256": "95fed1653cff3b9d6c8b844251f344f70eef25f976aebce798ae6218b50b97d0",
+      "case": 45,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-45-control-32.bin",
+      "bytes": 676,
+      "sha256": "d7361bf66a9631fecd8b01a46fee236c691e553adec403292317e5ac9cf2af8a",
+      "case": 45,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-45-control-128.bin",
+      "bytes": 676,
+      "sha256": "eeacc4733e892ce3bd3ee8c1a2d9d91788dff37d2f57b5f3b80e0988d73fa6e2",
+      "case": 45,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-45-control-168.bin",
+      "bytes": 676,
+      "sha256": "44c7e0c3de9d0b23f9f033d2d7e00e8ec94eff51c7335954a8c91db10135e126",
+      "case": 45,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-46-control-2.bin",
+      "bytes": 199,
+      "sha256": "36be83613afcb58bf93b7f74d4ce2df223ed3ec3415dac8604cba8dc99022089",
+      "case": 46,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-46-control-5.bin",
+      "bytes": 199,
+      "sha256": "9ce85c585b8d3cd130716bc5c18e8996184edb9c7bbf236ff747e39ad165fcf5",
+      "case": 46,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-46-control-233.bin",
+      "bytes": 199,
+      "sha256": "7b7b33785c6b19db87c548562a159b6073f1ed0968bc03ba68d81d40ce22ea52",
+      "case": 46,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-46-control-236.bin",
+      "bytes": 199,
+      "sha256": "715b582af564e1fe9711de1f9f5a5888e8b3c2d06eb54f34ba8882cfc5c1380d",
+      "case": 46,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-46-control-248.bin",
+      "bytes": 199,
+      "sha256": "1d91713eaf2a8de5f9a93f2fe215e8fc6e446c6bdfde5b461637bd5f2985a04d",
+      "case": 46,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-46-control-254.bin",
+      "bytes": 199,
+      "sha256": "1ba52f80c918cd16ece5912bc0156dc36347d7e9bcf0d20974ec05a46902def3",
+      "case": 46,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-46-control-0.bin",
+      "bytes": 676,
+      "sha256": "7de6e795ba0766dc3be3c9db595013413721feeaecf2b27f611e154461eef02a",
+      "case": 46,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-46-control-32.bin",
+      "bytes": 676,
+      "sha256": "fb370e000ede67c52456fda86cd11e66daf824cf5eb0fcbb2217aa0e9e69a9db",
+      "case": 46,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-46-control-128.bin",
+      "bytes": 676,
+      "sha256": "9e638038241204a71161f79238c2d0eb0af71e31f6add3e5437ef659e2786000",
+      "case": 46,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-46-control-168.bin",
+      "bytes": 676,
+      "sha256": "cc30ffd002b6566fccbc71b2f971108c83fe0c47720bd2c910fd8c2ec5b59a5e",
+      "case": 46,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-47-control-2.bin",
+      "bytes": 199,
+      "sha256": "d4d66ac57d1ab79c4e6ee773c83ec5c36507c6a1b4d9f6dc4dfec7ed8a9ff706",
+      "case": 47,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-47-control-5.bin",
+      "bytes": 199,
+      "sha256": "04302d6ebfe1e18355233ad9148ac567ce471e11b9c239f3278e1d5d8d37a563",
+      "case": 47,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-47-control-233.bin",
+      "bytes": 199,
+      "sha256": "e5f9834c2af4a165737365b83514e7ea7d9f845a005a25ce01c079a4b464e03a",
+      "case": 47,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-47-control-236.bin",
+      "bytes": 199,
+      "sha256": "2ac74e5b434ffbb6352e2ea30ad97f3413d465fe7035ecc37dd4692ec19dac5c",
+      "case": 47,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-47-control-248.bin",
+      "bytes": 199,
+      "sha256": "5bbdf7436c1c524fa4f593b7130b69fad6fef2bfb32d166566af382d5df589f3",
+      "case": 47,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-47-control-254.bin",
+      "bytes": 199,
+      "sha256": "46bdffbde31cce027e853de6dea747effaf7faa2123d38122ac1ffe7d991e99c",
+      "case": 47,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-47-control-0.bin",
+      "bytes": 676,
+      "sha256": "1e00357c7fe71c5735c715da9973e4b8375556ff08f5f03032469536dc952b1a",
+      "case": 47,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-47-control-32.bin",
+      "bytes": 676,
+      "sha256": "e36ba0abbd026015b070f0df430f1263ca77f597c22ef01cf919d227ee2f2d9f",
+      "case": 47,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-47-control-128.bin",
+      "bytes": 676,
+      "sha256": "498db5840089dc2cba24e0b7211a0cfd4ad5c59d7fae17e125f384fd9324f67c",
+      "case": 47,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-47-control-168.bin",
+      "bytes": 676,
+      "sha256": "464469072a6587178f6388d43d5bc586c65e25013222948767fa13b932200af1",
+      "case": 47,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-48-control-2.bin",
+      "bytes": 199,
+      "sha256": "3b17dcf7a550989ce2ebfd19013751b3400118d5e2d4fb352a1ccfb3bbdc14c6",
+      "case": 48,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-48-control-5.bin",
+      "bytes": 199,
+      "sha256": "fae0c4acb97c2066a35d63414a560b049ef24aeac5b573b2caeb44c0e7091c10",
+      "case": 48,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-48-control-233.bin",
+      "bytes": 199,
+      "sha256": "ee7f773a0334fc1c479ba4b180873a1f39c827291893de714277f27a7045fcd5",
+      "case": 48,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-48-control-236.bin",
+      "bytes": 199,
+      "sha256": "8a348f606b052b782c456d6cdf663861fa44c3387ae2adcae391eda5bb7dc1c7",
+      "case": 48,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-48-control-248.bin",
+      "bytes": 199,
+      "sha256": "5bc7235adb5575db9188715c13e61ed825abe9ec6e317f0cb21219430d91702a",
+      "case": 48,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-48-control-254.bin",
+      "bytes": 199,
+      "sha256": "3dbfd46e52495ab58acbe975f706fb129335746d697134054bca82ffd36a9b4d",
+      "case": 48,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-48-control-0.bin",
+      "bytes": 676,
+      "sha256": "b0e9b6eb8e169139e758102e325fa5d3f53ba18ff6ac0e7ec1ced3d276a95093",
+      "case": 48,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-48-control-32.bin",
+      "bytes": 676,
+      "sha256": "38dcf567e11b2abd4b1baf9039f52049add892b0bec92517297138323dcf0612",
+      "case": 48,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-48-control-128.bin",
+      "bytes": 676,
+      "sha256": "8523194b2c91aad8da7dca53d732c242891ebd52922d1a37ca8e6381156e150e",
+      "case": 48,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-48-control-168.bin",
+      "bytes": 676,
+      "sha256": "ca021b748bb841965384b8d09aa5e5296308658400053245cabb1fc233a20021",
+      "case": 48,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-49-control-2.bin",
+      "bytes": 199,
+      "sha256": "ea46ffd4a86d025355d68f1d81df2890c9aec18a3f01fb282f3ca5f49b5d6397",
+      "case": 49,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-49-control-5.bin",
+      "bytes": 199,
+      "sha256": "289f68463ac718f6d8fbae0cec4ad8a15e34c01d8ab9213632dbd79febca0fb2",
+      "case": 49,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-49-control-233.bin",
+      "bytes": 199,
+      "sha256": "f6fbf94ebb179ddbf10e637f19e5e63a302c7ce527a77527ae30b379976a3c14",
+      "case": 49,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-49-control-236.bin",
+      "bytes": 199,
+      "sha256": "dacebdfe7dde20eb4fd9fdd840b11b0b5cd78350b81bdb9ca42db627de39bbd0",
+      "case": 49,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-49-control-248.bin",
+      "bytes": 199,
+      "sha256": "e74a07f057e337bb09aa40eff284fe95dd0fa4c4cd9da84b730cef4f725b5961",
+      "case": 49,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-49-control-254.bin",
+      "bytes": 199,
+      "sha256": "f4e3ee7c216b93b5bc52c88d1d209318baab49f8345f1f9482c23a1b3dbbad00",
+      "case": 49,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-49-control-0.bin",
+      "bytes": 676,
+      "sha256": "e5775f83fe980c9c05dc9014d333eeba9c858cfc3abf68a3cddd39f31207e8b1",
+      "case": 49,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-49-control-32.bin",
+      "bytes": 676,
+      "sha256": "87dd138ca7e3e08b1b6e174d26df91ac3ffe0689cf121ede394a71a2e7d4c41d",
+      "case": 49,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-49-control-128.bin",
+      "bytes": 676,
+      "sha256": "9d7e8f6df169d3c5b8f422dcdc024ea1f97c761d645d041d58764f8b9dcdbfa9",
+      "case": 49,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-49-control-168.bin",
+      "bytes": 676,
+      "sha256": "3fe868ab3740f40378c6cfbd059a3e87ce1f9326936a93594aa64df786c520c4",
+      "case": 49,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-50-control-2.bin",
+      "bytes": 199,
+      "sha256": "d4b3280c4124bbf1a1bf2a8e87a6e5913f40dd711aa6282c36d52abb8a416553",
+      "case": 50,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-50-control-5.bin",
+      "bytes": 199,
+      "sha256": "9ea0a44bb251eb607d769fd58cdec165ae434c717d9fd9b8234990ae1771b60e",
+      "case": 50,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-50-control-233.bin",
+      "bytes": 199,
+      "sha256": "7629c4242280ed9137e97ff97d051446a7aadc8d54ca1a46c82d7a7425b05413",
+      "case": 50,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-50-control-236.bin",
+      "bytes": 199,
+      "sha256": "ac9e2842e11bf602b4f0d870f9eb1e2a59d4b3914437acef543b0023fb8e67f5",
+      "case": 50,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-50-control-248.bin",
+      "bytes": 199,
+      "sha256": "142fc341609c2ebd3cbad04b27e95105d82c6ff1ee95c2d2c9a99915aa5c29ab",
+      "case": 50,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-50-control-254.bin",
+      "bytes": 199,
+      "sha256": "4e05721bf96ed3c0b56200a6a01b83e5e0a96a160a9ff897074daefa84756db1",
+      "case": 50,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-50-control-0.bin",
+      "bytes": 676,
+      "sha256": "be61ae8651b03ac5d2d87c48506ee09812ca996d68ae1ff9806995305d33e785",
+      "case": 50,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-50-control-32.bin",
+      "bytes": 676,
+      "sha256": "3842ce41ded250a9954ea975081c45d14ef444c4caa34027a59d84d1463c3b97",
+      "case": 50,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-50-control-128.bin",
+      "bytes": 676,
+      "sha256": "1abef803a2f1801951b9e4ab74f1ac7e5cb1276a55eb23edf2aa203d70f8d5e3",
+      "case": 50,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-50-control-168.bin",
+      "bytes": 676,
+      "sha256": "87010db0603406ae7614041b089de0618c23c2bd30c302ead61c3e481c940cf2",
+      "case": 50,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-51-control-2.bin",
+      "bytes": 199,
+      "sha256": "89d1b87132d1a96ecdc28758a4d39bf9c4b441cc5d293f4b1648023adbfc158c",
+      "case": 51,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-51-control-5.bin",
+      "bytes": 199,
+      "sha256": "58e076d6a3d92e9faafecec16427f1e303b17b7e2f7cd1b9b5d2ce318e98eb93",
+      "case": 51,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-51-control-233.bin",
+      "bytes": 199,
+      "sha256": "5be29b7a12b5dbe99b22fc0f8d776e639aad30dbd7746017ca4338dead817346",
+      "case": 51,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-51-control-236.bin",
+      "bytes": 199,
+      "sha256": "fa87a0a0d2757c48e4762740ad68e04e1c88506825df1cc2d67833144a694afd",
+      "case": 51,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-51-control-248.bin",
+      "bytes": 199,
+      "sha256": "f8b5e0f649df765d266590fe84bb54e18b7533628c9c3f4fc3f51921ebe2811a",
+      "case": 51,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-51-control-254.bin",
+      "bytes": 199,
+      "sha256": "e2ec7b1ec53fa7d34b06cf1d045631805f4707f6c02910324c49e0bb746d124a",
+      "case": 51,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-51-control-0.bin",
+      "bytes": 676,
+      "sha256": "e645e046a14b9c644f7817eda90769dc2ffed024ed3d58bfa6ff0c90fc6b222c",
+      "case": 51,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-51-control-32.bin",
+      "bytes": 676,
+      "sha256": "a30a62c101871df8eded4cd545cccaa93367992bed97595cb15d79c1f06f078c",
+      "case": 51,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-51-control-128.bin",
+      "bytes": 676,
+      "sha256": "faa6f916735b2050343c0dac8fc67b40288e15e7a011d84fc3c41dd5527dbda8",
+      "case": 51,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-51-control-168.bin",
+      "bytes": 676,
+      "sha256": "538f09548bb679717dd92ca167a497d859e1625406ceeef99c78d62d94136f24",
+      "case": 51,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-52-control-2.bin",
+      "bytes": 199,
+      "sha256": "14113a96a22d76dbc43cdad1831b0b80d6057e14b54e39436ceb511a2906a784",
+      "case": 52,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-52-control-5.bin",
+      "bytes": 199,
+      "sha256": "924f2a3db63f829be06b16f1598752af9789523bd1c85bcfaa0a6f8413dfd88f",
+      "case": 52,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-52-control-233.bin",
+      "bytes": 199,
+      "sha256": "4df552c380979fa2b9d64a812bbba7664696c84362ca9811fd9f2f57574fbad1",
+      "case": 52,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-52-control-236.bin",
+      "bytes": 199,
+      "sha256": "9a5ad9157efff54faad0223d90ccf64bc0123a0d318a60d98f3e8dd6e57c148c",
+      "case": 52,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-52-control-248.bin",
+      "bytes": 199,
+      "sha256": "5a0ef9f4bc877087397053db851e3f4d6a41da4b3b6ca3f9e7d712af055b6505",
+      "case": 52,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-52-control-254.bin",
+      "bytes": 199,
+      "sha256": "a8e6277d505854157b96648525ff5c93c04b3b154ec720f2030edded4a041ba9",
+      "case": 52,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-52-control-0.bin",
+      "bytes": 676,
+      "sha256": "5581facb2a51d96747616643414b1531874e2d3ff53035755437925621b0370a",
+      "case": 52,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-52-control-32.bin",
+      "bytes": 676,
+      "sha256": "b309316d57f1e8c97e8ce435190e528774b9c62be4cf3ac091ac617eaa104e76",
+      "case": 52,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-52-control-128.bin",
+      "bytes": 676,
+      "sha256": "6284532fac3fc6fb87a825010b0173cc1d119d8eaeb8640a6238a594d4e7d08c",
+      "case": 52,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-52-control-168.bin",
+      "bytes": 676,
+      "sha256": "e8421e50070f3b3784903cbeedaa654bfccc7d2700021142d237cd6307e8e3ce",
+      "case": 52,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-53-control-2.bin",
+      "bytes": 199,
+      "sha256": "16d7070f343fdac17e84157a0bc0dc274d5ebfcee32754212c9c3817e9495d93",
+      "case": 53,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-53-control-5.bin",
+      "bytes": 199,
+      "sha256": "ec52825e122d0609bf82ce19028806ab0db4f723230ac1ae97d456200e52146e",
+      "case": 53,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-53-control-233.bin",
+      "bytes": 199,
+      "sha256": "0646f035278002aeca66e6b5f29de4a7964b624cf9bf009d07d02d555ee78f0d",
+      "case": 53,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-53-control-236.bin",
+      "bytes": 199,
+      "sha256": "4f575f2f9f37b9865d8ab2d138cd2233a99e3b0a11541889a248c6fd5939d456",
+      "case": 53,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-53-control-248.bin",
+      "bytes": 199,
+      "sha256": "5eca07b046826bb1359b7f8a957e67deae6f5ec2696e258501d47c45c22df7f3",
+      "case": 53,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-53-control-254.bin",
+      "bytes": 199,
+      "sha256": "adbd5c80d527e7e1b4e739071e08e3e34509403cd121465097fd784a837f94e3",
+      "case": 53,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-53-control-0.bin",
+      "bytes": 676,
+      "sha256": "af40ec588b0e9913714fb4c766b158056d6a0c62df8a96a7e47b3eee1f9ce136",
+      "case": 53,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-53-control-32.bin",
+      "bytes": 676,
+      "sha256": "13df58c75b8b8449be9d3b2eadb16ddd421fd48d7508c889f601e62b3e1cf217",
+      "case": 53,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-53-control-128.bin",
+      "bytes": 676,
+      "sha256": "d9a0515fa4bccdb942c3bf9a3b9de1bd278a89853ae180374b289eb6efa6ff40",
+      "case": 53,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-53-control-168.bin",
+      "bytes": 676,
+      "sha256": "14d7ac2d80d40acbf98f0eda57854de1229f95757f1437ef08598858832e0057",
+      "case": 53,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-54-control-2.bin",
+      "bytes": 199,
+      "sha256": "d17df374277f2ff3060c1fe58cf7e46805adb9cd9fec1371fe52fd90a97a92f0",
+      "case": 54,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-54-control-5.bin",
+      "bytes": 199,
+      "sha256": "4620b2bac1985b67cda49f05cb9e8eba336e2d25a993ba8f35c49d40121b82b4",
+      "case": 54,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-54-control-233.bin",
+      "bytes": 199,
+      "sha256": "ac937683a0c4a7f71e37c28dff579a1f2b40618e3cfe48515863e60e141b3afd",
+      "case": 54,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-54-control-236.bin",
+      "bytes": 199,
+      "sha256": "3d8963ca390976fa937dada8bf2f4a30f1fce293da67f214a15a5ce84ce1c242",
+      "case": 54,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-54-control-248.bin",
+      "bytes": 199,
+      "sha256": "ed159611a2b99ac33ad6c4e2b79be84428795dcd30080f447e9ea0dda2295654",
+      "case": 54,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-54-control-254.bin",
+      "bytes": 199,
+      "sha256": "99b084f35989504ca451ec220e1d697a1c1021f3bf22cc8ae438fc3c8e4db509",
+      "case": 54,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-54-control-0.bin",
+      "bytes": 676,
+      "sha256": "cda14065121bb3938a4875d52091a3fb53b34a9f187eb8e4f75986cce1469a81",
+      "case": 54,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-54-control-32.bin",
+      "bytes": 676,
+      "sha256": "ad7657acdd04ea81873472d2165cde5a923f72f73e9aeb1d52194f2abe2c7fe6",
+      "case": 54,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-54-control-128.bin",
+      "bytes": 676,
+      "sha256": "f4afc3821c7d13010c9d7ea548f1f5f0e66b4a9a3542851fe1d16c9a3e3a4134",
+      "case": 54,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-54-control-168.bin",
+      "bytes": 676,
+      "sha256": "3ef75fbb742ac35fc90601b9ef2420428ff3d25221be48b47b0038b38418e85a",
+      "case": 54,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-55-control-2.bin",
+      "bytes": 199,
+      "sha256": "476301b0ffff80f9779fa6823b88fe43f1255406783167b948dc26a4ac629a46",
+      "case": 55,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-55-control-5.bin",
+      "bytes": 199,
+      "sha256": "cf0a1731bbed2a036d4480eb509a37dca77e621e7cc5bb9e590fc34d3242c995",
+      "case": 55,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-55-control-233.bin",
+      "bytes": 199,
+      "sha256": "66e410ee3aceb7eff3fbe913b6999c081ccc5952f7a251dc00b7e26773935fcb",
+      "case": 55,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-55-control-236.bin",
+      "bytes": 199,
+      "sha256": "b5fc9ae942c0a75403cfb136c4fe78a60e5c07fe3ada03f14b74ebf79c62fea9",
+      "case": 55,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-55-control-248.bin",
+      "bytes": 199,
+      "sha256": "f3f8d337798afa9b1ecd44e85df12090598bda0ccaac15b3b33d6edab9fe5e50",
+      "case": 55,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-55-control-254.bin",
+      "bytes": 199,
+      "sha256": "2316dc8b555b15b569dca65e6a84921db18cd833c7db083b43044fc84251d222",
+      "case": 55,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-55-control-0.bin",
+      "bytes": 676,
+      "sha256": "b0bbe828108b014419e3dd58cd1d76bee1ca1b104e44e2915f0460f8e4128575",
+      "case": 55,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-55-control-32.bin",
+      "bytes": 676,
+      "sha256": "5a9bd1f7a436ed9994a173ee725c20d618787be822f94f515c9d230e60afdd8e",
+      "case": 55,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-55-control-128.bin",
+      "bytes": 676,
+      "sha256": "39ba5d71c6ddcc92532922f7cd25e38ba363a62e8fa678f5f67f0b87328145a8",
+      "case": 55,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-55-control-168.bin",
+      "bytes": 676,
+      "sha256": "fdb7dd66252e46182f56b3634c29d1e4d464665088a4f8d94db3dc96c4541c04",
+      "case": 55,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-56-control-2.bin",
+      "bytes": 199,
+      "sha256": "8620c15012e9d77769f0bbce44523084af72cad076490c299e35210a0081f2d5",
+      "case": 56,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-56-control-5.bin",
+      "bytes": 199,
+      "sha256": "325a4b056c02d951c77f97cd39ef3a0eb31b8b4480b6160f4eb3b5d10e682721",
+      "case": 56,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-56-control-233.bin",
+      "bytes": 199,
+      "sha256": "5853fee6b4de51904c3170d0e47fd2b87449404ed205aa4e2de1263b29208854",
+      "case": 56,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-56-control-236.bin",
+      "bytes": 199,
+      "sha256": "30f814c8cf3ef1d752eb24be5b7e0443313f967debb0f31533d6d928517b6a9d",
+      "case": 56,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-56-control-248.bin",
+      "bytes": 199,
+      "sha256": "c5a0db45b9789325cedfdaf73844aabb848024cd4972d2ccbe2fbc3b4c624d41",
+      "case": 56,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-56-control-254.bin",
+      "bytes": 199,
+      "sha256": "1f02fb8ae4d5b7982de47fdec2577a787aa94b2d31de6f74be155b7eea14d366",
+      "case": 56,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-56-control-0.bin",
+      "bytes": 676,
+      "sha256": "041afafa97d04bebbb3ebaf585facc90f4e3fc297fbd7cf2808c0b7a8026a102",
+      "case": 56,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-56-control-32.bin",
+      "bytes": 676,
+      "sha256": "59c57c001834bc2566d45d11a5ee430d1ecf78e454b2200922466215bca1dfac",
+      "case": 56,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-56-control-128.bin",
+      "bytes": 676,
+      "sha256": "7f3df261d1c9a987a3b02cdd730f27cd0258edc3feaa556aebd05b9127687a78",
+      "case": 56,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-56-control-168.bin",
+      "bytes": 676,
+      "sha256": "447379220e3cdeb4030be0d1d4dabc1c151144c2bbfdb7f2a188f13858d4fc92",
+      "case": 56,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-57-control-2.bin",
+      "bytes": 199,
+      "sha256": "da5933b250ff0cf436b0974e3480290300fad1f2f15c308e98dffecf727dc25b",
+      "case": 57,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-57-control-5.bin",
+      "bytes": 199,
+      "sha256": "64a62549eecc3bdebdce6bbe23568a0aee191047e2c5d2b46492b9f15ad1a675",
+      "case": 57,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-57-control-233.bin",
+      "bytes": 199,
+      "sha256": "5257719176d8559e540004634ed32f1891e61f76f5651842522cdbef898aad0c",
+      "case": 57,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-57-control-236.bin",
+      "bytes": 199,
+      "sha256": "565009288499043ccf9fb1470b276cfb7eb47e04e5adb30ff68f6815aecfc263",
+      "case": 57,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-57-control-248.bin",
+      "bytes": 199,
+      "sha256": "dafa1f967b619caee7c95b0a0c076b3b529bd1bed855f81962ea3fccbb0f8112",
+      "case": 57,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-57-control-254.bin",
+      "bytes": 199,
+      "sha256": "a88fe03fc5085a7156f03135d5eff03765fa6e7bc5bc83997e9f8fe97dd408c8",
+      "case": 57,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-57-control-0.bin",
+      "bytes": 676,
+      "sha256": "b06b86d5ded2296a4c583b771e088c2a3244f883f45adf44c1c2df88d84e5135",
+      "case": 57,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-57-control-32.bin",
+      "bytes": 676,
+      "sha256": "9cffe286323d74e5caea03f51c4e292d4736c462bead665542f1a4ef65234950",
+      "case": 57,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-57-control-128.bin",
+      "bytes": 676,
+      "sha256": "2b840ef70feaa935f4d1f7227de5fe6112240658e693c37a3a2cc5dca9adcfbb",
+      "case": 57,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-57-control-168.bin",
+      "bytes": 676,
+      "sha256": "70603b5fb3167e613722868d0790a1b1caa38b629d849b099fddb0c9488e17d5",
+      "case": 57,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-58-control-2.bin",
+      "bytes": 199,
+      "sha256": "1bbdb5e174aaf000fcc8eace1d8a3c00723f5a114552cc2cb314bbf8111427e0",
+      "case": 58,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-58-control-5.bin",
+      "bytes": 199,
+      "sha256": "636270762166423d3282564ba77f71ae953f11bfbc4ac02b11b42c04f51e8965",
+      "case": 58,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-58-control-233.bin",
+      "bytes": 199,
+      "sha256": "227d023595b096ce102a530c08205ddb6ec76eaaf122c52d1d443c07d1cb61e7",
+      "case": 58,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-58-control-236.bin",
+      "bytes": 199,
+      "sha256": "56198c375f4aa5b8aaa644ba11cda7b55e6483408cca0111ef35cbcb77791682",
+      "case": 58,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-58-control-248.bin",
+      "bytes": 199,
+      "sha256": "0e22498eb95d83db22e09473f2013fdc1507d39e6531800fd125d71e39470e67",
+      "case": 58,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-58-control-254.bin",
+      "bytes": 199,
+      "sha256": "1b526f647887423d542b472f445db28ef2117fcee099da4dbb541407733686bc",
+      "case": 58,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-58-control-0.bin",
+      "bytes": 676,
+      "sha256": "829a253edb622b0aecb20f53aff5b8242463b1e9d29184041264e0f647c34ea8",
+      "case": 58,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-58-control-32.bin",
+      "bytes": 676,
+      "sha256": "e9d1549ce55760a87eac2d0f1d9d8fb7e69371769bd985505cfcf6364549c721",
+      "case": 58,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-58-control-128.bin",
+      "bytes": 676,
+      "sha256": "9481b136ffea08fdcdae6be807ccfc2273d26f759fd593948dc2a959f6098ef0",
+      "case": 58,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-58-control-168.bin",
+      "bytes": 676,
+      "sha256": "a82d095fad28c380fa86b1701ee2c43812e073ae191e8fb3389ef67e414a3046",
+      "case": 58,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-59-control-2.bin",
+      "bytes": 199,
+      "sha256": "e5a8e5e74cfeb23719200599dabfb715fdf864d9bcf23fafd4733d70c38d58e0",
+      "case": 59,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-59-control-5.bin",
+      "bytes": 199,
+      "sha256": "d2bbebc4fabc2816ca1bb88973a03d813c7c6a50ace6dc9bbdb38ddb6de6619f",
+      "case": 59,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-59-control-233.bin",
+      "bytes": 199,
+      "sha256": "eb638ba5bde362a3d31e75abfcadbd1fcb0f48eb0c303b9e2851f1fb1b2f33fd",
+      "case": 59,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-59-control-236.bin",
+      "bytes": 199,
+      "sha256": "480daa77ad95af9b438b128e7359b258d944b6555c1489be30647b84df8ecf28",
+      "case": 59,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-59-control-248.bin",
+      "bytes": 199,
+      "sha256": "3a547ac4c2ce9619e224417fd4de00378db6d99fbff2a68bc588d57df3e83fbc",
+      "case": 59,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-59-control-254.bin",
+      "bytes": 199,
+      "sha256": "cdebbe8b74663c257d440e400369ce1e46ab030598cde875198680a2c43d54ce",
+      "case": 59,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-59-control-0.bin",
+      "bytes": 676,
+      "sha256": "d18ad5390bc065c64764d898f51cc22dab3d3ff9ed207132b580d6f6f702648c",
+      "case": 59,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-59-control-32.bin",
+      "bytes": 676,
+      "sha256": "a14a699a5a694f169b27c43ea47772b42591001a299fc464a87ba584a640ff16",
+      "case": 59,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-59-control-128.bin",
+      "bytes": 676,
+      "sha256": "6345cfdfc541a8a0e3e7261dd0185e57820bb506dfa9cc1ad8e4fb550d403127",
+      "case": 59,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-59-control-168.bin",
+      "bytes": 676,
+      "sha256": "69ec353565c0afcacc676a6245a00c8d60f237fa83661b69f0a545ec237d2dcb",
+      "case": 59,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-60-control-2.bin",
+      "bytes": 199,
+      "sha256": "6fbfbb4614bb80f9c6512c2c3494ca1a087484d14177b7fa2e9b669541c324b2",
+      "case": 60,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-60-control-5.bin",
+      "bytes": 199,
+      "sha256": "051abb6cb56571e66bf8ca3b44c30531f0a5ea9ea87fef99aa1ec439d2922139",
+      "case": 60,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-60-control-233.bin",
+      "bytes": 199,
+      "sha256": "b12dda9a6c80688c048410da38ad708d4293a4b6fc17ac74b47752898ce491cd",
+      "case": 60,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-60-control-236.bin",
+      "bytes": 199,
+      "sha256": "1bb71a9986ea2dfc3e10c8608f18e5e450752c72c27aaefcc49b9b996dbe762f",
+      "case": 60,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-60-control-248.bin",
+      "bytes": 199,
+      "sha256": "74e4c6aae839f13e1cb8e1b83c707d4aaed1ad81ab869233c3fcb1d5ea322722",
+      "case": 60,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-60-control-254.bin",
+      "bytes": 199,
+      "sha256": "8bc4fb88fb3ac11850e4f2f472b45081883a4caa74cf48fa2d26d9af64977c4c",
+      "case": 60,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-60-control-0.bin",
+      "bytes": 676,
+      "sha256": "3f6d85f46d8a446391ea1b2d068e0337ef4c869d625dc8bff4ab845f465d90f7",
+      "case": 60,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-60-control-32.bin",
+      "bytes": 676,
+      "sha256": "59188c6c34ba9432c683815c0e932eecfc2a8916bdcf8e65381f1bb4faf078e7",
+      "case": 60,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-60-control-128.bin",
+      "bytes": 676,
+      "sha256": "afed38b60e61d4388e39bba57b16bb7baa19b38e78afb9002c297befbedeb2b6",
+      "case": 60,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-60-control-168.bin",
+      "bytes": 676,
+      "sha256": "81804a698d09ba8aae5e169d4f1d5d4ecd429ef7058f2fd06c59558a4ba73fac",
+      "case": 60,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-61-control-2.bin",
+      "bytes": 199,
+      "sha256": "4a9dd826ea9d36127ac0783ce56cb39a8224668629fa2adbdf026e8e2be84cdf",
+      "case": 61,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-61-control-5.bin",
+      "bytes": 199,
+      "sha256": "f6f4512606aa1923816e1f13722c9291ec14daa4b77a51efd0a4bcfbd3593b5b",
+      "case": 61,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-61-control-233.bin",
+      "bytes": 199,
+      "sha256": "b81f50646dc47ee0caf573e40e403a2a68dcd72175fec5cd1f5f994a2ba75323",
+      "case": 61,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-61-control-236.bin",
+      "bytes": 199,
+      "sha256": "6d8be0afd8e89beb0964afb711b9f03d870f609ee7eb8fe6e9dfcbb4dc3e76d7",
+      "case": 61,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-61-control-248.bin",
+      "bytes": 199,
+      "sha256": "7fd3740e59bed0e072cc5339f9d4dc9fd9214d6da4ed5604d239192ab4eeac98",
+      "case": 61,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-61-control-254.bin",
+      "bytes": 199,
+      "sha256": "54b6cbcd45c133fe568f1f874ae264d7a9414eda22251b7323adb9b2084b16ec",
+      "case": 61,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-61-control-0.bin",
+      "bytes": 676,
+      "sha256": "518c3c9e7bbe9ddda309a8921661b6332c6ee6171fc9d2244a6e67b1eb8787a7",
+      "case": 61,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-61-control-32.bin",
+      "bytes": 676,
+      "sha256": "08af594dd3c6cace209d55cc52f659d11a457555e0232e2fc6ec4c4e556f66bc",
+      "case": 61,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-61-control-128.bin",
+      "bytes": 676,
+      "sha256": "f6f814cb729baed7b606ed0a0178baf4fb2ae45f9d8c2f3aca9ce233d0321e11",
+      "case": 61,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-61-control-168.bin",
+      "bytes": 676,
+      "sha256": "ed7fe52dd0460dd412d135dd68b7d783ac2869e9b80ed903a35edab7c6b0ca24",
+      "case": 61,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-62-control-2.bin",
+      "bytes": 199,
+      "sha256": "d7dcf3fe24d1fde46866b8b5df4f9774715f867e4e55f837cf825814b6d17c04",
+      "case": 62,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-62-control-5.bin",
+      "bytes": 199,
+      "sha256": "4adfcbefdb482bf0d0000d6ce35ca464deb88f05e06a3e103f72010ee9660063",
+      "case": 62,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-62-control-233.bin",
+      "bytes": 199,
+      "sha256": "546acf61df5acaaf04ff431e9f25013b43e03dd410b87fc98456306c73f77237",
+      "case": 62,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-62-control-236.bin",
+      "bytes": 199,
+      "sha256": "564b1d1ec5b24f64b64c29459b3f31049574a8a003f801f58d609a16ac387237",
+      "case": 62,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-62-control-248.bin",
+      "bytes": 199,
+      "sha256": "39e1b29c0211171e7f189c4449136b846a274180a72c901749fb9a5369589b69",
+      "case": 62,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-62-control-254.bin",
+      "bytes": 199,
+      "sha256": "aed4f23b5b657f5256a148bb3046fdeb1ba8ceb124a807ab5a82a358bc742027",
+      "case": 62,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-62-control-0.bin",
+      "bytes": 676,
+      "sha256": "11589d7c06ccb2145d3f1234edede8bd0dd0846b08d3470315d214dd1a97f309",
+      "case": 62,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-62-control-32.bin",
+      "bytes": 676,
+      "sha256": "8b795a88f01e16cb3dadcf90a49e3e56f36716044bbf7f45713ebcf1e726c244",
+      "case": 62,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-62-control-128.bin",
+      "bytes": 676,
+      "sha256": "46f629899a2417d45645ac6b15335cb90347037a50bcbd289f653f3ff50b4d67",
+      "case": 62,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-62-control-168.bin",
+      "bytes": 676,
+      "sha256": "8f1579dc63093f280b796f10137e8dde5daf09d7e0c4b40931db5e4b5c87b16b",
+      "case": 62,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-63-control-2.bin",
+      "bytes": 199,
+      "sha256": "df3c000d08a5fe8d1e636f2bd1d86ee04e29698f24c2ed9ef1d4c1aead94b781",
+      "case": 63,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-63-control-5.bin",
+      "bytes": 199,
+      "sha256": "4c8dce9c78f9c06ad7ea75292e46791ba37434cb1f1b86fe094e5f74e26af49f",
+      "case": 63,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-63-control-233.bin",
+      "bytes": 199,
+      "sha256": "41d09bf1f05bd5b498a534354af58b104be1be10ece06cd963e1b01b3c83a863",
+      "case": 63,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-63-control-236.bin",
+      "bytes": 199,
+      "sha256": "cfb1cb3c63df11d8e610bbb58ef48b33525e1ce1ba404d9515ab66dc95fd10b4",
+      "case": 63,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-63-control-248.bin",
+      "bytes": 199,
+      "sha256": "34fd0fd95da04907f7d8ac3a63f32be96b3e088152209af6f45e01cf66b9183e",
+      "case": 63,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-63-control-254.bin",
+      "bytes": 199,
+      "sha256": "50d979ba84ca0461494bacd5e1e7ba915c2c7c4be69e2eaaa2b3d4945796f34d",
+      "case": 63,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-63-control-0.bin",
+      "bytes": 676,
+      "sha256": "7c8facf2a8af18928d47e27b1e1969e0c72eee4d7e462593a36960c41b28e14f",
+      "case": 63,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-63-control-32.bin",
+      "bytes": 676,
+      "sha256": "645d7f6788086ac2d3612054eeda831855006c5613f558dab394fea831d142c1",
+      "case": 63,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-63-control-128.bin",
+      "bytes": 676,
+      "sha256": "7eaaad26e3cfaef0564e14be9bf0135b0cb3e20fdc43ae09dca1f17239077b8b",
+      "case": 63,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-63-control-168.bin",
+      "bytes": 676,
+      "sha256": "f7d5d104360988977664f983835c199e04d1ba34d507a7e96e42ba27ed15bd92",
+      "case": 63,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-64-control-2.bin",
+      "bytes": 199,
+      "sha256": "7eaabd8d4b2b1de7d966286aaffbfc595161e3fd3c028daaa638898faf86e519",
+      "case": 64,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-64-control-5.bin",
+      "bytes": 199,
+      "sha256": "23ce301a9d509d22708399ef7140980a61372b2334b15bec093bfffcef810af8",
+      "case": 64,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-64-control-233.bin",
+      "bytes": 199,
+      "sha256": "4dd61485373ec4cea66a0d6449374f1f400d38845f7c07dfc6ac1003c5da14e3",
+      "case": 64,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-64-control-236.bin",
+      "bytes": 199,
+      "sha256": "4d3a479ab46cbed56b6e7fd64f07e4cec3dc18ab8ae7e92093206a45e1ae6bec",
+      "case": 64,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-64-control-248.bin",
+      "bytes": 199,
+      "sha256": "f08a76004daee329d818fde457f72aa7156b5ceb9f70d064a7981e72be4b8b3f",
+      "case": 64,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-64-control-254.bin",
+      "bytes": 199,
+      "sha256": "25dfd062f19ba484eafe34cf5d0609a411b93c24997e078af8b0cb779ab8552c",
+      "case": 64,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-64-control-0.bin",
+      "bytes": 676,
+      "sha256": "c332b291d735ebdbe776a2baf7262bc887e09c64a28751a95d55b4463f293413",
+      "case": 64,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-64-control-32.bin",
+      "bytes": 676,
+      "sha256": "caf890b27c058364422e13233aa08746c4c4bde3086ab85385a1f08e633ae55a",
+      "case": 64,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-64-control-128.bin",
+      "bytes": 676,
+      "sha256": "c756df1a53bef2bbb861b6725f02cecebfb8d7e640a306988af9569ef08b36b1",
+      "case": 64,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-64-control-168.bin",
+      "bytes": 676,
+      "sha256": "4db512fa4dc61229c16be52e8e2ab914633c388f7b92b494cc2ab5b59f9ce793",
+      "case": 64,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-65-control-2.bin",
+      "bytes": 199,
+      "sha256": "6c9d1812135a287b61485c0b8e8a40f84d3cbf3e0d3cd63c878556d3b475065a",
+      "case": 65,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-65-control-5.bin",
+      "bytes": 199,
+      "sha256": "582361966846dd6d6b758ff3d7f651ca1071dd94f30cbdf7f638e53354f40056",
+      "case": 65,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-65-control-233.bin",
+      "bytes": 199,
+      "sha256": "00cd2dc714b0f63eccfdd10a6d0d97128681e725efafaa262e55a07ee5923e51",
+      "case": 65,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-65-control-236.bin",
+      "bytes": 199,
+      "sha256": "6a394fecd306cf448733323789eb77b84affc96dfcac2ae79a3bb38e35339308",
+      "case": 65,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-65-control-248.bin",
+      "bytes": 199,
+      "sha256": "de1402b684e41eb6aed4e45223efa19e057e97c9106b5de734a5768acee982ae",
+      "case": 65,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-65-control-254.bin",
+      "bytes": 199,
+      "sha256": "6d81de44cd01b17d956376547e35736cb48d754752ea1ad5fd17b67e4bdb7199",
+      "case": 65,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-65-control-0.bin",
+      "bytes": 676,
+      "sha256": "dbacca6a748ce3735d355de50025c42617e3c767d32048f43d1e0ba4743c8a21",
+      "case": 65,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-65-control-32.bin",
+      "bytes": 676,
+      "sha256": "076ab0c870a6ee0e428fafa6c21a84d2241b9474d993e6655a9a3b7046dcb064",
+      "case": 65,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-65-control-128.bin",
+      "bytes": 676,
+      "sha256": "f33efbd3d651edc1616ad45727d4c065eb956b075517a7dec52e3a3cfa107657",
+      "case": 65,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-65-control-168.bin",
+      "bytes": 676,
+      "sha256": "dc1d27987cac6fabfa182d9c1afbf2f910514f9c02f97dc80c4ac446ff522c4f",
+      "case": 65,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-66-control-2.bin",
+      "bytes": 199,
+      "sha256": "7b71cbcd7e3319548fd7503affddbcc31c155342832627df6cbc7f87eeb8e9a9",
+      "case": 66,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-66-control-5.bin",
+      "bytes": 199,
+      "sha256": "1730bf42dc8ffe57a0f3e17f6867500babd275527bf319d8c1222e98072ef0b5",
+      "case": 66,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-66-control-233.bin",
+      "bytes": 199,
+      "sha256": "6c8dfb6cb0cfc35ca91b655a3c0ad0acf951c34203be736f810a5db9c3205126",
+      "case": 66,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-66-control-236.bin",
+      "bytes": 199,
+      "sha256": "c3d65a09e975a01de59f4d95b940ef5470a0e13238b4814b685da9bd0ecfe71e",
+      "case": 66,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-66-control-248.bin",
+      "bytes": 199,
+      "sha256": "342bc2364ad58b6febf68727c59358280195f8933b06e644c57e438a3b09611c",
+      "case": 66,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-66-control-254.bin",
+      "bytes": 199,
+      "sha256": "6482aa9493c1e666a36660e712e4a59273bd07f79112ef75570769cc67e67b42",
+      "case": 66,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-66-control-0.bin",
+      "bytes": 676,
+      "sha256": "3155ec94f9fb7ad437d5ba3b4ad348d838b5902a488bb1855d89ceb82aa40192",
+      "case": 66,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-66-control-32.bin",
+      "bytes": 676,
+      "sha256": "3a3edb2e52b528e76f07f4ba3bd5056f12983063cc39a93c4aa667986efa675f",
+      "case": 66,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-66-control-128.bin",
+      "bytes": 676,
+      "sha256": "09a1203a3701cc48f179ea4bcecaf8ad4efb4e033647ebd4af24e79829ae67fb",
+      "case": 66,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-66-control-168.bin",
+      "bytes": 676,
+      "sha256": "9fed68da7ca751ee20a80dc63708dda31cde1e85951f182d92dd24ce47af18d1",
+      "case": 66,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-67-control-2.bin",
+      "bytes": 199,
+      "sha256": "7e9df3dae6d252f3de39e20595c8eeaa5bb666584c35f5a2ccdc5ca266cc31a0",
+      "case": 67,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-67-control-5.bin",
+      "bytes": 199,
+      "sha256": "4a7a78692c17b3e98f4dc38a9e0cf6a7561869aeb536b867315994c1626d7a18",
+      "case": 67,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-67-control-233.bin",
+      "bytes": 199,
+      "sha256": "4be6fc6d47cd165b097edce55a0df63ef1963bfcf35ff645f83271cdab227a42",
+      "case": 67,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-67-control-236.bin",
+      "bytes": 199,
+      "sha256": "e7189dc8a80d54883ebbb8d8a48fdc0733fbe475a028dc332c6b8e61d59d4bbf",
+      "case": 67,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-67-control-248.bin",
+      "bytes": 199,
+      "sha256": "f75fca7b7118094e6e0727184b9a3320dca059a5729dece35e1e8e123b746029",
+      "case": 67,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-67-control-254.bin",
+      "bytes": 199,
+      "sha256": "a41ecdf7f0587c6a19139a3913edce50d36dc2f1791d34a8bab135f944e45832",
+      "case": 67,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-67-control-0.bin",
+      "bytes": 676,
+      "sha256": "d8a3a9ef2d2789edc959031e22de283d4107971d762ea6c9843a21f8d95416c3",
+      "case": 67,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-67-control-32.bin",
+      "bytes": 676,
+      "sha256": "80b307476e587c08a1b3bfca87feca8d5a4107896e4f554ca978ab198a8210af",
+      "case": 67,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-67-control-128.bin",
+      "bytes": 676,
+      "sha256": "ece4f16044cd35e2118a0c012e3b8d3682d06eb8a00483e03bb247bb4a1de562",
+      "case": 67,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-67-control-168.bin",
+      "bytes": 676,
+      "sha256": "b9f8797bdc26e976ae2737f861f245a975c34c59ea21735b43c4f99f2fc6e661",
+      "case": 67,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-68-control-2.bin",
+      "bytes": 199,
+      "sha256": "14859c44ebd7e41e9606512c87f65032bc72bc5836b8213023bc2486cb1de5f1",
+      "case": 68,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-68-control-5.bin",
+      "bytes": 199,
+      "sha256": "d2de8c85bdc6bf9fc1c043c567f3372522964809bf541b754d266bd78afd4378",
+      "case": 68,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-68-control-233.bin",
+      "bytes": 199,
+      "sha256": "e8b9cf67038c9f84140ca9be9726f53b982315973f7d8003c149c2f469309c66",
+      "case": 68,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-68-control-236.bin",
+      "bytes": 199,
+      "sha256": "dd206995c87aaf38edea89a112c276a9da9f60fa28d671144cbccab51cec7439",
+      "case": 68,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-68-control-248.bin",
+      "bytes": 199,
+      "sha256": "e4fef4cad8cc0794138c4e394faf46340bc5d3438e47a58195b524cb3c2093ce",
+      "case": 68,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-68-control-254.bin",
+      "bytes": 199,
+      "sha256": "1e6eaef44c9e307d1c34e136acb2b5148bab307b47975d14ccc08ad49f221c7a",
+      "case": 68,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-68-control-0.bin",
+      "bytes": 676,
+      "sha256": "a2dc054724e4ed23d8f8f536d2d351131b6395c0f0ba83184dd97c02c3d7e05a",
+      "case": 68,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-68-control-32.bin",
+      "bytes": 676,
+      "sha256": "ebe67defc994e716cd68732c67a0f68414b7ffe8a39b6e55df007fb41d6b3a80",
+      "case": 68,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-68-control-128.bin",
+      "bytes": 676,
+      "sha256": "6a0e652e245ed02ff9115a26298b60919a556615a20b690c7f2ff98c5bcabc59",
+      "case": 68,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-68-control-168.bin",
+      "bytes": 676,
+      "sha256": "ccd3d5cb32bdc4c50f3db207324e0ab6362d7b2276ca81d09bb8d7ccb37644cd",
+      "case": 68,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-69-control-2.bin",
+      "bytes": 199,
+      "sha256": "4de83688b724498196ea28fdbd263f067275db18c6707be43b1c55d9c4ac9b63",
+      "case": 69,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-69-control-5.bin",
+      "bytes": 199,
+      "sha256": "a20eb696b72ecf6ff3cf47e80cb0505559053cf710f917ebc30b39eda1d653ec",
+      "case": 69,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-69-control-233.bin",
+      "bytes": 199,
+      "sha256": "017acce5d7df9dfbab6be82a6ed862049b6cc599bc2c3ea30aab45f9fc7a2011",
+      "case": 69,
+      "control": 233
+    },
+    {
+      "path": "vorbis_headers/float-69-control-236.bin",
+      "bytes": 199,
+      "sha256": "b3d3c00be7dbe96dbbe3faea484703cde2154c31919d4c4d12acad120b3ea9e0",
+      "case": 69,
+      "control": 236
+    },
+    {
+      "path": "vorbis_headers/float-69-control-248.bin",
+      "bytes": 199,
+      "sha256": "f6098cdf4163ea578743874f8a0560c3a8f19dc0deea72686a78cef31277e5c7",
+      "case": 69,
+      "control": 248
+    },
+    {
+      "path": "vorbis_headers/float-69-control-254.bin",
+      "bytes": 199,
+      "sha256": "eec3f377698f3a1abdff7810509d5af86222531c31eb4fb0bc510245600f4120",
+      "case": 69,
+      "control": 254
+    },
+    {
+      "path": "vorbis_stream/float-69-control-0.bin",
+      "bytes": 676,
+      "sha256": "6eec31827bd05b3ef084181e6644702dd717a2fbb90cab14fbe863a98af8f541",
+      "case": 69,
+      "control": 0
+    },
+    {
+      "path": "vorbis_stream/float-69-control-32.bin",
+      "bytes": 676,
+      "sha256": "21b037ed074ede207d63dae6dc06e713fcaf7f9e658e4a9fbda8014a32ca78f1",
+      "case": 69,
+      "control": 32
+    },
+    {
+      "path": "vorbis_stream/float-69-control-128.bin",
+      "bytes": 676,
+      "sha256": "548cf66908e19c50fbc1d9e62f496b5cd3b14827ac33f2d5ec0de413c212c714",
+      "case": 69,
+      "control": 128
+    },
+    {
+      "path": "vorbis_stream/float-69-control-168.bin",
+      "bytes": 676,
+      "sha256": "1c8a071d06ad1146ebd1044b3b1c2034a8b6889295c5b402c6bc5b4a4f3ceb9a",
+      "case": 69,
+      "control": 168
+    },
+    {
+      "path": "vorbis_headers/float-guard-0-control-2.bin",
+      "bytes": 49,
+      "sha256": "ca6010b1e8eb88b7ae74dbd2937d12c20e0275a42d30e5dc83d83ddd466977c7",
+      "guard_case": 0,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-guard-0-control-5.bin",
+      "bytes": 49,
+      "sha256": "214fe6b0cbb65354edf7d2113467a3f05d735a773a5ddbec5a44300efeee2fd7",
+      "guard_case": 0,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-guard-1-control-2.bin",
+      "bytes": 50,
+      "sha256": "71bb7be1b90636903362b37a7d651bc86520263b879076ed3019af3f11307b1c",
+      "guard_case": 1,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-guard-1-control-5.bin",
+      "bytes": 50,
+      "sha256": "16fe2970d61f086fbc37f3260ca92e86665179b85c02a1f0a7c4b4ce56f07af2",
+      "guard_case": 1,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-guard-16-control-2.bin",
+      "bytes": 49,
+      "sha256": "d4d66e42d37b3f8c3bcd245333ccc8dcb1390ee8b04a1fc841d3c24fa3b382d8",
+      "guard_case": 16,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-guard-16-control-5.bin",
+      "bytes": 49,
+      "sha256": "9a0616dbc5efdd08bc86796b6318d7fa580ee2edee7ae510ef4d87afe344d18b",
+      "guard_case": 16,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-guard-17-control-2.bin",
+      "bytes": 50,
+      "sha256": "bfbcc3f249ebfc6728730b10b42533c945f5b0db78a9373acf8f62c7ff2b0e5a",
+      "guard_case": 17,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-guard-17-control-5.bin",
+      "bytes": 50,
+      "sha256": "af4b96e2edb807692de54257a470b67618478116cffb04a2370a7fa5996bc6be",
+      "guard_case": 17,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-guard-208-control-2.bin",
+      "bytes": 58,
+      "sha256": "c09601756c86d4de8561fdef6c5ced4605b9dcfb5f1aa598ad8d9db0b971b0a4",
+      "guard_case": 208,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-guard-208-control-5.bin",
+      "bytes": 58,
+      "sha256": "f300f4fb9eb261e957bc910ffda71a03b3aa1ebd7a76d840fac49d8ed783d51e",
+      "guard_case": 208,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-guard-240-control-2.bin",
+      "bytes": 58,
+      "sha256": "e11c51046a925ccad77afafd0d98a9a17b3b56b5d9f99e18f41fab0f9e7bff4d",
+      "guard_case": 240,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-guard-240-control-5.bin",
+      "bytes": 58,
+      "sha256": "c4ec89c857f9da7db48be69027abab2ea950bbd2d6f6e48d4080421507d96c57",
+      "guard_case": 240,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-guard-336-control-2.bin",
+      "bytes": 58,
+      "sha256": "06860a3486f431cf8e711a1920de141e94e89e569358e3979bff1d3ceb3d96a1",
+      "guard_case": 336,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-guard-336-control-5.bin",
+      "bytes": 58,
+      "sha256": "226164e00fdcceeab419601739faa8d338eba9c4bb659d38aa9a6fea8b72b29f",
+      "guard_case": 336,
+      "control": 5
+    },
+    {
+      "path": "vorbis_headers/float-guard-368-control-2.bin",
+      "bytes": 58,
+      "sha256": "cc6262d5b5bb407de595de98c22e80b2526ef2ae7e1c7bfac74f33828ec9259c",
+      "guard_case": 368,
+      "control": 2
+    },
+    {
+      "path": "vorbis_headers/float-guard-368-control-5.bin",
+      "bytes": 58,
+      "sha256": "6cf978510d12c2d43b15ca6e3cd933c13b800bdca0cfd8a32bf661f902df33d2",
+      "guard_case": 368,
+      "control": 5
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index 2d01ace40..3aa7428af 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -23,13 +23,13 @@ const DIST_EXTRA: [u8; 30] = [
+     13,
+ ];
+ 
+-struct Bits<'a> {
++struct Bits<'a, const BUFFERED: bool = false> {
+     input: &'a [u8],
+     pos: usize,
+     word: u64,
+     count: u8,
+ }
+-impl<'a> Bits<'a> {
++impl<'a, const BUFFERED: bool> Bits<'a, BUFFERED> {
+     fn new(input: &'a [u8]) -> Self {
+         Self {
+             input,
+@@ -45,14 +45,20 @@ impl<'a> Bits<'a> {
+             self.count += 8;
+         }
+     }
++    #[inline]
+     fn fill_huffman(&mut self, n: u8) {
+-        // Only Huffman lookahead may refill this widely. Fast lookahead starts
+-        // with at most 8 bits; a slow miss starts with at most 14 and consumes
+-        // at least 10. After EOB and alignment, at most four bytes remain: the
+-        // zlib Adler trailer. A streaming caller's suffix is never accepted.
+-        // General field/checksum reads retain their conservative byte refill.
++        // Buffered input remains available, and consumed() subtracts every
++        // prefetched bit. Its 56-bit refill starts at <=8 and fits the u64.
++        // Streaming instead keeps the 32-bit bound: after EOB/alignment no
++        // more than the four Adler bytes are accepted from the caller.
++        // General field/checksum reads retain conservative byte refill.
+         if self.count < n {
+-            if self.input.len() - self.pos >= 4 {
++            if BUFFERED && self.count <= 8 && self.input.len() - self.pos >= 8 {
++                let bytes = self.input[self.pos..self.pos + 8].try_into().unwrap();
++                self.word |= (u64::from_le_bytes(bytes) & 0x00ff_ffff_ffff_ffff) << self.count;
++                self.pos += 7;
++                self.count += 56;
++            } else if self.input.len() - self.pos >= 4 {
+                 let bytes = self.input[self.pos..self.pos + 4].try_into().unwrap();
+                 self.word |= u64::from(u32::from_le_bytes(bytes)) << self.count;
+                 self.pos += 4;
+@@ -155,7 +161,7 @@ impl Huffman {
+     // A small primary lookup can inline at symbol call sites; keep the
+     // canonical long-code and error paths in a separate function.
+     #[inline]
+-    fn decode(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
++    fn decode<const BUFFERED: bool>(&self, bits: &mut Bits<'_, BUFFERED>) -> Result<usize, Error> {
+         bits.fill_huffman(9);
+         let entry = self.fast[(bits.word & 511) as usize];
+         let n = (entry & 15) as u8;
+@@ -168,7 +174,10 @@ impl Huffman {
+     }
+ 
+     #[inline(never)]
+-    fn decode_slow(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
++    fn decode_slow<const BUFFERED: bool>(
++        &self,
++        bits: &mut Bits<'_, BUFFERED>,
++    ) -> Result<usize, Error> {
+         bits.fill_huffman(self.max);
+         // A primary-table miss cannot match a code of length 1 through 9.
+         // Reverse once, then compare only the remaining canonical lengths.
+@@ -201,7 +210,7 @@ fn fixed() -> (Huffman, Huffman) {
+     )
+ }
+ 
+-fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
++fn dynamic(bits: &mut Bits<'_, true>) -> Result<(Huffman, Huffman), Error> {
+     let nl = bits.read(5)? as usize + 257;
+     let nd = bits.read(5)? as usize + 1;
+     let nc = bits.read(4)? as usize + 4;
+@@ -264,7 +273,7 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+         return Err(Error::Invalid("zlib dictionary not permitted"));
+     }
+     let window = 1usize << ((cmf >> 4) + 8);
+-    let mut bits = Bits::new(&input[2..]);
++    let mut bits = Bits::<true>::new(&input[2..]);
+     let mut output = Vec::new();
+     loop {
+         let last = bits.read(1)? != 0;
+diff --git a/crates/deadlib-image/png/src/zlib/inflate.rs b/crates/deadlib-image/png/src/zlib/inflate.rs
+index fd71d891f..c9cb2c45c 100644
+--- a/crates/deadlib-image/png/src/zlib/inflate.rs
++++ b/crates/deadlib-image/png/src/zlib/inflate.rs
+@@ -125,7 +125,7 @@ impl Inflater {
+         if let Some(error) = &self.failure {
+             return Err(error.clone());
+         }
+-        let mut bits = Bits {
++        let mut bits = Bits::<false> {
+             input,
+             pos: 0,
+             word: self.word,

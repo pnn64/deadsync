@@ -1,0 +1,3 @@
+Profiling decode: 24 files, 40 corpus passes
+[ perf record: Woken up 107 times to write data ]
+[ perf record: Captured and wrote 26.676 MB /tmp/deadlib-png-decode-huffman-split-selected.data (6356 samples) ]

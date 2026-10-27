@@ -1,0 +1,31 @@
+path	engine	phase	median_ns	min_ns	max_ns	mad_ns	reads_per_run	bytes_read_per_run	seeks_per_run	tells_per_run	api_exposed_samples_per_run
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	seek_open	1294883.8709677418	1120597.5806451612	1350668.5483870967	55784.677419354906	19.0	5458.0	3.0	0.0	0.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	symphonia	seek_open	1957629.1666666667	1846183.3333333333	2248504.1666666665	30598.611111111008	4.0	2917.0	3.0	0.0	0.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	seek_open	55753.23041738136	53116.523727844484	57223.2132647227	566.8953687821631	5.0	5552.0	4.0	1.0	0.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	native	seek_batch	2226115.0	2100332.5	2363612.5	91288.75	300.0	9400.0	100.0	0.0	35805.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	symphonia	seek_batch	1071531.3559322034	1036711.0169491526	1163665.2542372881	12953.389830508502	100.0	9400.0	100.0	0.0	52736.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/mono.ogg	libvorbis	seek_batch	925360.9271523178	911478.8079470198	975267.5496688741	13882.119205298019	100.0	9400.0	100.0	0.0	21508.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	seek_open	2391126.785714286	2377712.5	2458633.9285714286	13414.285714285914	19.0	9900.0	3.0	0.0	0.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	symphonia	seek_open	2289710.1694915253	2276671.186440678	2436283.0508474577	13038.983050847426	5.0	6786.0	3.0	0.0	0.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libvorbis	seek_open	121721.72739541161	116942.37516869095	135217.27395411607	1956.2753036437352	7.0	10818.0	4.0	1.0	0.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	native	seek_batch	24951928.57142857	23436728.57142857	25466128.57142857	514200.0	300.0	91800.0	100.0	0.0	429370.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	symphonia	seek_batch	8435273.684210526	8268236.842105263	8910100.0	167036.8421052629	100.0	91800.0	100.0	0.0	444544.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/stereo.ogg	libvorbis	seek_batch	5786666.666666667	5479437.037037037	6010296.296296297	54285.1851851847	100.0	91800.0	100.0	0.0	49586.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	seek_open	1564602.1276595744	1510547.8723404256	1651656.3829787234	52015.957446808694	19.0	6406.0	3.0	0.0	0.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	symphonia	seek_open	1961707.894736842	1908332.894736842	1998094.7368421052	36386.842105263146	5.0	3275.0	3.0	0.0	0.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	libvorbis	seek_open	78862.65775798069	75835.93170007424	80040.60876020786	988.5671863400057	5.0	6442.0	4.0	1.0	0.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	native	seek_batch	24090833.333333332	22999750.0	26518950.0	818583.3333333358	300.0	3600.0	100.0	0.0	380464.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	symphonia	seek_batch	11652838.461538462	11326369.23076923	12136384.615384616	137923.07692307606	100.0	3600.0	100.0	0.0	615024.0
+crates/deadlib-audio/decode/vorbis/tests/fixtures/eight-channel.ogg	libvorbis	seek_batch	11401646.153846154	10983792.307692308	11750876.923076924	63161.53846153803	100.0	3600.0	100.0	0.0	181200.0
+assets/music/in_two (loop).ogg	native	seek_open	33521180.0	32945960.0	34006460.0	485280.0	6505.0	9878028.0	3.0	0.0	0.0
+assets/music/in_two (loop).ogg	symphonia	seek_open	2300535.714285714	2232168.5714285714	2473177.1428571427	61670.0	14.0	87835.0	3.0	0.0	0.0
+assets/music/in_two (loop).ogg	libvorbis	seek_open	178946.83026584866	164169.73415132923	189548.0572597137	4786.503067484649	40.0	81920.0	4.0	1.0	0.0
+assets/music/in_two (loop).ogg	native	seek_batch	44603500.0	42443800.0	48121650.0	2033850.0	600.0	920907.0	100.0	0.0	462262.0
+assets/music/in_two (loop).ogg	symphonia	seek_batch	28935020.0	28192680.0	30777780.0	655120.0	2561.0	12111157.0	689.0	0.0	642664.0
+assets/music/in_two (loop).ogg	libvorbis	seek_batch	19794900.0	19160600.0	21692525.0	634300.0	3676.0	7525063.0	216.0	0.0	50690.0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	seek_open	18508188.888888888	17997333.333333332	19205722.222222224	164944.44444444403	3337.0	4700278.0	3.0	0.0	0.0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	symphonia	seek_open	2550302.380952381	2519490.476190476	2714340.476190476	30811.90476190485	14.0	87835.0	3.0	0.0	0.0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libvorbis	seek_open	217301.4652014652	210877.2893772894	219754.3956043956	832.967032967048	40.0	81920.0	4.0	1.0	0.0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	native	seek_batch	71238033.33333333	67973400.0	71374000.0	135966.66666667163	600.0	844721.0	100.0	0.0	1059258.0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	symphonia	seek_batch	28479700.0	26161266.666666668	29789200.0	1308933.333333332	2644.0	17129046.0	593.0	0.0	639360.0
+target/deadlib-audio-reference/corpus/itgmania/goin-under.ogg	libvorbis	seek_batch	15395370.0	14570890.0	16060850.0	69290.0	3929.0	8043355.0	196.0	0.0	50690.0

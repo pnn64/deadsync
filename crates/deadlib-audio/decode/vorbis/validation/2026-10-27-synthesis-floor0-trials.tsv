@@ -1,0 +1,15 @@
+path	engine	trial	iterations	elapsed_ns	samples	packets	header_ns	clear_floor_ns	residue_ns	coupling_ns	floor_gain_ns	imdct_finite_ns	window_ns	overlap_copy_ns
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	production	0	1	798973000	12525696	6856	0	0	0	0	0	0	0	0
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	profiled	0	1	817524300	12525696	6856	784900	547980100	111106500	319200	9832800	112586300	4595100	25748800
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	production	1	1	805307400	12525696	6856	0	0	0	0	0	0	0	0
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	profiled	1	1	804746900	12525696	6856	789500	538262900	109188900	343500	9894700	111026100	4588000	25923800
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	production	2	1	778615800	12525696	6856	0	0	0	0	0	0	0	0
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	profiled	2	1	855349000	12525696	6856	924600	572671000	116293400	348300	10274200	117398300	4834600	27686300
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	profiled	3	1	883059900	12525696	6856	884600	591484500	119525200	358800	10648900	121900200	4958500	28265800
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	production	3	1	795054500	12525696	6856	0	0	0	0	0	0	0	0
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	profiled	4	1	794509300	12525696	6856	767400	532960900	106854800	321500	9711300	109490300	4564400	25319400
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	production	4	1	816048400	12525696	6856	0	0	0	0	0	0	0	0
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	profiled	5	1	797395400	12525696	6856	824500	534167100	107885900	320100	9678900	110039700	4466300	25437100
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	production	5	1	750477100	12525696	6856	0	0	0	0	0	0	0	0
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	profiled	6	1	835343100	12525696	6856	848900	559380100	113166200	324000	10103000	115364800	4776300	26680300
+target/deadlib-audio-reference/corpus/floor0/vorbis_floor_type_0.ogg	production	6	1	820319200	12525696	6856	0	0	0	0	0	0	0	0

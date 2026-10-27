@@ -4,6 +4,9 @@ use std::hint::black_box;
 
 include!("indexed_pixels_original.rs");
 
+#[path = "decode/expansion_perf.rs"]
+mod expansion_perf;
+
 fn indices(width: u32, height: u32, bits: u8) -> Vec<u8> {
     let pitch = (width as usize * usize::from(bits)).div_ceil(8);
     (0..pitch * height as usize)
@@ -160,7 +163,7 @@ fn indexed_decoders_match_original_pixels_and_errors() {
             if !path.is_file() {
                 continue;
             }
-            let signature = image_signature(&path).unwrap();
+            let signature = image_source(&path).unwrap().0;
             for key in [false, true] {
                 if signature == *b"\x89PNG\r\n\x1a\n" {
                     assert_eq!(

@@ -1,0 +1,13 @@
+{
+  "binary_sha256": "9076c25475eab27a725833b05e4cb4891c23b3ab68fe7b15c874bfd0c988563d",
+  "pdb_sha256": "b3c202214db5c255089955a59e0a3426b1fcc818a26509cd3059c0f51c496619",
+  "functions": [
+    {
+      "name": "deadlib_image_png::zlib::decompress_prefix",
+      "address": "0x1400189d0",
+      "code_bytes": 3700,
+      "assembly": "experiments/huffman-lookahead-inline-decompress_prefix.txt",
+      "assembly_sha256": "095d6b2fcc42782eb11339b19c28d2d35a5ff70506cd443f7a47797ff8c347b8"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "literal_streams": 172,
+  "c_zlib_exact_streams": 172,
+  "tag_cases": 2758,
+  "typed_tags": 48,
+  "opaque_tags": 2434,
+  "malformed_tags": 276,
+  "language_png_files": 16548,
+  "language_api_policy_checks": 165480,
+  "exact_rust_png_metadata_samples": 14892,
+  "new_png_seeds": 3066,
+  "new_raw_seeds_per_target": 130,
+  "production_changes": [
+    "src/zlib/inflate.rs"
+  ],
+  "new_successful_sanitizer_executions": 70000,
+  "profile_scope": {
+    "requested_hz": 499,
+    "initial_kernel_cap_hz": 250,
+    "lost_samples": 0,
+    "scope": "Reader-only diagnostic shares; kernel can throttle sampling and these shares are not comparative timing."
+  },
+  "storage_recovery_verified_archives": 3,
+  "storage_recovery_archived_files": 292997,
+  "evidence": [
+    {
+      "path": "stream-literals-validation.json",
+      "sha256": "22d3375ac53a9553aef3bc995fc9e3daa88e250b5d50f484cd69da425f7ee92b"
+    },
+    {
+      "path": "fuzz/reports/stream-literals-source.json",
+      "sha256": "203499c1c29072ef1b23c9325ff10c305c125f0d0e787b9e4c11a46025c4a3b6"
+    },
+    {
+      "path": "fuzz/reports/stream-literals-seeds.json",
+      "sha256": "bbbc569a0fc803928afebeef555dd52c1e97767bf2f63c5c8a4a7b0aa144eb87"
+    },
+    {
+      "path": "fuzz/reports/stream-literals-seed-build.json",
+      "sha256": "cc3ba726f28bec98e30945b5252fada894463e8a79979a396068783671e9cf84"
+    },
+    {
+      "path": "fuzz/reports/generated-seeds-storage-20261027.json",
+      "sha256": "03df0acde32c882b9f85d5fc916b1574554018a8be2c7333ece94553842a6a1a"
+    },
+    {
+      "path": "profiling/reader-stream-literals.json",
+      "sha256": "d7ab9b9a4d45d39b448ecfcf322651de1b6aefc306d05a6b9bbb36a605fb8667"
+    },
+    {
+      "path": "experiments/stream-literals-selection.json",
+      "sha256": "6f474be66e6ceb0748bf5824bc86388cc28c585ccaf3775481cee1b499c48934"
+    }
+  ]
+}

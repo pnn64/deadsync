@@ -48,38 +48,38 @@ serialize = ["serde"]
 
 [dependencies]
 mlua_derive = { package = "deadlib-lua-legacy-derive", version = "=0.12.2", optional = true, path = "mlua_derive" }
-bstr = { version = "1.0", features = ["std"], default-features = false }
-either = "1.0"
-num-traits = { version = "0.2.14" }
-rustc-hash = "2.0"
-futures-util = { version = "0.3", optional = true, default-features = false, features = ["std"] }
-serde = { version = "1.0", optional = true }
-erased-serde = { version = "0.4", optional = true }
-serde-value = { version = "0.7", optional = true }
-parking_lot = { version = "0.12", features = ["arc_lock"] }
-anyhow = { version = "1.0", optional = true }
-inventory = { version = "0.3", optional = true }
-libc = "0.2"
+bstr = { version = "1.13.1", features = ["std"], default-features = false }
+either = "1.19.0"
+num-traits = { version = "0.2.19" }
+rustc-hash = "2.1.3"
+futures-util = { version = "0.3.34", optional = true, default-features = false, features = ["std"] }
+serde = { version = "1.0.229", optional = true }
+erased-serde = { version = "0.4.11", optional = true }
+serde-value = { version = "0.7.0", optional = true }
+parking_lot = { version = "0.12.5", features = ["arc_lock"] }
+anyhow = { version = "1.0.104", optional = true }
+inventory = { version = "0.3.25", optional = true }
+libc = "0.2.191"
 
 ffi = { package = "deadlib-lua-legacy-sys", version = "0.13.0", path = "mlua-sys" }
 
 [dev-dependencies]
-trybuild = "1.0"
-tokio = { version = "1.0", features = ["macros", "rt", "time"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", features = ["arbitrary_precision"] }
-maplit = "1.0"
-static_assertions = "1.0"
+trybuild = "1.0.122"
+tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = { version = "1.0.154", features = ["arbitrary_precision"] }
+maplit = "1.0.2"
+static_assertions = "1.1.0"
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-hyper = { version = "1.2", features = ["full"] }
-hyper-util = { version = "0.1.3", features = ["full"] }
-http-body-util = "0.1.1"
-reqwest = { version = "0.13", features = ["json"] }
-tempfile = "3"
-criterion = { version = "0.8", features = ["async_tokio"] }
-rustyline = "18.0"
-tokio = { version = "1.0", features = ["full"] }
+hyper = { version = "1.12.0", features = ["full"] }
+hyper-util = { version = "0.1.21", features = ["full"] }
+http-body-util = "0.1.5"
+reqwest = { version = "0.13.5", features = ["json"] }
+tempfile = "3.27.0"
+criterion = { version = "0.8.2", features = ["async_tokio"] }
+rustyline = "19.0.0"
+tokio = { version = "1.54.1", features = ["full"] }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin_include)', 'cfg(force_memory_limit)'] }
