@@ -1,6 +1,61 @@
 use bincode::{Decode, Encode};
 use std::collections::{HashMap, HashSet};
 
+#[test]
+fn signed_zigzag_matches_unsigned_wire_across_widths_and_endianness() {
+    macro_rules! check {
+        ($signed:ty, $unsigned:ty, $values:expr) => {
+            for value in $values {
+                // Independent arithmetic definition, including the signed minimum.
+                let wire = if value < 0 {
+                    !(value as $unsigned) * 2 + 1
+                } else {
+                    (value as $unsigned) * 2
+                };
+                for big in [false, true] {
+                    let mut actual = [0xa5; 17];
+                    let mut expected = [0xa5; 17];
+                    macro_rules! compare {
+                        ($config:expr) => {{
+                            let config = $config;
+                            let used =
+                                bincode::encode_into_slice(value, &mut actual, config).unwrap();
+                            let expected_used =
+                                bincode::encode_into_slice(wire, &mut expected, config).unwrap();
+                            assert_eq!((actual, used), (expected, expected_used));
+                            assert_eq!(
+                                bincode::decode_from_slice::<$signed, _>(&actual[..used], config)
+                                    .unwrap(),
+                                (value, used)
+                            );
+                        }};
+                    }
+                    if big {
+                        compare!(bincode::config::standard().with_big_endian());
+                    } else {
+                        compare!(bincode::config::standard());
+                    }
+                }
+            }
+        };
+    }
+
+    check!(i16, u16, i16::MIN..=i16::MAX);
+    let mut state = 0x1234_5678_9abc_def0_1357_9bdf_2468_ace0u128;
+    let values = std::iter::once(i128::MIN)
+        .chain(std::iter::once(i128::MAX))
+        .chain((0..4096).map(|_| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state as i128
+        }))
+        .collect::<Vec<_>>();
+    check!(i32, u32, values.iter().map(|&value| value as i32));
+    check!(i64, u64, values.iter().map(|&value| value as i64));
+    check!(i128, u128, values);
+}
+
 #[derive(Debug, PartialEq, Encode, Decode)]
 struct PersistedData {
     enabled: bool,
