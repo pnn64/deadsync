@@ -158,6 +158,9 @@ The initial [performance baseline](PERFORMANCE.md) compares resident full decode
 4 KiB fragmented reads and time to first PCM against libvorbisfile and Symphonia.
 The measured N/4 transform update improves the two longer tracks by 1.35–1.67x
 in observed full-file runs, while a native throughput gap remains.
+The later unit-twiddle FFT update adds 1.14-1.27x isolated kernel throughput and
+observed full-file gains of 1.03x / 1.11x on those longer tracks. The report keeps
+trial spreads and mixed short-clip movements alongside these scoped gains.
 [Allocation/memory/seek comparisons](RESOURCES.md) now measure five files:
 native uses less requested heap than Symphonia here. The packet-read update
 addresses the measured page-sized synthesis work; eager indexing and broader

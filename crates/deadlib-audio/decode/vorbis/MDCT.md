@@ -74,3 +74,21 @@ quantization. A separate libvorbis `mdct_forward` oracle compares every
 coefficient at all eight sizes, with peak <=3e-7 and RMS <=5e-8 at unit peak.
 Observed maximum coefficient error is 8.196e-8. Encoder output is independently
 decoded through libvorbisfile and Symphonia; see [ENCODING.md](ENCODING.md).
+
+## Unit FFT twiddles
+
+The radix-two FFT's first stage uses only the twiddle `exp(0) = 1`.
+It now processes adjacent complex pairs in a contiguous sum/difference pass.
+Each later group handles its first pair the same way before evaluating its
+remaining complex twiddles. For an FFT of length L = N/4, this removes L-1
+complex multiplications, out of `(L/2) log2(L)` butterflies. At N=2048 that is
+511 of 2,304 butterflies. The same helper serves forward and inverse transforms.
+
+Tables, scratch storage, bit reversal, rotations and the remaining butterflies
+are unchanged. No transform coefficient is approximated. Omitting multiplication
+by signed zero can change the sign of a zero result; finite PCM is checked with
+the existing numerical tolerances. Arbitrary nonfinite transform input has no
+new numerical guarantee. Packet synthesis retains its finite-value checks.
+
+Paired kernel and complete decoding results, including unchanged accuracy gates,
+are recorded in [PERFORMANCE.md](PERFORMANCE.md).

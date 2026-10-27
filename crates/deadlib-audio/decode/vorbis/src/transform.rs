@@ -90,14 +90,27 @@ impl Imdct {
     }
     fn fft(&mut self) {
         let fft = self.n / 4;
-        let mut width = 2;
+        // The first stage contains only unit twiddles. Keep these adjacent
+        // sums/differences in one contiguous pass without complex multiplies.
+        for [a, b] in self.scratch.as_chunks_mut::<2>().0 {
+            let [br, bi] = *b;
+            *b = [a[0] - br, a[1] - bi];
+            a[0] += br;
+            a[1] += bi;
+        }
+        let mut width = 4;
         while width <= fft {
             let half = width / 2;
             let step = fft / width;
             for group in self.scratch.chunks_exact_mut(width) {
                 let (left, right) = group.split_at_mut(half);
-                for (j, (a, b)) in left.iter_mut().zip(right).enumerate() {
-                    let [wr, wi] = self.twiddle[j * step];
+                // Every later group also starts with the exact twiddle 1+0i.
+                let [br, bi] = right[0];
+                right[0] = [left[0][0] - br, left[0][1] - bi];
+                left[0][0] += br;
+                left[0][1] += bi;
+                for (j, (a, b)) in left[1..].iter_mut().zip(&mut right[1..]).enumerate() {
+                    let [wr, wi] = self.twiddle[(j + 1) * step];
                     let [br, bi] = *b;
                     let real = br * wr - bi * wi;
                     let imag = br * wi + bi * wr;

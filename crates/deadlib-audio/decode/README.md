@@ -88,6 +88,10 @@ speedup on the longer tracks in interleaved baseline/current trials, at about
 6% higher stream-startup time. Tables fit the existing tree buffer and remaining
 setup budget. Scalar, full PCM, seeking and sanitizer gates remain unchanged;
 the short-clip tradeoff is explicit in the report.
+Removing unit-twiddle FFT multiplications then improves the isolated kernel
+1.14-1.27x, with observed longer-track full decoding gains of 1.03x / 1.11x.
+Transform storage and the numerical gates stay unchanged; mixed short-clip
+movements and overlapping trial ranges remain explicit in the report.
 
 The [resource and arbitrary-seek baseline](vorbis/RESOURCES.md) separates
 requested-heap instrumentation, fresh-process memory and uninstrumented timing.

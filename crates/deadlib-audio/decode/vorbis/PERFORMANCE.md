@@ -1,6 +1,6 @@
 # Decoding performance
 
-The initial baseline and subsequent transform optimization are recorded below.
+The initial baseline and subsequent measured optimizations are recorded below.
 Native full-file synthesis remains slower than both references on the two longer
 stereo inputs. These shared-machine measurements do not establish competitive
 performance across platforms.
@@ -282,6 +282,97 @@ no artifacts/failures: [statistics](validation/2026-10-26-huffman-fuzz.tsv),
 [provenance](validation/2026-10-26-huffman-fuzz-provenance.json),
 [binary hashes/results](validation/2026-10-26-huffman-fuzz-results.json), and
 [initial corpus hashes](validation/2026-10-26-huffman-fuzz-initial.sha256.json).
+
+## Unit-twiddle FFT butterflies, 2026-10-27
+
+The FFT's width-two stage is now a contiguous sum/difference pass. Every later
+group also handles its first pair without complex multiplication by the unit
+twiddle. This removes L-1 complex multiplications for FFT length L=N/4;
+[MDCT.md](MDCT.md#unit-fft-twiddles) describes the arithmetic and signed-zero
+qualification. Transform storage stays at 7N bytes. Both synthesis and native
+analysis use this helper; no public API, dependency or allocation changes.
+
+Seven shuffled trials interleave native baseline `046b21236`, the candidate and
+libvorbis for the isolated kernel; the pipeline also includes Symphonia. The
+current adapter is compiled against both native source snapshots with identical
+Cargo artifact profiles and all 17 registry dependency artifact IDs. No custom
+CPU flags are added. These remain shared, unlocked Windows desktop measurements
+on the same Xeon system. The 10,000-iteration cap still limits short kernel trials.
+
+```powershell
+python crates/deadlib-audio/decode/scripts/benchmark.py --imdct --baseline-revision 046b21236 --repeats 7
+python crates/deadlib-audio/decode/scripts/benchmark.py --baseline-revision 046b21236 --repeats 7
+```
+
+Median microseconds per inverse transform:
+
+| Block N | Native before | Native after | Speedup | libvorbis |
+| --- | ---: | ---: | ---: | ---: |
+| 64 | 0.245 | 0.207 | 1.19x | 0.155 |
+| 128 | 0.483 | 0.423 | 1.14x | 0.339 |
+| 256 | 1.067 | 0.879 | 1.21x | 0.726 |
+| 512 | 2.484 | 2.050 | 1.21x | 1.736 |
+| 1024 | 5.233 | 4.345 | 1.20x | 3.679 |
+| 2048 | 11.378 | 8.931 | 1.27x | 7.879 |
+| 4096 | 21.280 | 18.629 | 1.14x | 15.459 |
+| 8192 | 46.880 | 38.633 | 1.21x | 34.741 |
+
+The isolated gain is 1.14-1.27x across every legal size. Native still trails
+libvorbis's kernel. The same five-file pipeline suite gives these song medians
+in milliseconds:
+
+| File / phase | Native before | Native after | Symphonia | libvorbisfile |
+| --- | ---: | ---: | ---: | ---: |
+| `in_two`, full | 331.405 | 321.578 | 186.777 | 315.343 |
+| `in_two`, 4 KiB reads | 336.578 | 311.613 | 191.022 | 302.333 |
+| `in_two`, startup | 0.777 | 0.771 | 1.813 | 0.661 |
+| `Goin' Under`, full | 324.450 | 291.895 | 181.931 | 237.974 |
+| `Goin' Under`, 4 KiB reads | 336.497 | 308.726 | 189.647 | 252.359 |
+| `Goin' Under`, startup | 1.095 | 1.096 | 2.001 | 0.615 |
+
+Observed full-file speedup is **1.03x / 1.11x**, and fragmented reads improve
+**1.08x / 1.09x**. Startup is essentially unchanged. The shorter mono/stereo
+fixtures have mixed small movements: full-decode throughput improves 2.6-3.7%,
+fragmented decode takes 2.8-6.2% longer and startup 2.2-2.5% longer. The
+eight-channel fixture's full/fragmented throughput improves 8.8% / 10.3%.
+These small differences
+should be read with the retained spreads. Maximum relative MAD is 7.80% for
+kernel groups and 7.42% for pipeline groups. Song full-file trial ranges overlap:
+`in_two` is 301.93-331.37 ms after versus 321.16-393.24 ms before; Goin' Under is
+273.86-342.02 versus 294.99-348.54 ms. No universal speedup is claimed.
+
+Native song full decoding still trails Symphonia by 1.72x / 1.60x and
+libvorbisfile by 1.02x / 1.23x. This small FFT optimization does not explain or
+close the complete pipeline gap. Floor/residue profiling remains necessary.
+
+The [kernel summary](validation/2026-10-27-unit-twiddle-kernel-summary.tsv),
+[168 trials](validation/2026-10-27-unit-twiddle-kernel-trials.tsv), and
+[manifest](validation/2026-10-27-unit-twiddle-kernel.json), plus the
+[pipeline summary](validation/2026-10-27-unit-twiddle-pipeline-summary.tsv),
+[420 trials](validation/2026-10-27-unit-twiddle-pipeline-trials.tsv), and
+[manifest](validation/2026-10-27-unit-twiddle-pipeline.json), retain the measurements.
+The [validation record](validation/2026-10-27-unit-twiddle-checks.json) pins source,
+input and worker hashes, full conformance checks and sanitizer results.
+
+The real-PCM encoder check also reproduces all 24 prior pair-encoder file hashes
+exactly, across six inputs and all four precision settings. The current native
+decoder and Symphonia pass the existing PCM gates against the retained,
+hash-verified libvorbis PCM for those identical files: 3,658,112 channel samples
+per decoder. [Encoding checks](validation/2026-10-27-unit-twiddle-encoding.json)
+record the individual errors and artifact hashes. This does not claim all
+possible forward-transform inputs produce identical encoded bytes.
+
+Validation passes **108 release tests** and **85 extracted offline tests**,
+including all-size direct cosine and libvorbis forward/inverse checks, the
+38-file raw/full PCM corpus, 1,900 repository-corpus seeks, 528 upstream vectors,
+historical/floor-zero media, the 144-case native encoding matrix and warmed
+allocation checks. No numerical tolerance is increased. Default/all-feature
+Clippy and formatting pass. Resumed raw-packet, streaming/indexed and encoding
+AddressSanitizer targets run 300 seconds each, completing **18,658 executions**
+with no failures or artifacts. The
+[fuzz results](validation/2026-10-27-unit-twiddle-fuzz-results.tsv) and
+[provenance](validation/2026-10-27-unit-twiddle-fuzz-provenance.json) retain this
+campaign; sanitizer memory is not a production memory measurement.
 
 ## Remaining measurements and next optimization gate
 
