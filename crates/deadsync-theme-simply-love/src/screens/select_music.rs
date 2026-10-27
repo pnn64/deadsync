@@ -6997,6 +6997,11 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
     refreshed.audio_playback = audio_playback;
     refreshed.arrow_bounce_offset = arrow_bounce_offset;
     refreshed.policy = policy;
+    // The shell sends settings only when they change, not after a wheel rebuild.
+    refreshed.sync_graph_mode = state.sync_graph_mode;
+    refreshed.sync_graph_orientation = state.sync_graph_orientation;
+    refreshed.sync_graph_origin = state.sync_graph_origin;
+    refreshed.sync_confidence_percent = state.sync_confidence_percent;
     refreshed.scoreboxes = scoreboxes;
     refreshed.scorebox_presentation = scorebox_presentation;
     refreshed.unlock_downloads_available = unlock_downloads_available;
@@ -7007,8 +7012,9 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
         apply_wheel_sort(&mut refreshed, sort_mode);
     }
 
-    if let Some(expanded) = expanded_series_name
-        && refreshed.all_entries.iter().any(|entry| {
+    // Preserve collapsed sections too; init otherwise reopens the last played pack.
+    refreshed.expanded_series_name = expanded_series_name.filter(|expanded| {
+        refreshed.all_entries.iter().any(|entry| {
             matches!(
                 entry,
                 MusicWheelEntry::PackHeader {
@@ -7019,20 +7025,14 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
                 } if name.as_ref() == expanded.as_ref()
             )
         })
-    {
-        refreshed.expanded_series_name = Some(expanded);
-        rebuild_displayed_entries(&mut refreshed);
-    }
-
-    if let Some(expanded) = expanded_pack_name
-        && refreshed
+    });
+    refreshed.expanded_pack_name = expanded_pack_name.filter(|expanded| {
+        refreshed
             .all_entries
             .iter()
             .any(|entry| entry.section_key() == Some(expanded.as_ref()))
-    {
-        refreshed.expanded_pack_name = Some(expanded);
-        rebuild_displayed_entries(&mut refreshed);
-    }
+    });
+    rebuild_displayed_entries(&mut refreshed);
 
     let mut restored = false;
     if let Some(simfile_path) = selected_simfile_path {
@@ -7190,6 +7190,10 @@ fn refresh_after_style_switch(state: &mut State) {
     refreshed.audio_playback = audio_playback;
     refreshed.arrow_bounce_offset = arrow_bounce_offset;
     refreshed.policy = policy;
+    refreshed.sync_graph_mode = state.sync_graph_mode;
+    refreshed.sync_graph_orientation = state.sync_graph_orientation;
+    refreshed.sync_graph_origin = state.sync_graph_origin;
+    refreshed.sync_confidence_percent = state.sync_confidence_percent;
     refreshed.scoreboxes = scoreboxes;
     refreshed.scorebox_presentation = scorebox_presentation;
     refreshed.unlock_downloads_available = unlock_downloads_available;
@@ -14915,7 +14919,9 @@ mod tests {
     use deadlib_present::actors::Actor;
     use deadsync_chart::{SongData, SongPack, SyncPref};
     use deadsync_config::null_or_die::GraphOrigin;
-    use deadsync_config::theme::{SelectMusicSeriesSource, SelectMusicSort, SelectMusicWheelStyle};
+    use deadsync_config::theme::{
+        SelectMusicSeriesSource, SelectMusicSort, SelectMusicWheelStyle, SyncGraphMode,
+    };
     use deadsync_core::input::InputSource;
     use deadsync_input::{InputBinding, InputEvent, Keymap, VirtualAction};
     use deadsync_online::lobbies as lobby_data;
@@ -19301,6 +19307,158 @@ mod tests {
         let _ = handle_raw_key_event(&mut state, None, Some("a"));
 
         assert_eq!(song_search_query(&state), Some("a"));
+    }
+
+    #[test]
+    fn sync_refresh_preserves_options_for_song_analysis_and_style_changes() {
+        let mut pack = test_pack("Test", "");
+        pack.songs.push(super::test_folder_stats_song(0));
+        let mut state = super::init(super::SelectMusicInitView {
+            song_packs: vec![pack],
+            ..Default::default()
+        });
+        let policy = state.policy;
+        super::sync_runtime_view(
+            &mut state,
+            crate::views::SelectMusicRuntimeView {
+                settings: Some(crate::views::SelectMusicSettingsView {
+                    arrow_bounce_offset: 0.0,
+                    policy,
+                    sync_graph_mode: SyncGraphMode::BeatIndex,
+                    sync_graph_orientation: GraphOrientation::Horizontal,
+                    sync_graph_origin: GraphOrigin::Top,
+                    sync_confidence_percent: 70,
+                }),
+                ..Default::default()
+            },
+        );
+
+        for style_change in [false, false, true] {
+            if style_change {
+                super::refresh_after_style_switch(&mut state);
+            } else {
+                let packs = state.song_packs.clone();
+                super::refresh_from_song_packs(&mut state, packs);
+            }
+            super::show_sync_song_overlay(&mut state);
+            let super::SyncOverlayState::NullOrDie(overlay) = &state.sync_overlay else {
+                panic!("song analysis should open after the rebuild");
+            };
+            assert_eq!(overlay.confidence_threshold, 0.70);
+            assert_eq!(overlay.graph_mode, SyncGraphMode::BeatIndex);
+            assert_eq!(overlay.graph_orientation, GraphOrientation::Horizontal);
+            assert_eq!(overlay.graph_origin, GraphOrigin::Top);
+        }
+    }
+
+    #[test]
+    fn sync_refresh_keeps_custom_threshold_for_subsequent_pack_reviews() {
+        let song = super::test_folder_stats_song(0);
+        let mut pack = test_pack("Test", "");
+        pack.songs.push(song.clone());
+        let mut state = super::init(super::SelectMusicInitView {
+            song_packs: vec![pack],
+            ..Default::default()
+        });
+        state.sync_confidence_percent = 70;
+
+        for _ in 0..3 {
+            state.selected_index = state
+                .entries
+                .iter()
+                .position(|entry| entry.pack_key() == Some("Test"))
+                .unwrap();
+            super::pack_sync::show_from_selected(&mut state);
+            super::apply_sync_analysis_events(
+                &mut state,
+                crate::SimplyLoveSyncOwner::SelectMusicPack,
+                &mut vec![
+                    crate::SimplyLoveSyncEvent::RowCached {
+                        index: 0,
+                        result: crate::SimplyLoveSyncResult {
+                            bias_ms: -4.0,
+                            confidence: 0.75,
+                        },
+                        applied: false,
+                    },
+                    crate::SimplyLoveSyncEvent::Finished,
+                ],
+            );
+            let mut effects = Vec::new();
+            super::pack_sync::handle_input(
+                &mut state,
+                &input_event(VirtualAction::p1_start, InputSource::Keyboard, true),
+                &mut effects,
+            );
+            assert!(
+                effects.iter().any(|effect| matches!(
+                    effect,
+                    ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Sync(
+                        crate::SimplyLoveSyncRequest::ApplySongOffsetBatch { changes, .. }
+                    )) if changes.len() == 1 && changes[0].simfile_path == song.simfile_path
+                )),
+                "75% confidence must remain eligible at the saved 70% threshold"
+            );
+
+            // Saving offsets replaces song Arcs and rebuilds the wheel.
+            let mut packs = state.song_packs.clone();
+            let mut updated = (*packs[0].songs[0]).clone();
+            updated.offset += 0.004;
+            packs[0].songs[0] = Arc::new(updated);
+            super::refresh_from_song_packs(&mut state, packs);
+        }
+    }
+
+    #[test]
+    fn sync_refresh_keeps_collapsed_pack_selection_instead_of_last_played_song() {
+        for (wheel_style, initial_sort) in [
+            (SelectMusicWheelStyle::Itg, SelectMusicSort::Group),
+            (SelectMusicWheelStyle::Iidx, SelectMusicSort::Group),
+            (SelectMusicWheelStyle::Itg, SelectMusicSort::Series),
+            (SelectMusicWheelStyle::Iidx, SelectMusicSort::Series),
+        ] {
+            let mut played = (*super::test_folder_stats_song(0)).clone();
+            played.music_path = Some(PathBuf::from("Songs/Played/song.ogg"));
+            let mut played_pack = test_pack("Played", "Series");
+            played_pack.songs.push(Arc::new(played));
+            let mut selected_pack = test_pack("Selected", "Series");
+            selected_pack.songs.push(super::test_folder_stats_song(1));
+            let mut init_view = super::SelectMusicInitView {
+                song_packs: vec![played_pack, selected_pack],
+                last_played: crate::views::SelectMusicLastPlayedView {
+                    song_music_path: Some("Songs/Played/song.ogg".to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            init_view.policy.interaction.wheel_style = wheel_style;
+            init_view.policy.interaction.initial_sort = initial_sort;
+            let mut state = super::init(init_view);
+            super::close_open_section_one_level(&mut state);
+            let expanded_series = state.expanded_series_name.clone();
+            state.selected_index = state
+                .entries
+                .iter()
+                .position(|entry| entry.pack_key() == Some("Selected"))
+                .unwrap();
+            super::pack_sync::show_from_selected(&mut state);
+
+            let packs = state.song_packs.clone();
+            super::refresh_from_song_packs(&mut state, packs);
+
+            assert_eq!(state.expanded_pack_name, None);
+            assert_eq!(state.expanded_series_name, expanded_series);
+            assert_eq!(
+                state.entries[state.selected_index].pack_key(),
+                Some("Selected")
+            );
+            assert!(
+                state
+                    .entries
+                    .iter()
+                    .all(|entry| !matches!(entry, super::MusicWheelEntry::Song(_)))
+            );
+        }
     }
 
     #[test]
