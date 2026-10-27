@@ -27,7 +27,7 @@ evidence, application responsibilities and explicitly open items.
 | Bounded streaming with arbitrary input boundaries | `zlib::Inflater`, `StreamDecoder`, `decode_reader` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Twelve targets; 1,360,000 recorded successful sanitizer executions across milestones, including historical encoder runs; newest 100,000 use native-crate feedback with artifact-verified isolation; targeted decoder gaps and longer campaigns remain open |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Twelve targets; 1,410,000 recorded successful sanitizer executions across milestones, including historical encoder runs; newest 50,000 use native-crate feedback with artifact-verified isolation; targeted decoder gaps and longer campaigns remain open |
 | Benchmarks and profile-guided optimization | Decoder-only harnesses, `BENCHMARKS.md`, checked-in TSV and profiles | Bulk copying, filter reconstruction and buffered Adler-32 improvements measured; competitive decoder performance still pending |
 
 Historical milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -1382,3 +1382,66 @@ Both experiment patches reconstruct their recorded sources from `ded016feb`.
 Only the checksum source changes in production; the other twenty PNG files and
 shared primitives are unchanged. Decoder field audits, remaining corpus gaps and
 competitive decoder performance remain open.
+
+## Scalar chunk field audit (2026-10-27)
+
+`tests/scalar_fields.rs` exercises 207,348 independently framed one-pixel files
+across fifteen native formats and both interlace flags. Both animation policies,
+buffered decoding, one-/seven-byte readers and one-/31-byte push input produce
+2,073,480 API/policy checks. The independent framing uses literal fields, bitwise
+CRC and stored zlib; it calls no production encoder. Native samples, raw and typed
+metadata, palettes, transparency, explicit RGBA16 expansion and fused errors are
+checked against literal known answers.
+
+| Field | Accepted cases | Invalid cases |
+| --- | ---: | ---: |
+| PLTE | 2,604 | 20,556 |
+| bKGD | 20,050 | 3,706 |
+| cHRM | 1,950 | 1,530 |
+| gAMA | 240 | 300 |
+| hIST | 32 | 5,392 |
+| pHYs | 570 | 8,100 |
+| sBIT | 716 | 17,394 |
+| sRGB | 150 | 7,680 |
+| tIME | 71,206 | 33,060 |
+| tRNS | 11,858 | 254 |
+| Total | 109,376 | 97,972 |
+
+The matrix includes exact-layout length neighborhoods; all PLTE lengths 0–771;
+palette/depth/alpha length relationships; all sBIT channel bytes, sRGB intents,
+pHYs units and timestamp field bytes; all 65,536 years; individual 31-bit integer
+edges; and background/transparency word-byte positions and unused-bit masking.
+It is not every 32-bit Cartesian product or a substitute for larger-image,
+APNG-control, text/profile or calendar-interpretation evidence.
+
+The new test-only C `--scalar-metadata` mode exports integer getters without
+sample/color transforms. Its 440-case run has 408 exact matches and 32 hIST drops.
+The pinned libpng source marks hIST as preceding PLTE; the specification requires
+PLTE first. The test checks that precise drop and warning separately, and will
+accept exact hIST values from a future fixed reference. The retained wire,
+source/binary hashes and diagnostic are in `experiments/scalar-hist-reference.json`;
+the fixture was replayed against the same binary during finalization. No native
+behavior was changed to reproduce the reference drop.
+
+Strict main/fuzz Clippy and scoped formatting pass. The normal release and
+standalone offline suites each pass 129 tests, with sixteen optional checks
+ignored by default. Explicit scalar getter, existing C native-sample and zlib
+batch checks pass. All compiled sources/test inputs and 876 copied files match;
+the oracle README was updated after the copy and is identified as documentation
+in `scalar-fields-validation.json`. Commands and logs are retained alongside it.
+
+The seed generator adds 6,494 representative files. Focused export plus the
+immutable earlier PNG ZIP produces 34,361 files / 7,204,344 bytes. Separate full
+generation produces a byte-for-byte identical ZIP. Source, generator binary,
+archive, command and log hashes are in `fuzz/reports/scalar-fields-*`.
+
+Fresh native-feedback ASan passes 50,000 PNG-stream executions in 70 fuzzing
+seconds / 528 MiB peak RSS. Object audits verify fourteen dependency archives
+and two harness objects have no feedback counters or PC tables. Both native
+archives retain feedback; the executable defines ASan's runtime entry. The
+binary and all twenty-one production PNG files match the checksum milestone.
+These runs bring historical sanitizer executions to 1,410,000. No encoder target
+runs. `scalar-fields-audit.json` links exact counts, per-field totals and evidence.
+
+Remaining animation/control-field audits, corpus gaps and competitive decoder
+performance remain open.

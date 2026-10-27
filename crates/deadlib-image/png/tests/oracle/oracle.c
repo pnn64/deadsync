@@ -21,6 +21,50 @@ static void named_header(const char *kind,const char *name,size_t size) {
     size_t length=strlen(name);
     blob(kind,4);word((unsigned int)length);blob(name,length);word((unsigned int)size);
 }
+/* Version 1, followed by kind/count/u32-BE-value records until EOF.  Values
+ * come from libpng's integer getters, with no color or sample transforms. */
+static void scalar_header(const char *kind,unsigned int count) { blob(kind,4);word(count); }
+static void scalar_metadata(png_structp png,png_infop info) {
+    png_colorp palette=NULL;
+    png_bytep alpha=NULL;
+    png_color_16p transparent=NULL,background=NULL;
+    png_color_8p significant=NULL;
+    png_uint_16p histogram=NULL;
+    png_timep stamp=NULL;
+    png_fixed_point gamma=0,wx=0,wy=0,rx=0,ry=0,gx=0,gy=0,bx=0,by=0;
+    png_uint_32 x=0,y=0;
+    int n=0,transparency=0,intent=0,unit=0,i,color=png_get_color_type(png,info);
+    word(1);
+    if (png_get_PLTE(png,info,&palette,&n)) {
+        scalar_header("PLTE",3*(unsigned int)n);
+        for (i=0;i<n;i++) {word(palette[i].red);word(palette[i].green);word(palette[i].blue);}
+    }
+    if (png_get_tRNS(png,info,&alpha,&transparency,&transparent)) {
+        if (color==PNG_COLOR_TYPE_PALETTE) {scalar_header("tRNS",(unsigned int)transparency);for(i=0;i<transparency;i++)word(alpha[i]);}
+        else if (color==PNG_COLOR_TYPE_GRAY) {scalar_header("tRNS",1);word(transparent->gray);}
+        else {scalar_header("tRNS",3);word(transparent->red);word(transparent->green);word(transparent->blue);}
+    }
+    if (png_get_gAMA_fixed(png,info,&gamma)) {scalar_header("gAMA",1);word((unsigned int)gamma);}
+    if (png_get_cHRM_fixed(png,info,&wx,&wy,&rx,&ry,&gx,&gy,&bx,&by)) {
+        scalar_header("cHRM",8);word((unsigned int)wx);word((unsigned int)wy);word((unsigned int)rx);word((unsigned int)ry);
+        word((unsigned int)gx);word((unsigned int)gy);word((unsigned int)bx);word((unsigned int)by);
+    }
+    if (png_get_sBIT(png,info,&significant)) {
+        int gray=color==PNG_COLOR_TYPE_GRAY || color==PNG_COLOR_TYPE_GRAY_ALPHA;
+        scalar_header("sBIT",(gray ? 1u : 3u)+((color&PNG_COLOR_MASK_ALPHA) ? 1u : 0u));
+        if(gray)word(significant->gray);else {word(significant->red);word(significant->green);word(significant->blue);}
+        if(color&PNG_COLOR_MASK_ALPHA)word(significant->alpha);
+    }
+    if (png_get_sRGB(png,info,&intent)) {scalar_header("sRGB",1);word((unsigned int)intent);}
+    if (png_get_bKGD(png,info,&background)) {
+        if(color==PNG_COLOR_TYPE_PALETTE) {scalar_header("bKGD",1);word(background->index);}
+        else if(color==PNG_COLOR_TYPE_GRAY || color==PNG_COLOR_TYPE_GRAY_ALPHA) {scalar_header("bKGD",1);word(background->gray);}
+        else {scalar_header("bKGD",3);word(background->red);word(background->green);word(background->blue);}
+    }
+    if (png_get_hIST(png,info,&histogram)) {scalar_header("hIST",(unsigned int)n);for(i=0;i<n;i++)word(histogram[i]);}
+    if (png_get_pHYs(png,info,&x,&y,&unit)) {scalar_header("pHYs",3);word(x);word(y);word((unsigned int)unit);}
+    if (png_get_tIME(png,info,&stamp)) {scalar_header("tIME",6);word(stamp->year);word(stamp->month);word(stamp->day);word(stamp->hour);word(stamp->minute);word(stamp->second);}
+}
 /* Version 1, presence bits cICP/mDCV/cLLI, then present fixed-point fields.
  * Chromaticities are libpng's integers scaled by 100,000, in R,G,B,white order.
  * Luminance values use the getter's exact 10,000 scale; no floating point. */
@@ -129,9 +173,10 @@ int main(int argc,char **argv) {
     int metadata=argc==3 && strcmp(argv[1],"--metadata")==0;
     int names=argc==3 && strcmp(argv[1],"--named-metadata")==0;
     int hdr=argc==3 && strcmp(argv[1],"--hdr-metadata")==0;
+    int scalar=argc==3 && strcmp(argv[1],"--scalar-metadata")==0;
     int batch=argc==3 && strcmp(argv[1],"--zlib-batch")==0;
     int reference=argc==3 && strcmp(argv[1],"--reference-samples")==0;
-    const char *path=argc==2 ? argv[1] : ((metadata || names || hdr || batch || reference) ? argv[2] : NULL);
+    const char *path=argc==2 ? argv[1] : ((metadata || names || hdr || scalar || batch || reference) ? argv[2] : NULL);
     if (path==NULL || !(file=fopen(path,"rb"))) return 2;
 #ifdef _WIN32
     _setmode(_fileno(stdout),_O_BINARY);
@@ -167,7 +212,9 @@ int main(int argc,char **argv) {
     if (!data || !rows) return 3;
     for (y=0;y<height;y++) rows[y]=data+y*stride;
     png_read_image(png,rows); png_read_end(png,info);
-    if (hdr) {
+    if (scalar) {
+        scalar_metadata(png,info);
+    } else if (hdr) {
         hdr_metadata(png,info);
     } else if (names) {
         named_metadata(png,info);

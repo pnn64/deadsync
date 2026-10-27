@@ -33,6 +33,31 @@ Pinned source commits: libpng `2b978915d82377df13fcbb1fb56660195ded868a`, zlib
 the production crate and is never linked to it. The test fails if an oracle is
 missing; normal `cargo test` explicitly reports it as ignored.
 
+`--scalar-metadata FILE.png` uses libpng's integer getters for PLTE, tRNS,
+gAMA, cHRM, sBIT, sRGB, bKGD, hIST, pHYs and tIME. Output begins with a big-endian
+u32 protocol version (1), followed by records until EOF. Each record is a
+four-byte chunk name, a big-endian u32 value count, then that many big-endian u32
+values. Palette entries use RGB order; transparency follows its color type;
+cHRM uses white/red/green/blue x/y order; sBIT uses native channel order (RGB
+for indexed); pHYs is x/y/unit; tIME is year/month/day/hour/minute/second.
+No image/sample/color transforms are enabled.
+
+Build the updated helper in a fresh directory to retain earlier reference
+binaries, then run:
+
+```powershell
+$env:DEADLIB_LIBPNG_ORACLE = (Resolve-Path target/deadlib-image-reference/oracle-scalar-fields-build/Release/deadlib_png_oracle.exe).Path
+cargo test -p deadlib-image-png --release --test scalar_fields libpng_scalar_integer_getters -- --ignored --nocapture
+```
+
+The pinned run checks 440 representative files: 408 exact field comparisons and
+32 hIST drops. The library's ordering table places hIST before PLTE, while PNG
+Table 7 requires the reverse. Those drops are checked explicitly, including the
+warning and retained PLTE; they are not counted as exact hIST matches. A retained
+wire fixture and source/binary hashes are in
+`../../experiments/scalar-hist-reference.json`. A future reference that returns
+the expected hIST values passes the exact comparison instead.
+
 `--metadata FILE.png` emits ICC length and Exif length (two big-endian u32s),
 followed by the exact uncompressed profile and Exif bytes retained by libpng.
 The profiles test checks 480 encodings across eight pinned independent ICC v2/v4

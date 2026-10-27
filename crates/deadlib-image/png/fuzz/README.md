@@ -234,6 +234,32 @@ These 100,000 successful executions bring the historical total to 1,360,000
 across twelve targets. Compiler SIMD and comparative decoder timings are
 documented in `../BENCHMARKS.md`; ASan runs are correctness evidence, not timings.
 
+## Scalar metadata fields (2026-10-27)
+
+`tests/support/scalar_fields.rs` adds 6,494 representative valid/invalid PNG
+inputs from the 207,348-case field audit. Normal seed generation includes them
+in both PNG corpora. A focused mode exports only these additions to a fresh root:
+
+```sh
+cargo run -p deadlib-image-png --release --example seed_fuzz -- --scalar-fields-only /tmp/png-scalar-seeds-fresh
+python3 crates/deadlib-image/png/fuzz/scripts/archive_native_seeds.py --corpus-root /tmp/png-scalar-seeds-fresh --output /tmp/png-scalar-seeds-fresh.zip --targets png_stream --include-archive /path/to/retained-base-seeds.zip
+```
+
+The archive helper imports selected targets from earlier immutable ZIPs, rejects
+duplicate names, and records input archive hashes. Literal UTF-8 filename sorting
+and fixed ZIP metadata remain deterministic. This avoids reopening thousands of
+cross-filesystem seed files. A separate full seed-generation run produces the
+identical combined PNG ZIP; `reports/scalar-fields-reproduce.*` retains the proof.
+
+The combined PNG corpus starts at 34,361 files / 7,204,344 bytes. Its native-only
+ASan campaign passes 50,000 executions in 70 fuzzing seconds / 528 MiB peak RSS.
+Object audits verify fourteen dependency archives and two harness objects have
+no feedback counters/PC tables; both native archives retain feedback. The binary
+defines ASan's runtime entry. `reports/scalar-fields-*` retains generator/source/
+binary/corpus hashes, commands and logs. Production PNG code and the selected
+PNG-stream binary are unchanged from the checksum milestone. These runs bring
+the historical total to 1,410,000 across twelve targets. No encoder target runs.
+
 `decode` checks for native parser failures and compares every native sample when
 the independent Rust png decoder also accepts the image. Reference ancillary
 policies differ, so a reference rejection does not automatically mean a native

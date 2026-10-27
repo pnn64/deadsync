@@ -25,6 +25,9 @@ mod named;
 #[allow(dead_code)]
 #[path = "../tests/support/prefix.rs"]
 mod prefix;
+#[allow(dead_code)]
+#[path = "../tests/support/scalar_fields.rs"]
+mod scalar_fields;
 #[path = "../tests/support/text_body.rs"]
 mod text_body;
 use std::{
@@ -32,6 +35,32 @@ use std::{
     path::{Path, PathBuf},
 };
 fn main() -> std::io::Result<()> {
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|s| s == "--scalar-fields-only")
+    {
+        let destination = std::env::args_os().nth(2).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "--scalar-fields-only requires a fresh output root",
+            )
+        })?;
+        let path = PathBuf::from(destination);
+        fs::create_dir(&path)?;
+        let cases = scalar_fields::seeds();
+        for target in ["decode", "png_stream"] {
+            let directory = path.join(target);
+            fs::create_dir(&directory)?;
+            for (name, bytes) in &cases {
+                fs::write(directory.join(name), bytes)?;
+            }
+        }
+        println!(
+            "Scalar PNG fields: {} independent seeds per PNG target",
+            cases.len()
+        );
+        return Ok(());
+    }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let corpus = if let Some(destination) = std::env::args_os().nth(1) {
         let path = PathBuf::from(destination);
@@ -301,6 +330,16 @@ fn main() -> std::io::Result<()> {
         }
     }
     println!("PNG chunk grammar: {} independent seeds", chunk_cases.len());
+    let scalar_cases = scalar_fields::seeds();
+    for (name, bytes) in &scalar_cases {
+        for directory in [&png, &png_stream] {
+            fs::write(directory.join(name), bytes)?;
+        }
+    }
+    println!(
+        "Scalar PNG fields: {} independent seeds per PNG target",
+        scalar_cases.len()
+    );
     let mut named_count = 0;
     for case in named::names().into_iter().filter(|case| case.c_reference) {
         for (index, form) in named::FORMS.into_iter().enumerate() {

@@ -31,7 +31,7 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | 5.5: CRC | Native CRC-32 for chunks and fdAT sequence/data; known answers, bulk tails/splits, corrupt-stream tests | Covered |
 | 5.6: ordering | All 720 core and 120 APNG permutations; `tests/ancillary_order.rs` checks all 18 non-animation ancillary types across all native formats, optional palettes, critical-boundary placements, ordered pairs, duplicates and 720 six-type permutations per context | Covered for the Table 7 representative matrix, every small-stream IDAT split and direct event error termination; arbitrary payload mutations remain separate field/fuzz evidence |
 | 5.7–5.8: extensions and private fields | Public raw ancillary API enforces alphabetic names, ancillary/reserved bits; unknown critical chunks fail; encoder emits only supported IHDR methods | Covered for current extension API; no new public chunk definitions |
-| 7.1: integers and byte order | Big-endian native u16 samples; 31-bit PNG u32 fields and checked dimensions/lengths; `tests/decoder_boundaries.rs` adds 960 dimension pairs across all native formats | Covered for IHDR zero/31-bit/high-bit boundaries with allocation guards; remaining chunk-field matrices remain Open |
+| 7.1: integers and byte order | Big-endian native u16 samples; checked dimensions/lengths; `tests/decoder_boundaries.rs` and `tests/scalar_fields.rs` | Covered for IHDR and scalar metadata zero/31-bit/high-bit boundaries, all timestamp years and native word-byte positions; remaining animation/control-field matrices remain Open |
 | 7.2: scanlines | Native sub-byte packing/unpacking, per-row padding, 8/16-bit samples; 3,240 format/geometry/filter/interlace/compression cases | Covered; nonzero unused input bits are not image samples |
 | 7.3, 9.1–9.4: filters | Native None/Sub/Up/Average/Paeth plus adaptive encoder selection; byte-wise wrapping arithmetic and pass resets | Covered by reference sample matrix and PNGSuite |
 | 8.1: Adam7 | All seven pass origins/steps, empty passes, plain/stream writer and row-reader paths | Covered by geometry matrix, PNGSuite and APNG subframes |
@@ -45,14 +45,14 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | Clause / chunk | Implementation and evidence | Audit |
 | --- | --- | --- |
 | 11.2.1 IHDR | Required first, singleton, nonzero 31-bit dimensions, legal color/depth, method 0, interlace 0/1 | Covered by framing/format tests plus all 65,536 color/depth pairs, all 11,520 native-format/method bytes and 960 dimension pairs through three APIs and both animation policies, without giant allocations |
-| 11.2.2 PLTE | Presence by color type, 1–256 RGB entries, depth capacity and placement; native index retention | Covered; out-of-range index recovery is listed below |
+| 11.2.2 PLTE | Presence by color type, 1–256 RGB entries, depth capacity and placement; native index retention | Covered by grammar tests and all payload lengths 0–771 in thirty format/interlace contexts; index recovery is listed below |
 | 11.2.3 IDAT | Consecutive chunks, arbitrary/empty payload boundaries, single concatenated zlib stream, ignored unused final compressed bytes | Covered by buffered/reader/row/encoder tests |
 | 11.2.4 IEND | Empty, required last; whole-file APIs reject trailing bytes, push parser reports prefix completion | Covered by truncation/grammar/prefix tests |
 | 11.3.1.1 tRNS | Color-specific lengths, PLTE dependency, missing palette alpha = opaque, unused bits masked, both bytes of 16-bit keys compared | Covered by palette/field/compositing tests; encoder zeroes unused bits |
 | 11.3.2.1 cHRM | Exact fixed-point integers, size, 31-bit range, singleton/order and sRGB compatibility | Covered for wire values; physical color interpretation is Application |
 | 11.3.2.2 gAMA | Exact nonzero fixed-point value, range, singleton/order and sRGB compatibility | Covered for wire values; gamma conversion is Application |
 | 11.3.2.3 iCCP | Names/method, bounded native inflate, RGB/GRAY match, common ICC header/tag framing and version-aware v4.4 table checks | Covered by 960 profile wire cases, eight pinned independent profiles, C oracle and structured mutations; transform/tag semantics remain opaque |
-| 11.3.2.4 sBIT | Exact channel count and nonzero depth bounded by native/palette precision | Covered by metadata suite; original significant-bit recovery is available from unchanged native samples |
+| 11.3.2.4 sBIT | Exact channel count and nonzero depth bounded by native/palette precision | Covered by all 256 values at every channel position in all formats/interlace contexts, plus independent C getters and original significant-bit recovery |
 | 11.3.2.5 sRGB | Four intents, singleton/order; accompanying gAMA/cHRM must use Table 17 values when encoding | Covered by all-format/intent and incompatible-fallback tests; decoder follows higher-precedence description |
 | 11.3.2.6 cICP | H.273 (07/2024) primaries/transfer assignments, matrix 0, full-range flag 0/1, singleton/order and highest selection priority | Covered by all 131,072 primaries/transfer/range combinations and all matrix/flag bytes; reserved values retained as unknown when decoding and rejected when encoding |
 | 11.3.2.7 mDCV | Exact 16/32-bit fixed-point fields, length/range, cICP dependency and placement; `tests/hdr.rs` | Covered by independent literal/byte/boundary fixtures, all formats, two writers and exact C/Rust fixed-point comparisons; physical display interpretation and tone mapping are Application |
@@ -62,14 +62,31 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | 11.3.3.3 zTXt | Method 0, bounded zlib, same strict body repertoire as tEXt with independent stored-stream fixtures and native Stored/Fast typed construction | Covered by the shared 6,144-file body matrix, C/Rust exact values, expansion/method tests and structured text-body fuzzing |
 | 11.3.3.4 iTXt | Flags, ignored decoder method when uncompressed, strict encoder method, UTF-8 BOM/replacement, raw retention and BCP47 grammar/registration | Covered by all 256 method values, UTF-8 known answers and 9,902 IANA records/codes; extension-specific semantics need final scope audit |
 | 11.3.4.1 bKGD | Color-specific size, indexed bounds, unused-bit masking, encoder normalization and placement | Covered by all nonindexed formats and indexed metadata tests; compositing against suggested background is Application |
-| 11.3.4.2 hIST | One frequency per PLTE entry, placement and nonzero frequencies for used encoded indices, including frames | Covered by field tests; suggested-quantization semantics for truecolor are Application |
-| 11.3.4.3 pHYs | Two exact 31-bit values, known unit flag, singleton/order | Covered for wire structure; display aspect correction is Application |
+| 11.3.4.2 hIST | One frequency per PLTE entry, placement and nonzero frequencies for used encoded indices, including frames | Covered by independent payload-length/palette contexts and prior usage tests; pinned libpng drops 32 legal representative chunks, recorded separately; quantization remains Application |
+| 11.3.4.3 pHYs | Two exact 31-bit values, known unit flag, singleton/order | Covered by integer boundaries, all 256 unit values, lengths and C integer getters; display aspect correction is Application |
 | 11.3.4.4 sPLT | All 256 depth bytes, entry/remainder/count boundaries through 257 entries, full sample/frequency boundaries, all 15 image formats, case-sensitive unique names | Covered for these equivalence classes, with independent big-endian fields and 158 exact C/policy comparisons; palette generation/selection is Application |
 | 11.3.4.5 eXIf | Both TIFF byte orders and first-directory framing; unsupported data retained as unknown; encoder rejects unsupported containers | Covered by endian/truncation/offset tests and exact C/Rust payload comparisons; remaining Exif tags/directories/thumbnails are opaque |
-| 11.3.5.1 tIME | Exact fields, documented month/day/time ranges, leap second, singleton and legal placement | Covered by metadata tests; calendar/display/local-time policy is Application |
+| 11.3.5.1 tIME | Exact fields, documented month/day/time ranges, leap second, singleton and legal placement | Covered by all 65,536 years, all byte values in five remaining fields across all formats/interlace contexts, and C getters; calendar/display/local-time policy is Application |
 | 11.3.6.1 acTL | Before IDAT, singleton, nonzero frame count, plays/frame limits and actual count agreement; explicit recovery diagnostic | Covered by 3,000 independent fault cases across 60 configurations and 120 APNG permutations, with fatal resource/core errors kept distinct |
 | 11.3.6.2 fcTL | Contiguous sequence numbers, legal rectangles, default-image restrictions, timing, blend/disposal enums; first fcTL may precede acTL | Covered by native/recovery matrices, 35 pinned WPT animations, 240 generated native-precision animations, 2,121 independent RGBA16 canvases, all disposal/blend states and all nine disposal transitions |
 | 11.3.6.3 fdAT | Sequence prefix, preceding frame control, arbitrary splits/empty frame-data fields, shared image format and independent frame zlib | Covered by native/reference APNG matrix, independent 20-frame fixture and streamed one-byte data |
+
+`tests/scalar_fields.rs` supplements the scalar chunk rows above with 207,348
+independently framed one-pixel files: 109,376 accepted wire cases and 97,972
+invalid field cases. Both animation policies, buffered decoding, one-/seven-byte
+readers and one-/31-byte push input produce 2,073,480 checks. The suite verifies
+native rows, raw/typed metadata, palette/transparency values, explicit RGBA16
+expansion and terminal errors. It samples integer edges individually rather than
+claiming the full Cartesian product of 32-bit fields. Existing suites cover
+larger images, APNG geometry, opaque profiles and variable-length text.
+
+The external scalar getter run has 408 exact matches and 32 recorded hIST drops.
+[PNG Table 7](https://www.w3.org/TR/2025/REC-png-3-20250624/) requires hIST after
+PLTE. The [pinned libpng table](https://github.com/pnggroup/libpng/blob/2b978915d82377df13fcbb1fb56660195ded868a/pngrutil.c#L3077)
+instead places it before PLTE, explaining the observed warning/drop. The exact
+fixture, binary/source hashes and diagnostics are retained in
+`experiments/scalar-hist-reference.json`. This reference difference does not
+change native known answers.
 
 ## Encoders, decoders, viewers and editors
 
@@ -105,9 +122,9 @@ The clarified decoder deliverable still requires competitive performance,
 comprehensive differential and fuzz evidence, independent reuse and no DeadSync
 integration. Package isolation and the production dependency boundary are
 verified by retained offline builds. Decoder performance remains incomplete in
-`BENCHMARKS.md`: the Huffman and filter optimizations improve measured photo
-decoding, but native 109.49 MiB/s still trails Rust png's 226.46 in the selected
-comparison. Native-precision APNG render answers and scoped native compositor
+`BENCHMARKS.md`: the latest buffered checksum comparison measures native photo
+decoding at 96.47 MiB/s against Rust png's 193.95 on the same shared host;
+competitive performance is still unproven. Native-precision APNG render answers and scoped native compositor
 corpus coverage are now retained. Native-crate feedback isolation and a
 whole-package source replay are verified; package totals also contain untouched
 encoding utilities and are not decoder-only percentages. Resolve remaining
