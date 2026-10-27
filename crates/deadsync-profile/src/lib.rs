@@ -4896,6 +4896,7 @@ pub enum TargetScoreSetting {
     SpecifiedValue,
     MachineBest,
     PersonalBest,
+    GhostData,
 }
 
 impl FromStr for TargetScoreSetting {
@@ -4934,6 +4935,7 @@ impl FromStr for TargetScoreSetting {
             "specifiedvalue" | "specified" => Ok(Self::SpecifiedValue),
             "machinebest" | "machine" => Ok(Self::MachineBest),
             "personalbest" | "personal" => Ok(Self::PersonalBest),
+            "ghostdata" | "ghost" => Ok(Self::GhostData),
             other => Err(format!("'{other}' is not a valid TargetScore setting")),
         })
     }
@@ -4961,6 +4963,7 @@ impl core::fmt::Display for TargetScoreSetting {
             Self::SpecifiedValue => write!(f, "Specified Value"),
             Self::MachineBest => write!(f, "Machine Best"),
             Self::PersonalBest => write!(f, "Personal Best"),
+            Self::GhostData => write!(f, "Ghost Data"),
         }
     }
 }
@@ -14708,6 +14711,8 @@ ApiKey = gs-key
             ("machinebest", TargetScoreSetting::MachineBest),
             ("personal", TargetScoreSetting::PersonalBest),
             ("personalbest", TargetScoreSetting::PersonalBest),
+            ("Ghost Data", TargetScoreSetting::GhostData),
+            ("ghost", TargetScoreSetting::GhostData),
         ] {
             assert_eq!(TargetScoreSetting::from_str(raw), Ok(setting));
             assert_eq!(

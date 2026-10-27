@@ -236,6 +236,31 @@ fn mini_indicator_view(
         let side = profile_side_from_gameplay(session.runtime_player_side(player));
         let chart_hash = charts[player].short_hash.as_str();
         let score_type = profiles[player].mini_indicator_score_type;
+        if profiles[player].target_score == profile_data::TargetScoreSetting::GhostData {
+            let ghost_type = match score_type {
+                profile_data::MiniIndicatorScoreType::Itg => deadsync_gameplay::GhostScoreType::Itg,
+                profile_data::MiniIndicatorScoreType::Ex => deadsync_gameplay::GhostScoreType::Ex,
+                profile_data::MiniIndicatorScoreType::HardEx => {
+                    deadsync_gameplay::GhostScoreType::HardEx
+                }
+            };
+            if let Some(profile_id) = profile_data::runtime_active_local_profile_id_for_side(side) {
+                let dir = profile_data::app_runtime::local_profile_dir(&profile_id);
+                match deadsync_score::ghost::load(&dir, chart_hash) {
+                    Ok(data) => {
+                        let mut histories = data.into_histories();
+                        view.ghost_targets[player] = deadsync_gameplay::GameplayGhostTarget {
+                            score_type: ghost_type,
+                            points: std::mem::take(&mut histories[ghost_type.index()]),
+                        };
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => {
+                        log::warn!("Could not load ghost history for {chart_hash}: {error}")
+                    }
+                }
+            }
+        }
         view.specified_target_percent[player] =
             f64::from(profiles[player].target_score_percent.min(100));
         view.personal_best_percent[player] =

@@ -851,17 +851,7 @@ mod tests {
         let missing = translate_player_options(&sl(&[]), &base);
         assert_eq!(missing.target_score, base.target_score);
         assert_eq!(missing.target_score_percent, base.target_score_percent);
-        for raw in [
-            "",
-            " ",
-            "0",
-            "19",
-            "-1",
-            "255",
-            "1.5",
-            "17foo",
-            "Ghost Data",
-        ] {
+        for raw in ["", " ", "0", "19", "-1", "255", "1.5", "17foo"] {
             let out = translate_player_options(&sl(&[("TargetScore", raw)]), &base);
             assert_eq!(out.target_score, base.target_score, "TargetScore={raw:?}");
             assert_eq!(out.target_score_percent, base.target_score_percent);
@@ -885,7 +875,7 @@ mod tests {
         let pb = translate_player_options(&sl(&[("TargetScore", "Personal best")]), &base);
         assert_eq!(pb.target_score, TargetScoreSetting::PersonalBest);
 
-        // Numeric targets import directly; ghost data still requires replay support.
+        // Numeric and ghost targets preserve the selected Arrow Cloud option.
         let specified = translate_player_options(
             &sl(&[
                 ("TargetScore", "SpecifiedValue"),
@@ -901,7 +891,7 @@ mod tests {
             TargetScoreMissPolicy::RestartSong
         );
         let ghost = translate_player_options(&sl(&[("TargetScore", "Ghost Data")]), &base);
-        assert_eq!(ghost.target_score, base.target_score);
+        assert_eq!(ghost.target_score, TargetScoreSetting::GhostData);
     }
 
     #[test]

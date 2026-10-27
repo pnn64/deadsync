@@ -1230,6 +1230,10 @@ mod runtime_regression_tests {
                     [GameplayTargetScoreSetting::MachineBest; MAX_PLAYERS],
                     [99.5, 98.75],
                 ),
+                (
+                    [GameplayTargetScoreSetting::GhostData; MAX_PLAYERS],
+                    [6.0 / 7.0 * 100.0, 100.0],
+                ),
             ] {
                 let state = init_gameplay_runtime(
                     song.clone(),
@@ -1243,6 +1247,16 @@ mod runtime_regression_tests {
                     GameplayConfig::default(),
                     SyncPref::Default,
                     GameplayMiniIndicatorData {
+                        ghost_targets: [
+                            GameplayGhostTarget {
+                                score_type: GhostScoreType::Ex,
+                                points: vec![3.0, 6.0],
+                            },
+                            GameplayGhostTarget {
+                                score_type: GhostScoreType::HardEx,
+                                points: vec![3.5, 7.0],
+                            },
+                        ],
                         specified_target_percent: [97.0, 96.0],
                         personal_best_percent: [Some(95.25), Some(93.5)],
                         machine_best_percent: [Some(99.5), Some(98.75)],
@@ -1284,6 +1298,143 @@ mod runtime_regression_tests {
                 }
             }
         }
+    }
+
+    fn finalize_ghost_test_tap(state: &mut State, note_index: usize, offset_ms: f32) {
+        let player = state.player_for_col(state.chart_runtime.notes[note_index].column);
+        let row = state.chart_runtime.notes[note_index].row_index;
+        let entry = row_entry_index_for_note(
+            &state.chart_runtime.row_indices.note_row_entry_indices,
+            note_index,
+        )
+        .unwrap();
+        state.set_final_note_result(
+            note_index,
+            Judgment {
+                time_error_ms: offset_ms,
+                time_error_music_ns: song_time_ns_from_seconds(offset_ms / 1000.0),
+                grade: JudgeGrade::Fantastic,
+                window: Some(TimingWindow::W1),
+                miss_because_held: false,
+            },
+        );
+        state.finalize_row_judgment(player, row, entry, false);
+    }
+
+    #[test]
+    fn ghost_history_records_players_independently_and_only_saves_valid_passes() {
+        let mut state = regression_state_with_session(GameplaySession {
+            play_style: GameplayInputPlayStyle::Versus,
+            ..GameplaySession::default()
+        });
+        for player in 0..2 {
+            let (first, end) = state.note_range_for_player(player);
+            finalize_ghost_test_tap(&mut state, first, if player == 0 { 0.0 } else { 20.0 });
+            finalize_ghost_test_tap(&mut state, end - 1, 0.0);
+        }
+        assert_eq!(state.players()[0].ghost.recorded[0], [5.0, 10.0]);
+        assert_eq!(state.players()[0].ghost.recorded[1], [3.5, 7.0]);
+        assert_eq!(state.players()[1].ghost.recorded[1], [3.0, 6.5]);
+        assert_eq!(state.players()[1].ghost.recorded[2], [3.0, 6.5]);
+        assert!(state.ghost_history_for_save(0).is_none(), "unfinished run");
+        state.progress.stage.song_completed_naturally = true;
+        assert!(state.ghost_history_for_save(0).is_some());
+        state.players_runtime.players[0].stage_failed = true;
+        assert!(state.ghost_history_for_save(0).is_none());
+        assert!(state.ghost_history_for_save(1).is_some());
+        state.progress.stage.score_valid[1] = false;
+        assert!(state.ghost_history_for_save(1).is_none());
+        state.progress.stage.score_valid[1] = true;
+        state.mark_autoplay_used();
+        assert!(state.ghost_history_for_save(1).is_none());
+    }
+
+    #[test]
+    fn ghost_history_includes_held_dropped_and_missed_hold_results() {
+        for result in [HoldResult::Held, HoldResult::LetGo, HoldResult::Missed] {
+            let mut state = hold_regression_state(GameplayInputPlayStyle::Single);
+            finalize_ghost_test_tap(&mut state, 0, 0.0);
+            match result {
+                HoldResult::Held => state.handle_hold_success(0, 0),
+                HoldResult::LetGo => state.handle_hold_let_go(0, 0, 500_000_000),
+                HoldResult::Missed => state.handle_hold_missed(0, 0),
+            }
+            let histories = &state.players()[0].ghost.recorded;
+            assert_eq!(
+                histories[0],
+                [
+                    5.0,
+                    if result == HoldResult::Held {
+                        10.0
+                    } else {
+                        5.0
+                    }
+                ]
+            );
+            assert_eq!(
+                histories[1],
+                [3.5, if result == HoldResult::Held { 4.5 } else { 3.5 }]
+            );
+        }
+    }
+
+    #[test]
+    fn ghost_history_counts_avoided_mines_without_lua_and_finalizes_last_mine() {
+        for finalize_at_end in [false, true] {
+            let mut state = regression_state_with_segments(
+                TimingSegments {
+                    bpms: vec![(0.0, 60.0)],
+                    ..TimingSegments::default()
+                },
+                192,
+            );
+            set_regression_mine(&mut state, 1, 1, 96, 2_000_000_000);
+            state.progress.chart_totals.mines_total[0] = 1;
+            finalize_ghost_test_tap(&mut state, 0, 0.0);
+            if finalize_at_end {
+                state.finalize_completed_mines();
+            } else {
+                state.apply_time_based_mine_avoidance(3_000_000_000);
+                state.dispatch_avoided_mine_judgments();
+            }
+            assert_eq!(state.players()[0].ghost.recorded[0], [5.0, 5.0]);
+            assert_eq!(state.players()[0].ghost.recorded[1], [3.5, 3.5]);
+            state.finalize_completed_mines();
+            assert_eq!(
+                state.players()[0].ghost.recorded[0].len(),
+                2,
+                "do not count the same mine twice"
+            );
+        }
+    }
+
+    #[test]
+    fn ghost_history_includes_mine_penalties_and_skips_autoplay() {
+        let mut state = regression_state();
+        set_regression_mine(&mut state, 1, 1, 96, 2_000_000_000);
+        state.progress.chart_totals.mines_total[0] = 1;
+        finalize_ghost_test_tap(&mut state, 0, 0.0);
+        state.chart_runtime.notes[1].mine_result = Some(MineResult::Hit);
+        state
+            .chart_runtime
+            .mine_scan
+            .pending_mine_hit_indices
+            .push(ChartNoteIndex(1));
+        state.apply_pending_mine_hits();
+        assert_eq!(state.players()[0].ghost.recorded[0], [5.0, -1.0]);
+        assert_eq!(state.players()[0].ghost.recorded[1], [3.5, 2.5]);
+        assert_eq!(state.players()[0].ghost.recorded[2], [3.5, 2.5]);
+
+        let mut autoplay = regression_state();
+        autoplay.set_live_autoplay_enabled(true);
+        finalize_ghost_test_tap(&mut autoplay, 0, 0.0);
+        assert!(
+            autoplay.players()[0]
+                .ghost
+                .recorded
+                .iter()
+                .all(Vec::is_empty)
+        );
     }
 
     #[test]

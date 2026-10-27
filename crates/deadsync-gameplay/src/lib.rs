@@ -136,6 +136,7 @@ include!("mod_effects.rs");
 include!("score_validity.rs");
 include!("course_display.rs");
 include!("score_display.rs");
+include!("ghost.rs");
 include!("attacks.rs");
 include!("runtime_config.rs");
 include!("cues.rs");

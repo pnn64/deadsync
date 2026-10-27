@@ -6359,7 +6359,7 @@ pub(super) mod tests {
         p.score_position = super::SCORE_POSITION_VARIANTS[1];
         p.score_display_mode = super::SCORE_DISPLAY_MODE_VARIANTS[1];
         p.display_scorebox = true;
-        p.target_score = super::TARGET_SCORE_VARIANTS[1];
+        p.target_score = deadsync_profile::TargetScoreSetting::GhostData;
         p.mini_indicator_score_type = super::MINI_INDICATOR_SCORE_TYPE_VARIANTS[1];
         p.mini_indicator_subtractive_display =
             super::MINI_INDICATOR_SUBTRACTIVE_DISPLAY_VARIANTS[1];

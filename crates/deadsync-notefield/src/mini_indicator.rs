@@ -112,6 +112,57 @@ pub struct ZmodMiniIndicatorOutput {
     pub color: [f32; 4],
 }
 
+/// Arrow Cloud's ghost comparison uses the saved run's actual progress.
+pub fn ghost_mini_indicator_output(difference: f64) -> ZmodMiniIndicatorOutput {
+    ZmodMiniIndicatorOutput {
+        text: if difference == 0.0 {
+            ZmodMiniIndicatorText::Percent(0.0)
+        } else {
+            ZmodMiniIndicatorText::SignedPercent {
+                value: difference.abs(),
+                negative: difference < 0.0,
+            }
+        },
+        color: if difference > 0.0 {
+            [0.0, 1.0, 0.0, 1.0]
+        } else if difference < 0.0 {
+            [1.0, 0.0, 0.0, 1.0]
+        } else {
+            [1.0; 4]
+        },
+    }
+}
+
+#[cfg(test)]
+mod ghost_tests {
+    use super::*;
+
+    #[test]
+    fn ghost_indicator_shows_ahead_behind_and_tied() {
+        let ahead = ghost_mini_indicator_output(0.12);
+        assert_eq!(
+            ahead.text,
+            ZmodMiniIndicatorText::SignedPercent {
+                value: 0.12,
+                negative: false
+            }
+        );
+        assert_eq!(ahead.color, [0.0, 1.0, 0.0, 1.0]);
+        let behind = ghost_mini_indicator_output(-0.34);
+        assert_eq!(
+            behind.text,
+            ZmodMiniIndicatorText::SignedPercent {
+                value: 0.34,
+                negative: true
+            }
+        );
+        assert_eq!(behind.color, [1.0, 0.0, 0.0, 1.0]);
+        let tied = ghost_mini_indicator_output(0.0);
+        assert_eq!(tied.text, ZmodMiniIndicatorText::Percent(0.0));
+        assert_eq!(tied.color, [1.0; 4]);
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZmodComboColorStyle {
     None,

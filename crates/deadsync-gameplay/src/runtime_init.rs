@@ -179,7 +179,7 @@ pub fn init_gameplay_runtime<
     session: GameplaySession,
     config: GameplayConfig,
     pack_sync_pref: SyncPref,
-    mini_indicator_data: GameplayMiniIndicatorData,
+    mut mini_indicator_data: GameplayMiniIndicatorData,
     noteskin_data: GameplayNoteskinData,
     build_song_lua_runtime: BuildSongLuaRuntime,
     build_crossover_annotations: CrossoverAnnotationBuilder,
@@ -1033,7 +1033,31 @@ where
             combo_carry[p],
             caps,
         );
-        player.fail_type = song_fail_type(config.default_fail_type, &charts[p].difficulty, in_course_stage);
+        let target = std::mem::take(&mut mini_indicator_data.ghost_targets[p]);
+        let possible = target.score_type.possible_points(
+            possible_grade_points[p],
+            total_steps[p],
+            holds_total[p],
+            rolls_total[p],
+        );
+        player.ghost = GameplayGhostState::new(
+            total_steps[p] as usize
+                + holds_total[p] as usize
+                + rolls_total[p] as usize
+                + mines_total[p] as usize,
+            target,
+            possible,
+        );
+        if player_profiles[p].target_score() == GameplayTargetScoreSetting::GhostData {
+            if let Some(percent) = player.ghost.target_percent() {
+                mini_indicator_target_score_percent[p] = percent.clamp(0.0, 100.0);
+            }
+        }
+        player.fail_type = song_fail_type(
+            config.default_fail_type,
+            &charts[p].difficulty,
+            in_course_stage,
+        );
         player
     });
     let assist_clap_rows =

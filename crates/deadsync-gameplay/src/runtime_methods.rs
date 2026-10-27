@@ -423,6 +423,7 @@ where
                 if player_update.counted_for_score {
                     update_itg_grade_totals(&mut self.players_runtime.players[player]);
                 }
+                self.record_ghost_judgment(player);
             }
             if !update.stopped || update.event_count == 0 {
                 break;
@@ -615,6 +616,7 @@ where
             player_update.combo_update,
             combo_milestones_enabled,
         );
+        self.record_ghost_judgment(player);
         if update.effects.reset_receptor_glow {
             self.display.receptor_feedback.clear_lift_glow(column);
         }
@@ -671,6 +673,7 @@ where
             player_update.combo_update,
             combo_milestones_enabled,
         );
+        self.record_ghost_judgment(player);
         if update.effects.trigger_hold_explosion {
             self.trigger_hold_explosion(column);
         }
@@ -699,6 +702,7 @@ where
         let mut stats = hold_result_stats_state(&self.players_runtime.players[player]);
         apply_hold_result_stats_update(&mut stats, stats_update);
         set_hold_result_stats_state(&mut self.players_runtime.players[player], stats);
+        self.record_ghost_judgment(player);
         self.display.hold_feedback.set_hold_judgment(
             column,
             Some(HoldJudgmentRenderInfo {
@@ -1457,6 +1461,7 @@ where
     }
 
     pub fn finalize_completed_mines(&mut self) {
+        self.dispatch_avoided_mine_judgments();
         let mines_hit: [u32; MAX_PLAYERS] = std::array::from_fn(|player| {
             self.players_runtime
                 .players
@@ -1472,10 +1477,15 @@ where
             self.setup.num_players,
         );
         for player in 0..update.players_finalized {
+            let newly_avoided = update.mines_avoided[player]
+                .saturating_sub(self.players_runtime.players[player].mines_avoided);
             set_player_mines_avoided(
                 &mut self.players_runtime.players[player],
                 update.mines_avoided[player],
             );
+            for _ in 0..newly_avoided {
+                self.record_ghost_judgment(player);
+            }
         }
     }
 
@@ -1531,7 +1541,7 @@ where
         }
         let music_time_sec = song_time_ns_to_seconds(music_time_ns);
         let log_mine_avoid = log::log_enabled!(log::Level::Trace);
-        if self.avoided_mine_judgment_callback.is_some() {
+        if !self.autoplay_blocks_scoring() || self.avoided_mine_judgment_callback.is_some() {
             for player in 0..self.setup.num_players.min(MAX_PLAYERS) {
                 let start = self.chart_runtime.mine_scan.next_mine_ix_cursor[player];
                 let indices = &self.chart_runtime.mine_scan.mine_note_ix[player];
@@ -1799,6 +1809,7 @@ where
         if plan.capture_failed_ex_score_inputs {
             self.capture_failed_ex_score_inputs(player, self.player_blue_window_ms(player));
         }
+        self.record_ghost_judgment(player);
     }
 
     pub fn update_judged_rows(&mut self) {
@@ -1879,7 +1890,11 @@ where
     }
 
     fn dispatch_avoided_mine_judgments(&mut self) {
-        let mut pending = std::mem::take(&mut self.chart_runtime.mine_scan.pending_avoided_mine_judgments);
+        let mut pending =
+            std::mem::take(&mut self.chart_runtime.mine_scan.pending_avoided_mine_judgments);
+        for &(player, _) in &pending {
+            self.record_ghost_judgment(player);
+        }
         if let Some(mut callback) = self.avoided_mine_judgment_callback.take() {
             for &(player, column) in &pending {
                 callback(self, player, column);

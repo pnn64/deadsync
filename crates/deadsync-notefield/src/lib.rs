@@ -56,6 +56,7 @@ pub use holds::{HoldMeshScratch, HoldMeshScratchStats, offset_center};
 pub use hud::{COUNTER_TEXT_SLOTS_PER_PLAYER, MEASURE_COUNTER_LOOKAHEAD_MAX};
 pub use judgment_feedback::{IndicatorSprite, TapJudgmentAnimation, TapJudgmentSprite};
 pub use measure_lines::MeasureLineMode;
+pub use mini_indicator::ghost_mini_indicator_output;
 pub use mini_indicator::{
     BrokenRunLookup, MiniIndicatorColorStyle, MiniIndicatorMode, MiniIndicatorProgress,
     MiniIndicatorScoreType, MiniIndicatorSize, MiniIndicatorSubtractiveDisplay,

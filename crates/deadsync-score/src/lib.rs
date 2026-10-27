@@ -19,6 +19,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub mod column_judgments;
 pub mod event_progress;
+pub mod ghost;
 pub mod import;
 pub mod itl;
 pub mod leaderboard;

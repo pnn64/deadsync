@@ -381,6 +381,16 @@ pub(super) fn zmod_mini_indicator_text(
 ) -> Option<(TextContent, [f32; 4])> {
     let mode = zmod_indicator_mode(profile);
     mini_indicator_output_if_enabled(mode, || {
+        if profile.target_score == profile_data::TargetScoreSetting::GhostData
+            && let Some(difference) = state.ghost_difference_percent(player_idx)
+        {
+            let output = deadsync_notefield::ghost_mini_indicator_output(difference);
+            return Some((
+                zmod_mini_indicator_text_content(output.text)
+                    .with_frame_inline_slot(FRAME_TEXT_MINI_BASE + player_idx as u8),
+                output.color,
+            ));
+        }
         let dims_missed_target = profile.target_score_miss_policy
             == profile_data::TargetScoreMissPolicy::DimMiniIndicator;
         let progress = zmod_mini_indicator_progress(
