@@ -15908,6 +15908,89 @@ mod tests {
     }
 
     #[test]
+    fn folder_stats_renders_imported_quints_after_history_refresh() {
+        use deadsync_online::arrowcloud::scores_from_retrieve_entry_map;
+
+        let mut state = folder_stats_state();
+        state.session.guest[0] = false;
+        let assets = deadlib_assets::AssetManager::new();
+        // Arrow-Cloud/theme v20260901.2, PerPlayer/FolderStats.lua: show
+        // columns from the best earned grade down to one star, including quints.
+        for (ex_percent, star_counts, sprite_states) in [
+            (99.99, [0, 1, 0, 0, 0], [1, 2, 3, 4].as_slice()),
+            (100.0, [1, 0, 0, 0, 0], [0, 1, 2, 3, 4].as_slice()),
+        ] {
+            let imported = serde_json::from_value(serde_json::json!({
+                "3": {"score": "100.00", "grade": "Quad"},
+                "2": {"score": ex_percent}
+            }))
+            .unwrap();
+            let score = scores_from_retrieve_entry_map(&imported)
+                .to_cached_itg_score()
+                .unwrap();
+            let mut history = state.history.clone();
+            history.sides[0].cached_scores[0].1 = score;
+            reset_preview_after_gameplay(&mut state, history);
+
+            let summary = super::build_folder_stats_summary(
+                &state,
+                0,
+                profile_data::PlayerSide::P1,
+                "dance-single",
+                "Hard",
+            );
+            assert_eq!(summary.count_charts, 1);
+            assert_eq!(summary.passes, 1);
+            assert_eq!(summary.star_counts, star_counts);
+
+            let mut actors = Vec::new();
+            super::push_folder_stats_overlay(
+                &mut actors,
+                &state,
+                &assets,
+                profile_data::PlayerSide::P1,
+                "Player",
+                "dance-single",
+                None,
+                3,
+                false,
+            );
+            let Actor::Frame { children, .. } = &actors[0] else {
+                panic!("folder stats should be an actor frame");
+            };
+            let grade_cells: Vec<_> = children
+                .iter()
+                .filter_map(|actor| match actor {
+                    Actor::Sprite {
+                        source,
+                        cell: Some((cell, _)),
+                        visible: true,
+                        ..
+                    } if source.texture_key() == Some("grades/grades 1x19.png") => Some(*cell),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(grade_cells, sprite_states);
+            let grade_counts: Vec<u32> = children
+                .iter()
+                .filter_map(|actor| match actor {
+                    Actor::Text { content, .. } => content.as_str().parse().ok(),
+                    _ => None,
+                })
+                .collect();
+            let expected_counts: Vec<_> = sprite_states
+                .iter()
+                .map(|&cell| star_counts[cell as usize])
+                .collect();
+            assert_eq!(grade_counts, expected_counts);
+            assert!(children.iter().any(|actor| matches!(
+                actor,
+                Actor::Text { content, .. } if content.as_str() == "Total Hard: 1/1"
+            )));
+        }
+    }
+
+    #[test]
     fn folder_stats_summary_memoizes_and_invalidates_with_history() {
         let mut state = folder_stats_state();
 
