@@ -126,16 +126,56 @@ mod x86 {
             let mut i = N;
             let bias = 1u64 << (width - 1);
             while output.len() - i >= 4 {
-                let mut sums = [_mm256_setzero_si256(); 4];
-                for j in 0..N {
-                    let c = _mm256_loadu_si256(coeff.as_ptr().add(j).cast());
-                    let previous = _mm256_set1_epi64x(*base.add(i - j - 1));
-                    sums[j % 4] = _mm256_add_epi64(sums[j % 4], _mm256_mul_epi32(previous, c));
-                }
-                let sum = _mm256_add_epi64(
-                    _mm256_add_epi64(sums[0], sums[1]),
-                    _mm256_add_epi64(sums[2], sums[3]),
+                // Explicit taps keep four independent accumulators in registers.
+                // An indexed loop leaves stack loads/stores in high-order code.
+                let (mut s0, mut s1, mut s2, mut s3) = (
+                    _mm256_setzero_si256(),
+                    _mm256_setzero_si256(),
+                    _mm256_setzero_si256(),
+                    _mm256_setzero_si256(),
                 );
+                macro_rules! tap {
+                    ($j:literal, $sum:ident) => {
+                        if $j < N {
+                            let c = _mm256_loadu_si256(coeff.as_ptr().add($j).cast());
+                            let previous = _mm256_set1_epi64x(*base.add(i - $j - 1));
+                            $sum = _mm256_add_epi64($sum, _mm256_mul_epi32(previous, c));
+                        }
+                    };
+                }
+                tap!(0, s0);
+                tap!(1, s1);
+                tap!(2, s2);
+                tap!(3, s3);
+                tap!(4, s0);
+                tap!(5, s1);
+                tap!(6, s2);
+                tap!(7, s3);
+                tap!(8, s0);
+                tap!(9, s1);
+                tap!(10, s2);
+                tap!(11, s3);
+                tap!(12, s0);
+                tap!(13, s1);
+                tap!(14, s2);
+                tap!(15, s3);
+                tap!(16, s0);
+                tap!(17, s1);
+                tap!(18, s2);
+                tap!(19, s3);
+                tap!(20, s0);
+                tap!(21, s1);
+                tap!(22, s2);
+                tap!(23, s3);
+                tap!(24, s0);
+                tap!(25, s1);
+                tap!(26, s2);
+                tap!(27, s3);
+                tap!(28, s0);
+                tap!(29, s1);
+                tap!(30, s2);
+                tap!(31, s3);
+                let sum = _mm256_add_epi64(_mm256_add_epi64(s0, s1), _mm256_add_epi64(s2, s3));
                 let mut partial = [0i64; 4];
                 _mm256_storeu_si256(partial.as_mut_ptr().cast(), sum);
                 // Lane a contains the terms from samples before this batch.

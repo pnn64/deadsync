@@ -323,3 +323,44 @@ versions, flags, workspace manifests/lockfile and codec/Ogg source hashes. It
 requires a new output path and fails if inputs change while building. The runner
 can pair any native pipeline mode with its `baseline-` equivalent. Allocation
 and retained-buffer measurements remain in progress.
+
+## LPC tap unrolling, 2026-10-27
+
+Explicit constant taps keep the AVX2 predictor's four accumulators in registers.
+The prior indexed loop generated stack loads and stores for every high-order
+tap. Arithmetic, dispatch thresholds and all range checks are unchanged.
+Disassembly and paired counters on case 44 confirm the change: instructions
+fall from 40.14 billion to 24.53 billion and branches from 3.93 billion to
+2.08 billion across the same ten complete passes (prepass, warm-up and eight
+timed passes). Branch misses remain approximately 19 million.
+
+Five interleaved trials against the preceding milestone give the following
+complete-file milliseconds. References validate frame CRC; the Symphonia column
+includes its explicit footer CRC pass.
+
+| Case | Previous raw | Current raw | libFLAC | FFmpeg | Symphonia + CRC | Previous reader + MD5 | Current reader + MD5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 01: block 4096 | 6.733 | 6.449 | 5.330 | 8.241 | 7.116 | 10.230 | 10.193 |
+| 03: block 16 | 8.995 | 9.079 | 15.124 | 20.216 | 8.767 | 14.302 | 14.561 |
+| 15: verbatim | 0.969 | 0.970 | 4.626 | 2.323 | 2.544 | 3.202 | 3.228 |
+| 17: fixed | 3.694 | 3.700 | 4.111 | 4.410 | 4.438 | 6.360 | 6.485 |
+| 28: high resolution | 20.705 | 20.884 | 17.033 | 22.398 | 21.906 | 39.741 | 39.808 |
+| 31: LPC-32 | 34.686 | 26.956 | 40.489 | 39.498 | 33.401 | 53.379 | 44.496 |
+| 44: 8-channel LPC-32 | 517.592 | 384.340 | 575.261 | 597.942 | 490.571 | 733.157 | 609.436 |
+
+The two LPC-32 files improve 22.3% and 25.7% in raw decode time, overtaking all
+three references in this run. Common blocks and high-resolution defaults still
+trail libFLAC, so the overall performance goal remains open. A separate MD5
+add-order experiment produced a byte-identical executable and was reverted.
+Its measurements are preserved as an identical-binary control, with no claimed
+optimization.
+
+Reports: [paired timings](benches/validation/2026-10-27-taps/raw.tsv),
+[provenance](benches/validation/2026-10-27-taps/manifest.json),
+[before counters](benches/validation/2026-10-27-taps/before-stat.csv),
+[after counters](benches/validation/2026-10-27-taps/after-stat.csv).
+The directory also retains both disassemblies and the identical-binary control.
+All 10 unit tests, 43 integration/external gates and three doctests pass, as
+does Clippy. Four fresh 60-second ASan campaigns complete 109,156 executions
+without failure. Test, benchmark and fuzz source hashes agree in the
+[validation record](benches/validation/2026-10-27-taps/final-validation.json).
