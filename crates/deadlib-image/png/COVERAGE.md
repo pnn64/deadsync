@@ -22,11 +22,11 @@ evidence, application responsibilities and explicitly open items.
 | sRGB fallback metadata consistency | `tests/metadata_fields.rs` | Both encoders enforce Table 17 gAMA/cHRM values with sRGB; all 15 formats / four intents and incompatible fallback orders pass |
 | cICP code-point validity | `tests/cicp.rs`, H.273 (07/2024) | All 131,072 primaries/transfer/range combinations, all matrix/flag bytes and reserved-code fallback behavior pass |
 | mDCV/cLLI exact fixed-point metadata | `tests/hdr.rs`, independent stored-zlib/CRC fixtures, C fixed-point getters and Rust png metadata | All 8,192 field-byte mutations, 60 integer boundaries, 132 length cases and 120 ordering permutations pass; exact units/order and both writers checked across all 15 formats |
-| APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing/recovery tests | Exact native frames, explicit static recovery and 3,000 independent faults across all formats/layouts/roles pass; broader external rendered-frame corpus pending |
+| APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing/recovery/rendered tests | Exact native frames, 4,530 independent faults, legal fcTL-before-acTL ordering and 201 independent RGBA16 WPT canvases pass, including reset and 280 writer outputs |
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Nine targets; 530,000 recorded successful sanitizer executions across milestones, including 60,000 with new HDR field/order seeds; longer campaigns and native fuzz coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Nine targets; 590,000 recorded successful sanitizer executions across milestones, including 60,000 with pending-control/WPT seeds; longer campaigns and native fuzz coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -850,3 +850,64 @@ are in `fuzz/reports/hdr-source.json`, with full per-target logs. The 60,000
 successful inputs bring the historical count to 530,000. Native-only fuzz
 coverage, longer campaigns, remaining conformance audits, broader external
 rendered APNG evidence and competitive pipeline/encoder performance remain open.
+
+
+## WPT rendering and fcTL-before-acTL conformance (2026-10-27)
+
+A pinned external WPT input exposed an incorrect native ordering restriction.
+The [Third Edition ordering table](https://www.w3.org/TR/2025/REC-png-3-20250624/#5ChunkOrdering)
+requires acTL before IDAT, while allowing the first fcTL to precede acTL. WPT
+`024.png` uses that legal order. Previously strict decoding rejected it and
+recovery discarded a valid animation. Both parsers now accept it. The stream
+parser retains one bounded control and delays its public FrameControl event
+until the verified Animation event. No frame-row allocation occurs while waiting.
+Missing acTL at IDAT, additional pre-IDAT controls, invalid fields/CRCs and caller
+limits still fail or recover under their existing policies.
+
+The existing 120-permutation classifier incorrectly required acTL first; it now
+recognizes both legal orders. Thirty independent all-format/interlace positives
+check exact native samples, Rust png frames, one-/seven-byte push and reader
+boundaries, zero-input delivery of the delayed event and fatal frame-count caps.
+Another 1,530 malformed prefix cases preserve verified static samples and one
+first diagnostic, in addition to the existing 3,000 recovery cases. The final
+regression fails against an isolated, hash-verified copy of the pre-fix production
+source; `apng-order-before.log` / `.json` retain that evidence.
+
+The new [pinned WPT corpus](tests/fixtures/wpt-apng/README.md) retains 85 exact
+upstream files, their BSD license and source hashes. All 35 animations render
+201 complete canvases. Test-only libpng decodes each native frame; an independent
+Python Fraction compositor uses full-canvas snapshots, immediate disposal and
+exact rational straight-alpha arithmetic to produce RGBA16 answers. flate2
+independently decompresses the checked-in answers in normal offline tests.
+Every sample, frame control, default-image role and plays value matches through
+strict/recovery parsing, fragmented readers, reset and both writers with both
+interlace and compression modes (280 reencodings). The compositor itself needed
+no arithmetic or disposal change.
+
+All 28 applicable published static final-state references match exactly after
+projection to their 8-bit precision in the recorded run. The comparison harness
+allows one reference level for quantization; the separate 201 RGBA16 comparisons
+are exact. One WPT display test requires Display-P3 to sRGB conversion, which is
+caller-controlled; its raw stored-space frames still have exact RGBA16 answers.
+The ignored regeneration test independently rebuilds all 35 golden files and
+compares their uncompressed contents, without relying on native composition.
+
+Release and isolated offline runs each pass 102 normal tests, with 12 optional
+C/regeneration tests ignored. Main and final fuzz all-target Clippy pass with
+warnings denied. Golden regeneration and the 1,061-file C native-pixel matrix
+pass separately. The isolated production dependency remains only
+`deadlib-image`; no application integration or production dependency was added.
+Commands, source/oracle hashes and results are retained in
+`apng-order-validation.log` / `.json` and `independent-build.log`.
+
+The fresh PNG corpora gain 1,560 pending-control and 42 WPT PNG files, for
+19,487 files / 4,090,790 bytes each (maximum 63,435 bytes). Both PNG fuzz targets
+now allow a bounded 8 MiB of native output and 256 frames so the 128-frame WPT
+case is decoded; the independent Rust reference retains separate limits. Fresh
+Linux ASan runs complete 30,000 inputs each: `png_stream` in 53 fuzzing seconds /
+497 MiB peak RSS, and `decode` in 10 seconds / 553 MiB. Their ASan runtime entries
+are verified, with source/corpus/binary hashes in
+`fuzz/reports/apng-order-source.json` and full target logs. The historical
+successful input count is now 590,000. Native-only fuzz coverage, remaining
+conformance audits and measured competitive pipeline/encoder performance remain
+open.

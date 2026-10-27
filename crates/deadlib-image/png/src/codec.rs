@@ -310,6 +310,9 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
                 if ended_data {
                     return Err(Error::Invalid("nonconsecutive IDAT"));
                 }
+                if !seen_data {
+                    animation_decoder.before_default()?;
+                }
                 if header.color == ColorType::Indexed && palette.is_empty() {
                     return Err(Error::Invalid("missing PLTE"));
                 }

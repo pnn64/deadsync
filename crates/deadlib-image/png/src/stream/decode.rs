@@ -47,6 +47,9 @@ fn animation_chunk(kind: &[u8; 4]) -> bool {
 
 /// Incremental PNG/APNG parser and native-row decoder.
 ///
+/// A default fcTL preceding acTL is retained until acTL is verified, so the
+/// public `Animation` event always precedes its first `FrameControl` event.
+///
 /// The image pipeline owns a 32 KiB DEFLATE window and a bounded number of rows.
 /// Metadata and suggested-palette names are bounded by the configured metadata
 /// budget. No complete image, frame, compressed payload or IDAT chunk is stored.
@@ -82,6 +85,7 @@ pub struct StreamDecoder {
     controls: u32,
     sequence: u32,
     default_control: bool,
+    pre_control: Option<FrameControl>,
     frames_ended: u32,
     rows: Option<ImageRows>,
     image_kind: Option<ImageKind>,
@@ -139,6 +143,7 @@ impl StreamDecoder {
             controls: 0,
             sequence: 0,
             default_control: false,
+            pre_control: None,
             frames_ended: 0,
             rows: None,
             image_kind: None,
@@ -258,6 +263,7 @@ impl StreamDecoder {
         }
         self.animation = None;
         self.default_control = false;
+        self.pre_control = None;
         if matches!(self.image_kind, Some(ImageKind::AnimationFrame(_))) {
             self.rows = None;
             self.image_kind = None;
@@ -355,6 +361,10 @@ impl StreamDecoder {
                     return Err(Error::Invalid("nonconsecutive IDAT"));
                 }
                 if !self.seen_data {
+                    if self.pre_control.is_some() && self.animation.is_none() {
+                        self.animation_fault = Some(AnimationFault::Begin);
+                        return Err(Error::Invalid("fcTL without acTL before IDAT"));
+                    }
                     let h = self.header.ok_or(Error::Invalid("missing IHDR"))?;
                     if h.color == ColorType::Indexed && self.palette.is_empty() {
                         return Err(Error::Invalid("missing PLTE"));
@@ -375,7 +385,7 @@ impl StreamDecoder {
                 }
             }
             b"fcTL" => {
-                if self.length != 26 || self.animation.is_none() {
+                if self.length != 26 || (self.animation.is_none() && self.seen_data) {
                     return Err(Error::Invalid("fcTL length or missing acTL"));
                 }
             }
@@ -462,9 +472,15 @@ impl StreamDecoder {
                 Some(Event::Animation)
             }
             b"fcTL" => {
-                let (frames, _) = self.animation.ok_or(Error::Invalid("missing acTL"))?;
-                if self.controls >= frames || (!self.seen_data && self.controls != 0) {
+                if self
+                    .animation
+                    .is_some_and(|(frames, _)| self.controls >= frames)
+                    || (!self.seen_data && self.controls != 0)
+                {
                     return Err(Error::Invalid("too many APNG frame controls"));
+                }
+                if self.controls as usize >= self.options.limits.max_frames {
+                    return Err(Error::LimitExceeded);
                 }
                 let c = FrameControl::parse(
                     d,
@@ -486,11 +502,18 @@ impl StreamDecoder {
                 } else {
                     self.default_control = true;
                 }
-                Some(Event::Control {
-                    index,
-                    control: c,
-                    default: !self.seen_data,
-                })
+                if self.animation.is_none() {
+                    // PNG 5.6 only requires acTL before IDAT. Keep one bounded
+                    // default control, and publish Animation before Control.
+                    self.pre_control = Some(c);
+                    None
+                } else {
+                    Some(Event::Control {
+                        index,
+                        control: c,
+                        default: !self.seen_data,
+                    })
+                }
             }
             b"IEND" => {
                 self.validator.finish()?;
@@ -530,6 +553,18 @@ impl StreamDecoder {
     }
     fn run(&mut self, input: &[u8]) -> Result<DecodeProgress, Error> {
         let mut pos = 0;
+        if self.animation.is_some()
+            && let Some(control) = self.pre_control.take()
+        {
+            return Ok(self.emit(
+                Event::Control {
+                    index: 0,
+                    control,
+                    default: true,
+                },
+                0,
+            ));
+        }
         if let Some(rows) = &mut self.rows {
             rows.advance()?;
         }

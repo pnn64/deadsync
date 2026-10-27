@@ -224,14 +224,22 @@ impl Decoder {
                 self.control = Some((count, plays));
             }
             b"fcTL" => {
-                let (count, _) = self.control.ok_or(Error::Invalid("fcTL without acTL"))?;
+                if self.control.is_none() && seen_data {
+                    return Err(Error::Invalid("fcTL without acTL"));
+                }
                 if data.len() != 26 {
                     return Err(Error::Invalid("fcTL length"));
                 }
                 self.sequence(data)?;
                 self.flush(palette)?;
-                if self.frames.len() >= count as usize {
+                if self
+                    .control
+                    .is_some_and(|(count, _)| self.frames.len() >= count as usize)
+                {
                     return Err(Error::Invalid("too many APNG frames"));
+                }
+                if self.frames.len() >= self.limits.max_frames {
+                    return Err(Error::LimitExceeded);
                 }
                 let control = FrameControl::parse(data, self.h, !seen_data)?;
                 if !seen_data {
@@ -260,6 +268,13 @@ impl Decoder {
                 bytes.extend_from_slice(&data[4..]);
             }
             _ => unreachable!(),
+        }
+        Ok(())
+    }
+    pub(crate) fn before_default(&self) -> Result<(), Error> {
+        // acTL must precede IDAT, but may follow the default frame's fcTL.
+        if self.default && self.control.is_none() {
+            return Err(Error::Invalid("fcTL without acTL before IDAT"));
         }
         Ok(())
     }

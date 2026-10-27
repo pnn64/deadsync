@@ -201,6 +201,50 @@ fn main() -> std::io::Result<()> {
         }
     }
     println!("Independent APNG validity/recovery: {animation_count} seeds");
+    let mut prefix_count = 0;
+    for (color, depth) in apng_recovery::formats() {
+        for interlaced in [false, true] {
+            let mut fixture = apng_recovery::Fixture::new(color, depth, interlaced, true);
+            let ac = fixture
+                .chunks
+                .iter()
+                .position(|c| &c.kind == b"acTL")
+                .unwrap();
+            let fc = fixture
+                .chunks
+                .iter()
+                .position(|c| &c.kind == b"fcTL")
+                .unwrap();
+            fixture.chunks.swap(ac, fc);
+            let mut cases = fixture.cases();
+            cases.push(("valid".into(), fixture.wire()));
+            for (name, bytes) in cases {
+                let label = format!(
+                    "apng-prefctl-{}-{depth}-{}-{name}",
+                    color as u8,
+                    u8::from(interlaced)
+                );
+                for directory in [&png, &png_stream] {
+                    fs::write(directory.join(&label), &bytes)?;
+                }
+                prefix_count += 1;
+            }
+        }
+    }
+    println!("APNG fcTL before acTL: {prefix_count} seeds");
+    let mut wpt_count = 0;
+    for entry in fs::read_dir(root.join("tests/fixtures/wpt-apng/support"))? {
+        let path = entry?.path();
+        if path.extension().is_some_and(|v| v == "png") {
+            let name = format!("wpt-{}", path.file_name().unwrap().to_string_lossy());
+            let bytes = fs::read(path)?;
+            for directory in [&png, &png_stream] {
+                fs::write(directory.join(&name), &bytes)?;
+            }
+            wpt_count += 1;
+        }
+    }
+    println!("Pinned WPT APNG/reference images: {wpt_count} seeds");
     let mut hdr_seeds = Vec::new();
     for (label, value) in hdr::byte_cases().chain(hdr::boundary_cases()) {
         hdr_seeds.push((label, value.fixture(2, 8, false)));

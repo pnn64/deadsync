@@ -78,11 +78,19 @@ target logs. These smoke runs do not establish native-only coverage.
 HDR seeds add another 8,534 independent files per PNG corpus: every byte value
 at all 32 mDCV/cLLI payload-byte positions, 60 integer boundaries, 30 format/
 interlace cases, 132 length cases and 120 chunk-order permutations. Current
-fresh PNG corpora contain 17,885 files / 3,551,398 bytes each. Native metadata
+fresh PNG corpora at that milestone contain 17,885 files / 3,551,398 bytes each. Native metadata
 fixtures use independent stored-DEFLATE and CRC construction; the HDR integration
 suite independently compares exact C and Rust fixed-point metadata. The fresh
 30,000-input campaigns on each PNG target are retained in
 `reports/hdr-source.json` and its two target logs.
+
+The fcTL-before-acTL fix adds 1,560 independent valid/fault prefix files and all
+42 pinned WPT APNG/static-reference PNGs to each PNG corpus. Current fresh
+corpora contain 19,487 files / 4,090,790 bytes each, maximum 63,435 bytes. Both
+PNG targets now bound native output at 8 MiB and animation count at 256 so the
+128-frame WPT case reaches its frame data. The Rust png reference is bounded at
+16 MiB, with an 8 MiB output-buffer cap. Full commands, hashes and two fresh
+30,000-input ASan campaigns are retained in `reports/apng-order-source.json`.
 
 `inflate_stream` compares fragmented decoding, prefix byte counts and fused
 errors against buffered native zlib decoding. Independent reference parity is

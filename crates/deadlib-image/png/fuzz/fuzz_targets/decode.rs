@@ -6,10 +6,10 @@ use std::io::Cursor;
 fuzz_target!(|bytes: &[u8]| {
     let limits = Limits {
         max_input_bytes: 1 << 20,
-        max_output_bytes: 1 << 20,
+        max_output_bytes: 8 << 20,
         max_metadata_bytes: 1 << 16,
         max_chunks: 4096,
-        max_frames: 64,
+        max_frames: 256,
     };
     let Ok(actual) = decode_with_options(
         bytes,
@@ -21,7 +21,7 @@ fuzz_target!(|bytes: &[u8]| {
         return;
     };
     let mut decoder = png::Decoder::new(Cursor::new(bytes));
-    decoder.set_limits(png::Limits { bytes: 2 << 20 });
+    decoder.set_limits(png::Limits { bytes: 16 << 20 });
     // Reference ancillary policies can differ; only reference-accepted images
     // are used for exact sample assertions. Native acceptance is not an oracle.
     let Ok(mut reader) = decoder.read_info() else {
@@ -30,7 +30,7 @@ fuzz_target!(|bytes: &[u8]| {
     let Some(size) = reader.output_buffer_size() else {
         return;
     };
-    if size > 1 << 20 {
+    if size > 8 << 20 {
         return;
     }
     let mut output = vec![0; size];

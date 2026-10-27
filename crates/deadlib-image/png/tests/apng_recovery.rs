@@ -252,6 +252,110 @@ fn permutations(values: &mut [usize], at: usize, f: &mut impl FnMut(&[usize])) {
 }
 
 #[test]
+fn default_control_before_actl_all_formats_faults_and_deferred_events() {
+    let mut faults = 0;
+    for (color, depth) in fixtures::formats() {
+        for interlaced in [false, true] {
+            let mut fixture = Fixture::new(color, depth, interlaced, true);
+            let expected = decode(&fixture.wire()).unwrap();
+            let ac = fixture
+                .chunks
+                .iter()
+                .position(|c| &c.kind == b"acTL")
+                .unwrap();
+            let fc = fixture
+                .chunks
+                .iter()
+                .position(|c| &c.kind == b"fcTL")
+                .unwrap();
+            fixture.chunks.swap(ac, fc);
+            let wire = fixture.wire();
+            assert_eq!(decode(&wire).unwrap(), expected);
+            assert_eq!(decode_with_options(&wire, &recovery()).unwrap(), expected);
+            assert_eq!(
+                decode_reader(Fragments(&wire, 1), &Default::default()).unwrap(),
+                expected
+            );
+            let mut reference = png::Decoder::new(std::io::Cursor::new(wire.as_slice()))
+                .read_info()
+                .unwrap();
+            for frame in &fixture.frames {
+                reference_frame(&mut reference, frame);
+            }
+            reference.finish().unwrap();
+            for fragment in [1, 7, wire.len()] {
+                assert_eq!(stream(&wire, fragment, &fixture).unwrap(), (wire.len(), 0));
+            }
+            // The public event order stays Animation -> default FrameControl,
+            // even when the wire has fcTL first. The control owns no row data.
+            let end = 8 + fixture
+                .chunks
+                .iter()
+                .take(fc + 1)
+                .map(|c| 12 + c.data.len())
+                .sum::<usize>();
+            let mut decoder = StreamDecoder::new(Default::default());
+            let mut offset = 0;
+            while offset < end {
+                let p = decoder.process(&wire[offset..end]).unwrap();
+                offset += p.consumed;
+                match decoder.event() {
+                    Some(DecodeEvent::FrameControl { .. }) => panic!("control before animation"),
+                    Some(DecodeEvent::Animation {
+                        frames: 2,
+                        plays: 3,
+                    }) => assert_eq!(offset, end),
+                    _ => (),
+                }
+            }
+            let p = decoder.process(&[]).unwrap();
+            assert_eq!((p.consumed, p.status), (0, DecodeStatus::Event));
+            assert!(matches!(
+                decoder.event(),
+                Some(DecodeEvent::FrameControl {
+                    index: 0,
+                    uses_default_image: true,
+                    ..
+                })
+            ));
+            assert_eq!(decoder.finish(), Err(Error::Truncated));
+            let options = DecodeOptions {
+                limits: Limits {
+                    max_frames: 0,
+                    ..Default::default()
+                },
+                ..recovery()
+            };
+            assert_eq!(
+                decode_with_options(&wire, &options),
+                Err(Error::LimitExceeded)
+            );
+            assert_eq!(
+                decode_reader(Fragments(&wire, 1), &options),
+                Err(Error::LimitExceeded)
+            );
+            for (name, bytes) in fixture.cases() {
+                assert!(decode(&bytes).is_err(), "{name}");
+                assert_static(&decode_with_options(&bytes, &recovery()).unwrap(), &fixture);
+                assert_static(
+                    &decode_reader(Fragments(&bytes, 1), &recovery()).unwrap(),
+                    &fixture,
+                );
+                for fragment in [1, 7, bytes.len()] {
+                    assert_eq!(
+                        stream(&bytes, fragment, &fixture).unwrap(),
+                        (bytes.len(), 1),
+                        "{name}"
+                    );
+                }
+                faults += 1;
+            }
+        }
+    }
+    assert_eq!(faults, 1530);
+}
+
+#[test]
 fn animation_chunk_permutations_and_reencoding_clear_diagnostics() {
     let fixture = Fixture::new(deadlib_image_png::ColorType::Rgba, 16, true, true);
     let positions: Vec<_> = fixture
@@ -269,7 +373,7 @@ fn animation_chunk_permutations_and_reencoding_clear_diagnostics() {
             changed[position] = fixture.chunks[positions[order[slot]]].clone();
         }
         let wire = fixtures::file(&changed);
-        let valid = order == [0, 1, 2, 3, 4];
+        let valid = order == [0, 1, 2, 3, 4] || order == [1, 0, 2, 3, 4];
         assert_eq!(decode(&wire).is_ok(), valid, "{order:?}");
         let png = decode_with_options(&wire, &recovery()).unwrap();
         if valid {

@@ -47,10 +47,10 @@ fn check(bytes: &[u8], repair_crc: bool, animation_policy: AnimationPolicy) {
     let options = DecodeOptions {
         limits: Limits {
             max_input_bytes: 1 << 20,
-            max_output_bytes: 1 << 20,
+            max_output_bytes: 8 << 20,
             max_metadata_bytes: 1 << 16,
             max_chunks: 4096,
-            max_frames: 64,
+            max_frames: 256,
         },
         palette_policy: if bytes.len() & 1 == 0 {
             PalettePolicy::RecoverBlack
