@@ -96,9 +96,82 @@ static void encode(FILE *file) {
     while (ogg_stream_flush(&stream, &page)) output_page(&page);
     ogg_stream_clear(&stream);
 }
+/* Direct, stateful synchronization protocols; all parsing is unmodified libogg. */
+static void sync_ops(FILE *file) {
+    ogg_sync_state sync; uint64_t count=get64(file),i;
+    if(count>1000000||ogg_sync_init(&sync))fail("sync ops init");put64(count);
+    for(i=0;i<count;++i){
+        uint64_t kind=get64(file);long result=0;ogg_page page;int have=0;
+        if(kind==0)result=ogg_sync_reset(&sync);
+        else if(kind==1){
+            uint64_t n=get64(file);char *b;if(n>(32u<<20))fail("sync ops bytes");
+            b=ogg_sync_buffer(&sync,(long)n);if(n&&(!b||fread(b,1,(size_t)n,file)!=(size_t)n))fail("sync ops append");
+            result=ogg_sync_wrote(&sync,(long)n);
+        }else if(kind==2){result=ogg_sync_pageseek(&sync,&page);have=result>0;}
+        else if(kind==3){result=ogg_sync_pageout(&sync,&page);have=result>0;}
+        else fail("sync ops kind");
+        put64((uint64_t)(int64_t)result);put64((uint64_t)(sync.fill-sync.returned));put8(sync.unsynced!=0);
+        put64(have?(uint64_t)(page.header_len+page.body_len):0);
+        if(have)output_page(&page);
+    }
+    if(fgetc(file)!=EOF)fail("sync ops trailing bytes");ogg_sync_clear(&sync);
+}
+typedef struct {
+    unsigned char *bytes;uint64_t length,at,read_size,reads,seeks;
+    int fail_read,fail_seek;
+} sync_source;
+/* Boundary/seek driver adapted from pinned vorbisfile's transport helpers.
+   Xiph.Org Foundation BSD license: see VORBIS-COPYING. No codec is linked. */
+static ogg_int64_t sync_next(ogg_sync_state *sync,sync_source *source,
+                              ogg_int64_t *offset,ogg_int64_t boundary,ogg_page *page){
+    if(boundary>0)boundary+=*offset;
+    for(;;){
+        long more;if(boundary>0&&*offset>=boundary)return -1;
+        more=ogg_sync_pageseek(sync,page);
+        if(more<0)*offset-=more;
+        else if(!more){
+            uint64_t n;char *b;
+            if(!boundary)return -1;
+            ++source->reads;
+            if(source->fail_read){source->fail_read=0;return -128;}
+            n=source->at<source->length?source->length-source->at:0;
+            if(n>source->read_size)n=source->read_size;
+            b=ogg_sync_buffer(sync,(long)source->read_size);if(!b)fail("sync read buffer");
+            if(n)memcpy(b,source->bytes+(size_t)source->at,(size_t)n);
+            source->at+=n;if(ogg_sync_wrote(sync,(long)n))fail("sync read append");
+            if(!n)return -2;
+        }else{ogg_int64_t result=*offset;*offset+=more;return result;}
+    }
+}
+static void sync_read_ops(FILE *file){
+    ogg_sync_state sync;sync_source source;uint64_t count,i;ogg_int64_t offset=0;
+    memset(&source,0,sizeof(source));source.length=get64(file);if(source.length>(32u<<20))fail("sync read source size");
+    source.bytes=(unsigned char*)malloc((size_t)source.length+1);
+    if(!source.bytes||fread(source.bytes,1,(size_t)source.length,file)!=(size_t)source.length)fail("sync read source");
+    source.read_size=get64(file);count=get64(file);
+    if(!source.read_size||source.read_size>(1u<<20)||count>1000000||ogg_sync_init(&sync))fail("sync read init");put64(count);
+    for(i=0;i<count;++i){
+        uint64_t kind=get64(file);ogg_int64_t result=0;ogg_page page;int have=0;
+        if(kind==0){result=sync_next(&sync,&source,&offset,(ogg_int64_t)get64(file),&page);have=result>=0;}
+        else if(kind==1){
+            uint64_t at=get64(file);
+            if(at!=(uint64_t)offset){
+                ++source.seeks;
+                if(source.fail_seek){source.fail_seek=0;result=-128;}
+                else{source.at=at;offset=(ogg_int64_t)at;ogg_sync_reset(&sync);}
+            }
+        }else if(kind==2)source.fail_read=1;
+        else if(kind==3)source.fail_seek=1;
+        else fail("sync read kind");
+        put64((uint64_t)result);put64((uint64_t)offset);put64(source.at);
+        put64(source.reads);put64(source.seeks);put64((uint64_t)(sync.fill-sync.returned));put8(sync.unsynced!=0);
+        put64(have?(uint64_t)(page.header_len+page.body_len):0);if(have)output_page(&page);
+    }
+    if(fgetc(file)!=EOF)fail("sync read trailing bytes");ogg_sync_clear(&sync);free(source.bytes);
+}
 int main(int argc, char **argv) {
     FILE *file;
-    if (argc != 3) fail("usage: oracle decode|capture|encode input");
+    if (argc != 3) fail("usage: oracle decode|capture|encode|sync-ops|sync-read-ops input");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
@@ -106,6 +179,8 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[1], "decode")) decode(file, 0);
     else if (!strcmp(argv[1], "capture")) decode(file, 1);
     else if (!strcmp(argv[1], "encode")) encode(file);
+    else if (!strcmp(argv[1], "sync-ops")) sync_ops(file);
+    else if (!strcmp(argv[1], "sync-read-ops")) sync_read_ops(file);
     else fail("unknown mode");
     fclose(file); if (fflush(stdout)) fail("flush"); return 0;
 }

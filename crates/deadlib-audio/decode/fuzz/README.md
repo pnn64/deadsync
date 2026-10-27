@@ -7,6 +7,7 @@ with DeadSync. `Cargo.lock` pins the fuzz tooling dependencies.
 | Target | Input and invariants |
 | --- | --- |
 | `ogg_container` | One control byte, then Ogg bytes. Strict/explicit compatibility flags and chunk size vary. Pull and incremental parsing must return identical packet summaries, errors and exception counts. Recovery exposes only CRC-valid pages and terminates. Accepted index-event packet summaries match full demux; full-page and packet-paused capture at first/last pages also agree, including exception counts. |
+| `ogg_sync` | Stateful reset/append/pageseek/pageout and cached/bounded reader operations. Paired contexts match exact results, byte positions, unread counts and ordered page hashes. Every returned page passes an independent bitwise CRC check; strict conversion checks raw versions/flags. |
 | `vorbis_headers` | Selector byte: identification, comments, or 30-byte identification followed by setup. Accepted identification/comments round-trip exactly; owned metadata preserves binary fields. Accepted setups construct a decoder under separate memory limits and consume probe packets. Every bounded input also exercises mixed bit-reader lookaheads/reads against direct wire-bit indexing, including invalid widths, exact positions/remaining bits and sticky end-of-packet state. |
 | `vorbis_packets` | Fixture selector byte, then repeated little-endian u16 lengths and packet bytes (a final oversized length consumes the remainder). At most 32 packets. Two reset/replays must agree on PCM bits, errors and positions. A known-good replay after malformed input must match its original result. The high control bit tests positions near u64 overflow. |
 | `vorbis_synthesis` | Fixture selector and finite/IEEE policy, then at most 32 decode, track-only, read, drain and restart operations. Paired decoders with identical histories must match results, clocks, counts, positions and ordered PCM hashes. Failed or discarded operations preserve exposed state/PCM. Restart retains the previous block size and overlap storage, matching the reference lifecycle. |
@@ -20,7 +21,7 @@ finite samples and infinity signs retain their exact bits. Summaries use an orde
 hash is a practical fuzz oracle, not a mathematical proof of equality. Separate
 normal/reference tests compare complete PCM values and exact positions.
 
-The two Ogg targets use a custom mutator that repairs checksums for three
+`ogg_container`, `ogg_sync` and `vorbis_stream` use a custom mutator that repairs checksums for three
 quarters of mutations. It changes no other page field and leaves malformed
 headers/lacing, sequence holes and invalid granules available to the validator.
 The other quarter retains ordinary mutations for CRC rejection/recovery paths.
@@ -97,6 +98,15 @@ Header control bit four raises the codebook extent cap from 24 to the full
 40 wire-field bits. Streaming bit six makes the same choice, preserved during
 indexing and selected setup reparsing. Entry/value/memory caps remain independent;
 procedural seeds cover both sides of the default reference extent guard.
+
+Synchronization input starts with a control byte, u32 source length and source
+bytes. Up to 64 following opcodes modulo six select buffer reset, u16-length
+append, pageseek, pageout, reader query with a u32 boundary, or reader seek with
+a u32 offset. Boundary `u32::MAX` means unbounded; zero means cached only.
+The reader uses one-, seven-, 27-, 255-, 2,048- or 65,536-byte reads. Control bit
+seven lowers the append buffer cap from 128 KiB to 256 bytes to exercise
+transactional rejection. A final reader drain checks at most 128 pages. Reader
+storage is capped independently at one maximum page plus one input chunk.
 Streaming control bits three, four and five select layout, empty books and IEEE
 propagation for pull, push, reset and indexed seeking. The raw target uses its
 normative fixture contexts. Procedural empty-book and unaligned

@@ -1,0 +1,21 @@
+{
+  "scope": "Required next reference-seek work; synchronization now has exact C transport behavior. The indexed seek implementation is not fixed.",
+  "open_seek_differences": 172,
+  "ogg_source": "target/deadlib-audio-reference/ogg/src/framing.c",
+  "ogg_source_sha256": "e728c071ca7b08836b92b5e3a42d385c3a72f017eb220ee03fcdfd42f525191f",
+  "vorbis_source": "target/deadlib-audio-reference/vorbis/lib/vorbisfile.c",
+  "vorbis_source_sha256": "cbb0f6b604846b31847a9c0c438b617dd7ec85dbf1a22bb1d4327f8792ff1f5d",
+  "required_packet_behavior": [
+    "Reuse SyncedPage/SyncReader so probe offsets can find captures inside packet payloads and obey cached/byte-boundary behavior.",
+    "Add a separate reference packet queue alongside strict Demuxer/PacketCapture. Match pagein, packetpeek and packetout with unmodified libogg.",
+    "Initial stream init uses pageno zero; reset uses signed C-long -1 sentinel. Sequence wrap and the sentinel differ by host C-long width; test both ordinary values and boundaries.",
+    "A missing initial continuation is skipped without a packet number increment. Holes increment packet numbers when consumed, including packetpeek on a hole.",
+    "Sequence gaps remove pending partial data. Continued pages discard unavailable fragments. Preserve lacing/granule placement and source packet counts exactly.",
+    "When sequence matches, a missing continued flag does not discard an existing partial packet: libogg can merge new laces into it. Strict continuation validation must stay separate.",
+    "EOS marks the last currently queued lacing entry, including a nil EOS page when older queued data remains. EOS and completion are separate state.",
+    "Keep raw version/flag transport fields. Reference stream pagein rejects unsupported versions/serial mismatch, while strict parsing still rejects reserved flags.",
+    "Combine reference queues and synthesis with exact large page bisection, raw-seek continuation fallback, header-only initial offsets, link changes, track-only preroll and signed file PCM cursors.",
+    "Probe rejected long-mode window prefixes in track-only seek loops: vorbisfile ignores the track return and inserts the retained/partially changed block descriptor. Establish defined observable behavior before implementing that path.",
+    "Close all 172 indexed seek differences with fresh exact statuses, clocks, positions and counts; retain original PCM tolerances. Add large searches, continuation pages, competing serials, chains and repeated/partial reads."
+  ]
+}

@@ -33,3 +33,16 @@ mid-stream seek. Later holes remain errors. Rust tests compare every generated
 page-boundary capture and beginning/middle/end captures of the local corpus.
 The production PacketCapture validates sequence/continuation strictly after
 its initial page and never delegates packet assembly to this helper.
+
+`sync-ops` accepts reset, append, `ogg_sync_pageseek` and `ogg_sync_pageout`
+operations. It reports exact signed results, unread bytes, hole state and full
+returned page bytes. Parsing and synchronization use unmodified libogg.
+`sync-read-ops` additionally exercises the pinned vorbisfile boundary/seek
+contract with a memory source, configurable read size, read/seek failures and
+exact source/logical positions and callback counts. This test-only driver links
+only libogg. The adapted transport driver's BSD license is in `VORBIS-COPYING`.
+
+The synchronization tests use the same `DEADLIB_LIBOGG_ORACLE` executable.
+Set `DEADLIB_OGG_SYNC_INPUTS` to a new directory to retain every binary request
+and response. The four-batch offline golden needs no C installation. Its
+regeneration test is manual; normal validation excludes regeneration.

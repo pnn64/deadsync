@@ -156,6 +156,211 @@ impl Digest {
     }
 }
 
+fn synced_page(digest: &mut Digest, page: ogg::LocatedSyncedPage<'_>) {
+    let b = page.page.bytes();
+    assert!(b.len() >= 27 && b.len() <= ogg::MAX_PAGE_SIZE);
+    let header = 27 + b[26] as usize;
+    assert_eq!(
+        header + b[27..header].iter().map(|&v| v as usize).sum::<usize>(),
+        b.len()
+    );
+    // Independent bitwise polynomial check, including unknown versions/flags.
+    let mut crc = 0u32;
+    for (i, &byte) in b.iter().enumerate() {
+        crc ^= (if (22..26).contains(&i) { 0 } else { byte } as u32) << 24;
+        for _ in 0..8 {
+            crc = (crc << 1) ^ if crc & 0x80000000 == 0 { 0 } else { 0x04c11db7 };
+        }
+    }
+    assert_eq!(crc, u32::from_le_bytes(b[22..26].try_into().unwrap()));
+    assert_eq!(page.page.validated().is_ok(), b[4] == 0 && b[5] & !7 == 0);
+    digest.number(page.offset);
+    digest.bytes(b);
+}
+
+/// Stateful transport synchronization and cached/bounded seek replay. CRC and
+/// version/flag conversion are checked independently of the synchronization API.
+pub fn ogg_sync(input: &[u8]) {
+    if input.len() > MAX_INPUT || input.len() < 5 {
+        return;
+    }
+    let control = input[0];
+    let mut wire = &input[1..];
+    let n = (u32::from_le_bytes(wire[..4].try_into().unwrap()) as usize).min(wire.len() - 4);
+    wire = &wire[4..];
+    let (source, rest) = wire.split_at(n);
+    wire = rest;
+    let size = [1, 7, 27, 255, 2048, 65536][control as usize % 6];
+    let mut readers = std::array::from_fn::<_, 2, _>(|_| {
+        ogg::SyncReader::with_options(
+            Cursor::new(source),
+            ogg::SyncReadOptions {
+                read_size: size,
+                max_buffered_bytes: ogg::MAX_PAGE_SIZE + size,
+            },
+        )
+        .unwrap()
+    });
+    let mut buffers = std::array::from_fn::<_, 2, _>(|_| {
+        ogg::SyncBuffer::with_limit(if control & 128 == 0 { MAX_INPUT } else { 256 })
+    });
+    for _ in 0..64 {
+        let Some((&opcode, rest)) = wire.split_first() else {
+            break;
+        };
+        wire = rest;
+        let kind = opcode % 6;
+        let mut payload = &[][..];
+        let mut argument = 0u32;
+        if kind == 1 {
+            if wire.len() < 2 {
+                break;
+            }
+            let n = u16::from_le_bytes(wire[..2].try_into().unwrap()) as usize;
+            wire = &wire[2..];
+            let n = n.min(wire.len());
+            payload = &wire[..n];
+            wire = &wire[n..];
+        } else if kind >= 4 {
+            if wire.len() < 4 {
+                break;
+            }
+            argument = u32::from_le_bytes(wire[..4].try_into().unwrap());
+            wire = &wire[4..];
+        }
+        if kind < 4 {
+            let mut first = None;
+            for sync in &mut buffers {
+                let before = (sync.position(), sync.buffered_bytes(), sync.is_unsynced());
+                let mut digest = Digest::default();
+                let result = match kind {
+                    0 => {
+                        sync.reset();
+                        0
+                    }
+                    1 => match sync.push(payload) {
+                        Ok(()) => 1,
+                        Err(e) => {
+                            assert!(matches!(e, ogg::Error::LimitExceeded(_)));
+                            assert_eq!(
+                                (sync.position(), sync.buffered_bytes(), sync.is_unsynced()),
+                                before
+                            );
+                            2
+                        }
+                    },
+                    2 => match sync.page_seek().unwrap() {
+                        ogg::PageSeek::NeedMore => {
+                            assert_eq!(
+                                (sync.position(), sync.buffered_bytes()),
+                                (before.0, before.1)
+                            );
+                            3
+                        }
+                        ogg::PageSeek::Skipped(n) => {
+                            assert!(n > 0 && n <= before.1);
+                            assert_eq!(
+                                (sync.position(), sync.buffered_bytes()),
+                                (before.0 + n as u64, before.1 - n)
+                            );
+                            digest.number(n as u64);
+                            4
+                        }
+                        ogg::PageSeek::Page(p) => {
+                            synced_page(&mut digest, p);
+                            5
+                        }
+                    },
+                    _ => match sync.page_out().unwrap() {
+                        ogg::PageOut::NeedMore => 6,
+                        ogg::PageOut::Hole => 7,
+                        ogg::PageOut::Page(p) => {
+                            synced_page(&mut digest, p);
+                            8
+                        }
+                    },
+                };
+                let outcome = (
+                    result,
+                    sync.position(),
+                    sync.buffered_bytes(),
+                    sync.is_unsynced(),
+                    digest,
+                );
+                if let Some(a) = &first {
+                    assert_eq!(a, &outcome);
+                } else {
+                    first = Some(outcome);
+                }
+            }
+        } else {
+            let mut first = None;
+            for reader in &mut readers {
+                let mut digest = Digest::default();
+                let result = if kind == 4 {
+                    let boundary = if argument == u32::MAX {
+                        ogg::SyncBoundary::Unbounded
+                    } else {
+                        ogg::SyncBoundary::Bytes(argument as u64)
+                    };
+                    match reader.next_page(boundary).unwrap() {
+                        ogg::SyncRead::Boundary => 0,
+                        ogg::SyncRead::Eof => 1,
+                        ogg::SyncRead::Page(p) => {
+                            synced_page(&mut digest, p);
+                            2
+                        }
+                    }
+                } else {
+                    reader
+                        .seek(argument as u64 % (source.len() as u64 + 65537))
+                        .unwrap();
+                    3
+                };
+                let outcome = (
+                    result,
+                    reader.position(),
+                    reader.buffered_bytes(),
+                    reader.get_ref().position(),
+                    digest,
+                );
+                if let Some(a) = &first {
+                    assert_eq!(a, &outcome);
+                } else {
+                    first = Some(outcome);
+                }
+            }
+        }
+    }
+    for _ in 0..MAX_PAGES {
+        let mut first = None;
+        let mut done = false;
+        for reader in &mut readers {
+            let mut digest = Digest::default();
+            let tag = match reader.next_page(ogg::SyncBoundary::Unbounded).unwrap() {
+                ogg::SyncRead::Page(p) => {
+                    synced_page(&mut digest, p);
+                    0
+                }
+                ogg::SyncRead::Eof => {
+                    done = true;
+                    1
+                }
+                ogg::SyncRead::Boundary => panic!(),
+            };
+            let outcome = (tag, reader.position(), reader.buffered_bytes(), digest);
+            if let Some(a) = &first {
+                assert_eq!(a, &outcome);
+            } else {
+                first = Some(outcome);
+            }
+        }
+        if done {
+            break;
+        }
+    }
+}
+
 pub fn ogg_container(input: &[u8]) {
     let Some((&control, data)) = input.split_first() else {
         return;
@@ -1062,6 +1267,60 @@ mod tests {
             vorbis_packets(&input);
             input[0] |= 0x80;
             vorbis_packets(&input);
+        }
+    }
+
+    #[test]
+    fn buffered_sync_covers_raw_flags_nested_capture_limits_and_cached_seeks() {
+        let header = ogg::PageHeader {
+            flags: 0,
+            granule_position: 1,
+            serial: 7,
+            sequence: 0,
+        };
+        let base = ogg::encode_page(header, &[32], &[79; 32]).unwrap();
+        let mut raw = base.clone();
+        raw[4] = 255;
+        raw[5] = 248;
+        repair_checksums(&mut raw);
+        let mut nested = ogg::encode_page(header, &[254], &[0; 254]).unwrap();
+        nested[60..60 + base.len()].copy_from_slice(&base);
+        repair_checksums(&mut nested);
+        nested[22] ^= 1;
+        let mut source = b"OggS short O\0prefix".to_vec();
+        source.extend(&raw);
+        source.extend(&nested);
+        source.extend(&base);
+        source.extend(b"OggS");
+        for control in [0, 1, 3, 5, 128, 255] {
+            let mut bytes = vec![control];
+            bytes.extend((source.len() as u32).to_le_bytes());
+            bytes.extend(&source);
+            for chunk in source.chunks(27) {
+                bytes.push(1);
+                bytes.extend((chunk.len() as u16).to_le_bytes());
+                bytes.extend(chunk);
+                bytes.extend([2, 3]);
+            }
+            for at in [0, 1, source.len() as u32, 0] {
+                bytes.push(5);
+                bytes.extend(at.to_le_bytes());
+                for bound in [0u32, 1, 27, u32::MAX] {
+                    bytes.push(4);
+                    bytes.extend(bound.to_le_bytes());
+                }
+            }
+            for n in [0, 1, 5, 20, bytes.len() / 2, bytes.len()] {
+                ogg_sync(&bytes[..n]);
+            }
+        }
+        let large = ogg::encode_page(header, &vec![255; 255], &vec![0; 65025]).unwrap();
+        for control in [0, 128] {
+            let mut bytes = vec![control, 0, 0, 0, 0, 1];
+            bytes.extend((large.len() as u16).to_le_bytes());
+            bytes.extend_from_slice(&large);
+            bytes.extend([2, 3, 0, 2]);
+            ogg_sync(&bytes);
         }
     }
 }

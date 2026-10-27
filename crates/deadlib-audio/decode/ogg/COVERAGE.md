@@ -3,6 +3,13 @@
 Status: **in development; full requested conformance/performance not claimed**.
 Sources are linked in the parent directory's work plan.
 
+The [buffered synchronization follow-up](BUFFERED_SYNC.md) matches exact libogg
+page-seek/pageout state and libvorbisfile's cached/bounded transport operations.
+This supplies a required primitive for full reference Vorbis seeking. The 172
+recorded Vorbis seek differences remain open; indexed reader integration is
+still required. The active priority is complete parity with the original PCM
+tolerances and exact behavior/counts. No new performance claim is made.
+
 ## Implemented and tested (2026-10-26)
 
 * Version-zero page reading/writing, little-endian fields, reserved-flag/version

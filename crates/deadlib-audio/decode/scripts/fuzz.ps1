@@ -1,8 +1,8 @@
 param(
     [ValidateRange(1, 86400)][int]$Seconds = 300,
     [string]$RunRoot = '',
-    [ValidateSet('ogg_container', 'vorbis_headers', 'vorbis_packets', 'vorbis_stream', 'vorbis_synthesis', 'vorbis_encode')]
-    [string[]]$Targets = @('ogg_container', 'vorbis_headers', 'vorbis_packets', 'vorbis_stream', 'vorbis_synthesis', 'vorbis_encode'),
+    [ValidateSet('ogg_container', 'ogg_sync', 'vorbis_headers', 'vorbis_packets', 'vorbis_stream', 'vorbis_synthesis', 'vorbis_encode')]
+    [string[]]$Targets = @('ogg_container', 'ogg_sync', 'vorbis_headers', 'vorbis_packets', 'vorbis_stream', 'vorbis_synthesis', 'vorbis_encode'),
     [string]$FloorZero = '',
     [string[]]$ExtraSeeds = @(),
     [string]$ResumeCorpus = '',

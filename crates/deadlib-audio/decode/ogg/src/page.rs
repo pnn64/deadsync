@@ -44,7 +44,9 @@ impl<'a> Page<'a> {
         }
         Ok((Self::verified(bytes), len))
     }
-    /// Only call on an exact slice previously validated by `parse`.
+    /// Only call on an exact slice with verified lacing length and CRC.
+    /// Strict callers also validate version/flags; SyncedPage keeps that policy
+    /// separate and never exposes an unconverted Page publicly.
     pub(crate) fn verified(bytes: &'a [u8]) -> Self {
         Self {
             bytes,

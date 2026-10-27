@@ -8,6 +8,29 @@ fn put(root: &Path, target: &str, name: &str, bytes: &[u8]) {
     fs::write(directory.join(name), bytes).unwrap();
 }
 fn ogg_seed(root: &Path, name: &str, data: &[u8]) {
+    for control in [0, 4, 5, 255] {
+        let source = &data[..data.len().min(32768)];
+        let mut bytes = vec![control];
+        bytes.extend_from_slice(&(source.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(source);
+        for (i, chunk) in source.chunks(4096).enumerate() {
+            bytes.push(1);
+            bytes.extend_from_slice(&(chunk.len() as u16).to_le_bytes());
+            bytes.extend_from_slice(chunk);
+            bytes.push(if i & 1 == 0 { 2 } else { 3 });
+            bytes.push(4);
+            bytes.extend_from_slice(&[0, 0, 0, 0]);
+        }
+        for at in [0u32, 1, source.len() as u32 / 2, source.len() as u32, 0] {
+            bytes.push(5);
+            bytes.extend_from_slice(&at.to_le_bytes());
+            for bound in [0u32, 1, 27, u32::MAX] {
+                bytes.push(4);
+                bytes.extend_from_slice(&bound.to_le_bytes());
+            }
+        }
+        put(root, "ogg_sync", &format!("sync-{name}-{control}"), &bytes);
+    }
     for target in ["ogg_container", "vorbis_stream"] {
         for control in [0, 3, 17, 255] {
             let mut bytes = vec![control];
