@@ -1,0 +1,20 @@
+[package]
+name = "deadlib-flac-allocation-probe"
+version = "0.0.0"
+edition = "2024"
+
+[workspace]
+
+[[bin]]
+name = "deadlib-flac-allocation-probe"
+path = "../allocator-probe.rs"
+
+[dependencies]
+deadlib-audio-decode-flac = { path = "../../../crates/deadlib-audio/decode/flac" }
+symphonia = { version = "=0.6.1", default-features = false, features = ["flac", "ogg"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

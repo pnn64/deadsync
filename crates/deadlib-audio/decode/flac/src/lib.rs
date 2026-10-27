@@ -14,6 +14,7 @@ mod ogg_encode;
 mod ogg_seek;
 mod pcm_md5;
 mod predictor;
+mod sample;
 
 pub use encode::{EncodeOptions, FrameEncoder};
 pub use encoder::{EncodedStream, Encoder};

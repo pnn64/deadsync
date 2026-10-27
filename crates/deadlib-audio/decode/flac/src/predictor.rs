@@ -1,9 +1,9 @@
 //! LPC reconstruction. The scalar path also handles 33-bit stereo side signals.
-use crate::{Error, frame::check_sample};
+use crate::{Error, frame::check_sample, sample::Sample};
 
 #[inline(always)]
-pub(crate) fn restore(
-    output: &mut [i64],
+pub(crate) fn restore<T: Sample>(
+    output: &mut [T],
     coeff: &[i64],
     shift: u32,
     width: u32,
@@ -11,6 +11,7 @@ pub(crate) fn restore(
     let order = coeff.len();
     assert!((1..=32).contains(&order) && order < output.len());
     assert!((1..=33).contains(&width) && shift <= 15);
+    assert!(width <= T::BITS);
     // AVX2 multiplies the signed low 32 bits of each i64 lane. Every previous
     // sample must therefore fit i32; the 33-bit side channel uses scalar i64.
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
@@ -20,7 +21,7 @@ pub(crate) fn restore(
     macro_rules! short {
         ($($n:literal),*) => {
             match order {
-                $($n => return short_scalar::<$n>(output, coeff, shift, width),)*
+                $($n => return short_scalar::<T, $n>(output, coeff, shift, width),)*
                 _ => (),
             }
         }
@@ -30,8 +31,8 @@ pub(crate) fn restore(
 }
 
 #[inline(never)]
-fn short_scalar<const N: usize>(
-    output: &mut [i64],
+fn short_scalar<T: Sample, const N: usize>(
+    output: &mut [T],
     coeff: &[i64],
     shift: u32,
     width: u32,
@@ -40,24 +41,26 @@ fn short_scalar<const N: usize>(
     for i in N..output.len() {
         let mut sum = 0i64;
         for j in 0..N {
-            sum += coeff[j] * output[i - j - 1];
+            sum += coeff[j] * output[i - j - 1].wide();
         }
-        output[i] += sum >> shift;
-        check_sample(output[i], width)?;
+        let value = output[i].wide() + (sum >> shift);
+        check_sample(value, width)?;
+        output[i] = T::store(value);
     }
     Ok(())
 }
 
 #[inline(always)]
-fn scalar(output: &mut [i64], coeff: &[i64], shift: u32, width: u32) -> Result<(), Error> {
+fn scalar<T: Sample>(output: &mut [T], coeff: &[i64], shift: u32, width: u32) -> Result<(), Error> {
     let order = coeff.len();
     for i in order..output.len() {
         let mut sum = 0i64;
         for j in 0..order {
-            sum += coeff[j] * output[i - j - 1];
+            sum += coeff[j] * output[i - j - 1].wide();
         }
-        output[i] += sum >> shift;
-        check_sample(output[i], width)?;
+        let value = output[i].wide() + (sum >> shift);
+        check_sample(value, width)?;
+        output[i] = T::store(value);
     }
     Ok(())
 }
@@ -71,8 +74,8 @@ mod x86 {
     #[cfg(target_arch = "x86_64")]
     use std::arch::x86_64::*;
 
-    pub(super) fn restore(
-        output: &mut [i64],
+    pub(super) fn restore<T: Sample>(
+        output: &mut [T],
         coeff: &[i64],
         shift: u32,
         width: u32,
@@ -84,7 +87,7 @@ mod x86 {
         assert!((1..=32).contains(&width) && shift <= 15);
         assert!(coeff.iter().all(|&c| (-16384..=16383).contains(&c)));
         for &sample in &output[..coeff.len()] {
-            check_sample(sample, width)?;
+            check_sample(sample.wide(), width)?;
         }
         let mut padded = [0i64; 35];
         padded[..coeff.len()].copy_from_slice(coeff);
@@ -95,7 +98,7 @@ mod x86 {
                     // N initialized coefficients and N earlier, checked samples
                     // in the same output slice. It checks all four new samples
                     // before the next batch can use their low 32 bits.
-                    $($n => unsafe { kernel::<$n>(output, &padded, shift, width) },)*
+                    $($n => unsafe { kernel::<T, $n>(output, &padded, shift, width) },)*
                     _ => unreachable!(),
                 }
             }
@@ -111,8 +114,8 @@ mod x86 {
         clippy::needless_range_loop,
         reason = "Constant tap indices retain unrolled predictor code"
     )]
-    unsafe fn kernel<const N: usize>(
-        output: &mut [i64],
+    unsafe fn kernel<T: Sample, const N: usize>(
+        output: &mut [T],
         coeff: &[i64; 35],
         shift: u32,
         width: u32,
@@ -138,7 +141,7 @@ mod x86 {
                     ($j:literal, $sum:ident) => {
                         if $j < N {
                             let c = _mm256_loadu_si256(coeff.as_ptr().add($j).cast());
-                            let previous = _mm256_set1_epi64x(*base.add(i - $j - 1));
+                            let previous = _mm256_set1_epi64x((*base.add(i - $j - 1)).wide());
                             $sum = _mm256_add_epi64($sum, _mm256_mul_epi32(previous, c));
                         }
                     };
@@ -186,29 +189,30 @@ mod x86 {
                     let mut prediction = partial[a];
                     for b in 0..a {
                         if N >= 16 {
-                            prediction = prediction
-                                .wrapping_add(coeff[a - b - 1].wrapping_mul(*base.add(i + b)));
+                            prediction = prediction.wrapping_add(
+                                coeff[a - b - 1].wrapping_mul((*base.add(i + b)).wide()),
+                            );
                         } else {
-                            prediction += coeff[a - b - 1] * *base.add(i + b);
+                            prediction += coeff[a - b - 1] * (*base.add(i + b)).wide();
                         }
                     }
                     let value = if N >= 16 {
-                        (*base.add(i + a)).wrapping_add(prediction >> shift)
+                        (*base.add(i + a)).wide().wrapping_add(prediction >> shift)
                     } else {
-                        *base.add(i + a) + (prediction >> shift)
+                        (*base.add(i + a)).wide() + (prediction >> shift)
                     };
                     if N >= 16 {
                         range_bits |= (value as u64).wrapping_add(bias);
                     } else {
                         check_sample(value, width)?;
                     }
-                    *base.add(i + a) = value;
+                    *base.add(i + a) = T::store(value);
                 }
                 // Each biased value is in 0..2^width iff it fits. OR keeps any
                 // invalid high bit set, checking every sample with one branch.
-                // New terms use full i64 arithmetic, wrapping only to avoid
-                // overflow after an already-invalid value. Such a batch always
-                // fails here, before SIMD can reuse any unchecked low 32 bits.
+                // Arithmetic uses i64, wrapping only after an invalid value.
+                // Narrow storage may truncate that invalid value, but its high
+                // range bit is already latched. Reject the batch before reuse.
                 if N >= 16 && range_bits >= (1u64 << width) {
                     return Err(Error::Invalid("sample outside declared bit depth"));
                 }
@@ -217,11 +221,11 @@ mod x86 {
             for i in i..output.len() {
                 let mut prediction = 0i64;
                 for j in 0..N {
-                    prediction += coeff[j] * *base.add(i - j - 1);
+                    prediction += coeff[j] * (*base.add(i - j - 1)).wide();
                 }
-                let value = *base.add(i) + (prediction >> shift);
+                let value = (*base.add(i)).wide() + (prediction >> shift);
                 check_sample(value, width)?;
-                *base.add(i) = value;
+                *base.add(i) = T::store(value);
             }
         }
         Ok(())
@@ -266,6 +270,23 @@ mod tests {
                         let mut reference = residual.clone();
                         scalar(&mut reference, &coeff, shift, width).unwrap();
                         assert_eq!(reference, pcm);
+                        if width <= 32 {
+                            let narrow: Result<Vec<i32>, _> =
+                                residual.iter().copied().map(i32::try_from).collect();
+                            if let Ok(mut narrow) = narrow {
+                                let mut scalar_narrow = narrow.clone();
+                                scalar(&mut scalar_narrow, &coeff, shift, width).unwrap();
+                                restore(&mut narrow, &coeff, shift, width).unwrap();
+                                assert_eq!(narrow, scalar_narrow);
+                                assert!(
+                                    narrow
+                                        .iter()
+                                        .copied()
+                                        .map(i64::from)
+                                        .eq(pcm.iter().copied())
+                                );
+                            }
+                        }
                         restore(&mut residual, &coeff, shift, width).unwrap();
                         assert_eq!(
                             residual, pcm,
@@ -330,6 +351,13 @@ mod tests {
                         coeff[0] = 1;
                         let mut reference = residual.clone();
                         assert!(scalar(&mut reference, &coeff, 0, width).is_err());
+                        if width <= 32 {
+                            let mut narrow: Vec<i32> = residual
+                                .iter()
+                                .map(|&s| i32::try_from(s).unwrap())
+                                .collect();
+                            assert!(restore(&mut narrow, &coeff, 0, width).is_err());
+                        }
                         assert!(restore(&mut residual, &coeff, 0, width).is_err());
                     }
                 }
@@ -343,6 +371,8 @@ mod tests {
             let mut residual = vec![0; 65];
             residual[..order].fill(i32::MAX as i64);
             let coeff = vec![16383; order];
+            let mut narrow: Vec<i32> = residual.iter().map(|&s| s as i32).collect();
+            assert!(restore(&mut narrow, &coeff, 0, 32).is_err());
             assert!(restore(&mut residual, &coeff, 0, 32).is_err());
         }
     }

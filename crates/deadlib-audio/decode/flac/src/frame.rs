@@ -4,6 +4,7 @@ use crate::{
     bitstream::BitReader,
     checksum::{crc8, crc16},
     reserve,
+    sample::Sample,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -167,11 +168,12 @@ pub struct Frame<'a> {
     pub bytes: usize,
 }
 
-/// Reuses flat scratch and PCM buffers across frames. Errors leave it reusable.
+/// Reuses PCM storage across frames. Only 33-bit side samples need wide scratch.
+/// Errors leave it reusable.
 #[derive(Default)]
 pub struct FrameDecoder {
     info: Option<StreamInfo>,
-    work: Vec<i64>,
+    side: Vec<i64>,
     output: Vec<i32>,
     partial: Option<PartialFrame>,
 }
@@ -253,31 +255,40 @@ impl FrameDecoder {
         let header = FrameHeader::parse(data, self.info.as_ref())?;
         let n = header.block_size;
         let len = n * header.channels as usize;
-        if len > self.work.len() {
-            let additional = len - self.work.len();
-            reserve(&mut self.work, additional)?;
+        if len > self.output.len() {
+            let additional = len - self.output.len();
+            reserve(&mut self.output, additional)?;
         }
-        self.work.resize(len, 0);
+        self.output.resize(len, 0);
+        let wide_side = header.bits_per_sample == 32 && header.channel_assignment >= 8;
+        if wide_side {
+            if n > self.side.len() {
+                let additional = n - self.side.len();
+                reserve(&mut self.side, additional)?;
+            }
+            self.side.resize(n, 0);
+        }
         let partial = partial.filter(|p| p.header == header);
         let first_channel = partial.map_or(0, |p| p.channel);
         let mut r = BitReader::at_position(
             &data[header.header_bytes..],
             partial.map_or(0, |p| p.position),
         )?;
-        for (channel, plane) in self
-            .work
-            .chunks_exact_mut(n)
-            .enumerate()
-            .skip(first_channel)
-        {
+        for channel in first_channel..header.channels as usize {
             let side = (header.channel_assignment == 9 && channel == 0)
                 || (matches!(header.channel_assignment, 8 | 10) && channel == 1);
             let position = r.position();
-            if let Err(error) = subframe(
-                &mut r,
-                plane,
-                u32::from(header.bits_per_sample) + u32::from(side),
-            ) {
+            let bits = u32::from(header.bits_per_sample) + u32::from(side);
+            let result = if wide_side && side {
+                subframe(&mut r, &mut self.side, bits)
+            } else {
+                subframe(
+                    &mut r,
+                    &mut self.output[channel * n..(channel + 1) * n],
+                    bits,
+                )
+            };
+            if let Err(error) = result {
                 if RESUME && error == Error::Truncated {
                     self.partial = Some(PartialFrame {
                         header,
@@ -302,63 +313,11 @@ impl FrameDecoder {
                 return Err(error);
             }
         };
-        if len > self.output.len() {
-            let additional = len - self.output.len();
-            reserve(&mut self.output, additional)?;
-        }
-        self.output.resize(len, 0);
         if header.channel_assignment >= 8 {
-            let (left, right) = self.work.split_at(n);
-            let (out_left, out_right) = self.output.split_at_mut(n);
-            match header.channel_assignment {
-                8 => {
-                    for ((out_l, out_r), (&l, &side)) in out_left
-                        .iter_mut()
-                        .zip(out_right)
-                        .zip(left.iter().zip(right))
-                    {
-                        let r = l - side;
-                        check_sample(r, header.bits_per_sample.into())?;
-                        *out_l = l as i32;
-                        *out_r = r as i32;
-                    }
-                }
-                9 => {
-                    for ((out_l, out_r), (&side, &r)) in out_left
-                        .iter_mut()
-                        .zip(out_right)
-                        .zip(left.iter().zip(right))
-                    {
-                        let l = side + r;
-                        check_sample(l, header.bits_per_sample.into())?;
-                        *out_l = l as i32;
-                        *out_r = r as i32;
-                    }
-                }
-                10 => {
-                    for ((out_l, out_r), (&mid, &side)) in out_left
-                        .iter_mut()
-                        .zip(out_right)
-                        .zip(left.iter().zip(right))
-                    {
-                        let mid = (mid << 1) | (side & 1);
-                        let l = (mid + side) >> 1;
-                        let r = (mid - side) >> 1;
-                        check_sample(l, header.bits_per_sample.into())?;
-                        check_sample(r, header.bits_per_sample.into())?;
-                        *out_l = l as i32;
-                        *out_r = r as i32;
-                    }
-                }
-                _ => unreachable!(),
-            }
-        } else {
-            // Signed raw/warm-up fields and every reconstructed sample already
-            // fit the subframe width. Restoring wasted bits keeps them within
-            // the declared channel depth, which is at most 32 here. Only stereo
-            // decorrelation above can create a new out-of-range PCM value.
-            for (dst, &src) in self.output.iter_mut().zip(&self.work) {
-                *dst = src as i32;
+            if wide_side {
+                stereo::<true>(&mut self.output, &self.side, header)?;
+            } else {
+                stereo::<false>(&mut self.output, &[], header)?;
             }
         }
         Ok(Frame {
@@ -373,6 +332,47 @@ impl FrameDecoder {
             bytes: crc_pos + 2,
         })
     }
+}
+
+fn stereo<const WIDE: bool>(
+    output: &mut [i32],
+    side: &[i64],
+    header: FrameHeader,
+) -> Result<(), Error> {
+    let (left, right) = output.split_at_mut(header.block_size);
+    let bits = u32::from(header.bits_per_sample);
+    match header.channel_assignment {
+        8 => {
+            for (i, (l, r)) in left.iter().zip(right).enumerate() {
+                let s = if WIDE { side[i] } else { i64::from(*r) };
+                let value = i64::from(*l) - s;
+                check_sample(value, bits)?;
+                *r = value as i32;
+            }
+        }
+        9 => {
+            for (i, (l, r)) in left.iter_mut().zip(right).enumerate() {
+                let s = if WIDE { side[i] } else { i64::from(*l) };
+                let value = s + i64::from(*r);
+                check_sample(value, bits)?;
+                *l = value as i32;
+            }
+        }
+        10 => {
+            for (i, (l, r)) in left.iter_mut().zip(right).enumerate() {
+                let s = if WIDE { side[i] } else { i64::from(*r) };
+                let mid = (i64::from(*l) << 1) | (s & 1);
+                let a = (mid + s) >> 1;
+                let b = (mid - s) >> 1;
+                check_sample(a, bits)?;
+                check_sample(b, bits)?;
+                *l = a as i32;
+                *r = b as i32;
+            }
+        }
+        _ => unreachable!(),
+    }
+    Ok(())
 }
 
 fn footer(r: &mut BitReader<'_>, data: &[u8], header_bytes: usize) -> Result<usize, Error> {
@@ -394,7 +394,8 @@ pub(crate) fn check_sample(sample: i64, bits: u32) -> Result<(), Error> {
     }
 }
 
-fn subframe(r: &mut BitReader<'_>, output: &mut [i64], bits: u32) -> Result<(), Error> {
+fn subframe<T: Sample>(r: &mut BitReader<'_>, output: &mut [T], bits: u32) -> Result<(), Error> {
+    debug_assert!(bits <= T::BITS);
     if r.read(1)? != 0 {
         return Err(Error::Invalid("subframe reserved bit"));
     }
@@ -406,7 +407,7 @@ fn subframe(r: &mut BitReader<'_>, output: &mut [i64], bits: u32) -> Result<(), 
     };
     let width = bits - wasted;
     match kind {
-        0 => output.fill(r.signed(width)?),
+        0 => output.fill(T::store(r.signed(width)?)),
         1 => verbatim(r, output, width)?,
         8..=12 | 32..=63 => {
             let order = if kind < 32 { kind - 8 } else { kind - 31 };
@@ -414,7 +415,7 @@ fn subframe(r: &mut BitReader<'_>, output: &mut [i64], bits: u32) -> Result<(), 
                 return Err(Error::Invalid("predictor order exceeds block"));
             }
             for sample in &mut output[..order] {
-                *sample = r.signed(width)?;
+                *sample = T::store(r.signed(width)?);
             }
             let mut coeff = [0i64; 32];
             let shift;
@@ -446,7 +447,7 @@ fn subframe(r: &mut BitReader<'_>, output: &mut [i64], bits: u32) -> Result<(), 
     }
     if wasted != 0 {
         for sample in output {
-            *sample <<= wasted;
+            *sample = T::store(sample.wide() << wasted);
         }
     }
     Ok(())
@@ -454,80 +455,87 @@ fn subframe(r: &mut BitReader<'_>, output: &mut [i64], bits: u32) -> Result<(), 
 
 // Keep the format-specific copy loops out of the predictor's hot code.
 #[inline(never)]
-fn verbatim(r: &mut BitReader<'_>, output: &mut [i64], width: u32) -> Result<(), Error> {
+fn verbatim<T: Sample>(r: &mut BitReader<'_>, output: &mut [T], width: u32) -> Result<(), Error> {
     if r.position().is_multiple_of(8) && matches!(width, 8 | 16 | 24 | 32) {
         let bytes = r.aligned_bytes(output.len() * (width / 8) as usize)?;
         match width {
             8 => {
                 for (sample, &byte) in output.iter_mut().zip(bytes) {
-                    *sample = i64::from(byte as i8);
+                    *sample = T::store(i64::from(byte as i8));
                 }
             }
             16 => {
                 for (sample, &bytes) in output.iter_mut().zip(bytes.as_chunks::<2>().0) {
-                    *sample = i64::from(i16::from_be_bytes(bytes));
+                    *sample = T::store(i64::from(i16::from_be_bytes(bytes)));
                 }
             }
             24 => {
                 for (sample, &bytes) in output.iter_mut().zip(bytes.as_chunks::<3>().0) {
-                    *sample = i64::from(i32::from_be_bytes([bytes[0], bytes[1], bytes[2], 0]) >> 8);
+                    *sample = T::store(i64::from(
+                        i32::from_be_bytes([bytes[0], bytes[1], bytes[2], 0]) >> 8,
+                    ));
                 }
             }
             32 => {
                 for (sample, &bytes) in output.iter_mut().zip(bytes.as_chunks::<4>().0) {
-                    *sample = i64::from(i32::from_be_bytes(bytes));
+                    *sample = T::store(i64::from(i32::from_be_bytes(bytes)));
                 }
             }
             _ => unreachable!(),
         }
     } else {
         for sample in output.iter_mut() {
-            *sample = r.signed(width)?;
+            *sample = T::store(r.signed(width)?);
         }
     }
     Ok(())
 }
 
-fn restore_fixed(output: &mut [i64], order: usize, width: u32) -> Result<(), Error> {
+fn restore_fixed<T: Sample>(output: &mut [T], order: usize, width: u32) -> Result<(), Error> {
     match order {
         0 => {
             for &sample in output.iter() {
-                check_sample(sample, width)?;
+                check_sample(sample.wide(), width)?;
             }
         }
         1 => {
-            let mut previous = output[0];
+            let mut previous = output[0].wide();
             for sample in &mut output[1..] {
-                let value = *sample + previous;
+                let value = sample.wide() + previous;
                 check_sample(value, width)?;
-                *sample = value;
+                *sample = T::store(value);
                 previous = value;
             }
         }
         2 => {
-            let (mut a, mut b) = (output[1], output[0]);
+            let (mut a, mut b) = (output[1].wide(), output[0].wide());
             for sample in &mut output[2..] {
-                let value = *sample + 2 * a - b;
+                let value = sample.wide() + 2 * a - b;
                 check_sample(value, width)?;
-                *sample = value;
+                *sample = T::store(value);
                 (a, b) = (value, a);
             }
         }
         3 => {
-            let (mut a, mut b, mut c) = (output[2], output[1], output[0]);
+            let (mut a, mut b, mut c) = (output[2].wide(), output[1].wide(), output[0].wide());
             for sample in &mut output[3..] {
-                let value = *sample + 3 * a - 3 * b + c;
+                let value = sample.wide() + 3 * a - 3 * b + c;
                 check_sample(value, width)?;
-                *sample = value;
+                *sample = T::store(value);
                 (a, b, c) = (value, a, b);
             }
         }
         4 => {
-            let (mut a, mut b, mut c, mut d) = (output[3], output[2], output[1], output[0]);
+            let (mut a, mut b, mut c, mut d) = (
+                output[3].wide(),
+                output[2].wide(),
+                output[1].wide(),
+                output[0].wide(),
+            );
             for sample in &mut output[4..] {
-                let value = *sample + 4 * a - 6 * b + 4 * c - d;
+                let value = sample.wide() + 4 * a - 6 * b + 4 * c - d;
                 check_sample(value, width)?;
-                *sample = value;
+                *sample = T::store(value);
                 (a, b, c, d) = (value, a, b, c);
             }
         }
@@ -536,7 +544,7 @@ fn restore_fixed(output: &mut [i64], order: usize, width: u32) -> Result<(), Err
     Ok(())
 }
 
-fn residual(r: &mut BitReader<'_>, output: &mut [i64], order: usize) -> Result<(), Error> {
+fn residual<T: Sample>(r: &mut BitReader<'_>, output: &mut [T], order: usize) -> Result<(), Error> {
     let method = r.read(2)?;
     if method > 1 {
         return Err(Error::Invalid("reserved residual method"));
@@ -559,7 +567,7 @@ fn residual(r: &mut BitReader<'_>, output: &mut [i64], order: usize) -> Result<(
         if k == (1 << param_bits) - 1 {
             let width = r.read(5)? as u32;
             for sample in part {
-                *sample = r.signed(width)?;
+                *sample = T::store(r.signed(width)?);
             }
         } else {
             r.rice(part, k)?;

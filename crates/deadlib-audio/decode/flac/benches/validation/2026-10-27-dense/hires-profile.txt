@@ -1,0 +1,36 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 2K of event 'cycles:Pu'
+# Event count (approx.): 20807639350
+#
+# Overhead  Command          Shared Object              Symbol
+# ........  ...............  .........................  .......................................................................................
+#
+    41.13%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9bitstream3x8611acceleratedlEB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9bitstream3x8611acceleratedlEB6_
+
+    34.25%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj8_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj8_EB6_
+
+    13.23%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RNvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame6footer
+            |
+            ---_RNvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame6footer
+
+     7.18%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame6stereoKb0_EB4_
+            |
+            ---_RINvNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac5frame6stereoKb0_EB4_
+
+     1.34%  deadlib-flac-de  deadlib-flac-decode-dense  [.] _RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj7_EB6_
+            |
+            ---_RINvNtNtCs6l4HYnHGbZv_25deadlib_audio_decode_flac9predictor3x866kernellKj7_EB6_
+
+
+
+#
+# (Tip: To filter subset of samples with report or script add --time X-Y or --cpu A,B,C or --socket-filter ...)
+#

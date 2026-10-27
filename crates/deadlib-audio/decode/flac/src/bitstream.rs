@@ -1,5 +1,5 @@
 //! Checked, MSB-first FLAC bit packing. Reads never require padding after input.
-use crate::Error;
+use crate::{Error, sample::Sample};
 
 #[derive(Clone)]
 pub struct BitReader<'a> {
@@ -126,7 +126,7 @@ impl<'a> BitReader<'a> {
 
     /// Decode a Rice partition, fusing the unary prefix and remainder when
     /// both are already cached. Exact tails and long quotients use checked reads.
-    pub(crate) fn rice(&mut self, output: &mut [i64], k: u32) -> Result<(), Error> {
+    pub(crate) fn rice<T: Sample>(&mut self, output: &mut [T], k: u32) -> Result<(), Error> {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
             x86::rice(self, output, k)
@@ -136,7 +136,7 @@ impl<'a> BitReader<'a> {
     }
 
     #[inline(always)]
-    fn rice_inner(&mut self, output: &mut [i64], k: u32) -> Result<(), Error> {
+    fn rice_inner<T: Sample>(&mut self, output: &mut [T], k: u32) -> Result<(), Error> {
         debug_assert!(k <= 30);
         let mask = (1u64 << k) - 1;
         let limit = u64::from(u32::MAX - 1);
@@ -158,7 +158,7 @@ impl<'a> BitReader<'a> {
             if folded > limit {
                 return Err(Error::Invalid("residual exceeds 31-bit magnitude"));
             }
-            *sample = ((folded >> 1) as i64) ^ -((folded & 1) as i64);
+            *sample = T::store(((folded >> 1) as i64) ^ -((folded & 1) as i64));
         }
         Ok(())
     }
@@ -177,9 +177,9 @@ impl<'a> BitReader<'a> {
 mod x86 {
     use super::*;
 
-    pub(super) fn rice(
+    pub(super) fn rice<T: Sample>(
         reader: &mut BitReader<'_>,
-        output: &mut [i64],
+        output: &mut [T],
         k: u32,
     ) -> Result<(), Error> {
         if output.len() >= 32
@@ -195,9 +195,9 @@ mod x86 {
     }
 
     #[target_feature(enable = "bmi2,lzcnt")]
-    unsafe fn accelerated(
+    unsafe fn accelerated<T: Sample>(
         reader: &mut BitReader<'_>,
-        output: &mut [i64],
+        output: &mut [T],
         k: u32,
     ) -> Result<(), Error> {
         reader.rice_inner(output, k)

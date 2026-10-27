@@ -364,3 +364,44 @@ All 10 unit tests, 43 integration/external gates and three doctests pass, as
 does Clippy. Four fresh 60-second ASan campaigns complete 109,156 executions
 without failure. Test, benchmark and fuzz source hashes agree in the
 [validation record](benches/validation/2026-10-27-taps/final-validation.json).
+
+## Dense PCM storage, 2026-10-27
+
+Subframes now decode directly into i32 PCM planes. A private storage trait keeps
+all reconstruction arithmetic and range checks in i64; only a declared 33-bit
+stereo side plane uses separate i64 storage. Stereo decorrelation happens in
+place after frame CRC validation. Completed-plane checkpoints survive refills
+as before. Grouped LPC checks latch invalid high bits before a narrow store and
+reject the batch before reuse. Scalar/SIMD comparison and rejection tests now
+exercise both storage types.
+
+Separate allocation probes measure requested heap during each decoder region,
+excluding resident input and the untimed prepass. Native fresh-reader peak heap
+falls from 122,992 to 57,456 bytes on case 01, and from 401,494 to 139,350 bytes
+on case 43. Corresponding Ogg peaks fall from 138,698 to 73,162 and 420,312 to
+158,168 bytes. Warm raw decoding still performs zero allocations. Native readers
+return to their starting live heap after each iteration. These are logical
+requested bytes, excluding allocator metadata, stack and RSS; reallocations
+count the full new request. Probe timings are never used for throughput claims.
+Unchanged Symphonia modes reproduce the same allocation counts and peaks.
+
+Five paired trials improve verbatim raw time from 0.981 to 0.722 ms (26.4%).
+Other selected raw cases are close, except an initial apparent slowdown on
+high-resolution case 28. A nine-trial repeat measures 20.395 ms before and
+20.236 ms after; reader plus MD5 is 39.266 versus 38.064 ms. Paired counters
+show similar instructions and branches and L1 load misses falling from 85.05
+million to 29.07 million over 102 whole-file passes. The initial result remains
+in the reports. Common stereo raw time remains 6.540 ms versus libFLAC's
+5.474 ms in the initial run; this milestone reduces memory without closing that
+remaining CPU gap. Common/high-resolution profiles attribute about 41–43% of
+cycles to Rice decoding.
+
+Reports: [paired timings](benches/validation/2026-10-27-dense/raw.tsv),
+[nine-trial repeat](benches/validation/2026-10-27-dense/hires-repeat-raw.tsv),
+[allocation phases](benches/validation/2026-10-27-dense/memory-comparison.json),
+[reference allocation probes](benches/validation/2026-10-27-dense/memory-initial.json).
+Probe sources, profiles, counters and build provenance are retained alongside
+them. All 10 unit tests, 43 integration/external gates, three doctests and
+Clippy pass. Four fresh 60-second ASan campaigns complete 117,483 executions
+without failure. Test, fuzz, benchmark and memory-probe codec source hashes
+agree in the [validation record](benches/validation/2026-10-27-dense/final-validation.json).
