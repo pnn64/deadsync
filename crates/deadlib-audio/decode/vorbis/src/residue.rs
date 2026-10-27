@@ -96,20 +96,30 @@ fn decode_partition(
                 output.spectrum[plane + start + i + j * step] += value;
             }
         }
+    } else if kind == 2 {
+        // Traverse the flattened channel interleave in stream order. A vector
+        // can begin/end between channels, so keep the cursor across vectors;
+        // divide only once per partition rather than once per coefficient.
+        let channels = output.bundle.len();
+        let mut channel = start % channels;
+        let mut bin = start / channels;
+        for _ in (0..size).step_by(dimensions) {
+            let vector = book.decode_vector(bits)?;
+            for &value in vector {
+                output.spectrum[output.bundle[channel] * output.stride + bin] += value;
+                channel += 1;
+                if channel == channels {
+                    channel = 0;
+                    bin += 1;
+                }
+            }
+        }
     } else {
+        let plane = output.bundle[ch] * output.stride;
         for i in (0..size).step_by(dimensions) {
             let vector = book.decode_vector(bits)?;
             for (j, &value) in vector.iter().enumerate() {
-                let index = start + i + j;
-                let (channel, bin) = if kind == 2 {
-                    (
-                        output.bundle[index % output.bundle.len()],
-                        index / output.bundle.len(),
-                    )
-                } else {
-                    (output.bundle[ch], index)
-                };
-                output.spectrum[channel * output.stride + bin] += value;
+                output.spectrum[plane + start + i + j] += value;
             }
         }
     }
@@ -141,6 +151,60 @@ mod tests {
         }
         let bytes = bits.finish().unwrap();
         Codebook::read(&mut BitReader::new(&bytes), &Limits::default()).unwrap()
+    }
+    #[test]
+    fn residue_two_cursor_crosses_vector_channel_and_partition_edges_before_truncation() {
+        let book = vector_book();
+        for channels in [1usize, 2, 3, 4, 5, 7, 8, 17, 255] {
+            let bundle: Vec<_> = (1..=channels).rev().collect();
+            for start in [0, 1, channels - 1] {
+                let size = 20;
+                let bins = (start + size).div_ceil(channels) + 1;
+                let stride = bins + 3;
+                for bytes in [&[][..], &[0][..], &[0, 0][..]] {
+                    let mut actual = vec![0.125; (channels + 2) * stride];
+                    let mut expected = actual.clone();
+                    let decoded = size.min(bytes.len() * 8 * 2);
+                    for i in 0..decoded {
+                        let flat = start + i;
+                        expected[bundle[flat % channels] * stride + flat / channels] +=
+                            if i % 2 == 0 { 1.0 } else { 2.0 };
+                    }
+                    let mut bits = BitReader::new(bytes);
+                    let result = decode_partition(
+                        2,
+                        &mut bits,
+                        &book,
+                        &mut Output {
+                            spectrum: &mut actual,
+                            stride,
+                            bins,
+                            bundle: &bundle,
+                            nonzero: &[],
+                            classes: &mut [],
+                        },
+                        0,
+                        start,
+                        size,
+                    );
+                    assert_eq!(
+                        result,
+                        if decoded == size {
+                            Ok(())
+                        } else {
+                            Err(Error::EndOfPacket)
+                        }
+                    );
+                    assert_eq!(bits.position(), decoded / 2);
+                    assert_eq!(
+                        actual,
+                        expected,
+                        "channels={channels}, start={start}, bytes={}",
+                        bytes.len()
+                    );
+                }
+            }
+        }
     }
     #[test]
     fn residue_interleaves_clips_and_propagates_truncation() {

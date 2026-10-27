@@ -398,7 +398,9 @@ The [real-packet component diagnostic](SYNTHESIS_PROFILE.md) now measures floor,
 residue, transform and overlap work with a bit-checked instrumented copy.
 Residue takes about 55% / 42% of recorded stage time on the two songs; floor-zero
 has a different dominant cost. Its timers affect layout and execution, so the
-next residue change still needs an uninstrumented paired pipeline comparison.
+subsequent [residue cursor update](RESIDUE_PERFORMANCE.md) uses an uninstrumented
+paired comparison: full-file song medians improve 1.24x / 1.03x and 4 KiB reads
+1.09x / 1.10x, with unchanged heap/IO counters. Small-file movements remain mixed.
 Add actual codebook-frequency evidence to refine the remaining gap. Optimize a measured bottleneck,
 then rerun the same corpus/count/PCM gates and benchmark manifest. Broader files,
 platforms and controlled machines remain necessary before performance claims.

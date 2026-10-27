@@ -161,6 +161,9 @@ in observed full-file runs, while a native throughput gap remains.
 The later unit-twiddle FFT update adds 1.14-1.27x isolated kernel throughput and
 observed full-file gains of 1.03x / 1.11x on those longer tracks. The report keeps
 trial spreads and mixed short-clip movements alongside these scoped gains.
+The measured [residue cursor update](RESIDUE_PERFORMANCE.md) improves paired song
+full decoding 1.24x / 1.03x, retaining exact heap/IO counters and mixed small-file
+results. Native still trails Symphonia on these song medians.
 [Allocation/memory/seek comparisons](RESOURCES.md) now measure five files:
 native uses less requested heap than Symphonia here. The packet-read update
 addresses the measured page-sized synthesis work; eager indexing and broader

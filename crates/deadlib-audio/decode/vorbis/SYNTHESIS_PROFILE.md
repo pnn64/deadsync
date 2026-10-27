@@ -3,7 +3,9 @@
 Real-packet profiling identifies residue as the next song-throughput target:
 **55.2% / 42.2%** of recorded component time, versus **23.1% / 30.7%** for inverse
 MDCT plus finite checks. These are diagnostic shares, not uninstrumented CPU
-samples or a cross-library ranking. No production codec source is changed.
+samples or a cross-library ranking. The profiling milestone changed no
+production codec source. The subsequent [residue scatter update](RESIDUE_PERFORMANCE.md)
+uses this evidence for a paired uninstrumented comparison.
 
 ## Reproduce and validate the copy
 
@@ -85,7 +87,8 @@ Generated source, executables and external media stay under ignored `target/`.
 
 Python syntax, driver formatting and the generated workspace's release Clippy
 pass. The instrumented decoder reconstructs exactly from the checked current
-source. Production Ogg/Vorbis and the prior validation sources match `c7d23c320`;
+source. At this profiling milestone, production Ogg/Vorbis and the prior
+validation sources matched `c7d23c320`;
 this tooling milestone does not claim a new production sanitizer campaign.
 Broader conformance, synthesis performance, index-free codec seeking and encoder
 quality/rate control remain open; the crates remain independent of DeadSync.

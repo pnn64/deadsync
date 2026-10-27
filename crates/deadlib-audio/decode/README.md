@@ -94,6 +94,9 @@ Transform storage and the numerical gates stay unchanged; mixed short-clip
 movements and overlapping trial ranges remain explicit in the report.
 A [bit-checked synthesis diagnostic](vorbis/SYNTHESIS_PROFILE.md) now separates
 actual song packet stages and identifies residue as the next throughput target.
+The resulting [residue cursor update](vorbis/RESIDUE_PERFORMANCE.md) improves
+paired full-file song medians 1.24x / 1.03x and fragmented reads 1.09x / 1.10x.
+Heap/IO and PCM digests remain unchanged; small-file movements remain mixed.
 
 The [resource and arbitrary-seek baseline](vorbis/RESOURCES.md) separates
 requested-heap instrumentation, fresh-process memory and uninstrumented timing.
