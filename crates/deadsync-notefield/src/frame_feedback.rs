@@ -1075,6 +1075,7 @@ mod tests {
             split_15_10ms: false,
             custom_fantastic_window: false,
             judgment_tilt_enabled: false,
+            judgment_animation: crate::TapJudgmentAnimation::Default,
             judgment_tilt_min_ms: 0.0,
             judgment_tilt_max_ms: 0.0,
             judgment_tilt_multiplier: 0.0,

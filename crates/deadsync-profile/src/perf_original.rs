@@ -192,6 +192,7 @@ impl Profile {
         self.custom_fantastic_window = options.custom_fantastic_window;
         self.custom_fantastic_window_ms = options.custom_fantastic_window_ms;
         self.pad_light_brightness = options.pad_light_brightness;
+        self.judgment_animation = options.judgment_animation;
         self.judgment_tilt = options.judgment_tilt;
         self.column_cues = options.column_cues;
         self.measure_cues = options.measure_cues;

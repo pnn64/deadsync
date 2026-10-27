@@ -521,6 +521,15 @@ pub(crate) fn gameplay_notefield_plan(
         split_15_10ms: profile.split_15_10ms,
         custom_fantastic_window: profile.custom_fantastic_window,
         judgment_tilt_enabled: profile.judgment_tilt,
+        judgment_animation: match profile.judgment_animation {
+            profile_data::JudgmentAnimation::Default => {
+                deadsync_notefield::TapJudgmentAnimation::Default
+            }
+            profile_data::JudgmentAnimation::Still => {
+                deadsync_notefield::TapJudgmentAnimation::Still
+            }
+            profile_data::JudgmentAnimation::Itg => deadsync_notefield::TapJudgmentAnimation::Itg,
+        },
         judgment_tilt_min_ms: profile.tilt_min_threshold_ms as f32,
         judgment_tilt_max_ms: profile.tilt_max_threshold_ms as f32,
         judgment_tilt_multiplier: profile.tilt_multiplier,
@@ -1114,7 +1123,7 @@ pub(crate) fn compose_frame(
     let tap = if song_lua_judgment_visible
         && !blind_active
         && let Some(render) = p.last_judgment.as_ref()
-        && TapJudgmentHudFrame::render_active(render, elapsed_screen)
+        && TapJudgmentHudFrame::render_active(render, elapsed_screen, options.judgment_animation)
         && let Some(sprite) = judgment_sprite
     {
         Some(TapJudgmentHudFrame { render, sprite })

@@ -3281,6 +3281,50 @@ pub(super) mod tests {
     }
 
     #[test]
+    fn judgment_animation_display_row_persists_each_player_independently() {
+        use deadsync_profile::JudgmentAnimation;
+        ensure_i18n();
+        let mut view = test_init_view_for(PlayStyle::Versus, PlayerSide::P1, [true, true]);
+        view.players[P1].options.judgment_animation = JudgmentAnimation::Default;
+        view.players[P2].options.judgment_animation = JudgmentAnimation::Itg;
+        let (mut state, _) = setup_state_with(view);
+        super::super::apply_pane(&mut state, OptionsPane::Display);
+        let row_index = state
+            .pane()
+            .row_map
+            .display_order()
+            .iter()
+            .position(|&id| id == RowId::JudgmentAnimation)
+            .unwrap();
+        let row = state.pane().row_map.get(RowId::JudgmentAnimation).unwrap();
+        assert_eq!(row.selected_choice_index, [0, 2]);
+        assert_eq!(
+            row.choices
+                .iter()
+                .map(|choice| choice.as_ref())
+                .collect::<Vec<_>>(),
+            ["Default", "Still", "ITG"]
+        );
+        state.pane_mut().selected_row[P2] = row_index;
+        super::change_choice_for_player(&mut state, P2, -1, super::NavWrap::Wrap);
+        assert_eq!(
+            state.player_options[P1].judgment_animation,
+            JudgmentAnimation::Default
+        );
+        assert_eq!(
+            state.player_options[P2].judgment_animation,
+            JudgmentAnimation::Still
+        );
+        assert!(state.pending_effects.iter().any(|effect| matches!(effect,
+            ThemeEffect::Runtime(crate::SimplyLoveRuntimeRequest::Profile(
+                crate::SimplyLoveProfileRequest::UpdatePlayerOptions {
+                    side: PlayerSide::P2, options, ..
+                }
+            )) if options.judgment_animation == JudgmentAnimation::Still
+        )));
+    }
+
+    #[test]
     fn judgment_colors_row_selects_a_profile_palette_and_persists_its_id() {
         ensure_i18n();
         let mut view = test_init_view();
@@ -5553,6 +5597,7 @@ pub(super) mod tests {
             RowId::TapExplosionSkin,
             RowId::TapExplosionOptions,
             RowId::JudgmentColors,
+            RowId::JudgmentAnimation,
             RowId::JudgmentOffsetX,
             RowId::JudgmentOffsetY,
             RowId::ComboOffsetX,

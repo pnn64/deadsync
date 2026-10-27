@@ -20,6 +20,7 @@ const ROW_IDS: &[RowId] = &[
     RowId::TapExplosionOptions,
     RowId::JudgmentFont,
     RowId::JudgmentColors,
+    RowId::JudgmentAnimation,
     RowId::JudgmentOffsetX,
     RowId::JudgmentOffsetY,
     RowId::ComboFont,

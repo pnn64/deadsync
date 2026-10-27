@@ -282,6 +282,11 @@ pub fn translate_player_options(map: &SlSettings, base: &PlayerOptionsData) -> P
     if let Some(font) = sl_enum::<ComboFont>(map, "ComboFont") {
         out.combo_font = font;
     }
+    if let Some(animation) =
+        sl_enum::<deadsync_profile::JudgmentAnimation>(map, "JudgmentAnimation")
+    {
+        out.judgment_animation = animation;
+    }
     if let Some(x) = sl_str(map, "NoteFieldOffsetX").and_then(leading_i32) {
         out.note_field_offset_x = x;
     }
@@ -673,6 +678,28 @@ mod tests {
         );
         assert!(out.held_miss_graphic.is_none());
         assert_eq!(out.combo_font, ComboFont::BebasNeue);
+    }
+
+    #[test]
+    fn imports_arrow_cloud_judgment_animation() {
+        use deadsync_profile::JudgmentAnimation;
+        let base = PlayerOptionsData {
+            judgment_animation: JudgmentAnimation::Still,
+            ..Default::default()
+        };
+        for (value, expected) in [
+            ("Default", JudgmentAnimation::Default),
+            ("Still", JudgmentAnimation::Still),
+            ("ITG", JudgmentAnimation::Itg),
+            ("unknown", JudgmentAnimation::Still),
+        ] {
+            let out = translate_player_options(&sl(&[("JudgmentAnimation", value)]), &base);
+            assert_eq!(out.judgment_animation, expected);
+        }
+        assert_eq!(
+            translate_player_options(&sl(&[]), &base).judgment_animation,
+            JudgmentAnimation::Still
+        );
     }
 
     #[test]

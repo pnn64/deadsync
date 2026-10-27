@@ -12,6 +12,23 @@ use deadsync_gameplay::{
 use deadsync_rules::note::HoldResult;
 use deadsync_theme::JudgmentFeedbackStyle;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum TapJudgmentAnimation {
+    #[default]
+    Default,
+    Still,
+    Itg,
+}
+
+impl TapJudgmentAnimation {
+    const fn duration(self) -> f32 {
+        match self {
+            Self::Default | Self::Still => 0.9,
+            Self::Itg => 1.0,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TapJudgmentSprite {
     pub source: SpriteSource,
@@ -54,6 +71,7 @@ pub(crate) struct JudgmentFeedbackRequest<'a> {
     pub tap_xy: [f32; 2],
     pub judgment_back: bool,
     pub judgment_zoom: f32,
+    pub judgment_animation: TapJudgmentAnimation,
     pub held_misses: &'a [Option<HeldMissRenderInfo>],
     pub held_miss_sprite: Option<&'a IndicatorSprite>,
     pub hold_judgments: &'a [Option<HoldJudgmentRenderInfo>],
@@ -92,7 +110,8 @@ fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequ
         return;
     };
     let elapsed = (request.elapsed_screen - feedback.render.started_at_screen_s).max(0.0);
-    let Some(zoom) = tap_judgment_zoom(elapsed, request.judgment_zoom) else {
+    let Some(zoom) = tap_judgment_zoom(elapsed, request.judgment_zoom, request.judgment_animation)
+    else {
         return;
     };
     let columns = sprite.frame_cols.max(1);
@@ -127,26 +146,33 @@ fn append_tap_judgment(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackRequ
     }
 }
 
-const TAP_JUDGMENT_DURATION_S: f32 = 0.9;
-
 /// Whether the most recent tap judgment is still inside its actor lifetime.
 #[inline]
-pub(crate) fn tap_judgment_active(render: &JudgmentRenderInfo, elapsed_screen: f32) -> bool {
-    (elapsed_screen - render.started_at_screen_s).max(0.0) < TAP_JUDGMENT_DURATION_S
+pub(crate) fn tap_judgment_active(
+    render: &JudgmentRenderInfo,
+    elapsed_screen: f32,
+    animation: TapJudgmentAnimation,
+) -> bool {
+    (elapsed_screen - render.started_at_screen_s).max(0.0) < animation.duration()
 }
 
-fn tap_judgment_zoom(elapsed: f32, zoom_mod: f32) -> Option<f32> {
-    if elapsed >= TAP_JUDGMENT_DURATION_S {
+fn tap_judgment_zoom(elapsed: f32, zoom_mod: f32, animation: TapJudgmentAnimation) -> Option<f32> {
+    if elapsed >= animation.duration() {
         return None;
     }
-    let zoom = if elapsed < 0.1 {
-        let t = elapsed / 0.1;
+    let (start_zoom, settle_duration, shrink_start) = match animation {
+        TapJudgmentAnimation::Default => (0.8, 0.1, 0.7),
+        TapJudgmentAnimation::Still => return Some(0.75 * zoom_mod),
+        TapJudgmentAnimation::Itg => (1.0, 0.2, 0.8),
+    };
+    let zoom = if elapsed < settle_duration {
+        let t = elapsed / settle_duration;
         let ease = (1.0 - t).mul_add(-(1.0 - t), 1.0);
-        (0.75_f32 - 0.8).mul_add(ease, 0.8)
-    } else if elapsed < 0.7 {
+        (0.75_f32 - start_zoom).mul_add(ease, start_zoom)
+    } else if elapsed < shrink_start {
         0.75
     } else {
-        let t = (elapsed - 0.7) / 0.2;
+        let t = (elapsed - shrink_start) / 0.2;
         0.75 * t.mul_add(-t, 1.0)
     };
     Some(zoom * zoom_mod)
@@ -502,6 +528,7 @@ mod tests {
             tap_xy: [320.0, 150.0],
             judgment_back: false,
             judgment_zoom: 1.0,
+            judgment_animation: TapJudgmentAnimation::Default,
             held_misses,
             held_miss_sprite: None,
             hold_judgments,
@@ -570,10 +597,106 @@ mod tests {
     #[test]
     fn tap_judgment_activity_matches_actor_lifetime_boundary() {
         let info = judgment_info(2.0);
-        assert!(tap_judgment_active(&info, 1.5));
-        assert!(tap_judgment_active(&info, 2.899));
-        assert!(!tap_judgment_active(&info, 2.9));
-        assert!(!tap_judgment_active(&info, 3.5));
+        for (animation, end) in [
+            (TapJudgmentAnimation::Default, 2.9),
+            (TapJudgmentAnimation::Still, 2.9),
+            (TapJudgmentAnimation::Itg, 3.0),
+        ] {
+            assert!(tap_judgment_active(&info, 1.5, animation));
+            assert!(tap_judgment_active(&info, end - 0.001, animation));
+            assert!(!tap_judgment_active(&info, end, animation));
+            assert!(!tap_judgment_active(&info, 3.5, animation));
+        }
+    }
+
+    #[test]
+    fn tap_judgment_animation_matches_arrow_cloud_tweens() {
+        for (animation, samples) in [
+            (
+                TapJudgmentAnimation::Default,
+                [
+                    (0.0, 0.8),
+                    (0.05, 0.7625),
+                    (0.1, 0.75),
+                    (0.7, 0.75),
+                    (0.8, 0.5625),
+                ],
+            ),
+            (
+                TapJudgmentAnimation::Still,
+                [
+                    (0.0, 0.75),
+                    (0.05, 0.75),
+                    (0.1, 0.75),
+                    (0.7, 0.75),
+                    (0.899, 0.75),
+                ],
+            ),
+            (
+                TapJudgmentAnimation::Itg,
+                [
+                    (0.0, 1.0),
+                    (0.1, 0.8125),
+                    (0.2, 0.75),
+                    (0.8, 0.75),
+                    (0.9, 0.5625),
+                ],
+            ),
+        ] {
+            for (elapsed, expected) in samples {
+                let zoom = tap_judgment_zoom(elapsed, 1.5, animation).unwrap();
+                assert!(
+                    (zoom - expected * 1.5).abs() < 0.00001,
+                    "{animation:?} at {elapsed}"
+                );
+            }
+            assert_eq!(
+                tap_judgment_zoom(animation.duration(), 1.5, animation),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn still_judgment_and_split_overlay_keep_their_size_until_hidden() {
+        let info = judgment_info(0.0);
+        let sprite = TapJudgmentSprite {
+            source: source("judgment"),
+            frame_size: [200.0, 28.0],
+            frame_cols: 2,
+            frame_rows: 7,
+        };
+        for elapsed in [0.0, 0.05, 0.7, 0.899, 0.9] {
+            let mut request = empty_request(&[], &[]);
+            request.elapsed_screen = elapsed;
+            request.judgment_animation = TapJudgmentAnimation::Still;
+            request.tap = Some(TapJudgmentFeedback {
+                render: &info,
+                frame_row: 3,
+                overlay_row: Some(1),
+                rotation_deg: 0.0,
+            });
+            request.tap_sprite = Some(&sprite);
+            let mut draws = Vec::new();
+            compose_judgment_feedback(&mut draws, request);
+            if elapsed >= 0.9 {
+                assert!(draws.is_empty());
+            } else {
+                assert_eq!(draws.len(), 2);
+                for (index, row, alpha) in [(0, 3.0, 1.0), (1, 1.0, 0.5)] {
+                    assert_sprite(
+                        &draws[index],
+                        "judgment",
+                        [320.0, 150.0],
+                        [150.0, 21.0],
+                        [1.0, 1.0, 1.0, alpha],
+                        [0.0, row / 7.0, 0.5, (row + 1.0) / 7.0],
+                        0.0,
+                        200,
+                    );
+                }
+            }
+        }
     }
 
     #[test]
