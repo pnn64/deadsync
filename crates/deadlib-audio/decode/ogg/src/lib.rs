@@ -16,7 +16,9 @@ mod writer;
 pub use capture::{CaptureInfo, CapturedPacket, PacketCapture};
 pub use crc::crc32;
 pub use demux::{Demuxer, Limits, Packet, PacketInfo};
-pub use index::{GranuleLocation, IndexOptions, IndexedPage, OggIndex, StreamIndex, find_granule};
+pub use index::{
+    GranuleLocation, IndexEvent, IndexOptions, IndexedPage, OggIndex, StreamIndex, find_granule,
+};
 pub use page::{Fragment, Fragments, Page, PageHeader, encode_page, write_page};
 pub use reader::{LocatedPage, PageDecoder, PageProgress, PageReader, SyncMode};
 pub use validation::{CompatibilityStats, ValidationOptions};

@@ -7,6 +7,68 @@ const STEREO: &[u8] = include_bytes!("fixtures/stereo.ogg");
 const MONO: &[u8] = include_bytes!("fixtures/mono.ogg");
 const SURROUND: &[u8] = include_bytes!("fixtures/surround.ogg");
 
+#[test]
+fn index_construction_reads_each_byte_once_with_fragmented_input_and_one_initial_rewind() {
+    use std::io::{Read, Seek, SeekFrom};
+    struct Once<'a> {
+        source: Cursor<&'a [u8]>,
+        seen: Vec<bool>,
+        seeks: usize,
+    }
+    impl Read for Once<'_> {
+        fn read(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+            let start = self.source.position() as usize;
+            let cap = output.len().min(17);
+            let n = self.source.read(&mut output[..cap])?;
+            for seen in &mut self.seen[start..start + n] {
+                assert!(!*seen, "index construction reread a source byte");
+                *seen = true;
+            }
+            Ok(n)
+        }
+    }
+    impl Seek for Once<'_> {
+        fn seek(&mut self, from: SeekFrom) -> std::io::Result<u64> {
+            assert_eq!(from, SeekFrom::Start(0));
+            self.seeks += 1;
+            assert_eq!(self.seeks, 1);
+            self.source.seek(from)
+        }
+    }
+    for bytes in [
+        MONO.to_vec(),
+        STEREO.to_vec(),
+        SURROUND.to_vec(),
+        repack(STEREO, 101, -37, 29, 280, true, true),
+    ] {
+        let reference = full(&bytes);
+        for packet_preroll in [false, true] {
+            let mut source = Once {
+                source: Cursor::new(bytes.as_slice()),
+                seen: vec![false; bytes.len()],
+                seeks: 0,
+            };
+            source.source.set_position(13);
+            let index = VorbisIndex::read(
+                &mut source,
+                SeekOptions {
+                    packet_preroll,
+                    ..SeekOptions::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(source.seeks, 1);
+            assert!(source.seen.iter().all(|&seen| seen));
+            assert_eq!(index.streams().len(), reference.len());
+            for stream in index.streams() {
+                let expected = &reference[&(stream.info.id.chain, stream.info.id.serial)];
+                assert_eq!(&stream.info, expected.info.as_ref().unwrap());
+                assert_eq!(Some(stream.end), expected.end);
+            }
+        }
+    }
+}
+
 #[derive(Default)]
 struct Audio {
     info: Option<StreamInfo>,

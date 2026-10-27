@@ -111,6 +111,9 @@ from two logical bits per packet. Paired longer-file seek batches improve anothe
 references on those two seek workloads in this run. Short files, eager index
 construction, and full-file throughput still have performance gaps. The
 page-only pre-roll option preserves a lower-storage strategy with exact PCM.
+One-pass container/Vorbis construction now halves indexed-open source bytes.
+Paired song open medians improve 1.86x / 1.66x with unchanged retained heap;
+mixed seek-batch movements and their recheck remain in the resource report.
 
 The initial [native encoder](vorbis/ENCODING.md) now generates setup and audio
 packets directly from PCM, with a native forward MDCT, fixed blocks, an adaptive

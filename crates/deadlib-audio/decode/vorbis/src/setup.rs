@@ -217,29 +217,42 @@ impl Setup {
     pub fn modes(&self) -> &[Mode] {
         &self.modes
     }
+    // Index construction only needs the mode prefixes after fully validating
+    // setup and its resource preflight. Moving this small vector releases the
+    // codebooks/floors/residues even when many streams are multiplexed.
+    pub(crate) fn into_modes(self) -> Vec<Mode> {
+        self.modes
+    }
     /// Read only the audio packet's mode/window prefix, leaving the reader at
     /// the floor payload. Non-audio packets must be ignored by a stream decoder.
     pub fn read_audio_header(&self, bits: &mut BitReader<'_>) -> Result<AudioHeader, Error> {
-        if bits.flag()? {
-            return Err(Error::Invalid("non-audio packet"));
-        }
-        let mode = bits.read(ilog(self.modes.len() as u32 - 1))? as u8;
-        let config = self
-            .modes
-            .get(mode as usize)
-            .ok_or(Error::Invalid("audio mode number"))?;
-        let (previous_long, next_long) = if config.long_block {
-            (bits.flag()?, bits.flag()?)
-        } else {
-            (false, false)
-        };
-        Ok(AudioHeader {
-            mode,
-            block_size: self.block_sizes[config.long_block as usize],
-            previous_long,
-            next_long,
-        })
+        read_audio_header(&self.modes, self.block_sizes, bits)
     }
+}
+
+pub(crate) fn read_audio_header(
+    modes: &[Mode],
+    block_sizes: [usize; 2],
+    bits: &mut BitReader<'_>,
+) -> Result<AudioHeader, Error> {
+    if bits.flag()? {
+        return Err(Error::Invalid("non-audio packet"));
+    }
+    let mode = bits.read(ilog(modes.len() as u32 - 1))? as u8;
+    let config = modes
+        .get(mode as usize)
+        .ok_or(Error::Invalid("audio mode number"))?;
+    let (previous_long, next_long) = if config.long_block {
+        (bits.flag()?, bits.flag()?)
+    } else {
+        (false, false)
+    };
+    Ok(AudioHeader {
+        mode,
+        block_size: block_sizes[config.long_block as usize],
+        previous_long,
+        next_long,
+    })
 }
 
 fn storage<T>(count: usize, budget: &mut Budget) -> Result<Vec<T>, Error> {

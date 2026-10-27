@@ -379,14 +379,18 @@ campaign; sanitizer memory is not a production memory measurement.
 [RESOURCES.md](RESOURCES.md) adds separate requested-heap counters, uninstrumented
 process memory, indexed construction and validated 100-request seek batches for
 five files. It retains the initial page-API baseline, the packet-read update,
-and the compact mode-index update separately. The latest paired run against
+and the compact mode-index update separately. The mode-index paired run against
 `af518655b` improves longer-file seek batches 1.99x/3.18x, using two mode bits per
 packet to choose the nearest overlap pre-roll. Native beats both references on
 those two workloads in this run, while the short fixtures still trail them.
 The additional live requested heap is 4,224 bytes per longer track; all five
 warmed native batches allocate nothing. Indexed-open time remains largely
-unchanged and still requires two complete source passes. These scoped results
+unchanged and required two complete source passes at that milestone. These scoped results
 do not establish overall or cross-platform competitive performance.
+The subsequent one-pass construction update halves native indexed-open source
+bytes and improves the two song medians 1.86x / 1.66x, with unchanged retained
+heap. Its mixed seek-batch timings, including a 15-trial recheck, remain explicit
+in [RESOURCES.md](RESOURCES.md#one-pass-container-and-vorbis-indexing-2026-10-27).
 Ogg-only container throughput and truly cold startup still need comparative
 measurements. Sanitizer RSS is not a production memory result.
 

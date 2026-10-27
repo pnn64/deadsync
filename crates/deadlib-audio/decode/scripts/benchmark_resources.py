@@ -164,6 +164,19 @@ def main() -> None:
             raise RuntimeError("baseline/current Cargo profiles differ")
         if baseline_metadata["registry_packages"] != packages["rust_timing"]:
             raise RuntimeError("baseline/current registry dependency artifacts differ")
+        # Keep counted and uninstrumented baseline resource workers separate,
+        # just as for current sources. Reuse the same extracted source/adapter
+        # workspace, rather than comparing today's heap to an older report.
+        for name, features, current in (("rust_baseline_counted", ["--features", "bench-alloc"], "rust_counted"),
+                                        ("rust_baseline_memory", [], "rust_memory")):
+            build = invoke(["cargo", "bench", "--offline", "--manifest-path", run / "baseline/Cargo.toml",
+                            "-p", "deadlib-audio-decode-vorbis", "--bench", "resources", "--no-run",
+                            "--message-format=json", "--target-dir", run / "baseline/target", *features],
+                           log=run / f"{name}-build.log")
+            workers[name], profiles[name] = rust_worker(build, "resources")
+            packages[name] = registry_packages(build)
+            if profiles[name] != profiles[current] or packages[name] != packages[current]:
+                raise RuntimeError("baseline/current resource profiles or registry artifacts differ")
         timing_engines += ("native-baseline",)
     csource = DECODE / "vorbis/benches/oracle"
     cbuild = reference / "vorbis-benchmark-build"
@@ -172,7 +185,7 @@ def main() -> None:
                                     "deadlib_vorbis_resources", run, "c-counted", True)
     workers["oracle"] = build_c(reference, reference / "vorbis-oracle-build", DECODE / "vorbis/tests/oracle",
                                  "deadlib_vorbis_oracle", run, "oracle")
-    for name in ("rust_counted", "c_counted"):
+    for name in ("rust_counted", "c_counted", *(("rust_baseline_counted",) if baseline_metadata else ())):
         if invoke([workers[name], "--selftest"]).strip() != "allocator-selftest:ok":
             raise RuntimeError("allocator self-test failed")
     files = args.files or [DECODE / "vorbis/tests/fixtures" / name for name in
@@ -208,7 +221,7 @@ def main() -> None:
                                  if line.startswith(("CMAKE_C_FLAGS_RELEASE:", "CMAKE_CXX_FLAGS_RELEASE:", "CMAKE_EXE_LINKER_FLAGS_RELEASE:"))],
         "source_sha256": {label(p): sha(p) for p in sorted(source_files)},
         "input_sha256": {label(p): sha(p) for p in files}, "workloads": metadata,
-        "allocator_self_tests": "passed both actual instrumented workers",
+        "allocator_self_tests": "passed all actual instrumented workers, including the baseline when requested",
         "metric_scopes": {"heap": "requested bytes; Rust global allocator / only libogg+libvorbis+libvorbisfile C allocation calls; input and harness excluded",
                           "process_memory": "fresh uninstrumented process PeakWorkingSetSize; input, workload, loader and harness included; seek_batch includes warm/validation",
                           "seek_timing": "uninstrumented; resident input; seek_open constructs+destroys; seek_batch warmed context, exact requested consumption; PCM validation excluded",
@@ -216,12 +229,14 @@ def main() -> None:
     (run / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
     def resource(engine: str, phase: str, path: Path, counted: bool) -> dict:
+        identity = "native" if engine == "native-baseline" else engine
         if engine == "libvorbis":
             command = [workers["c_counted" if counted else "c_memory"], phase, path, inputs[path]]
         else:
-            command = [workers["rust_counted" if counted else "rust_memory"], engine, phase, path, inputs[path]]
+            prefix = "rust_baseline" if engine == "native-baseline" else "rust"
+            command = [workers[prefix + ("_counted" if counted else "_memory")], identity, phase, path, inputs[path]]
         row = json.loads(invoke(command))
-        if (row["engine"], row["phase"], row["instrumented"]) != (engine, phase, counted):
+        if (row["engine"], row["phase"], row["instrumented"]) != (identity, phase, counted):
             raise ValueError("resource worker identity mismatch")
         if counted and row["process_peak_working_set_bytes"] is not None:
             raise ValueError("instrumented worker reported process memory")
@@ -229,14 +244,14 @@ def main() -> None:
             raise ValueError("uninstrumented worker reported heap counters")
         if counted and phase == "full" and row["retained_delta_bytes"] != 0:
             raise ValueError("unexpected retained full-decode allocation")
-        return {"path": label(path), **row}
+        return {"path": label(path), **row, "engine": engine}
 
     randomizer = random.Random(args.seed)
     rows = []
     for path in files:
         for phase in PHASES:
             for trial in range(args.resource_repeats):
-                cases = [(engine, counted) for engine in ENGINES for counted in (True, False)]
+                cases = [(engine, counted) for engine in timing_engines for counted in (True, False)]
                 randomizer.shuffle(cases)
                 for engine, counted in cases:
                     row = resource(engine, phase, path, counted)

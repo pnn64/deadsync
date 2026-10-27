@@ -2,7 +2,6 @@
 use crate::{
     Error, Limits, Metadata, OggEvent, OggPcm, PacketDecoder, Setup, StreamEnd, StreamId,
     StreamInfo,
-    decoder::packet_header,
     ogg::{Timing, granule, read_identification, read_metadata},
 };
 use core::ops::ControlFlow;
@@ -132,37 +131,94 @@ impl VorbisIndex {
         reader
             .seek(SeekFrom::Start(0))
             .map_err(container::Error::from)?;
-        let container = OggIndex::read(
+        let mut builder = IndexBuilder {
+            streams: Vec::new(),
+            active: Vec::new(),
+            memory: 0,
+            options,
+        };
+        let container = OggIndex::read_with_events(
             &mut *reader,
             container::IndexOptions {
                 container_limits: options.container_limits,
                 max_pages: options.max_index_pages,
                 validation: options.validation(),
             },
+            |event| match event {
+                container::IndexEvent::Packet { page, packet } => builder.packet(page, packet),
+                container::IndexEvent::Page { page, offset } => builder.page(page, offset),
+            },
         )?;
-        let mut pages = PageReader::new(reader);
-        pages.seek(0)?;
-        let mut streams = Vec::new();
-        let mut memory = 0;
-        for physical in container.streams() {
-            let entries = container.pages(physical.serial).unwrap();
-            let first = read_page(&mut pages, &entries[0])?;
+        Ok(Self {
+            container,
+            streams: builder.streams,
+            memory: builder.memory,
+            options,
+        })
+    }
+    pub fn streams(&self) -> &[SeekStream] {
+        &self.streams
+    }
+    pub fn stream(&self, id: StreamId) -> Option<&SeekStream> {
+        self.streams.iter().find(|s| s.info.id == id)
+    }
+    pub fn container(&self) -> &OggIndex {
+        &self.container
+    }
+    /// Retained container and Vorbis index elements, excluding allocator overhead.
+    pub fn storage_bytes(&self) -> usize {
+        self.container.storage_bytes() + self.memory
+    }
+}
+
+// Only the small mode vector survives setup parsing. Full codebooks/floors and
+// residues are released immediately, keeping one parsed setup at a time even
+// when physical streams interleave their headers and audio.
+struct BuildingStream {
+    stream: usize,
+    modes: Vec<crate::Mode>,
+    setup_page: Option<u64>,
+    previous_size: usize,
+    last_audio: Option<u64>,
+    timing: Timing,
+}
+struct IndexBuilder {
+    streams: Vec<SeekStream>,
+    active: Vec<BuildingStream>,
+    memory: usize,
+    options: SeekOptions,
+}
+impl IndexBuilder {
+    fn packet(&mut self, page: Page<'_>, packet: container::Packet<'_>) -> Result<(), Error> {
+        let options = self.options;
+        let header = page.header();
+        let ends_packet = page.lacing().last().is_none_or(|&n| n < 255);
+        if packet.info.first_in_stream {
             let Some(identification) =
-                read_identification(first.body(), first.header(), first.bytes().len())?
+                read_identification(packet.data, header, page.bytes().len())?
             else {
-                continue;
+                return Ok(());
             };
             let id = StreamId {
-                serial: physical.serial,
-                chain: physical.chain,
+                serial: packet.info.serial,
+                chain: packet.info.chain,
             };
-            let mut capture = PacketCapture::at_page_with_validation(
-                &entries[0],
-                options.container_limits,
-                options.validation(),
-            );
-            capture.push_page(first, entries[0].offset, |_| {})?;
-            let mut stream = SeekStream {
+            reserve_index(
+                &mut self.streams,
+                1,
+                &mut self.memory,
+                options.max_index_memory,
+            )?;
+            crate::reserve(&mut self.active, 1)?;
+            self.active.push(BuildingStream {
+                stream: self.streams.len(),
+                modes: Vec::new(),
+                setup_page: None,
+                previous_size: 0,
+                last_audio: None,
+                timing: Timing::with_extended_end_trim(options.trim_to_final_granule),
+            });
+            self.streams.push(SeekStream {
                 info: StreamInfo {
                     id,
                     identification,
@@ -182,180 +238,159 @@ impl VorbisIndex {
                 marks: Vec::new(),
                 packet_modes: Vec::new(),
                 first_audio: None,
-            };
-            let mut setup = None;
-            let mut setup_page = None;
-            let mut previous_size = 0;
-            let mut last_audio = None;
-            let mut timing = Timing::with_extended_end_trim(options.trim_to_final_granule);
-            for entry in &entries[1..] {
-                let page = read_page(&mut pages, entry)?;
-                let header = page.header();
-                let ends_packet = page.lacing().last().is_none_or(|&n| n < 255);
-                let mut failure = None;
-                capture.push_page(page, entry.offset, |packet| {
-                    if failure.is_some() {
-                        return;
-                    }
-                    let result = (|| {
-                        match packet.info.number.unwrap() {
-                            1 => {
-                                let (metadata, error) = read_metadata(
-                                    packet.data,
-                                    options.limits,
-                                    options.max_index_memory - memory,
-                                )?;
-                                charge(
-                                    &mut memory,
-                                    metadata.storage_bytes(),
-                                    options.max_index_memory,
-                                )?;
-                                stream.info.metadata = metadata;
-                                stream.comment_error = error;
-                                if packet.info.granule_position.is_some_and(|gp| gp != 0) {
-                                    return Err(Error::Invalid("comment page granule"));
-                                }
-                            }
-                            2 => {
-                                if packet.info.granule_position != Some(0) || !ends_packet {
-                                    return Err(Error::Invalid(
-                                        "setup header must finish its page at granule zero",
-                                    ));
-                                }
-                                let mut limits = options.limits;
-                                limits.max_setup_memory =
-                                    limits.max_setup_memory.min(options.max_stream_memory);
-                                let parsed = Setup::parse(
-                                    packet.data,
-                                    &stream.info.identification,
-                                    &limits,
-                                )?;
-                                check_decoder_memory(&parsed, options)?;
-                                reserve_index(
-                                    &mut stream.setup_packet,
-                                    packet.data.len(),
-                                    &mut memory,
-                                    options.max_index_memory,
-                                )?;
-                                stream.setup_packet.extend_from_slice(packet.data);
-                                setup = Some(parsed);
-                                setup_page = Some(entry.offset);
-                            }
-                            _ => {
-                                let setup = setup
-                                    .as_ref()
-                                    .ok_or(Error::Invalid("audio before Vorbis setup"))?;
-                                if Some(packet.info.start_page_offset) == setup_page {
-                                    return Err(Error::Invalid("audio must begin on a fresh page"));
-                                }
-                                let Some((audio, _)) =
-                                    packet_header(setup, &options.limits, packet.data)?
-                                else {
-                                    return Ok(());
-                                };
-                                let frames = if previous_size == 0 {
-                                    0
-                                } else {
-                                    (previous_size + audio.block_size) / 4
-                                };
-                                timing.advance(
-                                    timing.raw_end,
-                                    frames,
-                                    packet.info.granule_position.is_some(),
-                                    header,
-                                    ends_packet,
-                                )?;
-                                previous_size = audio.block_size;
-                                let number = packet.info.number.unwrap();
-                                if options.packet_preroll {
-                                    let byte = usize::try_from(number / 4)
-                                        .ok()
-                                        .and_then(|n| n.checked_add(1))
-                                        .ok_or(Error::LimitExceeded("packet-mode index"))?;
-                                    let extra = byte.saturating_sub(stream.packet_modes.len());
-                                    reserve_index(
-                                        &mut stream.packet_modes,
-                                        extra,
-                                        &mut memory,
-                                        options.max_index_memory,
-                                    )?;
-                                    stream.packet_modes.resize(byte, 0);
-                                    let code = 1 + u8::from(
-                                        audio.block_size
-                                            == stream.info.identification.block_sizes[1],
-                                    );
-                                    stream.packet_modes[byte - 1] |= code << ((number & 3) * 2);
-                                }
-                                stream.first_audio.get_or_insert(number);
-                                last_audio = Some(number);
-                            }
-                        }
-                        Ok(())
-                    })();
-                    if let Err(error) = result {
-                        failure = Some(error);
-                    }
-                })?;
-                if let Some(error) = failure {
-                    return Err(error);
-                }
-                if setup.is_none() {
-                    if header.granule_position != 0
-                        && header.granule_position != UNKNOWN_GRANULE_POSITION
-                    {
-                        return Err(Error::Invalid("nonzero Vorbis header granule"));
-                    }
-                } else if Some(entry.offset) == setup_page {
-                    if header.granule_position != 0 {
-                        return Err(Error::Invalid("setup page granule"));
-                    }
-                } else if page.completed_packets() != 0 || header.is_eos() {
-                    timing.check_page(header)?;
-                    if let Some(packet) = last_audio
-                        && stream
-                            .marks
-                            .last()
-                            .is_none_or(|mark: &SeekMark| header.granule_position >= mark.granule)
-                    {
-                        reserve_index(&mut stream.marks, 1, &mut memory, options.max_index_memory)?;
-                        stream.marks.push(SeekMark {
-                            granule: granule(header.granule_position)?,
-                            packet,
-                            raw_end: timing.raw_end,
-                        });
-                    }
+            });
+            return Ok(());
+        }
+        let Some(state) = self
+            .active
+            .iter_mut()
+            .find(|state| self.streams[state.stream].info.id.serial == packet.info.serial)
+        else {
+            return Ok(());
+        };
+        let stream = &mut self.streams[state.stream];
+        match packet.info.number {
+            1 => {
+                let (metadata, error) = read_metadata(
+                    packet.data,
+                    options.limits,
+                    options.max_index_memory - self.memory,
+                )?;
+                charge(
+                    &mut self.memory,
+                    metadata.storage_bytes(),
+                    options.max_index_memory,
+                )?;
+                stream.info.metadata = metadata;
+                stream.comment_error = error;
+                if packet.info.granule_position.is_some_and(|gp| gp != 0) {
+                    return Err(Error::Invalid("comment page granule"));
                 }
             }
-            capture.finish()?;
-            if setup.is_none() {
+            2 => {
+                if packet.info.granule_position != Some(0) || !ends_packet {
+                    return Err(Error::Invalid(
+                        "setup header must finish its page at granule zero",
+                    ));
+                }
+                let mut limits = options.limits;
+                limits.max_setup_memory = limits.max_setup_memory.min(options.max_stream_memory);
+                let setup = Setup::parse(packet.data, &stream.info.identification, &limits)?;
+                check_decoder_memory(&setup, options)?;
+                reserve_index(
+                    &mut stream.setup_packet,
+                    packet.data.len(),
+                    &mut self.memory,
+                    options.max_index_memory,
+                )?;
+                stream.setup_packet.extend_from_slice(packet.data);
+                state.modes = setup.into_modes();
+                state.setup_page = Some(packet.info.end_page_offset);
+            }
+            _ => {
+                if state.modes.is_empty() {
+                    return Err(Error::Invalid("audio before Vorbis setup"));
+                }
+                if Some(packet.info.start_page_offset) == state.setup_page {
+                    return Err(Error::Invalid("audio must begin on a fresh page"));
+                }
+                let Some((audio, _)) = crate::decoder::packet_header_from_modes(
+                    &state.modes,
+                    stream.info.identification.block_sizes,
+                    &options.limits,
+                    packet.data,
+                )?
+                else {
+                    return Ok(());
+                };
+                let frames = if state.previous_size == 0 {
+                    0
+                } else {
+                    (state.previous_size + audio.block_size) / 4
+                };
+                state.timing.advance(
+                    state.timing.raw_end,
+                    frames,
+                    packet.info.granule_position.is_some(),
+                    header,
+                    ends_packet,
+                )?;
+                state.previous_size = audio.block_size;
+                let number = packet.info.number;
+                if options.packet_preroll {
+                    let byte = usize::try_from(number / 4)
+                        .ok()
+                        .and_then(|n| n.checked_add(1))
+                        .ok_or(Error::LimitExceeded("packet-mode index"))?;
+                    let extra = byte.saturating_sub(stream.packet_modes.len());
+                    reserve_index(
+                        &mut stream.packet_modes,
+                        extra,
+                        &mut self.memory,
+                        options.max_index_memory,
+                    )?;
+                    stream.packet_modes.resize(byte, 0);
+                    let code =
+                        1 + u8::from(audio.block_size == stream.info.identification.block_sizes[1]);
+                    stream.packet_modes[byte - 1] |= code << ((number & 3) * 2);
+                }
+                stream.first_audio.get_or_insert(number);
+                state.last_audio = Some(number);
+            }
+        }
+        Ok(())
+    }
+    fn page(&mut self, page: Page<'_>, offset: u64) -> Result<(), Error> {
+        let header = page.header();
+        let Some(active) = self
+            .active
+            .iter()
+            .position(|state| self.streams[state.stream].info.id.serial == header.serial)
+        else {
+            return Ok(());
+        };
+        let state = &mut self.active[active];
+        let stream = &mut self.streams[state.stream];
+        if state.modes.is_empty() {
+            if header.granule_position != 0 && header.granule_position != UNKNOWN_GRANULE_POSITION {
+                return Err(Error::Invalid("nonzero Vorbis header granule"));
+            }
+        } else if Some(offset) == state.setup_page {
+            if header.granule_position != 0 {
+                return Err(Error::Invalid("setup page granule"));
+            }
+        } else if page.completed_packets() != 0 || header.is_eos() {
+            state.timing.check_page(header)?;
+            if let Some(packet) = state.last_audio
+                && stream
+                    .marks
+                    .last()
+                    .is_none_or(|mark| header.granule_position >= mark.granule)
+            {
+                reserve_index(
+                    &mut stream.marks,
+                    1,
+                    &mut self.memory,
+                    self.options.max_index_memory,
+                )?;
+                stream.marks.push(SeekMark {
+                    granule: granule(header.granule_position)?,
+                    packet,
+                    raw_end: state.timing.raw_end,
+                });
+            }
+        }
+        if header.is_eos() {
+            if state.modes.is_empty() {
                 return Err(Error::Invalid("EOS before all Vorbis headers"));
             }
-            stream.end = timing.end(id, entries.last().unwrap().header)?;
+            stream.end = state.timing.end(stream.info.id, header)?;
             (stream.end_padding_frames, stream.extended_end_trim) =
-                timing.end_padding(entries.last().unwrap().header)?;
-            stream.origin = timing.origin.unwrap_or(0);
-            reserve_index(&mut streams, 1, &mut memory, options.max_index_memory)?;
-            streams.push(stream);
+                state.timing.end_padding(header)?;
+            stream.origin = state.timing.origin.unwrap_or(0);
+            self.active.swap_remove(active);
         }
-        Ok(Self {
-            container,
-            streams,
-            memory,
-            options,
-        })
-    }
-    pub fn streams(&self) -> &[SeekStream] {
-        &self.streams
-    }
-    pub fn stream(&self, id: StreamId) -> Option<&SeekStream> {
-        self.streams.iter().find(|s| s.info.id == id)
-    }
-    pub fn container(&self) -> &OggIndex {
-        &self.container
-    }
-    /// Retained container and Vorbis index elements, excluding allocator overhead.
-    pub fn storage_bytes(&self) -> usize {
-        self.container.storage_bytes() + self.memory
+        Ok(())
     }
 }
 

@@ -291,6 +291,15 @@ pub(crate) fn packet_header<'a>(
     limits: &Limits,
     packet: &'a [u8],
 ) -> Result<Option<(AudioHeader, BitReader<'a>)>, Error> {
+    packet_header_from_modes(setup.modes(), setup.block_sizes(), limits, packet)
+}
+
+pub(crate) fn packet_header_from_modes<'a>(
+    modes: &[crate::Mode],
+    block_sizes: [usize; 2],
+    limits: &Limits,
+    packet: &'a [u8],
+) -> Result<Option<(AudioHeader, BitReader<'a>)>, Error> {
     if packet.len() > limits.max_packet_bytes {
         return Err(Error::LimitExceeded("audio packet bytes"));
     }
@@ -298,7 +307,7 @@ pub(crate) fn packet_header<'a>(
         return Ok(None);
     }
     let mut bits = BitReader::new(packet);
-    match setup.read_audio_header(&mut bits) {
+    match crate::setup::read_audio_header(modes, block_sizes, &mut bits) {
         Ok(header) => Ok(Some((header, bits))),
         Err(Error::EndOfPacket) => Ok(None),
         Err(error) => Err(error),

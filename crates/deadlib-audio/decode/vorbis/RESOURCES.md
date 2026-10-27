@@ -29,9 +29,10 @@ and common request-file parsing are outside timing and allocation windows.
   continue to the end of that page; the heap snapshot is inside the first PCM
   callback. RSS is a process high-water value, so it includes that page's work.
 * **Seek open:** construct and validate a seek-ready reader. Requested heap is
-  captured while it is alive; timing includes its destruction. Native performs
-  its documented two full indexing passes, while the references use their own
-  default seek initialization. These are different startup guarantees; source
+  captured while it is alive; timing includes its destruction. Native validates
+  the complete input and now shares one forward Ogg/Vorbis indexing pass (the
+  older baselines below used two), while the references use their own default
+  seek initialization. These are different startup guarantees; source
   byte/read/seek counts expose that work.
 * **Seek batch:** reuse a reader warmed by a full decode and an untimed validated
   request batch. Measure the same 100 boundary/random requests, consuming up to
@@ -393,3 +394,114 @@ Sparse codec seeking, faster indexing, Ogg-only throughput, truly cold startup,
 broader files/platforms, synthesis profiling/optimization, and native encoding
 remain open. The existing DeadSync decoding and playback integrations are
 unchanged.
+
+## One-pass container and Vorbis indexing, 2026-10-27
+
+`VorbisIndex` now builds header/mode/timing information during the Ogg index's
+existing demultiplexing pass. The codec-neutral `OggIndex::read_with_events`
+lends assembled packets and then each completing page to a fallible callback;
+nil pages still produce page events. Callback errors abort construction, and
+events remain provisional until complete physical-stream validation succeeds.
+The ordinary `OggIndex::read` delegates to the same implementation.
+
+Vorbis retains the validated setup packet and extracts only its small mode
+vector for construction. Codebooks, floors and residues are released immediately
+after resource preflight, so multiplexed streams do not retain multiple parsed
+setups. Mode/window parsing is shared with the raw decoder. Temporary active
+construction state is released before returning the index; retained index budgets
+and per-setup/selected-decoder limits still apply. The returned index layout and
+nearest-packet pre-roll policy are unchanged.
+
+Construction rewinds once, then reads the input once. It validates all Ogg
+CRC/grammar and Vorbis headers; audio indexing reads only mode prefixes.
+Floors/residues are validated when synthesized. This remains a complete linear
+source scan; index-free codec seeking is still open.
+
+```powershell
+python crates/deadlib-audio/decode/scripts/benchmark_resources.py --baseline-revision d351a0a49 --repeats 7
+```
+
+The runner now builds counted and uninstrumented baseline resource workers
+alongside its baseline timing worker. Both native versions use the same current
+adapters, matching Cargo profiles and all 17 registry dependency artifact IDs,
+with no adapter changes. All instrumented workers self-test their allocators.
+Five files yield **480 resource rows** (three trials per group) and **280 timing
+rows** (seven trials), with 500 common reference PCM windows checked by every
+engine. Default mode also passes a one-file smoke run: 24 resource / 18 timing rows.
+
+Median milliseconds per indexed open, including selected-decoder construction
+and destruction:
+
+| Input | Two passes | One pass | Symphonia | libvorbisfile |
+| --- | ---: | ---: | ---: | ---: |
+| Mono fixture | 1.078 | 1.054 | 1.723 | 0.049 |
+| Stereo fixture | 2.279 | 2.251 | 2.244 | 0.110 |
+| Eight-channel silence | 1.513 | 1.535 | 1.884 | 0.064 |
+| `in_two` | 34.956 | 18.799 | 2.400 | 0.166 |
+| `Goin' Under` | 19.385 | 11.661 | 2.672 | 0.217 |
+
+Song medians improve **1.86x / 1.66x**. Trial ranges are 18.014-19.704 /
+11.103-11.889 ms after versus 32.724-37.912 / 17.850-20.167 ms before. Small-file
+open times move roughly -2.2% to +1.4%. This shared, unlocked Xeon/Windows run
+has maximum relative timing MAD 11.97%. Native open still substantially trails
+the references, whose initialization performs different validation/synthesis work.
+
+All five current native opens read exactly one file's bytes; baseline opens
+read two. Song reads fall **9,878,028 -> 4,939,014** and
+**4,700,278 -> 2,350,139 bytes**. Read calls fall 6,505 -> 3,253 and
+3,337 -> 1,669; source seeks fall three -> two, including final pre-roll selection.
+The 17-byte-input regression independently enforces one read per source byte
+and only the initial rewind inside index construction.
+
+Retained and peak requested heap match the baseline on all five opens. Song
+live/peak heap remains **394,911 / 499,739 bytes**. Allocation requests fall
+799 -> 795 and 755 -> 749; total requested bytes fall 893,712 -> 882,039 and
+1,110,220 -> 1,085,632. Fresh-process peak working-set medians are essentially
+unchanged: 12.957 -> 12.961 MiB and 8.020 -> 8.023 MiB. This establishes no
+process-memory improvement. Forward full/startup and warmed-seek heap counters,
+source IO and exposed PCM work match the baseline exactly. All five warmed
+native batches still allocate nothing.
+
+Seek batches do not remove synthesis work. Their initial timings were mixed,
+so a recheck reused the exact saved native binaries and request files for 15
+shuffled trials with seed 1338 and the same 150 ms target:
+
+| Input | Initial batch ms, before -> after | Recheck batch ms, before -> after |
+| --- | ---: | ---: |
+| Mono fixture | 1.311 -> 1.354 | 1.432 -> 1.555 |
+| Stereo fixture | 7.524 -> 7.980 | 7.492 -> 7.755 |
+| Eight-channel silence | 18.311 -> 18.704 | 16.063 -> 16.037 |
+| `in_two` | 16.233 -> 16.252 | 15.768 -> 15.963 |
+| `Goin' Under` | 11.990 -> 13.056 | 12.102 -> 11.775 |
+
+The recheck adds **150 timing rows**. Count, PCM, IO and exposed work remain
+exact on every invocation. Mono/stereo batch medians regress in both runs;
+song movements change between runs and all native trial ranges overlap.
+This is an indexed-open improvement with mixed batch timings that remain an
+investigation item during synthesis profiling. No general decode-speed or
+seek-batch speedup is claimed.
+
+Evidence: [manifest](validation/2026-10-27-single-pass-resources.json),
+[resources](validation/2026-10-27-single-pass-resources.tsv),
+[summary](validation/2026-10-27-single-pass-summary.tsv),
+[trials](validation/2026-10-27-single-pass-trials.tsv),
+[recheck summary](validation/2026-10-27-single-pass-batch-recheck-summary.tsv),
+[recheck trials](validation/2026-10-27-single-pass-batch-recheck-trials.tsv), and
+[checks](validation/2026-10-27-single-pass-checks.json) pin source, input, workload
+and worker hashes. Corpora, PCM windows and saved binaries stay under ignored
+`target/`; no external media is redistributed.
+
+Validation passes **111 release tests** and **88 extracted offline tests**,
+including 38-file raw/full PCM, 1,900 repository-corpus seeks, 528 upstream
+vectors / 2,640 packet seeks, historical floor-zero and legacy trimming, and the
+native encoding matrix. Numerical tolerances remain unchanged. New tests cover
+index-event ordering, nil pages, spans/mux/chains, callback/CRC failures and the
+single-read fragmented source. Default/all-feature Clippy, formatting and fuzz
+harness tests pass. Resumed container, raw-packet and streaming/indexed sanitizer
+targets run 300 seconds each, completing **32,968 executions** without failures
+or artifacts: [results](validation/2026-10-27-single-pass-fuzz-results.tsv) and
+[provenance](validation/2026-10-27-single-pass-fuzz-provenance.json).
+
+Broader conformance/legacy material, Ogg-only comparative throughput, truly cold
+startup, synthesis profiling, index-free codec seeking and competitive encoder
+quality/rate control remain open. Neither crate is integrated into DeadSync.

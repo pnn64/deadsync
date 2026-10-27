@@ -187,15 +187,23 @@ pub fn ogg_container(input: &[u8]) {
         assert!(ogg::Page::parse(page.page.bytes()).is_ok());
     }
     if pull_result.is_ok() {
-        let result = ogg::OggIndex::read(
+        let mut indexed = Digest::default();
+        let result = ogg::OggIndex::read_with_events(
             data,
             ogg::IndexOptions {
                 container_limits: container_limits(),
                 max_pages: MAX_PAGES,
                 validation: options,
             },
+            |event| {
+                if let ogg::IndexEvent::Packet { packet, .. } = event {
+                    indexed.packet(packet);
+                }
+                Ok::<_, ogg::Error>(())
+            },
         );
         if let Ok(index) = result {
+            assert_eq!(indexed, expected);
             assert_eq!(index.compatibility(), demux.compatibility());
             for stream in index.streams() {
                 let entries = index.pages(stream.serial).unwrap();

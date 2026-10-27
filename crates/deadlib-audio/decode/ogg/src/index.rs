@@ -1,6 +1,6 @@
 use crate::{
-    CompatibilityStats, Demuxer, Error, Limits, PageHeader, PageReader, UNKNOWN_GRANULE_POSITION,
-    ValidationOptions, reserve,
+    CompatibilityStats, Demuxer, Error, Limits, Packet, Page, PageHeader, PageReader,
+    UNKNOWN_GRANULE_POSITION, ValidationOptions, reserve,
 };
 use core::ops::Range;
 use std::io::{self, Read, Seek, SeekFrom};
@@ -185,8 +185,30 @@ pub struct OggIndex {
     length: u64,
     compatibility: CompatibilityStats,
 }
+
+/// Borrowed observations during index construction. Packets precede their
+/// completing page's Page event; nil pages still produce a Page event. Packet
+/// data may borrow either the page or the demultiplexer's span assembly buffer.
+/// Observations are provisional until construction succeeds: a later page,
+/// callback or end-of-input validation can still fail the physical stream.
+pub enum IndexEvent<'a> {
+    Packet { page: Page<'a>, packet: Packet<'a> },
+    Page { page: Page<'a>, offset: u64 },
+}
+
 impl OggIndex {
     pub fn read(reader: impl Read, options: IndexOptions) -> Result<Self, Error> {
+        Self::read_with_events(reader, options, |_| Ok::<(), Error>(()))
+    }
+    /// Build the same validated index while observing its existing packet
+    /// assembly and pages in physical order. This allows a codec to build its
+    /// timing/header index in one forward source pass without a second demux.
+    /// Callback errors stop construction; no partial index is returned.
+    pub fn read_with_events<E: From<Error>>(
+        reader: impl Read,
+        options: IndexOptions,
+        mut observe: impl FnMut(IndexEvent<'_>) -> Result<(), E>,
+    ) -> Result<Self, E> {
         let mut reader = PageReader::new(reader);
         let mut demux = Demuxer::with_validation(options.container_limits, options.validation);
         let mut index = Self {
@@ -200,9 +222,18 @@ impl OggIndex {
             let page = located.page;
             let header = page.header();
             let mut last = None;
-            demux.push_page(page, located.offset, |packet| last = Some(packet.info))?;
+            let mut failure = None;
+            demux.push_page(page, located.offset, |packet| {
+                last = Some(packet.info);
+                if failure.is_none() {
+                    failure = observe(IndexEvent::Packet { page, packet }).err();
+                }
+            })?;
+            if let Some(error) = failure {
+                return Err(error);
+            }
             if index.pages.len() == options.max_pages {
-                return Err(Error::LimitExceeded("index pages"));
+                return Err(Error::LimitExceeded("index pages").into());
             }
             let stream_index = if header.is_bos() {
                 reserve(&mut index.streams, 1)?;
@@ -263,6 +294,10 @@ impl OggIndex {
                 stream.eos_offset = located.offset;
                 stream.end_offset = index.length;
             }
+            observe(IndexEvent::Page {
+                page,
+                offset: located.offset,
+            })?;
         }
         demux.finish()?;
         index.compatibility = demux.compatibility();

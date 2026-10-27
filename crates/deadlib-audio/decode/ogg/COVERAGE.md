@@ -24,6 +24,9 @@ Sources are linked in the parent directory's work plan.
   offsets, absolute packet counts and packet-start pages; logarithmic numeric
   granule predecessor lookup across unknown-granule packet spans. Index page
   count policy and storage reporting are available.
+  Fallible borrowed packet/page events share that validated pass with codec
+  index construction. Packet summaries match complete demux across spans,
+  multiplexed chains and nil EOS; callback/CRC failures return no partial index.
 * Index-free numeric granule bisection, skipping competing serials and unknown
   granules; explicit byte range fencing and exact u64 positions above 2^54.
   Capture at arbitrary page boundaries with initial continuation discard,

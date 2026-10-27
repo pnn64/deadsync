@@ -62,6 +62,94 @@ fn packets(bytes: &[u8]) -> Vec<(Vec<u8>, PacketInfo)> {
 }
 
 #[test]
+fn index_events_share_exact_demux_packets_and_finish_every_page_in_physical_order() {
+    let bytes = multiplexed_and_chained();
+    let mut output = Vec::new();
+    let mut observed_pages = Vec::new();
+    let index = OggIndex::read_with_events(bytes.as_slice(), IndexOptions::default(), |event| {
+        match event {
+            IndexEvent::Packet { page, packet } => {
+                assert_eq!(packet.info.serial, page.header().serial);
+                assert!(packet.info.start_page_offset <= packet.info.end_page_offset);
+                output.push((packet.data.to_vec(), packet.info));
+            }
+            IndexEvent::Page { page, offset } => {
+                let completed = output
+                    .iter()
+                    .filter(|(_, info)| info.end_page_offset == offset)
+                    .count();
+                assert_eq!(completed, page.completed_packets());
+                observed_pages.push((offset, page.header(), page.bytes().len()));
+            }
+        }
+        Ok::<_, Error>(())
+    })
+    .unwrap();
+    assert_eq!(output, packets(&bytes));
+    assert!(observed_pages.windows(2).all(|pair| pair[0].0 < pair[1].0));
+    assert!(
+        observed_pages
+            .iter()
+            .any(|(_, header, length)| header.is_eos() && *length == 27)
+    );
+    assert_eq!(index.length(), bytes.len() as u64);
+    for stream in index.streams() {
+        let actual: Vec<_> = index
+            .pages(stream.serial)
+            .unwrap()
+            .iter()
+            .map(|entry| (entry.offset, entry.header, entry.length as usize))
+            .collect();
+        let expected: Vec<_> = observed_pages
+            .iter()
+            .copied()
+            .filter(|(_, header, _)| header.serial == stream.serial)
+            .collect();
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
+fn index_callback_errors_stop_observations_and_crc_failure_leaves_only_provisional_events() {
+    #[derive(Debug, PartialEq)]
+    enum Failure {
+        Container(Error),
+        Stop,
+    }
+    impl From<Error> for Failure {
+        fn from(value: Error) -> Self {
+            Self::Container(value)
+        }
+    }
+    let mut bytes = fixture(1, false);
+    let mut packets = 0;
+    let result = OggIndex::read_with_events(bytes.as_slice(), IndexOptions::default(), |event| {
+        if matches!(event, IndexEvent::Packet { .. }) {
+            packets += 1;
+            if packets == 3 {
+                return Err(Failure::Stop);
+            }
+        }
+        Ok(())
+    });
+    assert!(matches!(result, Err(Failure::Stop)));
+    assert_eq!(packets, 3);
+    *bytes.last_mut().unwrap() ^= 1;
+    let mut pages = 0;
+    let result = OggIndex::read_with_events(bytes.as_slice(), IndexOptions::default(), |event| {
+        if matches!(event, IndexEvent::Page { .. }) {
+            pages += 1;
+        }
+        Ok::<_, Failure>(())
+    });
+    assert!(matches!(
+        result,
+        Err(Failure::Container(Error::Checksum { .. }))
+    ));
+    assert!(pages > 0);
+}
+
+#[test]
 fn paused_capture_matches_demux_from_every_page_including_spans_and_mux() {
     let bytes = multiplexed_and_chained();
     let index = OggIndex::read(bytes.as_slice(), IndexOptions::default()).unwrap();

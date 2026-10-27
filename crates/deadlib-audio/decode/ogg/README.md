@@ -48,6 +48,11 @@ streams.finish()?; // Require complete logical streams, including EOS.
   ranges for each serial/chain. `granule_at_or_before` finds the last known
   granule in logarithmic time; `packet_start_page` finds a packet's starting
   page even across long continuations. `IndexOptions` bounds the page count.
+  `read_with_events` also lends each assembled packet and then its completing
+  page to a fallible codec callback in physical order. Nil pages produce page
+  events. Observations remain provisional until the full index succeeds; the
+  callback can abort with its own error type. Vorbis uses this shared pass for
+  header and sample-timing indexing without rereading or assembling packets again.
 * `find_granule` performs index-free bisection with CRC capture recovery inside
   an explicit byte range, using one reusable page buffer. Reads stay inside the
   range and positions use integer u64 arithmetic. This search assumes

@@ -165,6 +165,9 @@ trial spreads and mixed short-clip movements alongside these scoped gains.
 native uses less requested heap than Symphonia here. The packet-read update
 addresses the measured page-sized synthesis work; eager indexing and broader
 construction/seek optimization remain open.
+The later one-pass index construction halves source bytes and improves song open
+medians 1.86x / 1.66x with unchanged retained heap. It still scans the complete
+input; mixed batch timings and index-free seeking remain open in that report.
 
 Legacy handling is explicit and disabled by default.
 `OggOptions::allow_zero_span_granules` and the same `SeekOptions` flag ignore

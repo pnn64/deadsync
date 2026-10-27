@@ -1,0 +1,21 @@
+-- Configuring ogg 1.3.6
+-- Configuring vorbis 1.3.7
+-- Configuring done (0.2s)
+-- Generating done (1.0s)
+-- Build files have been written to: C:/GitHub/deadsync/target/deadlib-audio-reference/vorbis-oracle-build
+CMake Deprecation Warning at C:/GitHub/deadsync/target/deadlib-audio-reference/ogg/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+CMake Deprecation Warning at C:/GitHub/deadsync/target/deadlib-audio-reference/vorbis/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
