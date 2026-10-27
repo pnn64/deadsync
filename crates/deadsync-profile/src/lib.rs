@@ -4035,34 +4035,21 @@ impl PlayStyle {
     #[must_use]
     pub const fn player_count(self) -> usize {
         match self {
-            Self::Single
-            | Self::Double
-            | Self::PumpSingle
-            | Self::PumpDouble
+            Self::Single | Self::Double | Self::PumpSingle | Self::PumpDouble => 1,
+            Self::Versus
+            | Self::PumpVersus
+            | Self::Couple
+            | Self::PumpCouple
             | Self::Routine
-            | Self::PumpRoutine => 1,
-            Self::Versus | Self::PumpVersus | Self::Couple | Self::PumpCouple => 2,
+            | Self::PumpRoutine => 2,
         }
     }
 
-    /// Number of human participants; Routine has one shared scoring field.
-    #[must_use]
-    pub const fn participant_count(self) -> usize {
-        if matches!(self, Self::Routine | Self::PumpRoutine) {
-            2
-        } else {
-            self.player_count()
-        }
-    }
-
+    /// Routine gives each participant its own field over the shared pads.
     #[inline(always)]
     #[must_use]
     pub const fn total_cols(self) -> usize {
-        match self {
-            Self::Routine => 8,
-            Self::PumpRoutine => 10,
-            _ => self.cols_per_player() * self.player_count(),
-        }
+        self.cols_per_player() * self.player_count()
     }
 
     #[inline(always)]
@@ -4083,7 +4070,12 @@ impl PlayStyle {
     pub const fn is_versus(self) -> bool {
         matches!(
             self,
-            Self::Versus | Self::PumpVersus | Self::Couple | Self::PumpCouple
+            Self::Versus
+                | Self::PumpVersus
+                | Self::Couple
+                | Self::PumpCouple
+                | Self::Routine
+                | Self::PumpRoutine
         )
     }
 
@@ -4102,10 +4094,7 @@ impl PlayStyle {
     #[inline(always)]
     #[must_use]
     pub const fn is_double(self) -> bool {
-        matches!(
-            self,
-            Self::Double | Self::PumpDouble | Self::Routine | Self::PumpRoutine
-        )
+        matches!(self, Self::Double | Self::PumpDouble)
     }
 
     #[inline(always)]
@@ -4260,9 +4249,7 @@ pub const fn runtime_player_is_p2(play_style: PlayStyle, side: PlayerSide) -> bo
             PlayStyle::Single
                 | PlayStyle::Double
                 | PlayStyle::PumpSingle
-                | PlayStyle::PumpDouble
-                | PlayStyle::Routine
-                | PlayStyle::PumpRoutine,
+                | PlayStyle::PumpDouble,
             PlayerSide::P2
         )
     )

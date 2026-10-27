@@ -295,7 +295,7 @@ fn parse_song_source(
 ) -> Result<SerializableSongData, String> {
     let parsed = rssp::parse::extract_sections(source.data, source.extension)
         .map_err(|error| error.to_string())?;
-    let projection = crate::partner_charts::project(source.data, &parsed.notes_list)?;
+    let projection = crate::partner_charts::project(source.data, &parsed.notes_list);
     let projected = rssp::parse::extract_sections(&projection.bytes, source.extension)
         .map_err(|error| error.to_string())?;
     let analysis_bytes = note_analysis_bytes(&projection.bytes, &projected.notes_list);

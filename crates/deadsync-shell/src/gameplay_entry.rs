@@ -62,7 +62,8 @@ pub(crate) fn gameplay_chart_entry_plan(
     let chart_type = play_style.chart_type();
     let mut resolved_steps_index = requested_steps;
     let chart_indices = match play_style {
-        PlayStyle::Couple | PlayStyle::PumpCouple => {
+        // Partner styles play one authored chart split between both participants.
+        PlayStyle::Couple | PlayStyle::PumpCouple | PlayStyle::Routine | PlayStyle::PumpRoutine => {
             let resolved = resolve_chart(song, chart_type, requested_steps[0], preferred_steps[0]);
             resolved_steps_index = [resolved.0; MAX_PLAYERS];
             [resolved.1; MAX_PLAYERS]
@@ -73,9 +74,7 @@ pub(crate) fn gameplay_chart_entry_plan(
             resolved_steps_index = [p1.0, p2.0];
             [p1.1, p2.1]
         }
-        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble
-        | PlayStyle::Routine
-        | PlayStyle::PumpRoutine => {
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
             let side = player_side_index(player_side);
             let resolved = resolve_chart(
                 song,
@@ -123,7 +122,12 @@ pub(crate) fn gameplay_last_played_commands(
 ) -> Vec<Command> {
     let mut commands = Vec::with_capacity(MAX_PLAYERS);
     match play_style {
-        PlayStyle::Versus | PlayStyle::PumpVersus | PlayStyle::Couple | PlayStyle::PumpCouple => {
+        PlayStyle::Versus
+        | PlayStyle::PumpVersus
+        | PlayStyle::Couple
+        | PlayStyle::PumpCouple
+        | PlayStyle::Routine
+        | PlayStyle::PumpRoutine => {
             for (idx, side) in [(0, PlayerSide::P1), (1, PlayerSide::P2)] {
                 commands.push(Command::UpdateLastPlayed {
                     side,
@@ -134,9 +138,7 @@ pub(crate) fn gameplay_last_played_commands(
                 });
             }
         }
-        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble
-        | PlayStyle::Routine
-        | PlayStyle::PumpRoutine => {
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
             let index = player_side_index(player_side);
             commands.push(Command::UpdateLastPlayed {
                 side: player_side,
@@ -211,7 +213,7 @@ pub fn apply_song_lua_reload(
         };
         // GameState::SetCurrentStyle preserves joined sides and rejects styles
         // that require a different number of them.
-        if selected_session.play_style.participant_count() != session.joined_sides.iter().filter(|joined| **joined).count() {
+        if selected_session.play_style.player_count() != session.joined_sides.iter().filter(|joined| **joined).count() {
             return Err(format!("Lua reload style {style} is incompatible with joined sides"));
         }
     }

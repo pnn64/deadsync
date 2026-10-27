@@ -26,7 +26,7 @@ pub(crate) struct Projection<'a> {
 pub(crate) fn project<'a>(
     data: &'a [u8],
     entries: &[rssp::parse::ParsedChartEntry<'_>],
-) -> Result<Projection<'a>, String> {
+) -> Projection<'a> {
     let mut replacements = Vec::new();
     let mut owners = BTreeMap::new();
     let mut hash_notes = BTreeMap::new();
@@ -36,9 +36,6 @@ pub(crate) fn project<'a>(
             continue;
         }
         if let Some(width) = lanes(entry.fields[0]) {
-            let kind = std::str::from_utf8(entry.fields[0])
-                .map_err(|e| e.to_string())?
-                .trim();
             let offset = entry.fields[0].as_ptr() as usize - data.as_ptr() as usize;
             let replacement = if width == 8 {
                 b"dance-double".as_slice()
@@ -46,8 +43,12 @@ pub(crate) fn project<'a>(
                 b"pump-double".as_slice()
             };
             replacements.push((offset..offset + entry.fields[0].len(), replacement.to_vec()));
-            if kind.to_ascii_lowercase().ends_with("-routine") {
-                let (notes, ownership) = merge_routine(entry.note_data, width)?;
+            if entry.fields[0]
+                .trim_ascii()
+                .to_ascii_lowercase()
+                .ends_with(b"-routine")
+            {
+                let (notes, ownership) = merge_routine(entry.note_data, width);
                 let mut composite = Vec::new();
                 for participant in 0..2 {
                     if participant > 0 {
@@ -86,11 +87,11 @@ pub(crate) fn project<'a>(
         chart += 1;
     }
     if replacements.is_empty() {
-        return Ok(Projection {
+        return Projection {
             bytes: Cow::Borrowed(data),
             owners,
             hash_notes,
-        });
+        };
     }
     replacements.sort_unstable_by_key(|(range, _)| range.start);
     let mut bytes = Vec::with_capacity(data.len());
@@ -101,16 +102,155 @@ pub(crate) fn project<'a>(
         cursor = range.end;
     }
     bytes.extend_from_slice(&data[cursor..]);
-    Ok(Projection {
+    Projection {
         bytes: Cow::Owned(bytes),
         owners,
         hash_notes,
-    })
+    }
 }
 
 type Ownership = BTreeMap<(usize, usize), u8>;
 
-fn merge_routine(data: &[u8], width: usize) -> Result<(Vec<u8>, Ownership), String> {
+/// StepMania's NoteData::MAX_NOTE_ROW, the length of a hold awaiting its tail.
+const OPEN_HOLD: usize = 1 << 30;
+
+#[derive(Clone, Copy)]
+struct TapNote {
+    symbol: u8,
+    duration: usize,
+    owner: u8,
+}
+
+type Track = BTreeMap<usize, TapNote>;
+
+fn is_head(note: &TapNote) -> bool {
+    matches!(note.symbol, b'2' | b'4')
+}
+
+/// NoteData::IsHoldNoteAtRow: the head of a hold whose body covers `row`.
+/// A head on `row` itself does not count, and autokeysounds are ignored.
+fn hold_head_before(track: &Track, row: usize) -> Option<usize> {
+    for (&head, note) in track.range(..row).rev() {
+        match note.symbol {
+            b'K' => continue,
+            _ if is_head(note) => return (head + note.duration >= row).then_some(head),
+            _ => return None,
+        }
+    }
+    None
+}
+
+/// NoteData::AddHoldNote: absorb overlapping or adjacent holds, then clear the
+/// covered rows, including a note sitting on the tail.
+fn add_hold(track: &mut Track, mut start: usize, mut end: usize, mut note: TapNote) {
+    let mut covered: Vec<usize> = track.range(start..end).map(|(&row, _)| row).collect();
+    if let Some((&row, prev)) = track.range(..start).next_back()
+        && is_head(prev)
+        && row + prev.duration + 1 > start
+    {
+        covered.push(row);
+    }
+    if let Some((&row, next)) = track.range(end..).next()
+        && is_head(next)
+        && row == end
+    {
+        covered.push(row);
+    }
+    for row in &covered {
+        let other = track[row];
+        if is_head(&other) {
+            start = start.min(*row);
+            end = end.max(row + other.duration);
+        }
+    }
+    for row in covered {
+        track.remove(&row);
+    }
+    track.remove(&end);
+    note.duration = end - start;
+    track.insert(start, note);
+}
+
+/// StepMania's BeatToNoteRow, rounding the float beat with lrint.
+fn note_row(measure: usize, line: usize, lines: usize) -> usize {
+    let beat = (measure as f32 + line as f32 / lines as f32) * 4.0;
+    (beat * 48.0).round_ties_even() as usize
+}
+
+fn trim_line(mut line: &[u8]) -> &[u8] {
+    while let [b'\r' | b'\n' | b'\t' | b' ', rest @ ..] = line {
+        line = rest;
+    }
+    while let [rest @ .., b'\r' | b'\n' | b'\t' | b' '] = line {
+        line = rest;
+    }
+    line
+}
+
+/// NoteDataUtil's LoadFromSMNoteDataStringWithPlayer for one participant.
+/// Returns the tracks and the number of measures read.
+fn load_participant(part: &[u8], width: usize, owner: u8) -> (Vec<Track>, usize) {
+    let mut tracks = vec![Track::new(); width];
+    // Empty measures are skipped without advancing the measure index.
+    let measures: Vec<_> = part
+        .split(|&b| b == b',')
+        .filter(|m| !m.is_empty())
+        .collect();
+    for (measure, body) in measures.iter().enumerate() {
+        let lines: Vec<_> = body
+            .split(|&b| b == b'\n')
+            .map(trim_line)
+            .filter(|line| !line.is_empty())
+            .collect();
+        for (index, line) in lines.iter().enumerate() {
+            let row = note_row(measure, index, lines.len());
+            let mut cursor = 0;
+            for track in tracks.iter_mut() {
+                let Some(&symbol) = line.get(cursor) else {
+                    break;
+                };
+                cursor += 1;
+                if line.get(cursor) == Some(&b'[') {
+                    while cursor < line.len() && line[cursor] != b']' {
+                        cursor += 1;
+                    }
+                    cursor = (cursor + 1).min(line.len());
+                }
+                let duration = match symbol {
+                    b'1' | b'M' | b'K' | b'L' | b'F' => 0,
+                    b'2' | b'4' => OPEN_HOLD,
+                    b'3' => {
+                        // An unmatched tail is ignored.
+                        if let Some(head) = hold_head_before(track, row) {
+                            track.get_mut(&head).unwrap().duration = row - head;
+                        }
+                        continue;
+                    }
+                    _ => continue,
+                };
+                track.insert(
+                    row,
+                    TapNote {
+                        symbol,
+                        duration,
+                        owner,
+                    },
+                );
+            }
+        }
+    }
+    // A hold that never found its tail is dropped.
+    for track in &mut tracks {
+        track.retain(|_, note| note.duration != OPEN_HOLD);
+    }
+    (tracks, measures.len())
+}
+
+/// Resolve overlaps as NoteDataUtil::CombineCompositeNoteData does, so a
+/// partner collision never rejects the chart: the second participant replaces
+/// a note on the same row and column, notes inside an earlier hold are skipped,
+/// and a hold absorbs what it covers. Only the first two participants are read.
+fn merge_routine(data: &[u8], width: usize) -> (Vec<u8>, Ownership) {
     // Remove comments before splitting: '&' in a comment is not a participant.
     let clean: Vec<u8> = data
         .split(|&b| b == b'\n')
@@ -122,68 +262,39 @@ fn merge_routine(data: &[u8], width: usize) -> Result<(Vec<u8>, Ownership), Stri
             line[..end].iter().copied().chain(std::iter::once(b'\n'))
         })
         .collect();
-    let parts: Vec<_> = clean.split(|&b| b == b'&').collect();
-    if parts.len() > 2 {
-        return Err("Routine contains more than two participants".into());
-    }
-    let mut cells = BTreeMap::<(usize, usize), (u8, u8)>::new();
+    let mut combined = vec![Track::new(); width];
     let mut measure_count = 0;
-    for (owner, part) in parts.iter().enumerate() {
-        for (measure, body) in part.split(|&b| b == b',').enumerate() {
-            let rows: Vec<_> = body
-                .split(|&b| b == b'\n')
-                .map(|line| line.trim_ascii())
-                .filter(|line| !line.is_empty())
-                .collect();
-            if rows.is_empty() {
-                continue;
-            }
-            measure_count = measure_count.max(measure + 1);
-            for (index, line) in rows.iter().enumerate() {
-                // Match StepMania's 48 rows per beat, including unusual grids.
-                let row = measure * 192 + (index * 192 + rows.len() / 2) / rows.len();
-                let mut cursor = 0;
-                for col in 0..width {
-                    let Some(&symbol) = line.get(cursor) else {
-                        break;
-                    };
-                    cursor += 1;
-                    if line.get(cursor) == Some(&b'[') {
-                        cursor += 1;
-                        while cursor < line.len() && line[cursor] != b']' {
-                            cursor += 1;
-                        }
-                        if cursor < line.len() {
-                            cursor += 1;
-                        }
-                    }
-                    if symbol == b'0' {
-                        continue;
-                    }
-                    if cells.insert((row, col), (symbol, owner as u8)).is_some() {
-                        return Err(format!("Routine notes collide at row {row}, column {col}"));
-                    }
+    for (owner, part) in clean.split(|&b| b == b'&').take(2).enumerate() {
+        let (tracks, measures) = load_participant(part, width, owner as u8);
+        measure_count = measure_count.max(measures);
+        for (out, track) in combined.iter_mut().zip(tracks) {
+            for (row, note) in track {
+                if hold_head_before(out, row).is_some() {
+                    continue;
+                }
+                if is_head(&note) {
+                    add_hold(out, row, row + note.duration, note);
+                } else {
+                    out.insert(row, note);
                 }
             }
         }
     }
-    // A participant cannot place a note within the other's active hold.
-    let mut active = vec![None; width];
     let mut owners = Ownership::new();
-    for (&(row, col), &(symbol, owner)) in &cells {
-        if let Some(held_by) = active[col] {
-            if held_by != owner {
-                return Err(format!(
-                    "Routine hold overlaps another participant at row {row}, column {col}"
-                ));
+    let mut cells = BTreeMap::new();
+    for (col, track) in combined.iter().enumerate() {
+        for (&row, note) in track {
+            owners.insert((row, col), note.owner);
+            cells.insert((row, col), note.symbol);
+            if is_head(note) {
+                // The tail keeps its owner so each participant's hash sees it.
+                owners.insert((row + note.duration, col), note.owner);
+                cells.insert((row + note.duration, col), b'3');
             }
         }
-        active[col] = if matches!(symbol, b'2' | b'4') {
-            Some(owner)
-        } else {
-            None
-        };
-        owners.insert((row, col), owner);
+    }
+    if let Some(&(row, _)) = cells.keys().next_back() {
+        measure_count = measure_count.max(row / 192 + 1);
     }
     let mut output = Vec::new();
     for measure in 0..measure_count {
@@ -192,12 +303,12 @@ fn merge_routine(data: &[u8], width: usize) -> Result<(Vec<u8>, Ownership), Stri
         }
         for row in measure * 192..(measure + 1) * 192 {
             for col in 0..width {
-                output.push(cells.get(&(row, col)).map_or(b'0', |&(symbol, _)| symbol));
+                output.push(cells.get(&(row, col)).copied().unwrap_or(b'0'));
             }
             output.push(b'\n');
         }
     }
-    Ok((output, owners))
+    (output, owners)
 }
 
 #[cfg(test)]
@@ -229,8 +340,7 @@ mod tests {
         let (notes, owners) = merge_routine(
             b"10000000\n00000000\n&\n00000000\n00000001\n00000000\n00000000",
             8,
-        )
-        .unwrap();
+        );
         assert_eq!(owners.get(&(0, 0)), Some(&0));
         assert_eq!(owners.get(&(48, 7)), Some(&1));
         assert_eq!(
@@ -242,14 +352,98 @@ mod tests {
         );
     }
 
+    fn symbol(notes: &[u8], row: usize, col: usize) -> u8 {
+        notes
+            .split(|&b| b == b'\n')
+            .filter(|line| *line != b",")
+            .nth(row)
+            .unwrap()[col]
+    }
+
     #[test]
-    fn routine_rejects_cross_player_hold_overlap() {
-        assert!(merge_routine(b"20000000\n30000000\n&\n00000000\n10000000", 8).is_err());
+    fn routine_skips_partner_note_inside_an_earlier_hold() {
+        let (notes, owners) = merge_routine(b"20000000\n30000000\n&\n00000000\n10000000", 8);
+        assert_eq!(owners.len(), 2);
+        assert_eq!(owners.get(&(0, 0)), Some(&0));
+        assert_eq!(owners.get(&(96, 0)), Some(&0));
+        assert_eq!(symbol(&notes, 0, 0), b'2');
+        assert_eq!(symbol(&notes, 96, 0), b'3');
+    }
+
+    #[test]
+    fn routine_second_participant_replaces_a_same_row_note() {
+        let (notes, owners) = merge_routine(b"M0000000\n&\n10000000", 8);
+        assert_eq!(owners.len(), 1);
+        assert_eq!(owners.get(&(0, 0)), Some(&1));
+        assert_eq!(symbol(&notes, 0, 0), b'1');
+    }
+
+    #[test]
+    fn routine_hold_absorbs_covered_and_adjacent_partner_notes() {
+        // The second hold covers the first participant's tap and the hold on its tail.
+        let (notes, owners) = merge_routine(
+            b"00000000\n10000000\n20000000\n00000000,\n30000000\n00000000\n00000000\n00000000\n&\n20000000\n00000000\n30000000\n00000000",
+            8,
+        );
+        assert_eq!(owners.len(), 2);
+        assert_eq!(owners.get(&(0, 0)), Some(&1));
+        assert_eq!(owners.get(&(192, 0)), Some(&1));
+        assert_eq!(symbol(&notes, 0, 0), b'2');
+        assert_eq!(symbol(&notes, 96, 0), b'0');
+        assert_eq!(symbol(&notes, 192, 0), b'3');
+    }
+
+    #[test]
+    fn routine_ignores_participants_after_the_second() {
+        let (_, owners) = merge_routine(b"10000000\n&\n01000000\n&\n00100000", 8);
+        assert_eq!(owners.len(), 2);
+        assert!(!owners.contains_key(&(0, 2)));
+    }
+
+    #[test]
+    fn routine_rows_follow_stepmania_measures_and_rounding() {
+        // Empty measures are skipped; a 128th row rounds half to even.
+        let mut part = "00000000\n".repeat(128);
+        part.replace_range(27..28, "1");
+        let (_, owners) = merge_routine(format!(",,{part}&\n00000001").as_bytes(), 8);
+        assert_eq!(owners.get(&(4, 0)), Some(&0));
+        assert_eq!(owners.get(&(0, 7)), Some(&1));
     }
 
     #[test]
     fn routine_comments_do_not_create_participants() {
-        assert!(merge_routine(b"10000000 // &\n&\n00000001", 8).is_ok());
+        let (_, owners) = merge_routine(b"10000000 // &\n&\n00000001", 8);
+        assert_eq!(owners.get(&(0, 7)), Some(&1));
+    }
+
+    #[test]
+    fn routine_collision_keeps_the_song_and_its_single_chart() {
+        use crate::song::{ParseSongOptions, parse_song_bytes};
+        use std::path::Path;
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let source = "#TITLE:Partners;#BPMS:0=120;\
+            #NOTES:dance-single::Easy:2:0,0,0,0,0:\n1000\n0100\n0010\n0001;\
+            #NOTES:dance-routine::Hard:7:0,0,0,0,0:\n10000000\n00000001\n&\n10000000\n00000000;";
+        let song = parse_song_bytes(
+            source.as_bytes(),
+            "sm",
+            Path::new("partners.sm"),
+            &options,
+            |_| 4.0,
+        )
+        .unwrap();
+        assert_eq!(song.charts.len(), 2);
+        let single = &song.charts[0];
+        assert_eq!(single.chart_type, "dance-single");
+        assert_eq!(single.parsed_notes.len(), 4);
+        let routine = &song.charts[1];
+        assert_eq!(routine.chart_type, "dance-routine");
+        let owners: Vec<_> = routine
+            .parsed_notes
+            .iter()
+            .map(|note| (note.column, note.player))
+            .collect();
+        assert_eq!(owners, [(0, 1), (7, 0)]);
     }
 
     #[test]
@@ -334,8 +528,38 @@ mod tests {
     }
 
     #[test]
+    fn routine_hash_distinguishes_hold_lengths() {
+        use crate::song::{ParseSongOptions, parse_song_bytes};
+        use std::path::Path;
+        let options = ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new());
+        let hashes: Vec<_> = [
+            "20000000\n30000000\n00000000\n00000000\n&\n00000001",
+            "20000000\n00000000\n30000000\n00000000\n&\n00000001",
+        ]
+        .into_iter()
+        .map(|body| {
+            let source = format!(
+                "#TITLE:Partners;#BPMS:0=120;#NOTES:dance-routine::Hard:7:0,0,0,0,0:\n{body};"
+            );
+            parse_song_bytes(
+                source.as_bytes(),
+                "sm",
+                Path::new("partners.sm"),
+                &options,
+                |_| 4.0,
+            )
+            .unwrap()
+            .charts[0]
+                .short_hash
+                .clone()
+        })
+        .collect();
+        assert_ne!(hashes[0], hashes[1]);
+    }
+
+    #[test]
     fn routine_keysound_digits_do_not_become_notes() {
-        let (notes, owners) = merge_routine(b"1[24]0000000\n&\n00000001[23]", 8).unwrap();
+        let (notes, owners) = merge_routine(b"1[24]0000000\n&\n00000001[23]", 8);
         assert_eq!(owners.len(), 2);
         assert_eq!(&notes[..8], b"10000001");
     }

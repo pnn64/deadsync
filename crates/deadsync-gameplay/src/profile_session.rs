@@ -29,35 +29,26 @@ impl GameplayInputPlayStyle {
     #[must_use]
     pub const fn player_count(self) -> usize {
         match self {
-            Self::Single | Self::Double | Self::PumpSingle | Self::PumpDouble
+            Self::Single | Self::Double | Self::PumpSingle | Self::PumpDouble => 1,
+            Self::Versus
+            | Self::PumpVersus
+            | Self::Couple
+            | Self::PumpCouple
             | Self::Routine
-            | Self::PumpRoutine => 1,
-            Self::Versus | Self::PumpVersus | Self::Couple | Self::PumpCouple => 2,
-        }
-    }
-
-    /// Number of human participants; Routine has one shared scoring field.
-    #[must_use]
-    pub const fn participant_count(self) -> usize {
-        if matches!(self, Self::Routine | Self::PumpRoutine) {
-            2
-        } else {
-            self.player_count()
+            | Self::PumpRoutine => 2,
         }
     }
 
     #[inline(always)]
     #[must_use]
     pub const fn total_cols(self) -> usize {
-        match self {
-            Self::Routine => 8,
-            Self::PumpRoutine => 10,
-            _ => self.cols_per_player() * self.player_count(),
-        }
+        self.cols_per_player() * self.player_count()
     }
 
     /// Map an authored chart lane to a scoring field. Couple is one chart
     /// split across pads; Versus gives each participant a separate chart.
+    /// Routine, like ITGmania's TwoPlayersSharedSides, gives each participant
+    /// a full field holding only the notes it owns.
     #[must_use]
     pub const fn runtime_column(self, chart_column: usize, player: usize) -> Option<usize> {
         if player >= self.player_count() {
@@ -91,17 +82,29 @@ impl GameplayInputPlayStyle {
     #[inline(always)]
     #[must_use]
     pub const fn is_versus(self) -> bool {
-        matches!(self, Self::Versus | Self::PumpVersus | Self::Couple | Self::PumpCouple
+        matches!(
+            self,
+            Self::Versus
+                | Self::PumpVersus
+                | Self::Couple
+                | Self::PumpCouple
+                | Self::Routine
+                | Self::PumpRoutine
         )
+    }
+
+    /// Both participants share one set of pads, one life meter and one
+    /// combined score, as ScreenGameplay does for TwoPlayersSharedSides.
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_routine(self) -> bool {
+        matches!(self, Self::Routine | Self::PumpRoutine)
     }
 
     #[inline(always)]
     #[must_use]
     pub const fn is_double(self) -> bool {
-        matches!(
-            self,
-            Self::Double | Self::PumpDouble | Self::Routine | Self::PumpRoutine
-        )
+        matches!(self, Self::Double | Self::PumpDouble)
     }
 
     #[inline(always)]
@@ -284,9 +287,7 @@ pub const fn gameplay_runtime_player_is_p2(
             GameplayInputPlayStyle::Single
                 | GameplayInputPlayStyle::Double
                 | GameplayInputPlayStyle::PumpSingle
-                | GameplayInputPlayStyle::PumpDouble
-                | GameplayInputPlayStyle::Routine
-                | GameplayInputPlayStyle::PumpRoutine,
+                | GameplayInputPlayStyle::PumpDouble,
             GameplayInputPlayerSide::P2
         )
     )

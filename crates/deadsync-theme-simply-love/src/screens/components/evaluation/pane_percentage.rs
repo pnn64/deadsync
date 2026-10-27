@@ -44,8 +44,13 @@ pub(crate) struct PercentageText {
 
 impl PercentageText {
     pub(crate) fn new(score: &ScoreInfo) -> Self {
+        Self::with_itg_percent(score, score.score_percent)
+    }
+
+    /// Simply Love's Pane1 Percentage shows Routine's shared stats.
+    pub(crate) fn with_itg_percent(score: &ScoreInfo, itg_percent: f64) -> Self {
         Self {
-            score: percent_text(score.score_percent * 100.0),
+            score: percent_text(itg_percent * 100.0),
             ex: percent_text(score.ex_score_percent.max(0.0)),
             hard_ex: percent_text(score.hard_ex_score_percent.max(0.0)),
             cached: RefCell::new(None),

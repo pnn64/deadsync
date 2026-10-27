@@ -2743,7 +2743,9 @@ impl App {
         let (steps, preferred) = match profile::get_session_play_style() {
             profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
             | profile_data::PlayStyle::Couple
-            | profile_data::PlayStyle::PumpCouple => (
+            | profile_data::PlayStyle::PumpCouple
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine => (
                 [state.selected_steps_index, state.p2_selected_steps_index],
                 [
                     state.preferred_difficulty_index,
@@ -9345,7 +9347,9 @@ impl App {
                     let (steps, pref) = match play_style {
                         profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
                         | profile_data::PlayStyle::Couple
-                        | profile_data::PlayStyle::PumpCouple => (
+                        | profile_data::PlayStyle::PumpCouple
+                        | profile_data::PlayStyle::Routine
+                        | profile_data::PlayStyle::PumpRoutine => (
                             [
                                 sm_state.selected_steps_index,
                                 sm_state.p2_selected_steps_index,
@@ -9358,9 +9362,7 @@ impl App {
                         profile_data::PlayStyle::Single
                         | profile_data::PlayStyle::Double
                         | profile_data::PlayStyle::PumpSingle
-                        | profile_data::PlayStyle::PumpDouble
-                        | profile_data::PlayStyle::Routine
-                        | profile_data::PlayStyle::PumpRoutine => (
+                        | profile_data::PlayStyle::PumpDouble => (
                             [sm_state.selected_steps_index; 2],
                             [sm_state.preferred_difficulty_index; 2],
                         ),
@@ -9426,7 +9428,9 @@ impl App {
                     let (steps, pref) = match play_style {
                         profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
                         | profile_data::PlayStyle::Couple
-                        | profile_data::PlayStyle::PumpCouple => (
+                        | profile_data::PlayStyle::PumpCouple
+                        | profile_data::PlayStyle::Routine
+                        | profile_data::PlayStyle::PumpRoutine => (
                             [
                                 sm_state.selected_steps_index,
                                 sm_state.p2_selected_steps_index,
@@ -9439,9 +9443,7 @@ impl App {
                         profile_data::PlayStyle::Single
                         | profile_data::PlayStyle::Double
                         | profile_data::PlayStyle::PumpSingle
-                        | profile_data::PlayStyle::PumpDouble
-                        | profile_data::PlayStyle::Routine
-                        | profile_data::PlayStyle::PumpRoutine => (
+                        | profile_data::PlayStyle::PumpDouble => (
                             [sm_state.selected_steps_index; 2],
                             [sm_state.preferred_difficulty_index; 2],
                         ),
@@ -10472,7 +10474,9 @@ impl App {
                             profile_data::PlayStyle::Versus
                             | profile_data::PlayStyle::PumpVersus
                             | profile_data::PlayStyle::Couple
-                            | profile_data::PlayStyle::PumpCouple => {
+                            | profile_data::PlayStyle::PumpCouple
+                            | profile_data::PlayStyle::Routine
+                            | profile_data::PlayStyle::PumpRoutine => {
                                 self.state.screens.select_music_state.selected_steps_index =
                                     po.chart_steps_index[0];
                                 self.state
@@ -10491,9 +10495,7 @@ impl App {
                             profile_data::PlayStyle::Single
                             | profile_data::PlayStyle::Double
                             | profile_data::PlayStyle::PumpSingle
-                            | profile_data::PlayStyle::PumpDouble
-                            | profile_data::PlayStyle::Routine
-                            | profile_data::PlayStyle::PumpRoutine => {
+                            | profile_data::PlayStyle::PumpDouble => {
                                 let idx =
                                     profile_data::player_side_index(profile_session.player_side);
                                 self.state.screens.select_music_state.selected_steps_index =

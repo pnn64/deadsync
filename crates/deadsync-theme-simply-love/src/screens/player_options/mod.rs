@@ -763,7 +763,9 @@ const fn active_players(
     match play_style {
         profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
         | profile_data::PlayStyle::Couple
-        | profile_data::PlayStyle::PumpCouple => {
+        | profile_data::PlayStyle::PumpCouple
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => {
             if joined_count > 0 {
                 joined
             } else {
@@ -773,9 +775,7 @@ const fn active_players(
         profile_data::PlayStyle::Single
         | profile_data::PlayStyle::Double
         | profile_data::PlayStyle::PumpSingle
-        | profile_data::PlayStyle::PumpDouble
-        | profile_data::PlayStyle::Routine
-        | profile_data::PlayStyle::PumpRoutine => {
+        | profile_data::PlayStyle::PumpDouble => {
             if joined_count == 1 {
                 joined
             } else {
@@ -801,13 +801,13 @@ const fn persisted_player_idx(
     match play_style {
         profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
         | profile_data::PlayStyle::Couple
-        | profile_data::PlayStyle::PumpCouple => P1,
+        | profile_data::PlayStyle::PumpCouple
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => P1,
         profile_data::PlayStyle::Single
         | profile_data::PlayStyle::Double
         | profile_data::PlayStyle::PumpSingle
-        | profile_data::PlayStyle::PumpDouble
-        | profile_data::PlayStyle::Routine
-        | profile_data::PlayStyle::PumpRoutine => match side {
+        | profile_data::PlayStyle::PumpDouble => match side {
             profile_data::PlayerSide::P1 => P1,
             profile_data::PlayerSide::P2 => P2,
         },

@@ -43,6 +43,8 @@ pub(crate) struct StatsPanePresentation {
     window_counts_10ms: WindowCounts,
     disabled_timing_windows: [bool; 5],
     radar: [(u32, u32); 4],
+    /// Routine replaces the Hands row with the participant's own score.
+    routine_percent: Option<Arc<str>>,
     settled: RefCell<[SettledStatsPane; 3]>,
 }
 
@@ -59,8 +61,16 @@ impl StatsPanePresentation {
                 (score.mines_avoided, score.mines_total),
                 (score.rolls_held, score.rolls_total),
             ],
+            routine_percent: None,
             settled: RefCell::new(std::array::from_fn(|_| None)),
         }
+    }
+
+    /// Simply Love's JudgmentNumbers/Labels show a Routine participant's own
+    /// percent, labelled P1 or P2, in place of Hands.
+    pub(crate) fn routine(mut self, score: &ScoreInfo) -> Self {
+        self.routine_percent = Some(Arc::from(format!("{:.2}", score.score_percent * 100.0)));
+        self
     }
 
     fn cached_settled(
@@ -518,6 +528,31 @@ fn push_stats_actors(
             } else {
                 90.0
             };
+            if label_idx == 0
+                && let Some(percent) = presentation.routine_percent.as_ref()
+            {
+                let (label, rgba) = if controller == profile_data::PlayerSide::P1 {
+                    ("P1", [0.0, 0.0, 1.0, 1.0])
+                } else {
+                    ("P2", [1.0, 0.0, 0.0, 1.0])
+                };
+                out.push(act!(text: font(machine_font_key(machine_font, FontRole::Bold)): settext(label):
+                    align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + 38.0): zoom(0.5):
+                    diffuse(rgba[0], rgba[1], rgba[2], rgba[3]): z(101)
+                ));
+                let percent_x = (if controller == profile_data::PlayerSide::P1 {
+                    -114.0_f32
+                } else {
+                    286.0_f32
+                })
+                .mul_add(numbers_frame_zoom, numbers_frame_origin_x);
+                out.push(act!(text: font(machine_font_key(machine_font, FontRole::Headline)): settext(Arc::clone(percent)):
+                    align(1.0, 0.5): xy(percent_x, 47.0f32.mul_add(numbers_frame_zoom, frame_origin_y)):
+                    zoom(0.4 * numbers_frame_zoom):
+                    diffuse(rgba[0], rgba[1], rgba[2], rgba[3]): z(101)
+                ));
+                continue;
+            }
             let label_local_y = sl_row.mul_add(28.0, 41.0);
             out.push(act!(text: font("miso"): settext(radar_label_text(label_idx)):
                 align(1.0, 0.5): xy(labels_frame_origin_x + label_local_x, frame_origin_y + label_local_y): horizalign(right): zoom(0.833): z(101)

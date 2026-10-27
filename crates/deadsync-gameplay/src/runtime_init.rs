@@ -326,6 +326,10 @@ where
         let parsed_notes = &gameplay_charts[player].parsed_notes;
         let start = notes.len();
         for parsed in parsed_notes {
+            // Player::Load keeps only this participant's part of a Routine chart.
+            if play_style.is_routine() && usize::from(parsed.player) != player {
+                continue;
+            }
             let Some(column) = play_style.runtime_column(parsed.column, player) else {
                 continue;
             };
@@ -380,11 +384,7 @@ where
 
             let quantization_idx = quantization_index_from_beat(beat);
             notes.push(Note {
-                participant: matches!(
-                    play_style,
-                    GameplayInputPlayStyle::Routine | GameplayInputPlayStyle::PumpRoutine
-                )
-                .then_some(parsed.player),
+                participant: play_style.is_routine().then_some(parsed.player),
                 beat,
                 quantization_idx,
                 column,
@@ -403,10 +403,12 @@ where
     }
     let note_build_ms = note_build_started.elapsed().as_secs_f64() * 1000.0;
 
+    // Couple and Routine each score part of one authored chart, so the chart's
+    // possible points cover both participants and must be split.
     let couple = matches!(
         play_style,
         GameplayInputPlayStyle::Couple | GameplayInputPlayStyle::PumpCouple
-    );
+    ) || play_style.is_routine();
     let base_grade_points: [i32; MAX_PLAYERS] = std::array::from_fn(|player| {
         if couple && player < num_players {
             let totals = recompute_player_totals(&notes, note_ranges[player]);
@@ -1042,11 +1044,13 @@ where
             player_profiles[p].error_bar_options(),
         );
         let course_carry = course_display_carry.as_ref().map(|carry| carry[p]);
+        // Routine's CombinedLifeMeterShared uses the master player's life type.
+        let life_source = if play_style.is_routine() { 0 } else { p };
         let mut player = init_player_runtime_for_song_with_course_life(
             init_music_time,
             in_course_stage,
             course_carry,
-            course_life_config[p],
+            course_life_config[life_source],
             player_profiles[p].carry_combo_between_songs(),
             replay_mode,
             combo_carry[p],

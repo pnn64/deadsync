@@ -18,8 +18,9 @@ pub const fn course_display_totals_for_chart(chart: &ChartData) -> CourseDisplay
     }
 }
 
-/// Couple's metadata describes both pads. Course denominators must use only
-/// the notes assigned to the participant, just as song gameplay does.
+/// Couple and Routine metadata describe both participants. Course
+/// denominators must use only the notes assigned to the participant, just as
+/// song gameplay does.
 #[must_use]
 pub fn course_display_totals_for_chart_side(
     chart: &ChartData,
@@ -30,13 +31,16 @@ pub fn course_display_totals_for_chart_side(
     if !matches!(
         style,
         GameplayInputPlayStyle::Couple | GameplayInputPlayStyle::PumpCouple
-    ) {
+    ) && !style.is_routine()
+    {
         return course_display_totals_for_chart(chart);
     }
     let mut totals = CourseDisplayTotals::default();
     let mut last_step = None;
     for note in &payload.parsed_notes {
-        if style.runtime_column(note.column, player).is_none() {
+        if style.runtime_column(note.column, player).is_none()
+            || (style.is_routine() && usize::from(note.player) != player)
+        {
             continue;
         }
         let Some(beat) = payload.timing.get_beat_for_row(note.row_index) else {

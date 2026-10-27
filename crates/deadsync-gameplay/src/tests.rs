@@ -1545,6 +1545,21 @@ mod tests {
             ),
             viewport.center_x(),
         );
+        // Routine reaches song Lua as two Double players sharing the center.
+        for player in 0..2 {
+            assert_near(
+                song_lua_compile_player_screen_x(
+                    2,
+                    player,
+                    viewport,
+                    GameplayInputPlayStyle::Routine.as_song_lua_compile_play_style(),
+                    false,
+                    20.0,
+                    false,
+                ),
+                viewport.center_x(),
+            );
+        }
     }
 
     #[test]
@@ -6635,16 +6650,14 @@ mod tests {
     fn lane_input_mask_expands_only_active_gameplay_columns() {
         assert_eq!(input_lane_mask(0), 0);
         assert_eq!(input_lane_mask(4), 0b0000_1111);
-        assert_eq!(input_lane_mask(MAX_COLS), 0b11_1111_1111);
-        assert_eq!(input_lane_mask(MAX_COLS + 1), 0b11_1111_1111);
+        assert_eq!(input_lane_mask(MAX_COLS), 0b1111_1111_1111_1111_1111);
+        assert_eq!(input_lane_mask(MAX_COLS + 1), 0b1111_1111_1111_1111_1111);
 
         let inputs = lane_inputs_from_mask(0b1010_0101, 4);
-        assert_eq!(
-            inputs,
-            [
-                true, false, true, false, false, false, false, false, false, false,
-            ]
-        );
+        let mut expected = [false; MAX_COLS];
+        expected[0] = true;
+        expected[2] = true;
+        assert_eq!(inputs, expected);
     }
 
     #[test]
@@ -6854,7 +6867,7 @@ mod tests {
             decent,
             test_note_at(NoteType::Tap, None, false, 48, 1.0),
         ];
-        let mut note_indices = [usize::MAX; MAX_COLS];
+        let mut note_indices = [usize::MAX; MAX_COLS_PER_PLAYER];
         note_indices[0] = 0;
         note_indices[1] = 1;
         note_indices[2] = 2;
@@ -16325,7 +16338,7 @@ mod tests {
         let row = |time_ns| RowEntry {
             row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16353,7 +16366,7 @@ mod tests {
         let row = |finalized: bool| RowEntry {
             row_index: compact_row_index(0),
             time_ns: 0,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16374,7 +16387,7 @@ mod tests {
         let row = |finalized: bool| RowEntry {
             row_index: compact_row_index(0),
             time_ns: 0,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16396,7 +16409,7 @@ mod tests {
         let row = |finalized: bool| RowEntry {
             row_index: compact_row_index(0),
             time_ns: 0,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16427,7 +16440,7 @@ mod tests {
         let row = |time_ns| RowEntry {
             row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16464,7 +16477,7 @@ mod tests {
         let row = |time_ns| RowEntry {
             row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16501,7 +16514,7 @@ mod tests {
         let row = |time_ns| RowEntry {
             row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16540,7 +16553,7 @@ mod tests {
         let row = |time_ns| RowEntry {
             row_index: compact_row_index(0),
             time_ns,
-            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS],
+            nonmine_note_indices: [ChartNoteIndex::INVALID; MAX_COLS_PER_PLAYER],
             nonmine_note_count: 0,
             rescore_track_count: 0,
             unresolved_count: 0,
@@ -16949,7 +16962,7 @@ mod tests {
         let mut judged = test_note_at(NoteType::Tap, None, false, 48, 1.0);
         judged.result = Some(test_judgment(JudgeGrade::Great));
         let notes = [judged];
-        let mut note_indices = [usize::MAX; MAX_COLS];
+        let mut note_indices = [usize::MAX; MAX_COLS_PER_PLAYER];
         note_indices[0] = 0;
         note_indices[1] = 99;
         let row_entry = RowEntry {

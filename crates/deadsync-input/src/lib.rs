@@ -581,6 +581,16 @@ pub const fn lane_from_column(column: usize) -> Option<Lane> {
         7 => Some(Lane::P2Right),
         8 => Some(Lane::Col8),
         9 => Some(Lane::Col9),
+        10 => Some(Lane::Col10),
+        11 => Some(Lane::Col11),
+        12 => Some(Lane::Col12),
+        13 => Some(Lane::Col13),
+        14 => Some(Lane::Col14),
+        15 => Some(Lane::Col15),
+        16 => Some(Lane::Col16),
+        17 => Some(Lane::Col17),
+        18 => Some(Lane::Col18),
+        19 => Some(Lane::Col19),
         _ => None,
     }
 }
@@ -898,7 +908,10 @@ mod tests {
         assert_eq!(lane_from_column(7), Some(Lane::P2Right));
         assert_eq!(lane_from_column(8), Some(Lane::Col8));
         assert_eq!(lane_from_column(9), Some(Lane::Col9));
-        assert_eq!(lane_from_column(10), None);
+        // Routine's second field occupies the columns after the pads' own.
+        assert_eq!(lane_from_column(10), Some(Lane::Col10));
+        assert_eq!(lane_from_column(19), Some(Lane::Col19));
+        assert_eq!(lane_from_column(20), None);
     }
 
     #[test]

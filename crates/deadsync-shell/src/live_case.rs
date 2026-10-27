@@ -314,7 +314,7 @@ fn validate_manifest(manifest: &Manifest) -> Result<(), String> {
 }
 
 fn validate_players(style: PlayStyle, side: PlayerSide, joined: [bool; 2]) -> Result<(), String> {
-    if style.participant_count() == 2 {
+    if style.player_count() == 2 {
         return (joined == [true, true])
             .then_some(())
             .ok_or_else(|| "two-player cases require joined=[true,true]".to_owned());

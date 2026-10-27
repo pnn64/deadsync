@@ -200,7 +200,7 @@ pub fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> Pl
         let row = notes[note_ix].row_index;
         let carried_holds = carried_holds_for_row(&mut active_hold_ends, row);
         let mut has_step = false;
-        let mut row_mask = 0u16;
+        let mut row_mask = 0u32;
         while note_ix < notes.len() && notes[note_ix].row_index == row {
             let note = &notes[note_ix];
             note_ix += 1;
@@ -209,14 +209,14 @@ pub fn recompute_player_totals(notes: &[Note], note_range: (usize, usize)) -> Pl
             }
             has_step |= note.note_type != NoteType::Mine;
             match note.note_type {
-                NoteType::Tap => row_mask |= 1u16 << note.column.min(15),
+                NoteType::Tap => row_mask |= 1u32 << note.column.min(31),
                 NoteType::Hold | NoteType::Roll => {
                     if note.note_type == NoteType::Hold {
                         totals.holds = totals.holds.saturating_add(1);
                     } else {
                         totals.rolls = totals.rolls.saturating_add(1);
                     }
-                    row_mask |= 1u16 << note.column.min(15);
+                    row_mask |= 1u32 << note.column.min(31);
                     if let Some(hold) = note.hold.as_ref()
                         && let Some(end) = active_hold_ends.get_mut(note.column)
                     {

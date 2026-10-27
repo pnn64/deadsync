@@ -2047,7 +2047,9 @@ fn sync_versus_music_selection(state: &mut State, song: &SongData, chart_type: &
 
     let p1_music = song.chart_music_path(chart_type, state.selected_steps_index);
     let p2_music = song.chart_music_path(chart_type, state.p2_selected_steps_index);
-    if p1_music == p2_music && !state.session.play_style.is_couple() {
+    // Partner styles play one chart, so both sides always follow one selection.
+    let partner = state.session.play_style.is_couple() || state.session.play_style.is_routine();
+    if p1_music == p2_music && !partner {
         return;
     }
 
@@ -5285,10 +5287,22 @@ fn build_select_music_menu(state: &State) -> select_music_menu::MenuLists {
         (profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle, true) => {
             Some(vec![select_music_menu::ITEM_SWITCH_TO_DOUBLE])
         }
-        (profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble
-            | profile_data::PlayStyle::Routine
-            | profile_data::PlayStyle::PumpRoutine, true,
-        ) => Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE]),
+        (profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble, true) => {
+            Some(vec![select_music_menu::ITEM_SWITCH_TO_SINGLE])
+        }
+        // Simply Love's SortMenu offers the two-player styles once both
+        // players are joined: Versus, Couples (Routine) and Half Couple.
+        (style, false) if style.player_count() == 2 => Some(
+            [
+                (style.is_couple() || style.is_routine())
+                    .then_some(select_music_menu::ITEM_SWITCH_TO_VERSUS),
+                (!style.is_routine()).then_some(select_music_menu::ITEM_SWITCH_TO_ROUTINE),
+                (!style.is_couple()).then_some(select_music_menu::ITEM_SWITCH_TO_COUPLE),
+            ]
+            .into_iter()
+            .flatten()
+            .collect(),
+        ),
         _ => None,
     };
     let playlists = if state.playlist_library.is_empty() {
@@ -7294,7 +7308,9 @@ const fn steps_index_for_side(
         (
             profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
             | profile_data::PlayStyle::Couple
-            | profile_data::PlayStyle::PumpCouple,
+            | profile_data::PlayStyle::PumpCouple
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine,
             profile_data::PlayerSide::P2,
         ) => p2_selected_steps_index,
         _ => selected_steps_index,
@@ -7312,7 +7328,9 @@ const fn set_steps_index_for_side(
         (
             profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
                 | profile_data::PlayStyle::Couple
-                | profile_data::PlayStyle::PumpCouple,
+                | profile_data::PlayStyle::PumpCouple
+                | profile_data::PlayStyle::Routine
+                | profile_data::PlayStyle::PumpRoutine,
             profile_data::PlayerSide::P2
         )
     ) {
@@ -7531,7 +7549,9 @@ const fn selected_steps_index_for_sync(state: &State) -> usize {
         (
             profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
             | profile_data::PlayStyle::Couple
-            | profile_data::PlayStyle::PumpCouple,
+            | profile_data::PlayStyle::PumpCouple
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine,
             profile_data::PlayerSide::P2,
         ) => state.p2_selected_steps_index,
         _ => state.selected_steps_index,
@@ -7544,7 +7564,9 @@ const fn preferred_steps_index_for_sync(state: &State) -> usize {
         (
             profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
             | profile_data::PlayStyle::Couple
-            | profile_data::PlayStyle::PumpCouple,
+            | profile_data::PlayStyle::PumpCouple
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine,
             profile_data::PlayerSide::P2,
         ) => state.p2_preferred_difficulty_index,
         _ => state.preferred_difficulty_index,
@@ -7557,7 +7579,9 @@ const fn set_selected_steps_index_for_sync(state: &mut State, steps_index: usize
         (
             profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
             | profile_data::PlayStyle::Couple
-            | profile_data::PlayStyle::PumpCouple,
+            | profile_data::PlayStyle::PumpCouple
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine,
             profile_data::PlayerSide::P2,
         ) => {
             state.p2_selected_steps_index = steps_index;
@@ -9300,6 +9324,25 @@ fn switch_single_player_style(state: &mut State, new_style: profile_data::PlaySt
         profile_data::PlayerSide::P2 => [false, true],
     };
     set_session(state, new_style, side, joined);
+    finish_style_switch(state);
+}
+
+/// Simply Love's SortMenu ChangeStyle between the styles both joined players
+/// share; `new_style` names the dance style and follows the current game.
+fn switch_two_player_style(state: &mut State, new_style: profile_data::PlayStyle) {
+    hide_select_music_menu(state);
+    let new_style = match (state.session.play_style.is_pump(), new_style) {
+        (false, style) => style,
+        (true, profile_data::PlayStyle::Routine) => profile_data::PlayStyle::PumpRoutine,
+        (true, profile_data::PlayStyle::Couple) => profile_data::PlayStyle::PumpCouple,
+        (true, _) => profile_data::PlayStyle::PumpVersus,
+    };
+    let side = state.session.player_side;
+    set_session(state, new_style, side, [true, true]);
+    finish_style_switch(state);
+}
+
+fn finish_style_switch(state: &mut State) {
     refresh_after_style_switch(state);
     // The style switch remaps which profile each pad uses, so re-resolve both
     // pads (the controller recomputes each pad's active marker). The refresh
@@ -9948,6 +9991,18 @@ fn dispatch_menu_action(
         }
         select_music_menu::Action::SwitchToDouble => {
             switch_single_player_style(state, profile_data::PlayStyle::Double);
+            ThemeEffect::None
+        }
+        select_music_menu::Action::SwitchToVersus => {
+            switch_two_player_style(state, profile_data::PlayStyle::Versus);
+            ThemeEffect::None
+        }
+        select_music_menu::Action::SwitchToRoutine => {
+            switch_two_player_style(state, profile_data::PlayStyle::Routine);
+            ThemeEffect::None
+        }
+        select_music_menu::Action::SwitchToCouple => {
+            switch_two_player_style(state, profile_data::PlayStyle::Couple);
             ThemeEffect::None
         }
         select_music_menu::Action::TestInput => {
@@ -14317,15 +14372,17 @@ pub fn push_actors(
     if state.test_input_overlay_visible {
         let play_style = state.session.play_style;
         let (mut show_p1, mut show_p2, pad_spacing) = match play_style {
-            profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble
-            | profile_data::PlayStyle::Routine
-            | profile_data::PlayStyle::PumpRoutine => (true, true, 105.0),
+            profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble => {
+                (true, true, 105.0)
+            }
             profile_data::PlayStyle::Single
             | profile_data::PlayStyle::Versus
             | profile_data::PlayStyle::PumpSingle
             | profile_data::PlayStyle::PumpVersus
             | profile_data::PlayStyle::Couple
-            | profile_data::PlayStyle::PumpCouple => (
+            | profile_data::PlayStyle::PumpCouple
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine => (
                 state.session.side_joined(profile_data::PlayerSide::P1),
                 state.session.side_joined(profile_data::PlayerSide::P2),
                 125.0,
@@ -15291,6 +15348,41 @@ mod tests {
                 .iter()
                 .any(|item| item.action == super::select_music_menu::Action::SrpgShop)
         );
+    }
+
+    #[test]
+    fn two_joined_players_change_style_like_simply_love_sort_menu() {
+        use super::select_music_menu::Action;
+        let styles = |play_style| {
+            let mut state = init_placeholder();
+            state.session.play_style = play_style;
+            state.session.joined = [true, true];
+            super::build_select_music_menu(&state)
+                .styles
+                .unwrap_or_default()
+                .into_iter()
+                .map(|item| (item.action, item.bottom_label.to_string()))
+                .collect::<Vec<_>>()
+        };
+        for (versus, couple, routine) in [
+            (
+                profile_data::PlayStyle::Versus,
+                profile_data::PlayStyle::Couple,
+                profile_data::PlayStyle::Routine,
+            ),
+            (
+                profile_data::PlayStyle::PumpVersus,
+                profile_data::PlayStyle::PumpCouple,
+                profile_data::PlayStyle::PumpRoutine,
+            ),
+        ] {
+            let couples = (Action::SwitchToRoutine, "Couples".to_string());
+            let half_couple = (Action::SwitchToCouple, "Half Couple".to_string());
+            let to_versus = (Action::SwitchToVersus, "Versus".to_string());
+            assert_eq!(styles(versus), [couples.clone(), half_couple.clone()]);
+            assert_eq!(styles(couple), [to_versus.clone(), couples]);
+            assert_eq!(styles(routine), [to_versus, half_couple]);
+        }
     }
 
     #[test]

@@ -126,6 +126,8 @@ fn add_course_stage_totals(
     let couple_style = match chart_type {
         "dance-couple" => Some(deadsync_gameplay::GameplayInputPlayStyle::Couple),
         "pump-couple" => Some(deadsync_gameplay::GameplayInputPlayStyle::PumpCouple),
+        "dance-routine" => Some(deadsync_gameplay::GameplayInputPlayStyle::Routine),
+        "pump-routine" => Some(deadsync_gameplay::GameplayInputPlayStyle::PumpRoutine),
         _ => None,
     };
     for (player_idx, total) in totals.iter_mut().enumerate() {
@@ -143,7 +145,7 @@ fn add_course_stage_totals(
                 .position(|entry| std::ptr::eq(entry, chart))?;
             let mut payloads =
                 deadsync_simfile::app_runtime::load_gameplay_charts(&stage.song, &[index], 0.0)
-                    .map_err(|error| log::warn!("Cannot load Couple course chart: {error}"))
+                    .map_err(|error| log::warn!("Cannot load partner course chart: {error}"))
                     .ok()?;
             course_display_totals_for_chart_side(chart, &payloads.remove(0), style, player_idx)
         } else {
@@ -373,7 +375,12 @@ pub fn build_course_summary_score_info(
 ) -> [Option<ScoreInfo>; MAX_PLAYERS] {
     let mut score_info = std::array::from_fn(|_| None);
     match play_style {
-        PlayStyle::Versus | PlayStyle::PumpVersus | PlayStyle::Couple | PlayStyle::PumpCouple => {
+        PlayStyle::Versus
+        | PlayStyle::PumpVersus
+        | PlayStyle::Couple
+        | PlayStyle::PumpCouple
+        | PlayStyle::Routine
+        | PlayStyle::PumpRoutine => {
             for side in [PlayerSide::P1, PlayerSide::P2] {
                 let idx = profile_data::player_side_index(side);
                 score_info[idx] = score_info_from_stage(stage, side);
@@ -384,9 +391,7 @@ pub fn build_course_summary_score_info(
                 }
             }
         }
-        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble
-        | PlayStyle::Routine
-        | PlayStyle::PumpRoutine => {
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
             let idx = profile_data::player_side_index(active_side);
             score_info[0] = score_info_from_stage(stage, active_side);
             if let Some(score) = score_info[0].as_mut() {

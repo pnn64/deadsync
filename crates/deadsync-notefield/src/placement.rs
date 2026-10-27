@@ -69,6 +69,7 @@ pub(crate) struct FieldLayoutRequest {
     pub num_players: usize,
     pub single_style: bool,
     pub double_style: bool,
+    pub shared_sides: bool,
     pub center_one_player: bool,
     pub screen_width: f32,
     pub screen_center_x: f32,
@@ -590,7 +591,9 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     };
     let centered_one_side =
         request.num_players == 1 && request.single_style && request.center_one_player;
-    let centered_both_sides = request.num_players == 1 && request.double_style;
+    // ScreenGameplay centers both TwoPlayersSharedSides fields.
+    let centered_both_sides =
+        (request.num_players == 1 && request.double_style) || request.shared_sides;
     let base_playfield_center_x = if centered_both_sides || centered_one_side {
         request.screen_center_x
     } else {
@@ -599,8 +602,7 @@ pub(crate) fn field_layout(request: FieldLayoutRequest) -> FieldLayout {
     };
     let notefield_offset_x = side_sign * request.notefield_offset_x;
     let playfield_center_x = base_playfield_center_x + notefield_offset_x;
-    let layout_center_x = if request.num_players == 1 && (centered_both_sides || centered_one_side)
-    {
+    let layout_center_x = if centered_both_sides || centered_one_side {
         request.screen_center_x
     } else {
         playfield_center_x
@@ -1047,6 +1049,7 @@ mod tests {
             num_players: 1,
             single_style: true,
             double_style: false,
+            shared_sides: false,
             center_one_player: false,
             screen_width: 854.0,
             screen_center_x: 427.0,

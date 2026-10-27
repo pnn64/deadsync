@@ -64,8 +64,9 @@ pub fn smx_panel_for_col(
     let local = column % cols_per_player;
     let pump = matches!(cols_per_player, 5 | 10);
     let lanes_per_pad = if pump { 5 } else { 4 };
-    let (pad, local_col) = if cols_per_player > lanes_per_pad && num_players == 1 {
-        // One human on two pads (doubles): split at the native pad lane count.
+    let (pad, local_col) = if cols_per_player > lanes_per_pad {
+        // A field spanning both pads (doubles, or each Routine participant):
+        // split at the native pad lane count.
         (local / lanes_per_pad, local % lanes_per_pad)
     } else {
         let pad = column / cols_per_player;

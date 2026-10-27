@@ -1,6 +1,3 @@
-#[path = "select_style_info.rs"]
-mod info_bubble;
-
 use crate::SimplyLoveEffect as ThemeEffect;
 use crate::act;
 use crate::color;
@@ -31,6 +28,11 @@ const PAD_TILE_ZOOM_4_3: f32 = 0.435;
 const PAD_TILE_ZOOM_16_9: f32 = 0.525;
 const PAD_DUAL_OFFSET_4_3: f32 = 42.0;
 const PAD_DUAL_OFFSET_16_9: f32 = 51.0;
+const CHOICE_X_OFFSET_4_3: f32 = 160.0;
+const CHOICE_X_OFFSET_16_9: f32 = 214.0;
+const CHOICE_Y_OFFSET_4_3: f32 = 0.0;
+const CHOICE_Y_OFFSET_16_9: f32 = 10.0;
+
 const PAD_UNUSED_RGBA: [f32; 4] = [0.2, 0.2, 0.2, 1.0];
 const DANCE_PAD_LAYOUT: [bool; 9] = [false, true, false, true, false, true, false, true, false];
 const PUMP_PAD_LAYOUT: [bool; 9] = [true, false, true, false, true, false, true, false, true];
@@ -41,8 +43,6 @@ fn choice_label(choice: Choice) -> std::sync::Arc<str> {
         Choice::Single => "SinglePlayer",
         Choice::Versus => "TwoPlayers",
         Choice::Double => "Double",
-        Choice::Couple => "Couple",
-        Choice::Routine => "Routine",
     };
     tr("SelectStyle", key)
 }
@@ -52,7 +52,6 @@ pub struct State {
     flow: StyleFlow,
     bg: visual_style_bg::State,
     runtime: SelectFlowRuntimeView,
-    info_bubbles: info_bubble::InfoBubbles,
 }
 
 #[must_use]
@@ -64,7 +63,6 @@ pub fn init(runtime: SelectFlowRuntimeView) -> State {
         flow,
         bg: visual_style_bg::State::new(),
         runtime,
-        info_bubbles: info_bubble::InfoBubbles::default(),
     }
 }
 
@@ -90,7 +88,6 @@ pub const fn out_transition() -> (Vec<Actor>, f32) {
 }
 
 pub fn update(state: &mut State, dt: f32) -> Option<ThemeEffect> {
-    state.info_bubbles.update(state.flow.selected_index(), dt);
     let exit_elapsed = if state.flow.exit_chosen_anim() {
         exit_anim_t(true)
     } else {
@@ -223,7 +220,8 @@ pub fn push_actors(
     select_flow_footer::push(actors, &state.runtime.players, visual_policy);
 
     let cx = screen_center_x();
-    let cy = screen_center_y();
+    let cy = screen_center_y() + widescale(CHOICE_Y_OFFSET_4_3, CHOICE_Y_OFFSET_16_9);
+    let choice_x_off = widescale(CHOICE_X_OFFSET_4_3, CHOICE_X_OFFSET_16_9);
     let dual_pad_off = widescale(PAD_DUAL_OFFSET_4_3, PAD_DUAL_OFFSET_16_9);
     let layout = match state.runtime.game {
         GameFlag::Dance => &DANCE_PAD_LAYOUT,
@@ -232,31 +230,11 @@ pub fn push_actors(
 
     for i in 0..style_flow::CHOICE_COUNT {
         let choice = Choice::from_index(i);
-        let (x, cy) = if i < 2 {
-            (
-                cx + if i == 0 {
-                    -widescale(108.0, 150.0)
-                } else {
-                    widescale(108.0, 150.0)
-                },
-                cy - widescale(70.0, 86.0),
-            )
-        } else {
-            (
-                cx + (i as f32 - 3.0) * widescale(216.0, 300.0),
-                cy + widescale(80.0, 102.0),
-            )
+        let x = match choice {
+            Choice::Single => cx - choice_x_off,
+            Choice::Versus => cx,
+            Choice::Double => cx + choice_x_off,
         };
-        let bubble_fade = if exit_chosen_anim {
-            if i == state.flow.selected_index() {
-                1.0 - chosen_p
-            } else {
-                other_alpha
-            }
-        } else {
-            1.0
-        };
-        state.info_bubbles.push(actors, i, [x, cy], bubble_fade);
         let (zoom, alpha) = if exit_chosen_anim {
             if i == state.flow.selected_index() {
                 (style_flow::CHOICE_ZOOM_FOCUSED * (1.0 - chosen_p), 1.0)
@@ -272,7 +250,7 @@ pub fn push_actors(
                 let used = color::decorative_rgba(state.active_color_index);
                 push_pad_tiles(actors, x, cy, zoom, alpha, used, PAD_UNUSED_RGBA, layout);
             }
-            Choice::Versus | Choice::Couple | Choice::Routine => {
+            Choice::Versus => {
                 let left = color::decorative_rgba(state.active_color_index - 1);
                 let right = color::decorative_rgba(state.active_color_index + 2);
                 let off = dual_pad_off * zoom;

@@ -4677,6 +4677,10 @@ pub fn frame_layers<'a>(
                 let Some(rgba) = state.danger_overlay_rgba(player_idx, hide_lifebar) else {
                     continue;
                 };
+                // Routine's participants share one life meter and one danger state.
+                if play_style.is_routine() && player_idx > 0 {
+                    continue;
+                }
                 let (x, w, fl, fr) = match play_style {
                     profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble
                     | profile_data::PlayStyle::Routine
@@ -4711,15 +4715,18 @@ pub fn frame_layers<'a>(
             }
         }
         ScreenLayer::Filter => {
+            // Simply Love draws Routine's background filter for the master
+            // player only, since both fields share one position.
+            let filter_players = if play_style.is_routine() { 1 } else { state.num_players() };
             let has_background_filter = per_player_fields.iter().any(|&(player_idx, _)| {
                 player_idx != usize::MAX
-                    && player_idx < state.num_players()
+                    && player_idx < filter_players
                     && state.profiles()[player_idx].background_filter.alpha() > 0.0
             });
             if has_background_filter {
                 presentation_skeleton.push(STATIC_FILTER, actors, |actors| {
                     for &(player_idx, field_x) in &per_player_fields {
-                        if player_idx == usize::MAX || player_idx >= state.num_players() {
+                        if player_idx == usize::MAX || player_idx >= filter_players {
                             continue;
                         }
                         let filter_alpha = state.profiles()[player_idx].background_filter.alpha();
@@ -4758,7 +4765,9 @@ pub fn frame_layers<'a>(
             let player_count = match play_style {
                 profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
                 | profile_data::PlayStyle::Couple
-                | profile_data::PlayStyle::PumpCouple => {
+                | profile_data::PlayStyle::PumpCouple
+                | profile_data::PlayStyle::Routine
+                | profile_data::PlayStyle::PumpRoutine => {
                     players[0] = (
                         0,
                         profile_data::PlayerSide::P1,
@@ -5197,7 +5206,9 @@ pub fn frame_layers<'a>(
                     let color_index = match play_style {
                         profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
                         | profile_data::PlayStyle::Couple
-                        | profile_data::PlayStyle::PumpCouple => {
+                        | profile_data::PlayStyle::PumpCouple
+                        | profile_data::PlayStyle::Routine
+                        | profile_data::PlayStyle::PumpRoutine => {
                             if player_idx == 0 {
                                 state.active_color_index()
                             } else {
@@ -5225,7 +5236,9 @@ pub fn frame_layers<'a>(
                 let life_player_count = match play_style {
                     profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
                     | profile_data::PlayStyle::Couple
-                    | profile_data::PlayStyle::PumpCouple => {
+                    | profile_data::PlayStyle::PumpCouple
+                    | profile_data::PlayStyle::Routine
+                    | profile_data::PlayStyle::PumpRoutine => {
                         life_players[0] = (0, profile_data::PlayerSide::P1);
                         life_players[1] = (1, profile_data::PlayerSide::P2);
                         2
@@ -5281,7 +5294,9 @@ pub fn frame_layers<'a>(
                                     profile_data::PlayStyle::Versus
                                     | profile_data::PlayStyle::PumpVersus
                                     | profile_data::PlayStyle::Couple
-                                    | profile_data::PlayStyle::PumpCouple => match side {
+                                    | profile_data::PlayStyle::PumpCouple
+                                    | profile_data::PlayStyle::Routine
+                                    | profile_data::PlayStyle::PumpRoutine => match side {
                                         profile_data::PlayerSide::P1 => -widescale(238.0, 288.0),
                                         profile_data::PlayerSide::P2 => widescale(238.0, 288.0),
                                     },

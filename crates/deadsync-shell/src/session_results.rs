@@ -29,7 +29,12 @@ pub(crate) fn evaluation_view(
             continue;
         };
         let prof = &gs.profiles()[player_idx];
-        let score_percent = player.score_percent;
+        // Routine saves one shared score, for the master player only.
+        let routine_shared = gs.routine_shared_itg_score_percent();
+        let score_percent = routine_shared.unwrap_or(player.score_percent);
+        // The shared score needs both participants' scores to be valid.
+        let saves_score =
+            routine_shared.is_none_or(|_| player_idx == 0 && gs.score_valid_for_player(1));
         let noteskin = gs.noteskin_assets.noteskin[player_idx].clone();
         fail_stream_progress[player_idx] = player.fail_stream_progress;
         let machine_records =
@@ -77,6 +82,7 @@ pub(crate) fn evaluation_view(
             && (!gs.course_display_is_course_stage()
                 || policy.autosubmit_course_scores_individually)
             && !prof.arrowcloud_api_key.trim().is_empty();
+        let local_score_valid = local_score_valid && saves_score;
         let earned_machine_record =
             local_score_valid && machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
         let earned_top2_personal =
@@ -156,6 +162,7 @@ pub(crate) fn evaluation_view(
     }
     EvaluationInitView {
         score_info,
+        routine_shared_score_percent: gs.routine_shared_itg_score_percent(),
         fail_stream_progress,
         context,
         stage_duration_seconds: stage.duration_seconds,

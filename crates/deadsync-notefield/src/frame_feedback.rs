@@ -1120,6 +1120,7 @@ mod tests {
                 total_cols,
                 single_style: true,
                 double_style: false,
+                shared_sides: false,
                 center_one_player: false,
                 screen_width: 640.0,
                 screen_height: 480.0,

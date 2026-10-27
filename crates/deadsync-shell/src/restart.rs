@@ -154,12 +154,15 @@ const fn select_restart_steps(
     player_side: PlayerSide,
 ) -> [usize; MAX_PLAYERS] {
     match play_style {
-        PlayStyle::Versus | PlayStyle::PumpVersus | PlayStyle::Couple | PlayStyle::PumpCouple => {
-            resolved_steps
-        }
-        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble
+        PlayStyle::Versus
+        | PlayStyle::PumpVersus
+        | PlayStyle::Couple
+        | PlayStyle::PumpCouple
         | PlayStyle::Routine
-        | PlayStyle::PumpRoutine => [resolved_steps[player_side_index(player_side)]; MAX_PLAYERS],
+        | PlayStyle::PumpRoutine => resolved_steps,
+        PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble => {
+            [resolved_steps[player_side_index(player_side)]; MAX_PLAYERS]
+        }
     }
 }
 

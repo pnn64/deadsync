@@ -1,4 +1,4 @@
-﻿#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum StepStatsPlayStyle {
     #[default]
     Single,
@@ -13,10 +13,12 @@ pub const fn step_stats_play_style(play_style: GameplayInputPlayStyle) -> StepSt
         GameplayInputPlayStyle::Single | GameplayInputPlayStyle::PumpSingle => {
             StepStatsPlayStyle::Single
         }
-        GameplayInputPlayStyle::Double | GameplayInputPlayStyle::PumpDouble
+        GameplayInputPlayStyle::Double
+        | GameplayInputPlayStyle::PumpDouble
         | GameplayInputPlayStyle::Routine
         | GameplayInputPlayStyle::PumpRoutine => StepStatsPlayStyle::Double,
-        GameplayInputPlayStyle::Versus | GameplayInputPlayStyle::PumpVersus
+        GameplayInputPlayStyle::Versus
+        | GameplayInputPlayStyle::PumpVersus
         | GameplayInputPlayStyle::Couple
         | GameplayInputPlayStyle::PumpCouple => StepStatsPlayStyle::Versus,
     }

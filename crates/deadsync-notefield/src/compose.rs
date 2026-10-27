@@ -34,6 +34,8 @@ pub struct NotefieldGeometry {
     pub total_cols: usize,
     pub single_style: bool,
     pub double_style: bool,
+    /// Routine's two fields share the pads and are both centered.
+    pub shared_sides: bool,
     pub center_one_player: bool,
     pub screen_width: f32,
     pub screen_height: f32,
@@ -749,6 +751,7 @@ fn prepare_field<S>(
         num_players: request.geometry.num_players,
         single_style: request.geometry.single_style,
         double_style: request.geometry.double_style,
+        shared_sides: request.geometry.shared_sides,
         center_one_player: request.geometry.center_one_player,
         screen_width: request.geometry.screen_width,
         screen_center_x: request.geometry.screen_center_x,

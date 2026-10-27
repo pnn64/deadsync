@@ -2126,18 +2126,19 @@ fn append_edit_markers(state: &State, actors: &mut Vec<Actor>) {
     let is_p2_single = profile_data::is_single_p2_side(play_style, hud.player_side);
 
     match play_style {
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+        profile_data::PlayStyle::Versus
+        | profile_data::PlayStyle::PumpVersus
         | profile_data::PlayStyle::Couple
-        | profile_data::PlayStyle::PumpCouple => {
+        | profile_data::PlayStyle::PumpCouple
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => {
             append_player_markers(state, actors, 0, MarkerPlacement::P1, play_style, false);
             append_player_markers(state, actors, 1, MarkerPlacement::P2, play_style, false);
         }
         profile_data::PlayStyle::Single
         | profile_data::PlayStyle::Double
         | profile_data::PlayStyle::PumpSingle
-        | profile_data::PlayStyle::PumpDouble
-        | profile_data::PlayStyle::Routine
-        | profile_data::PlayStyle::PumpRoutine => {
+        | profile_data::PlayStyle::PumpDouble => {
             let placement = if is_p2_single {
                 MarkerPlacement::P2
             } else {
@@ -2180,7 +2181,10 @@ fn append_player_markers(
     let centered_one_side =
         state.gameplay.num_players() == 1 && play_style.is_single() && center_1player_notefield;
     let centered_both_sides = state.gameplay.num_players() == 1 && play_style.is_double();
-    let base_x = if state.gameplay.num_players() == 2 {
+    // Routine's two fields share the centered pads.
+    let base_x = if play_style.is_routine() {
+        screen_center_x()
+    } else if state.gameplay.num_players() == 2 {
         match placement {
             MarkerPlacement::P1 => screen_center_x() - clamped_width * 0.25,
             MarkerPlacement::P2 => screen_center_x() + clamped_width * 0.25,
