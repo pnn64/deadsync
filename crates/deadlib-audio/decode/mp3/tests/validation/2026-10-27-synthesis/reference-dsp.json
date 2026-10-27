@@ -1,0 +1,91 @@
+{
+  "passed": true,
+  "frames": 2880,
+  "granules": 5760,
+  "groups": {
+    "0/hybrid": {
+      "samples": 663552,
+      "max_rms": 4.417217419411854e-09,
+      "max_error": 3.759987776685847e-08
+    },
+    "0/pcm": {
+      "samples": 663552,
+      "max_rms": 4.86442936639983e-08,
+      "max_error": 1.8683172514633029e-07
+    },
+    "1/hybrid": {
+      "samples": 663552,
+      "max_rms": 4.417217419411854e-09,
+      "max_error": 3.759987776685847e-08
+    },
+    "1/pcm": {
+      "samples": 663552,
+      "max_rms": 4.741393266784275e-08,
+      "max_error": 1.8396339779291893e-07
+    },
+    "2/hybrid": {
+      "samples": 663552,
+      "max_rms": 4.711122714721339e-10,
+      "max_error": 7.117244238408205e-09
+    },
+    "2/pcm": {
+      "samples": 663552,
+      "max_rms": 3.6426994873079446e-08,
+      "max_error": 1.4921371443987752e-07
+    },
+    "3/hybrid": {
+      "samples": 663552,
+      "max_rms": 4.4626422195313614e-09,
+      "max_error": 4.018030089203428e-08
+    },
+    "3/pcm": {
+      "samples": 663552,
+      "max_rms": 4.7175837002879564e-08,
+      "max_error": 1.9062154360538486e-07
+    },
+    "4/hybrid": {
+      "samples": 663552,
+      "max_rms": 4.417217419411854e-09,
+      "max_error": 3.759987776685847e-08
+    },
+    "4/pcm": {
+      "samples": 663552,
+      "max_rms": 4.637002350370013e-08,
+      "max_error": 1.6346801279265577e-07
+    }
+  },
+  "limits": {
+    "hybrid": {
+      "rms": 2e-07,
+      "max": 1e-06
+    },
+    "pcm": {
+      "rms": 4e-07,
+      "max": 2e-06
+    }
+  },
+  "errors": [],
+  "method": "All-frequency isolated-coefficient DSP checks through libmad's public API.\n\nNative kernels receive explicitly reordered spectra. Reference MP3 frames encode\nthe same coefficients, with independent bit writing. Frames form a continuous\nstateful sequence; each first granule is followed by a zero granule. Constructed\nwindow transitions exercise equations and history, not full ISO conformance.\n",
+  "commands": [
+    [
+      "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/dsp",
+      "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/dsp-verified/spectra.bin",
+      "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/dsp-verified/native.bin"
+    ],
+    [
+      "/home/perfecttaste/.cache/deadlib-mp3/dsp-reference",
+      "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/dsp-verified/vectors.mp3",
+      "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/dsp-verified/reference.bin"
+    ]
+  ],
+  "binaries": {
+    "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/dsp": "eda93b347fe1f44b4499831a300a8cd85ef3fec8671329f11e6253e46db0c31d",
+    "/home/perfecttaste/.cache/deadlib-mp3/dsp-reference": "c7ce69740e429bdfa3e784bfeaf558f637d8b6adbc847b84f1a2c41cd131c021"
+  },
+  "data_sha256": {
+    "native.bin": "65181ea511901f03dc8a491272dd02a10c8c989b07e0cd8d86ca8fe0e3bcb865",
+    "reference.bin": "baa625eeefa575cabb08ae702d4b5140176579d753bc0090261b0b0eeed97d3f",
+    "spectra.bin": "4f5d50bfba8d1b9f91775bf79675f6fa448218be83baa2b75acb643afdbfab5c",
+    "vectors.mp3": "4fea38b45ba0542487e8da44cc6befe1c8735ca4bcb2c182957ce77ae115eb47"
+  }
+}

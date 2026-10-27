@@ -18,8 +18,13 @@ pub struct DecodeOptions {
     pub allow_nonfinite: bool,
 }
 
+#[path = "synthesis.rs"]
+mod synthesis;
+pub use synthesis::{PacketTiming, SynthesisDecoder, SynthesisState};
+
 /// Borrowed planar, unclipped f32 PCM in Vorbis mapping-zero channel order.
-/// Frame positions are raw overlap output positions, before container trimming.
+/// PacketDecoder positions count raw overlap output before container trimming.
+/// SynthesisDecoder positions count consumed PCM under its granule/read policy.
 /// Samples are finite unless `DecodeOptions::allow_nonfinite` was enabled.
 pub struct PcmBlock<'a> {
     data: &'a [f32],
@@ -48,6 +53,11 @@ impl<'a> PcmBlock<'a> {
         self.frames = end - start;
         self
     }
+}
+
+pub(crate) struct DecodedTime {
+    pub(crate) header: AudioHeader,
+    pub(crate) truncated: bool,
 }
 
 /// Reusable native raw-packet Vorbis I synthesis context. No Ogg framing,
@@ -173,6 +183,82 @@ impl PacketDecoder {
     /// End-of-packet after the prefix is nominal and produces a truncated block.
     /// Do not invent/flush a final block: a container supplies final sample count.
     pub fn decode(&mut self, packet: &[u8]) -> Result<Option<PcmBlock<'_>>, Error> {
+        let Some(decoded) = self.decode_time(packet)? else {
+            return Ok(None);
+        };
+        let channels = self.setup.channels() as usize;
+        let [small, large] = self.setup.block_sizes();
+        let stride = large / 2;
+        let n = decoded.header.block_size;
+        let bins = n / 2;
+        let truncated = decoded.truncated;
+        let left = if n == small || self.previous_size != large {
+            &self.short_slope
+        } else {
+            &self.long_slope
+        };
+        for ch in 0..channels {
+            apply_left_window(&mut self.current[ch * large..ch * large + n], left);
+        }
+        let frames = if self.previous_size == 0 {
+            0
+        } else {
+            (self.previous_size + n) / 4
+        };
+        let start_frame = self.position;
+        let next_position = self
+            .position
+            .checked_add(frames as u64)
+            .ok_or(Error::LimitExceeded("PCM frame position"))?;
+        let current_start = frames as isize - bins as isize;
+        let right = if self.previous_size == small || n == small {
+            &self.short_slope
+        } else {
+            &self.long_slope
+        };
+        for ch in 0..channels {
+            let current = &self.current[ch * large..ch * large + n];
+            let previous = &mut self.previous[ch * stride..ch * stride + stride];
+            let output = &mut self.pcm[ch * stride..ch * stride + frames];
+            for (i, value) in output.iter_mut().enumerate() {
+                let prior = if i < self.previous_size / 2 {
+                    // Delay the previous block's right window until the next
+                    // accepted mode is known. Discarded packets can make the
+                    // encoded neighbor hints disagree with the actual overlap.
+                    right_window(previous[i], i, self.previous_size, right)
+                } else {
+                    0.0
+                };
+                let index = i as isize - current_start;
+                let next = if index >= 0 {
+                    current[index as usize]
+                } else {
+                    0.0
+                };
+                *value = prior + next;
+                if !value.is_finite() && !self.allow_nonfinite {
+                    return Err(Error::Invalid("nonfinite overlap output"));
+                }
+            }
+        }
+        for ch in 0..channels {
+            self.previous[ch * stride..ch * stride + bins]
+                .copy_from_slice(&self.current[ch * large + bins..ch * large + n]);
+        }
+        self.previous_size = n;
+        self.position = next_position;
+        Ok(Some(PcmBlock {
+            data: &self.pcm,
+            stride,
+            channels,
+            frames,
+            start_frame,
+            block_size: n,
+            truncated,
+        }))
+    }
+
+    pub(crate) fn decode_time(&mut self, packet: &[u8]) -> Result<Option<DecodedTime>, Error> {
         let Some((header, mut bits)) = packet_header(&self.setup, &self.limits, packet)? else {
             return Ok(None);
         };
@@ -294,70 +380,9 @@ impl PacketDecoder {
                 if !self.allow_nonfinite && output.iter().any(|value| !value.is_finite()) {
                     return Err(Error::Invalid("nonfinite MDCT output"));
                 }
-                let left = if n == small || self.previous_size != large {
-                    &self.short_slope
-                } else {
-                    &self.long_slope
-                };
-                apply_left_window(output, left);
             }
         }
-        let frames = if self.previous_size == 0 {
-            0
-        } else {
-            (self.previous_size + n) / 4
-        };
-        let start_frame = self.position;
-        let next_position = self
-            .position
-            .checked_add(frames as u64)
-            .ok_or(Error::LimitExceeded("PCM frame position"))?;
-        let current_start = frames as isize - bins as isize;
-        let right = if self.previous_size == small || n == small {
-            &self.short_slope
-        } else {
-            &self.long_slope
-        };
-        for ch in 0..channels {
-            let current = &self.current[ch * large..ch * large + n];
-            let previous = &mut self.previous[ch * stride..ch * stride + stride];
-            let output = &mut self.pcm[ch * stride..ch * stride + frames];
-            for (i, value) in output.iter_mut().enumerate() {
-                let prior = if i < self.previous_size / 2 {
-                    // Delay the previous block's right window until the next
-                    // accepted mode is known. Discarded packets can make the
-                    // encoded neighbor hints disagree with the actual overlap.
-                    right_window(previous[i], i, self.previous_size, right)
-                } else {
-                    0.0
-                };
-                let index = i as isize - current_start;
-                let next = if index >= 0 {
-                    current[index as usize]
-                } else {
-                    0.0
-                };
-                *value = prior + next;
-                if !value.is_finite() && !self.allow_nonfinite {
-                    return Err(Error::Invalid("nonfinite overlap output"));
-                }
-            }
-        }
-        for ch in 0..channels {
-            self.previous[ch * stride..ch * stride + bins]
-                .copy_from_slice(&self.current[ch * large + bins..ch * large + n]);
-        }
-        self.previous_size = n;
-        self.position = next_position;
-        Ok(Some(PcmBlock {
-            data: &self.pcm,
-            stride,
-            channels,
-            frames,
-            start_frame,
-            block_size: n,
-            truncated,
-        }))
+        Ok(Some(DecodedTime { header, truncated }))
     }
 }
 pub(crate) fn packet_header<'a>(

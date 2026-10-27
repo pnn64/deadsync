@@ -1,0 +1,433 @@
+{
+  "baseline_png_commit": "8ce596494afb8cdfa09a273f6f8091cb02a79106",
+  "selected": "stored-growth",
+  "reason": "One fewer observed realloc call for each of 21 format-corpus images, in both PNG decode and raw inflation, with identical logical peak/retained requested bytes and native samples on all 84 images. The longer three-case stored subset supports a modest raw benefit; broader photo/format PNG throughput is inconclusive. Longer checks do not repeat the short-run gray8 PNG and RGB16 raw outliers. No broad speedup or decoder parity is claimed.",
+  "production_sources_changed": [
+    "src/zlib.rs"
+  ],
+  "production_sources_unchanged": 20,
+  "source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "b75b671c306d42a95a561d8ef1f24e3c536de230d6218141ffea8651adfc0fb7"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "6f3f7d4a2f6406c7852f1b57a1f3d7c2983b2aa20da1a7c2fba5e37a18e2e315"
+    }
+  ],
+  "reconstruction": [
+    {
+      "patch": "experiments/stored-growth.patch",
+      "patch_sha256": "f982d83520fa2ebca3cc62e230299d99762b984e34d4e57ba29c4fb7a5155f05",
+      "all_21_source_hashes_reconstructed": true,
+      "destination": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\png-stored-growth-6c77t73x"
+    }
+  ],
+  "benchmark_groups": [
+    {
+      "manifest": "benchmark-stored-growth-before-photos-a-manifest.json",
+      "sha256": "e54611b201e5ba0aebb2b1bddf483df35e21a1ceb8af42814f1cbd25360a1a2d",
+      "source_variant": "baseline",
+      "iterations": 12,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-stored-growth-before-formats-a-manifest.json",
+      "sha256": "5edf14901b41e4097f3834c0dbd9881d698e75d0d2ba8f0e7cd167061da08125",
+      "source_variant": "baseline",
+      "iterations": 12,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-stored-growth-probe-before-a-manifest.json",
+      "sha256": "29b22784b673e762340ff9a6c6076bfc6499088a53e204d877242db3216268c5",
+      "source_variant": "baseline",
+      "iterations": 4096,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-stored-growth-focus-before-b-manifest.json",
+      "sha256": "6925d87ee6098194e5049e8141fe418d23a4f8c8790d114242d30bcb3e2ac00a",
+      "source_variant": "baseline",
+      "iterations": 4096,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-stored-growth-trial-photos-a-manifest.json",
+      "sha256": "c6b067733a23a0b6d3ece88262c62ee806fd51114273e95d427a5c908a83d9d6",
+      "source_variant": "candidate",
+      "iterations": 12,
+      "binary_sha256": "e70c010482df642a99609331dbfacce6248970915ede70e155e64439d41b47c6"
+    },
+    {
+      "manifest": "benchmark-stored-growth-trial-formats-a-manifest.json",
+      "sha256": "c6f2c1faf331048a4c127d686ee8d3a44d21f75116f3354fead0bf0e89c295d3",
+      "source_variant": "candidate",
+      "iterations": 12,
+      "binary_sha256": "e70c010482df642a99609331dbfacce6248970915ede70e155e64439d41b47c6"
+    },
+    {
+      "manifest": "benchmark-stored-growth-probe-trial-a-manifest.json",
+      "sha256": "71af1b23ca83f75e6780989703a22e0da5f09093d2c30685bf8a171d162f01ff",
+      "source_variant": "candidate",
+      "iterations": 4096,
+      "binary_sha256": "e70c010482df642a99609331dbfacce6248970915ede70e155e64439d41b47c6"
+    },
+    {
+      "manifest": "benchmark-stored-growth-focus-trial-b-manifest.json",
+      "sha256": "354cbc3a1eb55a8a719030257c2b01f76431bd21aac1f2a158fc409ed9271aec",
+      "source_variant": "candidate",
+      "iterations": 4096,
+      "binary_sha256": "e70c010482df642a99609331dbfacce6248970915ede70e155e64439d41b47c6"
+    },
+    {
+      "manifest": "benchmark-stored-growth-repeat-photos-a-manifest.json",
+      "sha256": "dbb3bf974eb5feadb959e95c25d0135427d1980e4ee2c2b954ad6858fbec02f0",
+      "source_variant": "candidate",
+      "iterations": 12,
+      "binary_sha256": "e70c010482df642a99609331dbfacce6248970915ede70e155e64439d41b47c6"
+    },
+    {
+      "manifest": "benchmark-stored-growth-repeat-formats-a-manifest.json",
+      "sha256": "68a5a670c71f002558c0075f253fd26435f85aa5c9df2e187560ca305238a36c",
+      "source_variant": "candidate",
+      "iterations": 12,
+      "binary_sha256": "e70c010482df642a99609331dbfacce6248970915ede70e155e64439d41b47c6"
+    },
+    {
+      "manifest": "benchmark-stored-growth-probe-repeat-a-manifest.json",
+      "sha256": "20f6d7d36472d22fe6c7e0e37553fd758024721942878926fe18154810d564eb",
+      "source_variant": "candidate",
+      "iterations": 4096,
+      "binary_sha256": "e70c010482df642a99609331dbfacce6248970915ede70e155e64439d41b47c6"
+    },
+    {
+      "manifest": "benchmark-stored-growth-focus-repeat-b-manifest.json",
+      "sha256": "83e19c3db51c76ff564fd1379ed1f8e58796d85fb542043b042d396c05697049",
+      "source_variant": "candidate",
+      "iterations": 4096,
+      "binary_sha256": "e70c010482df642a99609331dbfacce6248970915ede70e155e64439d41b47c6"
+    },
+    {
+      "manifest": "benchmark-stored-growth-control-photos-a-manifest.json",
+      "sha256": "eb9f19e0bdf5a6acbbe1e00328252f46329cf0d3bdc26dcf1013a3ab3844cbd4",
+      "source_variant": "baseline",
+      "iterations": 12,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-stored-growth-control-formats-a-manifest.json",
+      "sha256": "463da51ac691f55988143f4d0d90a609f6ffd716dfd20da71dade6eaa3065776",
+      "source_variant": "baseline",
+      "iterations": 12,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-stored-growth-probe-control-a-manifest.json",
+      "sha256": "9d0ba284ec7148fb032f3df0886bdfb945adfe8fe91b91ae560f6cd400b3e9f4",
+      "source_variant": "baseline",
+      "iterations": 4096,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-stored-growth-focus-control-b-manifest.json",
+      "sha256": "7cc543148da19cd9cfd06eca104851f8e84699fe4589bd3bd339d7327ec873b4",
+      "source_variant": "baseline",
+      "iterations": 4096,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    }
+  ],
+  "summaries": [
+    {
+      "path": "benchmark-stored-growth-photos-summary.json",
+      "sha256": "dd86e6f2353957ee73c9b22ad159cfa422cd625b81c334d18b43c8fed051dc69",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 103.77542211498523,
+          "after_mib_s": 103.44095236153942,
+          "absolute_change_percent": -0.3223015109254046,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 0.41399074752690446
+        },
+        "decode-reader": {
+          "before_mib_s": 95.93659861458526,
+          "after_mib_s": 93.89084066212635,
+          "absolute_change_percent": -2.13240617449606,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -1.409484670695782
+        },
+        "inflate": {
+          "before_mib_s": 128.99195756989457,
+          "after_mib_s": 128.43425197194065,
+          "absolute_change_percent": -0.4323568759329155,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 1.3934874147926601
+        },
+        "inflate-stream": {
+          "before_mib_s": 104.55147647409797,
+          "after_mib_s": 103.45107576228426,
+          "absolute_change_percent": -1.0524965776894768,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 0.7619757602773891
+        }
+      }
+    },
+    {
+      "path": "benchmark-stored-growth-formats-summary.json",
+      "sha256": "9b688205b90ec9dd9e33ce9ed00301bace931cbef7204cc661c319e97ebf4ee7",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 265.83881968586877,
+          "after_mib_s": 262.1080893196946,
+          "absolute_change_percent": -1.4033805787215803,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -0.6300526937806028
+        },
+        "decode-reader": {
+          "before_mib_s": 248.39954065877455,
+          "after_mib_s": 246.81273882789188,
+          "absolute_change_percent": -0.6388102919491545,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 0.14051438604851807
+        },
+        "inflate": {
+          "before_mib_s": 1025.7487215271121,
+          "after_mib_s": 1025.7642967134364,
+          "absolute_change_percent": 0.0015184212270868969,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 2.558533716509248
+        },
+        "inflate-stream": {
+          "before_mib_s": 519.757262241292,
+          "after_mib_s": 528.1744935787955,
+          "absolute_change_percent": 1.619454300880152,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 4.217839835898407
+        }
+      }
+    },
+    {
+      "path": "benchmark-stored-growth-probe-summary.json",
+      "sha256": "4f9503ad3866c93275c54112728ed9705f5919bd7df11458544835f0577c02c3",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 444.6139458711517,
+          "after_mib_s": 499.05632663208434,
+          "absolute_change_percent": 12.24486574622874,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -0.9651012900598555
+        },
+        "decode-reader": {
+          "before_mib_s": 364.9118236703404,
+          "after_mib_s": 407.37311755760885,
+          "absolute_change_percent": 11.636042225265841,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -1.5022730825506425
+        },
+        "inflate": {
+          "before_mib_s": 3295.2589946989333,
+          "after_mib_s": 4019.8392101993377,
+          "absolute_change_percent": 21.988566503149908,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 3.223954867510126
+        },
+        "inflate-stream": {
+          "before_mib_s": 1297.1312560354866,
+          "after_mib_s": 1467.9457827947006,
+          "absolute_change_percent": 13.168638560239954,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -4.239267875500974
+        }
+      }
+    },
+    {
+      "path": "benchmark-stored-growth-focus-summary.json",
+      "sha256": "8716f36e56202b68987a044e9dacb3522f139b2c83bda99109dd26457206e5eb",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 344.0740885629722,
+          "after_mib_s": 339.87814686177273,
+          "absolute_change_percent": -1.2194878488885452,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -0.5250420666290778
+        },
+        "decode-reader": {
+          "before_mib_s": 286.4874532804096,
+          "after_mib_s": 288.4289057937456,
+          "absolute_change_percent": 0.6776745337729428,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 1.3854577283034297
+        },
+        "inflate": {
+          "before_mib_s": 2303.4610000699777,
+          "after_mib_s": 2329.421183570743,
+          "absolute_change_percent": 1.1270077288035862,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 5.438218410322593
+        },
+        "inflate-stream": {
+          "before_mib_s": 1120.3956068976493,
+          "after_mib_s": 1101.790655891441,
+          "absolute_change_percent": -1.660569792640021,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 2.531801873902517
+        }
+      }
+    }
+  ],
+  "derived_templates": [
+    {
+      "path": "experiments/stored-growth-probe-baseline-source.json",
+      "sha256": "b2f229507891a2d736ca6cd2ad1696d9a777c45cdc5409d6e46d76169cbe30d4"
+    },
+    {
+      "path": "experiments/stored-growth-focus-baseline-source.json",
+      "sha256": "9904f721feab4501a1f4ae041af2882044f7888cc21713c2075c38f90faa4ece"
+    },
+    {
+      "path": "experiments/stored-growth-focus-candidate-source.json",
+      "sha256": "b8debd2294734970851e751de12d072fb07f4dce74a17ff73cc6194e971d36ed"
+    }
+  ],
+  "case_audits": [
+    {
+      "path": "benchmark-stored-growth-photos-per-case.json",
+      "sha256": "161f91b2c4bc475b0b003c07d091b8d28cccdcabef37c82b3dbf62d476619b6e"
+    },
+    {
+      "path": "benchmark-stored-growth-formats-per-case.json",
+      "sha256": "d9cf560926fd9c1aad395223dec577c42783e2aedf0905f0976410857645a2f0"
+    },
+    {
+      "path": "benchmark-stored-growth-probe-per-case.json",
+      "sha256": "1eb467589d087651b222fc2de15e60cc94ca46b1bbca1bc1c93c7d39e850ed4f"
+    },
+    {
+      "path": "benchmark-stored-growth-focus-per-case.json",
+      "sha256": "c9c4962dc3fed7dbc2dc6ba390fd1f999e9cef43f18ceaa11b7d0a6f154f47c1"
+    }
+  ],
+  "focused_validation": [
+    {
+      "path": "stored-growth-focused.json",
+      "sha256": "dd18a0e59e77ce994ac6714dcb852f651e7c7557fb6ee4cda484e049d9be8b33",
+      "log": "stored-growth-focused.log",
+      "log_sha256": "9a9c38145aaa000f16687b27532dde6b962c0090cd605f4908d79ddc5fedab12"
+    }
+  ],
+  "scope": "Sixteen final groups / 48 processes; three successful baseline stdout files from a metadata-write failure are preserved but excluded. No task builds, tests, fuzzing or profiling overlap timed processes. Instrumented allocation binaries are untimed; requested live-byte peaks exclude allocator overhead, internal realloc overlap and RSS. Native crate forbids unsafe; only standalone test instrumentation wraps System. Existing regression fixtures, harnesses and generators are unchanged. Benchmark runner additionally fixes three metadata lineage assignments.",
+  "evidence": [
+    {
+      "path": "stored-growth-focused.json",
+      "sha256": "dd18a0e59e77ce994ac6714dcb852f651e7c7557fb6ee4cda484e049d9be8b33"
+    },
+    {
+      "path": "experiments/stored-growth-allocations.json",
+      "sha256": "c1cb9eb0f8dd9f00a53c0e572817a932eb7c496ebb816cb543cdec3e2e896f18"
+    },
+    {
+      "path": "experiments/stored-growth-stored-blocks.json",
+      "sha256": "8464995f654d23354a5d79b9965a20fe67d8a78f6923c9047a824e004c83cea7"
+    },
+    {
+      "path": "experiments/stored-growth-focus-recovery.json",
+      "sha256": "536c5de62290f6839a0d3d4c163f2d5931c0e6bade01a80d3f095603338186f7"
+    },
+    {
+      "path": "fuzz/reports/stored-growth-corpus-storage.json",
+      "sha256": "4f3f08a3ba1b4196d9cae51c497d2317cab34b779809259c16ed6296568dd3a0"
+    }
+  ],
+  "verifier_sha256": "c641b863ee860d5a125bb7bdb0c414e38d4e3676774328df64d92472548c2e43",
+  "final_validation_evidence": [
+    {
+      "path": "stored-growth-validation.json",
+      "sha256": "ed21903d4aeb9f72ad29c941c2fec55e1dcf566de261bdc974a96713ea17907d"
+    },
+    {
+      "path": "fuzz/reports/stored-growth-source.json",
+      "sha256": "67b7ff13cc02ee4af029dba28f26378463e556e1fee752d33042242d242d78ee"
+    },
+    {
+      "path": "fuzz/reports/stored-growth-seeds.json",
+      "sha256": "d9502a124c2b457a1b32099dc6ca96f474c9b15cf392f8e9888000d2a0825401"
+    }
+  ]
+}

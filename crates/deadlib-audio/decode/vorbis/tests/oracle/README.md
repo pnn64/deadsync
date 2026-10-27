@@ -187,3 +187,28 @@ declared durations. `pcm-timed-cases` assigns granules/EOS to each raw packet;
 calls unmodified synthesis/blockin. These test-only protocols add no production
 dependencies. See [EOS_CLAMPING.md](../../EOS_CLAMPING.md) for the bounded policy,
 goldens, counter-wrap witnesses and remaining seek differences.
+
+`synthesis-ops` accepts decode, track-only, read, drain, restart and fresh-context
+operations. It calls the unmodified libvorbis backends and reports statuses,
+sequence/granule/sample clocks, block sizes, queue cursors, EOS and the entire
+channel-major PCM backing buffer. Test-only operations inject clock counters or
+direct time blocks to isolate signed wrap, windows and IEEE behavior. These
+operations are never used by the production crates.
+
+`trace_seek.py --reference-root ROOT --build NEW_DIRECTORY` builds a separate
+oracle using an instrumented copy of pinned `vorbisfile.c`. The reference checkout
+and ordinary oracle stay unchanged. Hooks only read state and emit packet bytes
+and integers to stderr when `DEADLIB_SEEK_TRACE` is set. The generated source,
+helper snapshot, patch inventory, commands and hashes are retained. Then run:
+
+```powershell
+python crates/deadlib-audio/decode/vorbis/tests/oracle/replay_seek_trace.py --input FILE.ogg --requests REQUESTS.bin --oracle ORACLE.exe --trace TRACE.exe --output NEW_DIRECTORY
+```
+
+Requests use the existing `oggseekstates` protocol. Replay requires byte-identical
+file responses from ordinary/traced helpers, reconstructs the actual raw DSP
+schedule, checks every clock/queue transition and requires byte-identical returned
+PCM chunks. The resulting `schedule.bin` / `schedule.out` also drive the native
+test with `DEADLIB_VORBIS_SYNTHESIS_TRACES` set to their parent directory. This
+debugger currently accepts a single logical stream. The ordinary seek tests
+continue to cover chains independently. See [synthesis state](../../SYNTHESIS_STATE.md).

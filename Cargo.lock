@@ -1594,7 +1594,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.2478"
+version = "0.5.2479"
 dependencies = [
  "deadlib-assets",
  "deadlib-audio",
@@ -2070,7 +2070,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.2478"
+version = "0.5.2479"
 dependencies = [
  "askama",
  "bitflags 2.13.2",
@@ -2140,7 +2140,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.2478"
+version = "0.5.2479"
 dependencies = [
  "log",
  "semver",
@@ -6456,8 +6456,11 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.10.3",
+ "rustls",
+ "rustls-pki-types",
  "sha1",
  "thiserror 2.0.21",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -6538,7 +6541,7 @@ dependencies = [
  "ureq-proto",
  "url",
  "utf8-zero",
- "webpki-roots",
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]
@@ -6876,6 +6879,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e49d0e65abc00c142e8f9428da991da9f1a250c39be97459901eb12b9b49f62a"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.26.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
+dependencies = [
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]

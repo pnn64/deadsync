@@ -1,0 +1,23 @@
+{
+  "scope": "Next milestone investigation; no claim that indexed seeking is fixed.",
+  "reference_source": "target/deadlib-audio-reference/vorbis/lib/vorbisfile.c",
+  "reference_source_sha256": "cbb0f6b604846b31847a9c0c438b617dd7ec85dbf1a22bb1d4327f8792ff1f5d",
+  "known_difference_inventory": "crates/deadlib-audio/decode/vorbis/tests/fixtures/eos-seek-differences-v1.tsv",
+  "inventory_sha256": "5dd201420dba5cd958be3f0887e069b9ed5918cf196270fc5bd6208eacb7aea6",
+  "open_differences": 172,
+  "captured_streams_with_known_differences": 70,
+  "required_control_behavior": [
+    "Preserve strict retained-PCM seeking and expose reference behavior explicitly.",
+    "Implement exact page-anchor bisection with CHUNKSIZE 65536, strict granule < target, last-link end bound at final page start, first-page fallback, and continued-packet/raw-seek fallback.",
+    "Reset container packet numbering relative to the selected anchor, discarding all packets before its granule-carrying packet; that marked packet can be non-audio.",
+    "An unavailable initial continuation is skipped without incrementing libogg packetno. Relative numbering starts at the first fully available packet; actual sequence holes increment packetno when the hole marker is consumed.",
+    "Preroll uses header-only declared block sizes, conservative (thisblock+maxlong)/4 threshold, track-only insertion and trust in marked granules.",
+    "Restart preserves the previous block size and PCM backing buffer; new context/link clears both.",
+    "Run real synthesis/discard until the signed file PCM cursor reaches the requested position; EOF sets declared total. A seek may return an overshot position and fewer samples, matching C.",
+    "For fetched known non-EOS granules, subtract first-offset only in links after the first, preserving pinned first-link broadcast behavior.",
+    "Do not replace file PCM cursor with SynthesisDecoder consumed-frame position or infer emitted sample counts from declared duration.",
+    "Validate repeated/backward seeks, partial reads, all 172 inventory requests, matched controls, broadcast/trim offsets, continuation pages, chains and historical files.",
+    "Investigate actual negative signed read requests or rejected track prefixes if observed; public nonnegative raw synthesis tests do not establish coverage of those C call sequences."
+  ],
+  "current_production_state": "New raw SynthesisDecoder matches captured DSP schedules. OggSeekReader still uses its preexisting timing/preroll model."
+}

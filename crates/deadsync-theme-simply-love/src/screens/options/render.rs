@@ -1423,6 +1423,7 @@ pub fn push_actors(
     }
 
     let combined_alpha = alpha_multiplier * state.content_alpha;
+    push_twitch_channel_entry(actors, state);
     for actor in &mut actors[ui_start..] {
         actor.mul_alpha(combined_alpha);
     }

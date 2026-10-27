@@ -55,7 +55,9 @@ pub struct Id3Tag<'a> {
     pub bytes: usize,
 }
 impl<'a> Id3Tag<'a> {
-    pub fn parse(data: &'a [u8], limits: Limits) -> Result<Self, Error> {
+    /// Validates the ten-byte header and returns its complete on-disk size,
+    /// including a v2.4 footer. The payload need not be buffered yet.
+    pub fn encoded_len(data: &[u8], limits: Limits) -> Result<usize, Error> {
         let header = data.get(..10).ok_or(Error::Truncated)?;
         if &header[..3] != b"ID3" {
             return Err(Error::Invalid("ID3 signature"));
@@ -79,6 +81,15 @@ impl<'a> Id3Tag<'a> {
         if bytes > limits.metadata_bytes {
             return Err(Error::LimitExceeded("ID3 bytes"));
         }
+        Ok(bytes)
+    }
+    pub fn parse(data: &'a [u8], limits: Limits) -> Result<Self, Error> {
+        let bytes = Self::encoded_len(data, limits)?;
+        let header = &data[..10];
+        let version = header[3];
+        let flags = header[5];
+        let footer = version == 4 && flags & 0x10 != 0;
+        let length = bytes - 10 - usize::from(footer) * 10;
         let tag = data.get(..bytes).ok_or(Error::Truncated)?;
         if footer {
             let tail = &tag[bytes - 10..];

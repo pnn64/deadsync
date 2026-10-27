@@ -1114,6 +1114,16 @@ pub(super) fn apply_submenu_choice_delta(
             _ => return None,
         };
         action = Some(select_music_config_effect(request));
+    } else if matches!(kind, SubmenuKind::Streaming) {
+        let enabled = yes_no_from_choice(new_index);
+        match rows[row_index].id {
+            SubRowId::TwitchEnabled => state.twitch.enabled = enabled,
+            SubRowId::TwitchBadges => state.twitch.show_badges = enabled,
+            SubRowId::TwitchEmotes => state.twitch.show_emotes = enabled,
+            SubRowId::TwitchGameplay => state.twitch.show_gameplay = enabled,
+            _ => return None,
+        }
+        action = Some(twitch_effect(state));
     } else if matches!(kind, SubmenuKind::GrooveStats) {
         let row = &rows[row_index];
         let enabled = yes_no_from_choice(new_index);
@@ -1746,6 +1756,12 @@ pub(super) fn activate_current_selection(
                     state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
                     state.submenu_fade_t = 0.0;
                 }
+                ItemId::StreamingServices => {
+                    queue_sfx(state, "assets/sounds/start.ogg");
+                    state.pending_submenu_kind = Some(SubmenuKind::Streaming);
+                    state.submenu_transition = SubmenuTransition::FadeOutToSubmenu;
+                    state.submenu_fade_t = 0.0;
+                }
                 ItemId::DownloadPacks => {
                     queue_sfx(state, "assets/sounds/start.ogg");
                     clear_navigation_holds(state);
@@ -1879,6 +1895,13 @@ pub(super) fn activate_current_selection(
                     state.submenu_transition = SubmenuTransition::FadeOutToMain;
                 }
                 state.submenu_fade_t = 0.0;
+                return ThemeEffect::None;
+            }
+            if kind == SubmenuKind::Streaming
+                && submenu_visible_row_to_actual(state, kind, selected_row)
+                    .is_some_and(|idx| STREAMING_ROWS[idx].id == SubRowId::TwitchChannel)
+            {
+                begin_twitch_channel_entry(state);
                 return ThemeEffect::None;
             }
             if matches!(kind, SubmenuKind::Input) {
@@ -2181,6 +2204,9 @@ fn handle_input_impl(
     }
     if state.reload_ui.is_some() {
         return ThemeEffect::None;
+    }
+    if let Some(effect) = handle_twitch_channel_input(state, ev) {
+        return effect;
     }
     if let Some(effect) = handle_judgment_palette_input(state, ev) {
         return effect;

@@ -1,0 +1,277 @@
+Focused raw and PNG correctness
+COMMAND: ["cargo", "test", "--offline", "-p", "deadlib-image-png", "--release", "--target-dir", "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\build", "--lib", "--test", "compression", "--test", "huffman", "--test", "huffman_permutations", "--test", "primary_pairs", "--test", "deflate_prefix", "--test", "deflate_stream", "--test", "zlib_headers", "--test", "stream_literals", "--test", "static_png", "--", "--nocapture"]
+   Compiling simd-adler32 v0.3.10
+   Compiling crc32fast v1.5.3
+   Compiling adler2 v2.0.1
+   Compiling cfg-if v1.0.5
+   Compiling bitflags v2.13.2
+   Compiling miniz_oxide v0.9.1
+   Compiling fdeflate v0.3.7
+   Compiling miniz_oxide v0.8.9
+   Compiling flate2 v1.1.10
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+   Compiling png v0.18.1
+    Finished `release` profile [optimized] target(s) in 56.01s
+     Running unittests src\lib.rs (target\png-literal-refill-20261028-a\build\release\deps\deadlib_image_png-e217eeb2c3bd0973.exe)
+
+running 11 tests
+test checksum::tests::known_checksums ... ok
+test scanline::tests::invalid_filter_bytes_do_not_change_the_row ... ok
+test checksum::tests::adler_block_and_modulus_boundaries ... ok
+test zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow ... ok
+test zlib::tests::every_length_and_distance_code_matches_rfc1951_tables ... ok
+test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
+test zlib::matcher::tests::bounded_history_chains_and_wrapping_head_positions ... ok
+test scanline::tests::independent_filter_bytes_scores_and_short_row_boundaries ... ok
+test zlib::matcher::tests::every_prefix_mismatch_and_tail ... ok
+test checksum::tests::adler_fragmentation_and_tail_lengths_match_scalar_oracle ... ok
+test scanline::tests::every_paeth_triplet_matches_the_specification ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests\compression.rs (target\png-literal-refill-20261028-a\build\release\deps\compression-ddb515d2c371b818.exe)
+
+running 5 tests
+test truncation_checksums_limits_and_trailing_data ... ok
+test dynamic_literal_only_and_single_symbol_trees ... ok
+test mixed_block_alignment_and_prefetched_stored_bytes ... ok
+test bidirectional_differential ... ok
+test deterministic_mutation_campaign ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+
+     Running tests\deflate_prefix.rs (target\png-literal-refill-20261028-a\build\release\deps\deflate_prefix-a108b293004a10da.exe)
+
+running 2 tests
+Mixed/one-bit prefix audit: 740 independent streams, 45140 suffix/padding combinations, three streaming fragment shapes each
+test one_bit_end_codes_and_huffman_stored_huffman_transitions_at_every_alignment ... ok
+Prefix audit: 3091 independent positive Huffman fixtures, 43274 suffix placements, 24728 trailer/body truncations and three streaming fragment shapes each
+test every_valid_huffman_fixture_keeps_exact_prefix_trailer_limits_and_truncations ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.04s
+
+     Running tests\deflate_stream.rs (target\png-literal-refill-20261028-a\build\release\deps\deflate_stream-67b7281eda2a22db.exe)
+
+running 4 tests
+test empty_output_and_input_after_finish ... ok
+test cross_block_history_and_separate_finish ... ok
+test mixed_compressibility_block_transitions_and_full_window_reuse ... ok
+test input_output_fragments_and_block_boundaries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+     Running tests\huffman.rs (target\png-literal-refill-20261028-a\build\release\deps\huffman-f4859f1e05b0091f.exe)
+
+running 7 tests
+test c_zlib_huffman_oracle ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+test malformed_and_single_symbol_trees ... ok
+test published_distance_counts_and_reserved_symbols ... ok
+test all_repeat_counts_and_cross_table_runs ... ok
+test every_complete_code_length_histogram ... ok
+test all_dynamic_count_fields ... ok
+test all_length_distance_values_and_fifteen_bit_codes ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.14s
+
+     Running tests\huffman_permutations.rs (target\png-literal-refill-20261028-a\build\release\deps\huffman_permutations-08761b4270a07dfa.exe)
+
+running 5 tests
+test c_zlib_symbol_permutations ... ignored, explicit C zlib permutation audit; build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+code-lengths: 190 independent streams, 19 symbols x depths 1..=7, both padding values
+test every_code_length_assignment_and_all_repeat_symbols ... ok
+literals: 4626 independent streams, 257 symbols x depths 1..=15, both padding values
+test every_literal_and_eob_assignment_with_empty_distances ... ok
+lengths: 5148 independent streams, 286 symbols x depths 1..=15, both padding values
+test every_literal_length_and_eob_assignment_with_matches ... ok
+distances: 780 independent streams, 30 symbols x depths 1..=15, both padding values
+test every_distance_assignment_and_full_history ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.41s
+
+     Running tests\primary_pairs.rs (target\png-literal-refill-20261028-a\build\release\deps\primary_pairs-94e2582b21b93e9e.exe)
+
+running 2 tests
+test c_zlib_literal_pair_values_and_widths ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+Primary literal audit: 65536 byte pairs plus 132 width/padding/long-code fixtures; independent flate2 and fragmented native samples, exact EOF/suffix consumption, output limits 0/1 and four trailer truncations
+test every_two_byte_value_and_short_code_width_keeps_samples_prefixes_and_limits ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.80s
+
+     Running tests\static_png.rs (target\png-literal-refill-20261028-a\build\release\deps\static_png-7e6561faf550d8ba.exe)
+
+running 3 tests
+test one_byte_idat_and_truncations ... ok
+test decode_reference_encodings ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+
+     Running tests\stream_literals.rs (target\png-literal-refill-20261028-a\build\release\deps\stream_literals-5ff2483d4ae64c6a.exe)
+
+running 2 tests
+test c_zlib_literal_runs_and_history_wraps ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+Streaming literal audit: 172 independent fixed/dynamic streams; exact flate2/native bytes and prefixes; alternating zero-output calls, input/output 1/1, 7/31 and whole/257, history wraps, limits and four trailer truncations
+test literal_runs_history_wrap_pending_output_limits_and_trailer_fragments ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.84s
+
+     Running tests\zlib_headers.rs (target\png-literal-refill-20261028-a\build\release\deps\zlib_headers-ae3863b55d069959.exe)
+
+running 5 tests
+test c_zlib_header_and_history_oracle ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+Invalid pre-output references accepted: flate2 24/24, Rust png 0/24
+test distance_must_not_precede_actual_output ... ok
+test every_cmf_and_flg_value_buffered_and_fragmented ... ok
+test every_png_zlib_header_value ... ok
+test advertised_window_distances_and_ring_wrap ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.87s
+
+
+EXIT: 0
+Strict candidate lint
+COMMAND: ["cargo", "clippy", "--offline", "-p", "deadlib-image-png", "--all-targets", "--target-dir", "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\build", "--", "-D", "warnings"]
+    Checking simd-adler32 v0.3.10
+   Compiling crc32fast v1.5.3
+    Checking adler2 v2.0.1
+    Checking cfg-if v1.0.5
+    Checking bitflags v2.13.2
+    Checking deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+    Checking miniz_oxide v0.9.1
+    Checking fdeflate v0.3.7
+    Checking miniz_oxide v0.8.9
+    Checking deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Checking flate2 v1.1.10
+    Checking png v0.18.1
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 7.94s
+
+EXIT: 0
+Scoped formatting
+COMMAND: ["rustfmt", "--edition", "2024", "--check", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\src\\zlib.rs"]
+
+EXIT: 0
+Timed before photos
+COMMAND: ["powershell", "-NoProfile", "-File", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1", "-Manifest", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-baseline-photos-source.json", "-Executable", "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\baseline\\decode_bench.exe", "-CorpusDirectory", "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak", "-LogPrefix", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-before-photos-a", "-Iterations", "12", "-Runs", "3"]
+Completed saved run 1: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-before-photos-a-run1.tsv
+Completed saved run 2: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-before-photos-a-run2.tsv
+Completed saved run 3: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-before-photos-a-run3.tsv
+
+EXIT: 0
+Timed before formats
+COMMAND: ["powershell", "-NoProfile", "-File", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1", "-Manifest", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-baseline-formats-source.json", "-Executable", "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\baseline\\decode_bench.exe", "-CorpusDirectory", "C:\\GitHub\\deadsync\\target\\png-decode-corpus-20261027-a", "-LogPrefix", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-before-formats-a", "-Iterations", "12", "-Runs", "3"]
+Completed saved run 1: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-before-formats-a-run1.tsv
+Completed saved run 2: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-before-formats-a-run2.tsv
+Completed saved run 3: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-before-formats-a-run3.tsv
+
+EXIT: 0
+Timed trial photos
+COMMAND: ["powershell", "-NoProfile", "-File", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1", "-Manifest", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-candidate-photos-source.json", "-Executable", "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\candidate\\decode_bench.exe", "-CorpusDirectory", "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak", "-LogPrefix", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-trial-photos-a", "-Iterations", "12", "-Runs", "3"]
+Completed saved run 1: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-trial-photos-a-run1.tsv
+Completed saved run 2: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-trial-photos-a-run2.tsv
+Completed saved run 3: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-trial-photos-a-run3.tsv
+
+EXIT: 0
+Timed trial formats
+COMMAND: ["powershell", "-NoProfile", "-File", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1", "-Manifest", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-candidate-formats-source.json", "-Executable", "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\candidate\\decode_bench.exe", "-CorpusDirectory", "C:\\GitHub\\deadsync\\target\\png-decode-corpus-20261027-a", "-LogPrefix", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-trial-formats-a", "-Iterations", "12", "-Runs", "3"]
+Completed saved run 1: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-trial-formats-a-run1.tsv
+Completed saved run 2: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-trial-formats-a-run2.tsv
+Completed saved run 3: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-trial-formats-a-run3.tsv
+
+EXIT: 0
+Timed repeat photos
+COMMAND: ["powershell", "-NoProfile", "-File", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1", "-Manifest", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-candidate-photos-source.json", "-Executable", "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\candidate\\decode_bench.exe", "-CorpusDirectory", "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak", "-LogPrefix", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-repeat-photos-a", "-Iterations", "12", "-Runs", "3"]
+Completed saved run 1: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-repeat-photos-a-run1.tsv
+Completed saved run 2: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-repeat-photos-a-run2.tsv
+Completed saved run 3: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-repeat-photos-a-run3.tsv
+
+EXIT: 0
+Timed repeat formats
+COMMAND: ["powershell", "-NoProfile", "-File", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1", "-Manifest", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-candidate-formats-source.json", "-Executable", "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\candidate\\decode_bench.exe", "-CorpusDirectory", "C:\\GitHub\\deadsync\\target\\png-decode-corpus-20261027-a", "-LogPrefix", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-repeat-formats-a", "-Iterations", "12", "-Runs", "3"]
+Completed saved run 1: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-repeat-formats-a-run1.tsv
+Completed saved run 2: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-repeat-formats-a-run2.tsv
+Completed saved run 3: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-repeat-formats-a-run3.tsv
+
+EXIT: 0
+Timed control photos
+COMMAND: ["powershell", "-NoProfile", "-File", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1", "-Manifest", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-baseline-photos-source.json", "-Executable", "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\baseline\\decode_bench.exe", "-CorpusDirectory", "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak", "-LogPrefix", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-control-photos-a", "-Iterations", "12", "-Runs", "3"]
+Completed saved run 1: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-control-photos-a-run1.tsv
+Completed saved run 2: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-control-photos-a-run2.tsv
+Completed saved run 3: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-control-photos-a-run3.tsv
+
+EXIT: 0
+Timed control formats
+COMMAND: ["powershell", "-NoProfile", "-File", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\benchmark_saved.ps1", "-Manifest", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\experiments\\literal-refill-baseline-formats-source.json", "-Executable", "C:\\GitHub\\deadsync\\target\\png-literal-refill-20261028-a\\baseline\\decode_bench.exe", "-CorpusDirectory", "C:\\GitHub\\deadsync\\target\\png-decode-corpus-20261027-a", "-LogPrefix", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-control-formats-a", "-Iterations", "12", "-Runs", "3"]
+Completed saved run 1: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-control-formats-a-run1.tsv
+Completed saved run 2: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-control-formats-a-run2.tsv
+Completed saved run 3: C:\GitHub\deadsync\crates\deadlib-image\png\benchmark-literal-refill-control-formats-a-run3.tsv
+
+EXIT: 0
+Summarize photos
+COMMAND: ["python", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\summarize_decoder.py", "--before", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-before-photos-a", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-control-photos-a", "--after", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-trial-photos-a", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-repeat-photos-a", "--output", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-photos-summary.json"]
+{
+  "decode": {
+    "before_mib_s": 103.08955403495197,
+    "after_mib_s": 97.34287498529109,
+    "absolute_change_percent": -5.574453302720183,
+    "reference": "png-0.18.1/decode",
+    "reference_relative_change_percent": -1.9150740758469231
+  },
+  "decode-reader": {
+    "before_mib_s": 92.91423388525122,
+    "after_mib_s": 88.81899338513638,
+    "absolute_change_percent": -4.407549122314725,
+    "reference": "png-0.18.1/decode",
+    "reference_relative_change_percent": -0.7029475476035718
+  },
+  "inflate": {
+    "before_mib_s": 127.32538598912971,
+    "after_mib_s": 119.29525153607987,
+    "absolute_change_percent": -6.306781943496642,
+    "reference": "flate2-1.1.10/inflate",
+    "reference_relative_change_percent": -0.8900517778656969
+  },
+  "inflate-stream": {
+    "before_mib_s": 102.51714909108499,
+    "after_mib_s": 97.63188588284602,
+    "absolute_change_percent": -4.765313171066121,
+    "reference": "flate2-1.1.10/inflate",
+    "reference_relative_change_percent": 0.7405346550764635
+  }
+}
+
+EXIT: 0
+Summarize formats
+COMMAND: ["python", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\summarize_decoder.py", "--before", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-before-formats-a", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-control-formats-a", "--after", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-trial-formats-a", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-repeat-formats-a", "--output", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-refill-formats-summary.json"]
+{
+  "decode": {
+    "before_mib_s": 265.67921296250086,
+    "after_mib_s": 268.3137314400612,
+    "absolute_change_percent": 0.9916163361761265,
+    "reference": "png-0.18.1/decode",
+    "reference_relative_change_percent": 1.9376189323969006
+  },
+  "decode-reader": {
+    "before_mib_s": 245.68778098030424,
+    "after_mib_s": 245.22570417532967,
+    "absolute_change_percent": -0.18807480092452034,
+    "reference": "png-0.18.1/decode",
+    "reference_relative_change_percent": 0.746877463408091
+  },
+  "inflate": {
+    "before_mib_s": 1040.5244100982163,
+    "after_mib_s": 1096.7277862557298,
+    "absolute_change_percent": 5.401447156074735,
+    "reference": "flate2-1.1.10/inflate",
+    "reference_relative_change_percent": 6.3645245409025275
+  },
+  "inflate-stream": {
+    "before_mib_s": 540.7108178074624,
+    "after_mib_s": 535.8162262932403,
+    "absolute_change_percent": -0.9052142759172432,
+    "reference": "flate2-1.1.10/inflate",
+    "reference_relative_change_percent": 0.0002376857043184799
+  }
+}
+
+EXIT: 0

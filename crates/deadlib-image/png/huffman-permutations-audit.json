@@ -1,0 +1,68 @@
+{
+  "baseline_png_commit": "e30aac88a827ef45eb5928e557fb20ef74c1fadc",
+  "production_changes": [],
+  "families": [
+    {
+      "name": "literals",
+      "streams": 4626,
+      "alphabet": 257,
+      "maximum_depth": 15,
+      "shapes": 9,
+      "symbol_depth_cells": 3855
+    },
+    {
+      "name": "lengths",
+      "streams": 5148,
+      "alphabet": 286,
+      "maximum_depth": 15,
+      "shapes": 9,
+      "symbol_depth_cells": 4290
+    },
+    {
+      "name": "distances",
+      "streams": 780,
+      "alphabet": 30,
+      "maximum_depth": 15,
+      "shapes": 13,
+      "symbol_depth_cells": 450
+    },
+    {
+      "name": "code-lengths",
+      "streams": 190,
+      "alphabet": 19,
+      "maximum_depth": 7,
+      "shapes": 5,
+      "symbol_depth_cells": 133
+    }
+  ],
+  "independent_construction": "Complete comb/split shapes, cyclic assignments, lexicographic canonical wire builder, scalar checksums and PNG framing; expected overlap bytes calculated directly.",
+  "exercised_symbols": "All declared LL symbols, all 30 legal distance symbols, all 19 CL symbols including repeats 16/17/18; all 29 match-length symbols and low/high extra fields, 32 KiB history.",
+  "boundaries": "Buffered and three input/output fragment shapes, strict suffix rejection and prefix consumption, exact/zero/short limits, truncated trailers, PNG buffered/seven-byte reader output, both padding modes.",
+  "references": {
+    "C zlib": 10744,
+    "flate2": 10744,
+    "Rust png": 10744
+  },
+  "limitation": "Selected complete-tree shapes and cyclic assignments cover every legal symbol/depth cell, not all possible trees, assignments, block sequences or malformed inputs. Bounded ASan runs are not a source-coverage or universal conformance proof.",
+  "new_successful_sanitizer_executions": 200000,
+  "decoder_completion": false,
+  "remaining_work": "Measured competitive decoder performance and final requirement audit; encoding excluded by user clarification.",
+  "evidence": [
+    {
+      "path": "huffman-permutations-validation.json",
+      "sha256": "bdc39755e73099c22c682a91048b7797571581ccebb430a1ed80d98dac69879f"
+    },
+    {
+      "path": "fuzz/reports/huffman-permutations-source.json",
+      "sha256": "32258dff9592df554409a0f27f298b3c50b8e175d9ff5a3c01b2b39960720678"
+    },
+    {
+      "path": "fuzz/reports/huffman-permutations-seeds.json",
+      "sha256": "004bb9c217fc764e9d585c2dc27b8713f76f4abbca21d33205290353871eafcd"
+    },
+    {
+      "path": "fuzz/reports/huffman-permutations-seed-build.json",
+      "sha256": "643e657f5e06c97773444e7342d51c3e899a19ebdef67f5c0f8b4fafaf5edd4f"
+    }
+  ]
+}

@@ -646,3 +646,48 @@ Its 55,523 entries are verified byte for byte before the temporary source is
 removed, then checked again by ordered filename/content digest. Restore the
 archive beneath its recorded source path to replay that mutated corpus.
 The original binaries, logs, manifests and object audits remain in place.
+
+## Nonfinal stored-block allocation follow-up
+
+`reports/stored-growth-source.json` records 52,160 successful PNG-stream
+executions against a 50,000 request and 20,000 raw-stream executions. Both retain
+ASan, with verified completion/statistics agreement and native-only feedback.
+`reports/stored-growth-seeds.json` reuses the unchanged immutable seed ZIP with
+fresh mutable extractions; fixture, seed-generator and harness bytes are unchanged.
+
+The preceding completed row-reuse corpus is relocated to
+`target/png-fuzz-corpus-row-reuse-20261027.zip`, freeing temporary inodes for this
+campaign. All 55,508 entries are verified before removing the original corpus,
+then checked again by ordered filename/content digest. The storage report keeps
+the original source path, archive hashes and linked campaign evidence. Binaries,
+logs, manifests and object audits remain at their original locations.
+
+## Huffman symbol/depth assignment seeds
+
+`seed_fuzz --huffman-permutations-only <fresh-root>` exports 10,744 independent
+raw streams and their PNG wrappers, using the helper shared with
+`tests/huffman_permutations.rs`. It calls no production encoder. The four
+families cover literal/EOB, literal/length, distance and code-length assignments
+over 36 selected complete-tree shapes, with every legal symbol/depth cell and
+both padding modes. They complement the earlier malformed-tree and match-value
+corpora rather than enumerating every possible Huffman tree.
+
+`reports/huffman-permutations-seeds.json` records the fresh deterministic union
+with the earlier immutable seed ZIP: 58,911 PNG and 17,671 raw inputs.
+`reports/huffman-permutations-seed-build.json` binds the generator, helper,
+production source, executable and validation command. The runner accepts
+`--runs 100000` to request that execution threshold for each selected target;
+omitting the flag retains the historical target-specific defaults. Use fresh
+target/output directories for each invocation and a Linux environment in which
+`rustup` is available.
+
+`reports/huffman-permutations-source.json` and target logs retain actual
+completion/statistics counts, source/binary hashes, initial corpus digests and
+feedback isolation audits. Both PNG/raw decoder targets complete 100,000
+executions without a finding; all sixteen Rust archive and four harness-object
+audits pass. The separate
+launch-recovery report records a direct WSL PATH failure before compilation;
+the successful retry uses the established login shell and fresh directories.
+All duplicated seed bytes were verified against the immutable archive before
+removing the failed launch's extraction. The two corpus-storage reports preserve
+completed older mutable corpora in workspace ZIPs after byte-for-byte checks.

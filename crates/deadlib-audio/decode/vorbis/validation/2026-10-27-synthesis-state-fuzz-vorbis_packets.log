@@ -1,0 +1,47 @@
+Dictionary: 8 entries
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 1338
+INFO: Loaded 1 modules   (10390 inline 8-bit counters): 10390 [00007FF69903E748, 00007FF699040FDE),
+INFO: Loaded 1 PC tables (10390 PCs): 10390 [00007FF698FB3E00,00007FF698FDC760),
+INFO:      925 files found in C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-synthesis-state-final-20261027\corpus\vorbis_packets
+INFO: seed corpus: files: 925 min: 1b max: 4882b total: 794976b rss: 45Mb
+#128	pulse  cov: 1996 ft: 3602 corp: 75/1311b exec/s: 42 rss: 60Mb
+#256	pulse  cov: 2007 ft: 3942 corp: 128/3972b exec/s: 51 rss: 61Mb
+#512	pulse  cov: 2013 ft: 4319 corp: 207/25Kb exec/s: 46 rss: 64Mb
+#928	INITED cov: 2013 ft: 4608 corp: 297/154Kb exec/s: 29 rss: 69Mb
+#986	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 30 rss: 70Mb L: 2902/4788 MS: 3 ChangeBit-ChangeByte-EraseBytes-
+#989	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 30 rss: 70Mb L: 45/4788 MS: 3 InsertRepeatedBytes-ManualDict-EraseBytes- DE: "OggS"-
+#1024	pulse  cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 31 rss: 73Mb
+#1848	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 27 rss: 76Mb L: 73/4788 MS: 4 CrossOver-ChangeByte-ChangeASCIIInt-EraseBytes-
+#2048	pulse  cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 27 rss: 80Mb
+#2615	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 27 rss: 82Mb L: 485/4788 MS: 2 PersAutoDict-EraseBytes- DE: "OggS"-
+#2983	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 27 rss: 85Mb L: 27/4788 MS: 3 ShuffleBytes-PersAutoDict-EraseBytes- DE: "OggS"-
+#3599	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 27 rss: 90Mb L: 42/4788 MS: 1 EraseBytes-
+#3685	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 27 rss: 93Mb L: 331/4788 MS: 1 EraseBytes-
+#3780	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 27 rss: 96Mb L: 73/4788 MS: 5 ChangeBit-InsertByte-ChangeBit-InsertByte-EraseBytes-
+#3826	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 27 rss: 99Mb L: 10/4788 MS: 1 EraseBytes-
+#4096	pulse  cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 27 rss: 103Mb
+#4213	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 27 rss: 103Mb L: 50/4788 MS: 2 CopyPart-EraseBytes-
+#4849	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 28 rss: 107Mb L: 553/4788 MS: 1 EraseBytes-
+#5265	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 28 rss: 111Mb L: 519/4788 MS: 1 EraseBytes-
+#5431	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 28 rss: 114Mb L: 372/4788 MS: 1 EraseBytes-
+#5692	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 28 rss: 118Mb L: 1161/4788 MS: 1 EraseBytes-
+#5719	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 28 rss: 121Mb L: 27/4788 MS: 2 ChangeBit-EraseBytes-
+#5919	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 28 rss: 124Mb L: 179/4788 MS: 5 ChangeBinInt-InsertRepeatedBytes-PersAutoDict-PersAutoDict-EraseBytes- DE: "OggS"-"OggS"-
+#6434	REDUCE cov: 2013 ft: 4608 corp: 297/154Kb lim: 4788 exec/s: 28 rss: 128Mb L: 157/4788 MS: 5 ChangeBit-InsertByte-PersAutoDict-ShuffleBytes-EraseBytes- DE: "OggS"-
+#6776	NEW    cov: 2013 ft: 4609 corp: 298/154Kb lim: 4788 exec/s: 28 rss: 132Mb L: 203/4788 MS: 2 CopyPart-PersAutoDict- DE: "OggS"-
+#7044	NEW    cov: 2013 ft: 4620 corp: 299/154Kb lim: 4788 exec/s: 28 rss: 135Mb L: 393/4788 MS: 3 ChangeBit-ChangeBinInt-CrossOver-
+#7070	REDUCE cov: 2013 ft: 4620 corp: 299/154Kb lim: 4788 exec/s: 28 rss: 138Mb L: 16/4788 MS: 1 EraseBytes-
+#7441	NEW    cov: 2013 ft: 4622 corp: 300/155Kb lim: 4788 exec/s: 28 rss: 142Mb L: 272/4788 MS: 1 ShuffleBytes-
+#7685	REDUCE cov: 2013 ft: 4622 corp: 300/155Kb lim: 4788 exec/s: 28 rss: 145Mb L: 69/4788 MS: 4 ChangeBit-CopyPart-CrossOver-EraseBytes-
+#8192	pulse  cov: 2013 ft: 4622 corp: 300/155Kb lim: 4788 exec/s: 29 rss: 149Mb
+#8201	REDUCE cov: 2013 ft: 4622 corp: 300/155Kb lim: 4788 exec/s: 29 rss: 149Mb L: 131/4788 MS: 1 EraseBytes-
+#8712	REDUCE cov: 2013 ft: 4622 corp: 300/154Kb lim: 4788 exec/s: 29 rss: 152Mb L: 417/4788 MS: 1 EraseBytes-
+#8859	NEW    cov: 2013 ft: 4623 corp: 301/155Kb lim: 4788 exec/s: 29 rss: 155Mb L: 272/4788 MS: 2 ShuffleBytes-CopyPart-
+#8940	DONE   cov: 2013 ft: 4623 corp: 301/155Kb lim: 4788 exec/s: 29 rss: 158Mb
+Done 8940 runs in 301 second(s)
+stat::number_of_executed_units: 8940
+stat::average_exec_per_sec:     29
+stat::new_units_added:          25
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              158

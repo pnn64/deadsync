@@ -10,6 +10,7 @@ mod demux;
 mod index;
 mod page;
 mod reader;
+mod sync;
 mod validation;
 mod writer;
 
@@ -21,6 +22,10 @@ pub use index::{
 };
 pub use page::{Fragment, Fragments, Page, PageHeader, encode_page, write_page};
 pub use reader::{LocatedPage, PageDecoder, PageProgress, PageReader, SyncMode};
+pub use sync::{
+    LocatedSyncedPage, PageOut, PageSeek, SyncBoundary, SyncBuffer, SyncRead, SyncReadOptions,
+    SyncReader, SyncedPage,
+};
 pub use validation::{CompatibilityStats, ValidationOptions};
 pub use writer::{PacketWriter, WriteOptions};
 

@@ -90,6 +90,8 @@ mod item;
 use item::*;
 mod state;
 use state::*;
+mod streaming;
+use streaming::*;
 mod visibility;
 use visibility::*;
 mod reload;
@@ -295,6 +297,9 @@ pub fn handle_raw_key_event(
     text: Option<&str>,
     effects: &mut Vec<ThemeEffect>,
 ) -> bool {
+    if handle_twitch_channel_key(state, key, text, effects) {
+        return true;
+    }
     if judgment_palettes::handle_raw_key_event(state, key, text, effects) {
         return true;
     }

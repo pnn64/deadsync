@@ -1,0 +1,111 @@
+{
+  "passed": true,
+  "frames": 4032,
+  "granules": 8064,
+  "groups": {
+    "0/hybrid": {
+      "samples": 663552,
+      "max_rms": 4.417217419411854e-09,
+      "max_error": 3.759987776685847e-08
+    },
+    "0/pcm": {
+      "samples": 663552,
+      "max_rms": 4.86442936639983e-08,
+      "max_error": 1.8683172514633029e-07
+    },
+    "1/hybrid": {
+      "samples": 663552,
+      "max_rms": 4.417217419411854e-09,
+      "max_error": 3.759987776685847e-08
+    },
+    "1/pcm": {
+      "samples": 663552,
+      "max_rms": 4.741393266784275e-08,
+      "max_error": 1.8396339779291893e-07
+    },
+    "2/hybrid": {
+      "samples": 663552,
+      "max_rms": 4.711122714721339e-10,
+      "max_error": 7.117244238408205e-09
+    },
+    "2/pcm": {
+      "samples": 663552,
+      "max_rms": 3.6426994873079446e-08,
+      "max_error": 1.4921371443987752e-07
+    },
+    "3/hybrid": {
+      "samples": 663552,
+      "max_rms": 4.4626422195313614e-09,
+      "max_error": 4.018030089203428e-08
+    },
+    "3/pcm": {
+      "samples": 663552,
+      "max_rms": 4.7175837002879564e-08,
+      "max_error": 1.9062154360538486e-07
+    },
+    "4/hybrid": {
+      "samples": 663552,
+      "max_rms": 4.417217419411854e-09,
+      "max_error": 3.759987776685847e-08
+    },
+    "4/pcm": {
+      "samples": 663552,
+      "max_rms": 4.637002350370013e-08,
+      "max_error": 1.6346801279265577e-07
+    },
+    "5/hybrid": {
+      "samples": 663552,
+      "max_rms": 4.417217419411854e-09,
+      "max_error": 3.759987776685847e-08
+    },
+    "5/pcm": {
+      "samples": 663552,
+      "max_rms": 4.6693077274750206e-08,
+      "max_error": 1.8396339779291893e-07
+    },
+    "6/hybrid": {
+      "samples": 663552,
+      "max_rms": 4.4626422195313614e-09,
+      "max_error": 4.018030089203428e-08
+    },
+    "6/pcm": {
+      "samples": 663552,
+      "max_rms": 4.7175837002879564e-08,
+      "max_error": 1.9062154360538486e-07
+    }
+  },
+  "limits": {
+    "hybrid": {
+      "rms": 2e-07,
+      "max": 1e-06
+    },
+    "pcm": {
+      "rms": 4e-07,
+      "max": 2e-06
+    }
+  },
+  "errors": [],
+  "method": "All-frequency isolated-coefficient DSP checks through libmad's public API.\n\nNative kernels receive explicitly reordered spectra. Reference MP3 frames encode\nthe same coefficients, with independent bit writing. Frames form a continuous\nstateful sequence; each first granule is followed by a zero granule. Constructed\nwindow transitions exercise equations and history, not full ISO conformance.\n",
+  "commands": [
+    [
+      "/home/perfecttaste/.cache/deadlib-mp3/raw-final/dsp",
+      "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/raw-final/dsp/spectra.bin",
+      "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/raw-final/dsp/native.bin"
+    ],
+    [
+      "/home/perfecttaste/.cache/deadlib-mp3/dsp-reference",
+      "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/raw-final/dsp/vectors.mp3",
+      "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/raw-final/dsp/reference.bin"
+    ]
+  ],
+  "binaries": {
+    "/home/perfecttaste/.cache/deadlib-mp3/raw-final/dsp": "359a7bb1f4bfd2398e1d0a1a85f4225def7d1c44478a0c0db1ce5a1447150ad0",
+    "/home/perfecttaste/.cache/deadlib-mp3/dsp-reference": "c7ce69740e429bdfa3e784bfeaf558f637d8b6adbc847b84f1a2c41cd131c021"
+  },
+  "data_sha256": {
+    "native.bin": "0b5ca3b68eb63fd57ecd10ef27829ccaf942fc5e378d47d15dcd1ccdf617d23e",
+    "reference.bin": "1a31da4736d8a30326fb3a450bd8d311937ef2de888f3a8a11044f9e9568c66e",
+    "spectra.bin": "9fd29e2849e98122d7b626fb7260cd16625c2071e7502cdabfc86574044b2cee",
+    "vectors.mp3": "52c00b3eadace8217d90daa2b6008b62e13eb7d6e5658673c6867fdda2855567"
+  }
+}

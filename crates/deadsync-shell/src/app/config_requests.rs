@@ -365,6 +365,7 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
     use SimplyLoveOnlineConfigRequest as Request;
 
     match request {
+        Request::TwitchChat(options) => config::runtime_update::update_twitch_chat(options),
         Request::EnableGrooveStats(enabled) => {
             config::runtime_update::update_enable_groovestats(enabled)
         }

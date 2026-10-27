@@ -3,18 +3,27 @@
 //! No production codec dependencies and no DeadSync playback integration.
 #![deny(unsafe_code)]
 
+pub mod bands;
 pub mod bits;
 pub mod checksum;
+pub mod decoder;
 pub mod frame;
 pub mod huffman;
+pub mod reader;
 pub mod reservoir;
 pub mod scalefactors;
 pub mod side;
+pub mod spectral;
+pub mod stream;
+pub mod synthesis;
 pub mod tags;
 
+pub use decoder::{DecodeOptions, DecodedFrame, FrameDecoder, Pcm};
 pub use frame::{ChannelMode, Frame, FrameHeader, FreeFormat, MpegVersion};
+pub use reader::{Metadata, Packet, PacketReader, ReaderOptions, TruncatedPolicy};
 pub use reservoir::Reservoir;
 pub use side::{GranuleChannel, SideInfo};
+pub use stream::{FrameStatus, Recovery, StreamDecoder, StreamFrame, StreamOptions, StreamStats};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {

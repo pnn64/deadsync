@@ -1,0 +1,37 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index d71cfa56c..13fdd172c 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -287,9 +287,21 @@ fn inflate_codes(
+                 let mut room = (limit - output.len()).min(output.capacity() - output.len());
+                 let mut word = bits.word;
+                 let mut count = bits.count;
+-                // Append complete primary literals from prefetched
+-                // bits, without a refill or capacity growth here.
+-                while room != 0 && count >= 9 {
++                let mut pos = bits.pos;
++                let input = bits.input;
++                // Keep literal runs in this loop across conservative 32-bit
++                // refills. Matches, long codes and the input tail stay on the
++                // normal symbol path; no output growth occurs here.
++                while room != 0 {
++                    if count < 9 {
++                        if input.len() - pos < 4 {
++                            break;
++                        }
++                        let bytes = input[pos..pos + 4].try_into().unwrap();
++                        word |= u64::from(u32::from_le_bytes(bytes)) << count;
++                        pos += 4;
++                        count += 32;
++                    }
+                     let entry = lit.fast[(word & 511) as usize];
+                     if !(1..4096).contains(&entry) {
+                         break;
+@@ -302,6 +314,7 @@ fn inflate_codes(
+                 }
+                 bits.word = word;
+                 bits.count = count;
++                bits.pos = pos;
+             }
+             256 => break,
+             symbol @ 257..=285 => {

@@ -1,8 +1,8 @@
 param(
     [ValidateRange(1, 86400)][int]$Seconds = 300,
     [string]$RunRoot = '',
-    [ValidateSet('ogg_container', 'vorbis_headers', 'vorbis_packets', 'vorbis_stream', 'vorbis_encode')]
-    [string[]]$Targets = @('ogg_container', 'vorbis_headers', 'vorbis_packets', 'vorbis_stream', 'vorbis_encode'),
+    [ValidateSet('ogg_container', 'ogg_sync', 'vorbis_headers', 'vorbis_packets', 'vorbis_stream', 'vorbis_synthesis', 'vorbis_encode')]
+    [string[]]$Targets = @('ogg_container', 'ogg_sync', 'vorbis_headers', 'vorbis_packets', 'vorbis_stream', 'vorbis_synthesis', 'vorbis_encode'),
     [string]$FloorZero = '',
     [string[]]$ExtraSeeds = @(),
     [string]$ResumeCorpus = '',
@@ -60,6 +60,7 @@ if ($ResumeCorpus) {
     $resume = (Resolve-Path -LiteralPath $ResumeCorpus).Path
     foreach ($target in $Targets) {
         $directory = Join-Path $resume $target
+        if (-not (Test-Path -LiteralPath $directory -PathType Container)) { continue }
         foreach ($file in Get-ChildItem -LiteralPath $directory -File) {
             if ($file.Length -gt 131073) { throw "Resume seed exceeds input cap: $($file.FullName)" }
             $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
