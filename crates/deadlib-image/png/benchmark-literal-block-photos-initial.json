@@ -1,0 +1,94 @@
+{
+  "before": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 94.63053217319806,
+      "deadlib-image-png/decode-reader": 92.3766823722651,
+      "deadlib-image-png/inflate": 120.37623614186522,
+      "deadlib-image-png/inflate-stream": 101.4912381407695,
+      "flate2-1.1.10/inflate": 129.93188246627363,
+      "png-0.18.1/decode": 186.5143107249666
+    },
+    "process_runs": 3,
+    "artifacts": [
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-run-control-photos-a-manifest.json",
+        "sha256": "948e97e8e602fcbc8b4e2d176ed8703e4e4bc5c9282aff4e99e7ce767f57401b"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-run-control-photos-a-run1.tsv",
+        "sha256": "15277044bec0f7a418b619299ec4137ebe84b673d4d832a20889265e5a155922"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-run-control-photos-a-run2.tsv",
+        "sha256": "370b6dc7880d79b2018af698413970dfe429283a56cfaa8638801d2e06b0bf87"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-run-control-photos-a-run3.tsv",
+        "sha256": "43f64427764e0e7f4357cc4eb834dd725620eb98d8c2db80da122d7436776962"
+      }
+    ]
+  },
+  "after": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 113.48933047082978,
+      "deadlib-image-png/decode-reader": 108.13850336255274,
+      "deadlib-image-png/inflate": 146.38693453465578,
+      "deadlib-image-png/inflate-stream": 119.08883116788476,
+      "flate2-1.1.10/inflate": 154.99261478521382,
+      "png-0.18.1/decode": 221.00517672703512
+    },
+    "process_runs": 3,
+    "artifacts": [
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-block-trial-photos-a-manifest.json",
+        "sha256": "42fca877ee996f9a5679c06d0769e5d160c004ef5e939640565cb876a7bd8dd5"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-block-trial-photos-a-run1.tsv",
+        "sha256": "a606553531c3f0be3b66e72646054533d50e0ba8c0fd332101dc6ac833bcd4e7"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-block-trial-photos-a-run2.tsv",
+        "sha256": "1ad6cdd59717792876a56e043fc7fb536832964d7ae699a19575b6bc8afdae9e"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-literal-block-trial-photos-a-run3.tsv",
+        "sha256": "7bd2dbe1ac2a3f2690915a7e16c3ceb328df2b2907b3009b1d3360a0c3309c17"
+      }
+    ]
+  },
+  "native_changes": {
+    "decode": {
+      "before_mib_s": 94.63053217319806,
+      "after_mib_s": 113.48933047082978,
+      "absolute_change_percent": 19.92887270581476,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": 1.2123397289228066
+    },
+    "decode-reader": {
+      "before_mib_s": 92.3766823722651,
+      "after_mib_s": 108.13850336255274,
+      "absolute_change_percent": 17.062553650465297,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": -1.2066512234323312
+    },
+    "inflate": {
+      "before_mib_s": 120.37623614186522,
+      "after_mib_s": 146.38693453465578,
+      "absolute_change_percent": 21.607834923611136,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": 1.945082584541491
+    },
+    "inflate-stream": {
+      "before_mib_s": 101.4912381407695,
+      "after_mib_s": 119.08883116788476,
+      "absolute_change_percent": 17.339026845556084,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": -1.633502564419076
+    }
+  },
+  "case_count": 24,
+  "size_and_pipeline_capacity_invariants_verified": true,
+  "scope": "Single-CPU shared-host measurements, including allocations. Reference normalization cannot eliminate scheduling/frequency/cache effects. No broad performance claim follows from one pair.",
+  "runner_sha256": "6e14c9081ea08715bd2a8289ca03812a7ff6601812ca1ae5104916956460703f"
+}

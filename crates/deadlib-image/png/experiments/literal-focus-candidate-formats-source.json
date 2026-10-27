@@ -1,0 +1,165 @@
+{
+  "target": "decode",
+  "stage": "pipeline",
+  "iterations": 12,
+  "runs": 0,
+  "warmups_per_operation": 3,
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+  "commit": "36218269156c4905d8d69ae805634600ede4c972",
+  "source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "A7776F11D43D8DD4A9802E4D354689978D819CDF56308369020D07A8EB6DA412"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "35B18A4A03C88605B044ADF657E8631C85074D07CA0193B566DF59AE94E47A14"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "5FAD4314C55583E8A743215081FDB98809F73AA48D7D0FCDA233D564130B2E0E"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "C8E1725049CE5AF49FA3D4BAC24926BD758920DD548C27B0CAC18D30BD5EDD79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "DFA95C53F3697B5F0975B7C9A471B79DA254CB2BAA2AF6CD4118EBD13E4A6AF9"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "B664D12E18EFB201DD9F033E132AD99C2A62C7A92CB6CE4543AD0E30624BEA0B"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3B97FCF0DA4BB275883B1D2C31653BEF733939F0C9A867A177207AAA2C38F7CB"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9AC990B5A00EF5EACA278B8012B98434EBE31DA96EA7313CA2DC1E463D1B88F4"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9A0FAE073E45227763EDEFCE53AF4AE07AE79FF7D0BCE38CA66C8D6075ADFF1B"
+    },
+    {
+      "path": "src/reference.rs",
+      "sha256": "A697D0E85784053BC856CF26D3307D9F1D3D74DEC81F7C0859CF9D00654C94E5"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "A8EB599EF3AB866B01A0129EB1F8BB6462CA2845B0ED1BD1C3DEE26F4614207E"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "2108E0114B57620CE3FFF41174377548CC49214D783F637BEE9E72ABDA6B4C30"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "EAB412202BD525F1A969500B13894FA0008600DA9B34C1F42A78421D121CF447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8C7B0A66F345402BBD804D345D1C9815161E84A632A6E82F1530679A669F017B"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4B0E6E9A1C1863757D28521254F3E4613A6929280972922B6A0FD9DED216E46D"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "D648E905E12ACD1319F459E15FA605DBE59E51404B4F0C93B18E67293F270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "BE5AA900A1BBDC206D6EA32444E322CF2B89ECE631A03B5A54E05062C891A463"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "7D8F667B0887B1DCA7ECA8A0582F152ADA6594CC62C7EE560CA703CB1E5AC1BD"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9BD571140A43B90F75B8031F342B5E51FEB1FF61DEA8E4C417A079280C7DA0E4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "9082DE5B5ED2A318C9C6821FAC0AA3A8D81F67A1F8B9A896B02526F4E9B65D97"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582C0A4FA53C020D02B697DDEB3388C3253C4B30A1352AEDFF905977F46AE19"
+    }
+  ],
+  "benchmark_source": "examples/decode_bench.rs",
+  "benchmark_source_sha256": "C30BAAE289A56086D5BB51B6DA5CA04D303977A229C75B6118B712B1BA8EBC06",
+  "corpus_sha256": [
+    {
+      "file": "color-0-depth-08-adam7-0-noise-0.png",
+      "bytes": 2116,
+      "sha256": "BC0BAF5846D892A1862BD41963CC183D04E755DFB435E750806DAAB141051D72"
+    },
+    {
+      "file": "color-0-depth-08-adam7-1-noise-1.png",
+      "bytes": 33499,
+      "sha256": "7D977F92620C17D015FC52FDC31B85E9561C9F33A2E25358384AACE2B48DD1D0"
+    },
+    {
+      "file": "color-2-depth-16-adam7-0-noise-0.png",
+      "bytes": 4765,
+      "sha256": "62D25EDB4348C65969E463307B1CFB28227DDF4CA60B95920CE3FBD1448DC56A"
+    },
+    {
+      "file": "color-3-depth-02-adam7-0-noise-0.png",
+      "bytes": 261,
+      "sha256": "4DB2759B2055D871290067599E00724F96DD03EEFF99F59E60FF1540DF340F15"
+    },
+    {
+      "file": "color-3-depth-08-adam7-0-noise-0.png",
+      "bytes": 2731,
+      "sha256": "41660C948443F0D6A4DAB12C1DAF03071518FE7CC47CF467D7AA3CDB0668B4CC"
+    },
+    {
+      "file": "color-3-depth-08-adam7-0-noise-1.png",
+      "bytes": 34164,
+      "sha256": "3A77896CA4019B1E8EBBA56A6D50365E93B2A788BC4564BA4159C791CF8FC08C"
+    },
+    {
+      "file": "color-4-depth-16-adam7-0-noise-1.png",
+      "bytes": 132945,
+      "sha256": "AAFA3EDAC4996AD9ECD2026B41D7F5895F1CD79576B1AAA3C29D14332236C3C3"
+    },
+    {
+      "file": "color-4-depth-16-adam7-1-noise-1.png",
+      "bytes": 133060,
+      "sha256": "FBA42E0E51BBFF41467C6C743FDF31021E310D0C744C7C5F9F25C840DE72DB43"
+    },
+    {
+      "file": "color-6-depth-08-adam7-1-noise-1.png",
+      "bytes": 133060,
+      "sha256": "D90D5EAC342DDD47831AD02F00649A13196853C36D4A4F6F52881509204E2B0D"
+    },
+    {
+      "file": "color-6-depth-16-adam7-0-noise-1.png",
+      "bytes": 265693,
+      "sha256": "B465A6A80079948987F114936895AD4B900E7D045E6A9951AEE848E1F4DF9F7B"
+    }
+  ],
+  "executable": "C:\\GitHub\\deadsync\\target\\release\\examples\\decode_bench.exe",
+  "executable_sha256": "99042A46F8C2A1CE4A12A37061D87D5381FAA9F7D46F10203A3568088E077DF5",
+  "processor": {
+    "Name": "Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz",
+    "NumberOfCores": 22,
+    "NumberOfLogicalProcessors": 44
+  },
+  "eligible_affinity": 17592186044415,
+  "cpu": 0,
+  "affinity": 1,
+  "measurements": [],
+  "limits": "Single logical CPU affinity; shared host, frequency and other workloads are not controlled. Includes each codec's allocations. Deflate stage uses identical filtered bytes per source.",
+  "subset_of_manifest": "benchmark-literal-run-trial-formats-a-manifest.json",
+  "subset_parent_sha256": "2589d471f0d6185cf6673c28bec2361774f4c9b7d2cb308f9caf3903bed38c52",
+  "subset_scope": "Source/binary and selected input provenance only. No measurement is attributed to this derived template. Select every case flagged below -5% by both reference and unchanged-control comparisons."
+}

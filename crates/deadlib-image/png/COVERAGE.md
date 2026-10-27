@@ -1805,3 +1805,56 @@ tested independent workspace. Existing full release and decoder ASan validation
 are reused for these identical restored bytes, not repeated or counted again.
 Remaining corpus gaps, the completion audit and competitive decoder performance
 remain open. No encoder requirement is added.
+
+## Buffered literal runs with per-block Huffman decoding (2026-10-27)
+
+The selected decoder change is confined to `src/zlib.rs`. After the existing
+first-literal append, complete primary-table literals consume already-prefetched
+bits and existing vector capacity. Remaining output budget and capacity bound
+the run; no refill or allocation occurs within it. Empty/long-code entries,
+matches and end-of-block return to the existing decoder. Fixed/dynamic table
+construction and token decoding move to a private function called once per
+coded block, isolating their large stack frame from the stored-block path.
+The other twenty PNG production files, shared primitives and all recorded
+test/helper/harness/seed-generator inputs retain their baseline bytes.
+
+Existing independent fixtures already exercise every two-byte lookup value,
+all code widths, padding, short final codes, one-bit literal lengths 0 through
+63, output limits, prefetched stored-block transitions and prefix suffixes.
+Length/distance, PNG/APNG/Adam7, metadata and stream suspension tests remain
+part of the normal suite. No implementation-mirroring test or duplicate seed
+corpus is added. Each of four candidate algorithms passes 29 focused tests with
+three optional external checks ignored and strict main all-target Clippy.
+
+The selected implementation passes 134 normal release tests, with nineteen
+optional checks ignored, plus the explicitly run C zlib batch of 19,645 Huffman
+fixtures. That batch records 3,091 successful outputs and 16,554 error records;
+68 are documented reference-policy rejections of native-legal unused HDIST
+definitions, rather than native malformed-input requirements. Strict main/fuzz
+all-target Clippy and scoped rustfmt pass. A fresh complete standalone copy
+passes the offline Huffman target (six tests, one optional C check ignored) and
+retains the production dependency tree containing only the shared image crate.
+All 885 copied source, fixture, example and benchmark files match current bytes.
+`literal-block-validation.json`, logs and `literal-block-audit.json` retain the
+commands, toolchain, source/oracle hashes and exact validation scope.
+
+Fresh native-feedback ASan campaigns pass 50,000 PNG-stream inputs and 20,000
+raw-stream inputs. The latter compares buffered decoding, including the changed
+path, with incremental inflation and independent references. Dependencies and
+harnesses retain ASan but contribute no feedback counters; native crate sections
+and all four harness objects are audited. Existing fixture/generator inputs are
+unchanged, so the immutable 48,167-file PNG / 6,927-file raw seed ZIP is reused
+with fresh mutable extractions. Logs, initial corpus digests, binaries and
+source/section audits are retained in `fuzz/reports/literal-block-*`. Historical
+successful sanitizer campaigns now total 1,760,852, including older campaigns;
+the 70,000 new executions are decoder-only and do not prove exhaustive coverage.
+
+`BENCHMARKS.md` records the rejected staging/direct-loop alternatives and the
+selected per-block extraction. `experiments/literal-selection.json` reconstructs
+all four candidates, verifies 36 timing groups / 108 processes and recomputes
+nineteen final/interim summaries plus per-case comparisons. Repeated photo
+decoding improves 2.65% relative to Rust png, compared with 0.89% for the unchanged
+reader; raw format inflation improves 9.43% relative to flate2, compared with
+-0.60% for unchanged streaming inflation. Format end-to-end results remain
+inconclusive, and shared-host effects prevent a broad speedup claim. Remaining
+corpus gaps, the completion audit and competitive decoder performance stay open.

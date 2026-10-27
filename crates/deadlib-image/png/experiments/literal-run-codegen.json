@@ -1,0 +1,13 @@
+{
+  "binary_sha256": "99042a46f8c2a1ce4a12a37061d87d5381faa9f7d46f10203a3568088e077df5",
+  "pdb_sha256": "a7bdb0f28db8f1164582ee8ceb05aaedfcc592272b684edf76f719d663046050",
+  "functions": [
+    {
+      "name": "deadlib_image_png::zlib::decompress_prefix",
+      "address": "0x140018980",
+      "code_bytes": 3874,
+      "assembly": "experiments/literal-run-decompress_prefix.txt",
+      "assembly_sha256": "035514fc21f03ed95a9c2bb454689174efdd2a32c113bb02b8103eeab5b9dd4b"
+    }
+  ]
+}

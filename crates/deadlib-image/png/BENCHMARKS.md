@@ -960,3 +960,59 @@ previous tested standalone copy, preserving its 134-test / 70,852-execution
 validation. `experiments/sentinel-selection.json` verifies reconstruction, exact
 sources, fourteen timing groups, six recomputed summaries and both profiles.
 The measured decoder performance requirement remains open.
+
+## Buffered literal runs and coded-block frames (2026-10-27)
+
+The buffered decoder now appends complete primary-table literals directly from
+already-prefetched bits, up to the smaller of existing output capacity and the
+remaining output limit. The run performs no refill or allocation, and stops
+before an empty/long-code entry, match or end-of-block. The first literal and all
+slow/error paths retain their existing behavior. Fixed/dynamic table construction
+and token decoding move into one private function called once per coded block,
+keeping those table frames out of stored-block decoding. Streaming code and
+public APIs are unchanged.
+
+Four independently reconstructible candidates retain their source hashes,
+patches, PE/PDB hashes and generated code. Eight-byte staging with variable-width
+`memcpy` regresses photo decoding/inflation. Constant-width staged copies grow
+the containing function from 4,365 to 5,556 code bytes without a convincing
+overall gain. Direct literal runs shrink it to 3,874 bytes, but longer checks
+expose a stored-only regression even though the new literal loop is not entered.
+The selected per-block extraction leaves a 2,079-byte outer decoder and a
+4,502-byte coded-block helper. Primary lookup remains inlined in all four builds.
+
+Normal comparisons retain 24 timing groups / 72 processes across 24 photos and
+60 format files. Each group uses three processes, twelve iterations, three warmups
+and CPU 0. The selected comparison combines six baseline processes bracketing
+six candidate processes. Twelve longer groups / 36 processes examine the earlier
+per-case regressions: two photo and ten format inputs for the direct-run variant,
+then the two stored-only files for the selected extraction. The final stored
+probe uses 4,096 iterations per file per process. These subsets retain source-only
+provenance templates and exact original input bytes; no timing is attributed to
+the derived templates themselves.
+
+| Selected corpus | Buffered PNG | Unchanged reader | Buffered inflate | Unchanged streaming inflate |
+| --- | ---: | ---: | ---: | ---: |
+| Photos, reference-relative change | +2.65% | +0.89% | +2.64% | -1.68% |
+| Formats, reference-relative change | -0.25% | -1.04% | +9.43% | -0.60% |
+
+PNG changes are normalized to Rust png; raw inflation uses flate2. Absolute photo
+decode throughput rises from 98.98 to 108.58 MiB/s, while Rust png rises from
+198.58 to 212.21. Photo raw inflation rises from 126.70 to 141.28 MiB/s; format
+raw inflation rises from 946.43 to 1,091.43. The unchanged controls support a
+local photo and raw-format benefit. End-to-end format results remain inconclusive,
+and photo decoding remains substantially behind Rust png.
+
+The longer stored-only probe does not repeat the direct-run variant's 10.23%
+loss relative to unchanged streaming inflation. For gray8 Adam7 noise, selected
+raw inflation is -5.06% relative to flate2 and -2.58% relative to streaming
+inflation; the other stored case is -0.88% / -0.29%. Both stored cases improve
+end-to-end relative to both controls. No stored-only speedup is claimed.
+
+`experiments/literal-selection.json` verifies four reconstructed candidates,
+all 108 timed processes, nineteen recomputed final/interim summaries, per-case
+comparisons and generated-code artifacts. Timed runs overlap no task builds,
+tests, fuzzing or profiling. Shared-host frequency and unrelated workloads remain
+uncontrolled; normalization does not eliminate their effects. Reported pipeline
+byte fields are invariant checks, not measured peak memory. The broader decoder
+performance requirement remains open.

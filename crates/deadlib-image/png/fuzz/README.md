@@ -613,3 +613,19 @@ beneath the recorded corpus path when that mutated corpus is needed for replay.
 Binaries, logs, compiler records and object audits remain in their original paths;
 the immutable starting seed ZIP is unaffected. No new fuzz campaign is part of
 the rejected Huffman lookahead experiments.
+
+## Buffered literal-run follow-up
+
+`reports/literal-block-seeds.json` links the unchanged immutable literal-loop
+seed ZIP and its producer. Existing independent one-bit literal lengths 0 through
+63 and both padding values are already included; fixture, harness and generator
+inputs retain their recorded hashes. New mutable corpus extractions keep this
+campaign separate from the earlier streaming experiments.
+
+`reports/literal-block-source.json` retains 50,000 successful PNG-stream and
+20,000 raw-stream executions, exact source/binary/log hashes, initial corpus
+digests and native/dependency/harness feedback audits. Both binaries define the
+ASan runtime. The raw-stream harness exercises buffered decompression as well as
+incremental inflation. These campaigns validate the buffered literal run and
+per-coded-block extraction; only decoder targets run. They are bounded campaigns,
+not a proof that all malformed inputs or source branches have been covered.
