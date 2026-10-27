@@ -655,6 +655,9 @@ fn prepare_scorebox_presentation(
 
 #[inline(always)]
 pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
+    let chart_type_changed = view.session.is_some_and(|session| {
+        session.play_style.chart_type() != state.session.play_style.chart_type()
+    });
     if let Some(session) = view.session {
         state.session = session;
     }
@@ -674,6 +677,12 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
             let sort_mode = state.sort_mode;
             apply_wheel_sort(state, sort_mode);
         }
+    }
+    if chart_type_changed {
+        // Inline profile selection can change Double to Versus without entering
+        // this screen again. Rebuild from the full catalog, not the old filter.
+        let song_packs = std::mem::take(&mut state.song_packs);
+        refresh_after_reload(state, song_packs);
     }
     if let Some(pad_profiles) = view.pad_profiles {
         state.pad_profiles = pad_profiles;
@@ -6944,6 +6953,8 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
     let active_color_index = state.active_color_index;
     let old_steps_index_p1 = state.selected_steps_index;
     let old_steps_index_p2 = state.p2_selected_steps_index;
+    let session_elapsed = state.session_elapsed;
+    let gameplay_elapsed = state.gameplay_elapsed;
     let preferred_difficulty_index = state.preferred_difficulty_index;
     let p2_preferred_difficulty_index = state.p2_preferred_difficulty_index;
     let pending_audio = std::mem::take(&mut state.pending_audio);
@@ -6979,6 +6990,7 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
     refreshed.active_color_index = active_color_index;
     refreshed.preferred_difficulty_index = preferred_difficulty_index;
     refreshed.p2_preferred_difficulty_index = p2_preferred_difficulty_index;
+    sync_elapsed(&mut refreshed, session_elapsed, gameplay_elapsed);
     refreshed.active_playlist_id = active_playlist_id;
     refreshed.pending_audio = pending_audio;
     refreshed.pending_profile = pending_profile;
@@ -17344,6 +17356,150 @@ mod tests {
 
     fn test_pack(name: &str, series: &str) -> SongPack {
         test_pack_with_group(name, name, series)
+    }
+
+    #[test]
+    fn runtime_profile_switch_rebuilds_catalog_for_new_chart_type() {
+        for (single_style, double_style, versus_style) in [
+            (
+                profile_data::PlayStyle::Single,
+                profile_data::PlayStyle::Double,
+                profile_data::PlayStyle::Versus,
+            ),
+            (
+                profile_data::PlayStyle::PumpSingle,
+                profile_data::PlayStyle::PumpDouble,
+                profile_data::PlayStyle::PumpVersus,
+            ),
+        ] {
+            let make_song = |index, chart_types: &[&str]| {
+                let mut song = (*super::test_folder_stats_song(index)).clone();
+                let charts = std::mem::take(&mut song.charts);
+                for chart_type in chart_types {
+                    song.charts.extend(charts.iter().cloned().map(|mut chart| {
+                        chart.chart_type = (*chart_type).to_owned();
+                        chart.short_hash = format!("{chart_type}-{}", chart.short_hash);
+                        chart
+                    }));
+                }
+                Arc::new(song)
+            };
+            let single = make_song(0, &[single_style.chart_type()]);
+            let double = make_song(1, &[double_style.chart_type()]);
+            let mixed = make_song(2, &[single_style.chart_type(), double_style.chart_type()]);
+            let mut pack = test_pack("Mixed pack", "");
+            pack.songs = vec![single.clone(), double.clone(), mixed.clone()];
+            let mut singles_pack = test_pack("Singles-only pack", "");
+            singles_pack.songs = vec![single.clone()];
+            let mut state = super::init(super::SelectMusicInitView {
+                song_packs: vec![pack, singles_pack],
+                session: crate::views::SelectMusicSessionView {
+                    play_style: double_style,
+                    joined: [true, false],
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+            super::apply_wheel_sort(&mut state, super::WheelSortMode::Title);
+            super::focus_song_from_search(&mut state, &mixed);
+            super::sync_elapsed(&mut state, 123.0, 45.0);
+            state.selected_steps_index = 2;
+            state.p2_selected_steps_index = 3;
+            state.song_search_generation = 7;
+
+            // Inline profile selection stays on Select Music and sends a new
+            // session snapshot. Exercise both directions without screen entry.
+            for (style, joined, expected_song, excluded_song, expected_packs) in [
+                (versus_style, [true, true], &single, &double, 2),
+                (double_style, [false, true], &double, &single, 1),
+            ] {
+                let old_entries = Arc::clone(&state.group_entries);
+                let session = crate::views::SelectMusicSessionView {
+                    play_style: style,
+                    player_side: if joined[0] {
+                        profile_data::PlayerSide::P1
+                    } else {
+                        profile_data::PlayerSide::P2
+                    },
+                    joined,
+                    ..state.session
+                };
+                super::trigger_immediate_refresh(&mut state);
+                super::sync_runtime_view(
+                    &mut state,
+                    crate::views::SelectMusicRuntimeView {
+                        session: Some(session),
+                        profiles: Some(crate::views::SelectMusicProfileView {
+                            local_profile_ids: [Some("alice".into()), Some("bob".into())],
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                );
+
+                assert!(!Arc::ptr_eq(&old_entries, &state.group_entries));
+                assert!(state.group_entries.iter().any(|entry| matches!(entry,
+                    super::MusicWheelEntry::Song(song) if Arc::ptr_eq(song, expected_song))));
+                assert!(!state.group_entries.iter().any(|entry| matches!(entry,
+                    super::MusicWheelEntry::Song(song) if Arc::ptr_eq(song, excluded_song))));
+                assert_eq!(
+                    state
+                        .group_entries
+                        .iter()
+                        .filter(|entry| matches!(entry, super::MusicWheelEntry::PackHeader { .. }))
+                        .count(),
+                    expected_packs
+                );
+                assert!(Arc::ptr_eq(
+                    &super::selected_song_arc(&state).unwrap(),
+                    &mixed
+                ));
+                assert_eq!(state.sort_mode, super::WheelSortMode::Title);
+                assert_eq!(state.session, session);
+                assert_eq!(state.profiles.local_profile_ids[1].as_deref(), Some("bob"));
+                assert_eq!(
+                    [state.selected_steps_index, state.p2_selected_steps_index],
+                    [2, 3]
+                );
+                assert_eq!(
+                    (state.session_elapsed, state.gameplay_elapsed),
+                    (123.0, 45.0)
+                );
+                assert_eq!(state.song_search_generation, 7);
+            }
+        }
+    }
+
+    #[test]
+    fn runtime_profile_switch_keeps_catalog_when_chart_type_is_unchanged() {
+        let song = super::test_folder_stats_song(0);
+        let mut pack = test_pack("Test", "");
+        pack.songs = vec![song.clone()];
+        let mut state = super::init(super::SelectMusicInitView {
+            song_packs: vec![pack],
+            ..Default::default()
+        });
+        super::focus_song_from_search(&mut state, &song);
+        let entries = Arc::clone(&state.group_entries);
+        let session = crate::views::SelectMusicSessionView {
+            play_style: profile_data::PlayStyle::Versus,
+            joined: [true, true],
+            ..state.session
+        };
+        super::sync_runtime_view(
+            &mut state,
+            crate::views::SelectMusicRuntimeView {
+                session: Some(session),
+                ..Default::default()
+            },
+        );
+
+        assert!(Arc::ptr_eq(&entries, &state.group_entries));
+        assert!(Arc::ptr_eq(
+            &super::selected_song_arc(&state).unwrap(),
+            &song
+        ));
+        assert_eq!(state.session, session);
     }
 
     fn test_pack_with_group(group_name: &str, name: &str, series: &str) -> SongPack {

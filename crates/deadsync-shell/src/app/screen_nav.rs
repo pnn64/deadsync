@@ -12,7 +12,7 @@ use crate::navigation::{
     fade_completion_plan, navigation_transition_effect_plan, practice_music_rate_on_screen_change,
     process_exit_navigation_plan, screen_change_plan, write_current_screen_file,
 };
-use crate::screen_flow::navigation_route_plan;
+use crate::screen_flow::{navigation_route_plan, preferred_play_style_for_joined};
 use deadlib_present::actors::Actor;
 use deadsync_config as config;
 use deadsync_profile as profile_data;
@@ -238,10 +238,24 @@ impl App {
         if let Some(pending) = plan.pending_post_select_summary_exit {
             self.state.session.pending_post_select_summary_exit = pending;
         }
+        if plan.initialize_session_side {
+            let p2_started = self.state.screens.menu_state.started_by_p2;
+            profile::set_session_player_side(if p2_started {
+                profile_data::PlayerSide::P2
+            } else {
+                profile_data::PlayerSide::P1
+            });
+            profile::set_session_joined(!p2_started, p2_started);
+        }
         if plan.apply_preferred_style {
-            let play_style = profile_data::play_style_from_machine_preference(
-                cfg.machine_preferred_style,
-                cfg.game_flag,
+            let session = profile::get_session_snapshot();
+            // Confirmed players take precedence over the machine's solo default.
+            let play_style = preferred_play_style_for_joined(
+                &cfg,
+                [
+                    session.side_joined(profile_data::PlayerSide::P1),
+                    session.side_joined(profile_data::PlayerSide::P2),
+                ],
             );
             profile::set_session_play_style(play_style);
             self.state.session.preferred_difficulty_index =
@@ -252,16 +266,6 @@ impl App {
                 cfg.machine_preferred_play_mode,
             ));
         }
-        if plan.initialize_session_side {
-            let p2_started = self.state.screens.menu_state.started_by_p2;
-            profile::set_session_player_side(if p2_started {
-                profile_data::PlayerSide::P2
-            } else {
-                profile_data::PlayerSide::P1
-            });
-            profile::set_session_joined(!p2_started, p2_started);
-        }
-
         if allow_offset_prompt && self.maybe_begin_gameplay_offset_prompt(from, target, false) {
             return;
         }

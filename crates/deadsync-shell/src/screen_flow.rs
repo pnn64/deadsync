@@ -44,6 +44,17 @@ pub(crate) fn navigation_route_plan(
     )
 }
 
+pub(crate) fn preferred_play_style_for_joined(
+    config: &Config,
+    joined: [bool; 2],
+) -> deadsync_profile::PlayStyle {
+    let preferred = deadsync_profile::play_style_from_machine_preference(
+        config.machine_preferred_style,
+        config.game_flag,
+    );
+    deadsync_profile::play_style_for_joined(preferred, joined[0], joined[1])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -79,6 +90,72 @@ mod tests {
         assert!(plan.apply_preferred_style);
         assert!(plan.apply_preferred_play_mode);
         assert!(plan.initialize_session_side);
+    }
+
+    #[test]
+    fn skipped_style_selection_preserves_two_confirmed_players() {
+        use deadsync_config::theme::{GameFlag, MachinePreferredPlayStyle};
+
+        for (game, versus) in [
+            (GameFlag::Dance, PlayStyle::Versus),
+            (GameFlag::Pump, PlayStyle::PumpVersus),
+        ] {
+            for preferred in [
+                MachinePreferredPlayStyle::Single,
+                MachinePreferredPlayStyle::Double,
+                MachinePreferredPlayStyle::Versus,
+            ] {
+                let cfg = Config {
+                    game_flag: game,
+                    machine_preferred_style: preferred,
+                    machine_show_select_color: false,
+                    machine_show_select_style: false,
+                    machine_show_select_play_mode: false,
+                    ..Config::default()
+                };
+                let selection = crate::profile_session::profile_selection_session_plan(
+                    deadsync_profile::play_style_from_machine_preference(preferred, game),
+                    true,
+                    true,
+                );
+                let navigation =
+                    navigation_route_plan(&cfg, Screen::SelectProfile, Screen::SelectColor, false);
+                assert_eq!(navigation.target, Screen::ProfileLoad);
+                assert!(navigation.apply_preferred_style);
+                assert_eq!(
+                    preferred_play_style_for_joined(
+                        &cfg,
+                        [selection.p1_joined, selection.p2_joined],
+                    ),
+                    versus,
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn preferred_style_respects_solo_profile_selection() {
+        use deadsync_config::theme::{GameFlag, MachinePreferredPlayStyle};
+
+        for (game, single, double) in [
+            (GameFlag::Dance, PlayStyle::Single, PlayStyle::Double),
+            (GameFlag::Pump, PlayStyle::PumpSingle, PlayStyle::PumpDouble),
+        ] {
+            for joined in [[true, false], [false, true]] {
+                for (preferred, expected) in [
+                    (MachinePreferredPlayStyle::Single, single),
+                    (MachinePreferredPlayStyle::Versus, single),
+                    (MachinePreferredPlayStyle::Double, double),
+                ] {
+                    let cfg = Config {
+                        game_flag: game,
+                        machine_preferred_style: preferred,
+                        ..Config::default()
+                    };
+                    assert_eq!(preferred_play_style_for_joined(&cfg, joined), expected);
+                }
+            }
+        }
     }
 
     #[test]
