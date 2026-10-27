@@ -92,6 +92,98 @@ fn encode(chunk: &Chunk) -> Vec<u8> {
 }
 
 #[test]
+fn stripped_and_partial_upvalue_names_bound_debug_access_without_losing_cells() {
+    let observer = br#"
+local function observe(get)
+  local out={}
+  local function record(...)
+    out[#out+1]=select('#',...)
+    for i=1,select('#',...)do out[#out+1]=tostring(select(i,...))end
+  end
+  for i=-1,4 do
+    record(debug.getupvalue(get,i))
+    record(debug.setupvalue(get,i,i*100))
+    collectgarbage()
+    record(debug.getupvalue(get,i))
+  end
+  local a,b=get()
+  return a,b,table.concat(out,'|')
+end
+"#;
+    let bodies: &[&[u8]] = &[
+        b"local a,b=17,29;local get=function()return a,b end;local x,y,z=observe(get);return x,y,z,a,b",
+        b"local function factory()local a,b=17,29;return function()return a,b end end;return observe(factory())",
+        b"local get;local co=coroutine.create(function()local a,b=17,29;get=function()return a,b end;coroutine.yield();return a,b end);assert(coroutine.resume(co));local a,b,out=observe(get);local ok,x,y=coroutine.resume(co);return a,b,out,ok,x,y",
+    ];
+    for body in bodies {
+        let source = [observer, *body].concat();
+        for names in 0..=2 {
+            for strip_locations in [false, true] {
+                let mut decoder = decoded(&dump(&source, false));
+                let mut targets = 0;
+                for p in &mut decoder.chunk.prototypes {
+                    if p.nups == 2 {
+                        assert_eq!(p.names.len(), 2);
+                        p.names.truncate(names);
+                        targets += 1;
+                    }
+                    if strip_locations {
+                        p.source = None;
+                        p.lines.clear();
+                        p.locals.clear();
+                    }
+                }
+                assert!(targets > 0);
+                compare_execution(&encode(&decoder.chunk));
+            }
+        }
+    }
+}
+
+#[test]
+fn stripped_upvalue_operand_names_match_reference_without_exposing_missing_names() {
+    let source = br#"
+local a,b=nil,17
+local functions={
+  function()return a+b end,
+  function()return a(b)end,
+  function()return a[b]end,
+  function()a[b]=1;return b end,
+  function()return #a,b end,
+  function()return -a,b end,
+}
+local out={}
+for _,f in ipairs(functions)do
+  local ok,e=pcall(f)
+  out[#out+1]=tostring(ok)..':'..e
+  out[#out+1]=select('#',debug.getupvalue(f,2))
+end
+return table.concat(out,'|')
+"#;
+    for names in 0..=2 {
+        for replacement in [None, Some(b"".as_slice()), Some(b"name\0suffix".as_slice())] {
+            let mut decoder = decoded(&dump(source, false));
+            let mut targets = 0;
+            for p in &mut decoder.chunk.prototypes {
+                if p.nups == 2 {
+                    // Every failing operation uses the first capture. A partial
+                    // native name table therefore never requires the C oracle
+                    // to inspect an absent name outside that table.
+                    assert_eq!(p.names[0].as_deref(), Some(b"a".as_slice()));
+                    p.names.truncate(names);
+                    if let Some(name) = replacement {
+                        p.names.iter_mut().for_each(|n| *n = Some(name.into()));
+                    }
+                    targets += 1;
+                }
+            }
+            assert_eq!(targets, 6);
+            compare_execution(&encode(&decoder.chunk));
+        }
+    }
+}
+
+#[test]
 fn official_dumps_round_trip_across_every_stream_boundary() {
     let cases: &[&[u8]] = &[
         b"local a,b=...;local t={a,b,x='a\\0b'};return t.x,t[1],nil,true,false,-0",

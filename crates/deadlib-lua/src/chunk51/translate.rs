@@ -364,7 +364,7 @@ fn translate(mut p: Native, counts: &[u8], source: u32) -> Result<Prototype, &'s
         });
     }
     let mut names: Vec<_> = p.names.into_iter().map(Option::unwrap_or_default).collect();
-    names.resize_with(usize::from(p.nups), Box::default);
+    names.resize_with(usize::from(p.nups), || Box::from(b"?".as_slice()));
     let mut active_lines = p.lines.clone();
     active_lines.retain(|&l| l != 0);
     active_lines.sort_unstable();

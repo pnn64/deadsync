@@ -259,9 +259,17 @@ impl Vm {
             return Err(self.argument_type_error(base, count, 0, "function"));
         };
         let closure = &self.functions[slot_index(function.0)];
+        let debug = &self.programs[closure.program].data.prototypes[closure.prototype].debug;
+        // Native chunks may omit debug names while retaining executable cells.
+        // Lua 5.1 exposes only the names present in the imported prototype.
+        let named = debug
+            .native
+            .as_ref()
+            .map_or(debug.upvalues.len(), |native| native.wire.names);
         let Some(&cell) = n
             .checked_sub(1)
             .and_then(|n| usize::try_from(n).ok())
+            .filter(|&n| n < named)
             .and_then(|n| closure.upvalues.get(n))
         else {
             return Ok(0);

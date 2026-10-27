@@ -55,7 +55,7 @@ passed 629 Rust tests on each platform after fixing the remaining fixture
 assumptions. Crashing GNU C `unpack` inputs run in a separate strict audit;
 five native crashes remain recorded, with signed-overflow diagnostics and an
 independent wrapping control. The default reference flags remain unchanged.
-The current runs pass 630 Rust tests on Windows x64, Linux x64 and Linux i686
+The current runs pass 632 Rust tests on Windows x64, Linux x64 and Linux i686
 SSE2. The default x87 arithmetic baseline and five bounded traceback requests
 retain failed/incomplete observations. The C/auxiliary APIs, production native loading and
 remaining language, library, debug, GC and resource behavior must also be
@@ -63,7 +63,7 @@ completed. Selected passing probes and declaration counts do not close these
 gates. Production migration also requires the subsequent performance gates.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 553 differential/adversarial integration tests, seventy-three unit tests and
+crate, 553 differential/adversarial integration tests, seventy-five unit tests and
 four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -193,6 +193,15 @@ with official Lua, including binary strings, numeric coercion, reentry, error
 identity and forbidden yields. The core Rust runtime remains unchanged.
 Production native loading, the remaining C API and full standalone Lua 5.1
 parity remain open; performance work stays deferred.
+
+The [imported upvalue checks](testing/2026-10-27-rust-lua-upvalue-names.md)
+correct debug access to stripped and partially named native captures. Only
+retained names permit inspection/mutation; actual cells, execution and reported
+capture counts remain intact. Missing names use Lua 5.1's `?` diagnostic
+fallback. Eighteen native chunks match official Lua on Windows x64, Linux x64
+and Linux i686 SSE2 in direct, cache-store and fresh-process cache-hit modes,
+including open/closed/suspended cells and redumped functions. These regressions
+do not establish complete C API coverage or full standalone Lua 5.1 parity.
 
 The [standalone suite checks](testing/2026-10-27-rust-lua-full-suite.md) invoke
 the real CLIs with the official README's `LUA_PATH="?;./?.lua"` setup. Each run
