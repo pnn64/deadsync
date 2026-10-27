@@ -176,6 +176,22 @@ impl Inflater {
         };
         Ok(())
     }
+    #[inline]
+    fn copy_match(&mut self, distance: usize, output: &mut [u8]) {
+        let n = output.len();
+        let seed = distance.min(n);
+        let start = (self.history_pos + 32768 - distance) & 32767;
+        let first = seed.min(32768 - start);
+        output[..first].copy_from_slice(&self.history[start..start + first]);
+        output[first..seed].copy_from_slice(&self.history[..seed - first]);
+        let mut filled = seed;
+        while filled < n {
+            let count = filled.min(n - filled);
+            output.copy_within(..count, filled);
+            filled += count;
+        }
+        self.remember(output);
+    }
     fn end_block(&mut self) {
         self.state = if self.final_block {
             State::Adler
@@ -395,7 +411,12 @@ impl Inflater {
                             self.state = State::DistanceExtra { length, symbol };
                             let distance = DIST_BASE[symbol] + read!(DIST_EXTRA[symbol]) as usize;
                             self.begin_copy(length, distance)?;
-                            break;
+                            if length > output.len() - written {
+                                break;
+                            }
+                            self.copy_match(distance, &mut output[written..written + length]);
+                            written += length;
+                            self.state = State::Codes;
                         }
                         _ => return Err(Error::Invalid("reserved literal symbol")),
                     }
@@ -433,20 +454,7 @@ impl Inflater {
                         stop!(StreamStatus::NeedOutput);
                     }
                     let n = left.min(output.len() - written);
-                    let seed = distance.min(n);
-                    let start = (self.history_pos + 32768 - distance) & 32767;
-                    let first = seed.min(32768 - start);
-                    output[written..written + first]
-                        .copy_from_slice(&self.history[start..start + first]);
-                    output[written + first..written + seed]
-                        .copy_from_slice(&self.history[..seed - first]);
-                    let mut filled = seed;
-                    while filled < n {
-                        let count = filled.min(n - filled);
-                        output.copy_within(written..written + count, written + filled);
-                        filled += count;
-                    }
-                    self.remember(&output[written..written + n]);
+                    self.copy_match(distance, &mut output[written..written + n]);
                     written += n;
                     self.state = if n == left {
                         State::Codes

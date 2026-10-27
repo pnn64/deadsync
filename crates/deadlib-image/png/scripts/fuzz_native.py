@@ -145,11 +145,14 @@ def main():
         assert result.returncode == 0, log
         text = log.read_text(errors='replace')
         actual = int(re.search(r'stat::number_of_executed_units:\s+(\d+)', text)[1])
-        assert actual == runs
+        # Corpus reload can finish above the requested execution threshold.
+        # Verify completion and retain the actual count separately.
+        assert actual >= runs
+        assert int(re.search(r'Done (\d+) runs in ', text)[1]) == actual
         binary = target_dir / 'x86_64-unknown-linux-gnu/release' / target
         symbols = subprocess.check_output(['nm', str(binary)], text=True, stderr=subprocess.DEVNULL)
         assert re.search(r'^[0-9a-f]+ T __asan_init$', symbols, re.M)
-        campaign = {'target': target, 'runs': actual, 'initial_corpus': initial,
+        campaign = {'target': target, 'requested_runs': runs, 'runs': actual, 'initial_corpus': initial,
                     'binary': str(binary), 'binary_sha256': sha(binary), 'asan_init_defined': True,
                     'fuzz_seconds': int(re.search(r'Done \d+ runs in (\d+) second', text)[1]),
                     'peak_rss_mib': int(re.search(r'stat::peak_rss_mb:\s+(\d+)', text)[1])}

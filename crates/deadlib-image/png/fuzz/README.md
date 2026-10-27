@@ -584,3 +584,19 @@ campaign extracts new mutable corpus copies. No seed regeneration is needed.
 binaries, exact initial corpus digests, compiler arguments and native/dependency/
 harness feedback audits. The historical source snapshots remain distinct from
 the current selected code. Only PNG/raw decoder targets run.
+
+## Streaming complete-match follow-up
+
+`reports/stream-copy-seeds.json` reuses the same immutable literal-loop seed ZIP
+with fresh mutable PNG/raw corpora; fixture, seed-generator and harness inputs
+are unchanged. `reports/stream-copy-source.json` retains 50,852 successful PNG
+executions against a 50,000 request and 20,000 raw executions. Native feedback
+isolation and ASan runtime definitions are independently audited.
+
+The original runner rejected the successful PNG result because the observed
+count exceeded its exact-count assertion. It now requires at least the requested
+count, verifies completion/statistics agreement and retains both numbers.
+Recovery preserves the completed PNG campaign and runs only the missing raw
+target. The original helper and pre-recovery manifest are retained beside the
+campaign manifest, whose source-archive mapping identifies the as-run helper.
+Only decoder targets run in this milestone.

@@ -791,3 +791,53 @@ fragmented input/output. `stream-matches-validation.*` retains full release,
 strict lint, explicit C zlib and fresh focused offline checks. Fresh native-
 feedback campaigns reuse the exact immutable seed ZIP from the literal-loop
 milestone with new mutable corpus copies. Decoder performance remains open.
+
+## Streaming complete-match copies (2026-10-27)
+
+Complete LZ77 matches now copy inside the streaming symbol loop, avoiding the
+outer Copy/Codes dispatch when the caller's output space holds the whole match.
+Partial matches still suspend in Copy. Both paths use the same inlined history
+seed, doubling copy and ring update, with the existing window and output-budget
+checks before copying. Only `src/zlib/inflate.rs` changes in production; state
+layout, allocations, checksum batching, Huffman tables and bit refill stay fixed.
+
+The baseline is `788659fb4`, using its verified saved match-header executable.
+`experiments/stream-copy.{patch,json}` retain the candidate, and
+`experiments/stream-copy-selection.json` verifies its reconstruction and all
+eight timing groups. Baseline/candidate/candidate/baseline positions each use
+three processes per corpus, twelve iterations, three warmups and CPU 0. The
+24-photo and 60-format corpora, harness, toolchain, binary/source bytes and
+reported size fields agree. No task tests, fuzzing or profiling overlap timing.
+The zero pipeline-memory column is not a peak allocation measurement.
+
+| Streaming operation | Baseline MiB/s | Selected MiB/s | Change relative to reference |
+| --- | ---: | ---: | ---: |
+| Photo PNG reader decode | 88.23 | 91.09 | +6.31% |
+| Photo IDAT streaming inflate | 96.92 | 100.90 | +9.76% |
+| All-format PNG reader decode | 248.19 | 251.13 | -0.92% |
+| All-format IDAT streaming inflate | 552.09 | 567.17 | +1.28% |
+
+Reader comparisons use Rust png; inflation uses flate2. The unchanged buffered
+photo controls move -0.02% / +1.46% relative to those references, supporting a
+local photo-stream improvement. Absolute photo reader/inflate-stream gains are
++3.25% / +4.10%; reference normalization reflects a slower host during candidate
+runs. The format controls move -2.26% / -2.09%, and changed paths move -0.92% /
++1.28%. These smaller mixed results do not establish an independent format
+speedup. Shared-host scheduling, frequency, cache and code-generation effects
+remain uncontrolled; broad decoder parity is still unproven.
+
+The first baseline invocation completed all three photo measurements, then its
+current-source guard stopped because the candidate had already been edited.
+Only the missing format group was resumed, verifying the baseline manifest
+against committed source bytes and the same saved executable. No completed
+measurement was overwritten. Final combined comparisons are in
+`benchmark-stream-copy-{photos,formats}-summary.json`; the first-pair summaries
+remain exploratory.
+
+
+`stream-copy-validation.*` retains the complete 134-test release run, strict
+lint, the 19,645-case C zlib audit and a fresh offline six-test Huffman run.
+All 885 copied source/fixture/example/benchmark files match. Fresh decoder ASan
+campaigns complete 70,852 observed executions; their count-check recovery and
+exact source/binary/corpus evidence are documented in `COVERAGE.md` and
+`fuzz/reports/stream-copy-source.json`.

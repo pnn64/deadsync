@@ -1,0 +1,239 @@
+{
+  "baseline_png_commit": "788659fb452589026ecd393be0822aa60fd87daa",
+  "selected": "Streaming complete-match dispatch fusion in src/zlib/inflate.rs",
+  "reason": "Repeated photo comparison: reader +6.31% relative to Rust png (unchanged buffered decode -0.02%); streaming inflate +9.76% relative to flate2 (unchanged buffered inflate +1.46%). Format results are mixed and small; no independent format speedup is claimed. Shared-host variation remains and broad decoder parity is unproven.",
+  "production_sources_unchanged": 20,
+  "production_sources_changed": [
+    "src/zlib/inflate.rs"
+  ],
+  "source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "57984db9d36f37210db69ac28689e18f9ba9ac5f743d90e2a4a5afa7ddd3f570"
+    }
+  ],
+  "reconstruction": [
+    {
+      "experiment": "stream-copy",
+      "patch": "experiments/stream-copy.patch",
+      "patch_sha256": "17eac4f36c790fd7fd1aa1751d8318890e84d51691a20a90c6f39a9127872fcf",
+      "all_21_recorded_source_hashes_reconstructed": true,
+      "destination": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadlib-stream-copy-zqc29yej"
+    }
+  ],
+  "benchmark_groups": [
+    {
+      "manifest": "benchmark-stream-copy-before-photos-a-manifest.json",
+      "sha256": "728164abe2d683b64c1dfd32ae9bc4d1fdb518c89433b2313dba01eef2088c71",
+      "variant": "baseline",
+      "binary_sha256": "d60f4ed6662d6d6b7cdae541ba9c1343f03692f1569eb8d5564cb0d4a7952502"
+    },
+    {
+      "manifest": "benchmark-stream-copy-before-formats-a-manifest.json",
+      "sha256": "18806c1a2327fe37fea14b4b3bb4307d8e3caac847d79f651d6c0fdc87c829c4",
+      "variant": "baseline",
+      "binary_sha256": "d60f4ed6662d6d6b7cdae541ba9c1343f03692f1569eb8d5564cb0d4a7952502"
+    },
+    {
+      "manifest": "benchmark-stream-copy-trial-photos-a-manifest.json",
+      "sha256": "d63031ee80dd3e64822d48218835d99cc7caa37489c6b3616d1a5e6f92014085",
+      "variant": "trial",
+      "binary_sha256": "f1ea88e03f07e49f96a0ad961d59bd6550ece43b01a849fc6e20d0e63c562c2e"
+    },
+    {
+      "manifest": "benchmark-stream-copy-trial-formats-a-manifest.json",
+      "sha256": "76e4f07507473efec3f373be526de000ab3da1c0df5a7a38a408f46c8e0774d6",
+      "variant": "trial",
+      "binary_sha256": "f1ea88e03f07e49f96a0ad961d59bd6550ece43b01a849fc6e20d0e63c562c2e"
+    },
+    {
+      "manifest": "benchmark-stream-copy-repeat-photos-a-manifest.json",
+      "sha256": "bd83722ce7e9be8aa832aa9f4ff0cadf172158a8751e3982c3900f18a7c5c84d",
+      "variant": "repeat",
+      "binary_sha256": "f1ea88e03f07e49f96a0ad961d59bd6550ece43b01a849fc6e20d0e63c562c2e"
+    },
+    {
+      "manifest": "benchmark-stream-copy-repeat-formats-a-manifest.json",
+      "sha256": "3939e9bb6dfd8f38375ac0553e45cfdcde2d6448b1622b4fc33e1d1af83a1713",
+      "variant": "repeat",
+      "binary_sha256": "f1ea88e03f07e49f96a0ad961d59bd6550ece43b01a849fc6e20d0e63c562c2e"
+    },
+    {
+      "manifest": "benchmark-stream-copy-control-photos-a-manifest.json",
+      "sha256": "c88b3bbc32317cf0058593827d47ab360c4a9b769ce896921b738262899e543a",
+      "variant": "baseline",
+      "binary_sha256": "d60f4ed6662d6d6b7cdae541ba9c1343f03692f1569eb8d5564cb0d4a7952502"
+    },
+    {
+      "manifest": "benchmark-stream-copy-control-formats-a-manifest.json",
+      "sha256": "b2098403a12c4efee93d938bac52bcf17485500afda44590e7f20b0e21054b03",
+      "variant": "baseline",
+      "binary_sha256": "d60f4ed6662d6d6b7cdae541ba9c1343f03692f1569eb8d5564cb0d4a7952502"
+    }
+  ],
+  "summaries": [
+    {
+      "path": "benchmark-stream-copy-photos-summary.json",
+      "sha256": "76a80e41fb82bf0910ec459d98e739229598ed12d779d04187f287a1a1edb622",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 96.15378194859646,
+          "after_mib_s": 93.36502455788886,
+          "absolute_change_percent": -2.9003096229729852,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -0.020016624806684646
+        },
+        "decode-reader": {
+          "before_mib_s": 88.2253540610895,
+          "after_mib_s": 91.0920746443682,
+          "absolute_change_percent": 3.2493160427485623,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 6.3120269629241
+        },
+        "inflate": {
+          "before_mib_s": 123.52598376078998,
+          "after_mib_s": 118.86688298454466,
+          "absolute_change_percent": -3.77175767753265,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 1.4568678912541877
+        },
+        "inflate-stream": {
+          "before_mib_s": 96.92426167549353,
+          "after_mib_s": 100.90150827941245,
+          "absolute_change_percent": 4.103458241688673,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 9.759988906954064
+        }
+      }
+    },
+    {
+      "path": "benchmark-stream-copy-formats-summary.json",
+      "sha256": "5b0d5f70971daadeac412ed30cc4a6fd2a62feb3f8d2e35288663aad2557b4cc",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 244.79127203151242,
+          "after_mib_s": 244.32167616542742,
+          "absolute_change_percent": -0.19183521625907307,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -2.2645488975963635
+        },
+        "decode-reader": {
+          "before_mib_s": 248.1865895667554,
+          "after_mib_s": 251.12748185616928,
+          "absolute_change_percent": 1.184952134016437,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -0.9163532560592103
+        },
+        "inflate": {
+          "before_mib_s": 882.595550967842,
+          "after_mib_s": 876.5150359640871,
+          "absolute_change_percent": -0.6889356055655438,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -2.0942160068962323
+        },
+        "inflate-stream": {
+          "before_mib_s": 552.091454496257,
+          "after_mib_s": 567.172403428255,
+          "absolute_change_percent": 2.731603398164939,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 1.2779213765995001
+        }
+      }
+    }
+  ],
+  "verifier_sha256": "1a633ed94aace4eb57f3482b78f553c83eb12ef5e3b6893b35e88927b7adfa24",
+  "final_validation_evidence": [
+    {
+      "path": "stream-copy-validation.json",
+      "sha256": "a5dd09719b411f1b0103f613b32523b8e2fe6c94ca8c6f0d136267726dd10ce0"
+    },
+    {
+      "path": "fuzz/reports/stream-copy-source.json",
+      "sha256": "a83cccb4ff59c4ec734d8679d610ad0a0c605b49b0f262b3b2f38fad6d96be60"
+    },
+    {
+      "path": "fuzz/reports/stream-copy-seeds.json",
+      "sha256": "1a5794ca3f6c16877f3ba309dff343b57f6ec5d01d266bcc9d8b1ec432cc3886"
+    }
+  ]
+}

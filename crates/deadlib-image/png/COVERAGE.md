@@ -1678,3 +1678,60 @@ still contains the mDCV example correction already
 covered by `tests/hdr.rs`; this review identifies no additional format change.
 Remaining corpus gaps, the final requirements audit and competitive decoder
 performance remain open.
+
+## Streaming complete-match copies and fuzz count recovery (2026-10-27)
+
+Only `src/zlib/inflate.rs` changes in production from `788659fb4`. Complete
+matches copy directly inside the symbol loop; partial-output matches retain
+the existing Copy state. The common inlined copy helper retains ring wrapping,
+overlap expansion, history updates and validation order. State layout,
+allocations, checksum batching, Huffman tables and bit refill are unchanged.
+Existing independently assembled fixtures cover every legal length/distance,
+eight bit offsets, fixed/dynamic trees, final padding and fragmented input/output.
+No new fixtures duplicate the changed dispatch.
+
+Repeated photo timing supports +6.31% reader decoding relative to Rust png and
++9.76% streaming inflation relative to flate2. Unchanged buffered controls move
+-0.02% / +1.46%. Format measurements remain small and mixed; no independent
+format speedup is claimed. `BENCHMARKS.md` retains absolute/reference-relative
+rates, host limitations and the baseline source-guard recovery.
+`experiments/stream-copy-selection.json` reconstructs the exact candidate and
+verifies all eight timing groups and both combined summaries.
+
+Strict main/fuzz Clippy and scoped rustfmt pass. The full release suite passes
+134 tests, with nineteen optional checks ignored. The explicit C zlib Huffman
+batch checks 19,645 fixtures: 3,091 successful outputs and 16,554 error records,
+including 68 published-HDIST-range definitions rejected by default C policy.
+A fresh complete offline source copy passes six Huffman tests, with its external
+C check ignored there. All 885 copied sources, fixtures, examples and benchmark
+files match. The production dependency tree contains only shared image primitives.
+All recorded regression, oracle, seed-generator and harness inputs retain their
+baseline bytes; the separately documented fuzz-runner correction is below.
+
+Fresh mutable corpora reuse the verified immutable ZIP: 48,167 PNG seeds and
+6,927 raw seeds. ASan succeeds for 50,852 PNG-stream executions in 53 fuzzing
+seconds / 557 MiB peak RSS and 20,000 raw-stream executions in 36 seconds /
+443 MiB. Native PNG/shared archives retain 16,768 / 45 feedback-counter bytes;
+fourteen dependency archives and four harness objects contain no feedback
+counters or PC tables. Both binaries define the ASan runtime entry. This adds
+70,852 successful decoder executions, bringing historical all-target campaigns
+to 1,690,852; historical totals include earlier encoder campaigns.
+
+The PNG process exited zero with 50,852 completed executions against a 50,000
+request. The runner's exact-count assertion then failed. `scripts/fuzz_native.py`
+now accepts completed counts at or above the requested threshold, verifies the
+completion/statistics counts agree and records requested and observed values
+separately. Recovery reuses that completed PNG campaign and runs only the missing
+raw-stream campaign. The original helper and pre-recovery manifest remain in
+`fuzz/reports/stream-copy-fuzz-runner-before.py` and
+`fuzz/reports/stream-copy-before-count-recovery.json`; the current source manifest
+maps the archived helper to its as-run hash. The corrected helper passes Python
+compilation, and recovery checks both observed logs and the original binary.
+
+`stream-copy-validation.*`, `stream-copy-audit.json` and
+`fuzz/reports/stream-copy-{source,seeds}.json` retain exact sources, commands,
+corpus/binary/log hashes, independent-copy checks and feedback isolation audits.
+Earlier source-coverage snapshots retain their original source bindings; no new
+whole-decoder coverage percentage follows from these campaigns. Remaining
+corpus gaps, the final requirements audit and competitive decoder performance
+stay open. Encoder functionality, conformance and speed remain outside scope.
