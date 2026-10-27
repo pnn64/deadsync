@@ -459,6 +459,17 @@ handler returns identical diagnostic bytes. The
 compare `lua_pcall`, `lua_cpcall`, handler recursion and stack effects against
 official Lua. Instruction/resource limits still abort the outer Rust entry.
 
+Native value operations also provide nonmutating number/integer/boolean
+conversions, integer pushes, equality, less-than comparison and concatenation.
+Comparisons and concatenation share the VM's metamethod scheduler and preserve
+fault frames. Concatenation coerces and reduces the original operand slots;
+their visible top and roots remain intact until the whole operation succeeds,
+as in Lua 5.1. Comparison callbacks can release cleared operand roots without
+private argument copies retaining them. The
+[native value checks](../../docs/testing/2026-10-27-rust-lua-native-values.md)
+compare thirteen additional C API functions against the Windows/MSVC reference.
+The C API remains partial and production module loading remains unfinished.
+
 Callbacks run synchronously and can allocate strings, tables and userdata or
 perform raw table access. `HostCall::call` invokes a callable through a protected
 nested Lua boundary; `call_and_return` appends its results without an intermediate

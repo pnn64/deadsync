@@ -12,6 +12,8 @@ enum Action<'a> {
     ProtectedCall(Value, &'a [Value], Option<usize>),
     Get([Value; 2]),
     Set([Value; 3]),
+    Compare(Op, [Value; 2]),
+    Concat { first: usize, last: usize },
 }
 impl Action<'_> {
     fn arguments(&self) -> &[Value] {
@@ -19,6 +21,7 @@ impl Action<'_> {
             Self::Call(_, values) | Self::ProtectedCall(_, values, _) => values,
             Self::Get(values) => values,
             Self::Set(values) => values,
+            Self::Compare(..) | Self::Concat { .. } => &[],
         }
     }
 }
@@ -388,6 +391,11 @@ impl HostCall<'_> {
         if let Action::Call(function, _) | Action::ProtectedCall(function, _, _) = action {
             self.vm.validate_value(function)?;
         }
+        if let Action::Compare(_, values) = action {
+            for value in values {
+                self.vm.validate_value(value)?;
+            }
+        }
         let handler = match action {
             Action::ProtectedCall(_, _, handler) => handler,
             _ => None,
@@ -426,10 +434,10 @@ impl HostCall<'_> {
         };
         self.vm.registers[base + 1..].copy_from_slice(arguments);
         self.vm.push_record(Frame {
-            function: FrameKind::Native(if c_protected {
-                CONT_HOST_PCALL
-            } else {
-                CONT_HOST_CALL
+            function: FrameKind::Native(match action {
+                Action::Concat { .. } => CONT_HOST_CONCAT,
+                _ if c_protected => CONT_HOST_PCALL,
+                _ => CONT_HOST_CALL,
             }),
             pc: u32::from(protected),
             base,
@@ -437,19 +445,21 @@ impl HostCall<'_> {
             result: base,
             wanted: match action {
                 Action::Call(..) | Action::ProtectedCall(..) => FRAME_OPEN,
-                Action::Get(..) => 1,
+                Action::Get(..) | Action::Compare(..) | Action::Concat { .. } => 1,
                 Action::Set(..) => 0,
             },
             barriers: self.vm.frames.last().unwrap().barriers,
-            vararg_start: if c_protected {
-                handler.map_or(scratch, |slot| slot + usize::from(slot >= scratch))
-            } else {
-                base + 1
+            vararg_start: match action {
+                Action::Concat { first, .. } => first,
+                _ if c_protected => {
+                    handler.map_or(scratch, |slot| slot + usize::from(slot >= scratch))
+                }
+                _ => base + 1,
             },
-            vararg_count: if c_protected {
-                u32::from(handler.is_some())
-            } else {
-                arguments.len() as u32
+            vararg_count: match action {
+                Action::Concat { first, last, .. } => (last - first + 1) as u32,
+                _ if c_protected => u32::from(handler.is_some()),
+                _ => arguments.len() as u32,
             },
             tail_calls: 0,
         });
@@ -462,6 +472,12 @@ impl HostCall<'_> {
             Action::Get([target, key]) => self.vm.get_table(target, key, base).map(|()| None),
             Action::Set([target, key, value]) => {
                 self.vm.set_table(target, key, value).map(|()| None)
+            }
+            Action::Compare(op, [left, right]) => {
+                self.vm.compare(op, left, right, base).map(|()| None)
+            }
+            Action::Concat { first, last, .. } => {
+                self.vm.concat_range(base, first, last).map(|()| None)
             }
         }
         .map_err(|error| {

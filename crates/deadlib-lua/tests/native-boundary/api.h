@@ -8,6 +8,7 @@
 #define API __declspec(dllimport)
 #endif
 typedef struct lua_State lua_State;
+typedef ptrdiff_t lua_Integer;
 typedef int (*lua_CFunction)(lua_State *);
 #define LUA_REGISTRYINDEX (-10000)
 #define LUA_ENVIRONINDEX (-10001)
@@ -20,6 +21,7 @@ typedef struct BoundaryValue {
   double number;
   const char *bytes;
   size_t length;
+  lua_Integer wide_integer;
 } BoundaryValue;
 typedef int (*BoundaryDispatch)(void *, int, int, int, BoundaryValue *);
 API lua_State *boundary_state_new(void);
@@ -64,4 +66,17 @@ API void lua_getfenv(lua_State *, int);
 API int lua_setfenv(lua_State *, int);
 API int lua_pcall(lua_State *, int, int, int);
 API int lua_cpcall(lua_State *, lua_CFunction, void *);
+API int lua_isnumber(lua_State *, int);
+API int lua_isstring(lua_State *, int);
+API int lua_isuserdata(lua_State *, int);
+API int lua_iscfunction(lua_State *, int);
+API double lua_tonumber(lua_State *, int);
+API lua_Integer lua_tointeger(lua_State *, int);
+API int lua_toboolean(lua_State *, int);
+API void lua_pushinteger(lua_State *, lua_Integer);
+API void lua_pushstring(lua_State *, const char *);
+API const char *lua_typename(lua_State *, int);
+API int lua_equal(lua_State *, int, int);
+API int lua_lessthan(lua_State *, int, int);
+API void lua_concat(lua_State *, int);
 #endif

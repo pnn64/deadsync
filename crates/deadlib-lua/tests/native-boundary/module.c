@@ -9,6 +9,71 @@
 #include <stdint.h>
 #include <string.h>
 
+static int scalar_index(lua_State *L, int index) {
+  double number = lua_tonumber(L, index);
+  lua_Integer integer = lua_tointeger(L, index);
+  int before = lua_type(L, index);
+  int isnumber = lua_isnumber(L, index), isstring = lua_isstring(L, index);
+  int isuserdata = lua_isuserdata(L, index), iscfunction = lua_iscfunction(L, index);
+  int boolean = lua_toboolean(L, index), after = lua_type(L, index);
+  const char *name = lua_typename(L, before);
+  lua_createtable(L, 0, 10);
+  lua_pushnumber(L, before); lua_setfield(L, -2, "type");
+  lua_pushnumber(L, after); lua_setfield(L, -2, "after");
+  lua_pushstring(L, name); lua_setfield(L, -2, "name");
+  if (number != number) lua_pushstring(L, "nan");
+  else lua_pushlstring(L, (const char *)&number, sizeof(number));
+  lua_setfield(L, -2, "number");
+  lua_pushlstring(L, (const char *)&integer, sizeof(integer)); lua_setfield(L, -2, "integer");
+  lua_pushboolean(L, isnumber); lua_setfield(L, -2, "isnumber");
+  lua_pushboolean(L, isstring); lua_setfield(L, -2, "isstring");
+  lua_pushboolean(L, isuserdata); lua_setfield(L, -2, "isuserdata");
+  lua_pushboolean(L, iscfunction); lua_setfield(L, -2, "iscfunction");
+  lua_pushboolean(L, boolean); lua_setfield(L, -2, "boolean");
+  return 1;
+}
+EXPORT int boundary_scalar(lua_State *L) { return scalar_index(L, 1); }
+EXPORT int boundary_scalar_null(lua_State *L) {
+  lua_pushlightuserdata(L, NULL); return scalar_index(L, lua_gettop(L));
+}
+static int scalar_capture(lua_State *L) { return scalar_index(L, lua_upvalueindex(1)); }
+EXPORT int boundary_scalar_capture(lua_State *L) {
+  lua_pushvalue(L, 1); lua_pushcclosure(L, scalar_capture, 1); return 1;
+}
+EXPORT int boundary_integers(lua_State *L) {
+  static const lua_Integer values[] = {0, 1, -1, 2147483647, (lua_Integer)2147483648LL,
+    ((lua_Integer)1<<53)-1, ((lua_Integer)1<<53)+1, -(((lua_Integer)1<<53)+1), PTRDIFF_MIN, PTRDIFF_MAX};
+  size_t i;
+  lua_createtable(L, (int)(sizeof(values)/sizeof(values[0])), 0);
+  for (i=0; i<sizeof(values)/sizeof(values[0]); i++) {
+    double number; lua_Integer integer;
+    lua_pushinteger(L, values[i]);
+    number = lua_tonumber(L, -1); integer = lua_tointeger(L, -1);
+    lua_settop(L, -2);
+    lua_createtable(L, 0, 3);
+    lua_pushlstring(L, (const char *)&values[i], sizeof(lua_Integer)); lua_setfield(L, -2, "source");
+    lua_pushlstring(L, (const char *)&number, sizeof(number)); lua_setfield(L, -2, "number");
+    lua_pushlstring(L, (const char *)&integer, sizeof(integer)); lua_setfield(L, -2, "integer");
+    lua_rawseti(L, -2, (int)i+1);
+  }
+  lua_pushstring(L, NULL); lua_pushstring(L, "a\0ignored");
+  return 3;
+}
+EXPORT int boundary_compare(lua_State *L) {
+  int top = lua_gettop(L), mode = (int)lua_tointeger(L, 3);
+  int left = top >= 4 ? (int)lua_tointeger(L, 4) : 1;
+  int right = top >= 5 ? (int)lua_tointeger(L, 5) : 2;
+  int result = mode ? lua_lessthan(L, left, right) : lua_equal(L, left, right);
+  lua_pushboolean(L, result); lua_pushboolean(L, lua_gettop(L) == top + 1);
+  return 2;
+}
+EXPORT int boundary_concat(lua_State *L) {
+  lua_concat(L, lua_gettop(L)); return lua_gettop(L);
+}
+EXPORT int boundary_concat_prefix(lua_State *L) {
+  lua_concat(L, lua_gettop(L) - 1); return lua_gettop(L);
+}
+
 typedef struct Payload {
   double number;
   size_t visits;

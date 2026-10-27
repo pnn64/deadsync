@@ -19,6 +19,7 @@ mod windows {
         number: f64,
         bytes: *const c_char,
         length: usize,
+        wide_integer: isize,
     }
     type Dispatch =
         unsafe extern "C" fn(*mut c_void, c_int, c_int, c_int, *mut BoundaryValue) -> c_int;
@@ -235,6 +236,32 @@ mod windows {
                         handler,
                     )? as c_int;
                 }
+                35 => {
+                    let number = self.stack.to_number(a as isize);
+                    value.integer = c_int::from(number.is_some());
+                    value.number = number.unwrap_or(0.);
+                }
+                36 => value.wide_integer = self.stack.to_integer(a as isize).unwrap_or(0),
+                37 => value.integer = c_int::from(self.stack.to_boolean(a as isize)),
+                38 => self.stack.push_integer(value.wide_integer)?,
+                39 => {
+                    value.integer = c_int::from(if value.integer == 0 {
+                        self.stack.equal(a as isize, b as isize)?
+                    } else {
+                        self.stack.less_than(a as isize, b as isize)?
+                    });
+                }
+                40 => {
+                    let count = usize::try_from(a)
+                        .map_err(|_| self.stack.error(b"invalid concat count"))?;
+                    self.stack.concatenate(count)?;
+                }
+                41 => {
+                    value.integer = c_int::from(matches!(
+                        self.stack.value(a as isize),
+                        Some(Value::Native(_))
+                    ))
+                }
                 25 => {
                     value.integer = match self.stack.value(a as isize) {
                         None => -1,
@@ -392,6 +419,13 @@ mod windows {
             "boundary_protected_negative",
             "boundary_protected_argument",
             "boundary_replace_handler",
+            "boundary_scalar",
+            "boundary_scalar_null",
+            "boundary_scalar_capture",
+            "boundary_integers",
+            "boundary_compare",
+            "boundary_concat",
+            "boundary_concat_prefix",
             "boundary_cpcall",
         ] {
             let function = vm

@@ -136,10 +136,24 @@ reader-error inheritance, protected-boundary isolation, coroutine yield errors,
 binary C errors and recursion reserve exhaustion. Error functions retain mutable
 stack-slot references through Lua/native argument-window moves and vararg entry.
 Nine Rust groups cover protected execution, slot aliases and fatal instruction
-limits. The development shim declares 37 of the pinned Lua header's 80 core C
-functions, plus one auxiliary function; declarations do not establish full
+limits. That revision's development shim declared 37 of the pinned Lua header's
+80 core C functions, plus one auxiliary function; declarations do not establish full
 semantic coverage. Production native loading and full standalone Lua 5.1
 compatibility remain open; performance work stays deferred.
+
+The [native value checks](testing/2026-10-27-rust-lua-native-values.md) add
+nonmutating scalar conversions, pointer-width integer pushes, shared-handler
+equality and less-than, and concatenation of the original C operand window.
+Numeric coercions and partial reductions remain visible while its top and
+operand roots persist until the operation completes. Private comparison and
+metamethod argument copies stop retaining cleared operands after Lua entry.
+The same C fixture verifies conversion bytes, stack effects, collector roots,
+diagnostics and matching recursion limits. Nine new Rust groups accompany
+thirteen additional C API declarations; the shim now declares 50 of 80 core
+functions plus one auxiliary function. Validation lists the remaining 30 core
+names. Declarations are not proof of complete semantics or production C API
+availability. Full standalone Lua 5.1 and native loading remain open gates;
+performance tuning remains deferred.
 
 GC coverage includes cyclic and weak graphs, collection inside native callbacks,
 collected suspended/failed threads with escaping cells, 20,000-link graphs,

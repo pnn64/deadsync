@@ -24,6 +24,47 @@ static void operation(lua_State *L, int op, int a, int b, BoundaryValue *value) 
   if (frame->dispatch(frame->context, op, a, b, value)) longjmp(frame->failure, 1);
 }
 
+API double lua_tonumber(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 35, index, 0, &value); return value.number;
+}
+API int lua_isnumber(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 35, index, 0, &value); return value.integer;
+}
+API lua_Integer lua_tointeger(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 36, index, 0, &value); return value.wide_integer;
+}
+API int lua_toboolean(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 37, index, 0, &value); return value.integer;
+}
+API void lua_pushinteger(lua_State *L, lua_Integer integer) {
+  BoundaryValue value = {0}; value.wide_integer = integer; operation(L, 38, 0, 0, &value);
+}
+API int lua_isstring(lua_State *L, int index) {
+  int type = lua_type(L, index); return type == 3 || type == 4;
+}
+API int lua_isuserdata(lua_State *L, int index) {
+  int type = lua_type(L, index); return type == 2 || type == 7;
+}
+API int lua_iscfunction(lua_State *L, int index) {
+  BoundaryValue value = {0}; operation(L, 41, index, 0, &value); return value.integer;
+}
+API void lua_pushstring(lua_State *L, const char *string) {
+  if (string) lua_pushlstring(L, string, strlen(string)); else lua_pushnil(L);
+}
+API const char *lua_typename(lua_State *L, int type) {
+  static const char *const names[] = {"no value", "nil", "boolean", "userdata", "number", "string", "table", "function", "userdata", "thread"};
+  (void)L; return type >= -1 && type <= 8 ? names[type+1] : NULL;
+}
+API int lua_equal(lua_State *L, int left, int right) {
+  BoundaryValue value = {0}; operation(L, 39, left, right, &value); return value.integer;
+}
+API int lua_lessthan(lua_State *L, int left, int right) {
+  BoundaryValue value = {0}; value.integer = 1; operation(L, 39, left, right, &value); return value.integer;
+}
+API void lua_concat(lua_State *L, int count) {
+  BoundaryValue value = {0}; operation(L, 40, count, 0, &value);
+}
+
 API void *lua_newuserdata(lua_State *L, size_t size) {
   BoundaryValue value = {0}; value.length = size;
   operation(L, 29, 0, 0, &value);

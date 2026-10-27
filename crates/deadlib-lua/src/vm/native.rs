@@ -189,23 +189,27 @@ impl Vm {
         result: usize,
         continuation: u64,
     ) -> Result<(), Error> {
-        // A table API operation already crosses its host callback's C-call
+        // A native API operation already crosses its host callback's C-call
         // boundary. Its result continuation must not count that boundary twice.
-        let host_table = self.frames.last().is_some_and(|f| {
-            matches!(f.function, FrameKind::Native(CONT_HOST_CALL))
+        let host_action = self.frames.last().is_some_and(|f| {
+            (matches!(f.function, FrameKind::Native(CONT_HOST_CALL))
                 && f.pc == 0
-                && f.wanted != FRAME_OPEN
+                && f.wanted != FRAME_OPEN)
+                || (matches!(f.function, FrameKind::Native(CONT_CONCAT))
+                    && self.frames.iter().rev().nth(1).is_some_and(|parent| {
+                        matches!(parent.function, FrameKind::Native(CONT_HOST_CONCAT))
+                    }))
         });
         let base = self.registers.len();
         self.registers.push(function);
         self.registers.extend_from_slice(args);
         self.push_record(Frame {
-            function: FrameKind::Native(if host_table {
+            function: FrameKind::Native(if host_action {
                 CONT_HOST_META
             } else {
                 continuation
             }),
-            pc: 1,
+            pc: if host_action { continuation as u32 } else { 1 },
             base,
             stack_start: base,
             result,
@@ -213,7 +217,7 @@ impl Vm {
             barriers: self
                 .frames
                 .last()
-                .map_or(1, |f| f.barriers + u16::from(!host_table)),
+                .map_or(1, |f| f.barriers + u16::from(!host_action)),
             vararg_start: 0,
             vararg_count: 0,
             tail_calls: 0,
@@ -388,9 +392,16 @@ impl Vm {
         let index = self.frames.len() - 1;
         let scheduled = self.scheduled_native(id);
         match id {
-            CONT_HOST_CALL => self.host_return(frame),
+            CONT_HOST_CALL | CONT_HOST_CONCAT => self.host_return(frame),
             CONT_HOST_PCALL => Ok(self.host_protected_return(frame)),
-            CONT_HOST_META => Ok(self.return_frame(frame, base, usize::from(frame.wanted != 0))),
+            CONT_HOST_META => {
+                if matches!(u64::from(frame.pc), CONT_BOOL | CONT_NOT) {
+                    self.registers[base] = Value::Boolean(
+                        self.registers[base].is_truthy() == (u64::from(frame.pc) == CONT_BOOL),
+                    );
+                }
+                Ok(self.return_frame(frame, base, usize::from(frame.wanted != 0)))
+            }
             CONT_STANDALONE => self.standalone_driver(frame),
             debug::CONSOLE => self.debug_console_step(frame),
             _ if scheduled >= 2 => self.standalone_native(id, frame, scheduled),

@@ -238,6 +238,7 @@ const CONT_STANDALONE: u64 = 267;
 const CONT_HOST_CALL: u64 = 268;
 const CONT_HOST_META: u64 = 269;
 const CONT_HOST_PCALL: u64 = 270;
+const CONT_HOST_CONCAT: u64 = 271;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -859,6 +860,17 @@ impl Vm {
             self.discard_native_error_function_slots(
                 call + 1 + count.min(params)..call + 1 + count,
             );
+        }
+        if self
+            .frames
+            .last()
+            .is_some_and(|frame| matches!(frame.function, FrameKind::Native(CONT_HOST_META)))
+        {
+            // Native API operands remain in the visible C window. Their
+            // private metamethod argument copies stop owning roots after
+            // entering Lua; vararg extras remain in the callee's vararg area.
+            let copied = if vararg { count.min(params) } else { count };
+            self.registers[call + 1..call + 1 + copied].fill(Value::Nil);
         }
         let vararg_count = count.saturating_sub(params);
         let vararg_start = call + 1 + count.min(params);

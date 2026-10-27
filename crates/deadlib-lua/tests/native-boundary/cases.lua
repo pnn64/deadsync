@@ -527,3 +527,139 @@ do
   print('protected-native-argument',status,e)
   assert(status==2 and e=='native-replacement')
 end
+
+
+do
+  local function hex(s)return (s:gsub('.',function(c)return string.format('%02x',c:byte())end))end
+  local function emit(label,v)
+    assert(v.type==v.after and #v.integer==8)
+    print('scalar',label,v.type,v.name,hex(v.number),hex(v.integer),v.isnumber,v.isstring,v.isuserdata,v.iscfunction,v.boolean)
+  end
+  emit('absent',boundary_scalar());emit('nil',boundary_scalar(nil))
+  local ud,pointer=boundary_userdata(1)
+  local cases={
+    {'false',false},{'true',true},{'zero',0},{'negative-zero',-1/math.huge},
+    {'fraction',1.9},{'negative-fraction',-1.9},{'large',2^63},{'minimum',-2^63},
+    {'below-limit',2^63-1024},{'above-precision',2^53+1},{'infinity',1/0},{'nan',0/0},
+    {'empty',''},{'numeric',' 1.25 '},{'nul-tail','17\0ignored'},{'bad-tail','17x'},
+    {'hex','0x10'},{'hex-fraction','0x1.fp2'},{'nan-text','nan'},{'inf-text','inf'},
+    {'overflow-text','1e99999'},{'binary','17\255'},{'table',{}},{'userdata',ud},
+    {'lightuserdata',pointer},{'native',math.abs},{'module',boundary_scalar},
+    {'lua',function()end},{'thread',coroutine.create(function()end)}
+  }
+  for _,entry in ipairs(cases)do
+    emit(entry[1],boundary_scalar(entry[2]))
+    local captured=boundary_scalar_capture(entry[2]);emit(entry[1]..'-capture',captured())
+  end
+  local v=boundary_scalar_null();assert(v.type==2 and v.isuserdata and v.boolean)
+  emit('null-lightuserdata',v)
+  local rows,absent,truncated=boundary_integers()
+  assert(absent==nil and truncated=='a' and #rows==10)
+  for i,row in ipairs(rows)do print('integer',i,hex(row.source),hex(row.number),hex(row.integer))end
+end
+
+do
+  local function compare(a,b,mode)
+    local result,balanced=boundary_compare(a,b,mode);assert(balanced);return result
+  end
+  assert(compare(nil,nil,0) and not boundary_compare(nil,nil,0,1,999))
+  assert(not boundary_compare(nil,nil,1,999,1))
+  assert(compare(0,-0,0) and not compare(0/0,0/0,0) and not compare(1,'1',0))
+  assert(compare(1,2,1) and compare('a\0b','a\0c',1))
+  local calls=0
+  local function equal(a,b)calls=calls+1;collectgarbage();return {}end
+  local a,b=setmetatable({},{__eq=equal}),setmetatable({},{__eq=equal})
+  assert(compare(a,b,0) and compare(a,a,0) and calls==1)
+  assert(not compare(a,setmetatable({},{__eq=function()return true end}),0))
+  local u,v=newproxy(true),newproxy(true)
+  getmetatable(u).__eq=equal;getmetatable(v).__eq=equal;assert(compare(u,v,0))
+  local callable=setmetatable({},{__call=function()collectgarbage();return 'yes'end})
+  setmetatable(a,{__eq=callable,__lt=callable});setmetatable(b,{__eq=callable,__lt=callable})
+  assert(compare(a,b,0) and compare(a,b,1))
+  local marker={};local retained;local inspected=false
+  local function fail(a,b)
+    local retained_local={tag=17};retained=function()return retained_local end
+    error(marker,0)
+  end
+  setmetatable(a,{__lt=fail});setmetatable(b,{__lt=fail})
+  local ok,e=xpcall(function()return compare(a,b,1)end,function(e)
+    for level=2,12 do
+      local info=debug.getinfo(level,'f');if not info then break end
+      if info.func==fail then
+        for i=1,6 do local n,v=debug.getlocal(level,i)
+          if n=='retained_local' then debug.setlocal(level,i,{tag=42});inspected=true end
+        end
+      end
+    end
+    collectgarbage();return e
+  end)
+  assert(not ok and e==marker and inspected and retained().tag==42)
+  local ok,e=pcall(boundary_compare,1,'1',1)
+  assert(not ok and e=='attempt to compare number with string')
+  print('comparison',calls,retained().tag,e)
+  local depth=0
+  local function recurse(a,b)depth=depth+1;return boundary_compare(a,b,0)end
+  setmetatable(a,{__eq=recurse});setmetatable(b,{__eq=recurse})
+  local ok,e=pcall(boundary_compare,a,b,0)
+  assert(not ok and e:find('C stack overflow',1,true));print('comparison-depth',depth)
+end
+
+do
+  assert(boundary_concat()=='' and select('#',boundary_concat())==1)
+  local object={};assert(boundary_concat(object)==object and type(boundary_concat(17))=='number')
+  assert(boundary_concat('a\0',17,'',2.5)=='a\000172.5')
+  local prefix={};local p,v=boundary_concat_prefix(prefix,17,2.5)
+  assert(p==prefix and v=='172.5')
+  local p,v=boundary_concat_prefix(prefix);assert(p==prefix and v=='')
+  local weak=setmetatable({},{__mode='v'});local observed=false
+  local function right()local object=newproxy(true);weak[1]=object;return object end
+  local middle=setmetatable({},{__concat=function()return 'middle'end})
+  local left;left=setmetatable({},{__concat=function(a,b)
+    assert(b=='middle');collectgarbage();collectgarbage();assert(weak[1]~=nil)
+    for level=2,12 do
+      local info=debug.getinfo(level,'f');if not info then break end
+      if info.func==boundary_concat_prefix then
+        local _,p=debug.getlocal(level,1);local _,a=debug.getlocal(level,2)
+        local _,b=debug.getlocal(level,3)
+        assert(p==prefix and a==left and b=='middle')
+        local _,last=debug.getlocal(level,4);assert(last==weak[1]);observed=true
+      end
+    end
+    return 'result'
+  end})
+  local p,v=boundary_concat_prefix(prefix,left,middle,right())
+  assert(p==prefix and v=='result' and observed)
+  collectgarbage();collectgarbage();assert(weak[1]==nil)
+  local a=setmetatable({},{__concat=function()return 42 end})
+  assert(type(boundary_concat(a,'x'))=='number' and boundary_concat('prefix',a,'x')=='prefix42')
+  local co=coroutine.create(function()
+    return boundary_concat(setmetatable({},{__concat=function()coroutine.yield()end}),'x')
+  end)
+  local ok,e=coroutine.resume(co);assert(not ok and e:find('yield across',1,true))
+  local ok,e=pcall(boundary_concat,false,'x');assert(not ok)
+  print('concat',observed,v,e)
+  local depth=0
+  local a=setmetatable({},{__concat=function(a,b)depth=depth+1;return boundary_concat(a,b)end})
+  local ok,e=pcall(boundary_concat,a,'x')
+  assert(not ok and e:find('C stack overflow',1,true));print('concat-depth',depth)
+end
+
+
+do
+  local weak=setmetatable({},{__mode='v'})
+  local function equal(a,b)
+    for level=2,12 do
+      local info=debug.getinfo(level,'f');if not info then break end
+      if info.func==boundary_compare then
+        debug.setlocal(level,1,nil);debug.setlocal(level,2,nil);break
+      end
+    end
+    a,b=nil,nil;collectgarbage();collectgarbage()
+    return weak[1]==nil and weak[2]==nil
+  end
+  local mt={__eq=equal}
+  local function make(i)local value=setmetatable({},mt);weak[i]=value;return value end
+  local result,balanced=boundary_compare(make(1),make(2),0)
+  print('comparison-roots',result,balanced)
+  assert(result and balanced)
+end

@@ -2,6 +2,7 @@
 use super::*;
 mod objects;
 mod protected;
+mod scalars;
 mod tables;
 pub use protected::NativeCallStatus;
 
