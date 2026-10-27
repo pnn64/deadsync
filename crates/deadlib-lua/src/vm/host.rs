@@ -3,7 +3,10 @@ use super::*;
 use std::any::Any;
 mod stack;
 mod thread;
-pub use stack::{NativeCallStatus, NativeLoadStatus, NativeStack, NativeThreadStack};
+pub use stack::{
+    NativeCallStatus, NativeDebugFrame, NativeDebugInfo, NativeDebugString, NativeLoadStatus,
+    NativeStack, NativeThreadStack,
+};
 pub use thread::HostThreadState;
 pub(super) use thread::ThreadData;
 

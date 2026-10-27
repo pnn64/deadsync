@@ -212,7 +212,8 @@ fn jobs_bytes(substitutions: &[strings::Substitution]) -> usize {
         .sum()
 }
 pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
-    let native_roots = std::mem::size_of_val(p.parser_prototypes.as_ref());
+    let native_roots = std::mem::size_of_val(p.parser_prototypes.as_ref())
+        + p.debug_strings.capacity() * size_of::<StringId>();
     let mut bytes = p.constants.len() * std::mem::size_of::<Box<[Value]>>()
         + p.constants
             .iter()
@@ -986,6 +987,12 @@ impl Vm {
                                 names.iter().map(|&name| Trace::Value(Value::String(name))),
                             );
                         }
+                        work.extend(
+                            self.programs[i]
+                                .debug_strings
+                                .iter()
+                                .map(|&id| Trace::Value(Value::String(id))),
+                        );
                     }
                 }
                 Trace::Cell(i) => {

@@ -14,6 +14,13 @@ typedef ptrdiff_t lua_Integer;
 typedef int (*lua_CFunction)(lua_State *);
 typedef const char *(*lua_Reader)(lua_State *, void *, size_t *);
 typedef int (*lua_Writer)(lua_State *, const void *, size_t, void *);
+typedef struct lua_Debug {
+  int event;
+  const char *name, *namewhat, *what, *source;
+  int currentline, nups, linedefined, lastlinedefined;
+  char short_src[60];
+  int i_ci;
+} lua_Debug;
 typedef struct luaL_Reg { const char *name; lua_CFunction func; } luaL_Reg;
 #define LUA_REGISTRYINDEX (-10000)
 #define LUA_ENVIRONINDEX (-10001)
@@ -49,6 +56,10 @@ API int lua_resume(lua_State *, int);
 API int lua_yield(lua_State *, int);
 API void lua_setlevel(lua_State *, lua_State *);
 API int boundary_call_level(lua_State *);
+API int lua_getstack(lua_State *, int, lua_Debug *);
+API int lua_getinfo(lua_State *, const char *, lua_Debug *);
+API const char *lua_getlocal(lua_State *, const lua_Debug *, int);
+API const char *lua_setlocal(lua_State *, const lua_Debug *, int);
 API const void *lua_topointer(lua_State *, int);
 API int lua_load(lua_State *, lua_Reader, void *, const char *);
 API int luaL_loadbuffer(lua_State *, const char *, size_t, const char *);

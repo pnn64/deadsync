@@ -1119,6 +1119,17 @@ ordinary control and the reader/iterator cases pass. The release mismatch still
 exists and its strict audit still fails. This additional evidence does not close
 complete coroutine/C API or standalone Lua 5.1 parity. Optimization stays deferred.
 
+The [native stack-inspection checks](testing/2026-10-27-rust-lua-native-debug.md)
+add typed stack records, function information and local reads/writes, with four
+corresponding development C adapters. Records preserve visible call ordinals;
+inspection works on active, suspended, failed and waiting parent threads. Native
+stack effects, invalid options, tail records, field preservation, source-buffer
+padding and interned-name lifetimes are checked against official Lua 5.1.5.
+The boundary now declares 70 of 80 core APIs. This is declaration coverage,
+not complete C API or standalone parity. Native hooks, state/allocator APIs,
+the retained strict coroutine mismatch and broader compatibility gates remain
+open. Performance tuning remains deferred until full standalone Lua 5.1 parity.
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the

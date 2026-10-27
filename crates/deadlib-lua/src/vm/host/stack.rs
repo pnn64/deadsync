@@ -3,6 +3,8 @@ use super::*;
 mod coroutine;
 mod dump;
 mod file;
+mod inspection;
+pub use inspection::{NativeDebugFrame, NativeDebugInfo, NativeDebugString};
 mod loader;
 mod objects;
 mod parser_roots;

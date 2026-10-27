@@ -5,10 +5,11 @@
 #[cfg(windows)]
 mod windows {
     use deadlib_lua::{
-        Error, HostCall, HostThreadState, NativeStack, ThreadId, Value, Vm, compile_named,
+        Error, HostCall, HostThreadState, NativeDebugFrame, NativeStack, ThreadId, Value, Vm,
+        compile_named,
     };
     use std::{
-        ffi::{CString, c_char, c_int, c_void},
+        ffi::{CStr, CString, c_char, c_int, c_void},
         sync::{
             Arc, Mutex,
             atomic::{AtomicUsize, Ordering},
@@ -28,6 +29,28 @@ mod windows {
         userdata: *mut c_void,
         state: *mut c_void,
     }
+    #[repr(C)]
+    struct DebugRecord {
+        event: c_int,
+        name: *const c_char,
+        namewhat: *const c_char,
+        what: *const c_char,
+        source: *const c_char,
+        currentline: c_int,
+        nups: c_int,
+        linedefined: c_int,
+        lastlinedefined: c_int,
+        short_src: [u8; 60],
+        i_ci: c_int,
+    }
+    const _: () = assert!(
+        std::mem::size_of::<DebugRecord>()
+            == if cfg!(target_pointer_width = "64") {
+                120
+            } else {
+                100
+            }
+    );
     type Dispatch =
         unsafe extern "C" fn(*mut c_void, c_int, c_int, c_int, *mut BoundaryValue) -> c_int;
     type CFunction = unsafe extern "C" fn(*mut c_void) -> c_int;
@@ -197,6 +220,71 @@ mod windows {
             b: c_int,
             value: &mut BoundaryValue,
         ) -> Result<(), Error> {
+            if (61..=64).contains(&op) {
+                let thread = self
+                    .bridge
+                    .states
+                    .lock()
+                    .unwrap()
+                    .get(&(value.state as usize))
+                    .copied()
+                    .ok_or_else(|| self.stack.error(b"unknown debug thread"))?;
+                // SAFETY: these fixture operations lend a live lua_Debug with
+                // the matching repr(C) layout for this synchronous dispatch.
+                let ar = unsafe { &mut *value.userdata.cast::<DebugRecord>() };
+                if op == 61 {
+                    let frame = self.stack.get_stack(thread, a)?;
+                    value.integer = c_int::from(frame.is_some());
+                    if let Some(frame) = frame {
+                        ar.i_ci = frame.index();
+                    }
+                } else {
+                    let frame = NativeDebugFrame::from_index(thread, ar.i_ci);
+                    if op == 62 {
+                        // SAFETY: lua_getinfo lends a NUL-terminated option string.
+                        let options = unsafe { CStr::from_ptr(value.bytes) }.to_bytes();
+                        let info = self.stack.get_info(frame, options)?;
+                        value.integer = c_int::from(info.valid);
+                        if let Some(source) = info.source {
+                            ar.source = self.stack.debug_bytes(source).unwrap().as_ptr().cast();
+                        }
+                        if let Some(what) = info.what {
+                            ar.what = what.as_ptr().cast();
+                        }
+                        if let Some([first, last]) = info.defined {
+                            ar.linedefined = first;
+                            ar.lastlinedefined = last;
+                        }
+                        if let Some(short) = info.short_source {
+                            ar.short_src[..short.len()].copy_from_slice(&short);
+                        }
+                        if let Some(line) = info.current_line {
+                            ar.currentline = line;
+                        }
+                        if let Some(n) = info.upvalues {
+                            ar.nups = n as c_int;
+                        }
+                        if let Some(name) = info.name {
+                            ar.name = name
+                                .and_then(|n| self.stack.debug_bytes(n))
+                                .map_or(std::ptr::null(), |b| b.as_ptr().cast());
+                        }
+                        if let Some(kind) = info.name_what {
+                            ar.namewhat = kind.as_ptr().cast();
+                        }
+                    } else {
+                        let name = if op == 63 {
+                            self.stack.get_local(frame, a)?
+                        } else {
+                            self.stack.set_local(frame, a)?
+                        };
+                        value.bytes = name
+                            .and_then(|n| self.stack.debug_bytes(n))
+                            .map_or(std::ptr::null(), |b| b.as_ptr().cast());
+                    }
+                }
+                return Ok(());
+            }
             if op == 60 {
                 let thread = self
                     .bridge
@@ -937,6 +1025,9 @@ mod windows {
             "boundary_setlevel",
             "boundary_level_reader",
             "boundary_cpcall",
+            "boundary_debug_info",
+            "boundary_debug_local",
+            "boundary_debug_hold",
         ] {
             let function = vm
                 .new_host_function_with_data(

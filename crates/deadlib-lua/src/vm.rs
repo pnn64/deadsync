@@ -32,8 +32,8 @@ mod userdata;
 use crate::arena::{Arena, index as slot_index};
 pub use gc::{GcOperation, HeapStats, Root};
 pub use host::{
-    HostCall, HostFunction, HostThreadState, NativeCallStatus, NativeLoadStatus, NativeStack,
-    NativeThreadStack,
+    HostCall, HostFunction, HostThreadState, NativeCallStatus, NativeDebugFrame, NativeDebugInfo,
+    NativeDebugString, NativeLoadStatus, NativeStack, NativeThreadStack,
 };
 use native::format_number;
 pub use threads::NativeThreadStatus;
@@ -199,6 +199,7 @@ struct LoadedProgram {
     owner: std::sync::Weak<()>,
     constants: Box<[Box<[Value]>]>,
     upvalue_names: Box<[Box<[StringId]>]>,
+    debug_strings: Vec<StringId>,
     // Non-owning prototype map. Each live closure traces only its own subtree.
     parser_prototypes: Box<[ParserPrototypeId]>,
     entry: FunctionId,
@@ -834,6 +835,7 @@ impl Vm {
             owner: Arc::downgrade(&program.lifetime),
             constants: constants.into_boxed_slice(),
             upvalue_names: upvalue_names.into_boxed_slice(),
+            debug_strings: Vec::new(),
             parser_prototypes: Box::default(),
             entry: FunctionId(0),
         }));

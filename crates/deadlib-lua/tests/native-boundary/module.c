@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+typedef char DebugRecordSize[(sizeof(lua_Debug)==(sizeof(void *)==8?120:100))?1:-1];
 
 static int scalar_index(lua_State *L, int index) {
   double number = lua_tonumber(L, index);
@@ -883,4 +884,60 @@ EXPORT int boundary_thread_hold(lua_State *L) {
   lua_pushvalue(L,3);lua_call(L,0,0);after=lua_tolstring(co,index,&after_length);
   lua_pushboolean(L,before==after && before_length==after_length && !memcmp(before,after,before_length));
   lua_pushlstring(L,after,after_length);return 2;
+}
+
+static void debug_text(lua_State *L, const char *key, const char *text, const char *sentinel) {
+  lua_pushstring(L,text==sentinel?"<untouched>":text?text:"<null>");lua_setfield(L,-2,key);
+}
+static void debug_number(lua_State *L, const char *key, int value) {
+  lua_pushinteger(L,value);lua_setfield(L,-2,key);
+}
+/* arg1: thread or nil/current; arg2: level or function; arg3: options. */
+EXPORT int boundary_debug_info(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);lua_Debug ar,initial;int found=1,result,base,after,table,i;
+  const char *options=luaL_checklstring(L,3,NULL);
+  if(!co)co=L;
+  if(!lua_checkstack(co,8))return luaL_error(L,"debug probe stack reservation failed");
+  memset(&ar,0x5a,sizeof(ar));ar.i_ci=-997;initial=ar;
+  if(lua_type(L,2)==6){lua_pushvalue(L,2);lua_xmove(L,co,1);}
+  else found=lua_getstack(co,(int)lua_tointeger(L,2),&ar);
+  base=lua_gettop(co);result=found?lua_getinfo(co,options,&ar):-1;after=lua_gettop(co);
+  lua_newtable(L);table=lua_gettop(L);
+  debug_number(L,"found",found);debug_number(L,"status",result);debug_number(L,"delta",after-base);
+  debug_number(L,"event",ar.event);debug_number(L,"ci",ar.i_ci);
+  debug_number(L,"line",ar.currentline);debug_number(L,"nups",ar.nups);
+  debug_number(L,"first",ar.linedefined);debug_number(L,"last",ar.lastlinedefined);
+  debug_text(L,"name",ar.name,initial.name);debug_text(L,"namewhat",ar.namewhat,initial.namewhat);
+  debug_text(L,"what",ar.what,initial.what);debug_text(L,"source",ar.source,initial.source);
+  lua_pushlstring(L,ar.short_src,sizeof(ar.short_src));lua_setfield(L,table,"short_bytes");
+  i=base+(options[0]=='>'?-1:0);
+  if(found && strchr(options,'f')){lua_pushvalue(co,++i);lua_xmove(co,L,1);lua_setfield(L,table,"function");}
+  if(found && strchr(options,'L')){lua_pushvalue(co,++i);lua_xmove(co,L,1);lua_setfield(L,table,"lines");}
+  if(co!=L)lua_settop(co,base-(options[0]=='>'?1:0));
+  return 1;
+}
+/* arg1: thread or nil/current; arg2: level; arg3: local; arg4: set?; arg5: value. */
+EXPORT int boundary_debug_local(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);lua_Debug ar;const char *name;int base,after,set;
+  if(!co)co=L;
+  if(!lua_checkstack(co,8))return luaL_error(L,"debug probe stack reservation failed");
+  if(!lua_getstack(co,(int)lua_tointeger(L,2),&ar)){lua_pushnil(L);return 1;}
+  set=lua_toboolean(L,4);
+  if(set){lua_pushvalue(L,5);lua_xmove(L,co,1);}
+  base=lua_gettop(co);
+  name=set?lua_setlocal(co,&ar,(int)lua_tointeger(L,3)):lua_getlocal(co,&ar,(int)lua_tointeger(L,3));
+  after=lua_gettop(co);
+  if(name && !set){lua_pushvalue(co,-1);lua_xmove(co,L,1);}else lua_pushnil(L);
+  lua_pushstring(L,name);lua_insert(L,-2);
+  lua_pushinteger(L,after-base);lua_pushinteger(L,ar.i_ci);
+  if(co!=L)lua_settop(co,base-(set?1:0));
+  return 4;
+}
+EXPORT int boundary_debug_hold(lua_State *L) {
+  lua_Debug ar;const char *source;int same;
+  lua_pushvalue(L,1);lua_getinfo(L,">S",&ar);source=ar.source;
+  lua_pushstring(L,source);same=lua_tolstring(L,-1,NULL)==source;
+  lua_pushvalue(L,2);lua_call(L,0,0);
+  lua_pushboolean(L,same && source==ar.source && !strcmp(source,lua_tolstring(L,-1,NULL)));
+  lua_pushstring(L,source);return 2;
 }

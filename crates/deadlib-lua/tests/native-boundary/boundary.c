@@ -79,6 +79,18 @@ API void lua_setlevel(lua_State *from, lua_State *to) {
 API int boundary_call_level(lua_State *L) {
   BoundaryValue value={0};operation(L,60,0,0,&value);return value.integer;
 }
+API int lua_getstack(lua_State *L, int level, lua_Debug *ar) {
+  BoundaryValue value={0};value.userdata=ar;operation(L,61,level,0,&value);return value.integer;
+}
+API int lua_getinfo(lua_State *L, const char *options, lua_Debug *ar) {
+  BoundaryValue value={0};value.userdata=ar;value.bytes=options;operation(L,62,0,0,&value);return value.integer;
+}
+API const char *lua_getlocal(lua_State *L, const lua_Debug *ar, int n) {
+  BoundaryValue value={0};value.userdata=(void *)ar;operation(L,63,n,0,&value);return value.bytes;
+}
+API const char *lua_setlocal(lua_State *L, const lua_Debug *ar, int n) {
+  BoundaryValue value={0};value.userdata=(void *)ar;operation(L,64,n,0,&value);return value.bytes;
+}
 API int lua_pushthread(lua_State *L) {
   BoundaryValue value={0};operation(L,52,0,0,&value);return value.integer;
 }

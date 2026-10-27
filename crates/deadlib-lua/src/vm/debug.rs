@@ -16,12 +16,12 @@ pub(super) enum StackEntry {
     Tail,
 }
 
-enum LocalSlot {
+pub(super) enum LocalSlot {
     Register(usize),
     Copy(Value),
 }
 
-enum LocalName {
+pub(super) enum LocalName {
     Named(usize, usize, usize),
     Temporary,
 }
@@ -90,7 +90,7 @@ impl Vm {
         }
         Some((c_bytes(&call.name).into(), call.kind.bytes()))
     }
-    fn debug_nups(&self, id: u64) -> usize {
+    pub(super) fn debug_nups(&self, id: u64) -> usize {
         match id {
             _ if id >= strings::ITERATOR_FIRST => {
                 self.native_closures.get(id).map_or(0, |c| c.captures.len())
@@ -283,7 +283,7 @@ impl Vm {
         }
     }
 
-    fn debug_register(&self, thread: ThreadId, register: usize) -> Option<Value> {
+    pub(super) fn debug_register(&self, thread: ThreadId, register: usize) -> Option<Value> {
         if thread == self.thread {
             self.registers.get(register).copied()
         } else {
@@ -293,14 +293,14 @@ impl Vm {
                 .copied()
         }
     }
-    fn debug_set_register(&mut self, thread: ThreadId, register: usize, value: Value) {
+    pub(super) fn debug_set_register(&mut self, thread: ThreadId, register: usize, value: Value) {
         if thread == self.thread {
             self.registers[register] = value;
         } else {
             self.threads[slot_index(thread.0)].registers[register] = value;
         }
     }
-    fn local_slot(
+    pub(super) fn local_slot(
         &self,
         thread: ThreadId,
         index: usize,

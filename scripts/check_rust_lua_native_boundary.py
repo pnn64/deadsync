@@ -105,6 +105,7 @@ def main():
     names+=['boundary_pointer']
     names+=['boundary_resume','boundary_yield']
     names+=['boundary_level','boundary_setlevel','boundary_level_reader']
+    names+=['boundary_debug_info','boundary_debug_local','boundary_debug_hold']
     names+=['boundary_newthread','boundary_thread_values','boundary_thread_push','boundary_thread_move','boundary_thread_primitives','boundary_thread_selfmove','boundary_thread_resize','boundary_thread_hold']
     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
     runs={}
@@ -116,6 +117,7 @@ def main():
     resume_runs={}
     level_runs={}
     reader_level_runs={}
+    debug_runs={}
     for engine in ['reference','rust']:
         with tempfile.TemporaryDirectory(prefix='deadlua-native-boundary-')as temporary:
             work=Path(temporary);(work/'boundary.lua').write_bytes((fixture/'cases.lua').read_bytes())
@@ -154,6 +156,11 @@ def main():
             command=command[:-1]+[str(work/'reader-call-levels.lua')]
             run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=60)
             reader_level_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
+            # Use the same source name as the standalone Rust development runner.
+            (work/'boundary.lua').write_bytes((fixture/'native-debug.lua').read_bytes())
+            command=command[:-1]+['boundary.lua']
+            run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=60)
+            debug_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
     assert hashes()==before,'sources changed during boundary proof'
     reference_run=runs['reference'];rust=runs['rust']
     buffers={engine:bool(re.search(rb'(?m)^aux-buffer-complete\t99\t40\r*$',bytes.fromhex(run.get('stdout_hex',''))))for engine,run in runs.items()}
@@ -188,6 +195,9 @@ def main():
     reader_levels_complete=all(run['returncode']==0 and b'reader-call-levels-complete\t26'in bytes.fromhex(run['stdout_hex'])for run in reader_level_runs.values())
     reader_levels_equal=reader_levels_complete and reader_level_runs['reference']['stdout_hex']==reader_level_runs['rust']['stdout_hex'] and not reader_level_runs['reference']['stderr_hex']
     result['reader_call_levels_probe']=dict(runs=reader_level_runs,completed=reader_levels_complete,observations_equal=reader_levels_equal,fixture='crates/deadlib-lua/tests/native-boundary/reader-call-levels.lua')
+    debug_complete=all(run['returncode']==0 and b'native-debug-complete\t1000'in bytes.fromhex(run['stdout_hex'])for run in debug_runs.values())
+    debug_equal=debug_complete and debug_runs['reference']['stdout_hex']==debug_runs['rust']['stdout_hex'] and not debug_runs['reference']['stderr_hex']
+    result['native_debug_probe']=dict(runs=debug_runs,completed=debug_complete,observations_equal=debug_equal,fixture='crates/deadlib-lua/tests/native-boundary/native-debug.lua',full_debug_api_parity_proven=False)
     result['native_file_complete']=file_loaders
     result['native_dump_complete']=dumpers
     result['native_thread_complete']=threads
@@ -198,6 +208,6 @@ def main():
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
     print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,'state lifetimes balanced:',states,flush=True)
-    if not matched or not returned or not states or not scratch_complete or not result['parser_scratch_probe']['observations_equal'] or not roots_equal or not thread_stacks_equal or not resume_equal or not levels_equal or not reader_levels_equal:raise SystemExit(1)
+    if not matched or not returned or not states or not scratch_complete or not result['parser_scratch_probe']['observations_equal'] or not roots_equal or not thread_stacks_equal or not resume_equal or not levels_equal or not reader_levels_equal or not debug_equal:raise SystemExit(1)
 
 if __name__=='__main__':main()

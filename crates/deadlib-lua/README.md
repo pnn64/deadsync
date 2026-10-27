@@ -544,6 +544,14 @@ userdata within its VM. Its numeric identity may be shared across VMs; arena
 object handles retain their ownership restrictions. Package loading uses this
 value type for its observable sentinel.
 
+`NativeStack::get_stack`, `get_info`, `get_local` and `set_local` expose Lua 5.1
+activation records for current and inactive threads. Inspection uses the selected
+thread's native stack, including function-pop and result-push effects. Debug
+strings share interned storage and remain stable while their program is reachable;
+activation records and string handles do not root their owners. The development
+C fixture compares the corresponding four APIs; native hooks and the remaining
+C APIs are still incomplete.
+
 Other standard libraries, native C-library loading, complete diagnostic text and
 debug behavior, cache eviction/package integration, richer Rust host objects and
 later dialects remain unfinished. Numeric conversion edge cases and resource
