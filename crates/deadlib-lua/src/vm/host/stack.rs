@@ -66,6 +66,25 @@ impl<'vm> HostCall<'vm> {
 }
 
 impl NativeStack<'_, '_> {
+    /// Apply a collector operation while preserving this native stack.
+    /// Collection and completed steps run finalizers through the shared child
+    /// scheduler, with no extra visible Lua/native function frame. The result
+    /// is zero for controls/collection, an integer count, the previous control
+    /// value, or zero/one for an unfinished/completed step. Counts estimate this
+    /// engine's live storage; collector work units differ from PUC Lua.
+    ///
+    /// # Errors
+    /// Propagates finalizer errors with their fault frames and Lua error value.
+    /// A pending unprotected error or an instruction limit also rejects the call.
+    pub fn gc(&mut self, operation: GcOperation) -> Result<i32, Error> {
+        self.check_error()?;
+        let (result, dispatch) = self.call.vm.gc_control(operation);
+        if dispatch && !self.call.vm.gc.finalizers.is_empty() {
+            self.call.run_action(Action::Finalize, false)?;
+            self.call.vm.registers.truncate(self.base + self.top());
+        }
+        Ok(result)
+    }
     fn capture_index(index: isize) -> Option<usize> {
         usize::try_from((-10003isize).checked_sub(index)?).ok()
     }

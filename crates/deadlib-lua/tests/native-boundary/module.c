@@ -626,3 +626,16 @@ EXPORT int boundary_upbind(lua_State *L) {
   lua_pushvalue(L,1);lua_pushcclosure(L,boundary_upset,1);
   return 2;
 }
+EXPORT int boundary_gc(lua_State *L) {
+  int what=(int)luaL_checkinteger(L,1),data=(int)luaL_optinteger(L,2,0);
+  int before=lua_gettop(L),result=lua_gc(L,what,data),after=lua_gettop(L);
+  lua_pushinteger(L,result);lua_pushinteger(L,after-before);lua_pushvalue(L,1);
+  return 3;
+}
+EXPORT int boundary_gc_counts(lua_State *L) {
+  int whole=lua_gc(L,LUA_GCCOUNT,0),part=lua_gc(L,LUA_GCCOUNTB,0);
+  int repeated=lua_gc(L,LUA_GCCOUNT,0),remainder=lua_gc(L,LUA_GCCOUNTB,0);
+  lua_pushboolean(L,whole>=0 && part>=0 && part<1024);
+  lua_pushboolean(L,whole==repeated && part==remainder);
+  return 2;
+}

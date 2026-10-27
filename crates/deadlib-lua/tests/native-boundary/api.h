@@ -84,6 +84,15 @@ API int lua_lessthan(lua_State *, int, int);
 API void lua_concat(lua_State *, int);
 API const char *lua_getupvalue(lua_State *, int, int);
 API const char *lua_setupvalue(lua_State *, int, int);
+API int lua_gc(lua_State *, int, int);
+#define LUA_GCSTOP 0
+#define LUA_GCRESTART 1
+#define LUA_GCCOLLECT 2
+#define LUA_GCCOUNT 3
+#define LUA_GCCOUNTB 4
+#define LUA_GCSTEP 5
+#define LUA_GCSETPAUSE 6
+#define LUA_GCSETSTEPMUL 7
 API const char *lua_pushvfstring(lua_State *, const char *, va_list);
 API const char *lua_pushfstring(lua_State *, const char *, ...);
 API int luaL_argerror(lua_State *, int, const char *);

@@ -4,6 +4,27 @@ use crate::table::TableTrace;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static VM_ID: AtomicU64 = AtomicU64::new(1);
+
+/// A synchronous collector operation available within a native callback.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GcOperation {
+    /// Stop automatic collection until an explicit restart, step or collection.
+    Stop,
+    /// Restart automatic collection at the next allocation check.
+    Restart,
+    /// Complete a cycle and run its pending finalizers.
+    Collect,
+    /// Read estimated live storage in whole kibibytes.
+    CountKilobytes,
+    /// Read the remainder of estimated live storage modulo 1024 bytes.
+    CountRemainder,
+    /// Advance collection using Lua 5.1's pointer-width byte request.
+    Step(i32),
+    /// Replace the collector pause percentage, returning its previous value.
+    SetPause(i32),
+    /// Replace the step multiplier, returning its previous value.
+    SetStepMultiplier(i32),
+}
 pub(super) fn new_vm_identity() -> u64 {
     VM_ID.fetch_add(1, Ordering::Relaxed)
 }
@@ -1231,6 +1252,42 @@ impl Vm {
         self.sweep_gc_some(usize::MAX);
         self.heap_stats()
     }
+    pub(super) fn gc_control(&mut self, operation: GcOperation) -> (i32, bool) {
+        let mut dispatch = false;
+        let result = match operation {
+            GcOperation::Stop => {
+                self.gc.stopped = true;
+                0
+            }
+            GcOperation::Restart => {
+                self.gc.stopped = false;
+                self.defer_gc_until_allocation();
+                0
+            }
+            GcOperation::Collect => {
+                self.collect_cycle();
+                self.finish_gc_cycle();
+                dispatch = true;
+                0
+            }
+            GcOperation::CountKilobytes => (self.heap_stats().live_bytes >> 10) as i32,
+            GcOperation::CountRemainder => (self.heap_stats().live_bytes & 1023) as i32,
+            GcOperation::SetPause(value) => std::mem::replace(&mut self.gc.pause, value),
+            GcOperation::SetStepMultiplier(value) => std::mem::replace(&mut self.gc.stepmul, value),
+            GcOperation::Step(extra) => {
+                self.gc.stopped = false;
+                let complete = self.advance_gc_some(self.gc_step_budget(extra));
+                if complete {
+                    self.finish_gc_cycle();
+                    dispatch = true;
+                } else {
+                    self.defer_gc_until_allocation();
+                }
+                i32::from(complete)
+            }
+        };
+        (result, dispatch)
+    }
     pub(super) fn gc_native(&mut self, id: u64, base: usize, count: usize) -> Result<bool, Error> {
         if id == GC_INFO {
             self.registers[base] = Value::Number((self.heap_stats().live_bytes / 1024) as f64);
@@ -1259,48 +1316,24 @@ impl Vm {
             .position(|&name| name == option)
             .ok_or_else(|| self.argument_option_error(0, option))?;
         let extra = self.integer_argument(base, count, 1, Some(0))? as i32;
-        let option = choices[choice];
-        let mut dispatch = false;
-        let value = match option {
-            b"stop" => {
-                self.gc.stopped = true;
-                Value::Number(0.0)
-            }
-            b"restart" => {
-                self.gc.stopped = false;
-                // Frame-boundary checks must wait for the next allocation.
-                self.defer_gc_until_allocation();
-                Value::Number(0.0)
-            }
-            b"collect" => {
-                self.collect_cycle();
-                self.finish_gc_cycle();
-                dispatch = true;
-                Value::Number(0.0)
-            }
-            b"count" => Value::Number(self.heap_stats().live_bytes as f64 / 1024.0),
-            b"setpause" => {
-                let old = self.gc.pause;
-                self.gc.pause = extra;
-                Value::Number(f64::from(old))
-            }
-            b"setstepmul" => {
-                let old = self.gc.stepmul;
-                self.gc.stepmul = extra;
-                Value::Number(f64::from(old))
-            }
-            b"step" => {
-                self.gc.stopped = false;
-                let complete = self.advance_gc_some(self.gc_step_budget(extra));
-                if complete {
-                    self.finish_gc_cycle();
-                    dispatch = true;
-                } else {
-                    self.defer_gc_until_allocation();
-                }
-                Value::Boolean(complete)
-            }
+        if choice == 3 {
+            self.registers[base] = Value::Number(self.heap_stats().live_bytes as f64 / 1024.0);
+            return Ok(false);
+        }
+        let operation = match choice {
+            0 => GcOperation::Stop,
+            1 => GcOperation::Restart,
+            2 => GcOperation::Collect,
+            4 => GcOperation::Step(extra),
+            5 => GcOperation::SetPause(extra),
+            6 => GcOperation::SetStepMultiplier(extra),
             _ => unreachable!("validated collector option"),
+        };
+        let (result, dispatch) = self.gc_control(operation);
+        let value = if choice == 4 {
+            Value::Boolean(result != 0)
+        } else {
+            Value::Number(f64::from(result))
         };
         self.registers[base] = value;
         Ok(dispatch)

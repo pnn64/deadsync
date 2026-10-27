@@ -79,6 +79,7 @@ def main():
     names=['boundary_sum','boundary_identity','boundary_raise','boundary_binary','boundary_call','boundary_stack','boundary_mutate','boundary_state','boundary_state_reenter','boundary_cached_top','boundary_make_counter','boundary_snapshot','boundary_set_environment','boundary_set_globals','boundary_registry_roundtrip','boundary_make_many','boundary_table','boundary_get','boundary_set','boundary_field','boundary_raw','boundary_metatable','boundary_count','boundary_shuffle','boundary_userdata','boundary_userdata_read','boundary_userdata_finalize','boundary_bytes','boundary_environment','boundary_capture_bytes','boundary_length','boundary_userdata_empty','boundary_protected','boundary_protected_negative','boundary_protected_argument','boundary_replace_handler','boundary_cpcall','boundary_scalar','boundary_scalar_null','boundary_scalar_capture','boundary_integers','boundary_compare','boundary_concat','boundary_concat_prefix','boundary_format','boundary_format_gc','boundary_auxcheck','boundary_auxwhere','boundary_auxerror','boundary_auxuserdata','boundary_auxget','boundary_auxnewmetatable','boundary_auxmetafield','boundary_auxopen','boundary_auxfind','boundary_auxrefs']
     names+=['boundary_auxbuffer_info','boundary_auxbuffer','boundary_auxgsub']
     names+=['boundary_upget','boundary_upset','boundary_upbind']
+    names+=['boundary_gc','boundary_gc_counts']
     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
     runs={}
     for engine in ['reference','rust']:
@@ -97,13 +98,14 @@ def main():
     reference_run=runs['reference'];rust=runs['rust']
     buffers={engine:bool(re.search(rb'(?m)^aux-buffer-complete\t99\t40\r*$',bytes.fromhex(run.get('stdout_hex',''))))for engine,run in runs.items()}
     upvalues={engine:b'native-upvalues-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
-    matched=reference_run.get('returncode')==rust.get('returncode')==0 and reference_run.get('stdout_hex')==rust.get('stdout_hex')and not reference_run.get('stderr_hex')and all(buffers.values())and all(upvalues.values())
+    collectors={engine:b'native-gc-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
+    matched=reference_run.get('returncode')==rust.get('returncode')==0 and reference_run.get('stdout_hex')==rust.get('stdout_hex')and not reference_run.get('stderr_hex')and all(buffers.values())and all(upvalues.values())and all(collectors.values())
     match=re.fullmatch(rb'BOUNDARY operations=(\d+) drops=(\d+) panic_abort=true\r?\nSTATES created=(\d+) collected=(\d+) destroyed=(\d+)\r?\n',bytes.fromhex(rust.get('stderr_hex','')))
     returned=bool(match and int(match[1])==int(match[2])and int(match[1])>1000)
     states=bool(match and int(match[3])==int(match[5]) and 0<int(match[4])<int(match[3]))
     artifacts=[reference,runner,*directory.rglob('*.dll')]
     result=dict(source_hashes=before,reference=metadata,runner=dict(path=str(runner),sha256=sha(runner),prebuilt=args.runner is not None),artifacts={str(p):sha(p)for p in artifacts},commands=commands,runs=runs,program_observations_equal=matched,every_dispatch_returned_before_jump=returned,persistent_state_lifetimes_balanced=states,buffer_api_checks_complete=buffers,limitations=__doc__+' The probe uses VM-owned stacks, persistent C states, unprotected calls, private owned function bindings, up to 255 actual C upvalues and Lua 5.1 pseudo-indexes, aligned stable userdata payloads, environments and NUL-terminated string conversions, plus protected calls and error functions, scalar conversions, comparison and native-window concatenation, formatted messages, auxiliary checks/registration/references and auxiliary buffers/literal replacement. Cross-thread/inactive-state API access, complete C APIs, production library caching/unload, package.loadlib and require integration remain unfinished.')
-    result.update(native_upvalues_complete=upvalues,native_upvalue_fixture=dict(source=wire_source,command=wire_command,original_chunk_hex=original.hex(),chunks={name:dict(sha256=hashlib.sha256(chunk).hexdigest(),hex=chunk.hex())for name,chunk in chunks.items()}))
+    result.update(native_gc_complete=collectors,native_upvalues_complete=upvalues,native_upvalue_fixture=dict(source=wire_source,command=wire_command,original_chunk_hex=original.hex(),chunks={name:dict(sha256=hashlib.sha256(chunk).hexdigest(),hex=chunk.hex())for name,chunk in chunks.items()}))
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
     print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,'state lifetimes balanced:',states,flush=True)

@@ -28,7 +28,7 @@ mod threads;
 mod traces;
 mod userdata;
 use crate::arena::{Arena, index as slot_index};
-pub use gc::{HeapStats, Root};
+pub use gc::{GcOperation, HeapStats, Root};
 pub use host::{HostCall, HostFunction, HostThreadState, NativeCallStatus, NativeStack};
 use native::format_number;
 

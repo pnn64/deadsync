@@ -14,6 +14,7 @@ enum Action<'a> {
     Set([Value; 3]),
     Compare(Op, [Value; 2]),
     Concat { first: usize, last: usize },
+    Finalize,
 }
 impl Action<'_> {
     fn arguments(&self) -> &[Value] {
@@ -21,7 +22,7 @@ impl Action<'_> {
             Self::Call(_, values) | Self::ProtectedCall(_, values, _) => values,
             Self::Get(values) => values,
             Self::Set(values) => values,
-            Self::Compare(..) | Self::Concat { .. } => &[],
+            Self::Compare(..) | Self::Concat { .. } | Self::Finalize => &[],
         }
     }
 }
@@ -455,7 +456,7 @@ impl HostCall<'_> {
             wanted: match action {
                 Action::Call(..) | Action::ProtectedCall(..) => FRAME_OPEN,
                 Action::Get(..) | Action::Compare(..) | Action::Concat { .. } => 1,
-                Action::Set(..) => 0,
+                Action::Set(..) | Action::Finalize => 0,
             },
             barriers: self.vm.frames.last().unwrap().barriers,
             vararg_start: match action {
@@ -487,6 +488,10 @@ impl HostCall<'_> {
             }
             Action::Concat { first, last, .. } => {
                 self.vm.concat_range(base, first, last).map(|()| None)
+            }
+            Action::Finalize => {
+                self.vm.push_finalizers(false);
+                Ok(None)
             }
         }
         .map_err(|error| {

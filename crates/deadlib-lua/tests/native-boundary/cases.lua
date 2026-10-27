@@ -1015,3 +1015,121 @@ do
   end
   print('native-upvalues-complete')
 end
+
+do
+  local function gc(what,data,...)
+    local result,delta,after=boundary_gc(what,data,...)
+    assert(delta==0 and after==what)
+    return result
+  end
+  assert(boundary_gc_counts())
+  assert(select(2,boundary_gc_counts()))
+  assert(gc(0)==0)
+  for _,what in ipairs({-2147483648,-1,8,2147483647})do assert(gc(what,17)==-1)end
+  local pause=gc(6,200)
+  local stepmul=gc(7,200)
+  for _,control in ipairs({6,7})do
+    local previous=200
+    for _,value in ipairs({-2147483648,-17,0,1,173,2147483647,200})do
+      assert(gc(control,value)==previous)
+      previous=value
+    end
+  end
+  assert(gc(1)==0)
+  assert(gc(2)==0)
+  assert(gc(7,0)==200)
+  assert(gc(5,0)==1)
+  assert(gc(7,200)==0)
+  for _,size in ipairs({-1,2147483647})do assert(gc(5,size)==1)end
+  print('native-gc-controls',true,true)
+
+  gc(0)
+  local sentinel={}
+  local observed,locals=false,0
+  do
+    local proxy=newproxy(true)
+    getmetatable(proxy).__gc=function()
+      assert(debug.getinfo(2,'f').func==boundary_gc)
+      for i=1,8 do
+        local name,value=debug.getlocal(2,i)
+        if not name then break end
+        locals=i
+        if i==3 then observed=value==sentinel end
+      end
+      assert(locals==3 and observed)
+      assert(debug.setlocal(2,1,7))
+      assert(boundary_sum(17,25)==42)
+      gc(2)
+    end
+  end
+  local result,delta,changed=boundary_gc(2,0,sentinel)
+  assert(result==0 and delta==0 and changed==7 and observed and locals==3)
+  print('native-gc-finalizer',locals,observed,changed)
+
+  gc(0)
+  gc(7,0)
+  local stepped=false
+  do local p=newproxy(true);getmetatable(p).__gc=function()
+    assert(debug.getinfo(2,'f').func==boundary_gc)
+    assert(select(2,debug.getlocal(2,1))==5)
+    stepped=true
+  end end
+  assert(gc(5,0)==1 and stepped)
+  gc(7,200)
+  print('native-gc-step',stepped)
+
+  gc(0)
+  local marker={}
+  local detail=false
+  do
+    local proxy=newproxy(true)
+    getmetatable(proxy).__gc=function()
+      local retained=marker
+      gc(0)
+      error(retained)
+    end
+  end
+  local ok,e=xpcall(function()boundary_gc(2,0,sentinel)end,function(e)
+    for level=2,16 do
+      local info=debug.getinfo(level,'f');if not info then break end
+      if info.func==boundary_gc then
+        local name,value=debug.getlocal(level,3)
+        detail=name~=nil and value==sentinel
+        break
+      end
+    end
+    return e
+  end)
+  assert(not ok and e==marker and detail)
+  local finalized=false
+  do local p=newproxy(true);getmetatable(p).__gc=function()finalized=true end end
+  for i=1,2000 do local pressure={i,i+1}end
+  assert(not finalized)
+  assert(gc(2)==0 and finalized)
+  print('native-gc-error',e==marker,detail,finalized)
+
+  gc(0)
+  local yielded=false
+  do
+    local p=newproxy(true)
+    getmetatable(p).__gc=function()
+      local co=coroutine.create(function()coroutine.yield(42);return 17 end)
+      local ok,value=coroutine.resume(co);assert(ok and value==42)
+      ok,value=coroutine.resume(co);assert(ok and value==17)
+      yielded=true
+    end
+  end
+  assert(gc(2)==0 and yielded)
+  gc(0)
+  do
+    local p=newproxy(true)
+    getmetatable(p).__gc=function()coroutine.yield()end
+  end
+  local co=coroutine.create(function()return pcall(boundary_gc,2)end)
+  local resumed,ok,e=coroutine.resume(co)
+  assert(resumed and not ok and e:find('yield',1,true))
+  print('native-gc-yield',yielded,e)
+  gc(2)
+  gc(6,pause);gc(7,stepmul)
+  print('native-gc-complete')
+end

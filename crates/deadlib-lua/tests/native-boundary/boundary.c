@@ -71,6 +71,9 @@ API const char *lua_getupvalue(lua_State *L, int index, int number) {
 API const char *lua_setupvalue(lua_State *L, int index, int number) {
   BoundaryValue value = {0}; operation(L, 46, index, number, &value); return value.bytes;
 }
+API int lua_gc(lua_State *L, int what, int data) {
+  BoundaryValue value = {0}; operation(L, 47, what, data, &value); return value.integer;
+}
 
 API void *lua_newuserdata(lua_State *L, size_t size) {
   BoundaryValue value = {0}; value.length = size;

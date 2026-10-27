@@ -284,6 +284,24 @@ mod windows {
                         .map_err(|_| self.stack.error(b"invalid format-part count"))?;
                     self.stack.concatenate_primitives(count)?;
                 }
+                47 => {
+                    use deadlib_lua::GcOperation;
+                    let operation = match a {
+                        0 => GcOperation::Stop,
+                        1 => GcOperation::Restart,
+                        2 => GcOperation::Collect,
+                        3 => GcOperation::CountKilobytes,
+                        4 => GcOperation::CountRemainder,
+                        5 => GcOperation::Step(b),
+                        6 => GcOperation::SetPause(b),
+                        7 => GcOperation::SetStepMultiplier(b),
+                        _ => {
+                            value.integer = -1;
+                            return Ok(());
+                        }
+                    };
+                    value.integer = self.stack.gc(operation)?;
+                }
                 45 | 46 => {
                     let number = usize::try_from(b).unwrap_or(0);
                     let name = if op == 45 {
@@ -475,6 +493,8 @@ mod windows {
             "boundary_upget",
             "boundary_upset",
             "boundary_upbind",
+            "boundary_gc",
+            "boundary_gc_counts",
             "boundary_cpcall",
         ] {
             let function = vm
