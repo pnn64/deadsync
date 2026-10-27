@@ -294,5 +294,102 @@ artifacts: [statistics](validation/2026-10-27-packet-seek-fuzz.tsv),
 All fuzz code hashes still match; its README was updated after the campaign,
 which is explicitly recorded rather than rewriting the original provenance.
 
-Sparse codec seeking, faster indexing/pre-roll, Ogg-only throughput, truly cold
-startup, broader files/platforms, profiling, and native encoding remain open.
+## Compact packet-mode pre-roll index, 2026-10-27
+
+The default index now retains two logical bits per packet: discarded prefix,
+short block, or long block. These come from the already-validated mode prefixes;
+index construction still does not synthesize floors, residues, or PCM. Starting
+at a page landmark, seek advances exact raw overlap ends by
+`(previous_block_size + next_block_size) / 4`, leaving the latest valid packet
+whose end does not exceed the target as its pre-roll packet. Discarded prefixes
+do not advance overlap. Timestamp conversion uses the existing signed origin,
+so initial edits and large broadcast timestamps keep their exact positions.
+
+The mode bytes are flat and use the existing `max_index_memory` accounting,
+including vector capacity and containing stream elements. They add no
+per-seek allocation. `SeekOptions::packet_preroll` defaults to true; set false
+to retain page-only pre-roll when minimizing index storage matters more than
+seek work. Both options remain sample-accurate. Payloads preceding the chosen
+pre-roll packet are skipped, as seeking already skips earlier pages; the index
+does not promise to validate those audio payloads. Full decoding still does.
+
+```powershell
+python crates/deadlib-audio/decode/scripts/benchmark_resources.py --baseline-revision af518655b --repeats 7
+```
+
+Both native builds use the same `read_packet` benchmark adapter here; there are
+**no adapter adjustments**. The baseline contains the previous production
+source, built independently with matching Cargo profiles and all 17 registry
+artifacts. Seven shuffled trials per case yield 280 timing rows alongside 360
+resource rows. All workers validate the same 500 reference PCM windows before
+timing, and source/input/binary hashes match at completion.
+
+Median milliseconds per **100-request seek batch**:
+
+| Input | Previous packet API | Compact mode index | Symphonia | libvorbisfile |
+| --- | ---: | ---: | ---: | ---: |
+| Mono fixture | 2.035 | 1.601 | 1.121 | 0.995 |
+| Stereo fixture | 12.741 | 9.064 | 8.068 | 5.664 |
+| Eight-channel silence | 19.340 | 18.866 | 11.799 | 11.388 |
+| `in_two` | 31.256 | 15.687 | 28.937 | 19.844 |
+| `Goin' Under` | 43.150 | 13.568 | 28.734 | 16.167 |
+
+The two longer tracks improve **1.99x / 3.18x**. Native is faster than both
+references on those two workloads in this run, while the three short fixtures
+still trail them. Mono/stereo improve about 1.27x/1.41x against the paired native
+baseline. Eight-channel silence improves only about 1.03x, with overlapping
+ranges (current 18.365-19.591 ms, baseline 18.407-22.580); that small difference
+does not establish a reliable speedup.
+
+Native longer-track min/median/max is 14.275/15.687/17.430 ms and
+12.485/13.568/14.338 ms. Baseline is 29.012/31.256/32.505 and
+42.493/43.150/46.071 ms. Reference drift and uncontrolled machine activity still
+apply; this is a paired result on a shared machine, not a broad performance
+claim. Full-file throughput and truly cold startup were not rebenchmarked here.
+
+Native source bytes per batch fall from 920,907 / 844,721 to
+**541,441 / 484,647** (41.2% / 42.6% less), with 100 seeks unchanged. Read calls
+fall from 600 each to 354 / 345. Exposed PCM remains exactly 132,534 / 135,738
+channel samples for 50,690 consumed samples, so the improvement removes work
+before the target rather than changing the requested output or its packet tail.
+This diagnostic still does not count libvorbisfile's internal pre-roll.
+
+All five warmed native batches remain allocation-free. Full/startup requested
+heap measurements are unchanged. On each longer track, seek-open live requested
+heap rises by **4,224 bytes**: to 394,911 / 499,739 bytes. Construction adds eleven
+small vector allocation/reallocation requests per track, totaling 799 / 755
+operations rather than 788 / 744. Capacity growth and the stream's new field
+are included in those measurements; two logical bits are not an exact allocator
+footprint. The short fixtures add 132 live requested bytes each.
+
+Open time remains substantially unchanged: current/baseline medians are
+33.637/33.325 ms and 17.600/17.721 ms, with overlapping ranges. Construction still
+reads the entire file twice (9,878,028 / 4,700,278 bytes). Faster seek batches do
+not remove the substantial native indexed-open gap.
+
+Evidence: [paired manifest](validation/2026-10-27-mode-index-resources.json),
+[trials](validation/2026-10-27-mode-index-trials.tsv),
+[summary](validation/2026-10-27-mode-index-summary.tsv),
+[resource rows](validation/2026-10-27-mode-index-resources.tsv),
+[completion](validation/2026-10-27-mode-index-complete.json), and
+[validation checks](validation/2026-10-27-mode-index-checks.json).
+The **96 passing release tests** include all external differential cases except
+fixture regeneration, 1,900 corpus seeks, 528 upstream vectors / 2,640 packet
+seeks, floor-zero and explicit legacy trimming. New tests compare both strategies
+with edits/large timestamps, discarded packets, spanning audio, interrupted and
+mixed reads, and a mode index that must obey the configured memory budget.
+Independent offline tests pass (77 tests, 20 optional external/generation cases
+ignored), along with Clippy in both feature configurations and fuzz-harness tests.
+
+The resumed streaming sanitizer campaign varies both pre-roll strategies and
+completes **6,989 executions** without artifacts. The Ogg and synthesis code is
+unchanged from the preceding milestones. All recorded campaign source hashes
+still match: [statistics](validation/2026-10-27-mode-index-fuzz.tsv),
+[results](validation/2026-10-27-mode-index-fuzz-results.json),
+[provenance](validation/2026-10-27-mode-index-fuzz-provenance.json), and
+[initial seed hashes](validation/2026-10-27-mode-index-fuzz-initial.sha256.json).
+
+Sparse codec seeking, faster indexing, Ogg-only throughput, truly cold startup,
+broader files/platforms, synthesis profiling/optimization, and native encoding
+remain open. The existing DeadSync decoding and playback integrations are
+unchanged.

@@ -103,6 +103,12 @@ overlap logic. Paired trials improve seek batches 1.16-1.76x, with zero warmed
 native seek allocations on all five inputs. Eager indexing and pre-roll still
 leave performance work. Full differential, packet/mixed-read and sanitizer
 evidence is recorded in the resource report.
+The compact packet-mode index then selects the nearest overlap pre-roll packet
+from two logical bits per packet. Paired longer-file seek batches improve another
+1.99x/3.18x for 4,224 additional live requested bytes per track, beating both
+references on those two seek workloads in this run. Short files, eager index
+construction, and full-file throughput still have performance gaps. The
+page-only pre-roll option preserves a lower-storage strategy with exact PCM.
 
 ## Normative sources
 

@@ -21,6 +21,11 @@ pub struct SeekOptions {
     /// advance and can trim across earlier packets/pages, including a decreasing
     /// EOS granule. Streaming APIs deliberately do not offer this exception.
     pub trim_to_final_granule: bool,
+    /// Retain two mode bits per packet to select the nearest overlap pre-roll
+    /// packet without synthesizing the earlier packets in its page interval.
+    /// Disabling this saves that index storage and uses page landmarks alone;
+    /// both strategies return sample-accurate PCM. Enabled by default.
+    pub packet_preroll: bool,
     pub max_index_pages: usize,
     /// Retained Vorbis metadata, setup packets and seek entries. The native
     /// container index has its own page-count bound, separately from this budget.
@@ -35,6 +40,7 @@ impl Default for SeekOptions {
             container_limits: container::Limits::default(),
             allow_zero_span_granules: false,
             trim_to_final_granule: false,
+            packet_preroll: true,
             max_index_pages: 1 << 20,
             max_index_memory: 128 << 20,
             max_stream_memory: 256 << 20,
@@ -67,7 +73,48 @@ pub struct SeekStream {
     origin: i128,
     setup_packet: Vec<u8>,
     marks: Vec<SeekMark>,
+    packet_modes: Vec<u8>,
     first_audio: Option<u64>,
+}
+impl SeekStream {
+    fn packet_block_size(&self, number: u64) -> Option<usize> {
+        let byte = *self.packet_modes.get(usize::try_from(number / 4).ok()?)?;
+        match (byte >> ((number & 3) * 2)) & 3 {
+            1 => Some(self.info.identification.block_sizes[0]),
+            2 => Some(self.info.identification.block_sizes[1]),
+            _ => None,
+        }
+    }
+    fn refine_preroll(
+        &self,
+        mut packet: u64,
+        mut raw_end: u64,
+        target: i128,
+    ) -> Result<(u64, u64), Error> {
+        let mut previous = self
+            .packet_block_size(packet)
+            .ok_or(Error::Invalid("missing indexed pre-roll mode"))?;
+        let mut next = packet
+            .checked_add(1)
+            .ok_or(Error::LimitExceeded("packet count"))?;
+        while usize::try_from(next / 4).is_ok_and(|byte| byte < self.packet_modes.len()) {
+            if let Some(size) = self.packet_block_size(next) {
+                let end = raw_end
+                    .checked_add(((previous + size) / 4) as u64)
+                    .ok_or(Error::LimitExceeded("raw frame count"))?;
+                if end as i128 > target {
+                    break;
+                }
+                packet = next;
+                raw_end = end;
+                previous = size;
+            }
+            next = next
+                .checked_add(1)
+                .ok_or(Error::LimitExceeded("packet count"))?;
+        }
+        Ok((packet, raw_end))
+    }
 }
 
 /// Container-validated index with full Vorbis headers and mode/granule timing.
@@ -133,6 +180,7 @@ impl VorbisIndex {
                 origin: 0,
                 setup_packet: Vec::new(),
                 marks: Vec::new(),
+                packet_modes: Vec::new(),
                 first_audio: None,
             };
             let mut setup = None;
@@ -219,6 +267,25 @@ impl VorbisIndex {
                                 )?;
                                 previous_size = audio.block_size;
                                 let number = packet.info.number.unwrap();
+                                if options.packet_preroll {
+                                    let byte = usize::try_from(number / 4)
+                                        .ok()
+                                        .and_then(|n| n.checked_add(1))
+                                        .ok_or(Error::LimitExceeded("packet-mode index"))?;
+                                    let extra = byte.saturating_sub(stream.packet_modes.len());
+                                    reserve_index(
+                                        &mut stream.packet_modes,
+                                        extra,
+                                        &mut memory,
+                                        options.max_index_memory,
+                                    )?;
+                                    stream.packet_modes.resize(byte, 0);
+                                    let code = 1 + u8::from(
+                                        audio.block_size
+                                            == stream.info.identification.block_sizes[1],
+                                    );
+                                    stream.packet_modes[byte - 1] |= code << ((number & 3) * 2);
+                                }
                                 stream.first_audio.get_or_insert(number);
                                 last_audio = Some(number);
                             }
@@ -467,9 +534,14 @@ impl<R: Read + Seek> OggSeekReader<R> {
                 .ok_or(Error::LimitExceeded("seek granule"))?;
             let before = stream.marks.partition_point(|mark| mark.granule <= target);
             let mark = before.checked_sub(1).map(|n| stream.marks[n]);
-            let (packet, base) = mark.map_or((stream.first_audio.unwrap_or(3), 0), |mark| {
-                (mark.packet, mark.raw_end)
-            });
+            let (mut packet, mut base) = mark
+                .map_or((stream.first_audio.unwrap_or(3), 0), |mark| {
+                    (mark.packet, mark.raw_end)
+                });
+            if self.index.options.packet_preroll && frame < stream.end.frames {
+                (packet, base) =
+                    stream.refine_preroll(packet, base, target as i128 - stream.origin)?;
+            }
             self.prime_packet = packet;
             self.primed = false;
             self.last_span = 0;

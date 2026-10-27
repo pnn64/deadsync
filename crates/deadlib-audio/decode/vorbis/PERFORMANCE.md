@@ -287,17 +287,15 @@ no artifacts/failures: [statistics](validation/2026-10-26-huffman-fuzz.tsv),
 
 [RESOURCES.md](RESOURCES.md) adds separate requested-heap counters, uninstrumented
 process memory, indexed construction and validated 100-request seek batches for
-five files. Native uses less requested heap than Symphonia in this sample, but
-the longer-file seek batches remain 1.5-2.5x slower than Symphonia and 2.3-4.6x
-slower than libvorbisfile. The eager index reads the entire source twice; native
-page callbacks expose 9.1-20.9x the requested samples on the two longer files.
-The subsequent packet-read update in that report adds resumable Ogg capture and
-`OggSeekReader::read_packet`. Interleaved trials against commit `58ca53b37` improve
-native seek batches 1.16-1.76x across the five files (1.45x/1.71x on the longer
-tracks); all five warmed native batches allocate nothing. Longer-file seeks
-still trail Symphonia by 1.06x/1.46x and libvorbisfile by 1.49x/2.58x. Eager
-two-pass construction remains largely unchanged. The report retains the initial
-page-API baseline and the paired update separately.
+five files. It retains the initial page-API baseline, the packet-read update,
+and the compact mode-index update separately. The latest paired run against
+`af518655b` improves longer-file seek batches 1.99x/3.18x, using two mode bits per
+packet to choose the nearest overlap pre-roll. Native beats both references on
+those two workloads in this run, while the short fixtures still trail them.
+The additional live requested heap is 4,224 bytes per longer track; all five
+warmed native batches allocate nothing. Indexed-open time remains largely
+unchanged and still requires two complete source passes. These scoped results
+do not establish overall or cross-platform competitive performance.
 Ogg-only container throughput and truly cold startup still need comparative
 measurements. Sanitizer RSS is not a production memory result.
 

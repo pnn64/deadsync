@@ -267,7 +267,10 @@ counts match without discarding comparison samples.
   packet concealment differential validation remains necessary.
   `read_packet` now avoids decoding unused page tails, with exact suffix/mixed
   read checks, 1,900 corpus and 2,640 upstream packet-read seeks, and paired
-  1.16-1.76x seek-batch gains. Eager construction and page-interval pre-roll remain.
+  1.16-1.76x seek-batch gains. The subsequent compact packet-mode index avoids
+  page-interval pre-roll synthesis, adding paired 1.99x/3.18x longer-track gains
+  for 4,224 additional live requested bytes per track. Both packet and page-only
+  pre-roll strategies are tested. Eager construction and sparse seeking remain.
 * Broader conformance material, unusual/legacy encoders, malformed/fuzz corpora,
   and wider real ITGmania/StepMania song-pack coverage beyond the pinned shipped
   songs. The two documented compatibility policies do not conceal packet holes

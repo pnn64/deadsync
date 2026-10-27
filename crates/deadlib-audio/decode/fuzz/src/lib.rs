@@ -462,6 +462,7 @@ pub fn vorbis_stream(input: &[u8]) {
             container_limits: container_limits(),
             allow_zero_span_granules: control & 1 != 0,
             trim_to_final_granule: control & 2 != 0,
+            packet_preroll: control & 4 == 0,
             max_index_pages: MAX_PAGES,
             max_index_memory: 8 << 20,
             max_stream_memory: 16 << 20,

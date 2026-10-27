@@ -119,7 +119,14 @@ while reader.read_next(|event| {
 
 Construction validates the complete container, then scans Vorbis headers, packet
 modes and granules without synthesizing PCM. `VorbisIndex` caches metadata/setup
-packets and one timing landmark per completed audio page. It can be built
+packets, one timing landmark per completed audio page, and a compact packet-mode
+index. Two logical bits per packet identify short/long blocks or discarded
+prefixes. Seek refines a page landmark to the nearest valid pre-roll packet
+using those modes and exact overlap increments, avoiding synthesis of earlier
+packets in the page interval. `SeekOptions::packet_preroll` defaults to true;
+false retains page-only landmarks to save this storage. Both return the same
+sample-accurate PCM. Vector capacity is included in `max_index_memory`.
+The index can be built
 separately and passed to `with_index`; `into_parts` preserves it for reuse with
 the exact same immutable source. Audio floor/residue errors are still detected
 when those packets are decoded. Use the streaming reader for low-latency startup

@@ -145,6 +145,139 @@ fn packet_reads_and_mixed_page_reads_preserve_exact_suffixes_and_reset_pauses() 
     }
 }
 
+#[test]
+fn compact_packet_modes_reduce_preroll_and_preserve_both_index_strategies() {
+    for origin in [-37, 900, (1i64 << 54) + 731] {
+        let bytes = repack(STEREO, 98, origin, 29, 140, false, true);
+        let expected = full(&bytes);
+        let audio = expected.values().next().unwrap();
+        let frames = audio.end.unwrap().frames;
+        let mut worst = [0; 2];
+        let mut storage = [0; 2];
+        for (strategy, packet_preroll) in [false, true].into_iter().enumerate() {
+            let mut reader = OggSeekReader::with_options(
+                Cursor::new(&bytes),
+                SeekOptions {
+                    packet_preroll,
+                    ..SeekOptions::default()
+                },
+            )
+            .unwrap();
+            storage[strategy] = reader.index().storage_bytes();
+            for target in [
+                0,
+                1,
+                frames * 37 / 100,
+                frames / 2,
+                frames * 73 / 100,
+                frames - 1,
+                frames,
+            ] {
+                suffix_with_mode(&mut reader, target, audio, 1);
+                suffix_with_mode(&mut reader, target, audio, 2);
+                if target == frames {
+                    continue;
+                }
+                reader
+                    .seek(audio.info.as_ref().unwrap().id, target)
+                    .unwrap();
+                let mut calls = 0;
+                let mut found = false;
+                while !found {
+                    assert!(
+                        reader
+                            .read_packet(|event| {
+                                if let OggEvent::Pcm(block) = event {
+                                    assert_eq!(block.start_frame, target);
+                                    found = true;
+                                }
+                            })
+                            .unwrap()
+                    );
+                    calls += 1;
+                }
+                worst[strategy] = worst[strategy].max(calls);
+            }
+        }
+        // A valid pre-roll packet, two deliberately discarded packets, and the
+        // target block suffice, regardless of its distance into a dense page.
+        assert!(
+            worst[1] <= 4,
+            "packet-mode pre-roll took {} calls",
+            worst[1]
+        );
+        assert!(worst[0] > worst[1] + 8);
+        assert!(storage[1] > storage[0] && storage[1] - storage[0] < 1024);
+    }
+}
+
+#[test]
+fn packet_mode_preroll_handles_spanning_audio_and_exact_index_budgets() {
+    let packets = support::packets(STEREO);
+    let mut decoder = support::decoder(&packets);
+    let mut writer = PacketWriter::new(Vec::new(), 99);
+    for packet in &packets[..3] {
+        writer.write_packet(packet, 0, false).unwrap();
+    }
+    writer.flush_page().unwrap();
+    for (n, data) in packets[3..].iter().enumerate() {
+        let mut padded = data.clone();
+        if n % 2 == 0 {
+            padded.resize(padded.len() + 70000, 0);
+        }
+        let block = decoder.decode(&padded).unwrap().unwrap();
+        let last = n + 4 == packets.len();
+        let gp = block.start_frame + block.frames as u64 - if last { 33 } else { 0 };
+        writer.write_packet(&padded, gp, last).unwrap();
+        if n == 0 {
+            // Sparse valid modes still occupy their absolute packet slots;
+            // account for this storage rather than bypassing the index budget.
+            for _ in 0..20000 {
+                writer.write_packet(&[], gp, false).unwrap();
+            }
+        }
+    }
+    let bytes = writer.into_inner();
+    let expected = full(&bytes);
+    let audio = expected.values().next().unwrap();
+    let frames = audio.end.unwrap().frames;
+    let coarse_options = SeekOptions {
+        packet_preroll: false,
+        ..SeekOptions::default()
+    };
+    let coarse = VorbisIndex::read(&mut Cursor::new(&bytes), coarse_options).unwrap();
+    let budget = coarse.storage_bytes() - coarse.container().storage_bytes();
+    let exact = SeekOptions {
+        max_index_memory: budget,
+        ..coarse_options
+    };
+    VorbisIndex::read(&mut Cursor::new(&bytes), exact).unwrap();
+    assert!(matches!(
+        VorbisIndex::read(
+            &mut Cursor::new(&bytes),
+            SeekOptions {
+                packet_preroll: true,
+                ..exact
+            }
+        ),
+        Err(Error::LimitExceeded("Vorbis seek index memory"))
+    ));
+    for packet_preroll in [false, true] {
+        let mut reader = OggSeekReader::with_options(
+            Cursor::new(&bytes),
+            SeekOptions {
+                packet_preroll,
+                ..SeekOptions::default()
+            },
+        )
+        .unwrap();
+        for target in [0, 1, 127, frames / 2, frames - 1, frames] {
+            suffix_with_mode(&mut reader, target, audio, 1);
+            suffix_with_mode(&mut reader, target, audio, 2);
+        }
+    }
+}
+
 fn repack(
     bytes: &[u8],
     serial: u32,
