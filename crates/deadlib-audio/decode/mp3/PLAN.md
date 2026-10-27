@@ -49,8 +49,10 @@ and performance requirements are implemented and verified.
 Current checkpoint: foundation implemented; eight integration tests, all-target
 Clippy and 84 LAME/libmad structural comparisons (732 frames) pass. Evidence and
 explicit limitations are in COVERAGE.md. Scalefactor parsing now passes all
-compression/shape cases and the generated-file part2 bounds gate. Huffman,
-remaining spectral processing and PCM synthesis are next.
+compression/shape cases and the generated-file part2 bounds gate. Huffman pairs,
+escapes and quadruples now pass exact native tests and 22,476 independent
+libmad/analytical hybrid vectors; see HUFFMAN.md. Remaining spectral processing
+and PCM synthesis are next.
 
 ## Source material
 

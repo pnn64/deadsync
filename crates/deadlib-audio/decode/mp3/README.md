@@ -18,6 +18,8 @@ The foundation's eight tests and 84-file/732-frame libmad comparison are recorde
 in [COVERAGE.md](COVERAGE.md).
 MPEG-1 SCFSI/scalefactors and all MPEG-2 LSF scalefactor partitions are now
 implemented and tested separately, including intensity parameter widths.
+All Layer III Huffman pairs, escapes, signs and count1 quadruples are implemented;
+see [HUFFMAN.md](HUFFMAN.md) for numeric-table provenance and independent evidence.
 
 ```sh
 cargo test --locked -p deadlib-audio-decode-mp3 --target-dir target/deadlib-mp3

@@ -1,0 +1,179 @@
+{
+  "passed": true,
+  "vectors": 22476,
+  "groups": {
+    "0": {
+      "vectors": 4,
+      "max_rms": 0,
+      "max_error": 0
+    },
+    "1": {
+      "vectors": 16,
+      "max_rms": 1.2059965766166216e-08,
+      "max_error": 2.142423247142311e-08
+    },
+    "2": {
+      "vectors": 36,
+      "max_rms": 1.2059965766166216e-08,
+      "max_error": 2.519102032527698e-08
+    },
+    "3": {
+      "vectors": 36,
+      "max_rms": 1.2059965766166216e-08,
+      "max_error": 2.519102032527698e-08
+    },
+    "5": {
+      "vectors": 64,
+      "max_rms": 1.2059965766166216e-08,
+      "max_error": 2.519102032527698e-08
+    },
+    "6": {
+      "vectors": 64,
+      "max_rms": 1.2059965766166216e-08,
+      "max_error": 2.519102032527698e-08
+    },
+    "7": {
+      "vectors": 144,
+      "max_rms": 1.310359775624973e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "8": {
+      "vectors": 144,
+      "max_rms": 1.310359775624973e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "9": {
+      "vectors": 144,
+      "max_rms": 1.310359775624973e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "10": {
+      "vectors": 256,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "11": {
+      "vectors": 256,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "12": {
+      "vectors": 256,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "13": {
+      "vectors": 1024,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "15": {
+      "vectors": 1024,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "16": {
+      "vectors": 1156,
+      "max_rms": 1.3969170489334635e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "17": {
+      "vectors": 1156,
+      "max_rms": 1.4403920795254006e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "18": {
+      "vectors": 1156,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "19": {
+      "vectors": 1156,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "20": {
+      "vectors": 1156,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7508615829674454e-08
+    },
+    "21": {
+      "vectors": 1156,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "22": {
+      "vectors": 1156,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "23": {
+      "vectors": 1156,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "24": {
+      "vectors": 1156,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "25": {
+      "vectors": 1156,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "26": {
+      "vectors": 1156,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7508615829674454e-08
+    },
+    "27": {
+      "vectors": 1156,
+      "max_rms": 1.5556407408737093e-08,
+      "max_error": 2.9702534515285706e-08
+    },
+    "28": {
+      "vectors": 1156,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "29": {
+      "vectors": 1156,
+      "max_rms": 1.590078300193215e-08,
+      "max_error": 2.837585866277692e-08
+    },
+    "30": {
+      "vectors": 1156,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 3.062014830579329e-08
+    },
+    "31": {
+      "vectors": 1156,
+      "max_rms": 1.3850979741650353e-08,
+      "max_error": 2.7316608253169505e-08
+    },
+    "32": {
+      "vectors": 256,
+      "max_rms": 1.2059965766166216e-08,
+      "max_error": 2.2191125936821265e-08
+    },
+    "33": {
+      "vectors": 256,
+      "max_rms": 1.2059965766166216e-08,
+      "max_error": 2.2191125936821265e-08
+    }
+  },
+  "rms_limit": 2e-07,
+  "max_limit": 1e-06,
+  "errors": [],
+  "command": [
+    "/home/perfecttaste/.cache/deadlib-mp3/hybrid-reference",
+    "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/huffman-complete/vectors.mp3"
+  ],
+  "oracle_sha256": "ee1887c72ba022812165eca98d3dcb4a64d5d7b9621b00abb8d8b2f2462dc6c5",
+  "vectors_sha256": "9cfc1193705cf3e540de46e6cfa7e769c95255009e929098c29d5dbe02820e42",
+  "trace_sha256": "ef3cf74ff82ab63d43ec5a6323e40dbe73f2d8f05dc90fafd865e9bf868bdb86",
+  "fixture_sha256": "18554b47454c0c06e72c39f53e37f0eabca4410bd6fe330f0d009f90a73f3d3c",
+  "method": "Validate every normative codeword through libmad's public frame API.\n\nFrames put isolated coefficients in subband zero. Compare public hybrid output\nwith the analytical long IMDCT/window equation; a zero second granule clears\noverlap before the next vector. This tests codeword meaning, not native PCM.\n",
+  "libmad_version": "0.15.1b"
+}
