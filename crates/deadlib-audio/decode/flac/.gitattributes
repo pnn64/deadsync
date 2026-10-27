@@ -1,1 +1,2 @@
 tests/ffmpeg/*.sh text eol=lf
+benches/*.sh text eol=lf

@@ -94,5 +94,6 @@ See [PARITY.md](PARITY.md) for the decode contract, reports and reproduction.
 
 See [PLAN.md](PLAN.md) for the full scope and unfinished milestones. Fuzz
 targets now have recorded ASan campaigns; see [fuzz/README.md](fuzz/README.md).
-Pipeline performance work remains from the original implementation plan.
-No performance comparison is claimed yet.
+Decode performance work is active. The initial benchmark is slower than the
+references in several classes; see [PERFORMANCE.md](PERFORMANCE.md) for measured
+baselines, methods and remaining work. Performance parity is not yet claimed.

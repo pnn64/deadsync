@@ -20,7 +20,7 @@ Milestones (commit each when verified):
 5. Validation (implemented bounded campaigns and differential gates; see PARITY.md and fuzz/README.md): libFLAC, FFmpeg and Symphonia differential tests, official conformance
    corpus, malformed/truncated inputs, streaming splits, metadata, checksums,
    seek positions, fuzz targets and reproducible runs.
-6. Performance: reproducible whole-file/stream/startup/seek/encode benchmarks,
+6. Performance (in progress; baseline in PERFORMANCE.md): reproducible whole-file/stream/startup/seek/encode benchmarks,
    ratios, allocations and memory versus references; optimize measured hot paths
    and document evidence and limitations without asserting unmeasured parity.
 
