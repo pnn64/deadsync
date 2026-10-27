@@ -64,7 +64,7 @@ pub(super) fn with_label(
     actors.push(accent_actor(cx, cy, px, z, accent));
     actors.push(act!(text:
         font("miso"):
-        settext(label.to_owned()):
+        settext(super::localization::text(label)):
         align(0.0, 0.5):
         xy(cx + px * 0.5 + 8.0, cy):
         zoom(0.5):

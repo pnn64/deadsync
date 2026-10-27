@@ -132,7 +132,7 @@ pub(super) fn push_reload_dialog(
         ));
     }
     actors.push(act!(text:
-        font("miso"): settext("LEFT/RIGHT choose    START go    BACK cancel".to_owned()):
+        font("miso"): settext(crate::i18n::tr("ContentBrowser", "ChooseGoBackHint")):
         align(0.5, 0.5): xy(cx, cy + 56.0): zoom(0.5): horizalign(center):
         diffuse(FOOTER_RGBA[0], FOOTER_RGBA[1], FOOTER_RGBA[2], FOOTER_RGBA[3]):
         z(Z_MODAL_TEXT)

@@ -960,7 +960,7 @@ pub fn push_content(actors: &mut Vec<Actor>, state: &State, as_overlay: bool) {
     };
     actors.push(act!(text:
         font("miso"):
-        settext(title):
+        settext(crate::i18n::tr_ui(&title)):
         align(0.5, 0.0):
         xy(screen_center_x(), 36.0):
         zoom(1.2):
@@ -972,7 +972,7 @@ pub fn push_content(actors: &mut Vec<Actor>, state: &State, as_overlay: bool) {
     if !state.fsr_enabled {
         actors.push(act!(text:
             font("miso"):
-            settext("FSR support is off."):
+            settext(crate::i18n::tr("PadConfig", "Disabled")):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y() - 16.0):
             zoom(1.0):
@@ -982,7 +982,7 @@ pub fn push_content(actors: &mut Vec<Actor>, state: &State, as_overlay: bool) {
         ));
         actors.push(act!(text:
             font("miso"):
-            settext("If you have FSR pads, enable \"Use FSRs\" in Options > Input."):
+            settext(crate::i18n::tr("PadConfig", "EnableHint")):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y() + 14.0):
             zoom(0.7):
@@ -1006,7 +1006,7 @@ pub fn push_content(actors: &mut Vec<Actor>, state: &State, as_overlay: bool) {
     if state.pads.is_empty() {
         actors.push(act!(text:
             font("miso"):
-            settext("No FSR pads detected."):
+            settext(crate::i18n::tr("PadConfig", "NoPads")):
             align(0.5, 0.5):
             xy(screen_center_x(), screen_center_y()):
             zoom(1.0):
@@ -1036,7 +1036,7 @@ pub fn push_content(actors: &mut Vec<Actor>, state: &State, as_overlay: bool) {
     if !as_overlay && state.managed_active && advanced_pad.is_none() {
         actors.push(act!(text:
             font("miso"):
-            settext("DeadSync is managing pad config - edits here are temporary."):
+            settext(crate::i18n::tr("PadConfig", "TemporaryEdits")):
             align(0.5, 0.0):
             xy(screen_center_x(), 58.0):
             zoom(0.66):
@@ -1046,7 +1046,7 @@ pub fn push_content(actors: &mut Vec<Actor>, state: &State, as_overlay: bool) {
         ));
         actors.push(act!(text:
             font("miso"):
-            settext("Save tunings as profiles from Song Select."):
+            settext(crate::i18n::tr("PadConfig", "SaveProfilesHint")):
             align(0.5, 0.0):
             xy(screen_center_x(), 76.0):
             zoom(0.62):
@@ -1082,7 +1082,7 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
         .and_then(|dev| state.pads.iter().find(|p| p.device_id == dev))
         .map_or("", |p| p.device_name.as_ref());
     actors.push(act!(text:
-        font("miso"): settext(format!("PROFILES  -  {pad_name}")): align(0.5, 0.0):
+        font("miso"): settext(crate::i18n::tr_fmt("PadConfig", "ProfilesTitle", &[("pad_name", pad_name)])): align(0.5, 0.0):
         xy(cx, 84.0): zoom(0.95): horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.95): z(20.0 + zb)
     ));
@@ -1107,7 +1107,7 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
             );
         }
         let (label, color) = if row == 0 {
-            ("+ Save current pad as new\u{2026}".to_owned(), ON_TEXT)
+            (crate::i18n::tr("PadConfig", "SaveNew").to_string(), ON_TEXT)
         } else {
             let e = &state.profiles[row - 1];
             // `* ` marks the active (applied) config; `(default)` is independent
@@ -1118,7 +1118,7 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
             }
             label.push_str(&e.name);
             if e.is_default {
-                label.push_str("   (default)");
+                label.push_str(&crate::i18n::tr("PadConfig", "DefaultTag"));
             }
             // The active config is tinted even when the cursor is elsewhere.
             let color = if selected {
@@ -1148,14 +1148,14 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
     };
     line(
         actors,
-        "Up/Down - Select".to_owned(),
+        crate::i18n::tr("PadConfig", "SelectHint").to_string(),
         bottom - 94.0,
         [1.0, 1.0, 1.0, 0.85],
     );
     if state.profiles_sel == 0 {
         line(
             actors,
-            "Press &START; to name and save the current tuning".to_owned(),
+            crate::i18n::tr("PadConfig", "NameSaveHint").to_string(),
             bottom - 70.0,
             [1.0, 1.0, 1.0, 0.85],
         );
@@ -1165,33 +1165,33 @@ fn build_profiles(actors: &mut Vec<Actor>, state: &State, theme: &Theme, zb: f32
         // center — orange text right-anchored, gray "&BACK; to cancel" left-anchored.
         let y = bottom - 70.0;
         actors.push(act!(text:
-            font("miso"): settext("Press DELETE again to confirm   "):
+            font("miso"): settext(crate::i18n::tr("PadConfig", "ConfirmDeleteHint")):
             align(1.0, 0.5): xy(cx, y): zoom(0.7): horizalign(right):
             diffuse(CAUTION_TEXT[0], CAUTION_TEXT[1], CAUTION_TEXT[2], CAUTION_TEXT[3]):
             z(20.0 + zb)
         ));
         actors.push(act!(text:
-            font("miso"): settext("&BACK; to cancel"):
+            font("miso"): settext(crate::i18n::tr("PadConfig", "CancelHint")):
             align(0.0, 0.5): xy(cx, y): zoom(0.7): horizalign(left):
             diffuse(1.0, 1.0, 1.0, 0.85): z(20.0 + zb)
         ));
     } else {
         line(
             actors,
-            "&START; Activate    &SELECT; Set default".to_owned(),
+            crate::i18n::tr("PadConfig", "ActivateHint").to_string(),
             bottom - 70.0,
             [1.0, 1.0, 1.0, 0.85],
         );
         line(
             actors,
-            "R - Rename    O - Overwrite    DELETE - Delete".to_owned(),
+            crate::i18n::tr("PadConfig", "ProfileActionsHint").to_string(),
             bottom - 46.0,
             [1.0, 1.0, 1.0, 0.85],
         );
     }
     line(
         actors,
-        "Press &BACK; to return".to_owned(),
+        crate::i18n::tr("PadConfig", "ReturnHint").to_string(),
         bottom - 22.0,
         [1.0, 1.0, 1.0, 0.85],
     );
@@ -1217,12 +1217,12 @@ fn push_save_box(actors: &mut Vec<Actor>, state: &State, draft: &SaveDraft, zb: 
         .and_then(|dev| state.pads.iter().find(|p| p.device_id == dev))
         .map_or("", |p| p.device_name.as_ref());
     let title = if draft.rename_of.is_some() {
-        "Rename profile".to_owned()
+        crate::i18n::tr("PadConfig", "RenameTitle").to_string()
     } else {
-        format!("Save {pad_name} as profile")
+        crate::i18n::tr_fmt("PadConfig", "SaveTitle", &[("pad_name", pad_name)]).to_string()
     };
     actors.push(act!(text:
-        font("miso"): settext(title): align(0.5, 0.5):
+        font("miso"): settext(crate::i18n::tr_ui(&title)): align(0.5, 0.5):
         xy(cx, cy - 64.0): zoom(0.85): horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.95): z(z + 1.0)
     ));
@@ -1238,9 +1238,9 @@ fn push_save_box(actors: &mut Vec<Actor>, state: &State, draft: &SaveDraft, zb: 
         diffuse(SELECTED_TEXT[0], SELECTED_TEXT[1], SELECTED_TEXT[2], SELECTED_TEXT[3]): z(z + 1.0)
     ));
     let (def_label, def_color) = if draft.set_default {
-        ("Set as default: ON", ON_TEXT)
+        (crate::i18n::tr("PadConfig", "DefaultOn"), ON_TEXT)
     } else {
-        ("Set as default: off", OFF_TEXT)
+        (crate::i18n::tr("PadConfig", "DefaultOff"), OFF_TEXT)
     };
     actors.push(act!(text:
         font("miso"): settext(def_label): align(0.5, 0.5):
@@ -1248,12 +1248,12 @@ fn push_save_box(actors: &mut Vec<Actor>, state: &State, draft: &SaveDraft, zb: 
         diffuse(def_color[0], def_color[1], def_color[2], def_color[3]): z(z + 1.0)
     ));
     actors.push(act!(text:
-        font("miso"): settext("Up/Down - toggle default"): align(0.5, 0.5):
+        font("miso"): settext(crate::i18n::tr("PadConfig", "ToggleDefaultHint")): align(0.5, 0.5):
         xy(cx, cy + 28.0): zoom(0.62): horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.8): z(z + 1.0)
     ));
     actors.push(act!(text:
-        font("miso"): settext("Press &START; to save, &BACK; to cancel"): align(0.5, 0.5):
+        font("miso"): settext(crate::i18n::tr("PadConfig", "SaveCancelHint")): align(0.5, 0.5):
         xy(cx, cy + 50.0): zoom(0.62): horizalign(center):
         diffuse(1.0, 1.0, 1.0, 0.8): z(z + 1.0)
     ));
@@ -1550,7 +1550,7 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
     if pad.auto_recalibration.is_some() || pad.debounce_micros.is_some() {
         actors.push(act!(text:
             font("miso"):
-            settext("Extra Advanced - only change these if you know what they do"):
+            settext(crate::i18n::tr("PadConfig", "AdvancedWarning")):
             align(0.5, 0.5):
             xy(screen_center_x(), ey):
             zoom(0.62):
@@ -1565,8 +1565,8 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
         let focused_here = focused == Some(AdvTarget::AutoRecal);
         push_setting_row(
             actors,
-            "Auto-recalibration:",
-            TextContent::Static(if on { "ON" } else { "OFF" }),
+            crate::i18n::tr("PadConfig", "AutoRecalibration"),
+            TextContent::Shared(crate::i18n::tr("Common", if on { "On" } else { "Off" })),
             on,
             focused_here,
             ey,
@@ -1583,7 +1583,7 @@ fn build_advanced(actors: &mut Vec<Actor>, state: &State, pad_idx: usize, theme:
         let focused_here = focused == Some(AdvTarget::Debounce);
         push_setting_row(
             actors,
-            "Debounce:",
+            crate::i18n::tr("PadConfig", "DebounceLabel"),
             format_ms_text(us),
             true,
             focused_here,
@@ -1726,13 +1726,14 @@ fn push_sensor_bar(
 
 fn push_setting_row(
     actors: &mut Vec<Actor>,
-    label: &'static str,
+    label: impl Into<TextContent>,
     value: TextContent,
     value_on: bool,
     selected: bool,
     y: f32,
     zb: f32,
 ) {
+    let label: TextContent = label.into();
     let cx = screen_center_x();
     let label_color = if selected {
         SELECTED_TEXT
@@ -2468,7 +2469,7 @@ enum Footer {
 fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
     let cx = screen_center_x();
     let bottom = screen_height();
-    let line = |actors: &mut Vec<Actor>, text: &'static str, y: f32| {
+    let line = |actors: &mut Vec<Actor>, text: std::sync::Arc<str>, y: f32| {
         actors.push(act!(text:
             font("miso"):
             settext(text):
@@ -2487,12 +2488,12 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             save_available,
             threshold_lock,
         } => {
-            line(actors, "Left/Right - Select Panel", bottom - 94.0);
+            line(actors, crate::i18n::tr("PadConfig", "SelectPanelHint"), bottom - 94.0);
             // Kept static for the frame path; the regression test below binds
             // the embedded numbers to the edit constants.
             line(
                 actors,
-                "Up/Down - Threshold +/- 5 (Shift +/- 1)   Up+Down or 0 - Tare to live reading",
+                crate::i18n::tr("PadConfig", "ThresholdHint"),
                 bottom - 70.0,
             );
             // Combine the Start action (Advanced, or the press/release lock on
@@ -2500,29 +2501,29 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             // has a profile to save to (in-session, local profile).
             let action_line = match (threshold_lock, advanced_available, save_available) {
                 (Some(true), _, true) => Some(
-                    "&START; Press/Release lock: ON (keeps them 10 apart)    &SELECT; Profiles",
+                    crate::i18n::tr("PadConfig", "LockOnProfilesHint"),
                 ),
                 (Some(false), _, true) => Some(
-                    "&START; Press/Release lock: OFF (keeps them 10 apart)    &SELECT; Profiles",
+                    crate::i18n::tr("PadConfig", "LockOffProfilesHint"),
                 ),
                 (Some(true), _, false) => {
-                    Some("&START; Press/Release lock: ON (keeps them 10 apart)")
+                    Some(crate::i18n::tr("PadConfig", "LockOnHint"))
                 }
                 (Some(false), _, false) => {
-                    Some("&START; Press/Release lock: OFF (keeps them 10 apart)")
+                    Some(crate::i18n::tr("PadConfig", "LockOffHint"))
                 }
-                (None, true, true) => Some("&START; Advanced    &SELECT; Profiles"),
-                (None, false, true) => Some("Press &SELECT; for pad profiles"),
-                (None, true, false) => Some("Press &START; for Advanced (per-sensor)"),
+                (None, true, true) => Some(crate::i18n::tr("PadConfig", "AdvancedProfilesHint")),
+                (None, false, true) => Some(crate::i18n::tr("PadConfig", "ProfilesHint")),
+                (None, true, false) => Some(crate::i18n::tr("PadConfig", "AdvancedHint")),
                 (None, false, false) => None,
             };
             if let Some(action_line) = action_line {
                 line(actors, action_line, bottom - 46.0);
             }
             let back = if as_overlay {
-                "Press &BACK; to return to Song Select"
+                crate::i18n::tr("PadConfig", "ReturnToMusicHint")
             } else {
-                "Press &BACK; to return to Options"
+                crate::i18n::tr("PadConfig", "ReturnToOptionsHint")
             };
             line(actors, back, bottom - 22.0);
         }
@@ -2532,13 +2533,13 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
         } => {
             line(
                 actors,
-                "Left/Right - Select   Up/Down - Adjust (Shift = fine)   Up+Down or 0 - Tare",
+                crate::i18n::tr("PadConfig", "AdvancedThresholdHint"),
                 bottom - 70.0,
             );
             let action_line = match (supports_toggle, save_available) {
-                (true, true) => Some("&START; toggle sensor    &SELECT; Profiles"),
-                (true, false) => Some("Press &START; to toggle the selected sensor on/off"),
-                (false, true) => Some("Press &SELECT; for pad profiles"),
+                (true, true) => Some(crate::i18n::tr("PadConfig", "ToggleProfilesHint")),
+                (true, false) => Some(crate::i18n::tr("PadConfig", "ToggleSensorHint")),
+                (false, true) => Some(crate::i18n::tr("PadConfig", "ProfilesHint")),
                 (false, false) => None,
             };
             if let Some(action_line) = action_line {
@@ -2546,7 +2547,7 @@ fn push_footer(actors: &mut Vec<Actor>, footer: Footer, zb: f32) {
             }
             line(
                 actors,
-                "Press &BACK; to return to the simple view",
+                crate::i18n::tr("PadConfig", "ReturnToSimpleHint"),
                 bottom - 22.0,
             );
         }
@@ -2791,8 +2792,8 @@ fn push_value_cluster(
         // Which of the pair the cursor is editing, above the pressure value.
         if let Some(kind) = focused_kind {
             let caption = match kind {
-                ThresholdKind::Press => "Press",
-                ThresholdKind::Release => "Release",
+                ThresholdKind::Press => crate::i18n::tr("PadConfig", "PressThreshold"),
+                ThresholdKind::Release => crate::i18n::tr("PadConfig", "ReleaseThreshold"),
             };
             actors.push(act!(text:
                 font("miso"): settext(caption): align(0.5, 1.0):
@@ -2879,7 +2880,7 @@ fn push_bar(
             CAUTION_TEXT
         };
         actors.push(act!(text:
-            font("miso"): settext("OFF"): align(0.5, 0.5):
+            font("miso"): settext(crate::i18n::tr("Common", "Off")): align(0.5, 0.5):
             xy(x, BAR_HEIGHT.mul_add(0.5, y)): zoom(0.82): horizalign(center):
             diffuse(off[0], off[1], off[2], off[3]): z(z + 3.0)
         ));
@@ -3504,11 +3505,11 @@ mod tests {
         );
         assert_eq!(
             "&START; Press/Release lock: ON (keeps them 10 apart)",
-            format!("&START; Press/Release lock: ON (keeps them {LOCKED_THRESHOLD_GAP} apart)")
+            crate::i18n::tr_fmt("PadConfig", "LockOn", &[("gap", &LOCKED_THRESHOLD_GAP.to_string())]).to_string()
         );
         assert_eq!(
             "&START; Press/Release lock: OFF (keeps them 10 apart)",
-            format!("&START; Press/Release lock: OFF (keeps them {LOCKED_THRESHOLD_GAP} apart)")
+            crate::i18n::tr_fmt("PadConfig", "LockOff", &[("gap", &LOCKED_THRESHOLD_GAP.to_string())]).to_string()
         );
     }
 

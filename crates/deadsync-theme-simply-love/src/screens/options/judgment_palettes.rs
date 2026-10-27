@@ -486,7 +486,7 @@ fn create_palette(state: &mut State, source_id: Option<String>) -> ThemeEffect {
         source_id.unwrap_or_else(|| state.judgment_palettes.resolved_default_id().to_owned());
     let mut suffix = 1;
     let name = loop {
-        let candidate = format!("Custom Palette {suffix}");
+        let candidate = crate::i18n::tr_fmt("UiMessages", "CustomPaletteSuffix", &[("suffix", &(suffix).to_string())]).to_string();
         if !state
             .judgment_palettes
             .palettes
