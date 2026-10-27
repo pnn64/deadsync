@@ -182,6 +182,32 @@ struct PartialFrame {
     header: FrameHeader,
     channel: usize,
     position: usize,
+    plane: Option<PartialPlane>,
+}
+#[derive(Clone, Copy)]
+struct PartialPlane {
+    kind: usize,
+    order: usize,
+    width: u32,
+    wasted: u32,
+    coeff: [i64; 32],
+    shift: u32,
+    residual: PartialResidual,
+    position: usize,
+}
+#[derive(Clone, Copy)]
+struct PartialResidual {
+    param_bits: u32,
+    partitions: usize,
+    partition_size: usize,
+    partition: usize,
+    next: usize,
+    code: Option<ResidualCode>,
+}
+#[derive(Clone, Copy)]
+enum ResidualCode {
+    Rice(u32),
+    Escape(u32),
 }
 impl FrameDecoder {
     /// Change header defaults while retaining allocated PCM and predictor buffers.
@@ -246,12 +272,38 @@ impl FrameDecoder {
         self.partial = None;
     }
     /// The reader appends to the same frame prefix until decoding succeeds.
-    /// Retain completed planes, restarting only the incomplete subframe.
+    /// Retain completed planes and residual samples within incomplete planes.
     pub(crate) fn decode_buffer(&mut self, data: &[u8]) -> Result<Frame<'_>, Error> {
+        // STREAMINFO is only a performance hint. A small or incorrect maximum
+        // can trigger an incomplete optimistic attempt; resume normally then.
+        // Checksums and actual input bounds always decide frame validity.
+        if self.partial.is_none()
+            && self
+                .info
+                .is_some_and(|i| i.max_frame_size != 0 && data.len() >= i.max_frame_size as usize)
+        {
+            match self.decode_inner::<false>(data) {
+                Ok(frame) => {
+                    let header = frame.header;
+                    let bytes = frame.bytes;
+                    return Ok(Frame {
+                        header,
+                        bytes,
+                        pcm: self.pcm(header),
+                    });
+                }
+                Err(Error::Truncated) => (),
+                Err(error) => return Err(error),
+            }
+        }
         self.decode_inner::<true>(data)
     }
     fn decode_inner<const RESUME: bool>(&mut self, data: &[u8]) -> Result<Frame<'_>, Error> {
-        let partial = if RESUME { self.partial.take() } else { None };
+        let partial = if RESUME && self.partial.is_some() {
+            self.partial.take()
+        } else {
+            None
+        };
         let header = FrameHeader::parse(data, self.info.as_ref())?;
         let n = header.block_size;
         let len = n * header.channels as usize;
@@ -278,22 +330,33 @@ impl FrameDecoder {
             let side = (header.channel_assignment == 9 && channel == 0)
                 || (matches!(header.channel_assignment, 8 | 10) && channel == 1);
             let position = r.position();
+            let mut plane = if RESUME && channel == first_channel {
+                partial.and_then(|p| p.plane)
+            } else {
+                None
+            };
             let bits = u32::from(header.bits_per_sample) + u32::from(side);
             let result = if wide_side && side {
-                subframe(&mut r, &mut self.side, bits)
+                if RESUME {
+                    subframe_buffer(&mut r, &mut self.side, bits, &mut plane)
+                } else {
+                    subframe(&mut r, &mut self.side, bits)
+                }
             } else {
-                subframe(
-                    &mut r,
-                    &mut self.output[channel * n..(channel + 1) * n],
-                    bits,
-                )
+                let output = &mut self.output[channel * n..(channel + 1) * n];
+                if RESUME {
+                    subframe_buffer(&mut r, output, bits, &mut plane)
+                } else {
+                    subframe(&mut r, output, bits)
+                }
             };
             if let Err(error) = result {
                 if RESUME && error == Error::Truncated {
                     self.partial = Some(PartialFrame {
                         header,
                         channel,
-                        position,
+                        position: plane.map_or(position, |p| p.position),
+                        plane,
                     });
                 }
                 return Err(error);
@@ -308,6 +371,7 @@ impl FrameDecoder {
                         header,
                         channel: header.channels as usize,
                         position,
+                        plane: None,
                     });
                 }
                 return Err(error);
@@ -392,6 +456,174 @@ pub(crate) fn check_sample(sample: i64, bits: u32) -> Result<(), Error> {
     } else {
         Ok(())
     }
+}
+
+// The raw path below stays independent of checkpoint bookkeeping. Streaming
+// reconstructs each predictor only after its complete residual has arrived.
+fn subframe_buffer<T: Sample>(
+    r: &mut BitReader<'_>,
+    output: &mut [T],
+    bits: u32,
+    checkpoint: &mut Option<PartialPlane>,
+) -> Result<(), Error> {
+    debug_assert!(bits <= T::BITS);
+    let mut state = if let Some(state) = checkpoint.take() {
+        state
+    } else {
+        if r.read(1)? != 0 {
+            return Err(Error::Invalid("subframe reserved bit"));
+        }
+        let kind = r.read(6)? as usize;
+        let wasted = if r.read(1)? != 0 {
+            r.unary(u64::from(bits - 2))? as u32 + 1
+        } else {
+            0
+        };
+        let width = bits - wasted;
+        if kind == 0 {
+            output.fill(T::store(r.signed(width)? << wasted));
+            return Ok(());
+        }
+        let mut state = PartialPlane {
+            kind,
+            order: 0,
+            width,
+            wasted,
+            coeff: [0; 32],
+            shift: 0,
+            residual: PartialResidual {
+                param_bits: 0,
+                partitions: 1,
+                partition_size: output.len(),
+                partition: 0,
+                next: 0,
+                code: Some(ResidualCode::Escape(width)),
+            },
+            position: 0,
+        };
+        match kind {
+            1 => (),
+            8..=12 | 32..=63 => {
+                state.order = if kind < 32 { kind - 8 } else { kind - 31 };
+                if state.order >= output.len() {
+                    return Err(Error::Invalid("predictor order exceeds block"));
+                }
+                for sample in &mut output[..state.order] {
+                    *sample = T::store(r.signed(width)?);
+                }
+                if kind >= 32 {
+                    let precision = r.read(4)? as u32 + 1;
+                    if precision == 16 {
+                        return Err(Error::Invalid("forbidden LPC precision"));
+                    }
+                    let shift = r.signed(5)?;
+                    if shift < 0 {
+                        return Err(Error::Invalid("negative LPC shift"));
+                    }
+                    state.shift = shift as u32;
+                    for c in &mut state.coeff[..state.order] {
+                        *c = r.signed(precision)?;
+                    }
+                }
+                let method = r.read(2)?;
+                if method > 1 {
+                    return Err(Error::Invalid("reserved residual method"));
+                }
+                let partitions = 1usize << r.read(4)?;
+                let partition_size = output.len() / partitions;
+                if !output.len().is_multiple_of(partitions) || partition_size <= state.order {
+                    return Err(Error::Invalid("residual partition size"));
+                }
+                state.residual = PartialResidual {
+                    param_bits: method as u32 + 4,
+                    partitions,
+                    partition_size,
+                    partition: 0,
+                    next: state.order,
+                    code: None,
+                };
+            }
+            _ => return Err(Error::Invalid("reserved subframe type")),
+        }
+        state.position = r.position();
+        state
+    };
+    if let Err(error) = residual_buffer(r, output, &mut state) {
+        if error == Error::Truncated {
+            *checkpoint = Some(state);
+        }
+        return Err(error);
+    }
+    if state.kind >= 32 {
+        crate::predictor::restore(
+            output,
+            &state.coeff[..state.order],
+            state.shift,
+            state.width,
+        )?;
+    } else if state.kind >= 8 {
+        restore_fixed(output, state.order, state.width)?;
+    }
+    if state.wasted != 0 {
+        for sample in output {
+            *sample = T::store(sample.wide() << state.wasted);
+        }
+    }
+    Ok(())
+}
+
+fn residual_buffer<T: Sample>(
+    r: &mut BitReader<'_>,
+    output: &mut [T],
+    state: &mut PartialPlane,
+) -> Result<(), Error> {
+    let part = &mut state.residual;
+    while part.partition < part.partitions {
+        let end = (part.partition + 1) * part.partition_size;
+        let code = if let Some(code) = part.code {
+            code
+        } else {
+            // Until both fields arrive, retain the start of this header.
+            let k = r.read(part.param_bits)? as u32;
+            let code = if k == (1 << part.param_bits) - 1 {
+                ResidualCode::Escape(r.read(5)? as u32)
+            } else {
+                ResidualCode::Rice(k)
+            };
+            part.code = Some(code);
+            state.position = r.position();
+            code
+        };
+        match code {
+            ResidualCode::Rice(k) => {
+                if let Err(progress) = r.rice_resume(&mut output[part.next..end], k) {
+                    if progress.error == Error::Truncated {
+                        part.next += progress.samples;
+                        state.position = progress.position;
+                    }
+                    return Err(progress.error);
+                }
+            }
+            ResidualCode::Escape(width) => {
+                if width == 0 {
+                    output[part.next..end].fill(T::store(0));
+                } else {
+                    let count = (end - part.next).min(r.remaining() / width as usize);
+                    verbatim(r, &mut output[part.next..part.next + count], width)?;
+                    part.next += count;
+                    state.position = r.position();
+                    if part.next != end {
+                        return Err(Error::Truncated);
+                    }
+                }
+            }
+        }
+        part.next = end;
+        part.partition += 1;
+        part.code = None;
+        state.position = r.position();
+    }
+    Ok(())
 }
 
 fn subframe<T: Sample>(r: &mut BitReader<'_>, output: &mut [T], bits: u32) -> Result<(), Error> {
@@ -680,6 +912,22 @@ mod tests {
                     assert_eq!(actual, expected);
                 }
                 assert!(decoder.partial.is_none());
+                // An untrusted small maximum only selects an optimistic raw
+                // attempt. Every truncated prefix must still resume exactly.
+                let mut info = options.stream_info().unwrap();
+                info.min_frame_size = 0;
+                info.max_frame_size = 1;
+                let mut optimistic = FrameDecoder::new(Some(info)).unwrap();
+                for end in 0..data.len() {
+                    assert!(matches!(
+                        optimistic.decode_buffer(&data[..end]),
+                        Err(Error::Truncated)
+                    ));
+                }
+                let frame = optimistic.decode_buffer(&data).unwrap();
+                for (actual, expected) in frame.pcm.planes().zip(&planes) {
+                    assert_eq!(actual, expected);
+                }
                 if channels > 1 {
                     assert!(resumed_plane);
                 }

@@ -1,6 +1,13 @@
 //! Checked, MSB-first FLAC bit packing. Reads never require padding after input.
 use crate::{Error, sample::Sample};
 
+#[derive(Debug)]
+pub(crate) struct RiceFailure {
+    pub error: Error,
+    pub samples: usize,
+    pub position: usize,
+}
+
 #[derive(Clone)]
 pub struct BitReader<'a> {
     data: &'a [u8],
@@ -163,6 +170,69 @@ impl<'a> BitReader<'a> {
         Ok(())
     }
 
+    pub(crate) fn rice_resume<T: Sample>(
+        &mut self,
+        output: &mut [T],
+        k: u32,
+    ) -> Result<(), RiceFailure> {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            x86::rice_resume(self, output, k)
+        }
+        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+        self.rice_resume_inner(output, k)
+    }
+
+    #[inline(always)]
+    fn rice_resume_inner<T: Sample>(
+        &mut self,
+        output: &mut [T],
+        k: u32,
+    ) -> Result<(), RiceFailure> {
+        debug_assert!(k <= 30);
+        let mask = (1u64 << k) - 1;
+        let limit = u64::from(u32::MAX - 1);
+        let start_address = output.as_ptr().addr();
+        for sample in output {
+            if self.bits <= k {
+                self.refill();
+            }
+            let q = self.cache.leading_zeros();
+            let used = q + 1 + k;
+            let folded = if used < 64 && used <= self.bits {
+                let value = (u64::from(q) << k) | ((self.cache >> (64 - used)) & mask);
+                self.cache <<= used;
+                self.bits -= used;
+                value
+            } else {
+                let position = self.position();
+                let result = self
+                    .unary(limit >> k)
+                    .and_then(|q| self.read(k).map(|remainder| (q << k) | remainder));
+                match result {
+                    Ok(folded) => folded,
+                    Err(error) => {
+                        return Err(RiceFailure {
+                            error,
+                            samples: ((sample as *const T).addr() - start_address)
+                                / std::mem::size_of::<T>(),
+                            position,
+                        });
+                    }
+                }
+            };
+            if folded > limit {
+                return Err(RiceFailure {
+                    error: Error::Invalid("residual exceeds 31-bit magnitude"),
+                    samples: 0,
+                    position: 0,
+                });
+            }
+            *sample = T::store(((folded >> 1) as i64) ^ -((folded & 1) as i64));
+        }
+        Ok(())
+    }
+
     pub fn align_zero(&mut self) -> Result<(), Error> {
         let count = (8 - self.position() % 8) % 8;
         if self.read(count as u32)? != 0 {
@@ -202,11 +272,91 @@ mod x86 {
     ) -> Result<(), Error> {
         reader.rice_inner(output, k)
     }
+    pub(super) fn rice_resume<T: Sample>(
+        reader: &mut BitReader<'_>,
+        output: &mut [T],
+        k: u32,
+    ) -> Result<(), RiceFailure> {
+        if output.len() >= 32
+            && std::is_x86_feature_detected!("bmi2")
+            && std::is_x86_feature_detected!("lzcnt")
+        {
+            // SAFETY: both instruction-set extensions are checked at runtime.
+            // The same safe, checked implementation is compiled for each path.
+            unsafe { accelerated_resume(reader, output, k) }
+        } else {
+            reader.rice_resume_inner(output, k)
+        }
+    }
+    #[target_feature(enable = "bmi2,lzcnt")]
+    unsafe fn accelerated_resume<T: Sample>(
+        reader: &mut BitReader<'_>,
+        output: &mut [T],
+        k: u32,
+    ) -> Result<(), RiceFailure> {
+        reader.rice_resume_inner(output, k)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resumed_rice_keeps_complete_samples_and_rewinds_partial_symbols() {
+        for k in 0..=30 {
+            for offset in 0..8 {
+                let limit = u64::from(u32::MAX - 1);
+                let mask = (1u64 << k) - 1;
+                let folded: Vec<_> = (0..65)
+                    .map(|i| match i % 5 {
+                        0 => 0,
+                        1 => 1,
+                        2 => mask,
+                        3 => (130u64 << k).min(limit),
+                        _ => (3u64 << k).min(limit),
+                    })
+                    .collect();
+                let expected: Vec<_> = folded
+                    .iter()
+                    .map(|&f| ((f >> 1) as i32) ^ -((f & 1) as i32))
+                    .collect();
+                let mut writer = BitWriter::new();
+                writer.write(0, offset).unwrap();
+                for &value in &folded {
+                    writer.unary(value >> k).unwrap();
+                    writer.write(value & mask, k).unwrap();
+                }
+                let end_position = writer.position();
+                let data = writer.into_bytes();
+                let mut actual = vec![123; folded.len()];
+                let mut completed = 0;
+                let mut position = offset as usize;
+                let mut finished = false;
+                for end in 0..=data.len() {
+                    let Ok(mut reader) = BitReader::at_position(&data[..end], position) else {
+                        continue;
+                    };
+                    match reader.rice_resume(&mut actual[completed..], k) {
+                        Ok(()) => {
+                            assert_eq!(reader.position(), end_position);
+                            assert_eq!(actual, expected);
+                            finished = true;
+                            break;
+                        }
+                        Err(progress) if progress.error == Error::Truncated => {
+                            completed += progress.samples;
+                            assert!(progress.position >= position);
+                            position = progress.position;
+                            assert_eq!(actual[..completed], expected[..completed]);
+                        }
+                        other => panic!("k={k}, offset={offset}, end={end}: {other:?}"),
+                    }
+                }
+                assert!(finished);
+            }
+        }
+    }
 
     #[test]
     fn rice_dispatch_matches_portable_cache_and_tails() {

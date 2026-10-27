@@ -1,0 +1,379 @@
+{
+  "timestamp_utc": "2026-10-27T18:15:45Z",
+  "native": "/tmp/deadlib-flac-decode-residual-checkpoints",
+  "native_sha256": "2014b70b78d786800c5f4e53244e48e4ee7fd048c97070f9573cf9824a6a98ea",
+  "oracle": "/tmp/deadlib-flac-perf-pipelines-oracle/flac_decode_benchmark",
+  "oracle_sha256": "e0b7d8e4a6234108ed43dbe3d9b683ad10df7ba8395883f5c9ef3b27421b4f7e",
+  "baseline": "/tmp/deadlib-flac-decode-folded-crc-final",
+  "baseline_sha256": "ceaddab8394c91cce1734d9006b7cfeef458613f3cb728342cdf3cb333fb8e45",
+  "cpu": 2,
+  "rounds": 5,
+  "target_milliseconds": 100,
+  "cpuinfo": "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 79\nmodel name\t: Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz\nstepping\t: 1\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 2194.917\ncache size\t: 56320 KB\nphysical id\t: 0\nsiblings\t: 44\ncore id\t\t: 0\ncpu cores\t: 22\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 20\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid tsc_known_freq pni pclmulqdq vmx ssse3 fma cx16 pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch pti ssbd ibrs ibpb stibp tpr_shadow ept vpid ept_ad fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm rdseed adx smap xsaveopt vnmi md_clear flush_l1d arch_capabilities\nvmx flags\t: vnmi invvpid ept_x_only ept_ad ept_1gb tsc_offset vtpr ept vpid unrestricted_guest tsc_scaling\nbugs\t\t: cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs taa itlb_multihit mmio_stale_data bhi\nbogomips\t: 4389.83\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 46 bits physical, 48 bits virtual\npower management:",
+  "native_sources": {
+    "src/bitstream.rs": "fab62536daa08beba39538f0069e0b5054bf26516a28ed93f63e0c87778c5c55",
+    "src/checksum.rs": "26e72131ebd5de7ab711669c791b1499566cada16d165157bbd2be0bf5798418",
+    "src/encode.rs": "7d5a4964f53343ffeb269f958f68872c1137a37071a20185ae72e4c6d45926a6",
+    "src/encoder.rs": "e009f29eb87ece5ca05d26f22030b524f5d247d45939539505ff4826fb77e596",
+    "src/frame.rs": "e5720b54b4d4215ba4a8ac49e5f6e552d2f71328b73b8cae581d1a75b6fb4244",
+    "src/lib.rs": "9011070713ac11fa3c18b48ea04354c65c7a551bb116e45df552ce48fa75dd8a",
+    "src/metadata.rs": "088f01f53f6d47f107bef663b24c9256ce55e9673cced1f37e4316363caf48fa",
+    "src/native.rs": "ce68f01d63182232dd8f444ee20c0c5fe08442637e2f11fec700fc86cfa16675",
+    "src/ogg.rs": "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85",
+    "src/ogg_encode.rs": "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d",
+    "src/ogg_seek.rs": "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1",
+    "src/pcm_md5.rs": "4527bf3d8f717fc2e1931c27ce710db91cbe557ddc65232be4b6170600a9ea5b",
+    "src/predictor.rs": "dbc63dc45ce1cb14531989a1b9aba6a0e690e96267f8aa61722cc7be5dd94399",
+    "src/sample.rs": "fe25e01bd7dae81a5b6db6da4d8d353760f47d7a45b9b19795cb4a90d23f1128"
+  },
+  "driver_sources": {
+    "benches/decode.rs": "c0f395534929d33812e53720d203f6b6ee20b470eca0db8ee64631aaf750d9d3",
+    "benches/run.py": "44155cbfa8086822c79dae986bacafecc2e11826125630f09d2a0a26885f5360",
+    "benches/build.sh": "5fb5cbc09f7b05962007b20b8fb7a27674b71659597f2e4534c608a776aaf207",
+    "benches/oracle/CMakeLists.txt": "e29b8acc6a9149b4e85345743abae3b455dabdea88524402764fac119e751227",
+    "benches/oracle/benchmark.cpp": "750cc5fc2cca06bde7ff514cbe9b05753352c84dbbeef09ade097998b04ddda2",
+    "benches/build_native.py": "3cee991ae3f67cb91a0fd714749fca9ce259218e33cdd5cf441480ef1e0e0e5e"
+  },
+  "cases": [
+    {
+      "case": "subset/01 - blocksize 4096.flac",
+      "sha256": "02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f",
+      "bytes": 549954,
+      "frames": 76,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/03 - blocksize 16.flac",
+      "sha256": "164d0747e8c4855407990182b784fcd7475da228bf20a6cff67e947c683959b3",
+      "bytes": 959681,
+      "frames": 19294,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/06 - blocksize 512.flac",
+      "sha256": "ba705cc365abf5b8bd6b4d4392a2668ae395844f82d04e74be3e19b60cb03260",
+      "bytes": 590669,
+      "frames": 603,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/11 - partition order 8.flac",
+      "sha256": "07596315fc9b297702984deab49041f4695e1482ec3e1d081888d1bf13198e53",
+      "bytes": 510583,
+      "frames": 60,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/12 - qlp precision 15 bit.flac",
+      "sha256": "d33731350269929542c6e0a788c1b9a27eb91dcb3a20f5f960b8569be012c6fa",
+      "bytes": 492334,
+      "frames": 48,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/14 - wasted bits.flac",
+      "sha256": "58fa05681bd646168ea2a19bc9a6f4ee9d6de295fd832c1f70da1bdbf32d74cb",
+      "bytes": 231596,
+      "frames": 426,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/15 - only verbatim subframes.flac",
+      "sha256": "80459f8ad5a9c7edf081a10f9269c55c29136749021e5a55483bc173aaaa82b0",
+      "bytes": 889862,
+      "frames": 54,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/16 - partition order 8 containing escaped partitions.flac",
+      "sha256": "5562cff546a1b0d93cea31c0c375c5df65658311de1fc3d322d14b8a2c5ac930",
+      "bytes": 471502,
+      "frames": 51,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/17 - all fixed orders.flac",
+      "sha256": "d6f082cbbbcb03015f861b8fa30cf16708a62b85520905a126da28db29645feb",
+      "bytes": 589534,
+      "frames": 204,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/22 - 12 bit per sample.flac",
+      "sha256": "d9c385129c4253da4c0de34ed5b163b404523aa971773277b8b74ef92f7d4f44",
+      "bytes": 277942,
+      "frames": 54,
+      "bits": 12,
+      "channels": 2
+    },
+    {
+      "case": "subset/23 - 8 bit per sample.flac",
+      "sha256": "d72ad54e1d0ebe5d65b1b1addd13ee873d38c58cb3357774a1943ced2d984cf9",
+      "bytes": 181470,
+      "frames": 84,
+      "bits": 8,
+      "channels": 2
+    },
+    {
+      "case": "subset/24 - variable blocksize file created with flake revision 264.flac",
+      "sha256": "c6664710c935e4d862ab04f146ddd7f6df9e2278b651c17a432934e61488eaf7",
+      "bytes": 2321064,
+      "frames": 404,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/28 - high resolution audio, default settings.flac",
+      "sha256": "62322a5c7821081bae99cc1a3f398f177a17cf9312131a5fbcfcc2ee38539346",
+      "bytes": 3476937,
+      "frames": 205,
+      "bits": 24,
+      "channels": 2
+    },
+    {
+      "case": "subset/31 - high resolution audio, using only 32nd order predictors.flac",
+      "sha256": "caf84fbf740a98e3371a58df03422722a7d6058289b11a291f0b39103ea20133",
+      "bytes": 3235301,
+      "frames": 94,
+      "bits": 24,
+      "channels": 2
+    },
+    {
+      "case": "subset/38 - 3 channels (3.0).flac",
+      "sha256": "44d14d0efa374049fd9f56aaee3a068a30045e62a571df574c7b824ae596a3cf",
+      "bytes": 63893,
+      "frames": 42,
+      "bits": 16,
+      "channels": 3
+    },
+    {
+      "case": "subset/41 - 6 channels (5.1).flac",
+      "sha256": "c12650fda54a384abf017d4b931491de043eaa7a815ae74c7a9b49d4087d6193",
+      "bytes": 171527,
+      "frames": 88,
+      "bits": 16,
+      "channels": 6
+    },
+    {
+      "case": "subset/43 - 8 channels (7.1).flac",
+      "sha256": "9c39ff436f316b3a8e72200c8f38af2d9ef15418c25be555aa621d0c793a6254",
+      "bytes": 233560,
+      "frames": 108,
+      "bits": 16,
+      "channels": 8
+    },
+    {
+      "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "sha256": "1a0e8c17392ae03b2cb04e8c82fcc1f924580fdc978884101faa3e9cf7ed9197",
+      "bytes": 42264726,
+      "frames": 177,
+      "bits": 24,
+      "channels": 8
+    },
+    {
+      "case": "subset/60 - mono audio.flac",
+      "sha256": "20539fbbd6ae28cea2b2182a4c60c6c70cbb710a136199fc83200c4e5fa00b1c",
+      "bytes": 47782,
+      "frames": 56,
+      "bits": 16,
+      "channels": 1
+    },
+    {
+      "case": "subset/61 - predictor overflow check, 16-bit.flac",
+      "sha256": "9b15791a8b8ca14a6b9a2374ecf7c34be25bc7b9e64fa600eb5f7608194b0b61",
+      "bytes": 117020,
+      "frames": 56,
+      "bits": 16,
+      "channels": 1
+    },
+    {
+      "case": "subset/62 - predictor overflow check, 20-bit.flac",
+      "sha256": "a6b3904e8bcce7a93ad529f9b07e64d06d6647ea7a775ba91490dbacc3c771b7",
+      "bytes": 156871,
+      "frames": 56,
+      "bits": 20,
+      "channels": 1
+    },
+    {
+      "case": "subset/63 - predictor overflow check, 24-bit.flac",
+      "sha256": "d5e072373f2d9e80ca2e49b7dd349ebd4340929143d7e5f2c154a97f04755c38",
+      "bytes": 204107,
+      "frames": 56,
+      "bits": 24,
+      "channels": 1
+    },
+    {
+      "case": "subset/64 - rice partitions with escape code zero.flac",
+      "sha256": "3ad0bf2e9b9c78cd04deb0a8e133f5d088db051e42cbf3ffb15e1b528f009ca6",
+      "bytes": 89138,
+      "frames": 46,
+      "bits": 16,
+      "channels": 1
+    },
+    {
+      "case": "uncommon/05 - 32bps audio.flac",
+      "sha256": "de71cbd81f0be1743fc8264f159a521dfc1d92a5e2056c30a64d66001e055eec",
+      "bytes": 2923933,
+      "frames": 126,
+      "bits": 32,
+      "channels": 2
+    },
+    {
+      "case": "uncommon/07 - 15 bit per sample.flac",
+      "sha256": "7defaacc8d1bcd3201081d7054de5df1665d17f79851c35b3c6360401d30aa71",
+      "bytes": 825693,
+      "frames": 127,
+      "bits": 15,
+      "channels": 2
+    },
+    {
+      "case": "uncommon/08 - blocksize 65535.flac",
+      "sha256": "2c0825fc761db080dbfdc11ea2d2b02ee414c9ed83c6240ffbac62db22d08714",
+      "bytes": 835115,
+      "frames": 8,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "uncommon/09 - Rice partition order 15.flac",
+      "sha256": "33ee6f02cc9d930dd421e02b716bc2d9d520c3facdf98030eb09c303227f8626",
+      "bytes": 168445,
+      "frames": 4,
+      "bits": 16,
+      "channels": 1
+    }
+  ],
+  "unsupported": [
+    {
+      "mode": "symphonia-crc",
+      "file": "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/uncommon/05 - 32bps audio.flac",
+      "exit_code": 101,
+      "stderr": "\nthread 'main' (625810) panicked at crates/deadlib-audio/decode/flac/benches/decode.rs:278:13:\nassertion `left == right` failed: PCM endpoint check\n  left: 1103064073212\n right: 1076370157036\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+      "arguments": [
+        "/tmp/deadlib-flac-decode-residual-checkpoints",
+        "symphonia-crc",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/uncommon/05 - 32bps audio.flac",
+        "1"
+      ]
+    }
+  ],
+  "native_build": {
+    "built_utc": "2026-10-27T18:08:38Z",
+    "command": [
+      "/home/perfecttaste/.cargo/bin/cargo",
+      "bench",
+      "--locked",
+      "--color",
+      "never",
+      "-p",
+      "deadlib-audio-decode-flac",
+      "--bench",
+      "decode",
+      "--no-run",
+      "--target-dir",
+      "/tmp/deadlib-flac-perf-rust"
+    ],
+    "artifact": "/tmp/deadlib-flac-perf-rust/release/deps/decode-b341b6e801ae16a2",
+    "sha256": "2014b70b78d786800c5f4e53244e48e4ee7fd048c97070f9573cf9824a6a98ea",
+    "sources": {
+      "Cargo.toml": "fe0a1941d094968315415f041028d916ead9642bbbdf06a220479c0bf7424533",
+      "Cargo.lock": "fce258bfcc950a71dd19acdfdbf85a322079ababcdb29c5cbda2b90c88d8490c",
+      "crates/deadlib-audio/decode/flac/Cargo.toml": "bd3be8d42e8d9884b39608452813b4369887bd013cd374156fda919f6bc86666",
+      "crates/deadlib-audio/decode/flac/README.md": "527f3980da6c670966ba7b59d04dc31085d21b9379f3fd5980ef3fb972499dc4",
+      "crates/deadlib-audio/decode/flac/benches/decode.rs": "c0f395534929d33812e53720d203f6b6ee20b470eca0db8ee64631aaf750d9d3",
+      "crates/deadlib-audio/decode/ogg/Cargo.toml": "b18d898856a7db1f30299197ed8d053dd49b6825c50571d1b831950265d069eb",
+      "crates/deadlib-audio/decode/flac/src/bitstream.rs": "fab62536daa08beba39538f0069e0b5054bf26516a28ed93f63e0c87778c5c55",
+      "crates/deadlib-audio/decode/flac/src/checksum.rs": "26e72131ebd5de7ab711669c791b1499566cada16d165157bbd2be0bf5798418",
+      "crates/deadlib-audio/decode/flac/src/encode.rs": "7d5a4964f53343ffeb269f958f68872c1137a37071a20185ae72e4c6d45926a6",
+      "crates/deadlib-audio/decode/flac/src/encoder.rs": "e009f29eb87ece5ca05d26f22030b524f5d247d45939539505ff4826fb77e596",
+      "crates/deadlib-audio/decode/flac/src/frame.rs": "e5720b54b4d4215ba4a8ac49e5f6e552d2f71328b73b8cae581d1a75b6fb4244",
+      "crates/deadlib-audio/decode/flac/src/lib.rs": "9011070713ac11fa3c18b48ea04354c65c7a551bb116e45df552ce48fa75dd8a",
+      "crates/deadlib-audio/decode/flac/src/metadata.rs": "088f01f53f6d47f107bef663b24c9256ce55e9673cced1f37e4316363caf48fa",
+      "crates/deadlib-audio/decode/flac/src/native.rs": "ce68f01d63182232dd8f444ee20c0c5fe08442637e2f11fec700fc86cfa16675",
+      "crates/deadlib-audio/decode/flac/src/ogg.rs": "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85",
+      "crates/deadlib-audio/decode/flac/src/ogg_encode.rs": "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d",
+      "crates/deadlib-audio/decode/flac/src/ogg_seek.rs": "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1",
+      "crates/deadlib-audio/decode/flac/src/pcm_md5.rs": "4527bf3d8f717fc2e1931c27ce710db91cbe557ddc65232be4b6170600a9ea5b",
+      "crates/deadlib-audio/decode/flac/src/predictor.rs": "dbc63dc45ce1cb14531989a1b9aba6a0e690e96267f8aa61722cc7be5dd94399",
+      "crates/deadlib-audio/decode/flac/src/sample.rs": "fe25e01bd7dae81a5b6db6da4d8d353760f47d7a45b9b19795cb4a90d23f1128",
+      "crates/deadlib-audio/decode/ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+      "crates/deadlib-audio/decode/ogg/src/crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+      "crates/deadlib-audio/decode/ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+      "crates/deadlib-audio/decode/ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+      "crates/deadlib-audio/decode/ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+      "crates/deadlib-audio/decode/ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+      "crates/deadlib-audio/decode/ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+      "crates/deadlib-audio/decode/ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+      "crates/deadlib-audio/decode/ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+      ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+    },
+    "driver_sha256": "3cee991ae3f67cb91a0fd714749fca9ce259218e33cdd5cf441480ef1e0e0e5e",
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)\nrelease: 1.99.1\ncommit-hash: 5f94df4789f005f9a352888e8355ffc645b7ed0e\ncommit-date: 2026-08-27\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.6 (sys:0.21.0 vendored)\nlibcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:OpenSSL/3.6.3)\nssl: OpenSSL 3.6.3 9 Jun 2026\nos: Debian 13.0.0 (trixie) [64-bit]",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1",
+    "environment": {}
+  },
+  "baseline_build": {
+    "built_utc": "2026-10-27T17:55:46Z",
+    "command": [
+      "/home/perfecttaste/.cargo/bin/cargo",
+      "bench",
+      "--locked",
+      "--color",
+      "never",
+      "-p",
+      "deadlib-audio-decode-flac",
+      "--bench",
+      "decode",
+      "--no-run",
+      "--target-dir",
+      "/tmp/deadlib-flac-perf-rust"
+    ],
+    "artifact": "/tmp/deadlib-flac-perf-rust/release/deps/decode-b341b6e801ae16a2",
+    "sha256": "ceaddab8394c91cce1734d9006b7cfeef458613f3cb728342cdf3cb333fb8e45",
+    "sources": {
+      "Cargo.toml": "fe0a1941d094968315415f041028d916ead9642bbbdf06a220479c0bf7424533",
+      "Cargo.lock": "fce258bfcc950a71dd19acdfdbf85a322079ababcdb29c5cbda2b90c88d8490c",
+      "crates/deadlib-audio/decode/flac/Cargo.toml": "bd3be8d42e8d9884b39608452813b4369887bd013cd374156fda919f6bc86666",
+      "crates/deadlib-audio/decode/flac/README.md": "527f3980da6c670966ba7b59d04dc31085d21b9379f3fd5980ef3fb972499dc4",
+      "crates/deadlib-audio/decode/flac/benches/decode.rs": "c0f395534929d33812e53720d203f6b6ee20b470eca0db8ee64631aaf750d9d3",
+      "crates/deadlib-audio/decode/ogg/Cargo.toml": "b18d898856a7db1f30299197ed8d053dd49b6825c50571d1b831950265d069eb",
+      "crates/deadlib-audio/decode/flac/src/bitstream.rs": "2f7f60009c4e80ac663c96ed15afc28f16a36bbb52716cce0c14fe44a50b1386",
+      "crates/deadlib-audio/decode/flac/src/checksum.rs": "26e72131ebd5de7ab711669c791b1499566cada16d165157bbd2be0bf5798418",
+      "crates/deadlib-audio/decode/flac/src/encode.rs": "7d5a4964f53343ffeb269f958f68872c1137a37071a20185ae72e4c6d45926a6",
+      "crates/deadlib-audio/decode/flac/src/encoder.rs": "e009f29eb87ece5ca05d26f22030b524f5d247d45939539505ff4826fb77e596",
+      "crates/deadlib-audio/decode/flac/src/frame.rs": "311b07957aa431c3c8a17a059a145303c41f9f147d3d4c559bc9983e5d4ee5a6",
+      "crates/deadlib-audio/decode/flac/src/lib.rs": "9011070713ac11fa3c18b48ea04354c65c7a551bb116e45df552ce48fa75dd8a",
+      "crates/deadlib-audio/decode/flac/src/metadata.rs": "088f01f53f6d47f107bef663b24c9256ce55e9673cced1f37e4316363caf48fa",
+      "crates/deadlib-audio/decode/flac/src/native.rs": "ce68f01d63182232dd8f444ee20c0c5fe08442637e2f11fec700fc86cfa16675",
+      "crates/deadlib-audio/decode/flac/src/ogg.rs": "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85",
+      "crates/deadlib-audio/decode/flac/src/ogg_encode.rs": "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d",
+      "crates/deadlib-audio/decode/flac/src/ogg_seek.rs": "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1",
+      "crates/deadlib-audio/decode/flac/src/pcm_md5.rs": "4527bf3d8f717fc2e1931c27ce710db91cbe557ddc65232be4b6170600a9ea5b",
+      "crates/deadlib-audio/decode/flac/src/predictor.rs": "8b67af8cecb6e121961e8418b3115e5fc9a463da931b3c80a7bbbf55686699bd",
+      "crates/deadlib-audio/decode/flac/src/sample.rs": "fe25e01bd7dae81a5b6db6da4d8d353760f47d7a45b9b19795cb4a90d23f1128",
+      "crates/deadlib-audio/decode/ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+      "crates/deadlib-audio/decode/ogg/src/crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+      "crates/deadlib-audio/decode/ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+      "crates/deadlib-audio/decode/ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+      "crates/deadlib-audio/decode/ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+      "crates/deadlib-audio/decode/ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+      "crates/deadlib-audio/decode/ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+      "crates/deadlib-audio/decode/ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+      "crates/deadlib-audio/decode/ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+      ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+    },
+    "driver_sha256": "3cee991ae3f67cb91a0fd714749fca9ce259218e33cdd5cf441480ef1e0e0e5e",
+    "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)\nrelease: 1.99.1\ncommit-hash: 5f94df4789f005f9a352888e8355ffc645b7ed0e\ncommit-date: 2026-08-27\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.6 (sys:0.21.0 vendored)\nlibcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:OpenSSL/3.6.3)\nssl: OpenSSL 3.6.3 9 Jun 2026\nos: Debian 13.0.0 (trixie) [64-bit]",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1",
+    "environment": {}
+  }
+}

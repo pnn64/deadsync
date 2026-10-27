@@ -15,7 +15,7 @@ pub(crate) fn restore<T: Sample>(
     // AVX2 multiplies the signed low 32 bits of each i64 lane. Every previous
     // sample must therefore fit i32; the 33-bit side channel uses scalar i64.
     #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    if width <= 32 && order >= 4 && output.len() >= 64 && std::is_x86_feature_detected!("avx2") {
+    if width <= 32 && order >= 3 && output.len() >= 64 && std::is_x86_feature_detected!("avx2") {
         return x86::restore(output, coeff, shift, width);
     }
     macro_rules! short {
@@ -83,7 +83,7 @@ mod x86 {
         // These checks make the memory and arithmetic preconditions local to
         // the only unsafe entry point, including for direct unit-test calls.
         assert!(std::is_x86_feature_detected!("avx2"));
-        assert!((4..=32).contains(&coeff.len()) && coeff.len() < output.len());
+        assert!((3..=32).contains(&coeff.len()) && coeff.len() < output.len());
         assert!((1..=32).contains(&width) && shift <= 15);
         assert!(coeff.iter().all(|&c| (-16384..=16383).contains(&c)));
         for &sample in &output[..coeff.len()] {
@@ -104,8 +104,8 @@ mod x86 {
             }
         }
         dispatch!(
-            4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-            27, 28, 29, 30, 31, 32
+            3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+            26, 27, 28, 29, 30, 31, 32
         )
     }
 
@@ -300,7 +300,7 @@ mod tests {
 
     #[test]
     fn maximum_precision_coefficients_and_signed_samples() {
-        for order in 4..=32 {
+        for order in 3..=32 {
             let pcm: Vec<i64> = (0..129)
                 .map(|i| {
                     if i % 3 == 0 {
@@ -367,7 +367,7 @@ mod tests {
 
     #[test]
     fn invalid_batch_cannot_overflow_before_range_rejection() {
-        for order in 4..=32 {
+        for order in 3..=32 {
             let mut residual = vec![0; 65];
             residual[..order].fill(i32::MAX as i64);
             let coeff = vec![16383; order];

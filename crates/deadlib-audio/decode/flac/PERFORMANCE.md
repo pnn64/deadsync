@@ -457,3 +457,53 @@ All 11 unit tests, 43 integration/external gates, three doctests and Clippy pass
 Four fresh 60-second ASan campaigns complete 134,345 executions without failure.
 Test, fuzz and benchmark codec hashes agree in the
 [validation record](benches/validation/2026-10-27-folded-crc/final-validation.json).
+
+## Residual checkpoints and short LPC, 2026-10-27
+
+Streaming preserves completed residual samples, the current partition code and
+the start of an incomplete Rice symbol. Verbatim/escape fields retain complete
+sample prefixes. Predictor reconstruction runs once after the complete residual
+arrives; wasted bits, stereo decorrelation and CRC policies are unchanged.
+Completed buffered frames can use the raw path. STREAMINFO's maximum frame size
+only selects an optimistic attempt: an incorrect small hint falls back to normal
+resumption. Tests append every byte prefix with both normal and false hints,
+including 33-bit stereo, reset/recovery and bad CRCs. A separate Rice test covers
+every parameter and bit offset while preserving completed samples.
+
+Raw Rice decoding retains its prior signature and loop. Resumable reads return
+checkpoint information on failure, without passing a mutable progress record
+through the raw hot loop. The initial shared-signature implementation regressed
+raw throughput and short-block readers; its measurements and passing correctness
+reports remain in the artifact directory. The retained version separates those
+paths. AVX2 LPC now also handles order three; isolated real-subframe trials and
+complete-file trials establish its benefit before combination with checkpoints.
+
+Five interleaved trials over 27 raw cases give a median time of 0.912x the
+fastest CRC-checking reference. Raw throughput is nearly unchanged overall from
+the preceding milestone; the largest remaining ratio is 1.125x on block-size
+512. The six fresh-reader classes below show complete-file milliseconds, with
+MD5 enabled in both native and libFLAC columns.
+
+| Case | Previous reader, MD5 off | Current reader, MD5 off | Previous + MD5 | Current + MD5 | libFLAC + MD5 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 01: block 4096 | 6.759 | 6.321 | 9.879 | 9.344 | 8.019 |
+| 03: block 16 | 9.322 | 9.528 | 14.470 | 14.572 | 17.775 |
+| 15: verbatim | 0.275 | 0.295 | 2.393 | 2.398 | 6.510 |
+| 28: high resolution | 21.017 | 18.031 | 34.913 | 32.044 | 28.893 |
+| 44: 8-channel LPC-32 | 357.625 | 351.831 | 534.767 | 534.889 | 737.151 |
+| uncommon 08: block 65535 | 11.866 | 10.008 | 16.740 | 14.900 | 14.409 |
+
+High-resolution and large-block readers improve 14.2% and 15.7% with MD5 off,
+and 8.2% and 11.0% with MD5 on. The table retains small changes in other classes.
+The remaining common-reader gap and the two short-LPC raw outliers keep the
+overall performance goal open. Ogg continues to receive complete packets and
+uses the raw path; its paired measurements are retained in the same report.
+
+Reports: [27-case raw trials](benches/validation/2026-10-27-checkpoints/broad-raw.tsv),
+[full pipelines](benches/validation/2026-10-27-checkpoints/pipelines-raw.tsv),
+[LPC-3 trials](benches/validation/2026-10-27-checkpoints/lpc-three-raw.tsv),
+[initial shared-signature trials](benches/validation/2026-10-27-checkpoints/initial-broad-raw.tsv).
+All 12 unit tests, 43 integration/external gates, three doctests and Clippy pass.
+Four fresh 60-second ASan campaigns complete 118,608 executions without failure.
+Codec source hashes agree between tests, fuzzing and the preserved benchmark in
+the [validation record](benches/validation/2026-10-27-checkpoints/final-validation.json).
