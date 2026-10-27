@@ -57,6 +57,19 @@ $unsupported = @($imports | Where-Object {
     $_ -eq 'combase.dll' -or $_ -like 'api-ms-win-core-winrt-*.dll'
 } | Sort-Object -Unique)
 if ($unsupported.Count -ne 0) {
+    # Include the imported symbols so CI failures identify the API to trace.
+    $showBlock = $false
+    foreach ($line in $output) {
+        if ($line -match 'Section contains the following delay load imports') {
+            break
+        }
+        if ($line -match '^\s+(\S+\.dll)\s*$') {
+            $showBlock = $unsupported -contains $Matches[1].ToLowerInvariant()
+        }
+        if ($showBlock) {
+            Write-Host $line
+        }
+    }
     throw "Windows 7 cannot load ${Path}: unsupported DLL imports: $($unsupported -join ', ')"
 }
 

@@ -886,10 +886,23 @@ fn get_mix_format_bytes(audio_client: &Audio::IAudioClient) -> Result<Vec<u8>, S
     }
 }
 
-#[link(name = "ole32")]
+#[cfg_attr(
+    target_arch = "x86",
+    link(
+        name = "ole32.dll",
+        kind = "raw-dylib",
+        modifiers = "+verbatim",
+        import_name_type = "undecorated"
+    )
+)]
+#[cfg_attr(
+    not(target_arch = "x86"),
+    link(name = "ole32.dll", kind = "raw-dylib", modifiers = "+verbatim")
+)]
 unsafe extern "system" {
-    // `windows` links `CoTaskMemFree` from combase.dll, which is not available
-    // on Windows 7. Import it directly from its Windows 7 provider instead.
+    // `windows` also declares this symbol from combase.dll. A normal ole32
+    // library link can resolve to that import, so bind the DLL explicitly to
+    // keep CoTaskMemFree available on Windows 7.
     #[link_name = "CoTaskMemFree"]
     fn free_com_task_mem(ptr: *const c_void);
 }
