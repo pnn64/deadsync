@@ -102,5 +102,129 @@ startup speedup is claimed.
 [checks](validation/2026-10-27-container-baseline-checks.json) pin the evidence.
 The three-engine historical-source smoke run adds 189 functional timing rows
 and exact wire comparisons on four inputs; it is not a performance estimate.
-Formatting, all-target Clippy and Python syntax checks pass. Production codec
-source matches `013711c18`; only benchmark registration/adapters/tooling change.
+Formatting, all-target Clippy and Python syntax checks pass. At this baseline
+milestone, production source matched `013711c18`; only benchmark registration,
+adapters and tooling changed.
+
+## Eight-byte CRC update, 2026-10-27
+
+CRC now processes eight input bytes per word. Starting with the original
+one-byte remainder table, each additional row applies one more zero-byte
+transition. CRC linearity permits XORing the eight contributions, after merging
+the incoming state's four bytes with the first four input bytes. Short tails
+use the byte transition. This preserves the direct polynomial, zero initial
+state/xor-out, arbitrary seeded updates and page checksum-field masking.
+
+All tables are generated at compile time. Logical table elements grow from
+1 KiB to **8 KiB of shared read-only data**; there is no dynamic initialization,
+new retained heap, API change, dependency, unsafe code or target-specific flag.
+Independent bitwise tests cover every byte/table power, four initial states,
+16 alignments, lengths 0..256, large/page-sized buffers and split updates down
+to one-byte chunks. The benchmark runner also tightens source-count validation
+to exact multiplication; timed adapters are unchanged.
+
+```powershell
+python crates/deadlib-audio/decode/scripts/benchmark_ogg.py --baseline-revision a95e01e8f --repeats 7
+python crates/deadlib-audio/decode/scripts/benchmark.py --baseline-revision a95e01e8f --repeats 7
+python crates/deadlib-audio/decode/scripts/benchmark_resources.py --baseline-revision a95e01e8f --repeats 7
+```
+
+The paired container run interleaves the old native source, current native and
+libogg for **693 timing rows**. Every page field and complete packet byte agrees
+across all three workers on all seven inputs. Generated Ogg fixture files also
+reproduce their original complete-file hashes. Current adapters/profiles and
+registry artifacts match; historical source is extracted without switching the
+worktree. These remain shared, unlocked Windows measurements.
+
+CRC median MiB/s:
+
+| Bytes | Native before | Native after | libogg |
+| --- | ---: | ---: | ---: |
+| 64 | 313.2 | 1,545.1 | 1,022.3 |
+| 256 | 288.2 | 1,348.0 | 1,228.3 |
+| 4,096 | 288.9 | 1,328.5 | 1,309.9 |
+| 65,025 | 286.1 | 1,345.0 | 1,339.4 |
+| 1,048,576 | 291.0 | 1,375.7 | 1,348.4 |
+
+The observed CRC gain is **4.60-4.93x**. This is the public-API kernel described
+above, including libogg's header/body split and checksum zero/store operations.
+
+Full packet-demux median MiB/s:
+
+| Input | Native before | Native after | libogg |
+| --- | ---: | ---: | ---: |
+| `in_two` | 273.2 | 1,126.2 | 1,103.0 |
+| `Goin' Under` | 274.2 | 1,065.7 | 1,054.0 |
+| Bulk packets | 278.0 | 1,154.1 | 1,079.7 |
+| Spans / mux / chain | 199.8 | 451.0 | 464.2 |
+| Tiny packets | 256.0 | 888.1 | 885.7 |
+
+Song demux improves **4.12x / 3.89x**. Native medians are close to libogg here;
+the span/mux/chain case remains slower. Native song ranges are 4.149-4.192 /
+2.045-2.123 ms versus baseline 17.143-17.544 / 8.055-8.320 ms. Maximum relative
+MAD across all container cases is 22.05%, including tiny startup work. No
+universal or cross-platform performance ranking is claimed.
+
+## Effect on the Vorbis pipeline
+
+The same paired five-file suite adds **420 full/fragmented/startup trials**.
+The independent resource suite adds **280 seek/open trials** and **480 resource
+rows**, checking the same 500 reference PCM seek windows on all workers.
+Only `ogg/src/crc.rs` differs between native production source snapshots after
+normalizing archive line endings; profiles and registry artifacts match.
+
+Median milliseconds, native before -> after:
+
+| Song | Full decode | Indexed open | 100-request seek batch |
+| --- | ---: | ---: | ---: |
+| `in_two` | 356.733 -> 343.314 | 17.479 -> 6.223 | 13.282 -> 12.338 |
+| `Goin' Under` | 314.345 -> 301.740 | 10.296 -> 5.111 | 10.647 -> 9.596 |
+
+Full decoding improves **1.04x / 1.04x**, indexed open **2.81x / 2.01x**, and
+warmed seeks **1.08x / 1.11x**. Fragmented song decode changes
+360.546 -> 345.007 / 304.643 -> 297.337 ms. Native full decode still trails
+Symphonia by about 1.49x / 1.45x on these medians. Full-file ranges overlap:
+322.290-347.382 versus 340.702-360.211 ms and 294.170-328.528 versus
+297.952-331.479 ms. Indexed-open ranges do not overlap on these songs:
+6.099-6.965 / 4.971-5.654 ms after versus 17.042-19.975 / 10.221-10.629 before.
+Maximum relative MAD is 4.75% in pipeline groups and 5.90% in seek/open groups.
+
+Small-file movements remain mixed. Mono full decode rises 0.634 -> 0.642 ms and
+4 KiB reads 0.602 -> 0.634 ms; stereo full decode rises 1.580 -> 1.597 ms while
+fragmented reads improve 1.582 -> 1.541 ms. Eight-channel-silence seek batches
+move 16.193 -> 16.267 ms. The raw tables retain all cases and spreads.
+
+Every native allocation/requested/peak/live heap field, source-IO counter and
+exposed-PCM count matches its paired baseline across all resource groups.
+Warmed native seeks allocate nothing on all five files. The unchanged heap
+does not include the additional static table elements. Song open process-peak
+medians move 12.953 -> 12.957 / 8.020 -> 8.020 MiB; these process measurements
+do not establish an exact binary/static footprint. Indexing still reads the
+complete source once and supplies stronger validation than the reference opens.
+
+[Container summary](validation/2026-10-27-eight-byte-crc-container-summary.tsv),
+[693 trials](validation/2026-10-27-eight-byte-crc-container-trials.tsv),
+[manifest](validation/2026-10-27-eight-byte-crc-container.json),
+[Vorbis summary](validation/2026-10-27-eight-byte-crc-pipeline-summary.tsv),
+[420 trials](validation/2026-10-27-eight-byte-crc-pipeline-trials.tsv),
+[seek summary](validation/2026-10-27-eight-byte-crc-seek-summary.tsv),
+[280 trials](validation/2026-10-27-eight-byte-crc-seek-trials.tsv),
+[resources](validation/2026-10-27-eight-byte-crc-resources.tsv), and
+[checks](validation/2026-10-27-eight-byte-crc-checks.json) pin all inputs,
+workloads, adapters, archives and saved workers. Binaries, wire dumps, generated
+media and external corpora stay under ignored `target/`.
+
+Validation passes **114 release tests** and **91 extracted offline tests**,
+including independent libogg page/packet/write/capture comparisons, all-size
+transforms, 38-file raw/full PCM, 1,900 corpus seeks, 528 upstream vectors /
+2,640 packet seeks, historical floor-zero/legacy cases, the 144-case native
+encoding matrix and allocation checks. No numerical tolerance changes.
+Formatting and default/all-feature Clippy pass. Resumed container, indexed
+streaming and encoding sanitizer targets run 300 seconds each, completing
+**30,118 executions** with no failures or artifacts:
+[results](validation/2026-10-27-eight-byte-crc-fuzz-results.tsv) and
+[provenance](validation/2026-10-27-eight-byte-crc-fuzz-provenance.json).
+
+Broader conformance/platform coverage, Ogg-only heap/index-seek comparisons,
+truly cold startup, competitive Vorbis synthesis, index-free codec seeking and
+encoder quality/rate control remain open. DeadSync integration is unchanged.

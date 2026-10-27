@@ -7,6 +7,10 @@ Sources are linked in the parent directory's work plan.
 
 * Version-zero page reading/writing, little-endian fields, reserved-flag/version
   rejection, lacing, CRC, maximum page size, zero-size packets, payload borrowing.
+  The eight-byte CRC update is independently checked against the bitwise
+  polynomial across table powers, seeded/aligned/tail/split inputs and reference
+  page/packet bytes; [paired measurements](PERFORMANCE.md) record its speed and
+  additional 7 KiB of shared read-only table elements.
 * Logical stream packet assembly across arbitrary page boundaries, including
   a 255-byte packet's zero terminator on its following continuation page.
   Only the last completed packet gets the page granule even when another packet

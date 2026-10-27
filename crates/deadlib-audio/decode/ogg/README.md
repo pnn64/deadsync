@@ -7,6 +7,9 @@ is a workspace member and is not integrated into DeadSync's decoding pipeline.
 The [container performance report](PERFORMANCE.md) compares page parsing, packet
 assembly, fragmented reads, first-packet latency and isolated CRC with pinned
 libogg. Exact page fields and complete packet bytes are checked before timing.
+The measured eight-byte CRC update improves song packet demux 4.12x / 3.89x
+against its paired native baseline, with 7 KiB additional shared table elements.
+Native medians are close to libogg on those inputs; broader coverage remains.
 
 ```rust
 use deadlib_audio_decode_ogg::{Demuxer, PageReader};

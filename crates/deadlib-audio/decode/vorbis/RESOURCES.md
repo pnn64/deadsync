@@ -505,3 +505,9 @@ or artifacts: [results](validation/2026-10-27-single-pass-fuzz-results.tsv) and
 Broader conformance/legacy material, Ogg-only comparative throughput, truly cold
 startup, synthesis profiling, index-free codec seeking and competitive encoder
 quality/rate control remain open. Neither crate is integrated into DeadSync.
+
+The subsequent [eight-byte CRC comparison](../ogg/PERFORMANCE.md#effect-on-the-vorbis-pipeline)
+improves paired song indexed-open medians another 2.81x / 2.01x, with identical
+heap, source IO and exposed-PCM counters. Its additional 7 KiB static table
+elements are outside requested-heap counters. Ogg-only throughput is now
+measured; remaining Ogg allocation/index-seek and codec work stays open.

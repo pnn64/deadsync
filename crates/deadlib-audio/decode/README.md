@@ -81,6 +81,10 @@ competitive native encoding remain required.
 The independent [Ogg-only baseline](ogg/PERFORMANCE.md) now isolates CRC, page
 scanning, packet demux, fragmented reads and first-container-packet startup
 against pinned libogg, with byte-exact page/packet verification.
+Its eight-byte CRC update then improves paired song demux 4.12x / 3.89x and
+Vorbis indexed open 2.81x / 2.01x, for 7 KiB additional read-only table elements.
+Native requested heap and source IO remain unchanged; full Vorbis decoding
+improves about 4% on both songs and still trails Symphonia.
 The first measured transform optimization replaces a length-N complex FFT with
 a paired-spectrum N/4 FFT. Its isolated kernel is 3.2–3.8x faster, transform
 elements shrink 65%, and observed full-file times improve 1.35–1.67x on the two

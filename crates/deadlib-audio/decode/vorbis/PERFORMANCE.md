@@ -394,6 +394,9 @@ in [RESOURCES.md](RESOURCES.md#one-pass-container-and-vorbis-indexing-2026-10-27
 The [Ogg-only baseline](../ogg/PERFORMANCE.md) now adds comparative CRC, page,
 packet and first-container-packet measurements. Truly cold startup and Ogg-only
 heap/index-seek comparisons remain. Sanitizer RSS is not a production memory result.
+The subsequent [eight-byte CRC update](../ogg/PERFORMANCE.md#eight-byte-crc-update-2026-10-27)
+improves paired full Vorbis song medians about 4% each and indexed-open medians
+2.81x / 2.01x. Heap/IO counters stay exact; the shared CRC table adds 7 KiB.
 
 The [real-packet component diagnostic](SYNTHESIS_PROFILE.md) now measures floor,
 residue, transform and overlap work with a bit-checked instrumented copy.

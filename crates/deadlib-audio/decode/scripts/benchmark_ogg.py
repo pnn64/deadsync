@@ -136,7 +136,7 @@ def main():
         count=tuple(v//n for v in values)
         key=(str(source),phase)
         if expected_counts.setdefault(key,count)!=count:raise RuntimeError(f'count/checksum disagreement: {key}, {engine}')
-        if phase!='startup' and consumed//n!=(int(source) if phase=='crc' else Path(source).stat().st_size):raise RuntimeError('source byte count disagrees')
+        if phase!='startup' and consumed!=(int(source) if phase=='crc' else Path(source).stat().st_size)*n:raise RuntimeError('source byte count disagrees')
         return {'path':f'crc:{source}' if phase=='crc' else label(source),'engine':engine,'phase':phase,'iterations':n,'elapsed_ns':elapsed,
                 'ns_per_run':elapsed/n,'pages':pages,'packets':packets,'payload_bytes':payload,'read_calls':reads,'bytes_read':consumed,'checksum_sum':checksum}
     cases=[(p,phase) for p in files for phase in ('pages','demux','stream4096','startup')]
