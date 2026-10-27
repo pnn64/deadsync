@@ -1308,6 +1308,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadlib-audio-decode-mp3"
+version = "0.1.0"
+dependencies = [
+ "symphonia",
+]
+
+[[package]]
 name = "deadlib-audio-decode-ogg"
 version = "0.1.0"
 dependencies = [

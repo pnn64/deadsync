@@ -1,0 +1,3 @@
+tests/validation/** -text -whitespace
+fuzz/*.sh text eol=lf
+benches/*.sh text eol=lf
