@@ -1029,7 +1029,10 @@ pub(crate) fn extract_archive_root(
         let mut entry = archive
             .by_index(idx)
             .map_err(|error| StepManiaOnlineError::Archive(error.to_string()))?;
-        let parts = portable_archive_parts(entry.name())?;
+        let name = entry
+            .name()
+            .map_err(|error| StepManiaOnlineError::Archive(error.to_string()))?;
+        let parts = portable_archive_parts(&name)?;
         if parts
             .iter()
             .next()
@@ -1043,7 +1046,7 @@ pub(crate) fn extract_archive_root(
             continue;
         }
         let output = parts.output_path(staging);
-        let is_dir = entry.is_dir() || entry.name().ends_with('\\');
+        let is_dir = entry.is_dir() || name.ends_with('\\');
         if is_dir {
             fs::create_dir_all(&output)
                 .map_err(|error| io_error("create an extracted directory", error))?;
@@ -1065,7 +1068,9 @@ pub(crate) fn extract_archive_root(
         if copied != expected {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry '{}' produced {copied} bytes, expected {expected}",
-                entry.name()
+                entry
+                    .name()
+                    .map_err(|error| StepManiaOnlineError::Archive(error.to_string()))?
             )));
         }
     }
@@ -1102,7 +1107,10 @@ fn inspect_archive(
         let entry = archive
             .by_index(idx)
             .map_err(|error| StepManiaOnlineError::Archive(error.to_string()))?;
-        if entry.name().len() > MAX_ARCHIVE_PATH_BYTES {
+        let name = entry
+            .name()
+            .map_err(|error| StepManiaOnlineError::Archive(error.to_string()))?;
+        if name.len() > MAX_ARCHIVE_PATH_BYTES {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry path exceeds {MAX_ARCHIVE_PATH_BYTES} bytes"
             )));
@@ -1110,23 +1118,23 @@ fn inspect_archive(
         if entry.enclosed_name().is_none() {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry '{}' escapes the pack root",
-                entry.name()
+                name
             )));
         }
         if entry.is_symlink() {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry '{}' is a symbolic link",
-                entry.name()
+                name
             )));
         }
-        let is_dir = entry.is_dir() || entry.name().ends_with('\\');
+        let is_dir = entry.is_dir() || name.ends_with('\\');
         if !safe_unix_entry_type(entry.unix_mode(), is_dir) {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry '{}' is not a regular file or directory",
-                entry.name()
+                name
             )));
         }
-        let parts = portable_archive_parts(entry.name())?;
+        let parts = portable_archive_parts(&name)?;
         let entry_prefix = parts
             .iter()
             .next()
@@ -1160,7 +1168,7 @@ fn inspect_archive(
         if !output_files.insert(output_key) {
             return Err(StepManiaOnlineError::Archive(format!(
                 "entry '{}' duplicates another output path",
-                entry.name()
+                name
             )));
         }
         has_simfile |= is_simfile(parts.iter().next_back().unwrap_or_default());

@@ -1019,7 +1019,7 @@ pub fn unzip_to_destination(
             continue;
         };
         let out_path = destination.join(relative_path);
-        if entry.name().ends_with('/') {
+        if entry.name()?.ends_with('/') {
             fs::create_dir_all(&out_path)?;
             continue;
         }

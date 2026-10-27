@@ -133,11 +133,11 @@ deadsync-song-lua = { path = "crates/deadsync-song-lua", features = ["test-suppo
 deadsync-theme-simply-love = { path = "crates/deadsync-theme-simply-love", features = ["test-support"] }
 image = "0.25.10"
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-sha2 = "0.11.0"
+serde_json = "1.0.154"
+sha2 = "0.11.1"
 tar = "0.4.46"
 tempfile = "3.27.0"
-zstd = "0.14.0"
+zstd = "0.14.3"
 
 [patch.crates-io]
 # Native actor grids exceed Lua 5.1 C-stack storage used by mlua Rust handles.
@@ -228,5 +228,5 @@ inline_always = "allow"
 
 [workspace.dependencies]
 mlua = { package = "deadlib-lua-legacy", version = "=0.12.2", path = "crates/deadlib-lua-legacy" }
-serde_json = "1.0.151"
+serde_json = "1.0.154"
 windows-core = "0.100.0"

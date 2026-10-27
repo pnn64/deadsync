@@ -11,9 +11,9 @@ repository = "https://github.com/pnn64/deadsync"
 deadlib-image = { path = "..", version = "0.1.0" }
 
 [dev-dependencies]
-gif = "0.14"
-gif-dispose = "6.0"
-weezl = "0.1"
+gif = "0.14.2"
+gif-dispose = "6.0.0"
+weezl = "0.2.1"
 
 [[bench]]
 name = "pipeline"

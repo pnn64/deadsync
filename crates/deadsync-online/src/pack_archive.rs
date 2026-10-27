@@ -1790,7 +1790,10 @@ fn crate_names(tail: &[u8], tail_start: u64, total: u64) -> Result<Vec<String>, 
         stream: None,
     };
     let archive = ZipArchive::with_config(crate_config(), reader).map_err(zip_error)?;
-    Ok(archive.file_names().map(str::to_owned).collect())
+    archive
+        .file_names()
+        .map(|name| name.map(|name| name.into_owned()).map_err(zip_error))
+        .collect()
 }
 
 /// The planner's records, settled into the crate's order with the crate's
@@ -1845,8 +1848,8 @@ fn settle_entries(
         {
             return Err(malformed(format!("'{name}' overlaps the entry after it")));
         }
-        // The relay reads every name as UTF-8 (`toString("utf8")`); the
-        // crate reads one without the UTF-8 flag as CP437.
+        // The relay reads every name as UTF-8 (`toString("utf8")`); ZIP 9
+        // prefers valid UTF-8 too, falling back to CP437 for other bytes.
         let site = String::from_utf8_lossy(&record.raw_name);
         let site_name = (site != name.as_str()).then(|| Box::from(site.as_ref()));
         entries.push(ZipEntry {
@@ -2175,12 +2178,14 @@ fn open_entry<'r, 'a>(
 ) -> Result<ZipFile<'r, SparseReader<'a>>, ArchiveError> {
     let expected = entry_at(index, entry)?;
     let file = archive.by_index(entry).map_err(zip_error)?;
-    if file.name() != expected.name {
-        return Err(malformed(format!(
-            "entry {entry} is '{}', not '{}'",
-            file.name(),
-            expected.name
-        )));
+    {
+        let name = file.name().map_err(zip_error)?;
+        if name != expected.name {
+            return Err(malformed(format!(
+                "entry {entry} is '{name}', not '{}'",
+                expected.name
+            )));
+        }
     }
     Ok(file)
 }
@@ -2708,13 +2713,11 @@ fn extract_one(
     }
     let entry = entry_at(index, ix)?;
     let mut file = open_entry(archive, index, ix)?;
-    // The crate's own view of the same rules, on the record it will extract.
-    if file.enclosed_name().is_none() {
-        return Err(ArchiveError::Unsafe(format!(
-            "'{}' escapes its folder",
-            entry.name
-        )));
-    }
+    // ZIP 9's enclosed_name also rejects source folder names we safely
+    // sanitize in plan_folder (such as "V.L.S.I." and "con"). open_entry
+    // verified this record's name; recheck our portable path rules before
+    // writing it to the plan's sanitized destination.
+    smo::portable_archive_parts(&entry.name).map_err(smo_error)?;
     if file.is_symlink() || !smo::safe_unix_entry_type(file.unix_mode(), false) {
         return Err(ArchiveError::Unsafe(format!(
             "'{}' is not a regular file",
@@ -3528,7 +3531,7 @@ mod tests {
                 .map_or(directory_start, |next| next.local_header);
             assert_eq!(entry.end, next, "{}", entry.name);
             let mut file = reference.by_index(ix).expect("reference entry");
-            assert_eq!(entry.name, file.name());
+            assert_eq!(entry.name, file.name().expect("reference entry name"));
             assert_eq!(entry.local_header, file.header_start());
             assert_eq!(entry.compressed, file.compressed_size());
             assert_eq!(entry.uncompressed, file.size());
@@ -3767,9 +3770,7 @@ mod tests {
     }
 
     #[test]
-    fn the_site_name_is_the_raw_name_read_as_utf8() {
-        // No UTF-8 flag: the crate reads the bytes as CP437, the relay as
-        // UTF-8.
+    fn utf8_names_match_the_site_even_without_the_utf8_flag() {
         let bytes = hand_zip(
             &[
                 ("Pack/Se\u{f1}orita/song.ssc", b"#TITLE:Senorita;"),
@@ -3779,9 +3780,10 @@ mod tests {
         );
         let index = fetch_index_with(&mut FakeServer::new(bytes), 5, 1).expect("index");
         let entry = &index.entries[0];
-        assert_eq!(entry.name, "Pack/Se\u{251c}\u{2592}orita/song.ssc");
+        assert_eq!(entry.name, "Pack/Se\u{f1}orita/song.ssc");
         assert_eq!(entry.site_name(), "Pack/Se\u{f1}orita/song.ssc");
-        assert_eq!(index.folders[0].name, "Se\u{251c}\u{2592}orita");
+        assert_eq!(entry.site_name, None);
+        assert_eq!(index.folders[0].name, "Se\u{f1}orita");
         // An ASCII name reads the same either way, and costs nothing.
         assert_eq!(index.entries[1].site_name, None);
         assert_eq!(index.entries[1].site_name(), "Pack/Plain/song.sm");
@@ -3791,6 +3793,30 @@ mod tests {
         let index = fetch_index_with(&mut FakeServer::new(bytes), 6, 1).expect("index");
         assert_eq!(index.entries[0].name, "Pack/Se\u{f1}orita/song.ssc");
         assert_eq!(index.entries[0].site_name, None);
+    }
+
+    #[test]
+    fn cp437_names_keep_the_relay_spelling_and_open_the_same_entry() {
+        let raw_name = b"Pack/SeXorita/song.ssc";
+        let contents = b"#TITLE:Senorita;";
+        let mut bytes = hand_zip(&[("Pack/SeXorita/song.ssc", contents)], false);
+        let names: Vec<_> = bytes
+            .windows(raw_name.len())
+            .enumerate()
+            .filter_map(|(offset, name)| (name == raw_name).then_some(offset))
+            .collect();
+        assert_eq!(names.len(), 2, "local and central directory names");
+        for offset in names {
+            bytes[offset + b"Pack/Se".len()] = 0xa4; // CP437 n with tilde.
+        }
+        let index = fetch_index_with(&mut FakeServer::new(bytes), 7, 1).expect("index");
+        assert_eq!(index.entries[0].name, "Pack/Se\u{f1}orita/song.ssc");
+        assert_eq!(
+            index.entries[0].site_name(),
+            "Pack/Se\u{fffd}orita/song.ssc"
+        );
+        assert_eq!(index.folders[0].name, "Se\u{f1}orita");
+        assert_eq!(read_entry(&index, &[], 0, MAX).expect("entry"), contents);
     }
 
     fn flat_index(bytes: &[u8], held: usize) -> PackIndex {

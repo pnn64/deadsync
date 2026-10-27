@@ -1195,8 +1195,8 @@ mod tests {
     }
 
     /// A pack zip of these files, stored, whose records lack the UTF-8 flag
-    /// as some zippers write them: the crate then reads a non-ASCII name as
-    /// CP437, and the relay as UTF-8.
+    /// as some zippers write them. ZIP 9 and the relay both recognize the
+    /// valid UTF-8 names even without that flag.
     fn unflagged_zip(files: &[&str]) -> Vec<u8> {
         use std::io::{Cursor, Write};
         use zip::write::SimpleFileOptions;
@@ -1239,10 +1239,10 @@ mod tests {
         };
         let bytes = crate::pack_archive::index_to_bytes(&shelf);
         let index = crate::pack_archive::index_from_bytes(&bytes).expect("an index");
-        let cp437 = "Se\u{251c}\u{2592}orita";
-        assert_eq!(index.folders[0].name, cp437, "the crate reads CP437");
+        let folder = "Se\u{f1}orita";
+        assert_eq!(index.folders[0].name, folder);
 
-        let mut cards = vec![card(0x5A1E_F01D, 1, cp437, "", 10, None, 1)];
+        let mut cards = vec![card(0x5A1E_F01D, 1, folder, "", 10, None, 1)];
         cards.push(card(77, 2, "Not held", "", 10, None, 1));
         let held = vec![Arc::new(HeldSong {
             cache: crate::smo_songs::adopt_index(index),
