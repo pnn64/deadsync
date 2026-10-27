@@ -80,6 +80,7 @@ impl Vm {
             vararg_start: base,
             vararg_count: 1,
             tail_calls: 0,
+            c_level_bias: self.threads[slot_index(self.thread.0)].native_bias,
         });
         self.top = self.registers.len();
     }
@@ -126,6 +127,7 @@ impl Vm {
             vararg_start: 2,
             vararg_count: arguments.len() as u32,
             tail_calls: 0,
+            c_level_bias: 0,
         });
         // A fresh C message-handler closure is an allocation safe point before
         // lua_pcall installs that handler. Keep its failure outside protection.

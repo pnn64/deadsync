@@ -473,6 +473,7 @@ impl HostCall<'_> {
                 _ => arguments.len() as u32,
             },
             tail_calls: 0,
+            c_level_bias: 0,
         });
         let previous_protection = self.vm.native_protected;
         self.vm.native_protected |= c_protected;

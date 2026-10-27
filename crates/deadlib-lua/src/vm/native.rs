@@ -30,6 +30,7 @@ impl Vm {
             && (usize::from(frame.barriers)
                 + usize::from(self.threads[slot_index(self.thread.0)].depth)
                 >= 198
+                || self.threads[slot_index(self.thread.0)].native_bias != 0
                 || !self.loads.is_empty())
         {
             self.check_c_call()?;
@@ -111,6 +112,7 @@ impl Vm {
                     vararg_start: call + 1,
                     vararg_count: count as u32,
                     tail_calls: 0,
+                    c_level_bias: 0,
                 });
                 Ok(None)
             }
@@ -141,6 +143,7 @@ impl Vm {
                     vararg_start: call + 1,
                     vararg_count: count as u32,
                     tail_calls: 0,
+                    c_level_bias: 0,
                 });
                 let previous = self.active_native.replace(index);
                 // Host callbacks read the original arguments and write separate
@@ -224,6 +227,7 @@ impl Vm {
             vararg_start: 0,
             vararg_count: 0,
             tail_calls: 0,
+            c_level_bias: 0,
         });
         let wanted = if continuation == CONT_IGNORE { 0 } else { 1 };
         if let Some(actual) = self.start_call(base, args.len(), wanted, false)? {
@@ -233,6 +237,7 @@ impl Vm {
     }
     pub(super) fn protected_failure(&mut self, index: usize, value: Value) {
         let frame = self.frames[index];
+        self.set_thread_native_bias(self.thread, frame.c_level_bias);
         self.close_upvalues(frame.base);
         self.discard_finalizers(index + 1);
         self.frames.truncate(index + 1);
@@ -368,6 +373,7 @@ impl Vm {
                         vararg_start: index,
                         vararg_count: 0,
                         tail_calls: 0,
+                        c_level_bias: 0,
                     });
                     match self.start_call(base, 1, 1, false) {
                         Ok(Some(actual)) => self.finish_call(base, actual, 1),
@@ -1037,7 +1043,7 @@ impl Vm {
                         self.strings.bytes[slot_index(id.0)].to_vec()
                     }
                 };
-                let depth = self.native_depth(self.frames.len()) + 1;
+                let depth = usize::from(self.native_calls_for(self.thread, self.frames.len()));
                 let compiled = loads::compile(&source, &name, depth);
                 match compiled {
                     Ok(program) => Value::Function(self.load(&program)),

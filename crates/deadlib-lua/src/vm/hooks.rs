@@ -218,6 +218,7 @@ impl Vm {
             vararg_start: owner,
             vararg_count: pc,
             tail_calls: 0,
+            c_level_bias: 0,
         });
         self.hooks.running = Some((self.frames.len() - 1) as u16);
         if let Some(actual) = self.start_call(base + 1, 2, 0, false)? {
@@ -338,6 +339,7 @@ impl Vm {
             vararg_start: index,
             vararg_count: pc as u32,
             tail_calls: (u32::from(count) << 1) | u32::from(line_event),
+            c_level_bias: 0,
         });
         self.frames[index].pc = pc as u32 + 1;
         Ok(true)
@@ -359,6 +361,7 @@ impl Vm {
             vararg_start: source,
             vararg_count: count as u32,
             tail_calls: 0,
+            c_level_bias: 0,
         });
         true
     }

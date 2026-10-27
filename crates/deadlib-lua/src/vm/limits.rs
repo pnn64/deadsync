@@ -56,11 +56,12 @@ impl Vm {
     }
 
     fn check_c_depth(&mut self, depth: usize) -> Result<(), Error> {
-        if depth >= 224 {
+        let entered = (depth as u16).wrapping_add(1);
+        if entered >= 225 {
             let value = self.intern(b"error in error handling");
             return Err(Error::handling(value));
         }
-        if depth == 199 {
+        if entered == 200 {
             return Err(self.call_error("C stack overflow"));
         }
         Ok(())

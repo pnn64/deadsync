@@ -47,6 +47,8 @@ API int lua_pushthread(lua_State *);
 API int lua_status(lua_State *);
 API int lua_resume(lua_State *, int);
 API int lua_yield(lua_State *, int);
+API void lua_setlevel(lua_State *, lua_State *);
+API int boundary_call_level(lua_State *);
 API const void *lua_topointer(lua_State *, int);
 API int lua_load(lua_State *, lua_Reader, void *, const char *);
 API int luaL_loadbuffer(lua_State *, const char *, size_t, const char *);

@@ -98,6 +98,7 @@ impl Vm {
             vararg_start: 0,
             vararg_count: 0,
             tail_calls: 0,
+            c_level_bias: 0,
         });
         self.gc.running += 1;
         self.hooks.finalizers += 1;

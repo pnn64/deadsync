@@ -73,6 +73,12 @@ API int lua_resume(lua_State *L, int arguments) {
 API int lua_yield(lua_State *L, int results) {
   BoundaryValue value={0};operation(L,58,results,0,&value);return -1;
 }
+API void lua_setlevel(lua_State *from, lua_State *to) {
+  BoundaryValue value={0};value.userdata=to;operation(from,59,0,0,&value);
+}
+API int boundary_call_level(lua_State *L) {
+  BoundaryValue value={0};operation(L,60,0,0,&value);return value.integer;
+}
 API int lua_pushthread(lua_State *L) {
   BoundaryValue value={0};operation(L,52,0,0,&value);return value.integer;
 }

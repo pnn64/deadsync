@@ -325,6 +325,7 @@ struct Frame {
     vararg_start: usize,
     vararg_count: u32,
     tail_calls: u32,
+    c_level_bias: u16,
 }
 impl Frame {
     fn is_call(self) -> bool {
@@ -347,7 +348,7 @@ fn frame_wanted(wanted: u32) -> u16 {
     }
 }
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(std::mem::size_of::<Frame>() == 64);
+const _: () = assert!(std::mem::size_of::<Frame>() == 72);
 
 /// A Lua state with persistent globals and reusable contiguous register storage.
 ///
@@ -730,7 +731,8 @@ impl Vm {
         self.registers.resize(len, Value::Nil);
         self.gc_note_control((self.registers.capacity() - before) * std::mem::size_of::<Value>());
     }
-    fn push_record(&mut self, frame: Frame) {
+    fn push_record(&mut self, mut frame: Frame) {
+        frame.c_level_bias = self.threads[slot_index(self.thread.0)].native_bias;
         let before = self.frames.capacity();
         self.frames.push(frame);
         if self.hooks.mask & hooks::CALL != 0 && self.hooks.allowed() {
@@ -962,6 +964,7 @@ impl Vm {
             vararg_start,
             vararg_count: vararg_count as u32,
             tail_calls: 0,
+            c_level_bias: 0,
         });
         self.top = base;
         Ok(())
@@ -1016,6 +1019,7 @@ impl Vm {
             vararg_start: frame.stack_start,
             vararg_count: extras as u32,
             tail_calls: frame.tail_calls.saturating_add(1),
+            c_level_bias: frame.c_level_bias,
             ..frame
         };
         self.top = base;
@@ -1121,6 +1125,7 @@ impl Vm {
             vararg_start: 0,
             vararg_count: 0,
             tail_calls: 0,
+            c_level_bias: 0,
         });
         self.top = 0;
         let result = self.drive();
@@ -1204,6 +1209,11 @@ impl Vm {
     }
 
     fn finish_execution(&mut self, result: Result<usize, Error>) -> Result<&[Value], Error> {
+        if result.is_err()
+            && let Some(frame) = self.frames.first()
+        {
+            self.set_thread_native_bias(self.thread, frame.c_level_bias);
+        }
         self.close_upvalues(0);
         self.discard_finalizers(0);
         self.frames.clear();

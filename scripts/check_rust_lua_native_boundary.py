@@ -104,6 +104,7 @@ def main():
     names+=['boundary_thread','boundary_thread_status','boundary_thread_pointer','boundary_thread_capture']
     names+=['boundary_pointer']
     names+=['boundary_resume','boundary_yield']
+    names+=['boundary_level','boundary_setlevel','boundary_level_reader']
     names+=['boundary_newthread','boundary_thread_values','boundary_thread_push','boundary_thread_move','boundary_thread_primitives','boundary_thread_selfmove','boundary_thread_resize','boundary_thread_hold']
     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
     runs={}
@@ -113,6 +114,7 @@ def main():
     root_runs={}
     thread_stack_runs={}
     resume_runs={}
+    level_runs={}
     for engine in ['reference','rust']:
         with tempfile.TemporaryDirectory(prefix='deadlua-native-boundary-')as temporary:
             work=Path(temporary);(work/'boundary.lua').write_bytes((fixture/'cases.lua').read_bytes())
@@ -143,6 +145,10 @@ def main():
             command=command[:-1]+[str(work/'native-resume.lua')]
             run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=60)
             resume_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
+            (work/'native-levels.lua').write_bytes((fixture/'native-levels.lua').read_bytes())
+            command=command[:-1]+[str(work/'native-levels.lua')]
+            run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=60)
+            level_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
     assert hashes()==before,'sources changed during boundary proof'
     reference_run=runs['reference'];rust=runs['rust']
     buffers={engine:bool(re.search(rb'(?m)^aux-buffer-complete\t99\t40\r*$',bytes.fromhex(run.get('stdout_hex',''))))for engine,run in runs.items()}
@@ -171,6 +177,9 @@ def main():
     resume_complete=all(run['returncode']==0 and b'native-resume-complete'in bytes.fromhex(run['stdout_hex'])for run in resume_runs.values())
     resume_equal=resume_complete and resume_runs['reference']['stdout_hex']==resume_runs['rust']['stdout_hex'] and not resume_runs['reference']['stderr_hex']
     result['native_resume_probe']=dict(runs=resume_runs,completed=resume_complete,observations_equal=resume_equal,fixture='crates/deadlib-lua/tests/native-boundary/native-resume.lua',complete_coroutine_api_proven=False)
+    levels_complete=all(run['returncode']==0 and b'native-call-levels-complete\t1000'in bytes.fromhex(run['stdout_hex'])for run in level_runs.values())
+    levels_equal=levels_complete and level_runs['reference']['stdout_hex']==level_runs['rust']['stdout_hex'] and not level_runs['reference']['stderr_hex']
+    result['native_call_levels_probe']=dict(runs=level_runs,completed=levels_complete,observations_equal=levels_equal,fixture='crates/deadlib-lua/tests/native-boundary/native-levels.lua',reference_counter='source-built Lua 5.1.5 lua_State.nCcalls',complete_coroutine_api_proven=False)
     result['native_file_complete']=file_loaders
     result['native_dump_complete']=dumpers
     result['native_thread_complete']=threads
@@ -181,6 +190,6 @@ def main():
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
     print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,'state lifetimes balanced:',states,flush=True)
-    if not matched or not returned or not states or not scratch_complete or not result['parser_scratch_probe']['observations_equal'] or not roots_equal or not thread_stacks_equal or not resume_equal:raise SystemExit(1)
+    if not matched or not returned or not states or not scratch_complete or not result['parser_scratch_probe']['observations_equal'] or not roots_equal or not thread_stacks_equal or not resume_equal or not levels_equal:raise SystemExit(1)
 
 if __name__=='__main__':main()

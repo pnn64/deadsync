@@ -659,7 +659,7 @@ Coroutine switches transfer ownership of vectors without copying stack contents.
 Open cells include their owning thread ID. Active registers remain direct VM
 fields, and shared-heap references do not adjust reference counts. Yield-boundary
 depth is inherited in call frames; fixed result counts use 16 bits and retain an
-open-result sentinel. A compile-time assertion keeps frames at 64 bytes on 64-bit
+open-result sentinel. At that milestone a compile-time assertion kept frames at 64 bytes on 64-bit
 targets; values remain 16 bytes in measurements. The global instruction budget
 covers coroutine execution and aborts active resumer chains before restoring main.
 
@@ -1098,6 +1098,18 @@ Portable groups cover Rust destruction at yield, argument validation and quota
 recovery. The boundary declares 65 of 80 core APIs; full semantics, `lua_setlevel`,
 remaining native hook/debug/lifecycle/allocator behavior and full standalone
 Lua 5.1 parity remain unfinished. Optimization and benchmarks stay deferred.
+
+The [C-call count checks](testing/2026-10-27-rust-lua-native-level.md) add
+`NativeStack::copy_thread_call_level` and `thread_call_level`, plus development
+`lua_setlevel`. Current/waiting thread counters, parser bases, protected error
+checkpoints, unsigned wrapping, the resume limit and raw error-handler status 5
+are checked directly against source-built Lua 5.1.5's counter. Native-triggered
+GC no longer counts its finalizer call twice. A separate strict audit still
+fails when lowering the active counter permits a reference yield across a
+protected call; Rust retains its structural boundary. That mismatch remains
+open, along with complete coroutine/C API and standalone Lua 5.1 parity. The
+boundary declares 66 of 80 core APIs, which is not proof of full semantics.
+Optimization and benchmarks stay deferred.
 
 ## Reference contract
 

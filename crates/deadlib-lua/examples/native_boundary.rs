@@ -197,6 +197,22 @@ mod windows {
             b: c_int,
             value: &mut BoundaryValue,
         ) -> Result<(), Error> {
+            if op == 60 {
+                let thread = self
+                    .bridge
+                    .states
+                    .lock()
+                    .unwrap()
+                    .get(&(value.state as usize))
+                    .copied()
+                    .ok_or_else(|| self.stack.error(b"unknown level thread"))?;
+                value.integer = self
+                    .stack
+                    .thread_call_level(thread)
+                    .ok_or_else(|| self.stack.error(b"unknown level thread"))?
+                    as c_int;
+                return Ok(());
+            }
             if op == 57 {
                 let thread = self
                     .bridge
@@ -211,7 +227,7 @@ mod windows {
                 value.integer = self.stack.resume_thread(thread, count)? as c_int;
                 return Ok(());
             }
-            if op == 56 {
+            if op == 56 || op == 59 {
                 let states = self.bridge.states.lock().unwrap();
                 let from = *states
                     .get(&(value.state as usize))
@@ -220,6 +236,9 @@ mod windows {
                     .get(&(value.userdata as usize))
                     .ok_or_else(|| self.stack.error(b"unknown destination thread"))?;
                 drop(states);
+                if op == 59 {
+                    return self.stack.copy_thread_call_level(from, to);
+                }
                 if from == to {
                     return Ok(());
                 }
@@ -914,6 +933,9 @@ mod windows {
             "boundary_thread_hold",
             "boundary_resume",
             "boundary_yield",
+            "boundary_level",
+            "boundary_setlevel",
+            "boundary_level_reader",
             "boundary_cpcall",
         ] {
             let function = vm

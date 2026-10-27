@@ -121,6 +121,9 @@ impl Decoder {
     pub(crate) fn nesting(&self) -> usize {
         self.depth
     }
+    pub(crate) fn shift_native_depth(&mut self, change: u16) {
+        self.base_depth = (self.base_depth as u16).wrapping_add(change) as usize;
+    }
     pub(crate) fn enable_native_roots(&mut self) {
         self.native_events = Some(Vec::new());
     }
@@ -209,7 +212,11 @@ impl Decoder {
                     self.tasks.pop();
                 }
                 Task::Function(parent) => {
-                    if self.base_depth.saturating_add(self.depth) >= DEPTH_LIMIT {
+                    if (self.base_depth as u16)
+                        .wrapping_add(self.depth as u16)
+                        .wrapping_add(1)
+                        > DEPTH_LIMIT as u16
+                    {
                         return Err("code too deep");
                     }
                     self.depth += 1;

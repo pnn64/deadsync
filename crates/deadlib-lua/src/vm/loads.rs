@@ -166,6 +166,13 @@ pub(super) fn message(name: &[u8], error: &Error, binary: bool) -> Vec<u8> {
     message
 }
 impl Loading {
+    pub(super) fn shift_native_depth(&mut self, change: u16) {
+        self.native_depth = (self.native_depth as u16).wrapping_add(change) as usize;
+        self.parser.shift_native_depth(change);
+        if let Some(decoder) = &mut self.decoder {
+            decoder.shift_native_depth(change);
+        }
+    }
     pub(super) fn roots(&self) -> impl Iterator<Item = Value> + '_ {
         self.native
             .iter()
@@ -563,8 +570,13 @@ impl Vm {
             keep
         });
     }
-    pub(super) fn parser_nesting(&self, end: usize) -> usize {
-        self.loads
+    pub(super) fn parser_nesting_for(&self, thread: ThreadId, end: usize) -> usize {
+        let loads = if thread == self.thread {
+            &self.loads
+        } else {
+            &self.threads[slot_index(thread.0)].loads
+        };
+        loads
             .iter()
             .filter(|j| j.owner < end)
             .map(|j| {

@@ -26,6 +26,8 @@ pub enum NativeThreadStatus {
     Yielded = 1,
     /// The coroutine failed with an unprotected runtime error.
     RuntimeError = 2,
+    /// Execution failed while processing an error.
+    ErrorHandler = 5,
 }
 impl Status {
     fn name(self) -> &'static [u8] {
@@ -78,7 +80,9 @@ pub(super) struct Thread {
     pub(super) entry: Option<(usize, usize)>,
     pub(super) api_stack: std::ops::Range<usize>,
     pub(super) native_resumer: bool,
-    pub(super) native_level: usize,
+    pub(super) native_level: u16,
+    pub(super) native_bias: u16,
+    pub(super) native_base_calls: u16,
     pub(super) resumed_values: Option<std::ops::Range<usize>>,
     pub(super) status: Status,
     pub(super) resume_status: NativeThreadStatus,
@@ -106,6 +110,8 @@ impl Thread {
             api_stack: 0..0,
             native_resumer: false,
             native_level: 0,
+            native_bias: 0,
+            native_base_calls: 0,
             resumed_values: None,
             status: Status::Running,
             resume_status: NativeThreadStatus::Ok,
@@ -319,6 +325,14 @@ impl Vm {
         line: &mut u32,
     ) -> bool {
         let id = self.thread;
+        let host = self.frames.last().is_some_and(
+            |f| matches!(f.function, FrameKind::Native(id) if self.host_callback(id).is_some()),
+        );
+        let level = self
+            .native_calls_for(id, self.frames.len())
+            .wrapping_sub(u16::from(host))
+            .wrapping_sub(1);
+        self.threads[slot_index(id.0)].native_level = level;
         let parent = self.threads[slot_index(id.0)]
             .resumer
             .take()
@@ -331,7 +345,7 @@ impl Vm {
                 Status::Dead
             };
             state.resume_status = if failed {
-                NativeThreadStatus::RuntimeError
+                state.resume_status
             } else if suspended {
                 NativeThreadStatus::Yielded
             } else {
@@ -383,7 +397,7 @@ impl Vm {
             Status::Dead
         };
         self.threads[slot_index(id.0)].resume_status = if failed {
-            NativeThreadStatus::RuntimeError
+            self.threads[slot_index(id.0)].resume_status
         } else if suspended {
             NativeThreadStatus::Yielded
         } else {
@@ -403,6 +417,11 @@ impl Vm {
         false
     }
     pub(super) fn fail_thread(&mut self, error: &Error, line: &mut u32) {
+        self.threads[slot_index(self.thread.0)].resume_status = if error.bypass_handler {
+            NativeThreadStatus::ErrorHandler
+        } else {
+            NativeThreadStatus::RuntimeError
+        };
         self.discard_finalizers(0);
         let value = error.value().unwrap_or_else(|| {
             let value = self.intern(error.message().as_bytes());
@@ -531,7 +550,11 @@ impl Vm {
         Ok(1)
     }
     pub(super) fn native_depth(&self, end: usize) -> usize {
-        let iterators = self.frames[..end]
+        usize::from(self.native_calls_for(self.thread, end).wrapping_sub(1))
+    }
+    pub(super) fn native_calls_for(&self, thread: ThreadId, end: usize) -> u16 {
+        let frames = self.debug_frames(thread);
+        let iterators = frames[..end]
             .windows(2)
             .filter(|pair| {
                 if pair[1].barriers <= pair[0].barriers {
@@ -549,11 +572,19 @@ impl Vm {
                     .is_some_and(|i| i.op == Op::CallIter)
             })
             .count();
-        let boundaries = self.frames[..end]
-            .iter()
-            .filter(|f| {
+        let boundaries = frames[..end]
+            .iter().enumerate()
+            .filter(|(index, f)| {
+                if frames.get(index + 1).is_some_and(|next| {
+                    matches!(next.function, FrameKind::Native(CONT_RETURN))
+                        || (matches!(next.function, FrameKind::Native(CONT_HOOK)) && f.pc == 0)
+                }) { return false; }
                 // The standalone outer main is the implicit root C call,
                 // already accounted for by the depth-limit convention.
+                let host = matches!(f.function, FrameKind::Native(id) if self.host_callback(id).is_some())
+                    && !frames[index + 1..end].iter()
+                        .take_while(|next| !next.is_call())
+                        .any(|next| matches!(next.function, FrameKind::Native(CONT_GC)));
                 matches!(
                     f.function,
                     FrameKind::Native(
@@ -579,23 +610,60 @@ impl Vm {
                             | CONT_STANDALONE
                     )
                 ) || (matches!(f.function, FrameKind::Native(id) if self.scheduled_native(id) == 3))
-                    || (matches!(f.function, FrameKind::Native(id) if self.host_callback(id).is_some()))
+                    || host
                     || (loads::protected(f.function)
                         && !matches!(f.function, FrameKind::Native(CONT_HOST_LOAD))
                         && matches!(f.pc, 1 | 3))
             })
             .count();
-        usize::from(self.threads[slot_index(self.thread.0)].depth)
+        ((usize::from(self.threads[slot_index(thread.0)].depth)
             + boundaries
             + iterators
-            + self.parser_nesting(end)
+            + self.parser_nesting_for(thread, end)
+            + 1) as u16)
+            .wrapping_add(self.threads[slot_index(thread.0)].native_bias)
+    }
+
+    pub(super) fn thread_call_level(&self, thread: ThreadId) -> u16 {
+        let state = &self.threads[slot_index(thread.0)];
+        if thread != self.thread && state.status != Status::Normal {
+            return state.native_level;
+        }
+        let (frames, active) = if thread == self.thread {
+            (&self.frames, self.active_native)
+        } else {
+            (&state.frames, state.active_native)
+        };
+        let host = active.and_then(|i| frames.get(i)).is_some_and(
+            |f| matches!(f.function, FrameKind::Native(id) if self.host_callback(id).is_some()),
+        );
+        self.native_calls_for(thread, frames.len())
+            .wrapping_sub(u16::from(host))
+    }
+
+    pub(super) fn set_thread_native_bias(&mut self, thread: ThreadId, bias: u16) {
+        let state = &mut self.threads[slot_index(thread.0)];
+        let change = bias.wrapping_sub(state.native_bias);
+        state.native_bias = bias;
+        let loads = if thread == self.thread {
+            &mut self.loads
+        } else {
+            &mut state.loads
+        };
+        for job in loads {
+            job.shift_native_depth(change);
+        }
     }
     pub(super) fn coroutine_step(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
         let owner = self.frames.len() - 1;
         if id == CO_YIELD {
             if frame.pc() == 0 {
-                if self.thread == self.main || frame.barriers > 1 {
+                if self.thread == self.main
+                    || frame.barriers > 1
+                    || self.thread_call_level(self.thread)
+                        > self.threads[slot_index(self.thread.0)].native_base_calls
+                {
                     let message = "attempt to yield across metamethod/C-call boundary";
                     let value = self.intern(message.as_bytes());
                     return Err(Error::raised(value, message));
@@ -651,8 +719,8 @@ impl Vm {
         // A resumed thread inherits the caller's C-call count. Suspended native
         // callbacks and tag-method continuations each add one boundary; ordinary
         // Lua calls do not. The host's initial call accounts for the remaining one.
-        let depth = self.native_depth(owner);
-        if status != Status::Suspended || depth >= 199 {
+        let level = self.native_calls_for(self.thread, owner);
+        if status != Status::Suspended || level >= 200 {
             let message = if status != Status::Suspended {
                 format!(
                     "cannot resume {} coroutine",
@@ -662,7 +730,7 @@ impl Vm {
                 "C stack overflow".into()
             };
             if status == Status::Suspended
-                && depth >= 199
+                && level >= 200
                 && self.threads[slot_index(thread.0)].frames.is_empty()
             {
                 // lua_resume's initial-stack overflow error replaces the entry
@@ -716,8 +784,10 @@ impl Vm {
         state.resumer = Some(self.thread);
         state.status = Status::Running;
         state.resume_status = NativeThreadStatus::Ok;
-        state.depth = (depth + 1) as u16;
-        state.native_level = depth + 1;
+        state.depth = level;
+        state.native_level = level;
+        state.native_bias = 0;
+        state.native_base_calls = level.wrapping_add(1);
         let growth = (state.registers.capacity() - capacity) * std::mem::size_of::<Value>();
         self.threads.note_alloc(growth);
         // These are the caller's owned call temporaries. auxresume has moved

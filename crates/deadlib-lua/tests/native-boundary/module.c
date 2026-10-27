@@ -2,6 +2,7 @@
 #ifdef REFERENCE
 #include "lua.h"
 #include "lauxlib.h"
+#include "lstate.h"
 #else
 #include "api.h"
 #endif
@@ -807,6 +808,33 @@ EXPORT int boundary_resume(lua_State *L) {
 }
 EXPORT int boundary_yield(lua_State *L) {
   return lua_yield(L,lua_gettop(L));
+}
+EXPORT int boundary_level(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);
+#ifdef REFERENCE
+  lua_pushinteger(L,co->nCcalls);
+#else
+  lua_pushinteger(L,boundary_call_level(co));
+#endif
+  return 1;
+}
+EXPORT int boundary_setlevel(lua_State *L) {
+  lua_setlevel(lua_tothread(L,1),lua_tothread(L,2));return 0;
+}
+typedef struct LevelReader {lua_State *source;int reset;int visits;} LevelReader;
+static const char *level_reader(lua_State *L, void *data, size_t *size) {
+  LevelReader *reader=(LevelReader *)data;const char *bytes;
+  ++reader->visits;
+  if(reader->visits==reader->reset)lua_setlevel(reader->source,L);
+  lua_pushvalue(L,2);lua_pushinteger(L,reader->visits);lua_call(L,1,1);
+  bytes=lua_tolstring(L,-1,size);
+  return bytes;
+}
+EXPORT int boundary_level_reader(lua_State *L) {
+  LevelReader reader;int result;
+  reader.source=lua_tothread(L,1);reader.reset=(int)lua_tointeger(L,3);reader.visits=0;
+  result=lua_load(L,level_reader,&reader,"=level-reader");
+  lua_pushinteger(L,result);lua_insert(L,-2);lua_pushinteger(L,reader.visits);return 3;
 }
 EXPORT int boundary_thread_values(lua_State *L) {
   lua_State *co=lua_tothread(L,1);int i,n=lua_gettop(co);

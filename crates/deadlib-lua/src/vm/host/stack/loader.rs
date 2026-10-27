@@ -24,6 +24,7 @@ struct Scope {
     active: Option<usize>,
     count: usize,
     base: usize,
+    native_bias: u16,
 }
 
 impl NativeStack<'_, '_> {
@@ -63,6 +64,7 @@ impl NativeStack<'_, '_> {
             active: self.call.vm.active_native,
             count: self.top(),
             base: self.base + self.top(),
+            native_bias: self.call.vm.threads[slot_index(self.call.vm.thread.0)].native_bias,
         };
         let depth = self.call.vm.native_depth(scope.depth);
         self.call.vm.push_record(Frame {
@@ -76,6 +78,7 @@ impl NativeStack<'_, '_> {
             vararg_start: 0,
             vararg_count: 0,
             tail_calls: 0,
+            c_level_bias: 0,
         });
         let name = name.unwrap_or(b"?");
         let name = &name[..name
@@ -125,6 +128,9 @@ impl NativeStack<'_, '_> {
                     Err(error) => {
                         let message = self.call.vm.native_load_message(index, &error);
                         let value = self.intern(&message);
+                        self.call
+                            .vm
+                            .set_thread_native_bias(scope.owner, scope.native_bias);
                         self.finish_load_scope(scope);
                         self.set_top(scope.count)?;
                         self.push(value)?;
@@ -185,6 +191,9 @@ impl NativeStack<'_, '_> {
     }
     fn catch_load_error(&mut self, scope: Scope, error: Error) -> Result<NativeLoadStatus, Error> {
         if error.kind() == ErrorKind::Limit {
+            self.call
+                .vm
+                .set_thread_native_bias(scope.owner, scope.native_bias);
             self.finish_load_scope(scope);
             self.call.abort = Some(error.clone());
             return Err(error);

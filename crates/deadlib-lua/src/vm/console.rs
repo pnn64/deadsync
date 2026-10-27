@@ -34,7 +34,11 @@ impl Vm {
         }
         let source = io::c_bytes(&buffer[..len]);
         let name = b"=(debug command)";
-        match loads::compile(source, name, self.native_depth(self.frames.len()) + 1) {
+        match loads::compile(
+            source,
+            name,
+            usize::from(self.native_calls_for(self.thread, self.frames.len())),
+        ) {
             Ok(program) => {
                 let function = self.load(&program);
                 self.resize_registers(self.registers.len().max(base + 1));

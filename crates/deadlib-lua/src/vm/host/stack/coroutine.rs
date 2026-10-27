@@ -2,6 +2,32 @@
 use super::*;
 
 impl NativeStack<'_, '_> {
+    /// Read a live thread's Lua 5.1 C-call count, including active parser levels.
+    /// Returns None for a collected or invalid thread identity.
+    pub fn thread_call_level(&self, thread: ThreadId) -> Option<u16> {
+        self.call.vm.threads.get(thread.0)?;
+        Some(self.call.vm.thread_call_level(thread))
+    }
+    /// Copy Lua 5.1's C-call count between live threads without moving values.
+    /// This is the operation used by `lua_setlevel` before coroutine resume.
+    ///
+    /// # Errors
+    /// Rejects pending errors and collected/invalid thread identities.
+    pub fn copy_thread_call_level(&mut self, from: ThreadId, to: ThreadId) -> Result<(), Error> {
+        self.check_error()?;
+        self.call.vm.validate_value(Value::Thread(from))?;
+        self.call.vm.validate_value(Value::Thread(to))?;
+        let level = self.call.vm.thread_call_level(from);
+        let current = self.call.vm.thread_call_level(to);
+        let state = &mut self.call.vm.threads[slot_index(to.0)];
+        if to == self.call.vm.thread || state.status == threads::Status::Normal {
+            let bias = state.native_bias.wrapping_add(level.wrapping_sub(current));
+            self.call.vm.set_thread_native_bias(to, bias);
+        } else {
+            state.native_level = level;
+        }
+        Ok(())
+    }
     /// Resume a thread with the last `arguments` values on its own stack.
     /// Yielded values, final results and errors remain on that thread's stack.
     /// A successfully completed thread may receive a new entry function.
@@ -51,7 +77,9 @@ impl NativeStack<'_, '_> {
             state.resumed_values = Some(state.api_stack.end - arguments..state.api_stack.end);
         }
         state.top = state.api_stack.end;
-        state.depth = state.native_level as u16;
+        state.depth = state.native_level;
+        state.native_bias = 0;
+        state.native_base_calls = state.native_level.wrapping_add(1);
         state.resumer = Some(owner);
         state.native_resumer = true;
         state.status = threads::Status::Running;
@@ -100,7 +128,10 @@ impl NativeStack<'_, '_> {
         if count > self.top() {
             return Err(self.error(b"invalid native yield result count"));
         }
-        if self.call.vm.thread == self.call.vm.main || self.call.vm.frames[self.frame].barriers > 1
+        if self.call.vm.thread == self.call.vm.main
+            || self.call.vm.frames[self.frame].barriers > 1
+            || self.call.vm.thread_call_level(self.call.vm.thread)
+                > self.call.vm.threads[slot_index(self.call.vm.thread.0)].native_base_calls
         {
             return Err(self.error(b"attempt to yield across metamethod/C-call boundary"));
         }

@@ -54,6 +54,26 @@ fn api(call: &mut HostCall<'_>) -> Result<(), Error> {
             stack.push_integer(status as isize)?;
             stack.finish(1)
         }
+        7 => {
+            let from = stack.to_thread(2).unwrap();
+            let to = stack.to_thread(3).unwrap();
+            let before = [stack.value(1), stack.value(2), stack.value(3)];
+            stack.copy_thread_call_level(from, to)?;
+            assert_eq!([stack.value(1), stack.value(2), stack.value(3)], before);
+            stack.finish(0)
+        }
+        8 => {
+            let thread = stack.to_thread(2).unwrap();
+            let level = stack.thread_call_level(thread).unwrap();
+            stack.push_integer(level as isize)?;
+            stack.finish(1)
+        }
+        9 => {
+            let thread = stack.to_thread(2).unwrap();
+            let status = stack.thread_status(thread).unwrap();
+            stack.push_integer(status as isize)?;
+            stack.finish(1)
+        }
         _ => unreachable!(),
     }
 }
@@ -68,7 +88,243 @@ fn vm() -> Vm {
     }
     let f = vm.new_host_function(yield_values, &[]).unwrap();
     vm.set_global(b"native_yield", f).unwrap();
+    fn current(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        stack.push_thread()?;
+        stack.finish(1)
+    }
+    fn nested(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        let arguments = stack.top() - 1;
+        stack.call_unprotected(arguments, None)?;
+        let count = stack.top();
+        stack.finish(count)
+    }
+    fn collect(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        stack.gc(GcOperation::Collect)?;
+        stack.finish(0)
+    }
+    fn reader(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        let zero = stack.to_thread(1).unwrap();
+        let function = stack.value(2).unwrap();
+        let reset = stack.to_integer(3).unwrap() as usize;
+        let mut visits = 0;
+        let status = stack.load_reader(Some(b"=level-reader"), |stack| {
+            visits += 1;
+            if visits == reset {
+                stack.copy_thread_call_level(zero, stack.thread_id())?;
+            }
+            stack.push(function)?;
+            stack.push_integer(visits as isize)?;
+            stack.call_unprotected(1, Some(1))?;
+            Ok(stack.to_bytes(-1)?.map(<[u8]>::to_vec))
+        })?;
+        stack.push_integer(status as isize)?;
+        stack.insert(-2)?;
+        stack.push_integer(visits as isize)?;
+        stack.finish(3)
+    }
+    for (name, callback) in [
+        (
+            b"current_thread".as_slice(),
+            current as fn(&mut HostCall<'_>) -> Result<(), Error>,
+        ),
+        (b"native_call", nested),
+        (b"native_collect", collect),
+        (b"native_reader", reader),
+    ] {
+        let f = vm.new_host_function(callback, &[]).unwrap();
+        vm.set_global(name, f).unwrap();
+    }
     vm
+}
+
+#[test]
+fn copied_call_levels_preserve_stacks_and_reach_active_and_normal_threads() {
+    let mut vm = vm();
+    run(&mut vm, br#"
+local main=current_thread();assert(api(8,main)==1)
+local zero,save,co=api(0),api(0),api(0);api(7,main,save)
+local object={};api(1,co,object,false,nil);api(7,main,co)
+local n,a,b,c=api(2,co);assert(n==3 and a==object and b==false and c==nil and api(8,co)==1)
+api(4,co,0);api(1,co,function()return api(8,current_thread())end)
+assert(api(6,co,0)==0 and api(8,co)==1);local n,v=api(2,co);assert(n==1 and v==2)
+local parent=api(0);api(1,parent,function()
+ assert(api(8,main)==1);api(7,zero,main);assert(api(8,main)==0);return 42
+end)
+assert(api(6,parent,0)==0 and api(8,main)==0);api(7,save,main);assert(api(8,main)==1)
+local active=api(0);api(1,active,function()
+ assert(api(8,current_thread())==1);api(7,zero,current_thread());assert(api(8,current_thread())==0);return 42
+end)
+assert(api(6,active,0)==0 and api(8,active)==65535)
+assert(api(6,active,0)==2 and api(9,active)==0 and api(8,active)==65535)
+"#);
+}
+
+#[test]
+fn protected_call_level_changes_restore_on_failure_and_wrap_on_success() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        br#"
+local zero,save,co=api(0),api(0),api(0)
+api(1,co,function()
+ local current=current_thread();api(7,current,save)
+ local ok,e=pcall(function()api(7,zero,current);error('bad',0)end)
+ assert(not ok and e=='bad' and api(8,current)==1)
+ ok,e=pcall(function()api(7,zero,current);return 42 end)
+ assert(ok and e==42 and api(8,current)==65535)
+ local n=native_call(function()return api(8,current)end)
+ assert(n==0 and api(8,current)==65535);api(7,save,current)
+ collectgarbage();local seen={}
+ do local p=newproxy(true);getmetatable(p).__gc=function()seen[#seen+1]=api(8,current)end end
+ native_collect();assert(seen[1]==2 and api(8,current)==1)
+ do local p=newproxy(true);getmetatable(p).__gc=function()seen[#seen+1]=api(8,current)end end
+ collectgarbage();assert(seen[2]==2 and api(8,current)==1)
+ local hooks=0;local busy=false
+ debug.sethook(function(event)
+  if not busy then busy=true;assert(api(8,current)>=2);hooks=hooks+1;busy=false end
+ end,'cr')
+ assert(pcall(function()return tostring(setmetatable({},{__tostring=function()return 'ok'end}))end))
+ debug.sethook(nil);assert(hooks>0);return 42
+end)
+assert(api(6,co,0)==0 and api(8,co)==0)
+"#,
+    );
+    run(
+        &mut vm,
+        b"zero=api(0);saved=api(0);api(7,current_thread(),saved);api(7,zero,current_thread())",
+    );
+    assert_eq!(
+        run(&mut vm, b"return api(8,current_thread())"),
+        vec![Value::Number(0.)]
+    );
+    let error = vm
+        .execute(
+            &compile(
+                b"local function f()api(7,saved,current_thread());error('bad',0)end;return f()",
+            )
+            .unwrap(),
+        )
+        .unwrap_err();
+    assert_eq!(error.message_bytes(), b"bad");
+    assert_eq!(
+        run(&mut vm, b"return api(8,current_thread())"),
+        vec![Value::Number(0.)]
+    );
+    run(&mut vm, b"api(7,saved,current_thread())");
+}
+
+#[test]
+fn copied_levels_preserve_the_resume_limit_and_error_handler_status() {
+    std::thread::Builder::new().stack_size(32*1024*1024).spawn(|| {
+        let mut vm = vm();
+        run(&mut vm, br#"
+local main=current_thread();local exact,high,co=api(0),api(0),api(0)
+local function nest(n,f)if n==0 then return f()end;return native_call(function()return nest(n-1,f)end)end
+api(1,exact,function()return api(8,current_thread())end)
+api(1,high,function()return api(8,current_thread())end)
+api(1,co,function()
+ local current=current_thread()
+ nest(198,function()api(7,current,exact)end);assert(api(8,exact)==199)
+ local ok,e=xpcall(function()nest(500,function()end)end,function(e)api(7,current,high);return e end)
+ assert(not ok and type(e)=='string' and api(8,current)==1 and api(8,high)==201)
+ return 42
+end)
+assert(api(6,co,0)==0 and api(8,co)==0)
+assert(api(6,exact,0)==0 and api(8,exact)==199);assert(select(2,api(2,exact))==200)
+assert(api(6,high,0)==2 and api(9,high)==0 and api(8,high)==201)
+assert(select(2,api(2,high))=='C stack overflow')
+local bad=api(0);api(1,bad,function()
+ local zero=api(0);local chunks={'return ','(','(','17',')',')'}
+ native_reader(zero,function(i)return chunks[i]end,4)
+ print('forces a native call at the wrapped level')
+end)
+assert(api(6,bad,0)==5 and api(9,bad)==5 and api(8,bad)==65534)
+local elevated=api(0);native_call(function()api(7,current_thread(),elevated)end)
+assert(api(8,elevated)==2)
+for _,yield in ipairs{native_yield,coroutine.yield}do
+ local co=api(0);api(1,co,function()api(7,elevated,current_thread());return yield(17)end)
+ assert(api(6,co,0)==2 and api(9,co)==2 and api(8,co)==1)
+end
+"#);
+    }).unwrap().join().unwrap();
+}
+
+#[test]
+fn native_parser_level_changes_cover_text_binary_and_protected_recovery() {
+    let mut vm = vm();
+    let lua = lua_reference::Lua::new();
+    let binary = lua
+        .load("return function(a)return function(b)return a,b end end")
+        .into_function()
+        .unwrap()
+        .dump(false);
+    let bytes = vm.intern(&binary);
+    vm.set_global(b"wire", bytes).unwrap();
+    run(&mut vm, br#"
+local co=api(0);api(1,co,function()
+ local zero=api(0);local current=current_thread()
+ local status,f,n=native_reader(zero,function(i)return ({'return ','(','(','17',')',')'})[i]end,2)
+ assert(status==0 and f()==17 and n==7 and api(8,current)==65535)
+end)
+assert(api(6,co,0)==0 and api(8,co)==65534)
+for reset=0,3 do
+ local co=api(0);api(1,co,function()
+  local zero=api(0);local current=current_thread()
+  local status,e,n=native_reader(zero,function(i)return ({'local',' x =',' )'})[i]end,reset)
+  assert(status==3 and type(e)=='string' and n==4 and api(8,current)==1)
+  status,e,n=native_reader(zero,function(i)if i==2 then api(7,zero,current);error('bad',0)end;return 'return 'end,0)
+  assert(status==2 and e=='bad' and api(8,current)==1);return 42
+ end)
+ assert(api(6,co,0)==0 and api(8,co)==0)
+end
+for _,size in ipairs{1,7,4096}do
+ local co=api(0);api(1,co,function()
+  local zero=api(0);local current=current_thread()
+  local status,f,n=native_reader(zero,function(i)local s=wire:sub((i-1)*size+1,i*size);if s~=''then return s end end,1)
+  assert(status==0 and type(f)=='function' and api(8,current)==0);return 42
+ end)
+ assert(api(6,co,0)==0 and api(8,co)==65535)
+end
+"#);
+}
+
+#[test]
+fn copying_collected_thread_call_levels_rejects_without_mutation() {
+    use std::sync::{Arc, Mutex};
+    let saved = Arc::new(Mutex::new(None::<deadlib_lua::ThreadId>));
+    fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let saved = call
+            .function_data::<Arc<Mutex<Option<deadlib_lua::ThreadId>>>>()
+            .unwrap()
+            .clone();
+        let mut stack = call.native_stack()?;
+        if let Some(thread) = stack.to_thread(1) {
+            *saved.lock().unwrap() = Some(thread);
+        } else {
+            let stale = saved.lock().unwrap().unwrap();
+            let current = stack.thread_id();
+            let before = stack.thread_call_level(current);
+            assert_eq!(stack.thread_call_level(stale), None);
+            assert!(stack.copy_thread_call_level(stale, current).is_err());
+            assert!(stack.copy_thread_call_level(current, stale).is_err());
+            assert_eq!(stack.thread_call_level(current), before);
+            assert_eq!(stack.top(), 0);
+        }
+        stack.finish(0)
+    }
+    let mut vm = vm();
+    let f = vm
+        .new_host_function_with_data(callback, &[], saved)
+        .unwrap();
+    vm.set_global(b"save_level_thread", f).unwrap();
+    run(
+        &mut vm,
+        b"save_level_thread(api(0));collectgarbage();save_level_thread()",
+    );
 }
 
 #[test]

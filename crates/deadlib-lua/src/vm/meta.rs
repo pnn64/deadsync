@@ -269,6 +269,7 @@ impl Vm {
                     vararg_start: first,
                     vararg_count: (last - first) as u32,
                     tail_calls: 0,
+                    c_level_bias: 0,
                 });
                 return self.meta_call(handler, &[left, right], last - 1, CONT_RAW);
             }

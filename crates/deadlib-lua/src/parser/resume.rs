@@ -103,7 +103,7 @@ pub(crate) struct Parser {
     lookahead: Option<Token>,
     previous_line: u32,
     depth: u16,
-    limit: u16,
+    base_depth: u16,
     loops: u16,
     vararg: bool,
     locals: u16,
@@ -128,7 +128,7 @@ impl Default for Parser {
             lookahead: None,
             previous_line: 1,
             depth: 0,
-            limit: 200,
+            base_depth: 0,
             loops: 0,
             vararg: true,
             locals: 0,
@@ -172,12 +172,15 @@ impl Parser {
     }
     pub(crate) fn with_native_depth(depth: usize) -> Self {
         Self {
-            limit: 200usize.saturating_sub(depth) as u16,
+            base_depth: depth as u16,
             ..Self::default()
         }
     }
     pub(crate) fn nesting(&self) -> usize {
         usize::from(self.depth)
+    }
+    pub(crate) fn shift_native_depth(&mut self, change: u16) {
+        self.base_depth = self.base_depth.wrapping_add(change);
     }
     pub(crate) fn arena_bytes(&self) -> usize {
         self.tasks.capacity() * std::mem::size_of::<Task>()
@@ -333,7 +336,7 @@ impl Parser {
         })
     }
     fn enter(&mut self) -> Result<(), Error> {
-        if self.depth >= self.limit {
+        if self.base_depth.wrapping_add(self.depth).wrapping_add(1) > 200 {
             return Err(Error::new(
                 ErrorKind::Limit,
                 self.scanner.line(),
@@ -343,7 +346,7 @@ impl Parser {
         self.depth += 1;
         Ok(())
     }
-    fn limit_error(&self, limit: usize, what: &str, line: u32) -> Error {
+    fn limit_error(&self, limit: impl std::fmt::Display, what: &str, line: u32) -> Error {
         let owner = if line == 0 {
             "main function".to_owned()
         } else {
@@ -1023,8 +1026,8 @@ impl Parser {
                 Task::AssignTarget(line, mut targets) => {
                     let target = self.expr;
                     self.account(input, |r, _| r.conflict(&targets, target))?;
-                    let limit = usize::from(self.limit.saturating_sub(self.depth));
-                    if targets.len() > limit {
+                    let limit = 200 - i32::from(self.base_depth.wrapping_add(self.depth));
+                    if targets.len() as i32 > limit {
                         return Err(self.limit_error(
                             limit,
                             "variables in assignment",
