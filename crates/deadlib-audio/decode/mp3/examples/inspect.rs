@@ -5,6 +5,7 @@ use deadlib_audio_decode_mp3::{
 };
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = std::env::args().nth(1).expect("inspect INPUT.mp3");
+    let check_scalefactors = std::env::args().skip(2).any(|s| s == "--scalefactors");
     let data = std::fs::read(path)?;
     let limits = Limits::default();
     let mut offset = 0;
@@ -42,11 +43,39 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 tag.gapless.map_or(0, |g| g.encoder_padding)
             );
         }
-        reservoir.push(
+        let main_data = reservoir.push(
             frame.side_info.main_data_begin as usize,
             frame.main_data,
             frame.side_info.main_data_bits(header),
         )?;
+        if check_scalefactors {
+            let mut start = 0;
+            let mut previous = [None, None];
+            for granule in 0..header.granules() {
+                for (channel, prev) in previous.iter_mut().enumerate().take(header.channels()) {
+                    let info = &frame.side_info.granules[granule][channel];
+                    let mut bits =
+                        bits::BitReader::bounded(main_data, start, info.part2_3_bits as usize)?;
+                    let factors = scalefactors::read(
+                        &mut bits,
+                        header,
+                        &frame.side_info,
+                        granule,
+                        channel,
+                        prev.as_ref(),
+                    )?;
+                    println!(
+                        "part2\t{offset}\t{granule}\t{channel}\t{}\t{}\t{}\t{}",
+                        info.scalefac_compress,
+                        info.block_type,
+                        u8::from(info.mixed_block),
+                        factors.encoded_bits
+                    );
+                    *prev = Some(factors);
+                    start += info.part2_3_bits as usize;
+                }
+            }
+        }
         offset += frame.data.len();
         first = false;
     }

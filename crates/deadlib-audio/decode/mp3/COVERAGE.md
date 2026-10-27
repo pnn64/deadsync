@@ -46,3 +46,27 @@ independent ISO conformance fixtures, mpg123/Symphonia PCM comparisons,
 stateful synthesis, arbitrary streaming, seeking, fuzzing, encoding or
 performance. Those are still mandatory later milestones. ID3 compressed or
 encrypted payloads are retained, without claiming semantic decompression.
+
+## Scalefactor milestone
+
+The next milestone adds MPEG-1 long/short/mixed scalefactors and all sixteen
+SCFSI masks, plus every MPEG-2 LSF compression code (0..511), ordinary and
+intensity parameter sets, and long/short/mixed partitions. The numeric LSF
+partition counts and formulas were checked directly against ISO/IEC 13818-3
+section 2.4.3.2, printed pages 23-24, including visual inspection of the tables.
+Transmitted scalefactor widths remain available for later intensity processing;
+the final long/short bands remain their implied zero values.
+
+Three additional tests exercise 6,144 LSF version/compression/intensity/shape
+combinations, all MPEG-1 compression/shape combinations, all SCFSI masks and
+truncated/invalid part2 bounds. A failed read leaves the input cursor unchanged.
+Part2 scalefactors also parse within their declared part2_3 fields for all 84
+LAME files (1,422 granule/channel partitions). The framing/libmad comparisons
+and delay/padding accounting continue to pass. Run the structural gate above
+with `--scalefactors` to reproduce this additional check.
+
+This is syntax and bit-consumption evidence, not an independent comparison of
+every decoded scalefactor value or synthesized PCM. Huffman values, intensity
+stereo reconstruction and complete numerical parity remain subsequent gates.
+See [the scalefactor validation record](tests/validation/2026-10-27-scalefactors/validation.json)
+for all eleven tests, Clippy, source hashes and raw generated-file rows.

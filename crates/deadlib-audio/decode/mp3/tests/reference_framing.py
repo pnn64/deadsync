@@ -9,6 +9,7 @@ from pathlib import Path
 def main():
     parser=argparse.ArgumentParser()
     for name in ['native','oracle','output']:parser.add_argument('--'+name,type=Path,required=True)
+    parser.add_argument('--scalefactors',action='store_true')
     args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=False)
     records=[];rng=random.Random(9639)
     for rate in [8000,11025,12000,16000,22050,24000,32000,44100,48000]:
@@ -27,7 +28,7 @@ def main():
                     if mode=='free':options=['--freeformat','-b','400']
                     command=['lame','--silent','--noreplaygain','--resample',str(rate/1000),'-m','m' if channels==1 else 'j']+options+(['-p'] if crc else [])+[str(source),str(target)]
                     subprocess.run(command,capture_output=True,check=True)
-                    a=subprocess.run([str(args.native.resolve()),str(target)],capture_output=True,text=True)
+                    a=subprocess.run([str(args.native.resolve()),str(target)]+(['--scalefactors'] if args.scalefactors else []),capture_output=True,text=True)
                     b=subprocess.run([str(args.oracle.resolve()),str(target)],capture_output=True,text=True)
                     record={'rate':rate,'channels':channels,'mode':mode,'crc':crc,'command':command,'sha256':hashlib.sha256(target.read_bytes()).hexdigest(),'native':{'exit_code':a.returncode,'stdout':a.stdout,'stderr':a.stderr},'libmad':{'exit_code':b.returncode,'stdout':b.stdout,'stderr':b.stderr}}
                     records.append(record)
@@ -47,6 +48,6 @@ def main():
                         assert frames*native[-1][4]-delay-padding==4096,record
                     print(target.name,len(native),'frames',flush=True)
     versions={name:subprocess.check_output(command,text=True,stderr=subprocess.STDOUT).strip() for name,command in [('lame',['lame','--version']),('references',['pkg-config','--modversion','mad','libmpg123','lame'])]}
-    (args.output/'provenance.json').write_text(json.dumps({'versions':versions,'binaries':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [args.native,args.oracle]},'fixtures':len(records),'scope':'frame offsets/counts/rates/channels/sizes, side-info/reservoir acceptance, CRC, LAME raw delay/padding accounting. No native PCM decoding.'},indent=2)+'\n')
+    (args.output/'provenance.json').write_text(json.dumps({'versions':versions,'binaries':{str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in [args.native,args.oracle]},'fixtures':len(records),'scalefactors':args.scalefactors,'scope':'frame offsets/counts/rates/channels/sizes, side-info/reservoir acceptance, CRC, LAME raw delay/padding accounting. Optional part2 syntax/length validation. No native PCM decoding.'},indent=2)+'\n')
 
 if __name__=='__main__':main()

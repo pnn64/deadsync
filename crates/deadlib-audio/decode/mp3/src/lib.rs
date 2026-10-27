@@ -7,6 +7,7 @@ pub mod bits;
 pub mod checksum;
 pub mod frame;
 pub mod reservoir;
+pub mod scalefactors;
 pub mod side;
 pub mod tags;
 

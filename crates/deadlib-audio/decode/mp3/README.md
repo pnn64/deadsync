@@ -16,6 +16,8 @@ PCM-parity or performance-completion claim is made by the framing milestone.
 See [PLAN.md](PLAN.md) for the full requested scope and verification gates.
 The foundation's eight tests and 84-file/732-frame libmad comparison are recorded
 in [COVERAGE.md](COVERAGE.md).
+MPEG-1 SCFSI/scalefactors and all MPEG-2 LSF scalefactor partitions are now
+implemented and tested separately, including intensity parameter widths.
 
 ```sh
 cargo test --locked -p deadlib-audio-decode-mp3 --target-dir target/deadlib-mp3
