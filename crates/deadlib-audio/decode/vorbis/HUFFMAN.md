@@ -62,6 +62,11 @@ workloads. A faster scalar loop alone therefore does not establish that it was
 the full decoder's dominant bottleneck. Whole-file throughput and startup must
 be measured separately; see [PERFORMANCE.md](PERFORMANCE.md).
 
+The later [real-packet codebook diagnostic](CODEBOOK_PROFILE.md) records actual
+per-book/per-entry counts and prefix/fallback activity, with every PCM sample's
+bits checked against production. Its symbol distribution guides future
+experiments; instrumented counters are not a timing benchmark.
+
 The runner can build native production sources from a baseline commit in a
 fresh ignored workspace, retaining the current benchmark adapters and exact
 dependency lock/profile settings. It interleaves the baseline, current native,
