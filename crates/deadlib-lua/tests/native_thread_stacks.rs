@@ -47,6 +47,13 @@ fn api(call: &mut HostCall<'_>) -> Result<(), Error> {
             stack.push_integer(n as isize)?;
             stack.finish(1)
         }
+        6 => {
+            let co = stack.to_thread(2).unwrap();
+            let count = stack.to_integer(3).unwrap() as usize;
+            let status = stack.resume_thread(co, count)?;
+            stack.push_integer(status as isize)?;
+            stack.finish(1)
+        }
         _ => unreachable!(),
     }
 }
@@ -54,7 +61,175 @@ fn vm() -> Vm {
     let mut vm = Vm::new();
     let f = vm.new_host_function(api, &[]).unwrap();
     vm.set_global(b"api", f).unwrap();
+    fn yield_values(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let stack = call.native_stack()?;
+        let count = stack.top();
+        stack.yield_results(count)
+    }
+    let f = vm.new_host_function(yield_values, &[]).unwrap();
+    vm.set_global(b"native_yield", f).unwrap();
     vm
+}
+
+#[test]
+fn native_resume_keeps_values_and_interoperates_with_lua_resume() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        br#"
+local co=api(0);local marker={}
+api(1,co,'prefix',function(a)local b,c=native_yield(a,nil,false);return b,c end,marker)
+assert(api(6,co,1)==1)
+local n,a,b,c=api(2,co);assert(n==3 and a==marker and b==nil and c==false)
+api(1,co,17,25);assert(api(6,co,2)==0)
+local n,prefix,a,b=api(2,co);assert(n==3 and prefix=='prefix' and a==17 and b==25)
+api(4,co,0);api(1,co,tonumber,'42');assert(api(6,co,1)==0)
+assert(select(2,api(2,co))==42)
+co=coroutine.create(function()local v=native_yield(17);return v end)
+assert(select(2,coroutine.resume(co))==17);api(1,co,42);assert(api(6,co,1)==0)
+co=coroutine.create(function()local v=coroutine.yield(17);return v end)
+assert(api(6,co,0)==1);assert(select(2,coroutine.resume(co,42))==42)
+for _,yield in ipairs{native_yield,coroutine.yield}do
+ co=coroutine.create(function()return yield('old',nil,false)end)
+ assert(api(6,co,0)==1)
+ local name,a=debug.getlocal(co,0,1);local name3,c=debug.getlocal(co,0,3)
+ assert(name=='(*temporary)' and a=='old' and name3==name and c==false and debug.getlocal(co,0,4)==nil)
+ assert(debug.setlocal(co,0,1,'changed')==name and debug.setlocal(co,0,4,42)==name)
+ local n,a,b,c=api(2,co);assert(n==3 and a=='changed' and b==nil and c==false)
+ api(4,co,0);assert(debug.getlocal(co,0,1)==nil and debug.setlocal(co,0,1,42)==name)
+ assert(api(6,co,0)==0 and api(5,co)==0)
+ co=coroutine.create(function()return yield('old')end)
+ local seen=0
+ debug.sethook(co,function(event)
+  if event=='return' and debug.getinfo(2,'f').func==yield then
+   local n1,a=debug.getlocal(2,1);local n2,b=debug.getlocal(2,2)
+   local n3,c=debug.getlocal(2,3);local n4,d=debug.getlocal(2,4)
+   assert(n1=='(*temporary)' and n2==n1 and n3==n1 and n4==n1)
+   assert(a=='old' and b==17 and c==25 and type(d)=='table' and debug.getlocal(2,5)==nil)
+   debug.setlocal(2,2,19);collectgarbage();seen=seen+1
+  end
+ end,'r')
+ assert(api(6,co,0)==1);api(1,co,17,25);assert(api(6,co,2)==0)
+ local n,a,b=api(2,co);assert(n==2 and a==19 and b==25 and seen==1)
+ debug.sethook(co,nil)
+end
+"#,
+    );
+}
+
+#[test]
+fn native_resume_retains_error_status_and_rejects_yield_boundaries() {
+    let mut vm = vm();
+    run(&mut vm, br#"
+local message='attempt to yield across metamethod/C-call boundary'
+local ok,e=pcall(native_yield,17);assert(not ok and e==message)
+local co=coroutine.create(function()return pcall(native_yield,17)end)
+assert(api(6,co,0)==0);local n,ok,e=api(2,co);assert(n==2 and not ok and e==message)
+co=coroutine.create(function()error(17)end)
+assert(api(6,co,0)==2);local n,a,b,c=api(2,co);assert(n==3 and a==17 and type(b)=='string' and b==c)
+assert(api(6,co,0)==2);local n,e=api(2,co);assert(n==1 and e=='cannot resume non-suspended coroutine')
+"#);
+}
+
+#[test]
+fn yielding_callbacks_return_through_rust_and_are_not_reentered_on_resume() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    struct Returned(Arc<[AtomicUsize; 2]>);
+    impl Drop for Returned {
+        fn drop(&mut self) {
+            self.0[1].fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let state = call
+            .function_data::<Arc<[AtomicUsize; 2]>>()
+            .unwrap()
+            .clone();
+        state[0].fetch_add(1, Ordering::Relaxed);
+        let _returned = Returned(state);
+        let stack = call.native_stack()?;
+        let count = stack.top();
+        stack.yield_results(count)
+    }
+    let mut vm = vm();
+    let state = Arc::new([AtomicUsize::new(0), AtomicUsize::new(0)]);
+    let f = vm
+        .new_host_function_with_data(callback, &[], state.clone())
+        .unwrap();
+    vm.set_global(b"yield_once", f).unwrap();
+    run(
+        &mut vm,
+        br#"
+co=coroutine.create(function()local a=yield_once(17);local b=yield_once(a);return b end)
+assert(api(6,co,0)==1)
+"#,
+    );
+    assert_eq!(state[0].load(Ordering::Relaxed), 1);
+    assert_eq!(state[1].load(Ordering::Relaxed), 1);
+    run(
+        &mut vm,
+        br#"
+api(1,co,29);assert(api(6,co,1)==1)
+api(1,co,42);assert(api(6,co,1)==0)
+local n,v=api(2,co);assert(n==1 and v==42)
+"#,
+    );
+    assert_eq!(state[0].load(Ordering::Relaxed), 2);
+    assert_eq!(state[1].load(Ordering::Relaxed), 2);
+}
+
+#[test]
+fn native_resume_limits_escape_handlers_and_close_child_cells() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        br#"
+co=coroutine.create(function()
+ local x=42;escaped=function()return x end
+ while true do x=x end
+end)
+"#,
+    );
+    vm.set_instruction_limit(Some(100));
+    let error = vm
+        .execute(&compile(b"return pcall(function()return api(6,co,0)end)").unwrap())
+        .unwrap_err();
+    assert_eq!(error.kind(), deadlib_lua::ErrorKind::Limit);
+    vm.set_instruction_limit(None);
+    run(
+        &mut vm,
+        b"assert(escaped()==42 and coroutine.status(co)=='dead');collectgarbage()",
+    );
+    assert_eq!(run(&mut vm, b"return 42"), vec![Value::Number(42.)]);
+}
+
+#[test]
+fn native_resume_validates_argument_counts_before_touching_stacks() {
+    fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        let entry = stack.value(1).unwrap();
+        let co = stack.new_thread()?;
+        stack.thread_stack(co)?.push(entry)?;
+        for count in [1, 2, usize::MAX] {
+            assert!(stack.resume_thread(co, count).is_err());
+            let child = stack.thread_stack(co)?;
+            assert_eq!(child.top(), 1);
+            assert_eq!(child.value(1), Some(entry));
+        }
+        assert_eq!(stack.resume_thread(co, 0)?, NativeThreadStatus::Ok);
+        let child = stack.thread_stack(co)?;
+        assert_eq!(child.top(), 1);
+        assert_eq!(child.value(1), Some(Value::Number(42.)));
+        assert_eq!(stack.top(), 2);
+        stack.finish(0)
+    }
+    let mut vm = vm();
+    let f = vm.new_host_function(callback, &[]).unwrap();
+    vm.set_global(b"validate_resume", f).unwrap();
+    run(&mut vm, b"validate_resume(function()return 42 end)");
 }
 fn run(vm: &mut Vm, source: &[u8]) -> Vec<Value> {
     vm.execute(&compile(source).unwrap()).unwrap().to_vec()

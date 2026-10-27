@@ -298,7 +298,7 @@ impl Vm {
                     return Ok(count);
                 }
                 Ok(count) if self.thread != owner => {
-                    self.finish_thread(0, count, false, false, &mut line)
+                    self.finish_thread(0, count, false, false, &mut line);
                 }
                 Err(error) if self.thread == owner && self.frames.len() == depth => {
                     return Err(error.at_line(line));

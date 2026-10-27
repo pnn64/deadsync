@@ -67,6 +67,12 @@ API lua_State *lua_newthread(lua_State *L) {
 API void lua_xmove(lua_State *from, lua_State *to, int count) {
   BoundaryValue value={0};value.userdata=to;operation(from,56,count,0,&value);
 }
+API int lua_resume(lua_State *L, int arguments) {
+  BoundaryValue value={0};operation(L,57,arguments,0,&value);return value.integer;
+}
+API int lua_yield(lua_State *L, int results) {
+  BoundaryValue value={0};operation(L,58,results,0,&value);return -1;
+}
 API int lua_pushthread(lua_State *L) {
   BoundaryValue value={0};operation(L,52,0,0,&value);return value.integer;
 }

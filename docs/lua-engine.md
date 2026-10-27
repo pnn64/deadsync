@@ -1085,6 +1085,20 @@ The persistent representation advances to schema 2 for logical debug bounds.
 Both previously recorded predicate/debug/export probes now match the reference;
 broader stack-layout and hook parity remain open.
 
+The [native coroutine checks](testing/2026-10-27-rust-lua-native-resume.md)
+add `NativeStack::resume_thread` and `yield_results`, plus development C
+`lua_resume` and `lua_yield`. The shared scheduler preserves the C entry point's
+results on the resumed thread and Lua's transfer-to-caller behavior. Yielding
+returns normally through the Rust callback; resumption provides its return
+values without calling it again. Suspended debug locals follow the public
+stack, and return hooks can inspect and modify retained arguments and actual
+return values. The C fixture matches five fault windows, invalid/callable entries,
+nested/mixed resumes, parent mutations, collection, hook aliases and 1,000 cycles.
+Portable groups cover Rust destruction at yield, argument validation and quota
+recovery. The boundary declares 65 of 80 core APIs; full semantics, `lua_setlevel`,
+remaining native hook/debug/lifecycle/allocator behavior and full standalone
+Lua 5.1 parity remain unfinished. Optimization and benchmarks stay deferred.
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the

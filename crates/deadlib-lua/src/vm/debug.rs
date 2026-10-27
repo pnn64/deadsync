@@ -412,7 +412,20 @@ impl Vm {
             }
             FrameKind::Native(id) => {
                 let current = thread == self.thread && index + 1 == frames.len();
-                if (matches!(id, strings::STR_DUMP | CONSOLE | threads::CO_RESUME)
+                if thread != self.thread
+                    && index + 1 == frames.len()
+                    && self.threads[slot_index(thread.0)].resume_status
+                        == threads::NativeThreadStatus::Yielded
+                    && (id == threads::CO_YIELD || frame.pc == threads::HOST_YIELDED)
+                {
+                    let window = &self.threads[slot_index(thread.0)].api_stack;
+                    return (n < window.len())
+                        .then_some((LocalName::Temporary, LocalSlot::Register(window.start + n)));
+                }
+                if (matches!(
+                    id,
+                    strings::STR_DUMP | CONSOLE | threads::CO_RESUME | threads::CO_YIELD
+                ) || frame.pc == threads::HOST_YIELDED
                     || self.scheduled_native(id) == 1)
                     && n == frame.argc()
                 {
@@ -440,7 +453,6 @@ impl Vm {
                         }
                         frame.vararg_start + 1
                     }
-                    threads::CO_YIELD if frame.pc != 0 => return None,
                     LOAD_READER if frame.pc != 0 => {
                         if n >= 3 {
                             return None;
@@ -534,9 +546,12 @@ impl Vm {
                 if id == SET_LOCAL
                     && thread != self.thread
                     && i + 1 == frames.len()
-                    && n == 1
-                    && matches!(frames[i].function, FrameKind::Native(threads::CO_YIELD))
-                    && frames[i].pc != 0
+                    && self.threads[slot_index(thread.0)].resume_status
+                        == threads::NativeThreadStatus::Yielded
+                    && usize::try_from(n)
+                        == Ok(self.threads[slot_index(thread.0)].api_stack.len() + 1)
+                    && (matches!(frames[i].function, FrameKind::Native(threads::CO_YIELD))
+                        || frames[i].pc == threads::HOST_YIELDED)
                 {
                     Some((
                         LocalName::Temporary,

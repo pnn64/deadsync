@@ -1,5 +1,6 @@
 //! Mutable native argument/temporary storage in the VM register window.
 use super::*;
+mod coroutine;
 mod dump;
 mod file;
 mod loader;
@@ -23,7 +24,8 @@ pub use protected::NativeCallStatus;
 /// This window is separate from closure captures. Nested calls preserve the
 /// live prefix and cannot yield across this callback. [`Self::call`] protects
 /// errors; [`Self::call_unprotected`] propagates them with their fault frames.
-/// Call [`Self::finish`] to select the last values as callback results. Dropping
+/// Call [`Self::finish`] to select the last values as callback results, or
+/// [`Self::yield_results`] to end the callback at a coroutine yield. Dropping
 /// the stack without finishing selects zero results; the window remains
 /// available to fault/return inspectors until the native frame exits.
 pub struct NativeStack<'call, 'vm> {

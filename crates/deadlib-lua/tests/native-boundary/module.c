@@ -799,6 +799,15 @@ EXPORT int boundary_newthread(lua_State *L) {
   if(lua_gettop(L)>1){lua_pushvalue(L,1);lua_xmove(L,co,1);}
   return 1;
 }
+EXPORT int boundary_resume(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);
+  int count=(int)luaL_checkinteger(L,2);
+  int result=lua_resume(co,count);
+  lua_pushinteger(L,result);lua_pushinteger(L,lua_status(co));return 2;
+}
+EXPORT int boundary_yield(lua_State *L) {
+  return lua_yield(L,lua_gettop(L));
+}
 EXPORT int boundary_thread_values(lua_State *L) {
   lua_State *co=lua_tothread(L,1);int i,n=lua_gettop(co);
   lua_checkstack(co,1);lua_pushinteger(L,n);lua_newtable(L);

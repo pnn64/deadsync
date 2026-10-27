@@ -185,6 +185,7 @@ mod windows {
     struct Context<'stack, 'a, 'vm> {
         stack: &'stack mut NativeStack<'a, 'vm>,
         error: Option<Error>,
+        yielded: Option<usize>,
         bridge: Arc<Bridge>,
         state: usize,
     }
@@ -196,6 +197,20 @@ mod windows {
             b: c_int,
             value: &mut BoundaryValue,
         ) -> Result<(), Error> {
+            if op == 57 {
+                let thread = self
+                    .bridge
+                    .states
+                    .lock()
+                    .unwrap()
+                    .get(&(value.state as usize))
+                    .copied()
+                    .ok_or_else(|| self.stack.error(b"unknown target thread"))?;
+                let count = usize::try_from(a)
+                    .map_err(|_| self.stack.error(b"invalid resume argument count"))?;
+                value.integer = self.stack.resume_thread(thread, count)? as c_int;
+                return Ok(());
+            }
             if op == 56 {
                 let states = self.bridge.states.lock().unwrap();
                 let from = *states
@@ -224,6 +239,15 @@ mod windows {
                 return self.inactive_operation(thread, op, a, b, value);
             }
             match op {
+                58 => {
+                    let count = usize::try_from(a)
+                        .map_err(|_| self.stack.error(b"invalid yield result count"))?;
+                    if let Err(error) = self.stack.check_yield(count) {
+                        let value = self.stack.intern(error.message_bytes());
+                        return Err(self.stack.raise(value));
+                    }
+                    self.yielded = Some(count);
+                }
                 55 => {
                     let thread = self.stack.new_thread()?;
                     value.userdata = state_for(self.stack, &self.bridge, thread)? as *mut c_void;
@@ -263,6 +287,7 @@ mod windows {
                         let mut context = Context {
                             stack,
                             error: None,
+                            yielded: None,
                             bridge: bridge.clone(),
                             state,
                         };
@@ -332,6 +357,7 @@ mod windows {
                         let mut context = Context {
                             stack,
                             error: None,
+                            yielded: None,
                             bridge: bridge.clone(),
                             state,
                         };
@@ -746,6 +772,7 @@ mod windows {
         let mut context = Context {
             stack: &mut stack,
             error: None,
+            yielded: None,
             bridge,
             state: state as usize,
         };
@@ -762,7 +789,11 @@ mod windows {
         if let Some(error) = context.error.take() {
             return Err(error);
         }
+        let yielded = context.yielded;
         drop(context);
+        if let Some(count) = yielded {
+            return stack.yield_results(count);
+        }
         let count = usize::try_from(count)
             .map_err(|_| stack.error(b"invalid boundary-probe result count"))?;
         stack.finish(count)
@@ -881,6 +912,8 @@ mod windows {
             "boundary_thread_selfmove",
             "boundary_thread_resize",
             "boundary_thread_hold",
+            "boundary_resume",
+            "boundary_yield",
             "boundary_cpcall",
         ] {
             let function = vm

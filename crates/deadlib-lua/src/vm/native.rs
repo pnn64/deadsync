@@ -163,6 +163,9 @@ impl Vm {
                     }
                 });
                 self.active_native = previous;
+                if result.is_ok() && self.frames[index].pc == threads::HOST_YIELDED {
+                    return Ok(None);
+                }
                 if let Ok((source, actual)) = result
                     && self.hooks.mask & hooks::RETURN != 0
                     && self.hooks.allowed()
@@ -404,6 +407,17 @@ impl Vm {
         let index = self.frames.len() - 1;
         let scheduled = self.scheduled_native(id);
         match id {
+            _ if frame.pc == threads::HOST_YIELDED && self.host_callback(id).is_some() => {
+                if matches!(self.transition, Some(threads::Transition::Yield { .. })) {
+                    return Ok(None);
+                }
+                let values = self.threads[slot_index(self.thread.0)]
+                    .resumed_values
+                    .take()
+                    .expect("native yield resume arguments");
+                self.frames[index].vararg_count = (self.top - frame.vararg_start) as u32;
+                Ok(self.return_frame(self.frames[index], values.start, values.len()))
+            }
             CONT_HOST_LOAD if matches!(frame.pc, 2 | 5) => {
                 self.frames.pop();
                 self.registers[base] = Value::Number(if frame.pc == 5 { 5. } else { 2. });
@@ -522,6 +536,9 @@ impl Vm {
             _ => {
                 if let Some(callback) = self.host_callback(id) {
                     let (source, actual) = self.host_native(id, base, frame.argc(), callback)?;
+                    if self.frames[index].pc == threads::HOST_YIELDED {
+                        return Ok(None);
+                    }
                     return Ok(self.return_frame(self.frames[index], source, actual));
                 }
                 // Return hooks run before results replace the caller's slots.

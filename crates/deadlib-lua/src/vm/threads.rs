@@ -7,6 +7,7 @@ pub(super) const CO_RUNNING: u64 = 82;
 pub(super) const CO_STATUS: u64 = 83;
 pub(super) const CO_WRAP: u64 = 84;
 pub(super) const CO_YIELD: u64 = 85;
+pub(super) const HOST_YIELDED: u32 = u32::MAX;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) enum Status {
@@ -76,6 +77,9 @@ pub(super) struct Thread {
     pub(super) hooks: hooks::Hooks,
     pub(super) entry: Option<(usize, usize)>,
     pub(super) api_stack: std::ops::Range<usize>,
+    pub(super) native_resumer: bool,
+    pub(super) native_level: usize,
+    pub(super) resumed_values: Option<std::ops::Range<usize>>,
     pub(super) status: Status,
     pub(super) resume_status: NativeThreadStatus,
     pub(super) resumer: Option<ThreadId>,
@@ -100,6 +104,9 @@ impl Thread {
             hooks: hooks::Hooks::default(),
             entry: None,
             api_stack: 0..0,
+            native_resumer: false,
+            native_level: 0,
+            resumed_values: None,
             status: Status::Running,
             resume_status: NativeThreadStatus::Ok,
             resumer: None,
@@ -278,7 +285,7 @@ impl Vm {
         std::mem::swap(&mut self.hooks, &mut state.hooks);
         std::mem::swap(line, &mut state.line);
     }
-    fn switch_thread(&mut self, id: ThreadId, line: &mut u32) {
+    pub(super) fn switch_thread(&mut self, id: ThreadId, line: &mut u32) {
         self.exchange_thread(self.thread, line);
         self.exchange_thread(id, line);
         self.thread = id;
@@ -296,7 +303,9 @@ impl Vm {
                 }
             }
             Some(Transition::Yield { source, count }) => {
-                self.finish_thread(source, count, false, true, line)
+                return Ok(self
+                    .finish_thread(source, count, false, true, line)
+                    .then_some(0));
             }
         }
         Ok(None)
@@ -308,12 +317,39 @@ impl Vm {
         failed: bool,
         suspended: bool,
         line: &mut u32,
-    ) {
+    ) -> bool {
         let id = self.thread;
         let parent = self.threads[slot_index(id.0)]
             .resumer
             .take()
             .expect("resumed coroutine has a parent");
+        if std::mem::take(&mut self.threads[slot_index(id.0)].native_resumer) {
+            let state = &mut self.threads[slot_index(id.0)];
+            state.status = if suspended {
+                Status::Suspended
+            } else {
+                Status::Dead
+            };
+            state.resume_status = if failed {
+                NativeThreadStatus::RuntimeError
+            } else if suspended {
+                NativeThreadStatus::Yielded
+            } else {
+                NativeThreadStatus::Ok
+            };
+            let base = if suspended {
+                source
+            } else if failed {
+                state.api_stack.start
+            } else {
+                0
+            };
+            state.api_stack = base..source + count;
+            self.top = source + count;
+            self.threads[slot_index(parent.0)].status = Status::Running;
+            self.switch_thread(parent, line);
+            return true;
+        }
         let caller = &mut self.threads[slot_index(parent.0)];
         let frame = caller
             .frames
@@ -364,6 +400,7 @@ impl Vm {
             self.registers.clear();
         }
         self.switch_thread(parent, line);
+        false
     }
     pub(super) fn fail_thread(&mut self, error: &Error, line: &mut u32) {
         self.discard_finalizers(0);
@@ -408,8 +445,15 @@ impl Vm {
                 f.stack_start = base;
                 f.vararg_count = values.len() as u32;
             }
+        } else {
+            // A rejected entry has no call frame, but its raw diagnostic is
+            // still on the base stack before lua_resume adds the error copy.
+            self.registers.push(value);
+            self.top = self.registers.len();
+            self.threads[slot_index(self.thread.0)].api_stack = 0..self.top;
         }
-        let source = self.registers.len();
+        let source = self.top;
+        self.registers.truncate(source);
         self.registers.push(value);
         // Keep faulting frames and open cells for debug inspection and escaped
         // closures. A dead thread cannot execute again or overwrite those cells.
@@ -438,6 +482,8 @@ impl Vm {
             self.registers.clear();
             self.top = 0;
             self.threads[slot_index(id.0)].api_stack = 0..0;
+            self.threads[slot_index(id.0)].native_resumer = false;
+            self.threads[slot_index(id.0)].resumed_values = None;
             self.threads[slot_index(id.0)].status = Status::Dead;
             self.threads[slot_index(id.0)].resume_status = NativeThreadStatus::RuntimeError;
             self.switch_thread(parent, line);
@@ -561,7 +607,12 @@ impl Vm {
                 });
                 return Ok(None);
             }
-            return Ok(self.return_frame(frame, base, self.top - base));
+            let values = self.threads[slot_index(self.thread.0)]
+                .resumed_values
+                .take()
+                .expect("yield resume arguments");
+            self.frames[owner].vararg_count = (self.top - frame.vararg_start) as u32;
+            return Ok(self.return_frame(self.frames[owner], values.start, values.len()));
         }
         let wrapped = id != CO_RESUME;
         let phase = frame.pc & 3;
@@ -654,21 +705,19 @@ impl Vm {
             state.top = state.registers.len();
             state.entry = Some((call, count));
         } else {
-            let call = state
-                .frames
-                .last()
-                .expect("suspended coroutine has a yield frame")
-                .base;
+            let call = state.api_stack.end;
             state
                 .registers
                 .resize(state.registers.len().max(call + count), Value::Nil);
             state.registers[call..call + count].copy_from_slice(args);
             state.top = call + count;
+            state.resumed_values = Some(call..call + count);
         }
         state.resumer = Some(self.thread);
         state.status = Status::Running;
         state.resume_status = NativeThreadStatus::Ok;
         state.depth = (depth + 1) as u16;
+        state.native_level = depth + 1;
         let growth = (state.registers.capacity() - capacity) * std::mem::size_of::<Value>();
         self.threads.note_alloc(growth);
         // These are the caller's owned call temporaries. auxresume has moved
