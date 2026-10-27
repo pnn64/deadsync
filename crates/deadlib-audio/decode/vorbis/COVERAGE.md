@@ -26,6 +26,10 @@ coverage and exposes a specification/reference disagreement for unaligned
 type-two residue ranges. `Residue2Layout` offers the normative default and an
 explicit libvorbis layout through raw, Ogg and indexed APIs.
 
+The [codebook extent follow-up](CODEBOOK_LIMITS.md) adds a configurable 24-bit
+reference declaration guard before lengths/allocation, 475 exact declaration and
+whole-initialization checks, plus a full-wire-field override under other limits.
+
 ## Implemented and tested (2026-10-26)
 
 * Bitpacking/unpacking with widths 0..=32, unaligned 32-bit fields, zero-width

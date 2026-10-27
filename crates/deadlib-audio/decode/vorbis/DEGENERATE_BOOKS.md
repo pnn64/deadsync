@@ -145,3 +145,7 @@ This closes the named empty-book and eleven nonfinite cases under explicit
 reference policies. It does not establish complete parity for every legal or
 malformed stream. The remaining corpus, conformance and named acceptance/count
 differences in the [parity ledger](PARITY.md) still require independent work.
+
+The subsequent [extent-limit follow-up](CODEBOOK_LIMITS.md) applies the reference
+guard before lengths for every book and exposes it through
+`Limits::max_codebook_extent_bits` (default 24, configurable independently).

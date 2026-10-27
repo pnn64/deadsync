@@ -45,6 +45,23 @@ static void headers(FILE *file) {
     for (i = 0; i < comments.comments; ++i) vector(comments.user_comments[i], (uint32_t)comments.comment_lengths[i]);
     vorbis_comment_clear(&comments); vorbis_info_clear(&info);
 }
+/* Header-only unpacking: never initialize or evaluate potentially degenerate VQ
+   books. Report the reference bit reader's position even on an early rejection. */
+static void bookheaders(FILE *file) {
+    uint64_t count = get64(file), i;
+    if (count > (1u << 20)) fail("codebook header count");
+    put64(count);
+    for (i = 0; i < count; ++i) {
+        long size; unsigned char *data = packet(file, &size);
+        oggpack_buffer bits; static_codebook *book;
+        oggpack_readinit(&bits, data, size);
+        book = vorbis_staticbook_unpack(&bits);
+        put8(book != NULL); put64((uint64_t)oggpack_bits(&bits));
+        if (book) vorbis_staticbook_destroy(book);
+        free(data);
+    }
+    if (fgetc(file) != EOF) fail("trailing codebook headers");
+}
 static void books(FILE *file) {
     long size; unsigned char *data = packet(file, &size); oggpack_buffer bits;
     int count, i;
@@ -194,13 +211,14 @@ static void ogg_seek(FILE *file, const char *requests_path) {
     fclose(requests); ov_clear(&reader);
 }
 int main(int argc, char **argv) {
-    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|books|pcm|pcm-cases|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
+    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|books|pcm|pcm-cases|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
 #endif
     if (!strcmp(argv[1], "headers")) headers(file);
     else if (!strcmp(argv[1], "books")) books(file);
+    else if (!strcmp(argv[1], "bookheaders")) bookheaders(file);
     else if (!strcmp(argv[1], "pcm")) pcm(file, 0);
     else if (!strcmp(argv[1], "pcm-cases")) pcm(file, 1);
     else if (!strcmp(argv[1], "mdct")) transform(file, 0);

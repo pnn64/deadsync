@@ -70,6 +70,10 @@ Header and streaming inputs also exercise both `Residue2Layout` policies. The
 header target's high control bit selects the libvorbis layout when `kind % 3`
 selects setup parsing. Bits six and five enable empty books and IEEE propagation
 respectively (controls 2 / 224 exercise strict / all three compatibility options).
+Header control bit four raises the codebook extent cap from 24 to the full
+40 wire-field bits. Streaming bit six makes the same choice, preserved during
+indexing and selected setup reparsing. Entry/value/memory caps remain independent;
+procedural seeds cover both sides of the default reference extent guard.
 Streaming control bits three, four and five select layout, empty books and IEEE
 propagation for pull, push, reset and indexed seeking. The raw target uses its
 normative fixture contexts. Procedural empty-book and unaligned

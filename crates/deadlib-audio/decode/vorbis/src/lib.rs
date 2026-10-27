@@ -83,6 +83,10 @@ pub struct Limits {
     pub max_packet_bytes: usize,
     pub max_comment_bytes: usize,
     pub max_comments: usize,
+    /// Bound `ilog(dimensions) + ilog(entries)` before reading lengths or
+    /// allocating codebook storage. The default 24 matches libvorbis's guard.
+    /// Set to 40 to permit the full wire-field extent, subject to other limits.
+    pub max_codebook_extent_bits: u8,
     pub max_codebook_entries: usize,
     pub max_codebook_values: usize,
     pub max_huffman_nodes: usize,
@@ -96,6 +100,7 @@ impl Default for Limits {
             max_packet_bytes: 64 << 20,
             max_comment_bytes: 32 << 20,
             max_comments: 1 << 20,
+            max_codebook_extent_bits: 24,
             max_codebook_entries: 1 << 20,
             max_codebook_values: 16 << 20,
             max_huffman_nodes: 2 << 20,

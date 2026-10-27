@@ -1,0 +1,75 @@
+{
+  "scope": "Same complete 46-byte scalar book under ordinary default Limits before and after the extent guard. Preceding committed source accepts at bit 331; current source rejects at bit 64 without exhausting the reader. No performance measurement.",
+  "before_source_commit": "4b46420d6df61994875c33cd154691c669e6826b",
+  "before_source_sha256": {
+    "crates/deadlib-audio/decode/ogg/Cargo.toml": "b18d898856a7db1f30299197ed8d053dd49b6825c50571d1b831950265d069eb",
+    "crates/deadlib-audio/decode/ogg/benches/container.rs": "95de98f357e80218fff47d296f0d62a0769240db503dabd09cbde017d40bbae8",
+    "crates/deadlib-audio/decode/ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+    "crates/deadlib-audio/decode/ogg/src/crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+    "crates/deadlib-audio/decode/ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "crates/deadlib-audio/decode/ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+    "crates/deadlib-audio/decode/ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+    "crates/deadlib-audio/decode/ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+    "crates/deadlib-audio/decode/ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+    "crates/deadlib-audio/decode/ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+    "crates/deadlib-audio/decode/ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+    "crates/deadlib-audio/decode/vorbis/Cargo.toml": "f43d8776a2408c8a6ac0bff98fac4e9141b2bcccf499ff9f0fa845c918337a9e",
+    "crates/deadlib-audio/decode/vorbis/benches/encoding.rs": "306e4f76064d20cbe101bd68bedbcf7733e565de601839bb656dca4fa798afb6",
+    "crates/deadlib-audio/decode/vorbis/benches/pipeline.rs": "d58e98402bb5f67a2a0c3f46a2476ea4c11ffc04eed2657b959dc766cb32b399",
+    "crates/deadlib-audio/decode/vorbis/benches/resources.rs": "52aec945a67b721f8a4eec9c6596acbaf6f9788830ad35de8ea49a209b0d9ad2",
+    "crates/deadlib-audio/decode/vorbis/benches/support/alloc.rs": "ef798a2aa62694ea01242d31aa93a4fb893159222ef96e4619a93b29243a0763",
+    "crates/deadlib-audio/decode/vorbis/benches/support/codebook_profile.rs": "c3dc7aa93c6dbdd9b7ac3949a07d51329e3fadfa5881f296191c10fffeef3970",
+    "crates/deadlib-audio/decode/vorbis/benches/support/huffman.rs": "9c062fa9995065c2cd9f41acef5a519a10f36147b8013fc877e7a1675a0aa27f",
+    "crates/deadlib-audio/decode/vorbis/benches/support/io.rs": "a03cf39395f8294c6d782e1ee068b174f4593ecb4705891d56ebea1a4905e6f2",
+    "crates/deadlib-audio/decode/vorbis/benches/support/seek.rs": "a23d83c79589655d18d20ccf71e11b561a18261c6865904142e374a41c9160be",
+    "crates/deadlib-audio/decode/vorbis/benches/support/synthesis_profile.rs": "c90282a589eff1f4598035ef11fbfc46f086a3cd2f2f968682c140ea62a7645d",
+    "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "f1d5cb98dbc1a81977857650e809141cb725716e134b9138ce74b9d179ddd8d9",
+    "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "c8d5c92a3b05d3973dcdd70917c2f27fab5e56565c1e22e08fa4a2bbc7bb1a79",
+    "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "c09452cc502714d8bdc762fd054945faf1f9a2294029399f1ce14d8aa0d97a34",
+    "crates/deadlib-audio/decode/vorbis/src/encoder.rs": "8fac02bb876bde74196ef8d5149ec9c0f56fb84c39566a3438278d38fc258222",
+    "crates/deadlib-audio/decode/vorbis/src/floor.rs": "936fa4501e7c8f5bc2ce239a97ad1310b81b2ca862cac9fd7bf5339cd313f583",
+    "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "crates/deadlib-audio/decode/vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "crates/deadlib-audio/decode/vorbis/src/lib.rs": "bb1d95df7207103fad1d9fd0931ffbc3935b3e9323ff2b26e194a199ced56900",
+    "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "c115d78666a612b5d88cd7cbae94ed0b157ad2ff5a7de66318a3300e2a1dff78",
+    "crates/deadlib-audio/decode/vorbis/src/residue.rs": "4581655db4d773d3a4a4fecf5f4f3ba2ea66e033bc3f9d85ca25d34c47376c0a",
+    "crates/deadlib-audio/decode/vorbis/src/seek.rs": "e5275c9c4c5ecfb5a3a0290f508fcf94fd051c471f00a88720e891a52f211649",
+    "crates/deadlib-audio/decode/vorbis/src/setup.rs": "eea0a3c3e82fd7fe002c42fc1d4b2b59880dd1ae8b540fa563314790909c25e8",
+    "crates/deadlib-audio/decode/vorbis/src/transform.rs": "257918b47b792cc44acb02e4bfaaf863d4078f6063af3b9b5c201b8a2d06edda"
+  },
+  "input_sha256": "2a23659e70b480648b95a21765ae6d9fef8042fae943950f5a9c4429e6f021df",
+  "results": [
+    {
+      "variant": "before",
+      "command": [
+        "cargo",
+        "run",
+        "--offline",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\codebook-extents-before-after-20261027\\before\\probe\\Cargo.toml",
+        "--",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\codebook-extents-20261027\\default-rejection.bin"
+      ],
+      "exit_code": 0,
+      "accepted": true,
+      "consumed_bits": 331,
+      "source_sha256": "8d57933df5c77813e2bbd689a542c29acae952cc1722bdeabc2404ef85fbe886"
+    },
+    {
+      "variant": "after",
+      "command": [
+        "cargo",
+        "run",
+        "--offline",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\codebook-extents-before-after-20261027\\after\\probe\\Cargo.toml",
+        "--",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\codebook-extents-20261027\\default-rejection.bin"
+      ],
+      "exit_code": 0,
+      "accepted": false,
+      "consumed_bits": 64,
+      "source_sha256": "51cda82b11ba6705c3f496815b04187aebe40a691b3c7a08d6c42446df0b5ade"
+    }
+  ]
+}

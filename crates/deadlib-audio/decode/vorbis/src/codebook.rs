@@ -308,6 +308,9 @@ impl Codebook {
         }
         let dimensions = bits.read(16)? as u16;
         let entries = bits.read(24)? as usize;
+        if ilog(dimensions as u32) + ilog(entries as u32) > limits.max_codebook_extent_bits as u32 {
+            return Err(Error::LimitExceeded("codebook extent"));
+        }
         if entries == 0 && !allow_empty {
             return Err(Error::Invalid("zero codebook entries"));
         }
@@ -342,11 +345,6 @@ impl Codebook {
             }
         }
         let huffman = Huffman::build(&lengths, limits.max_huffman_nodes, budget, allow_empty)?;
-        if huffman.is_empty() && ilog(dimensions as u32) + ilog(entries as u32) > 24 {
-            return Err(Error::Invalid(
-                "empty codebook dimensions/entries exceed libvorbis range",
-            ));
-        }
         let lookup_type = bits.read(4)? as u8;
         let mut vectors = Vec::new();
         if lookup_type != 0 {

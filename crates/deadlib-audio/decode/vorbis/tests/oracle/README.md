@@ -43,6 +43,11 @@ It restarts synthesis between cases and resets packet numbering to three.
 Output starts with channels (u32) and case count (u64), then the existing `P`/`S`
 records for each packet, grouped by case. The prefix/recovery suite checks this
 mode against fresh-process `pcm` runs byte for byte; see [PARITY.md](../../PARITY.md).
+`bookheaders` reads a u64 count followed by length-prefixed bare codebooks. It
+calls only `vorbis_staticbook_unpack`, emitting the count and one accepted byte /
+u64 consumed-bit position per declaration. It neither builds synthesis tables nor
+evaluates VQ data. The codebook extent suite independently checks its decisions
+against complete three-header `pcm` initialization without audio packets.
 `mdctforward` receives N time samples instead of N/2 coefficients and emits the
 N/2 coefficients from `mdct_forward`, with the same length-prefixed protocol.
 

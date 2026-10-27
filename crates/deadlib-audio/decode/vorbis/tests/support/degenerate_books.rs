@@ -173,6 +173,10 @@ impl Config {
         (kind, partition, partition * 2 + 3)
     }
     pub fn headers(self) -> Vec<Vec<u8>> {
+        self.headers_with_unused(None)
+    }
+    /// Replace only the unreferenced fifth book with independently packed bits.
+    pub fn headers_with_unused(self, replacement: Option<(&[u8], usize)>) -> Vec<Vec<u8>> {
         let id = Identification {
             channels: self.channels,
             sample_rate: 48000,
@@ -191,8 +195,18 @@ impl Config {
         .unwrap();
         let mut bits = BitWriter::new();
         bits.write(4, 8).unwrap();
-        for book in self.books() {
-            book.write(&mut bits);
+        for (i, book) in self.books().into_iter().enumerate() {
+            if i == 4
+                && let Some((packed, count)) = replacement
+            {
+                assert_eq!(self.usage, Use::Unused);
+                for bit in 0..count {
+                    bits.write(((packed[bit / 8] >> (bit & 7)) & 1) as u32, 1)
+                        .unwrap();
+                }
+            } else {
+                book.write(&mut bits);
+            }
         }
         put(&mut bits, &[(0, 6), (0, 16), (1, 6)]); // Time, two floors.
         if self.usage == Use::FloorZero {

@@ -22,6 +22,8 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
   Nonempty dimension-zero scalar books work with lookup zero/two.
   `Codebook::read_with_options` / `Setup::parse_with_options` expose
   `ParseOptions::allow_empty_codebooks` for explicit reference acceptance.
+  `Limits::max_codebook_extent_bits` defaults to the reference's 24-bit
+  declaration guard; see [codebook limits](CODEBOOK_LIMITS.md).
   Optional, budget-bounded prefix lookup shares the tree allocation.
   [HUFFMAN.md](HUFFMAN.md) documents exact tail/fallback behavior and the measured
   throughput/startup tradeoff.

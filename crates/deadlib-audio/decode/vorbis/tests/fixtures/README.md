@@ -101,3 +101,20 @@ cargo test -p deadlib-audio-decode-vorbis --release --test codebook_compatibilit
 ```
 
 See [degenerate books](../../DEGENERATE_BOOKS.md) for policy distinctions and evidence.
+
+`codebook-extents-v1.libvorbis-headers` retains the pinned C header-unpack results
+for 475 procedural scalar/mapped declarations around the extent guard: 289
+accepted and 186 rejected, with exact consumed-bit positions. Format: `DVBEXT01`,
+u64 little-endian count, then one acceptance byte and one u64 bit position per
+book. The independent builder is `tests/support/book_extents.rs`. Size: 4,291
+bytes; SHA-256:
+`996c82e467390409834115f78a924112e70100c758aedacc5b37bdfc8da36053`.
+The normal test enables empty books and raises other caps to isolate the extent
+policy; complete setup/initialization checks are separate external tests.
+
+```powershell
+cargo test -p deadlib-audio-decode-vorbis --release --test book_limits regenerate_codebook_extent_golden -- --ignored
+```
+
+See [codebook limits](../../CODEBOOK_LIMITS.md) for reference protocol, policies
+and exact reader-position evidence.

@@ -32,6 +32,10 @@ previously recorded nonfinite cases match under that policy; the default finite
 guard remains separately tested. Nonempty zero-dimensional scalar books are
 also accepted where vector reconstruction is unnecessary.
 
+The [codebook extent follow-up](CODEBOOK_LIMITS.md) applies the default reference
+declaration guard before lengths/allocation for populated and empty books, with
+475 exact decision/reader-position checks and a configurable full-field override.
+
 ## Corrected discard and truncation behavior
 
 The 2026-10-27 work independently reproduced two differences against pinned

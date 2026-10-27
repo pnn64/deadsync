@@ -12,6 +12,7 @@ pub fn limits() -> vorbis::Limits {
         max_packet_bytes: MAX_INPUT,
         max_comment_bytes: MAX_INPUT,
         max_comments: 1024,
+        max_codebook_extent_bits: 24,
         max_codebook_entries: 65536,
         max_codebook_values: 262144,
         max_huffman_nodes: 131072,
@@ -356,19 +357,23 @@ pub fn vorbis_headers(input: &[u8]) {
             if data.len() < 30 {
                 return;
             }
+            let setup_limits = vorbis::Limits {
+                max_codebook_extent_bits: if kind & 16 != 0 { 40 } else { 24 },
+                ..limits()
+            };
             if let Ok(id) = vorbis::Identification::parse(&data[..30])
                 && let Ok(setup) = vorbis::Setup::parse_with_options(
                     &data[30..],
                     &id,
                     vorbis::ParseOptions {
-                        limits: limits(),
+                        limits: setup_limits,
                         allow_empty_codebooks: kind & 64 != 0,
                     },
                 )
                 && let Ok(mut decoder) = vorbis::PacketDecoder::with_options(
                     setup,
                     vorbis::DecodeOptions {
-                        limits: limits(),
+                        limits: setup_limits,
                         allow_nonfinite: kind & 32 != 0,
                         residue2_layout: if kind & 0x80 != 0 {
                             vorbis::Residue2Layout::Libvorbis
@@ -501,7 +506,10 @@ pub fn vorbis_stream(input: &[u8]) {
         return;
     }
     let options = vorbis::OggOptions {
-        limits: limits(),
+        limits: vorbis::Limits {
+            max_codebook_extent_bits: if control & 64 != 0 { 40 } else { 24 },
+            ..limits()
+        },
         container_limits: container_limits(),
         max_active_streams: 4,
         max_stream_memory: 16 << 20,
@@ -560,7 +568,7 @@ pub fn vorbis_stream(input: &[u8]) {
     // the same error/PCM prefix and recover after another explicit seek.
     {
         let seek_options = vorbis::SeekOptions {
-            limits: limits(),
+            limits: options.limits,
             container_limits: container_limits(),
             allow_zero_span_granules: control & 1 != 0,
             trim_to_final_granule: control & 2 != 0,
