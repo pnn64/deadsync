@@ -323,3 +323,28 @@ extension; extension-specific validation is not required of validating processor
 The codec preserves those payloads without interpreting Unicode locale or
 transformation settings. This is no certificate that a payload is valid for an
 individual extension. `stream-literals-validation.*` retains the exact checks.
+
+## Huffman symbol/depth assignments
+
+```powershell
+cargo test -p deadlib-image-png --release --test huffman_permutations -- --nocapture
+cargo test -p deadlib-image-png --release --test huffman_permutations c_zlib_symbol_permutations -- --ignored --nocapture
+./crates/deadlib-image/png/scripts/verify_independent.ps1 -Test huffman_permutations -LogPath target/permutations-independent-fresh.log
+```
+
+The existing `--zlib-batch` protocol checks exact successful output for all
+10,744 independently constructed streams. Four families rotate symbol
+assignments over 36 complete-tree shapes: literal/EOB with no distance alphabet,
+all literal/length symbols with distance-one matches, all legal distance symbols
+after a 32 KiB stored history, and all code-length symbols including every repeat
+instruction. The regular tests also compare flate2 raw output and Rust png pixels.
+
+Every LL/distance symbol reaches each depth 1–15; every CL symbol reaches each
+depth 1–7. The tests assert all 8,728 symbol/depth cells, both padding modes,
+buffered and fragmented native output, suffix consumption, short limits and
+truncated trailers. This covers selected complete-tree shapes and cyclic
+assignments; it does not enumerate every tree or possible symbol permutation.
+The wire builder, checksums and expected overlap bytes are independent of the
+production decoder. No production encoder constructs these fixtures.
+`huffman-permutations-validation.*` and `huffman-permutations-audit.json` retain
+the source, oracle and result identities.

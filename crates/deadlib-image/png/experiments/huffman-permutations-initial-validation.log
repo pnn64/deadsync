@@ -1,0 +1,27 @@
+Strict main lint
+COMMAND: ["cargo", "clippy", "-p", "deadlib-image", "-p", "deadlib-image-png", "--all-targets", "--", "-D", "warnings"]
+    Checking deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+    Checking deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+error: duplicated attribute
+  --> crates\deadlib-image\png\examples\..\tests\support\huffman_permutations.rs:2:10
+   |
+ 2 | #![allow(dead_code)]
+   |          ^^^^^^^^^
+   |
+note: first defined here
+  --> crates\deadlib-image\png\examples\seed_fuzz.rs:25:9
+   |
+25 | #[allow(dead_code)]
+   |         ^^^^^^^^^
+help: remove this attribute
+  --> crates\deadlib-image\png\examples\..\tests\support\huffman_permutations.rs:2:10
+   |
+ 2 | #![allow(dead_code)]
+   |          ^^^^^^^^^
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#duplicated_attributes
+   = note: `-D clippy::duplicated-attributes` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::duplicated_attributes)]`
+
+error: could not compile `deadlib-image-png` (example "seed_fuzz") due to 1 previous error
+
+EXIT: 101

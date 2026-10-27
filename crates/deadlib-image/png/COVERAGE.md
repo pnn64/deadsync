@@ -13,12 +13,12 @@ evidence, application responsibilities and explicitly open items.
 | Separate packages, no application integration | Package names, production tree, isolated offline workspace tests (`independent-build.log`) | Verified outside the application workspace; production dependency is only `deadlib-image` |
 | Native samples, all legal formats | Shared `Image`, `Samples`, `ColorType` | Primitives implemented |
 | CRC-32 / Adler-32 | Known-answer tests | Verified known answers |
-| Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, advertised/actual history and output limits; compression / zlib-header / Huffman / prefix suites | All 65,536 headers, 92 window fixtures, 19,645 Huffman fixtures, 88,414 prefix/suffix cases and virtual cursor overflow boundaries pass; arbitrary tree permutations and coverage review remain open |
-| PNG chunk framing and normative ordering | Independent `tests/chunks.rs` fixtures, malformed/metadata/APNG suites | All 16 property bits, all name-byte values, 25 standard names' case variants, 720 core permutations and every small-stream IDAT split pass; broader ancillary/APNG ordering audit remains open |
+| Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, history/output limits; compression / zlib-header / Huffman / prefix suites | All 65,536 headers, 92 window fixtures, 19,645 Huffman fixtures, 88,414 prefix/suffix cases, 65,668 literal-pair streams and 10,744 symbol/depth streams pass. Selected shapes cover every legal symbol/depth cell; this does not enumerate all trees |
+| PNG chunk framing and normative ordering | Independent `tests/chunks.rs`, `ancillary_order.rs`, `animation_fields.rs` and metadata suites | Property/name/case matrices, 720 core permutations, all 18 ancillary types across native formats, ordered pairs and critical boundaries, 120 APNG permutations and every small-stream IDAT split pass |
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
 | Five filters and Adam7 decode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Indexed-color error recovery (13.1) | `tests/palette.rs`; all indexed depths, Adam7, APNG, one-byte reads/events, independent Rust png fixtures | Native indices retained, opaque-black expansion/rendering; opt-in strict decode |
-| Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / field / IANA / profile tests, PNGSuite | Typed wire roundtrips, UTF-8, BCP47 registration, method distinctions, sample masks, histogram usage and profile containers checked; extension-specific and payload semantics still require audit |
+| Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / scalar-field / language-extension / profile suites | Wire values, UTF-8, BCP47 core registration/syntax, method distinctions, masks, histogram usage and profile containers checked. Extension interpretation, opaque profile transforms and Exif payload semantics remain application responsibilities |
 | Latin-1 text-body recovery | `tests/text_body.rs`, independent stored-zlib fixtures and C named-metadata oracle | All 256 byte values across 6,144 files; non-null decoder recovery, NBSP/long text and iTXt Unicode distinctions verified |
 | sRGB fallback metadata | `tests/metadata_fields.rs`, metadata selection API | All 15 formats / four intents and fallback orders pass; original metadata values remain available |
 | cICP code-point validity | `tests/cicp.rs`, H.273 (07/2024) | All 131,072 primaries/transfer/range combinations, all matrix/flag bytes and reserved-code fallback behavior pass |
@@ -27,7 +27,7 @@ evidence, application responsibilities and explicitly open items.
 | Bounded streaming with arbitrary input boundaries | `zlib::Inflater`, `StreamDecoder`, `decode_reader` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Twelve targets; 1,410,000 recorded successful sanitizer executions across milestones, including historical encoder runs; newest 50,000 use native-crate feedback with artifact-verified isolation; targeted decoder gaps and longer campaigns remain open |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Twelve harnesses; latest PNG/raw decoder campaigns complete 100,000 executions each with native-crate feedback and artifact-verified isolation. `fuzz/reports/huffman-permutations-source.json` retains actual counts. Historical reports include earlier encoder runs; bounded campaigns are not universal conformance proof |
 | Benchmarks and profile-guided optimization | Decoder-only harnesses, `BENCHMARKS.md`, checked-in TSV and profiles | Bulk copying, filter reconstruction and buffered Adler-32 improvements measured; competitive decoder performance still pending |
 
 Historical milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -1956,3 +1956,66 @@ outliers do not repeat in the longer checks. `stored-growth-validation.*`,
 `stored-growth-audit.json` and `experiments/stored-growth-selection.json` retain
 the exact validation and measurement boundaries. Competitive decoder performance,
 remaining corpus gaps and the final requirement audit remain open.
+
+## Huffman symbol/depth assignments (2026-10-28)
+
+`tests/huffman_permutations.rs` closes the specific systematic symbol-assignment
+gap recorded in the compression clause matrix. Independent complete-tree shapes
+are rotated over four alphabets:
+
+| Family | Streams | Selected shapes | Symbol/depth cells |
+| --- | ---: | ---: | ---: |
+| Literals and EOB, empty distance alphabet | 4,626 | 9 | 257 × 15 = 3,855 |
+| All literal/length symbols, distance-one matches | 5,148 | 9 | 286 × 15 = 4,290 |
+| All legal distances, 32 KiB initial history | 780 | 13 | 30 × 15 = 450 |
+| Code-length alphabet, including repeats 16/17/18 | 190 | 5 | 19 × 7 = 133 |
+| Total | 10,744 | 36 | 8,728 |
+
+Each symbol in the rotated alphabet is emitted. Literal bodies visit every byte
+value; match bodies visit all 29 length symbols, and distance bodies visit all 30 legal
+distance symbols with low/high extra fields. Code-length headers exercise every
+symbol 0–18. Both padding modes, buffered raw decoding, three fragmented
+input/output shapes, prefix consumption, strict suffix rejection, exact/zero/
+short limits and four truncated-trailer lengths are checked. PNG framing then
+checks exact native samples through buffered and seven-byte-reader APIs.
+The lexicographic canonical wire builder, scalar checksums and byte-wise overlap
+answers are independent of production codec code.
+
+All 10,744 streams match flate2 and C zlib exactly; all PNG wrappers match Rust
+png pixels. This is selected-tree and cyclic-assignment coverage, including
+every legal symbol/depth cell. It is not enumeration of every possible tree,
+assignment, extra-field combination or block sequence. Earlier malformed-tree,
+repeat-count, reserved-symbol and match-value suites remain complementary.
+
+Strict main/fuzz all-target Clippy and scoped rustfmt pass. The complete release
+suite passes 138 tests with twenty optional checks ignored. The explicit C batch
+passes all 10,744 positive cases. A fresh standalone copy passes four offline
+tests with one optional C check ignored. All 887 copied files are inspected:
+886 remain identical, and the oracle README was subsequently updated with the
+new test commands. Every compilation input matches, and the production
+dependency tree contains only the shared image crate. An initial duplicate lint allowance was removed before
+these checks; the original failure and source patch are retained separately.
+
+A fresh narrow seed export adds 10,744 PNG and 10,744 raw inputs to the earlier
+immutable corpus. The merged ZIP contains 58,911 PNG and 17,671 raw seeds; its
+tree/archive hashes and producer inputs are retained. The native fuzz runner's
+optional `--runs` flag requests 100,000 executions per target, above the enlarged
+initial corpus. Historical default thresholds are unchanged. Reports retain
+actual completed counts, source/binary/log identities, ASan runtime checks and
+native/dependency/harness feedback audits. Both targets complete exactly 100,000
+executions without a finding: 200,000 new decoder executions, bringing recorded
+historical campaigns to 2,108,472. All sixteen Rust archive and four harness-object
+audits pass. The first direct WSL launch failed
+to find `rustup` before compilation; all 76,582 extracted seed bytes were checked
+against the immutable archive before removing that duplicate extraction. The
+successful retry uses the established login-shell environment and fresh paths.
+Completed older mutable corpora were also verified and archived before freeing
+temporary inodes; their binaries, logs and build audits remain available.
+
+`huffman-permutations-validation.*`, `huffman-permutations-audit.json`,
+`experiments/huffman-permutations-*` and `fuzz/reports/huffman-permutations-*`
+retain the exact evidence. All 21 production PNG files and shared primitives
+remain byte-identical to `e30aac88`; no new performance claim follows from this
+milestone. `CONFORMANCE.md` now maps all twelve decoder conditions to current
+implementation and regression evidence. Competitive decoder throughput and the
+final requirement audit remain open. Encoding is outside the completion scope.

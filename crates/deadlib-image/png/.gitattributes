@@ -28,6 +28,8 @@ sentinel-*.log text eol=lf
 literal-*.log text eol=lf
 row-reuse-*.log text eol=lf
 stored-growth-*.log text eol=lf
+huffman-permutations-*.log text eol=lf
+experiments/huffman-permutations-*.log text eol=lf -whitespace
 experiments/stored-growth-*.log text eol=lf -whitespace
 experiments/stored-growth-*.ps1 -text
 experiments/row-reuse-*.txt text eol=lf
