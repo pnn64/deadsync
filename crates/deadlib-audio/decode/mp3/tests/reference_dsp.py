@@ -29,11 +29,11 @@ def encode(shape,line,negative):
     main.put(int(negative),1)
     side=Bits();side.put(0,9);side.put(0,5);side.put(0,4)
     for granule in range(2):
-        kind=2 if shape==4 else shape
+        kind=[0,1,2,3,2,1,3][shape]
         if granule:kind=0
         for value,width in [(len(main.bits) if not granule else 0,12),(pairs if not granule else 0,9),(206 if not granule else 0,8),(0,4),(int(kind!=0),1)]:side.put(value,width)
         if kind:
-            side.put(kind,2);side.put(int(shape==4),1)
+            side.put(kind,2);side.put(int(shape>=4),1)
             side.put(1,5);side.put(1,5)
             for _ in range(3):side.put(0,3)
         else:
@@ -49,14 +49,14 @@ def main():
     for name in ['native','oracle','output']:p.add_argument('--'+name,type=Path,required=True)
     p.add_argument('--quick',action='store_true');args=p.parse_args();args.output.mkdir(parents=True,exist_ok=False)
     selected=[0,1,17,18,35,36,71,72,127,255,511,575] if args.quick else range(576)
-    cases=[(shape,line) for shape in range(5) for line in selected];count=len(cases)*2
+    cases=[(shape,line) for shape in range(7) for line in selected];count=len(cases)*2
     stream=args.output/'vectors.mp3';spectra=args.output/'spectra.bin'
     with stream.open('wb') as bitstream,spectra.open('wb') as target:
         target.write(b'DLMDSP01'+struct.pack('<I',count))
         for shape,line in cases:
             negative=line%3==1;bitstream.write(encode(shape,line,negative))
             for granule in range(2):
-                target.write(bytes([2 if shape==4 else shape,2 if shape==4 else 0,0,0]) if not granule else bytes(4))
+                target.write(bytes([[0,1,2,3,2,1,3][shape],2 if shape>=4 else 0,0,0]) if not granule else bytes(4))
                 values=[0.0]*576
                 if not granule:values[line]=-.5 if negative else .5
                 target.write(struct.pack('<576d',*values))

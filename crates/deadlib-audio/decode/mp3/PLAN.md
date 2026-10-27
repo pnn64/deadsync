@@ -53,7 +53,12 @@ compression/shape cases and the generated-file part2 bounds gate. Huffman pairs,
 escapes and quadruples now pass exact native tests and 22,476 independent
 libmad/analytical hybrid vectors; see HUFFMAN.md. Hybrid and polyphase kernels
 now pass a 2,880-frame all-frequency libmad comparison; see SYNTHESIS.md.
-Remaining spectral processing and complete framed PCM composition are next.
+Raw spectral decoding and framed PCM composition are implemented. The raw gate
+includes 84 generated files, 18 pinned legacy Layer III vector/PCM pairs, and
+seven all-frequency window shapes. See RAW_PCM.md for exact criteria, reference
+disagreements and remaining limits. Native file/streaming APIs, gapless sample
+mapping, seeking, adversarial campaigns, encoding and measured optimization
+remain required. The MPEG-2.5 8 kHz mixed-block disagreement is still open.
 
 ## Source material
 

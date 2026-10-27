@@ -3,16 +3,20 @@
 //! No production codec dependencies and no DeadSync playback integration.
 #![deny(unsafe_code)]
 
+pub mod bands;
 pub mod bits;
 pub mod checksum;
+pub mod decoder;
 pub mod frame;
 pub mod huffman;
 pub mod reservoir;
 pub mod scalefactors;
 pub mod side;
+pub mod spectral;
 pub mod synthesis;
 pub mod tags;
 
+pub use decoder::{DecodeOptions, DecodedFrame, FrameDecoder, Pcm};
 pub use frame::{ChannelMode, Frame, FrameHeader, FreeFormat, MpegVersion};
 pub use reservoir::Reservoir;
 pub use side::{GranuleChannel, SideInfo};

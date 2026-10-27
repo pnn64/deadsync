@@ -135,15 +135,17 @@ fn all_header_configurations_and_reserved_fields() {
             Err(Error::Truncated)
         ));
     }
-    for word in [
-        0xffe90000u32,
-        0xfffbfc00,
-        0xfffb9202,
-        0xfff90000,
-        0x7ffb9000,
-    ] {
+    for word in [0xffe90000u32, 0xfffbfc00, 0xfff90000, 0x7ffb9000] {
         assert!(FrameHeader::parse(&word.to_be_bytes()).is_err());
     }
+    // Retain emphasis as a raw field, including the reserved value exercised
+    // by the ISO header fixture. It does not alter frame length or PCM timing.
+    assert_eq!(
+        FrameHeader::parse(&0xfffb9202u32.to_be_bytes())
+            .unwrap()
+            .emphasis(),
+        2
+    );
 }
 
 #[test]

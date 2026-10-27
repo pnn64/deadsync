@@ -11,8 +11,15 @@ ID3 unsynchronization, Xing/Info/LAME delay metadata and VBRI table framing.
 Unknown ID3 frame payloads remain available. Compressed/encrypted tag payload
 interpretation is not provided; these payloads are retained verbatim.
 
-Complete framed PCM decoding and encoding are not yet implemented. No standards-conformance,
-PCM-parity or performance-completion claim is made by the framing milestone.
+Native raw-frame PCM decoding is now implemented. `FrameDecoder` returns
+borrowed planar, normalized, unclipped f32 PCM with its frame header and byte
+count. It retains reservoir, hybrid overlap and synthesis history across calls.
+`DecodeOptions` controls CRC verification and MPEG-2.5 acceptance. A physically
+incomplete frame can be retried without consuming state; ordinary decode errors
+require `reset()`. Missing-reservoir errors retain payload for later recovery.
+
+File/streaming APIs, gapless trimming, seeking and encoding remain unfinished.
+No complete standards-conformance or performance-completion claim is made.
 See [PLAN.md](PLAN.md) for the full requested scope and verification gates.
 The foundation's eight tests and 84-file/732-frame libmad comparison are recorded
 in [COVERAGE.md](COVERAGE.md).
@@ -22,6 +29,8 @@ All Layer III Huffman pairs, escapes, signs and count1 quadruples are implemente
 see [HUFFMAN.md](HUFFMAN.md) for numeric-table provenance and independent evidence.
 Native hybrid/IMDCT and polyphase synthesis kernels now pass independent
 all-frequency checks; [SYNTHESIS.md](SYNTHESIS.md) records their scope.
+Raw PCM comparisons, pinned legacy conformance vectors, stereo disagreements
+and current limitations are recorded in [RAW_PCM.md](RAW_PCM.md).
 
 ```sh
 cargo test --locked -p deadlib-audio-decode-mp3 --target-dir target/deadlib-mp3
@@ -30,5 +39,7 @@ cargo test --locked -p deadlib-audio-decode-mp3 --target-dir target/deadlib-mp3
 MPEG-2.5 is an explicitly separate compatibility extension: header version bits
 `00` select quarter-rate MPEG-1 frequencies (8, 11.025 and 12 kHz) with MPEG-2
 Layer III granule and side-information syntax. Reserved version bits `01` are
-rejected. Complete DSP compatibility, especially the 8 kHz scalefactor bands,
-remains a required differential gate.
+rejected. Ordinary LAME-generated files pass PCM comparisons at all nine rates.
+The 8 kHz mixed-block profile uses four long subbands and 72 long lines, following
+the 1997 Layer3 syntax document. Synthetic mixed-block output at this rate still
+disagrees with the reference decoders; see RAW_PCM.md before using this case.

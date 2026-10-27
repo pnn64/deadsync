@@ -33,7 +33,7 @@ impl Hybrid {
         long_subbands: usize,
         output: &mut [f64; 576],
     ) -> Result<(), Error> {
-        if block_type > 3 || long_subbands > 32 || (block_type != 2 && long_subbands != 0) {
+        if block_type > 3 || long_subbands > 32 || (block_type == 0 && long_subbands != 0) {
             return Err(Error::Invalid("hybrid block shape"));
         }
         let aliases = if block_type == 2 {
@@ -66,7 +66,7 @@ impl Hybrid {
                         }
                     }
                 } else {
-                    let window = if block_type == 2 {
+                    let window = if band < long_subbands {
                         0
                     } else {
                         block_type as usize

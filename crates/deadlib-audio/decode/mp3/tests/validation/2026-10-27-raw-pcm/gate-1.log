@@ -1,0 +1,75 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test crc_and_complete_main_data_errors_require_reset ... ok
+test missing_reservoir_recovery_free_format_and_version_policy ... ok
+test raw_pcm_shape_prefix_retries_and_reset ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 8 tests
+test free_format_inference_padding_false_sync_and_limits ... ok
+test id3_frames_unsynchronization_footers_and_bounds ... ok
+test reservoir_cross_frame_history_and_recovery ... ok
+test all_header_configurations_and_reserved_fields ... ok
+test xing_gapless_and_vbri_optional_tables ... ok
+test bit_fields_and_atomic_boundaries ... ok
+test side_information_fields_switched_and_long ... ok
+test frame_truncation_crc_coverage_and_synchronization ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test pair_truncation_and_reserved_books_are_atomic ... ok
+test all_quadruples_signs_offsets_and_final_symbol_truncations ... ok
+test every_pair_codeword_sign_offset_and_escape_boundary ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+
+running 3 tests
+test mpeg1_widths_and_all_scfsi_masks ... ok
+test scalefactor_boundaries_are_atomic ... ok
+test every_lsf_compression_and_shape ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+running 6 tests
+test big_values_errors_and_partial_count1_stuffing ... ok
+test scalefactor_band_boundaries_and_mixed_alignment ... ok
+test requantization_half_steps_preemphasis_and_short_gain ... ok
+test short_intensity_bounds_are_independent_per_window ... ok
+test top_band_inherits_pan_only_when_preceding_band_is_intensity_coded ... ok
+test intensity_positions_and_zero_width_partitions ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test silence_reset_overlap_and_invalid_shapes ... ok
+test synthesis_finite_history_and_repeatable_reset ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling deadlib-audio-decode-mp3 v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\mp3)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.79s
+     Running unittests src\lib.rs (target/deadlib-mp3\debug\deps\deadlib_audio_decode_mp3-f30527800e5bdfa8.exe)
+     Running tests\decoder.rs (target/deadlib-mp3\debug\deps\decoder-42544c0f23881294.exe)
+     Running tests\foundation.rs (target/deadlib-mp3\debug\deps\foundation-597188a7d15eb13e.exe)
+     Running tests\huffman.rs (target/deadlib-mp3\debug\deps\huffman-c90e53c899d84111.exe)
+     Running tests\scalefactors.rs (target/deadlib-mp3\debug\deps\scalefactors-8520436f6ec73814.exe)
+     Running tests\spectral.rs (target/deadlib-mp3\debug\deps\spectral-13feab8e68794b5f.exe)
+     Running tests\synthesis.rs (target/deadlib-mp3\debug\deps\synthesis-25f4a715a7ec2ccb.exe)
+   Doc-tests deadlib_audio_decode_mp3

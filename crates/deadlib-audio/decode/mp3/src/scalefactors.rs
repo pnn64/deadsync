@@ -129,7 +129,7 @@ pub fn read(
     let mut factors = ScaleFactors {
         preflag: info.preflag,
         short_block: info.block_type == 2,
-        mixed_block: info.mixed_block,
+        mixed_block: info.mixed_block && info.block_type == 2,
         ..Default::default()
     };
     if header.version() == MpegVersion::Mpeg1 {

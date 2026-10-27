@@ -42,7 +42,7 @@ impl FrameHeader {
         }
         let rate = (word >> 10) & 3;
         let index = (word >> 12) & 15;
-        if rate == 3 || index == 15 || word & 3 == 2 {
+        if rate == 3 || index == 15 {
             return Err(Error::Invalid("reserved MPEG header field"));
         }
         let bitrates = if version == MpegVersion::Mpeg1 {

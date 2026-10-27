@@ -60,7 +60,7 @@ impl SideInfo {
                 if bits.flag()? {
                     g.block_type = bits.read(2)? as u8;
                     g.mixed_block = bits.flag()?;
-                    if g.block_type == 0 || (g.mixed_block && g.block_type != 2) {
+                    if g.block_type == 0 {
                         return Err(Error::Invalid("Layer III switched block"));
                     }
                     for t in &mut g.table_select[..2] {
