@@ -7,6 +7,12 @@ license = "GPL-3.0"
 [features]
 test-support = []
 
+[[example]]
+name = "export_gameplay"
+path = "examples/gameplay/export_gameplay.rs"
+harness = false
+test = false
+
 [dependencies]
 deadsync-song-lua = { path = "../deadsync-song-lua" }
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
@@ -48,12 +54,14 @@ twox-hash = "2.1.5"
 unicode-normalization = "0.1.25"
 
 [dev-dependencies]
+askama = "0.14"
 deadsync-lights = { path = "../deadsync-lights" }
 deadlib-render-core = { path = "../deadlib-render-core", features = ["test-util"] }
 deadlib-render = { path = "../deadlib-render" }
 deadsync-notefield = { path = "../deadsync-notefield" }
 serde_json = "1.0.151"
 winit = "0.30.13"
+tempfile = "3.27.0"
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

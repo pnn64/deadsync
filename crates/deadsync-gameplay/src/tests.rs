@@ -1277,12 +1277,36 @@ mod tests {
                 StepStatsPlayStyle::Single,
                 4,
                 1,
+                640.0,
+                480.0,
+                false,
+                true,
+            ),
+            192.0,
+        );
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Single,
+                4,
+                1,
                 854.0,
                 480.0,
                 true,
                 true,
             ),
             299.0,
+        );
+        assert_near(
+            step_stats_density_graph_width(
+                StepStatsPlayStyle::Single,
+                4,
+                1,
+                640.0,
+                640.0,
+                false,
+                true,
+            ),
+            192.0,
         );
         assert_near(
             step_stats_density_graph_width(

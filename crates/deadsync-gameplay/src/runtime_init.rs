@@ -601,8 +601,11 @@ where
     let audio_end_time_ns = song_audio_end_time_ns(&song);
     // Song.cpp resolves catalog note times with both group and cabinet
     // offsets, then compares them with the absolute LASTSECONDHINT.
-    let song_last_second = song.precise_note_last_second_seconds
-        .map_or(0.0, |seconds| (seconds - pack_sync_offset_seconds) - config.global_offset_seconds)
+    let song_last_second = song
+        .precise_note_last_second_seconds
+        .map_or(0.0, |seconds| {
+            (seconds - pack_sync_offset_seconds) - config.global_offset_seconds
+        })
         .max(song.last_second_hint)
         .max(0.0);
     let song_last_second_ns = song_time_ns_from_seconds(song_last_second);
@@ -784,16 +787,24 @@ where
             config.center_1player_notefield,
             &player_global_offset_shift_seconds,
         ));
-    let attack_option_windows: [Arc<[ChartAttackWindow]>; MAX_PLAYERS] = std::array::from_fn(|player| {
-        if player >= num_players {
-            return Arc::from([]);
-        }
-        build_attack_windows_for_mode(gameplay_charts[player].chart_attacks.as_deref(),
-            player_profiles[player].attack_mode(), player, song_seed,
-            attack_song_length_seconds).into()
-    });
+    let attack_option_windows: [Arc<[ChartAttackWindow]>; MAX_PLAYERS] =
+        std::array::from_fn(|player| {
+            if player >= num_players {
+                return Arc::from([]);
+            }
+            build_attack_windows_for_mode(
+                gameplay_charts[player].chart_attacks.as_deref(),
+                player_profiles[player].attack_mode(),
+                player,
+                song_seed,
+                attack_song_length_seconds,
+            )
+            .into()
+        });
     let attack_mask_windows: [Vec<AttackMaskWindow>; MAX_PLAYERS] = std::array::from_fn(|player| {
-        if player >= num_players { return Vec::new(); }
+        if player >= num_players {
+            return Vec::new();
+        }
         let mut windows = build_attack_mask_windows(&attack_option_windows[player]);
         windows.extend(song_lua_mask_windows[player].iter().copied());
         if let Some(window) = course_modifiers
@@ -910,9 +921,9 @@ where
         .any(GameplayProfileData::step_statistics_density_graph);
     let gameplay_play_style = step_stats_play_style(play_style);
     let wide = viewport.is_wide();
-    let density_graph_enabled = wide && wants_density_graph;
     let sw = viewport.width();
     let sh = viewport.height().max(1.0_f32);
+    let density_graph_enabled = sw >= sh && wants_density_graph;
     let density_graph_graph_h = if density_graph_enabled {
         105.0_f32
     } else {
@@ -1033,7 +1044,11 @@ where
             combo_carry[p],
             caps,
         );
-        player.fail_type = song_fail_type(config.default_fail_type, &charts[p].difficulty, in_course_stage);
+        player.fail_type = song_fail_type(
+            config.default_fail_type,
+            &charts[p].difficulty,
+            in_course_stage,
+        );
         player
     });
     let assist_clap_rows =
@@ -1121,7 +1136,8 @@ where
                 notes_end_time_ns,
                 music_end_time_ns,
                 audio_end_time_ns,
-            ).with_song_last_second_ns(song_last_second_ns),
+            )
+            .with_song_last_second_ns(song_last_second_ns),
             music_rate: GameplayMusicRateState::new(rate),
             offsets: GameplayOffsetState::new(
                 config.global_offset_seconds,
