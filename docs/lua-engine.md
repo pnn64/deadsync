@@ -48,16 +48,17 @@ overflow assertion as the 64-bit C reference. Windows stops in `main.lua:53` in
 both engines. The [GNU numeric and I/O fixes](testing/2026-10-27-rust-lua-gnu-numbers.md)
 resolve the Linux I/O and native-error targets. Four existing Linux targets
 remain red: debug locals, OS, package and stdlib. The expanded stream audit
-also retains 62 Windows byte-consumption mismatches, unchanged from the parent.
-Next work should close those Windows mismatches, repair platform-dependent
-fixtures/reference-bridge failures, and find
+now closes the 62 retained Windows byte-consumption mismatches and matches
+15,883 stream inputs on both platforms, including parser-stage transitions.
+Next work should repair platform-dependent fixtures and C-reference failures,
+and find
 a valid target for the full suite's large-string overflow test. The C/auxiliary APIs, production native loading and
 remaining language, library, debug, GC and resource behavior must also be
 completed. Selected passing probes and declaration counts do not close these
 gates. Production migration also requires the subsequent performance gates.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 550 differential/adversarial integration tests, seventy-three unit tests and
+crate, 551 differential/adversarial integration tests, seventy-three unit tests and
 four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000

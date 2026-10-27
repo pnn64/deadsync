@@ -280,6 +280,24 @@ fn numeric_reads_match_consumption_and_decimal_values() {
 }
 
 #[test]
+fn numeric_reads_preserve_sentinel_loss_at_each_crt_parse_stage() {
+    compare(br#"
+        local out={}
+        for _,prefix in ipairs{'','+','-','0','00','0x','1','1e+','inf','infinity',
+          'nan','nan(foo)','nan(ind)','nan(snan)','nan(sind)','nan(snind)','nan(snaind)','nan(snanind)'}do
+          for _,sentinel in ipairs{string.char(0),string.char(255)}do
+            for _,tail in ipairs{'','!','e+2','12','inity','(snan)',string.char(0),string.char(255)}do
+              local f=assert(io.tmpfile());assert(f:write(prefix..sentinel..tail));assert(f:seek('set',0))
+              local n=f:read('*n');out[#out+1]=n==nil and 'nil' or n~=n and 'nan' or string.format('%.17g',n)
+              out[#out+1]=tostring(f:read(0)~=nil);out[#out+1]=f:seek();out[#out+1]=f:read('*a');f:close()
+            end
+          end
+        end
+        return table.concat(out,'|')
+    "#);
+}
+
+#[test]
 fn generated_numeric_streams_match_value_bits_and_unconsumed_suffixes() {
     let mut tokens: Vec<String> = [
         "-0",

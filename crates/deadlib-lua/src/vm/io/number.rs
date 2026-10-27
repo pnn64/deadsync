@@ -13,7 +13,7 @@ fn word(file: &mut Stream, bytes: &mut Vec<u8>, text: &[u8]) -> Result<bool, i32
         let byte = file.peek()?;
         if byte.map(lower) != Some(expected) {
             // glibc consumes the mismatching character of a failed inf/nan
-            // word. The UCRT leaves that character unread.
+            // word. The UCRT keeps ordinary mismatches as lookahead.
             if cfg!(all(target_os = "linux", target_env = "gnu")) && byte.is_some() {
                 file.get()?;
             }
@@ -21,9 +21,19 @@ fn word(file: &mut Stream, bytes: &mut Vec<u8>, text: &[u8]) -> Result<bool, i32
         }
         bytes.push(file.get()?.unwrap());
     }
+    #[cfg(windows)]
+    file.peek()?;
     Ok(true)
 }
 pub(super) fn read_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i32> {
+    let result = scan_number(file, bytes);
+    #[cfg(windows)]
+    if result.is_ok() {
+        file.discard_number_sentinel();
+    }
+    result
+}
+fn scan_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i32> {
     file.flush()?;
     while file.peek()?.is_some_and(crate::locale::is_space) {
         file.get()?;
@@ -38,6 +48,8 @@ pub(super) fn read_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Opti
             if !word(file, bytes, b"inf")? {
                 return Ok(None);
             }
+            #[cfg(windows)]
+            file.discard_number_sentinel();
             if file.peek()?.is_some_and(|b| lower(b) == b'i') && !word(file, bytes, b"inity")? {
                 return Ok(None);
             }
@@ -58,6 +70,8 @@ pub(super) fn read_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Opti
             if !word(file, bytes, b"nan")? {
                 return Ok(None);
             }
+            #[cfg(windows)]
+            file.discard_number_sentinel();
             let mut bits = 0x7ff8_0000_0000_0000u64;
             if file.peek()? == Some(b'(') {
                 bytes.push(file.get()?.unwrap());
@@ -75,17 +89,23 @@ pub(super) fn read_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Opti
                     }
                     return Ok(None);
                 }
-                if !cfg!(all(target_os = "linux", target_env = "gnu"))
-                    && bytes[start..].eq_ignore_ascii_case(b"ind")
-                {
+                let ind = bytes[start..].eq_ignore_ascii_case(b"ind")
+                    || (cfg!(windows)
+                        && [b"sind".as_slice(), b"snind", b"snaind", b"snanind"]
+                            .iter()
+                            .any(|text| bytes[start..].eq_ignore_ascii_case(text)));
+                let snan = bytes[start..].eq_ignore_ascii_case(b"snan");
+                if !cfg!(all(target_os = "linux", target_env = "gnu")) && ind {
                     bits = 0xfff8_0000_0000_0000;
                 }
-                if !cfg!(all(target_os = "linux", target_env = "gnu"))
-                    && bytes[start..].eq_ignore_ascii_case(b"snan")
-                {
+                if !cfg!(all(target_os = "linux", target_env = "gnu")) && snan {
                     bits = 0x7ff0_0000_0000_0001;
                 }
                 bytes.push(file.get()?.unwrap());
+                #[cfg(windows)]
+                if ind || snan {
+                    file.peek()?;
+                }
             }
             if cfg!(all(target_os = "linux", target_env = "gnu"))
                 && !bytes[sign..sign + 3].eq_ignore_ascii_case(b"nan")
@@ -100,20 +120,44 @@ pub(super) fn read_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Opti
         _ => {}
     }
     let mut digits = 0;
-    while file.peek()?.is_some_and(|b| b.is_ascii_digit()) {
+    // UCRT probes the radix immediately after the first zero, then returns
+    // that lookahead before scanning decimal digits. Losing a sentinel here
+    // can expose more digits, but cannot turn a later x into a radix prefix.
+    #[cfg(windows)]
+    let hex = if file.peek()? == Some(b'0') {
         bytes.push(file.get()?.unwrap());
-        digits += 1;
-    }
-    let hex = digits == 1
-        && bytes[sign] == b'0'
-        && file.peek()?.is_some_and(|b| b.eq_ignore_ascii_case(&b'x'));
-    if hex {
-        bytes.push(file.get()?.unwrap());
-        digits = 0;
-        while file.peek()?.is_some_and(|b| b.is_ascii_hexdigit()) {
+        digits = 1;
+        let hex = file.peek()?.is_some_and(|b| b.eq_ignore_ascii_case(&b'x'));
+        if !hex {
+            file.discard_number_sentinel();
+        }
+        hex
+    } else {
+        false
+    };
+    #[cfg(not(windows))]
+    let hex = {
+        while file.peek()?.is_some_and(|b| b.is_ascii_digit()) {
             bytes.push(file.get()?.unwrap());
             digits += 1;
         }
+        digits == 1
+            && bytes[sign] == b'0'
+            && file.peek()?.is_some_and(|b| b.eq_ignore_ascii_case(&b'x'))
+    };
+    if hex {
+        bytes.push(file.get()?.unwrap());
+        digits = 0;
+    }
+    while file.peek()?.is_some_and(|b| {
+        if hex {
+            b.is_ascii_hexdigit()
+        } else {
+            b.is_ascii_digit()
+        }
+    }) {
+        bytes.push(file.get()?.unwrap());
+        digits += 1;
     }
     let point = crate::locale::decimal();
     let has_point = file.peek()? == point.first().copied();
@@ -144,6 +188,8 @@ pub(super) fn read_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Opti
         }
         return Ok(None);
     }
+    #[cfg(windows)]
+    file.discard_number_sentinel();
     let exponent_start = bytes.len();
     let mut exponent_digits = 0;
     if file.peek()?.is_some_and(|b| {

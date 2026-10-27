@@ -189,6 +189,14 @@ impl Stream {
     pub fn clear_eof(&mut self) {
         self.eof = false;
     }
+    #[cfg(windows)]
+    pub fn discard_number_sentinel(&mut self) {
+        // UCRT's floating-input adapter cannot put back NUL or signed EOF.
+        // Only drop existing lookahead; some NaN paths never fetch a suffix.
+        if matches!(self.peek, Some((0 | 255, _))) {
+            self.peek = None;
+        }
+    }
     pub fn read_chars(&mut self, out: &mut Vec<u8>, mut count: usize) -> Result<bool, i32> {
         self.flush()?;
         if count == 0 {

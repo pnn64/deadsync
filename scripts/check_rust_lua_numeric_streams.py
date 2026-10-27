@@ -45,6 +45,14 @@ def main():
     for prefix in [b'',b'+',b'-',b'0',b'1',b'0x',b'0x1',b'0x1.',b'1.',b'1e',b'1e+',b'nan',b'nan(',b'inf',b'infi']:
         for suffix in [b'',b'e',b'e+',b'p',b'p+',b'x',b'.',b'(',b')',b'\x00',b'\n',b'\r',b'\xff',b'!!',b'1',b'-1',b'_tag']:
             tokens.add(prefix+suffix)
+    boundaries=[b'',b'+',b'0',b'00',b'0x',b'0x1.',b'1e+',b'0x1p+',b'i',b'in',b'inf',b'infi',
+                b'infinity',b'n',b'na',b'nan',b'nan(',b'nan(s',b'nan(i',b'nan(ind)',b'nan(snan)',
+                b'nan(foo)',b'nan(sind)',b'nan(snind)',b'nan(snaind)',b'nan(snanind)']
+    for prefix in boundaries:
+        for byte in range(256):tokens.add(prefix+bytes([byte]))
+        for sentinel in [b'\0',b'\xff']:
+            for suffix in [b'\0',b'\xff',b'12',b'inity',b'(foo)',b'(ind)',b'(snan)',b'()',b'!23',b'e+2',b'p-1']:
+                tokens.add(prefix+sentinel+suffix)
     random=0x4d595df4d0f33173
     for _ in range(300):
         random=(random*6364136223846793005+1)&((1<<64)-1)

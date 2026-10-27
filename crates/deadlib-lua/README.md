@@ -328,6 +328,12 @@ conversion, including Turkish casing. GNU end-of-file state remains set across
 line-iterator calls; ordinary reads and successful seeks clear it. The
 [numeric stream checks](../../docs/testing/2026-10-27-rust-lua-gnu-numbers.md)
 retain values, file offsets, unread bytes and math error messages from real CLIs.
+The Windows/MSVC profile also preserves NUL/`0xff` lookahead loss at native
+floating-parser stage boundaries. A lost byte can expose more digits, an
+exponent or an infinity/NaN suffix. The
+[expanded stream audit](../../docs/testing/2026-10-27-rust-lua-ucrt-streams.md)
+checks every byte after selected prefixes, including the distinct lookahead
+behavior of special and generic NaN payloads.
 
 The partial `os` library supplies `difftime`, `getenv`, `remove` and `tmpname`.
 Time differences use the pinned MSVC 64-bit integer conversion and validation
