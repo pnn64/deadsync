@@ -64,12 +64,10 @@ ITGmania song and a historical setup page. Two explicit, disabled-by-default
 policies handle these cases; the indexed endpoint policy can trim across prior
 pages using the final length known in advance. Four historical/shipped files
 and 36 native seeks validate those policies; see [vorbis/LEGACY.md](vorbis/LEGACY.md).
-**This is not the completed goal:** encoding, broader conformance/legacy/fuzzing,
-index-free codec seeking and comparative performance work remain. The next work
-is longer fuzz campaigns and reproducible pipeline benchmarks,
-followed by measured optimization and independent native encoding validation.
+The requested goal remains open: broader conformance/legacy/fuzzing, index-free
+codec seeking, comparative performance and competitive native encoding remain.
 
-The independent [fuzz workspace](fuzz/README.md) supplies four coverage-guided
+The independent [fuzz workspace](fuzz/README.md) supplies five coverage-guided
 AddressSanitizer targets, seeded from normal and optional floor-zero fixtures,
 generated multiplexing/chains and spanning packets. Its Windows runner retains
 replayable corpora, hashes, logs and statistics without changing production
@@ -79,7 +77,7 @@ The initial [Vorbis performance baseline](vorbis/PERFORMANCE.md) measures full
 decode, 4 KiB fragmented reads and warm-process startup against libvorbisfile and
 Symphonia with exact decoded counts. It exposes a substantial native throughput
 gap. Component profiling, memory/allocation/seek measurements, optimization and
-native encoding remain required.
+competitive native encoding remain required.
 The first measured transform optimization replaces a length-N complex FFT with
 a paired-spectrum N/4 FFT. Its isolated kernel is 3.2–3.8x faster, transform
 elements shrink 65%, and observed full-file times improve 1.35–1.67x on the two
@@ -109,6 +107,16 @@ from two logical bits per packet. Paired longer-file seek batches improve anothe
 references on those two seek workloads in this run. Short files, eager index
 construction, and full-file throughput still have performance gaps. The
 page-only pre-roll option preserves a lower-storage strategy with exact PCM.
+
+The initial [native encoder](vorbis/ENCODING.md) now generates setup and audio
+packets directly from PCM, with a native forward MDCT, fixed blocks, an adaptive
+flat floor and one to four additive residue stages. Raw and Ogg APIs support
+arbitrary input chunks and exact final trimming; normal raw encode/reset has
+zero allocations after construction. Independent libvorbisfile and Symphonia
+decoding validate the output, including large packets and 255-channel streams.
+Source SNR and size measurements document its lossy precision tradeoffs. The
+encoder still needs perceptual analysis, rate control, compression optimization
+and comparative performance/real-music quality work.
 
 ## Normative sources
 

@@ -105,23 +105,25 @@ static void pcm(FILE *file) {
     }
     vorbis_block_clear(&block); vorbis_dsp_clear(&dsp); vorbis_comment_clear(&comments); vorbis_info_clear(&info);
 }
-static void transform(FILE *file) {
-    long size; unsigned char *data = packet(file, &size); int n, k; float *input, *output; mdct_lookup lookup;
+static void transform(FILE *file, int forward) {
+    long size; unsigned char *data = packet(file, &size); int n, k, in_count, out_count; float *input, *output; mdct_lookup lookup;
     if (size < 4) fail("MDCT protocol");
     n = (int)((uint32_t)data[0] | (uint32_t)data[1] << 8 | (uint32_t)data[2] << 16 | (uint32_t)data[3] << 24);
-    if (n < 64 || n > 8192 || (n & (n - 1)) || size != 4 + n / 2 * 4) fail("MDCT size");
-    input = (float *)malloc((size_t)n / 2 * sizeof(float)); output = (float *)malloc((size_t)n * sizeof(float));
+    in_count = forward ? n : n / 2; out_count = forward ? n / 2 : n;
+    if (n < 64 || n > 8192 || (n & (n - 1)) || size != 4 + in_count * 4) fail("MDCT size");
+    input = (float *)malloc((size_t)in_count * sizeof(float)); output = (float *)malloc((size_t)out_count * sizeof(float));
     if (!input || !output) fail("MDCT allocation");
-    for (k = 0; k < n / 2; ++k) {
+    for (k = 0; k < in_count; ++k) {
         unsigned char *p = data + 4 + k * 4;
         uint32_t raw = (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
         memcpy(&input[k], &raw, sizeof(raw));
     }
-    mdct_init(&lookup, n); mdct_backward(&lookup, input, output);
-    for (k = 0; k < n; ++k) { uint32_t raw; memcpy(&raw, &output[k], sizeof(raw)); put32(raw); }
+    mdct_init(&lookup, n);
+    if (forward) mdct_forward(&lookup, input, output); else mdct_backward(&lookup, input, output);
+    for (k = 0; k < out_count; ++k) { uint32_t raw; memcpy(&raw, &output[k], sizeof(raw)); put32(raw); }
     mdct_clear(&lookup); free(input); free(output); free(data);
 }
-static void ogg_pcm(FILE *file) {
+static void ogg_pcm(FILE *file, int raw_start) {
     OggVorbis_File reader; int links, i, link;
     if (ov_open_callbacks(file, &reader, NULL, 0, OV_CALLBACKS_NOCLOSE)) fail("vorbisfile open");
     links = (int)ov_streams(&reader); put32((uint32_t)links);
@@ -133,7 +135,7 @@ static void ogg_pcm(FILE *file) {
     /* No PCM seek target exists in an empty stream. The reported count is zero. */
     if (ov_pcm_total(&reader, -1) == 0) { ov_clear(&reader); return; }
     /* Establish the first link's cursor explicitly after the metadata scan. */
-    if (ov_pcm_seek(&reader, 0)) fail("vorbisfile initial PCM seek");
+    if (raw_start ? ov_raw_seek(&reader, 0) : ov_pcm_seek(&reader, 0)) fail("vorbisfile initial seek");
     for (;;) {
         float **samples; long frames = ov_read_float(&reader, &samples, 4096, &link); int ch; long frame;
         if (frames == 0) break; if (frames < 0) fail("vorbisfile decode/hole");
@@ -178,7 +180,7 @@ static void ogg_seek(FILE *file, const char *requests_path) {
     fclose(requests); ov_clear(&reader);
 }
 int main(int argc, char **argv) {
-    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|books|pcm|mdct|oggpcm input; oggseek input requests");
+    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|books|pcm|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
@@ -186,8 +188,10 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[1], "headers")) headers(file);
     else if (!strcmp(argv[1], "books")) books(file);
     else if (!strcmp(argv[1], "pcm")) pcm(file);
-    else if (!strcmp(argv[1], "mdct")) transform(file);
-    else if (!strcmp(argv[1], "oggpcm")) ogg_pcm(file);
+    else if (!strcmp(argv[1], "mdct")) transform(file, 0);
+    else if (!strcmp(argv[1], "mdctforward")) transform(file, 1);
+    else if (!strcmp(argv[1], "oggpcm")) ogg_pcm(file, 0);
+    else if (!strcmp(argv[1], "oggpcmraw")) ogg_pcm(file, 1);
     else if (!strcmp(argv[1], "oggseek")) ogg_seek(file, argv[3]);
     else fail("unknown mode");
     fclose(file); if (fflush(stdout)) fail("flush"); return 0;

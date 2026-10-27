@@ -47,6 +47,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "vorbis_encode"
+path = "fuzz_targets/vorbis_encode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "seed"
 path = "src/bin/seed.rs"
 required-features = ["seed"]

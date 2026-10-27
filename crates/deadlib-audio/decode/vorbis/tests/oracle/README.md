@@ -1,7 +1,7 @@
 # Test-only libvorbis oracle
 
 This process links unmodified libvorbis/libogg and checks raw headers, codebooks,
-inverse MDCT, packet PCM and full Ogg PCM via libvorbisfile. Its codebook mode uses libvorbis's private APIs to
+forward/inverse MDCT, packet PCM and full Ogg PCM via libvorbisfile. Its codebook mode uses libvorbis's private APIs to
 unpack VQ values and encode all used Huffman codewords. The Rust production
 graph never links either reference implementation.
 
@@ -36,6 +36,8 @@ and clears EOS, then emits unclipped, untrimmed planar PCM. It verifies raw
 overlap frame counts independently, including the zero-frame priming packet.
 It does not verify the Ogg Vorbis initial/final sample mapping. `mdct` tests the
 reference inverse transform directly, independently of headers or packet decode.
+`mdctforward` receives N time samples instead of N/2 coefficients and emits the
+N/2 coefficients from `mdct_forward`, with the same length-prefixed protocol.
 
 `oggpcm` reads an actual Ogg file, reports each link's serial, channels, rate and
 `ov_pcm_total`, and emits planar `ov_read_float` records tagged by link. The Rust
@@ -45,6 +47,13 @@ avoids libvorbisfile skipping the first short link at its raw-open position.
 Zero-total files have no PCM seek target and produce no sample records. This
 mode verifies final counts, trimming and mixed-rate chains separately from raw
 synthesis. Symphonia's format-reader path checks timestamps, durations and PCM.
+
+`oggpcmraw` has the same output protocol but establishes its initial position
+with `ov_raw_seek(0)`. The native encoder matrix uses this path. A named
+regression shows `ov_pcm_seek(0)` losing the first 4,096 frames of a legal
+eight-channel/N8192 native stream whose 65,810-byte priming packet spans pages;
+raw-start decoding returns all 16,401 declared frames. The original `oggpcm`
+mode and existing decoder corpus tests are unchanged. See [ENCODING.md](../../ENCODING.md).
 
 `oggseek input.ogg requests.bin` opens libvorbisfile once, then performs repeated
 `ov_pcm_seek`/`ov_pcm_tell`/`ov_read_float` operations without reopening. Requests

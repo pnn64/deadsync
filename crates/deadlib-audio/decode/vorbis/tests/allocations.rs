@@ -57,6 +57,39 @@ fn repeated_packet_decode_reset_and_in_page_mapping_allocate_nothing() {
     }
     in_page_mapping_allocate_nothing();
     repeated_seeks_allocate_nothing();
+    repeated_native_encoding_allocates_nothing();
+}
+
+fn repeated_native_encoding_allocates_nothing() {
+    use deadlib_audio_decode_vorbis::{EncodeOptions, EncodedPacket, PacketEncoder};
+    for (channels, block_size) in [(1, 64), (2, 1024), (8, 1024), (255, 64)] {
+        let options = EncodeOptions {
+            channels,
+            block_size,
+            residue_passes: 4,
+            ..EncodeOptions::default()
+        };
+        let frames = block_size + 17;
+        let pcm: Vec<f32> = (0..frames * channels as usize)
+            .map(|i| ((i * 37 % 101) as f32 - 50.0) / 64.0)
+            .collect();
+        let mut encoder = PacketEncoder::new(options).unwrap();
+        ALLOCATIONS.store(0, Ordering::Relaxed);
+        TRACK.with(|track| track.set(true));
+        for _ in 0..3 {
+            encoder.reset();
+            let mut emit = |p: EncodedPacket<'_>| {
+                std::hint::black_box((p.data, p.number, p.granule_position));
+                Ok(())
+            };
+            for chunk in pcm.chunks(channels as usize * 13) {
+                encoder.push_interleaved(chunk, &mut emit).unwrap();
+            }
+            encoder.finish(&mut emit).unwrap();
+        }
+        TRACK.with(|track| track.set(false));
+        assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 0);
+    }
 }
 
 fn repeated_seeks_allocate_nothing() {

@@ -49,3 +49,28 @@ upstream coded-grid, historical floor-zero, reset/allocation and seek gates must
 pass without increasing their numerical tolerances. Performance measurements
 use the resident transform worker rather than inferring kernel time solely from
 whole-file throughput; see [PERFORMANCE.md](PERFORMANCE.md).
+
+## Native forward analysis
+
+The inverse has the form `P D x`, where D is the symmetric, unscaled DCT-IV and
+P is the signed MDCT expansion/permutation. Forward analysis therefore computes
+`(4/N) D P^T t`, using the same N/4 complex FFT and rotations. For M=N/2,
+the transposed fold is:
+
+```text
+f[r] = -t[3M/2-1-r] - t[3M/2+r]     for 0 <= r < M/2
+f[M/2+q] = t[q] - t[M-1-q]          for 0 <= q < M/2
+X = (4/N) DCT-IV(f).
+```
+
+`Mdct` uses this fold directly while filling the bit-reversed FFT scratch; no
+extra folded vector or allocation is needed. Its table/scratch storage remains
+7N bytes. Both transforms share a private FFT butterfly helper; inverse
+arithmetic and operation order are preserved.
+
+Independent tests compare analysis to the f64 direct cosine equation at every
+legal size, then verify multiblock analysis/window/synthesis overlap before
+quantization. A separate libvorbis `mdct_forward` oracle compares every
+coefficient at all eight sizes, with peak <=3e-7 and RMS <=5e-8 at unit peak.
+Observed maximum coefficient error is 8.196e-8. Encoder output is independently
+decoded through libvorbisfile and Symphonia; see [ENCODING.md](ENCODING.md).

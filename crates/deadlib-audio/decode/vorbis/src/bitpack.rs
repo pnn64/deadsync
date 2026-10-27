@@ -100,6 +100,23 @@ impl BitWriter {
     pub fn position(&self) -> usize {
         self.output.len() * 8 + self.available as usize
     }
+    /// Start another packet while retaining byte capacity.
+    pub fn reset(&mut self) {
+        self.output.clear();
+        self.cache = 0;
+        self.available = 0;
+    }
+    pub(crate) fn with_capacity(bytes: usize) -> Result<Self, Error> {
+        let mut value = Self::new();
+        value
+            .output
+            .try_reserve_exact(bytes)
+            .map_err(|_| Error::Allocation)?;
+        Ok(value)
+    }
+    pub(crate) fn capacity_bytes(&self) -> usize {
+        self.output.capacity()
+    }
     /// Discard high bits, as required by the bitpacking convention.
     pub fn write(&mut self, value: u32, bits: u32) -> Result<(), Error> {
         if bits > 32 {
@@ -116,11 +133,17 @@ impl BitWriter {
         Ok(())
     }
     /// Pad the final byte with zero bits.
-    pub fn finish(mut self) -> Result<Vec<u8>, Error> {
+    pub fn finish_packet(&mut self) -> Result<&[u8], Error> {
         if self.available != 0 {
             reserve(&mut self.output, 1)?;
             self.output.push(self.cache as u8);
+            self.available = 0;
+            self.cache = 0;
         }
+        Ok(&self.output)
+    }
+    pub fn finish(mut self) -> Result<Vec<u8>, Error> {
+        self.finish_packet()?;
         Ok(self.output)
     }
 }

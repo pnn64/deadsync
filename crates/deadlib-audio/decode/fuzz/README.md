@@ -10,6 +10,7 @@ with DeadSync. `Cargo.lock` pins the fuzz tooling dependencies.
 | `vorbis_headers` | Selector byte: identification, comments, or 30-byte identification followed by setup. Accepted identification/comments round-trip exactly; owned metadata preserves binary fields. Accepted setups construct a decoder under separate memory limits and consume probe packets. |
 | `vorbis_packets` | Fixture selector byte, then repeated little-endian u16 lengths and packet bytes (a final oversized length consumes the remainder). At most 32 packets. Two reset/replays must agree on PCM bits, errors and positions. A known-good replay after malformed input must match its original result. The high control bit tests positions near u64 overflow. |
 | `vorbis_stream` | Control byte then Ogg bytes, with arbitrary input chunks. Pull and two reset/push replays must match PCM/event summaries, errors and exception counts. Accepted indices compare page, packet, and mixed reads after end/middle/start/last-frame seeks, including deterministic payload errors and recovery by seeking. |
+| `vorbis_encode` | Six policy bytes then little-endian i16 PCM, or raw f32 for range/NaN rejection. Vary legal blocks, 1..255 channels, four precision stages, rates, input chunks and page targets. Whole interleaved and reset/chunked planar encoding must produce identical bytes. Native decoding checks framing, finite PCM, exact positions and final trimming. Invalid PCM must emit nothing and preserve position. |
 
 Every returned PCM sample must be finite. Summaries use an order-sensitive
 64-bit hash plus exact counts rather than retaining untrusted output; a matching
@@ -70,6 +71,14 @@ at most 128 pages; raw synthesis at most 32 packets per replay. The fuzzer has a
 20-second per-input timeout and 2 GiB RSS limit. These are fuzz harness policies,
 not format restrictions. Sanitizer RSS includes its allocator/quarantine and
 must not be reported as production decoder memory consumption.
+
+Encoder inputs are capped at 2,048 frames and 8 MiB of raw encoder elements;
+oversized channel/block combinations are skipped. Encoded packets are capped at
+2 MiB. The generated stream's decoder has a 32 MiB element budget. Synthetic
+integer PCM and raw zero, NaN, infinity and amplitude-boundary seeds exercise
+analysis, reset, input validation and page-spanning packets. This round-trip
+oracle checks structure and determinism; independent decoder parity and lossy
+source error are measured in the normal encoder reference tests.
 
 ## Replay and extend
 

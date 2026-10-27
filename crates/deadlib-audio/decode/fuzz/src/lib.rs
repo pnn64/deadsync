@@ -518,11 +518,152 @@ pub fn vorbis_stream(input: &[u8]) {
     }
 }
 
+/// Encode two identical streams through different input layouts/chunks, with a
+/// reset between them, then validate framing, exact trimming and finite PCM.
+pub fn vorbis_encode(input: &[u8]) {
+    if input.len() < 6 || input.len() > MAX_INPUT + 1 {
+        return;
+    }
+    let channels = [1, 2, 3, 4, 5, 6, 7, 8, 16, 255][input[0] as usize % 10];
+    let channels_usize = channels as usize;
+    let options = vorbis::EncodeOptions {
+        channels,
+        block_size: 64 << (input[1] & 7),
+        residue_passes: 1 + (input[2] & 3),
+        sample_rate: [1, 8000, 22050, 44100, 48000, 192000, u32::MAX][input[3] as usize % 7],
+        max_memory: 8 << 20,
+        max_packet_bytes: 2 << 20,
+        max_frames: 2048,
+    };
+    let Ok(mut encoder) = vorbis::PacketEncoder::new(options) else {
+        return; // Some extreme channel/block combinations exceed the work fence.
+    };
+    let mut pcm: Vec<f32> = if input[4] & 7 == 7 {
+        input[6..]
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|b| f32::from_le_bytes(*b))
+            .collect()
+    } else {
+        input[6..]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|b| i16::from_le_bytes(*b) as f32 / 8192.0)
+            .collect()
+    };
+    pcm.truncate((pcm.len() / channels_usize).min(2048) * channels_usize);
+    let frames = pcm.len() / channels_usize;
+    if pcm.iter().any(|x| !x.is_finite() || x.abs() > 4.0) {
+        assert!(
+            encoder
+                .push_interleaved(&pcm, |_| panic!("invalid input emitted a packet"))
+                .is_err()
+        );
+        assert_eq!(encoder.position(), 0);
+        encoder.reset();
+        return;
+    }
+    let comments = vorbis::Comments {
+        vendor: b"native fuzz",
+        comments: vec![b"TITLE=a", b"TITLE=b"],
+    };
+    let header = encoder.identification().encode().unwrap();
+    let metadata = comments.encode(&limits()).unwrap();
+    let mut expected = None;
+    for planar in [false, true] {
+        encoder.reset();
+        let mut pages = ogg::PacketWriter::with_options(
+            Vec::new(),
+            123,
+            ogg::WriteOptions {
+                target_page_body: 1 + input[5] as usize * 257,
+            },
+        );
+        pages.write_packet(&header, 0, false).unwrap();
+        pages.write_packet(&metadata, 0, false).unwrap();
+        pages
+            .write_packet(encoder.setup_packet(), 0, false)
+            .unwrap();
+        pages.flush_page().unwrap();
+        let mut number = 3;
+        let mut end = false;
+        let mut emit = |packet: vorbis::EncodedPacket<'_>| {
+            assert_eq!(packet.number, number);
+            assert!(!end);
+            assert!(packet.granule_position <= frames as u64);
+            number += 1;
+            end = packet.last_in_stream;
+            pages.write_packet(packet.data, packet.granule_position, packet.last_in_stream)?;
+            Ok(())
+        };
+        if planar {
+            for chunk in pcm.chunks((1 + input[5] as usize) * channels_usize) {
+                let planes: Vec<Vec<_>> = (0..channels_usize)
+                    .map(|ch| chunk.chunks_exact(channels_usize).map(|f| f[ch]).collect())
+                    .collect();
+                let slices: Vec<_> = planes.iter().map(Vec::as_slice).collect();
+                encoder.push_planar(&slices, &mut emit).unwrap();
+            }
+        } else {
+            encoder.push_interleaved(&pcm, &mut emit).unwrap();
+        }
+        assert_eq!(encoder.position(), frames as u64);
+        encoder.finish(&mut emit).unwrap();
+        encoder.finish(&mut emit).unwrap();
+        assert!(end);
+        assert!(encoder.push_interleaved(&[], |_| Ok(())).is_err());
+        let bytes = pages.into_inner();
+        if let Some(expected) = &expected {
+            assert_eq!(expected, &bytes);
+        } else {
+            expected = Some(bytes);
+        }
+    }
+    let bytes = expected.unwrap();
+    let mut position = 0;
+    let mut starts = 0;
+    let mut ends = 0;
+    let decode_options = vorbis::OggOptions {
+        limits: vorbis::Limits {
+            max_packet_bytes: 2 << 20,
+            max_decode_memory: 32 << 20,
+            ..limits()
+        },
+        ..vorbis::OggOptions::default()
+    };
+    vorbis::decode_reader(bytes.as_slice(), decode_options, |event| match event {
+        vorbis::OggEvent::StreamStart(info) => {
+            starts += 1;
+            assert_eq!(info.identification, *encoder.identification());
+        }
+        vorbis::OggEvent::Pcm(block) => {
+            assert_eq!(block.start_frame, position);
+            position += block.pcm.frames as u64;
+            Digest::default().pcm(&block.pcm);
+        }
+        vorbis::OggEvent::StreamEnd(info) => {
+            ends += 1;
+            assert_eq!(info.frames, frames as u64);
+        }
+        _ => panic!("unexpected event from native encoding"),
+    })
+    .unwrap();
+    assert_eq!(position, frames as u64);
+    assert_eq!((starts, ends), (1, 1));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn valid_and_truncated_seeds_reach_every_oracle() {
+        for control in 0..80 {
+            let mut bytes = vec![control, control, control, control, control, control];
+            bytes.extend((0..2048).map(|v| (v * 79) as u8));
+            vorbis_encode(&bytes);
+        }
         for (fixture, bytes) in FIXTURES.iter().enumerate() {
             for length in [0, 1, 27, bytes.len() / 2, bytes.len()] {
                 let mut input = vec![17];

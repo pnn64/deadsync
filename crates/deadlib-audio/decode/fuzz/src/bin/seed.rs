@@ -58,6 +58,27 @@ fn main() {
     let root = Path::new(&root);
     assert!(!root.exists(), "seed output directory must be new");
     fs::create_dir_all(root).unwrap();
+    for block in 0..8 {
+        for precision in 0..4 {
+            let mut seed = vec![block, block, precision, 4, 0, 17];
+            for i in 0..4096i32 {
+                seed.extend_from_slice(&((i * 79) as i16).to_le_bytes());
+            }
+            put(
+                root,
+                "vorbis_encode",
+                &format!("pcm-{block}-{precision}"),
+                &seed,
+            );
+        }
+    }
+    for raw in [0u32, 0x7fc00000, 0x7f800000, 0x40800000, 0xc0800000] {
+        let mut seed = vec![9, 0, 3, 4, 7, 1];
+        for _ in 0..255 {
+            seed.extend_from_slice(&raw.to_le_bytes());
+        }
+        put(root, "vorbis_encode", &format!("float-{raw:x}"), &seed);
+    }
     for (number, bytes) in FIXTURES.iter().enumerate() {
         ogg_seed(root, &format!("fixture-{number}"), bytes);
         codec_seeds(root, number, bytes, true);

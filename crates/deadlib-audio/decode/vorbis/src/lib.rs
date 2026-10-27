@@ -5,6 +5,7 @@
 pub mod bitpack;
 pub mod codebook;
 mod decoder;
+mod encoder;
 mod floor;
 mod floor_table;
 mod headers;
@@ -15,6 +16,7 @@ mod setup;
 mod transform;
 
 pub use decoder::{PacketDecoder, PcmBlock};
+pub use encoder::{EncodeOptions, EncodedPacket, OggEncoder, PacketEncoder};
 pub use headers::{Channel, CommentField, Comments, Identification, Metadata, channel_order};
 pub use ogg::{
     OggDecoder, OggEvent, OggOptions, OggPcm, OggReader, OggStreamDecoder, StreamEnd, StreamId,
@@ -24,7 +26,7 @@ pub use seek::{OggSeekReader, SeekOptions, SeekStream, VorbisIndex};
 pub use setup::{
     AudioHeader, Floor, Floor0, Floor1, FloorClass, Mapping, Mode, Residue, Setup, Submap,
 };
-pub use transform::Imdct;
+pub use transform::{Imdct, Mdct};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {

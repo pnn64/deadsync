@@ -1,6 +1,6 @@
 # Vorbis coverage and numerical evidence
 
-Status: **raw synthesis, streaming mapping and indexed sample-accurate seeking implemented**. No full
+Status: **raw synthesis, streaming mapping, indexed sample-accurate seeking and initial native encoding implemented**. No full
 Vorbis I conformance or competitive-performance claim is made. The complete
 requested end state remains in the parent work plan.
 
@@ -261,6 +261,16 @@ counts match without discarding comparison samples.
 
 ## Remaining required work
 
+Initial native encoding now generates fixed-block setup/audio packets from PCM
+and supplies raw and Ogg APIs. All legal transform sizes, four additive precision
+stages, 1..255 channels, exact input lengths, reset/chunk determinism, allocation
+checks and independent decoder parity have dedicated tests. The 144-case
+libvorbisfile matrix compares 2,375,544 channel samples. A named reference test
+records a lost first block after libvorbisfile PCM-seek zero for a spanning
+priming packet; raw-start decoding returns the full correct output. See
+[ENCODING.md](ENCODING.md) for the precise interval checks, measured lossy source
+error, coding subset, resource policies and outstanding encoder work.
+
 * Index-free/sparse codec seeking and measured startup/seek optimizations. The
   indexed reader eagerly scans the full container and all audio mode prefixes;
   it does not decode every audio payload during construction. Broader malformed
@@ -275,7 +285,8 @@ counts match without discarding comparison samples.
   and wider real ITGmania/StepMania song-pack coverage beyond the pinned shipped
   songs. The two documented compatibility policies do not conceal packet holes
   or repair arbitrary malformed containers.
-* Native encoding, independently decoded lossy validation, measured pipeline
+* Competitive native encoding quality/bitrate control, real-music lossy
+  evaluation, comparative encoding performance, measured decoding pipeline
   optimization and broader throughput/startup plus memory/allocation/seek
   comparisons with libvorbis and Symphonia. The five-file
   [resource/seek baseline](RESOURCES.md) now covers requested heap, process memory

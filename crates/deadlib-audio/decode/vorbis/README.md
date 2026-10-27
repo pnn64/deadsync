@@ -33,7 +33,7 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
   and allocations; decode/reset perform zero allocations after construction.
   `reset_at` also seeds the raw position for caller-managed packet seeks; supply
   the actual preceding packet to prime overlap before consuming output.
-* `Imdct`: reusable native inverse transform for all legal 64..=8192 block sizes,
+* `Imdct` / `Mdct`: reusable native inverse/forward transforms for all legal 64..=8192 block sizes,
   using a paired-spectrum N/4 FFT. [MDCT.md](MDCT.md) gives the derivation.
 
 ```rust
@@ -172,10 +172,16 @@ clip PCM across earlier packets/pages. Applied container exceptions are counted;
 [LEGACY.md](LEGACY.md) for the precise policies, strict rejection tests and
 pinned historical/ITGmania evidence, including a reference count discrepancy.
 
-**Native audio encoding remains pending.**
+Native PCM encoding is available through `PacketEncoder` and `OggEncoder`.
+The initial implementation uses fixed blocks, a flat adaptive floor and staged
+residue-one quantization. Raw push/finish/reset retain all capacity. Independent
+libvorbisfile/Symphonia checks require exact counts and decoder PCM parity;
+source reconstruction is measured separately because encoding is lossy.
+See [ENCODING.md](ENCODING.md) for usage, policy, measured errors and limitations.
+Perceptual/rate control and competitive encoder quality/performance remain open.
 Raw decoder positions count overlap output before container initial/final trim.
 There is no synthetic final flush; the container mapping supplies final length.
-Header writers are not audio encoders. Do not replace the existing decoding
+Do not replace the existing decoding
 pipeline until the remaining conformance/performance gates pass.
 See [COVERAGE.md](COVERAGE.md) and the parent work plan for the remaining scope.
 The separate [fuzz workspace](../fuzz/README.md) covers headers, raw packet
