@@ -31,6 +31,21 @@ def main():
     output.mkdir(parents=True)
     target_dir = args.target_dir.resolve()
     target_dir.mkdir(parents=True)
+    project = output / 'fuzz-project'
+    project.mkdir()
+    copied_sources = []
+    for source in [package / 'fuzz/Cargo.lock'] + sorted((package / 'fuzz/fuzz_targets').glob('*.rs')) + sorted((package / 'fuzz/support').glob('*.rs')) + sorted((package / 'tests/support').glob('*.rs')):
+        if source.is_relative_to(package / 'fuzz'):
+            destination = project / source.relative_to(package / 'fuzz')
+        else:
+            destination = output / source.relative_to(package)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(source.read_bytes())
+        copied_sources.append({'source': str(source), 'copy': str(destination), 'sha256': sha(source)})
+    original_manifest = (package / 'fuzz/Cargo.toml').read_text()
+    binding = 'deadlib-image-png = { path = ".." }'
+    assert original_manifest.count(binding) == 1
+    (project / 'Cargo.toml').write_text(original_manifest.replace(binding, 'deadlib-image-png = { path = ' + json.dumps(str(package)) + ' }'))
     env = os.environ.copy()
     env.pop('CARGO_ENCODED_RUSTFLAGS', None)
     env.pop('RUSTC_WRAPPER', None)
@@ -61,9 +76,8 @@ def main():
             log.flush()
             assert result.returncode == 0, (command, result.stderr[-4000:])
 
-        for target in ['png_stream', 'inflate_stream']:
-            coverage = package / 'fuzz/coverage' / target
-            assert not coverage.exists(), ('Existing replay output', coverage)
+        for target in [row['target'] for row in campaign_manifest['campaigns']]:
+            coverage = project / 'coverage' / target
             corpus = campaign / 'corpus' / target
             digest, sizes = hashlib.sha256(), []
             for seed in sorted(corpus.iterdir(), key=lambda path: path.name.encode()):
@@ -75,13 +89,14 @@ def main():
                             'hash_method': 'Ascending literal UTF-8 filename bytes, NUL, file contents'})
             print(f'Replaying {target}: {len(sizes)} fixed corpus files', flush=True)
             command = prefix + [str(args.cargo_fuzz.resolve()), 'coverage', target, str(corpus),
-                                '--target-dir', str(target_dir), '--sanitizer', 'none', '--jobs', '4']
+                                '--target-dir', str(target_dir), '--fuzz-dir', str(project), '--sanitizer', 'none', '--jobs', '4']
             run(command)
             profiles.append(coverage / 'coverage.profdata')
             binaries.append(target_dir / host / 'release' / target)
         merged = output / 'native.profdata'
         run([str(tools / 'llvm-profdata'), 'merge', '-sparse', '-o', str(merged)] + [str(p) for p in profiles])
-        options = [str(binaries[0]), '-object', str(binaries[1]), '-instr-profile', str(merged)]
+        options = [str(binaries[0]), '-instr-profile', str(merged)]
+        for binary in binaries[1:]: options += ['-object', str(binary)]
         options += [str(path) for path in sources]
         run([str(tools / 'llvm-cov'), 'report'] + options, output / 'native-report.txt')
         run([str(tools / 'llvm-cov'), 'export', '-summary-only'] + options, output / 'native-summary.json')
@@ -102,6 +117,8 @@ def main():
     (output / 'native-zero-count-annotations.json').write_text(json.dumps(annotations, indent=2) + '\n')
     for entry in source_hashes:
         assert sha(package.parent / entry['path']) == entry['sha256']
+    for entry in copied_sources:
+        assert sha(Path(entry['source'])) == sha(Path(entry['copy'])) == entry['sha256']
     manifest = {'baseline_png_commit': 'fae2e5bd2', 'source_sha256': source_hashes,
                 'campaign_manifest_sha256': sha(campaign / 'manifest.json'),
                 'environment': {key: env[key] for key in ['RUSTFLAGS', 'CARGO_BUILD_JOBS', 'CC', 'CXX']},
@@ -109,6 +126,8 @@ def main():
                 'binaries': [{'path': str(path), 'sha256': sha(path)} for path in binaries],
                 'profiles': [{'path': str(path), 'sha256': sha(path)} for path in profiles + [merged]],
                 'runner_sha256': sha(Path(__file__)), 'files': files,
+                'isolated_fuzz_project': str(project), 'fuzz_source_copies': copied_sources,
+                'fuzz_manifest_copy_sha256': sha(project / 'Cargo.toml'),
                 'totals': summary['data'][0]['totals'], 'final_source_hashes_verified': True,
                 'scope': 'Fixed replay of corpora grown using native-crate feedback. Reports include only explicit native source filenames; harnesses, references and stdlib source are excluded. Package totals include encoding utilities never called by these targets, so they are not decoder-only percentages. Replay is not additional fuzzing or proof of conformance.'}
     (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

@@ -113,7 +113,7 @@ Fuzzing seconds / peak RSS are 71 / 524 MiB and 12 / 398. Initial corpus counts
 are 27,867 / 939, including bounded zlib fixtures in the raw-stream corpus.
 `reports/native-feedback-source.json` retains source/binary/corpus hashes,
 compiler arguments, object audits and the correction for Cargo's artifact layout.
-The historical successful total is now 1,180,000 across eleven targets,
+That milestone brings the historical successful total to 1,180,000 across eleven targets,
 including previous encoder campaigns. No encoder target runs here.
 
 The companion `scripts/coverage_fuzz_native.py` replays these final corpora and
@@ -134,9 +134,11 @@ python3 crates/deadlib-image/png/scripts/fuzz_native.py --cargo-fuzz /path/to/ca
 python3 crates/deadlib-image/png/scripts/coverage_fuzz_native.py --campaign-output /tmp/png-native-campaign-fresh --cargo-fuzz /path/to/cargo-fuzz --target-dir /tmp/png-native-coverage-build-fresh --output-dir /tmp/png-native-coverage-fresh
 ```
 
-Cargo-fuzz's per-target `fuzz/coverage/png_stream` and `inflate_stream`
-directories must also be absent for a fresh coverage run. Retain or rename old
-evidence before replaying. The runner never deletes it.
+The coverage runner now copies the fuzz project and its shared test helpers into
+the fresh output directory, records their hashes, and uses `--fuzz-dir` for
+isolated coverage storage. Earlier per-target `fuzz/coverage` evidence remains
+available. The runner refuses existing output/build directories and never deletes
+old evidence.
 Working corpora, crash artifacts and builds are
 ignored. Committed fixtures and the seed generator reproduce the initial corpus;
 do not reuse a previously mutated corpus when reproducing an exact smoke run.
@@ -150,6 +152,69 @@ cargo run -p deadlib-image-png --release --example seed_fuzz -- target/png-fuzz-
 Pass the desired subdirectory, such as `target/png-fuzz-fresh/deflate_stream`,
 after the target name in `cargo fuzz run` (using a path relative to its working
 directory). This keeps each campaign's initial corpus separate from mutations.
+
+## Decoder resource and reader target (2026-10-27)
+
+`decoder_limits` is the twelfth target. Its shared implementation lives in
+`tests/support/resource.rs`, so normal and standalone tests execute the same
+contract. It compares buffered, collecting-reader and push acceptance, exact
+native samples and metadata, error fusing, byte counters and image-pipeline
+capacity. The callback used for optional CRC repair is independent of the native
+codec. The PNG body follows a 20-byte control header; total input is at most
+65,536 bytes.
+
+| Header bytes | Meaning |
+| --- | --- |
+| 0..4 | Big-endian u32 input budget, capped at 1 MiB |
+| 4..8 | Big-endian u32 output budget, capped at 8 MiB |
+| 8..12 | Big-endian u32 metadata budget, capped at 64 KiB |
+| 12..14 | Big-endian u16 chunk budget, capped at 4,096 |
+| 14..16 | Big-endian u16 frame budget, capped at 256 |
+| 16 | Bit 0: default-image recovery; bit 1: strict palette; bits 2..3: reader mode; bit 4: repair CRCs |
+| 17 | Reader/push fragment size: 1 + byte modulo 32 |
+| 18..20 | Big-endian u16 reader fault offset, capped at the PNG body length |
+
+Reader modes select ordinary reads, alternating interruptions, an IO error or an
+invalid returned byte count. Zero budgets are retained. Independent constructors
+produce 6,376 structured seeds across all fifteen formats, plain/Adam7, static
+and animation roles, limit boundaries and reader modes. Two highly compressed
+1x4096 zero images expose a harness iteration-bound defect: an input-only bound
+could exhaust while emitting valid rows without consuming more input. Native
+buffered/reader/push decoding already passed. The corrected harness accounts for
+the output budget; its failing regression, exact old helper snapshots and hashes
+are retained in `reports/boundaries-harness-before.*` and
+`reports/boundaries-{resource,budgets}-before.rs`. This was a harness correction.
+
+The shared 740 independent mixed/one-bit DEFLATE fixtures add 2,220 valid,
+suffixed and truncated seeds to each raw corpus. The archive combines raw-stream
+and bounded zlib seeds into 5,379 initial `inflate_stream` inputs. That target
+now varies one-, seven-, 31-byte and whole-input fragments, and checks native
+counters, working capacity and terminal error behavior.
+
+The initial ASan stage passes 30,000 resource and 20,000 raw-stream executions
+(9 / 16 fuzzing seconds, 447 / 424 MiB peak RSS). After the tall-image regression
+and harness correction, another 30,000 resource executions pass in 13 seconds /
+445 MiB. `reports/boundaries-initial-source.json` maps the initial helper hashes
+to retained snapshots; `reports/boundaries-source.json` records the corrected
+source. Both stages verify native-crate feedback isolation from object sections
+and retain ASan. All production PNG source files are unchanged. These 80,000
+successful executions bring the historical total to 1,260,000 across twelve
+targets. The expected failing regression and fixed coverage replay are excluded.
+Encoder targets are outside this decoder continuation.
+
+To reproduce with new destinations, generate seeds as above, then select the
+resource/raw targets when archiving and running:
+
+```sh
+python crates/deadlib-image/png/fuzz/scripts/archive_native_seeds.py --corpus-root target/png-native-seeds-fresh --output target/png-resource-seeds-fresh.zip --targets decoder_limits inflate_stream
+python3 crates/deadlib-image/png/scripts/fuzz_native.py --cargo-fuzz /path/to/cargo-fuzz --seed-archive target/png-resource-seeds-fresh.zip --target-dir /tmp/png-resource-fuzz-fresh --output-dir /tmp/png-resource-campaign-fresh --targets decoder_limits inflate_stream
+python3 crates/deadlib-image/png/scripts/coverage_fuzz_native.py --campaign-output /tmp/png-resource-campaign-fresh --cargo-fuzz /path/to/cargo-fuzz --target-dir /tmp/png-resource-coverage-build-fresh --output-dir /tmp/png-resource-coverage-fresh
+```
+
+The two selection options default to the earlier `png_stream inflate_stream`
+pair. Selected run counts are 50,000 PNG-stream, 20,000 raw-stream and 30,000
+resource executions. Fixed replay counts are documented separately under
+`../coverage-reports/`.
 
 `decode` checks for native parser failures and compares every native sample when
 the independent Rust png decoder also accepts the image. Reference ancillary

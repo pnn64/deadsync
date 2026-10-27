@@ -6,6 +6,9 @@ mod ancillary_order;
 #[allow(dead_code)]
 #[path = "../tests/support/apng_recovery.rs"]
 mod apng_recovery;
+#[allow(dead_code)]
+#[path = "../tests/support/budgets.rs"]
+mod budgets;
 #[path = "../tests/support/chunks.rs"]
 mod chunks;
 #[allow(dead_code)]
@@ -19,6 +22,9 @@ mod huffman;
 #[allow(dead_code)]
 #[path = "../tests/support/named.rs"]
 mod named;
+#[allow(dead_code)]
+#[path = "../tests/support/prefix.rs"]
+mod prefix;
 #[path = "../tests/support/text_body.rs"]
 mod text_body;
 use std::{
@@ -149,6 +155,31 @@ fn main() -> std::io::Result<()> {
     fs::create_dir_all(&zlib)?;
     fs::create_dir_all(&png_stream)?;
     fs::create_dir_all(&inflate_stream)?;
+    let decoder_limits = corpus.join("decoder_limits");
+    fs::create_dir_all(&decoder_limits)?;
+    for (name, bytes) in budgets::seeds() {
+        fs::write(decoder_limits.join(name), bytes)?;
+    }
+    let mut prefix_count = 0;
+    for case in prefix::fixtures() {
+        for variant in 0..3 {
+            let mut bytes = case.bytes.clone();
+            if variant == 1 {
+                bytes.extend(prefix::suffix(63, prefix_count));
+            }
+            if variant == 2 {
+                bytes.pop();
+            }
+            let name = format!("prefix-{}-variant-{variant}", case.name);
+            fs::write(zlib.join(&name), &bytes)?;
+            fs::write(inflate_stream.join(&name), &bytes)?;
+            prefix_count += 1;
+        }
+    }
+    assert_eq!(prefix_count, 2220);
+    println!(
+        "Native resource budgets: 6376 seeds; independent mixed/one-bit prefixes: {prefix_count} seeds per raw corpus"
+    );
     let compositor_inputs = corpus.join("compositor");
     fs::create_dir_all(&compositor_inputs)?;
     for format in 0..compositor::FORMATS.len() {

@@ -14,13 +14,14 @@ def main():
     parser = ArgumentParser(description=__doc__)
     parser.add_argument('--corpus-root', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--targets', nargs='+', choices=['png_stream', 'inflate_stream', 'decoder_limits'], default=['png_stream', 'inflate_stream'])
     args = parser.parse_args()
     manifest = args.output.with_suffix('.json')
     assert not args.output.exists() and not manifest.exists()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     records = []
     with zipfile.ZipFile(args.output, 'w', compression=zipfile.ZIP_STORED) as archive:
-        for target in ['png_stream', 'inflate_stream']:
+        for target in args.targets:
             entries = [(path.name, path) for path in (args.corpus_root / target).iterdir()]
             if target == 'inflate_stream':
                 entries += [('zlib-' + path.name, path) for path in (args.corpus_root / 'zlib').iterdir()

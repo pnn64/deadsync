@@ -13,7 +13,7 @@ pub const STANDARD_NAMES: [[u8; 4]; 25] = [
     *b"tIME", *b"tEXt", *b"zTXt", *b"iTXt", *b"acTL", *b"fcTL", *b"fdAT",
 ];
 
-fn crc(bytes: &[u8]) -> u32 {
+pub fn crc(bytes: &[u8]) -> u32 {
     let mut state = !0u32;
     for &byte in bytes {
         state ^= u32::from(byte);

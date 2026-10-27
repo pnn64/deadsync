@@ -2,13 +2,11 @@
 use deadlib_image_png::{Error, zlib};
 #[path = "support/huffman.rs"]
 mod huffman;
+#[path = "support/prefix.rs"]
+mod prefix;
 mod support;
-
-fn suffix(len: usize, salt: usize) -> Vec<u8> {
-    (0..len)
-        .map(|n| ((n * 137 + salt * 73) ^ (n >> 2)) as u8)
-        .collect()
-}
+use prefix::suffix;
+use std::io::Read;
 
 #[test]
 fn every_valid_huffman_fixture_keeps_exact_prefix_trailer_limits_and_truncations() {
@@ -59,7 +57,7 @@ fn every_valid_huffman_fixture_keeps_exact_prefix_trailer_limits_and_truncations
     );
 }
 
-fn check(input: Vec<u8>, raw: Vec<u8>, salt: usize) -> usize {
+fn check(input: Vec<u8>, raw: Vec<u8>, salt: usize, name: &str) -> usize {
     let mut count = 0;
     for len in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 31, 32, 63, 64] {
         for pattern in 0..if len == 0 { 1 } else { 4 } {
@@ -71,7 +69,8 @@ fn check(input: Vec<u8>, raw: Vec<u8>, salt: usize) -> usize {
             });
             assert_eq!(
                 zlib::decompress_prefix(&bytes, raw.len()).unwrap(),
-                (raw.clone(), input.len())
+                (raw.clone(), input.len()),
+                "{name} suffix={len} pattern={pattern}"
             );
             count += 1;
         }
@@ -81,7 +80,8 @@ fn check(input: Vec<u8>, raw: Vec<u8>, salt: usize) -> usize {
     for (a, b) in [(bytes.len(), 4096), (1, 1), (7, 31)] {
         assert_eq!(
             support::inflate(&bytes, a, b, raw.len()).unwrap(),
-            (raw.clone(), input.len())
+            (raw.clone(), input.len()),
+            "{name} input={a} output={b}"
         );
     }
     count
@@ -89,52 +89,20 @@ fn check(input: Vec<u8>, raw: Vec<u8>, salt: usize) -> usize {
 
 #[test]
 fn one_bit_end_codes_and_huffman_stored_huffman_transitions_at_every_alignment() {
-    let (mut files, mut prefixes) = (0, 0);
-    let mut fixed = [8; 288];
-    fixed[144..256].fill(9);
-    fixed[256..280].fill(7);
-    let fixed = huffman::Codes::new(&fixed);
-    for before in 0..17 {
-        for stored in 0..18 {
-            for ones in [false, true] {
-                let mut wire = huffman::Wire::default();
-                let mut raw = vec![164; before];
-                wire.put(2, 3);
-                for &b in &raw {
-                    fixed.symbol(&mut wire, b as usize);
-                }
-                fixed.symbol(&mut wire, 256);
-                let tail = suffix(stored, before);
-                wire.stored(&tail, false);
-                raw.extend(tail);
-                wire.put(3, 3);
-                for b in [0, 255, 144, 143, 3, 127, 248, 1] {
-                    fixed.symbol(&mut wire, b as usize);
-                    raw.push(b);
-                }
-                fixed.symbol(&mut wire, 256);
-                prefixes += check(wire.finish(&raw, ones), raw, files);
-                files += 1;
-            }
-        }
-    }
-    for length in 0..64 {
-        for ones in [false, true] {
-            let mut lengths = vec![0; 257];
-            lengths[65] = 1;
-            lengths[256] = 1;
-            let codes = huffman::Codes::new(&lengths);
-            let mut wire = huffman::Wire::default();
-            huffman::lengths(&mut wire, &lengths, &[0]);
-            for _ in 0..length {
-                codes.symbol(&mut wire, 65);
-            }
-            codes.symbol(&mut wire, 256);
-            let raw = vec![65; length];
-            prefixes += check(wire.finish(&raw, ones), raw, files);
-            files += 1;
-        }
-    }
+    let fixtures = prefix::fixtures();
+    let files = fixtures.len();
+    let prefixes: usize = fixtures
+        .into_iter()
+        .enumerate()
+        .map(|(salt, case)| {
+            let mut independent = Vec::new();
+            flate2::read::ZlibDecoder::new(case.bytes.as_slice())
+                .read_to_end(&mut independent)
+                .unwrap();
+            assert_eq!(independent, case.raw, "{}", case.name);
+            check(case.bytes, case.raw, salt, &case.name)
+        })
+        .sum();
     assert_eq!((files, prefixes), (740, 45140));
     println!(
         "Mixed/one-bit prefix audit: {files} independent streams, {prefixes} suffix/padding combinations, three streaming fragment shapes each"

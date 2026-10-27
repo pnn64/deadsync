@@ -132,3 +132,59 @@ the manifest; the uncompressed trace remains in the temporary output directory.
 The campaign manifest records an initial artifact-directory audit failure and
 its recovery against the same retained binaries; no fuzzing was restarted.
 Production sources remain identical to `fae2e5bd2`.
+
+## Decoder field and resource corpus union (2026-10-27)
+
+`boundaries-*` replays 6,926 corrected resource-target inputs, 5,524 raw-stream
+inputs and the earlier 28,770 PNG-stream inputs. The first two corpora are new;
+the broad PNG corpus is reused after verifying unchanged native and harness
+source hashes. Only that additional PNG target was replayed when extending the
+two-target profile. Replay adds no sanitizer executions. The associated
+development and final ASan campaigns contribute 80,000 successful executions;
+their exact helper versions and object audits are retained in `../fuzz/reports/`.
+
+All twenty-one PNG production files retain `fae2e5bd2`/`41366d843` bytes. Explicit
+source operands map twenty of them plus shared primitives; the constant registry
+has no runtime mapping. Package totals include unused encoding utilities and
+must not be described as decoder-only coverage.
+
+| Decoder-only file | Line coverage | Instrumented branch outcomes |
+| --- | ---: | ---: |
+| `stream/decode.rs` | 554/555 (99.82%) | 218/228 (95.61%) |
+| `stream/read.rs` | 114/120 (95.00%) | 17/20 (85.00%) |
+| `stream/rows.rs` | 170/171 (99.42%) | 48/50 (96.00%) |
+| `zlib/inflate.rs` | 261/265 (98.49%) | 60/62 (96.77%) |
+
+`boundaries-decoder-gaps.json` lists twelve explicit zero-count annotations,
+down from 35. This is a focused review of four files, not a complete inventory
+of every uncovered line, region or branch. The remaining annotations are:
+
+- `stream/decode.rs:293`: a closing brace in LLVM's source display.
+- `stream/read.rs:48,62,102,155,158,164`: representation/header/frame invariants,
+  a `)?` span, input-progress checking and the final missing-header guard. Parser
+  state establishes these invariants before the collecting reader uses them;
+  ordinary resource and injected reader errors now execute in the corpus.
+- `stream/rows.rs:172`: an extra-data guard after complete row output. The parser
+  already caps inflation at the exact filtered size. Retain the defensive check.
+- `zlib/inflate.rs:140-141`: cumulative input-counter overflow, outside a fresh
+  inflater's bounded per-input fuzz campaign.
+- `zlib/inflate.rs:255-256`: draining prefetched stored-block payload. Under the
+  current refill logic, a fast lookup holds at most 39 bits after a symbol
+  (at most eight already buffered plus 32 loaded minus at least one code bit);
+  a canonical fallback holds at most 36 (fourteen plus 32 minus at least ten).
+  After EOB, the next three block-header bits and alignment leave at most 32
+  bits, all consumed by stored LEN/NLEN. No payload bits remain prefetched at
+  this guard. Keep it defensive against future refill changes.
+
+These reachability observations apply to the current implementation. They are
+not a reason to fabricate private decoder state or remove guards to increase a
+percentage. Further chunk-field, metadata/APNG and performance work remains
+independent of these annotations.
+
+The fresh isolated fuzz project, full annotated source, raw profiles and merged
+profile remain under `/tmp/deadlib-image-boundaries-coverage-20261027-a`; builds
+remain under `/tmp/deadlib-image-boundaries-coverage-target-20261027-a`. The
+manifest retains all source/copy/corpus/binary/profile hashes, commands and
+toolchain. `boundaries-commands.log.gz` retains the complete replay trace with
+both compressed and original hashes. Its three linked repository campaign
+manifests distinguish development helper snapshots from corrected source.

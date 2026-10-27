@@ -49,6 +49,19 @@ verification is mandatory. Out-of-range palette indices are retained, and
 them while decoding. Both encoders always reject out-of-range indices. Other
 invalid critical data is an error, unknown critical
 chunks are rejected, and unknown ancillary chunks are retained with placement.
+
+`Limits::max_input_bytes` bounds PNG input bytes; `max_chunks` counts every chunk,
+including IHDR, IEND and empty data chunks. `max_output_bytes` bounds cumulative
+native sample storage across the default image and separately stored animation
+frames, and each image's filtered inflation. A default image reused as frame zero
+is counted once. Filter bytes can make the inflation bound larger than the final
+sample vector. The metadata budget counts retained ancillary payloads plus
+expanded compressed payloads; PLTE/tRNS and animation controls have their separate
+format bounds. Frame limits apply to declared and observed animation frames.
+Resource errors remain fatal under animation recovery. These caps describe data
+budgets, not a process RSS limit. `tests/decoder_boundaries.rs` checks exact and
+adjacent boundaries through buffered, collecting-reader and push APIs.
+
 On reencoding, unrecognized ancillary chunks with the unsafe-to-copy flag are
 omitted because critical image chunks are rewritten (PNG Third Edition 14.2).
 PNG Third Edition's recommended tolerance for trailing bytes inside final IDAT

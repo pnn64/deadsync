@@ -94,3 +94,10 @@ path = "fuzz_targets/compositor.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "decoder_limits"
+path = "fuzz_targets/decoder_limits.rs"
+test = false
+doc = false
+bench = false

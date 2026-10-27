@@ -1,7 +1,7 @@
 """Run ASan fuzzing with feedback restricted to the two native image crates.
 
 Linux, nightly Rust and cargo-fuzz are required. Output and target directories
-must be fresh. The seed ZIP contains png_stream/ and inflate_stream/ files.
+must be fresh. The seed ZIP contains a directory for each selected target.
 Invocation records and compiled object sections independently audit isolation.
 """
 from argparse import ArgumentParser
@@ -19,7 +19,7 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def audit_build(target_dir, output):
+def audit_build(target_dir, output, targets=('png_stream', 'inflate_stream')):
     audit_dir = output / 'objects'
     audit_dir.mkdir(exist_ok=True)
     artifacts = []
@@ -53,7 +53,7 @@ def audit_build(target_dir, output):
                           'counter_bytes': counters, 'pc_table_bytes': tables})
     assert {'deadlib_image_png', 'deadlib_image'} <= {item['crate'] for item in artifacts}
     harnesses = []
-    for target in ['png_stream', 'inflate_stream']:
+    for target in targets:
         objects = sorted(dependencies.rglob(target + '*.rcgu.o'))
         assert objects, ('Missing saved harness object', target)
         for path in objects:
@@ -76,6 +76,7 @@ def main():
     parser.add_argument('--seed-archive', type=Path, required=True)
     parser.add_argument('--target-dir', type=Path, required=True)
     parser.add_argument('--output-dir', type=Path, required=True)
+    parser.add_argument('--targets', nargs='+', choices=['png_stream', 'inflate_stream', 'decoder_limits'], default=['png_stream', 'inflate_stream'])
     args = parser.parse_args()
     assert os.name == 'posix', 'Use Linux for the ASan campaign'
     package = Path(__file__).resolve().parent.parent
@@ -92,7 +93,7 @@ def main():
         for item in archive.infolist():
             name = PurePosixPath(item.filename)
             assert not name.is_absolute() and '..' not in name.parts
-            assert len(name.parts) == 2 and name.parts[0] in {'png_stream', 'inflate_stream'}
+            assert len(name.parts) == 2 and name.parts[0] in args.targets
             assert item.file_size <= 65536
             destination = corpus_root.joinpath(*name.parts)
             destination.parent.mkdir(exist_ok=True)
@@ -104,9 +105,8 @@ def main():
     env.update(RUSTFLAGS='-Csave-temps', RUSTC_WRAPPER=str(wrapper),
                DEADLIB_PNG_NATIVE_FUZZ_AUDIT=str(output / 'invocations'),
                CARGO_BUILD_JOBS='4', CC='/usr/bin/clang', CFLAGS='-fsanitize=address')
-    source_paths = sorted((package / 'src').rglob('*.rs')) + [
+    source_paths = sorted((package / 'src').rglob('*.rs')) + sorted((package / 'fuzz/fuzz_targets').glob('*.rs')) + sorted((package / 'fuzz/support').glob('*.rs')) + sorted((package / 'tests/support').glob('*.rs')) + [
         package.parent / 'src/lib.rs', package / 'fuzz/Cargo.toml', package / 'fuzz/Cargo.lock',
-        package / 'fuzz/fuzz_targets/png_stream.rs', package / 'fuzz/fuzz_targets/inflate_stream.rs',
         package / 'fuzz/scripts/native_rustc.py', Path(__file__).resolve()]
     sources = [{'path': p.relative_to(package.parent).as_posix(), 'sha256': sha(p)} for p in source_paths]
     metadata = {'baseline_png_commit': 'fae2e5bd2', 'source_sha256': sources,
@@ -120,7 +120,8 @@ def main():
     def save():
         manifest.write_text(json.dumps(metadata, indent=2) + '\n')
 
-    for target, runs in [('png_stream', 50000), ('inflate_stream', 20000)]:
+    for target in args.targets:
+        runs = {'png_stream': 50000, 'inflate_stream': 20000, 'decoder_limits': 30000}[target]
         corpus = corpus_root / target
         digest, sizes = hashlib.sha256(), []
         for seed in sorted(corpus.iterdir(), key=lambda p: p.name.encode()):
@@ -156,14 +157,14 @@ def main():
         save()
         print(json.dumps(campaign), flush=True)
 
-    audit = audit_build(target_dir, output)
+    audit = audit_build(target_dir, output, args.targets)
     metadata.update(audit)
     for entry in sources:
         assert sha(package.parent / entry['path']) == entry['sha256']
     metadata['final_source_hashes_verified'] = True
     save()
     print(json.dumps({'isolation_verified': True, 'archive_audits': len(audit['artifact_audit']),
-                      'harness_objects': len(audit['harness_object_audit']), 'successful_executions': 70000}), flush=True)
+                      'harness_objects': len(audit['harness_object_audit']), 'successful_executions': sum(row['runs'] for row in metadata['campaigns'])}), flush=True)
 
 
 if __name__ == '__main__':

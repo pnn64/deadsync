@@ -27,7 +27,7 @@ evidence, application responsibilities and explicitly open items.
 | Bounded streaming with arbitrary input boundaries | `zlib::Inflater`, `StreamDecoder`, `decode_reader` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eleven targets; 1,180,000 recorded successful sanitizer executions across milestones, including historical encoder runs; newest 70,000 executions use native-crate feedback with artifact-verified isolation; targeted decoder gaps and longer campaigns remain open |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Twelve targets; 1,260,000 recorded successful sanitizer executions across milestones, including historical encoder runs; newest 80,000 use native-crate feedback with artifact-verified isolation; targeted decoder gaps and longer campaigns remain open |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Historical milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -1265,4 +1265,74 @@ reason to alter normative behavior or a proof that every missed line is reachabl
 `coverage-reports/native-feedback-*` retains source/corpus/profile/binary hashes,
 commands, per-file summaries and the focused gap list. Replay is excluded from
 fuzz totals. Remaining field audits, corpus gaps and competitive decoder
+performance remain open.
+
+## Decoder field, resource and reader boundaries (2026-10-27)
+
+`tests/decoder_boundaries.rs` independently frames 120 PNG/APNG files: all fifteen
+native formats, plain/Adam7, static images, both default-image roles and legal
+fcTL-before-acTL ordering. Native samples, frame storage, metadata and resource
+thresholds come from literal constructors and image geometry, without using the
+production encoder. Across both animation policies, 4,680 zero/below/exact/above
+budget probes produce 2,400 successes and 2,280 resource failures. Three reader
+fragments and three push fragments plus buffered decoding make 32,760 API checks.
+The budgets include cumulative native samples, per-image filtered inflation,
+retained/expanded metadata, all chunks and animation frames. Resource errors
+remain fatal under recovery.
+
+IHDR checks enumerate 960 dimension pairs across native formats, all 65,536
+color/depth byte pairs, and 11,520 compression/filter/interlace bytes. Each is
+checked through buffered/reader/push parsing under both animation policies,
+totalling 468,096 API checks. Legal header declarations encounter a tiny output
+budget before large allocation; invalid fields fail as invalid data. These are
+header-field tests, not claims that each mutated file has matching image data.
+The [Third Edition integer and IHDR rules](https://www.w3.org/TR/2025/REC-png-3-20250624/)
+define the tested format classes; other chunk-field audits remain separate.
+
+Another 80,760 checks inject interruptions, short reads, IO failures and invalid
+returned byte counts at chunk boundaries and the final EOF probe. The new
+`decoder_limits` target varies all resource budgets, animation/palette policy,
+CRC repair, fragmentation and reader failures using a separate 20-byte control
+header. Its 6,376 structured seeds include two 1x4096 highly compressed files,
+plain and Adam7. The harness compares buffered/reader/push acceptance and native
+samples, checks fused errors, counters and bounded image-pipeline capacity.
+
+The tall files exposed an overly strict input-length-only iteration guard in the
+new test harness. The decoders already accepted them. The corrected guard also
+accounts for the output budget because rows can be emitted without consuming
+more compressed input. The failing test (exit 101), exact pre-fix helper and
+fixture hashes are retained in `fuzz/reports/boundaries-harness-before.*`. The
+corrected contract passes all 6,376 seeds. This is a harness correction, not a
+production decoder fix.
+
+The 740 independent mixed/one-bit DEFLATE fixtures are now shared by tests and
+seed generation. All match flate2; existing 88,414 suffix/padding checks and
+24,728 truncations remain. Valid, suffixed and truncated forms add 2,220 seeds
+to each raw corpus. The native raw-stream fuzzer now varies four input fragment
+shapes and checks input/output counters, memory and terminal errors.
+
+An initial isolated-feedback ASan stage passes 30,000 resource-target and 20,000
+raw-stream executions (9 / 16 fuzzing seconds, 447 / 424 MiB peak RSS). After the
+tall-image harness correction, another 30,000 resource executions pass in
+13 seconds / 445 MiB. Both stages' exact sources are retained; the first helper
+snapshots are explicitly distinguished from current source. Every native-only
+artifact audit passes: fourteen dependency archives and the selected harness
+objects have no feedback counters or PC tables. All binaries define ASan's
+runtime entry. These 80,000 successful development/final executions bring the
+historical total to 1,260,000. Expected failing regression tests and fixed
+coverage replay are excluded. No encoder target runs in this continuation.
+
+The final release and standalone offline suites each pass 127 tests, with fifteen
+optional checks ignored. Strict main/fuzz Clippy and scoped rustfmt pass. All
+21 production files retain `41366d843`/`fae2e5bd2` bytes. Commands and source hashes
+are in `boundaries-validation.json`/`.log` and `boundaries-independent.log`.
+
+A fixed union replay combines the earlier broad PNG corpus with the corrected
+resource corpus and new raw-stream corpus. Explicit source operands map twenty
+PNG files and shared primitives; package totals still include untouched encoding
+utilities and are not decoder-only percentages. The focused four-file list drops
+from 35 to twelve zero-count annotations. `stream/decode.rs` reaches 99.82% lines,
+`stream/read.rs` 95.00%, `stream/rows.rs` 99.42% and `zlib/inflate.rs` 98.49%.
+The source/profile/corpus hashes and reviewed remainder are in
+`coverage-reports/boundaries-*`. Full decoder field auditing and competitive
 performance remain open.
