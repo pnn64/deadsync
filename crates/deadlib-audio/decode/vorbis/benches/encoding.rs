@@ -430,6 +430,24 @@ fn compare(input: &Pcm, reference: &Pcm) {
         difference.rms()
     );
 }
+fn exact(input: &Pcm, before: &Path, after: &Path) {
+    let before = fs::read(before).unwrap();
+    let after = fs::read(after).unwrap();
+    for decode in [native_pcm, symphonia_pcm] {
+        let a = decode(&before, input);
+        let b = decode(&after, input);
+        for (a, b) in a.iter().zip(&b) {
+            assert!(
+                a.iter().zip(b).all(|(a, b)| a.to_bits() == b.to_bits()),
+                "encoded PCM changed"
+            );
+        }
+    }
+    println!(
+        "{{\"samples_per_decoder\":{},\"native_bit_exact\":true,\"symphonia_bit_exact\":true}}",
+        input.frames * input.channels
+    );
+}
 fn main() {
     let args: Vec<_> = std::env::args()
         .skip(1)
@@ -467,6 +485,14 @@ fn main() {
             compare(
                 &Pcm::load(Path::new(&args[1])),
                 &Pcm::load(Path::new(&args[2])),
+            );
+        }
+        Some("exact") => {
+            assert_eq!(args.len(), 4);
+            exact(
+                &Pcm::load(Path::new(&args[1])),
+                Path::new(&args[2]),
+                Path::new(&args[3]),
             );
         }
         _ => panic!(

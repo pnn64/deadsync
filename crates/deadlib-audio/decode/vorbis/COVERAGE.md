@@ -296,8 +296,11 @@ error, coding subset, resource policies and outstanding encoder work.
   The initial [encoding baseline](ENCODING_PERFORMANCE.md) now measures six
   shared PCM inputs, 42 independently decoded streams and 294 timing trials.
   It exposes a compression gap on two song excerpts and profiles actual packet
-  symbols for a candidate entropy improvement; that projection is not yet an
-  implemented optimization or a matched-quality performance claim.
+  symbols for an entropy improvement. The subsequent
+  [compact-book update](ENCODING_ENTROPY.md) reduces paired two-stage song files
+  26–29% with identical decoded PCM through three decoders. Header costs increase
+  tiny-file sizes. These comparisons do not establish matched perceptual quality
+  against another encoder or complete the broader performance/conformance goal.
 
 Raw packet and full-container comparisons are separate: raw PCM tests assign
 unknown granules and omit EOS trimming; `ogg_mapping` tests independently use

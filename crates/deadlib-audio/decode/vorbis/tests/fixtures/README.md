@@ -1,7 +1,7 @@
 # Generated, redistributable fixtures
 
 These files contain locally generated tones/silence, not third-party music.
-Generated with FFmpeg's libvorbis encoder. They exercise setup parsing and
+The original four Ogg fixtures were generated with FFmpeg's libvorbis encoder. They exercise setup parsing and
 provide independently decodable fixtures for the PCM differential suite.
 Ogg stream serials are arbitrary and may change when regenerated.
 
@@ -30,3 +30,15 @@ cargo test -p deadlib-audio-decode-vorbis --release --test pcm regenerate_surrou
 Set `DEADLIB_LIBVORBIS_ORACLE` as described in the oracle README. The regeneration
 test writes only when explicitly invoked with that output path; ordinary tests
 never update the golden.
+
+`spanning-prime-v1.ogg` preserves native encoder version `0e5ecb23d` output:
+8 channels, 48 kHz, N8192, four residue stages, 16,401 frames, serial 0x7788.
+Its deterministic tones/noise/impulses and duplicate/binary comments use the
+`signal` / `comments` helpers in `tests/encoding.rs` at that revision. Windows
+x86-64 rustc 1.99.1 generated all six audio packets at 65,810 bytes each, forcing
+the priming packet across physical pages. SHA-256:
+`e1dd28e18c307f3cb3e3b553da5f6d376c3d0e3cb507738d31ce18b63f83c2c0`.
+The fixture is kept independent of current encoder output so entropy improvements
+cannot accidentally remove the libvorbisfile 1.3.7 PCM-seek-zero regression's
+trigger. Native and Symphonia decode all declared frames; the named C regression
+checks both raw-start full PCM and the PCM-seek path's lost first block.

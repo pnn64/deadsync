@@ -9,6 +9,62 @@ use std::io::Write;
 const PARTITION: usize = 16;
 const PCM_LIMIT: f32 = 4.0;
 
+// The leading radix-16 digit of a small positive/negative scalar is eight/seven.
+// A complete tree assigns those four pairs three bits, the four corners eight,
+// and the remaining 248 entries nine: 4/8 + 4/256 + 248/512 = 1.
+const fn first_length(entry: usize) -> u8 {
+    match entry {
+        119 | 120 | 135 | 136 => 3,
+        0 | 15 | 240 | 255 => 8,
+        _ => 9,
+    }
+}
+// Entry-order assignment in a nine-bit left-edge domain. This is generated at
+// compile time, independent of reference books; one shared 512-byte table packs
+// each LSB-first word and its length. No per-encoder table or initialization.
+const fn first_words() -> [u16; 256] {
+    let mut words = [0; 256];
+    let mut free = [None; 10];
+    free[0] = Some(0u16);
+    let mut entry = 0;
+    while entry < 256 {
+        let length = first_length(entry) as usize;
+        let mut best = None;
+        let mut depth = 0;
+        while depth <= length {
+            if let Some(code) = free[depth] {
+                if let Some((_, previous)) = best {
+                    if code < previous {
+                        best = Some((depth, code));
+                    }
+                } else {
+                    best = Some((depth, code));
+                }
+            }
+            depth += 1;
+        }
+        let Some((depth, code)) = best else {
+            panic!("first-stage Huffman tree overpopulation");
+        };
+        free[depth] = None;
+        let mut split = depth + 1;
+        while split <= length {
+            assert!(free[split].is_none());
+            free[split] = Some(code | (1 << (9 - split)));
+            split += 1;
+        }
+        words[entry] = (code.reverse_bits() >> 7) | ((length as u16) << 12);
+        entry += 1;
+    }
+    let mut depth = 0;
+    while depth < free.len() {
+        assert!(free[depth].is_none());
+        depth += 1;
+    }
+    words
+}
+static FIRST_WORDS: [u16; 256] = first_words();
+
 /// Fixed-block encoder policy. This initial native encoder uses a flat adaptive
 /// floor per channel, uncoupled mapping zero, and residue one. Precision controls
 /// quantization, not a target bitrate or perceptual-quality guarantee.
@@ -99,7 +155,7 @@ impl PacketEncoder {
         let partitions = half / PARTITION;
         let packet_bytes = (1
             + channels * 17
-            + channels * partitions * (1 + 64 * options.residue_passes as usize))
+            + channels * partitions * (9 + 64 * options.residue_passes as usize))
             .div_ceil(8);
         let setup = setup_packet(n, options.residue_passes)?;
         if packet_bytes.max(setup.len()).max(30) > options.max_packet_bytes {
@@ -397,9 +453,20 @@ impl PacketEncoder {
                         continue;
                     }
                     let start = ch * half + p * PARTITION;
-                    for pair in self.quantized[start..start + PARTITION].as_chunks::<2>().0 {
-                        let entry = ((pair[0] >> shift) & 15) | (((pair[1] >> shift) & 15) << 4);
-                        self.bits.write((entry as u8).reverse_bits() as u32, 8)?;
+                    let pairs = self.quantized[start..start + PARTITION].as_chunks::<2>().0;
+                    if pass == 0 {
+                        for pair in pairs {
+                            let entry =
+                                ((pair[0] >> shift) & 15) | (((pair[1] >> shift) & 15) << 4);
+                            let word = FIRST_WORDS[entry as usize];
+                            self.bits.write(word as u32, (word >> 12) as u32)?;
+                        }
+                    } else {
+                        for pair in pairs {
+                            let entry =
+                                ((pair[0] >> shift) & 15) | (((pair[1] >> shift) & 15) << 4);
+                            self.bits.write((entry as u8).reverse_bits() as u32, 8)?;
+                        }
                     }
                 }
             }
@@ -510,17 +577,26 @@ fn zeroed<T: Default + Clone>(len: usize) -> Result<Vec<T>, Error> {
 fn setup_packet(block: usize, passes: u8) -> Result<Vec<u8>, Error> {
     let mut bits = BitWriter::new();
     bits.write(passes as u32, 8)?; // one classifier plus one book per stage
-    // Ordered full trees: classifier {zero, coded}; radix-16^2 VQ stage books.
+    // Classifier {zero, coded}; radix-16^2 VQ books. The leading stage has a
+    // nonuniform complete tree; later stages retain ordered eight-bit trees.
     for book in 0..=passes {
         bits.write(0x564342, 24)?;
         bits.write(if book == 0 { 1 } else { 2 }, 16)?;
         bits.write(if book == 0 { 2 } else { 256 }, 24)?;
-        bits.write(1, 1)?;
-        bits.write(if book == 0 { 0 } else { 7 }, 5)?;
-        bits.write(
-            if book == 0 { 2 } else { 256 },
-            if book == 0 { 2 } else { 9 },
-        )?;
+        if book == 1 {
+            bits.write(0, 1)?; // unordered, all entries present
+            bits.write(0, 1)?;
+            for entry in 0..256 {
+                bits.write(first_length(entry) as u32 - 1, 5)?;
+            }
+        } else {
+            bits.write(1, 1)?;
+            bits.write(if book == 0 { 0 } else { 7 }, 5)?;
+            bits.write(
+                if book == 0 { 2 } else { 256 },
+                if book == 0 { 2 } else { 9 },
+            )?;
+        }
         bits.write(u32::from(book != 0), 4)?;
         if book != 0 {
             bits.write(if book == 1 { float_power(5, true) } else { 0 }, 32)?;
@@ -584,4 +660,35 @@ fn setup_packet(block: usize, passes: u8) -> Result<Vec<u8>, Error> {
 // mantissa 2^20 times 2^(exponent-788), with the independent sign bit.
 fn float_power(power: i32, negative: bool) -> u32 {
     (u32::from(negative) << 31) | (((power + 768) as u32) << 21) | (1 << 20)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Setup, bitpack::BitReader};
+
+    #[test]
+    fn first_stage_words_decode_all_entries_with_exact_lengths() {
+        let encoder = PacketEncoder::new(EncodeOptions::default()).unwrap();
+        let setup = Setup::parse(
+            encoder.setup_packet(),
+            encoder.identification(),
+            &Limits::default(),
+        )
+        .unwrap();
+        let book = &setup.codebooks()[1];
+        let mut bits = BitWriter::new();
+        for &word in &FIRST_WORDS {
+            bits.write(word as u32, (word >> 12) as u32).unwrap();
+        }
+        let length = bits.position();
+        let wire = bits.finish().unwrap();
+        let mut bits = BitReader::new(&wire);
+        for entry in 0..256 {
+            let before = bits.position();
+            assert_eq!(book.decode_scalar(&mut bits).unwrap(), entry as u32);
+            assert_eq!(bits.position() - before, first_length(entry) as usize);
+        }
+        assert_eq!(bits.position(), length);
+    }
 }

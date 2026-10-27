@@ -122,6 +122,11 @@ independently decoded native/Xiph outputs, 294 timing trials and exact shared
 PCM excerpts from real songs. Source SNR, bitrate and CPU time are separate
 measurements. The reference encoder exposes a compression gap; symbol profiling
 identifies a candidate lossless change to the native packet representation.
+The [compact first-stage book](vorbis/ENCODING_ENTROPY.md) implements that change:
+two-stage song outputs shrink 26–29% in paired runs with bit-identical PCM through
+three decoders. Larger headers increase tiny-file sizes; raw retained buffers
+grow modestly and warmed encoding still allocates nothing. Competitive quality,
+rate control and broader decoder/encoder performance work remain open.
 
 ## Normative sources
 

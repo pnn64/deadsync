@@ -13,7 +13,7 @@ import statistics
 import subprocess
 import tomllib
 import uuid
-from benchmark import DECODE, REPO, PINS, label, registry_packages, rust_worker, sha
+from benchmark import DECODE, REPO, PINS, label, registry_packages, rust_worker, sha, baseline_worker
 
 
 def invoke(command, log=None):
@@ -75,6 +75,7 @@ def main():
     parser.add_argument('--repeats', type=int, default=7)
     parser.add_argument('--min-seconds', type=float, default=0.15)
     parser.add_argument('--seed', type=int, default=4187)
+    parser.add_argument('--baseline-revision', help='interleave prior production sources using the exact same encoding adapter')
     args = parser.parse_args()
     if not (args.seconds > 0 and args.skip_seconds >= 0 and args.repeats > 0 and math.isfinite(args.min_seconds) and args.min_seconds > 0):
         parser.error('invalid duration/repeat limits')
@@ -87,6 +88,13 @@ def main():
             raise RuntimeError(f'reference {name} must be the clean pinned source')
     build = invoke(['cargo', 'bench', '--locked', '-p', 'deadlib-audio-decode-vorbis', '--bench', 'encoding', '--no-run', '--message-format=json'], run / 'rust-build.log')
     rust, profile = rust_worker(build, 'encoding')
+    baseline, baseline_metadata = None, None
+    if args.baseline_revision:
+        baseline, baseline_metadata = baseline_worker(args.baseline_revision, run, 'encoding')
+        if baseline_metadata['cargo_artifact_profile'] != profile or baseline_metadata['registry_packages'] != registry_packages(build):
+            raise RuntimeError('baseline/current Cargo profiles or registry artifacts differ')
+        if baseline_metadata['adapter_adjustments']:
+            raise RuntimeError('encoding comparison requires identical adapters')
     cbuild = reference / 'vorbis-encoding-build'
     configure = ['cmake', '-S', DECODE / 'vorbis/benches/oracle', '-B', cbuild,
                  f'-DREFERENCE_ROOT={reference}', '-DCMAKE_BUILD_TYPE=Release', '-DDEADLIB_TRACK_ALLOCATIONS=OFF']
@@ -103,6 +111,8 @@ def main():
         files.append(song)
     files = [p.resolve() for p in files]
     configs = [('native', str(p)) for p in range(1, 5)] + [('libvorbis', q) for q in ['0', '0.4', '0.9']]
+    if baseline:
+        configs += [('native-baseline', str(p)) for p in range(1, 5)]
     manifest = {
         'started_utc': datetime.now(timezone.utc).isoformat(), 'git_head': invoke(['git', 'rev-parse', 'HEAD']).strip(),
         'rustc': invoke(['rustc', '-Vv']), 'cmake': invoke(['cmake', '--version']).splitlines()[0],
@@ -110,6 +120,7 @@ def main():
         'reference_pins': PINS, 'repeats': args.repeats, 'min_seconds': args.min_seconds, 'seed': args.seed,
         'excerpt_seconds': args.seconds, 'preferred_skip_seconds': args.skip_seconds,
         'binary_paths': {'rust': str(rust), 'libvorbis': str(c)}, 'binary_sha256': {'rust': sha(rust), 'libvorbis': sha(c)},
+        'baseline': baseline_metadata,
         'cargo_artifact_profile': profile, 'registry_packages': registry_packages(build),
         'cargo_profiles': tomllib.loads((REPO / 'Cargo.toml').read_text(encoding='utf-8'))['profile'],
         'rustflags_environment': {k: os.environ.get(k) for k in ['RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS']},
@@ -135,9 +146,11 @@ def main():
         manifest['prepared_inputs'][label(path)] = geometry
         write_json(run / 'manifest.json', manifest)
         def worker(engine, setting, iterations, output='-'):
-            command = [rust if engine == 'native' else c, 'encode', setting, iterations, pcm, output]
+            executable = baseline if engine == 'native-baseline' else rust if engine == 'native' else c
+            actual_engine = 'native' if engine == 'native-baseline' else engine
+            command = [executable, 'encode', setting, iterations, pcm, output]
             values = invoke(command).strip().split('\t')
-            if len(values) != 12 or values[:2] != [engine, setting]:
+            if len(values) != 12 or values[:2] != [actual_engine, setting]:
                 raise RuntimeError(f'invalid worker result: {values}')
             names = ['iterations', 'full_ns', 'open_ns', 'first_ns', 'frames', 'encoded_bytes', 'audio_packets', 'first_input_frames', 'first_granule', 'first_packet_bytes']
             row = {'path': label(path), 'engine': engine, 'setting': setting, **dict(zip(names, map(int, values[2:])))}
@@ -161,6 +174,19 @@ def main():
                               'total_bitrate_bps': pilot['encoded_bytes'] * 8 * geometry['rate'] / geometry['frames'],
                               'audio_bitrate_bps': packets['audio_packet_bytes'] * 8 * geometry['rate'] / geometry['frames'], **quality})
             write_tsv(run / 'quality.tsv', qualities)
+        if baseline:
+            exact_rows = []
+            for setting in map(str, range(1, 5)):
+                before = run / f'output-{number}-native-baseline-{setting}.ogg'
+                after = run / f'output-{number}-native-{setting}.ogg'
+                exact = json.loads(invoke([rust, 'exact', pcm, before, after]))
+                before_pcm = run / f'output-{number}-native-baseline-{setting}.pcm'
+                after_pcm = run / f'output-{number}-native-{setting}.pcm'
+                if before_pcm.read_bytes() != after_pcm.read_bytes():
+                    raise RuntimeError('baseline/current libvorbis decoded PCM changed')
+                exact_rows.append({'path': label(path), 'setting': setting, 'libvorbis_bit_exact': True, **exact})
+            previous = json.loads((run / 'exact.json').read_text()) if (run / 'exact.json').exists() else []
+            write_json(run / 'exact.json', previous + exact_rows)
         for trial in range(args.repeats):
             order = list(configs)
             rng.shuffle(order)
@@ -191,6 +217,8 @@ def main():
             raise RuntimeError('source input changed during run')
     if {'rust': sha(rust), 'libvorbis': sha(c)} != manifest['binary_sha256']:
         raise RuntimeError('worker binary changed during run')
+    if baseline and sha(baseline) != baseline_metadata['binary_sha256']:
+        raise RuntimeError('baseline worker changed during run')
     manifest['completed_utc'] = datetime.now(timezone.utc).isoformat()
     manifest['quality_cases'] = len(qualities)
     manifest['timing_rows'] = len(rows)

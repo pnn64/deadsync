@@ -148,8 +148,11 @@ One candidate complete prefix-length multiset assigns three bits to these four
 central pairs, eight to four corner pairs and nine to the other 248 entries:
 `4/2^3 + 4/2^8 + 248/2^9 = 1`. On the measured symbols alone it would save
 57,100 / 73,648 payload bytes for the two-stage songs without changing VQ values
-or reconstructed PCM. This is a projection, not an implemented optimization.
-It excludes about 159 extra setup bytes, packet rounding, Ogg pagination and
+or reconstructed PCM.
+At baseline capture this was a projection. The subsequent
+[compact-book update](ENCODING_ENTROPY.md) implements and measures it with
+bit-identical PCM and the documented header costs. The projection excludes
+about 159 extra setup bytes, packet rounding, Ogg pagination and
 encoder/decoder CPU costs. A production change must measure those costs and
 retain exact decoded PCM, numerical parity, allocation and sanitizer gates.
 

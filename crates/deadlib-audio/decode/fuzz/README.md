@@ -80,6 +80,12 @@ analysis, reset, input validation and page-spanning packets. This round-trip
 oracle checks structure and determinism; independent decoder parity and lossy
 source error are measured in the normal encoder reference tests.
 
+The leading residue book now uses three-, eight- and nine-bit entry-order
+codewords, while later stages retain eight-bit books. Encoder replays therefore
+exercise mixed codeword lengths and unaligned packet tails. All 256 leading-book
+words have separate exact-length native decode checks and independent libvorbis
+codebook/VQ checks; the PCM quantizer and stage digits are unchanged.
+
 ## Replay and extend
 
 Keep a failure unchanged before minimizing it. For a direct replay on this

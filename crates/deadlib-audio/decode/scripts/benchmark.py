@@ -127,7 +127,7 @@ def registry_packages(build_output: str) -> list[str]:
                    for message in [json.loads(line)] if message.get("reason") == "compiler-artifact"
                    and message["package_id"].startswith("registry+")})
 
-def baseline_worker(revision: str, run: Path) -> tuple[Path, dict]:
+def baseline_worker(revision: str, run: Path, target: str = "pipeline") -> tuple[Path, dict]:
     revision = invoke(["git", "rev-parse", "--verify", "--end-of-options", revision + "^{commit}"]).strip()
     baseline = run / "baseline"
     baseline.mkdir()
@@ -180,9 +180,9 @@ def baseline_worker(revision: str, run: Path) -> tuple[Path, dict]:
     (baseline / "Cargo.toml").write_text(workspace, encoding="utf-8")
     shutil.copy2(REPO / "Cargo.lock", baseline / "Cargo.lock")
     build = invoke(["cargo", "bench", "--offline", "--manifest-path", baseline / "Cargo.toml",
-        "-p", "deadlib-audio-decode-vorbis", "--bench", "pipeline", "--no-run", "--message-format=json",
+        "-p", "deadlib-audio-decode-vorbis", "--bench", target, "--no-run", "--message-format=json",
         "--target-dir", baseline / "target"], log=run / "baseline-build.log")
-    executable, profile = rust_worker(build)
+    executable, profile = rust_worker(build, target)
     return executable, {"revision": revision, "binary_sha256": sha(executable),
                         "source_archive_sha256": sha(archive), "cargo_artifact_profile": profile,
                         "registry_packages": registry_packages(build),

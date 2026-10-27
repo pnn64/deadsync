@@ -42,7 +42,8 @@ identities. Sample rate is a positive u32 metadata value.
 64 MiB maximum packet length, 128 MiB maximum owned raw encoder elements, and
 an input frame limit within the signed Ogg granule range. Both identification
 block sizes equal the configured power of two, 64..8192. Precision stages 1..4
-use 4/8/12/16 bits per coded spectral scalar before framing/classification costs.
+select 4/8/12/16-bit scalar quantization. Actual payload length depends on the
+first-stage entropy book, partition sparsity and framing/classification costs.
 They are precision choices; they provide no target bitrate or perceptual-quality
 guarantee. Bitrate hints in the identification header are zero (unknown).
 
@@ -102,9 +103,12 @@ Each channel uses a flat adaptive floor one with two equal endpoints. The
 endpoint is the smallest inverse-dB table entry sufficient to keep the normalized
 spectral peak below 28. Residue one partitions contain 16 coefficients. A
 one-dimensional classification book separates exactly zero partitions from
-coded partitions. All books are generated from the wire grammar: complete,
-ordered fixed-length Huffman trees and lookup-one two-dimensional radix-16 VQ
-books. No external training data or encoder packet template is embedded.
+coded partitions. All books are generated from the wire grammar: complete
+Huffman trees and lookup-one two-dimensional radix-16 VQ books. The
+classifier and later stages use ordered fixed-length trees; the first stage
+uses a compact unordered three-/eight-/nine-bit tree. No external training data
+or encoder packet template is embedded. [ENCODING_ENTROPY.md](ENCODING_ENTROPY.md)
+records its measured costs and unchanged-symbol/PCM comparisons.
 
 For P stages, `levels = 16^P`. A normalized scalar v is rounded to
 `q = round(v * levels / 64 + levels/2)`, bounded to its unsigned quantizer range.
@@ -123,7 +127,7 @@ normative floors, residues, mappings and window transitions.
 
 ## Independent validation and measured source error
 
-The retained [144-case matrix](validation/2026-10-27-encode-matrix.tsv) checks
+The retained [144-case matrix](validation/2026-10-27-encoder-entropy-matrix.tsv) checks
 libvorbisfile 1.3.7 decoding of native output: 1/2/3/6/8/16/255 channels, four
 precision stages, zero/one/partial/multiple-block lengths, mixed silent channels
 and packets larger than one Ogg page. Exact declared and emitted frame counts
@@ -149,7 +153,7 @@ cases (2N+17 frames), measured source SNR ranges are:
 | 3 | 12 bits | 41.31–59.36 |
 | 4 | 16 bits | 65.38–83.61 |
 
-The same 273-frame stereo/N128 example occupies 505/1125/1537/1955 total Ogg
+The current 273-frame stereo/N128 example occupies 611/1088/1500/1913 total Ogg
 bytes at these four settings, including all headers and padding. These short
 synthetic measurements establish lossy reconstruction and size tradeoffs. They
 do not establish perceptual transparency or compression competitiveness. The
@@ -197,13 +201,13 @@ chunks, reset replay, Ogg pagination and exact decoded counts. Retained source,
 input, reference-binary, validation and sanitizer hashes accompany this
 milestone's [check manifest](validation/2026-10-27-encode-checks.json).
 
-The complete release gate passes 106 tests with reference/corpus cases enabled
+The initial encoder milestone's release gate passed 106 tests with reference/corpus cases enabled
 (only the fixture regeneration utility is excluded). An extracted, offline
 workspace passes 84 tests, with 23 optional external/generator cases ignored;
 its normal dependency graph is Ogg alone for Vorbis and empty for Ogg. Clippy
 passes with default/all features and for every fuzz/seed target.
 
-Two concurrent Windows AddressSanitizer targets ran with a 300-second budget
+For that initial milestone, two concurrent Windows AddressSanitizer targets ran with a 300-second budget
 each, the pinned floor-zero fixture and recorded RNG seeds:
 
 | Target | Executions | Coverage counters | Features | Peak sanitizer RSS (MiB) |
@@ -228,10 +232,13 @@ comparative throughput/startup/memory measurements against libvorbis encoding.
 The first [resident-PCM encoding baseline](ENCODING_PERFORMANCE.md) now checks
 42 streams through native, libvorbisfile and Symphonia, including two real song
 excerpts. It measures source error, output size, full encoding and warm
-initialization/first-packet time. Xiph q0.9 has lower bitrate and higher source
-SNR than native stage 2 on those excerpts. Packet symbol profiling identifies
-a concrete entropy-coding opportunity; its projected saving is not yet a
-production optimization. Perceptual/rate control and broader resource/quality
+initialization/first-packet time. In that baseline, Xiph q0.9 used lower bitrate
+and achieved higher source SNR than native stage 2. Packet symbol profiling identifies
+a concrete entropy-coding opportunity. The subsequent
+[compact-book update](ENCODING_ENTROPY.md) implements it: paired two-stage song
+files shrink 26–29% with bit-identical PCM, zero raw warmed allocations and
+documented tiny-file header costs. The baseline measurements retain their
+original provenance. Perceptual/rate control and broader resource/quality
 comparisons remain open.
 The broader decoder conformance, sparse seeking and performance work in
 [COVERAGE.md](COVERAGE.md) also remains part of the requested goal.

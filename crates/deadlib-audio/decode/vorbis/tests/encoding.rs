@@ -440,15 +440,11 @@ fn forward_mdct_matches_libvorbis_at_all_legal_sizes() {
 #[ignore = "requires pinned libvorbisfile 1.3.7 oracle"]
 fn libvorbisfile_pcm_seek_zero_loses_first_block_when_priming_packet_spans_pages() {
     let frames = 16401;
-    let options = EncodeOptions {
-        channels: 8,
-        block_size: 8192,
-        residue_passes: 4,
-        ..EncodeOptions::default()
-    };
-    let bytes = encode(&signal(frames, 8), options, 17, false);
-    let expected = decode(&bytes, frames, 8);
-    let reference = symphonia(&bytes, frames, 8);
+    // Preserve the original encoder's packets, independently of future entropy
+    // improvements that make them too small to span a physical Ogg page.
+    let bytes = include_bytes!("fixtures/spanning-prime-v1.ogg");
+    let expected = decode(bytes, frames, 8);
+    let reference = symphonia(bytes, frames, 8);
     let mut difference = support::Difference::default();
     for (a, b) in expected.iter().zip(reference) {
         for (&x, y) in a.iter().zip(b) {
@@ -457,7 +453,7 @@ fn libvorbisfile_pcm_seek_zero_loses_first_block_when_priming_packet_spans_pages
     }
     difference.check("spanning native encoding/Symphonia");
     for (mode, skipped) in [("oggpcmraw", 0), ("oggpcm", 4096)] {
-        let wire = support::file_oracle(mode, &bytes);
+        let wire = support::file_oracle(mode, bytes);
         let mut input = wire.as_slice();
         assert_eq!(support::u32_in(&mut input), 1);
         assert_eq!(support::u32_in(&mut input), 0x7788);
@@ -481,6 +477,54 @@ fn libvorbisfile_pcm_seek_zero_loses_first_block_when_priming_packet_spans_pages
         }
         assert_eq!(position, frames, "{mode}");
         difference.check(mode);
+    }
+}
+
+#[test]
+#[ignore = "requires independently built libvorbis codebook oracle"]
+fn native_encoder_codebooks_match_libvorbis_for_every_entry() {
+    use bitpack::BitReader;
+    for passes in 1..=4 {
+        let encoder = PacketEncoder::new(EncodeOptions {
+            residue_passes: passes,
+            ..EncodeOptions::default()
+        })
+        .unwrap();
+        let setup = Setup::parse(
+            encoder.setup_packet(),
+            encoder.identification(),
+            &Limits::default(),
+        )
+        .unwrap();
+        let wire = support::oracle("books", &[encoder.setup_packet()]);
+        let mut input = wire.as_slice();
+        assert_eq!(
+            support::u32_in(&mut input) as usize,
+            setup.codebooks().len()
+        );
+        for book in setup.codebooks() {
+            assert_eq!(support::u32_in(&mut input) as usize, book.dimensions());
+            assert_eq!(support::u32_in(&mut input) as usize, book.entries());
+            assert_eq!(support::take(&mut input, 1)[0], book.lookup_type());
+            assert_eq!(support::take(&mut input, book.entries()), book.lengths());
+            if book.lookup_type() != 0 {
+                for entry in 0..book.entries() {
+                    for &value in book.vector(entry as u32).unwrap() {
+                        assert_eq!(support::u32_in(&mut input), value.to_bits());
+                    }
+                }
+            }
+            let bit_count = u64::from_le_bytes(support::take(&mut input, 8).try_into().unwrap());
+            let bytes = support::u32_in(&mut input) as usize;
+            let mut bits = BitReader::new(support::take(&mut input, bytes));
+            for (entry, &length) in book.lengths().iter().enumerate() {
+                let before = bits.position();
+                assert_eq!(book.decode_scalar(&mut bits).unwrap(), entry as u32);
+                assert_eq!(bits.position() - before, length as usize);
+            }
+            assert_eq!(bits.position() as u64, bit_count);
+        }
+        assert!(input.is_empty());
     }
 }
 
