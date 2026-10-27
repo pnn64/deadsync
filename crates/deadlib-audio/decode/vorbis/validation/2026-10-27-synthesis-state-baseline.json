@@ -1,0 +1,6 @@
+{
+  "vorbis_commit": "921cf04428c6084deea0ab97c40560d0f75008ee",
+  "reference_binary_sha256": "3f43c80a840124489521db2f32a0df3a9b4b416d7aa9acd94e6bf4a62231359b",
+  "known_eos_seek_differences": 172,
+  "remaining_work": "Exact reference page-anchor selection, track-only skipping, overlap priming, DSP trimming and cursor updates; positive broadcast offsets, all EOS cases and repeated requests."
+}

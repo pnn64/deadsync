@@ -46,9 +46,10 @@ def instrument(source: str) -> str:
     replace('            for &[magnitude, angle] in mapping.coupling.iter().rev() {', end('residue') + begin('coupling') + '            for &[magnitude, angle] in mapping.coupling.iter().rev() {')
     replace('            for ch in 0..channels {\n                let spectrum', end('coupling') + '            for ch in 0..channels {\n' + begin('floor_gain') + '                let spectrum')
     replace('                let transform = if n == small {', end('floor_gain') + begin('imdct_finite') + '                let transform = if n == small {')
-    replace('                let left = if n == small || self.previous_size != large {', end('imdct_finite') + begin('left_window') + '                let left = if n == small || self.previous_size != large {')
-    replace('                apply_left_window(output, left);', '                apply_left_window(output, left);\n' + end('left_window'))
-    replace('        let frames = if self.previous_size == 0 {', begin('overlap_right_window_copy') + '        let frames = if self.previous_size == 0 {')
+    replace('            }\n        }\n        Ok(Some(DecodedTime { header, truncated }))',
+            end('imdct_finite') + '            }\n        }\n        Ok(Some(DecodedTime { header, truncated }))')
+    replace('        let left = if n == small || self.previous_size != large {', begin('left_window') + '        let left = if n == small || self.previous_size != large {')
+    replace('        let frames = if self.previous_size == 0 {', end('left_window') + begin('overlap_right_window_copy') + '        let frames = if self.previous_size == 0 {')
     replace('        Ok(Some(PcmBlock {', end('overlap_right_window_copy') + '        Ok(Some(PcmBlock {')
     return source
 

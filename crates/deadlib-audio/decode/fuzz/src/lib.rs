@@ -520,6 +520,177 @@ pub fn vorbis_packets(input: &[u8]) {
     });
 }
 
+struct SynthesisFixture {
+    finite: [vorbis::SynthesisDecoder; 2],
+    ieee: [vorbis::SynthesisDecoder; 2],
+}
+thread_local! {
+    static SYNTHESIS_DECODERS: RefCell<Vec<SynthesisFixture>> = RefCell::new({
+        let mut files: Vec<Vec<u8>>=FIXTURES.iter().map(|b|b.to_vec()).collect();
+        if let Some(path)=std::env::var_os("DEADLIB_VORBIS_FLOOR0") {files.push(std::fs::read(path).expect("floor-zero fixture"));}
+        files.iter().map(|bytes| {
+            let p=packets(bytes);let id=vorbis::Identification::parse(&p[0]).unwrap();
+            let create=|allow_nonfinite|{
+                let setup=vorbis::Setup::parse_with_options(&p[2],&id,vorbis::ParseOptions{limits:limits(),allow_empty_codebooks:true,codebook_behavior:vorbis::CodebookBehavior::Libvorbis,residue_behavior:vorbis::ResidueBehavior::Libvorbis}).unwrap();
+                vorbis::SynthesisDecoder::with_options(setup,vorbis::DecodeOptions{limits:limits(),floor0_behavior:vorbis::Floor0Behavior::Libvorbis,floor1_behavior:vorbis::Floor1Behavior::Libvorbis,residue2_layout:vorbis::Residue2Layout::Libvorbis,allow_nonfinite}).unwrap()
+            };
+            SynthesisFixture{finite:std::array::from_fn(|_|create(false)),ieee:std::array::from_fn(|_|create(true))}
+        }).collect()
+    });
+}
+#[derive(Clone, Copy)]
+enum SynthesisOp<'a> {
+    Reset,
+    Packet {
+        track: bool,
+        data: &'a [u8],
+        timing: vorbis::PacketTiming,
+    },
+    Read(usize),
+    Drain,
+}
+fn synthesis_digest(d: &vorbis::SynthesisDecoder, ieee: bool) -> Digest {
+    let mut digest = Digest::with_nonfinite(ieee);
+    let state = d.state();
+    for value in [
+        state.packet_number.unwrap_or(u64::MAX),
+        state.granule_position.unwrap_or(-1) as u64,
+        state.sample_count.unwrap_or(-1) as u64,
+        state.block_size as u64,
+        state.queued_frames as u64,
+        state.end_of_stream as u64,
+        d.position(),
+    ] {
+        digest.number(value);
+    }
+    digest.pcm(&d.pcm());
+    digest
+}
+fn synthesis_apply(
+    d: &mut vorbis::SynthesisDecoder,
+    op: SynthesisOp<'_>,
+) -> Result<u8, vorbis::Error> {
+    match op {
+        SynthesisOp::Reset => {
+            let size = d.state().block_size;
+            d.reset();
+            assert_eq!(d.state().block_size, size);
+            assert_eq!(d.state().queued_frames, 0);
+            assert_eq!(d.position(), 0);
+            Ok(2)
+        }
+        SynthesisOp::Packet {
+            track,
+            data,
+            timing,
+        } => if track {
+            d.track(data, timing)
+        } else {
+            d.submit(data, timing)
+        }
+        .map(u8::from),
+        SynthesisOp::Read(n) => d.consume(n).map(|_| 3),
+        SynthesisOp::Drain => {
+            let n = d.pcm().frames;
+            d.consume(n).map(|_| 4)
+        }
+    }
+}
+/// Independent decoder pairs preserve identical restart histories. A restart
+/// intentionally retains PCM storage, so fresh/reset replay is not assumed to
+/// expose the same stale samples under arbitrary track/read scheduling.
+pub fn vorbis_synthesis(input: &[u8]) {
+    let Some((&control, mut wire)) = input.split_first() else {
+        return;
+    };
+    if wire.len() > MAX_INPUT {
+        return;
+    }
+    SYNTHESIS_DECODERS.with_borrow_mut(|fixtures| {
+        let count = fixtures.len();
+        let fixture = &mut fixtures[(control & 63) as usize % count];
+        let ieee = control & 64 != 0;
+        let pair = if ieee {
+            &mut fixture.ieee
+        } else {
+            &mut fixture.finite
+        };
+        pair[0].reset();
+        pair[1].reset();
+        for _ in 0..32 {
+            let Some((&opcode, rest)) = wire.split_first() else {
+                break;
+            };
+            wire = rest;
+            let op = match opcode % 6 {
+                0 => SynthesisOp::Reset,
+                1 | 2 => {
+                    if wire.len() < 19 {
+                        break;
+                    }
+                    let n = u16::from_le_bytes(wire[..2].try_into().unwrap()) as usize;
+                    let sequence = u64::from_le_bytes(wire[2..10].try_into().unwrap());
+                    let gp = i64::from_le_bytes(wire[10..18].try_into().unwrap());
+                    let eos = wire[18] & 1 != 0;
+                    wire = &wire[19..];
+                    let n = n.min(wire.len());
+                    let data = &wire[..n];
+                    wire = &wire[n..];
+                    SynthesisOp::Packet {
+                        track: opcode % 6 == 2,
+                        data,
+                        timing: vorbis::PacketTiming {
+                            packet_number: sequence,
+                            granule_position: Some(gp),
+                            end_of_stream: eos,
+                        },
+                    }
+                }
+                3 => {
+                    if wire.len() < 4 {
+                        break;
+                    }
+                    let n = u32::from_le_bytes(wire[..4].try_into().unwrap()) & 0x7fffffff;
+                    wire = &wire[4..];
+                    SynthesisOp::Read(n as usize)
+                }
+                4 => SynthesisOp::Drain,
+                _ => {
+                    let Some((&choice, rest)) = wire.split_first() else {
+                        break;
+                    };
+                    wire = rest;
+                    let frames = pair[0].pcm().frames;
+                    let n = [0, 1, frames / 2, frames, frames + 1, i32::MAX as usize]
+                        [choice as usize % 6];
+                    SynthesisOp::Read(n)
+                }
+            };
+            let mut first = None;
+            for decoder in pair.iter_mut() {
+                let before = decoder.state();
+                let previous = synthesis_digest(decoder, ieee);
+                let result = synthesis_apply(decoder, op);
+                if result.is_err() || result == Ok(0) {
+                    assert_eq!(decoder.state(), before);
+                    assert_eq!(synthesis_digest(decoder, ieee), previous);
+                }
+                let outcome = (
+                    result,
+                    decoder.state(),
+                    decoder.position(),
+                    synthesis_digest(decoder, ieee),
+                );
+                if let Some(first) = &first {
+                    assert_eq!(first, &outcome);
+                } else {
+                    first = Some(outcome);
+                }
+            }
+        }
+    });
+}
+
 pub fn vorbis_stream(input: &[u8]) {
     let Some((&control, data)) = input.split_first() else {
         return;
@@ -831,6 +1002,33 @@ mod tests {
         let input: Vec<_> = (0..128).map(|v| (v * 79) as u8).collect();
         for length in 0..=input.len() {
             bitpacking(&input[..length]);
+        }
+    }
+    #[test]
+    fn synthesis_schedules_cover_finite_ieee_pending_and_restart_states() {
+        for (fixture, bytes) in FIXTURES.iter().enumerate() {
+            let p = packets(bytes);
+            for profile in [0, 64] {
+                let mut wire = vec![fixture as u8 | profile, 0, 3];
+                wire.extend(i32::MAX.to_le_bytes());
+                for (i, p) in p[3..].iter().enumerate() {
+                    for kind in [1, 2] {
+                        wire.push(kind);
+                        wire.extend((p.len() as u16).to_le_bytes());
+                        wire.extend((i as u64).to_le_bytes());
+                        wire.extend((if i % 2 == 0 { i64::MIN } else { i64::MAX }).to_le_bytes());
+                        wire.push((i % 3 == 0) as u8);
+                        wire.extend(p);
+                        wire.extend([5, 1, 4]);
+                    }
+                    if i % 2 == 0 {
+                        wire.push(0);
+                    }
+                }
+                for n in [0, 1, 20, wire.len() / 2, wire.len()] {
+                    vorbis_synthesis(&wire[..n]);
+                }
+            }
         }
     }
     #[test]

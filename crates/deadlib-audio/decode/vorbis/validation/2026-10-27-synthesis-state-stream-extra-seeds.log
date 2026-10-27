@@ -1,0 +1,3 @@
+    Finished `release` profile [optimized] target(s) in 0.35s
+     Running `crates\deadlib-audio\decode\fuzz\target\release\seed.exe C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-synthesis-state-stream-final-20261027\corpus`
+Fuzz seeds retained at C:\GitHub\deadsync\target\deadlib-audio-reference\fuzz-synthesis-state-stream-final-20261027\corpus

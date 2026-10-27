@@ -1,9 +1,6 @@
 //! Direct unmodified floor-one backend comparisons.
 use super::*;
-use crate as codec;
-#[path = "../tests/support/floor1_vectors.rs"]
-#[allow(dead_code)]
-mod vectors;
+use crate::reference_vectors::floor1_vectors as vectors;
 use std::{
     fs,
     process::Command,

@@ -47,6 +47,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "vorbis_synthesis"
+path = "fuzz_targets/vorbis_synthesis.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "vorbis_encode"
 path = "fuzz_targets/vorbis_encode.rs"
 test = false

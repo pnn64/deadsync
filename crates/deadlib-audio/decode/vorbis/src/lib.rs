@@ -2,6 +2,12 @@
 //! Raw packet APIs have no dependency on a container or playback environment.
 #![forbid(unsafe_code)]
 
+#[cfg(test)]
+extern crate self as deadlib_audio_decode_vorbis;
+
+#[cfg(test)]
+mod reference_vectors;
+
 pub mod bitpack;
 pub mod codebook;
 mod decoder;
@@ -15,7 +21,9 @@ mod seek;
 mod setup;
 mod transform;
 
-pub use decoder::{DecodeOptions, PacketDecoder, PcmBlock};
+pub use decoder::{
+    DecodeOptions, PacketDecoder, PacketTiming, PcmBlock, SynthesisDecoder, SynthesisState,
+};
 pub use encoder::{EncodeOptions, EncodedPacket, OggEncoder, PacketEncoder};
 pub use headers::{Channel, CommentField, Comments, Identification, Metadata, channel_order};
 pub use ogg::{

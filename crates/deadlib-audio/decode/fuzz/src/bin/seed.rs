@@ -38,6 +38,43 @@ fn codec_seeds(root: &Path, number: usize, data: &[u8], raw_fixture: bool) {
             }
             put(root, "vorbis_packets", &format!("{number}-{group}"), &bytes);
         }
+        for (group, chunk) in packets[3..].chunks(8).take(8).enumerate() {
+            for profile in [0, 64] {
+                for schedule in 0..3 {
+                    let mut bytes = vec![number as u8 | profile, 0];
+                    for (i, p) in chunk.iter().enumerate() {
+                        if p.len() > u16::MAX as usize {
+                            continue;
+                        }
+                        bytes.push(if schedule == 1 && i < 2 { 2 } else { 1 });
+                        bytes.extend_from_slice(&(p.len() as u16).to_le_bytes());
+                        bytes.extend_from_slice(&(i as u64 + 3).to_le_bytes());
+                        bytes.extend_from_slice(
+                            &(if schedule == 0 {
+                                -1i64
+                            } else if i % 3 == 0 {
+                                0
+                            } else {
+                                37
+                            })
+                            .to_le_bytes(),
+                        );
+                        bytes.push((i + 1 == chunk.len()) as u8);
+                        bytes.extend_from_slice(p);
+                        bytes.extend_from_slice(&[5, if schedule == 2 { 1 } else { 2 }]);
+                        if schedule != 2 || i % 3 == 2 {
+                            bytes.push(4);
+                        }
+                    }
+                    put(
+                        root,
+                        "vorbis_synthesis",
+                        &format!("synthesis-{number}-{group}-{profile}-{schedule}"),
+                        &bytes,
+                    );
+                }
+            }
+        }
     }
 }
 fn pages(data: &[u8], serial: u32) -> Vec<Vec<u8>> {

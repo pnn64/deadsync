@@ -9,6 +9,12 @@ and the original PCM tolerances. The [parity ledger](PARITY.md) records two
 corrected discard/truncation differences, 7,014 independent cases and remaining
 work. Performance measurements do not establish completion.
 
+The [synthesis-state follow-up](SYNTHESIS_STATE.md) adds raw reference packet
+clocks, track-only insertion, partial PCM consumption and retained-buffer
+restarts. Actual vorbisfile traces provide independent queue/clock and PCM
+checks. This is a prerequisite for closing the 172 recorded seek differences;
+the indexed reader does not yet use this state machine.
+
 The [bit-mutation follow-up](BIT_MUTATIONS.md) adds 55,845 finite-reference
 cases and corrects floor-zero selector/rounding plus VQ sequence offsets.
 The [degenerate-book follow-up](DEGENERATE_BOOKS.md) matches all eleven nonfinite

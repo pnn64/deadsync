@@ -1,0 +1,9 @@
+MSBuild version 17.14.60+43b635718 for .NET Framework
+
+  1>Checking Build System
+  Building Custom Rule C:/GitHub/deadsync/target/deadlib-audio-reference/seek-reference-20261027/trace-final/CMakeLists.txt
+  oracle-snapshot.c
+  vorbisfile-traced.c
+  Generating Code...
+  deadlib_vorbis_seek_trace.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\seek-reference-20261027\trace-final\build\Release\deadlib_vorbis_seek_trace.exe
+  Building Custom Rule C:/GitHub/deadsync/target/deadlib-audio-reference/seek-reference-20261027/trace-final/CMakeLists.txt

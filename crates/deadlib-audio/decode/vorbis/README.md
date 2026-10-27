@@ -38,6 +38,12 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
 * `PacketDecoder`: floor-zero/one curves, residue-zero/one/two, inverse channel
   coupling in reverse order, native FFT-based inverse MDCT, Vorbis windows and
   overlap-add. Output is borrowed planar, unclipped f32 in Vorbis channel order.
+* `SynthesisDecoder`: raw packet timing, track-only insertion, queued PCM,
+  partial reads and retained-buffer restart behavior matching libvorbis.
+  `PacketTiming` supplies sequence/granule/EOS fields independently of Ogg;
+  `SynthesisState` exposes the exact queue and clocks. Numerical policies remain
+  explicit. See [synthesis state](SYNTHESIS_STATE.md), including the remaining
+  libvorbisfile seek work.
   Transform tables/scratch use f64 to retain PCM accuracy through cancellation;
   [configuration parity](CONFIGURATION_PARITY.md) records the regression.
   The first block primes overlap and returns zero frames. `reset` keeps tables

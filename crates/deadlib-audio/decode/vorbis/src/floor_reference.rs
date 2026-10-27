@@ -1,9 +1,6 @@
 //! Test-only direct comparisons with unmodified floor-zero backend callbacks.
 use super::*;
-use crate as codec;
-#[path = "../tests/support/floor0_vectors.rs"]
-#[allow(dead_code)]
-mod vectors;
+use crate::reference_vectors::floor0_vectors as vectors;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,

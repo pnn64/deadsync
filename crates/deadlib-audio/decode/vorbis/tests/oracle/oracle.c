@@ -341,6 +341,46 @@ static void eos_state_cases(FILE *file) {
     for(i=0;i<3;++i) free(audio[i]);
     vorbis_block_clear(&block); vorbis_dsp_clear(&dsp); vorbis_comment_clear(&comments); vorbis_info_clear(&info);
 }
+/* Arbitrary decode/track/read/restart schedules. All queue/clock decisions and
+   the entire retained PCM buffer are observable, including stale overlap. */
+static void synthesis_ops(FILE *file) {
+    vorbis_info info; vorbis_comment comments; vorbis_dsp_state dsp; vorbis_block block;
+    uint64_t cases,c;int i;vorbis_info_init(&info);vorbis_comment_init(&comments);
+    for(i=0;i<3;++i) {ogg_packet op;memset(&op,0,sizeof(op));op.packet=packet(file,&op.bytes);op.b_o_s=i==0;op.packetno=i;if(vorbis_synthesis_headerin(&info,&comments,&op))fail("synthesis ops header");free(op.packet);}
+    if(vorbis_synthesis_init(&dsp,&info)||vorbis_block_init(&dsp,&block))fail("synthesis ops init");
+    cases=get64(file);if(cases>65536)fail("synthesis ops count");put32(info.channels);put64(cases);
+    for(c=0;c<cases;++c) {
+        uint64_t n=get64(file),j;if(n>65536||vorbis_synthesis_restart(&dsp))fail("synthesis ops restart");
+        for(j=0;j<n;++j) {
+            uint64_t kind=get64(file);int decoded=0,result=0,frames,ch,k;float **pcm;
+            if(kind==0) result=vorbis_synthesis_restart(&dsp);
+            else if(kind==1||kind==2) {
+                ogg_packet op;memset(&op,0,sizeof(op));op.packetno=(ogg_int64_t)get64(file);op.granulepos=(ogg_int64_t)get64(file);op.e_o_s=(long)get64(file);op.packet=packet(file,&op.bytes);
+                decoded=kind==1?vorbis_synthesis(&block,&op):vorbis_synthesis_trackonly(&block,&op);free(op.packet);
+                if(!decoded) result=vorbis_synthesis_blockin(&dsp,&block);
+            }else if(kind==3) {uint64_t count=get64(file);if(count>INT32_MAX)fail("synthesis ops read count");result=vorbis_synthesis_read(&dsp,(int)count);}
+            else if(kind==4) {dsp.granulepos=(ogg_int64_t)get64(file);((private_state*)dsp.backend_state)->sample_count=(ogg_int64_t)get64(file);dsp.sequence=(ogg_int64_t)get64(file);}
+            else if(kind==5) result=vorbis_synthesis_read(&dsp,vorbis_synthesis_pcmout(&dsp,NULL));
+            else if(kind==7) {vorbis_block_clear(&block);vorbis_dsp_clear(&dsp);if(vorbis_synthesis_init(&dsp,&info)||vorbis_block_init(&dsp,&block))fail("synthesis ops reinitialize");}
+            else if(kind==6) {
+                uint64_t large=get64(file);float **raw;int ch,k,n;
+                if(large>1)fail("synthesis ops direct block");n=(int)vorbis_info_blocksize(&info,(int)large);
+                block.W=(long)large;block.sequence=(ogg_int64_t)get64(file);block.granulepos=(ogg_int64_t)get64(file);block.eofflag=(long)get64(file);block.pcmend=n;
+                raw=(float**)malloc(info.channels*sizeof(*raw));if(!raw)fail("synthesis ops direct channels");
+                for(ch=0;ch<info.channels;++ch){raw[ch]=(float*)malloc(n*sizeof(float));if(!raw[ch])fail("synthesis ops direct data");for(k=0;k<n;++k){uint64_t bits=get64(file);uint32_t word=(uint32_t)bits;memcpy(raw[ch]+k,&word,4);}}
+                block.pcm=raw;result=vorbis_synthesis_blockin(&dsp,&block);block.pcm=NULL;block.pcmend=0;
+                for(ch=0;ch<info.channels;++ch)free(raw[ch]);free(raw);
+            }
+            else fail("synthesis ops kind");
+            frames=vorbis_synthesis_pcmout(&dsp,&pcm);if(frames<0)fail("synthesis ops pcmout");
+            put32((uint32_t)decoded);put32((uint32_t)result);put64((uint64_t)dsp.sequence);put64((uint64_t)dsp.granulepos);put64((uint64_t)((private_state*)dsp.backend_state)->sample_count);
+            put32((uint32_t)vorbis_info_blocksize(&info,(int)dsp.W));put32((uint32_t)dsp.centerW);put32((uint32_t)dsp.pcm_returned);put32((uint32_t)dsp.pcm_current);put32((uint32_t)frames);put8(dsp.eofflag!=0);
+            /* Check full backing storage, not only the reported queue. */
+            for(ch=0;ch<info.channels;++ch)for(k=0;k<dsp.pcm_storage;++k){uint32_t raw;memcpy(&raw,dsp.pcm[ch]+k,4);put32(raw);}
+        }
+    }
+    if(fgetc(file)!=EOF)fail("trailing synthesis ops");vorbis_block_clear(&block);vorbis_dsp_clear(&dsp);vorbis_comment_clear(&comments);vorbis_info_clear(&info);
+}
 static void transform(FILE *file, int forward) {
     long size; unsigned char *data = packet(file, &size); int n, k, in_count, out_count; float *input, *output; mdct_lookup lookup;
     if (size < 4) fail("MDCT protocol");
@@ -454,7 +494,7 @@ static void ogg_seek(FILE *file, const char *requests_path) {
     fclose(requests); ov_clear(&reader);
 }
 int main(int argc, char **argv) {
-    FILE *file; if (argc < 3 || ((!strcmp(argv[1], "oggseek") || !strcmp(argv[1], "oggseekstates")) ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|bookcases|floor0cases|floor1cases|floatcases|vqaddcases|books|pcm|pcm-cases|pcm-timed-cases|eos-state-cases|mdct-cases|mdct|mdctforward|oggpcm|oggpcmraw|oggstream input; oggseek|oggseekstates input requests");
+    FILE *file; if (argc < 3 || ((!strcmp(argv[1], "oggseek") || !strcmp(argv[1], "oggseekstates")) ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|bookcases|floor0cases|floor1cases|floatcases|vqaddcases|books|pcm|pcm-cases|pcm-timed-cases|eos-state-cases|synthesis-ops|mdct-cases|mdct|mdctforward|oggpcm|oggpcmraw|oggstream input; oggseek|oggseekstates input requests");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
@@ -471,6 +511,7 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[1], "pcm-cases")) pcm(file, 1);
     else if (!strcmp(argv[1], "pcm-timed-cases")) pcm_timed_cases(file);
     else if (!strcmp(argv[1], "eos-state-cases")) eos_state_cases(file);
+    else if (!strcmp(argv[1], "synthesis-ops")) synthesis_ops(file);
     else if (!strcmp(argv[1], "mdct-cases")) {
         uint64_t count = get64(file), i;
         if (count > (1u << 20)) fail("MDCT case count");
