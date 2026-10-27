@@ -270,3 +270,28 @@ native decoding, exact EOF/suffix consumption, limits zero/one and four
 truncated-trailer lengths. `primary-pairs-validation.json` / `.log` retain the
 C binary/source identities and results. These literal-only fixtures complement
 the existing Huffman, length/distance, block, PNG and checksum matrices.
+
+## APNG scalar controls and delay words
+
+```powershell
+cargo test -p deadlib-image-png --release --test animation_fields -- --nocapture
+cargo test -p deadlib-image-png --release --test animation_fields rust_png_control_fields_and_all_delay_words -- --ignored --nocapture
+./crates/deadlib-image/png/scripts/verify_independent.ps1 -Test animation_fields -LogPath target/apng-independent-fresh.log
+```
+
+The field suite independently frames 80,460 files across every native format,
+plain/Adam7 layout and both default-image roles. It checks animation controls,
+frame rectangles, contiguous sequences, all blend/disposal bytes, payload-length
+neighborhoods, empty fdAT chunks and resource boundaries. Buffered decoding,
+one-/seven-byte readers and one-/31-byte push input check both animation policies.
+A separate RGB8 fixture checks all 65,536 values of each delay word through
+buffered decoding and fragmented push input. Native samples and raw timing
+values remain exact; denominator-zero timing uses the specified hundredths.
+
+The explicit Rust png audit compares all 136,352 valid files, including their
+raw control fields and native samples. Invalid-field recovery and resource
+errors use independent known outcomes. The C oracle is a static PNG decoder
+and supplies no APNG-control getter; no C animation comparison is claimed.
+`animation-fields-validation.json` / `.log` retain the commands and results.
+The optional `-Test` selector copies the complete package and runs only that
+target offline; omitting it retains the full standalone suite.

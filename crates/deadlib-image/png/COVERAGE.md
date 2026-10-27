@@ -1492,3 +1492,63 @@ including earlier encoder campaigns; no encoder target runs in this milestone.
 
 Decoder field/control audits, remaining corpus gaps and competitive decoder
 performance remain open.
+
+## APNG control-field audit (2026-10-27)
+
+`tests/animation_fields.rs` checks 80,460 independently framed files across all
+fifteen native formats, both interlace layouts and both default-image roles.
+Both animation policies run through buffered decoding, one-/seven-byte readers
+and one-/31-byte push input, producing 804,600 API/policy checks. There are
+5,280 valid files, 74,700 animation faults and 480 fatal resource cases.
+
+The matrix covers acTL lengths 0-12; fcTL lengths 0-30 in both frame positions;
+fdAT prefix lengths 0-3; individual zero, canvas, byte/word, 31-bit and high-bit
+integer edges; declared/actual frame counts and the frame limit boundary;
+plays; sequences; all 256 disposal/blend bytes in both frames; and one/two/seven
+legal empty fdAT chunks with contiguous sequence numbers. Valid rectangle
+changes carry independently generated samples and stored zlib, so geometry
+checks do not depend on an unrelated frame-data-length error. The small canvas
+is 3 by 2; larger positive geometries and native-precision composition retain
+their existing evidence. This is not every 32-bit Cartesian product.
+
+A further 131,072 RGB8/nondefault-first-frame files check every unsigned value
+of both delay words through buffered decoding and fragmented push input.
+Exact raw fields, denominator-zero timing and native samples are verified.
+Together the suites cover 211,532 files and 1,066,744 API/policy checks. Direct
+events check native sample positions, frame controls, image ends, complete input
+consumption and fused errors. Recovery emits one diagnostic, discards subsequent
+animation events, and completes the static image.
+
+The explicit Rust png differential audit matches raw controls and native
+samples for all 136,352 valid files. Invalid animation outcomes and fatal resource
+limits are independent known answers. The C oracle is static-only and provides
+no APNG-control getters. `animation-fields-validation.*` and
+`animation-fields-audit.json` retain exact counts, commands and source evidence.
+
+Strict main/fuzz Clippy and scoped rustfmt pass. The full release suite passes
+132 tests, with eighteen optional checks ignored. A fresh complete standalone
+copy passes both new APNG tests offline, with its optional Rust comparison
+ignored there. All 881 copied source, fixture, example and benchmark files match.
+The unchanged preexisting test inputs retain their linked full offline result
+of 130 passed / seventeen ignored; this milestone reruns them in release mode.
+`verify_independent.ps1 -Test animation_fields` selects the focused standalone
+target; its default still runs the full package suite and dependency tree.
+
+The generator adds 10,740 representative files per PNG decoder target.
+Focused export plus the immutable scalar-field ZIP exactly equals full fresh
+generation: 45,101 files / 10,776,415 bytes. The seed/archive/source/binary hashes
+and reproduction commands are in `fuzz/reports/animation-fields-*`.
+
+Fresh native-feedback ASan passes 50,000 PNG-stream executions in 45 fuzzing
+seconds / 525 MiB peak RSS. Both native archives retain feedback; fourteen
+dependency archives and two harness objects have no feedback counters or PC
+tables. The binary defines ASan's runtime entry and matches the prior checksum
+milestone. The exact logs, source/binary hashes and object audit are retained.
+Historical successful campaigns total 1,480,000, including earlier encoder runs;
+only the PNG-stream decoder target runs in this milestone.
+
+The initialized output-slice performance trial is rejected after repeated
+reference-relative comparisons. `BENCHMARKS.md` records the trial and control
+drift; its source checkpoint and reconstruction are retained. All twenty-one
+production PNG files remain unchanged from `861a15e00`. Remaining corpus gaps,
+extension scope checks and competitive decoder performance stay open.

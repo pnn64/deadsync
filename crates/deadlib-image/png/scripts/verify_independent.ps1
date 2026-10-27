@@ -1,4 +1,4 @@
-param([string]$LogPath)
+param([string]$LogPath, [string]$Test)
 $ErrorActionPreference = 'Stop'
 $pngSource = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $sharedSource = Split-Path -Parent $pngSource
@@ -13,7 +13,9 @@ Set-Content -LiteralPath (Join-Path $isolatedRoot 'Cargo.toml') -Value $sharedMa
 foreach ($entry in @('Cargo.toml', 'src', 'tests', 'benches', 'examples')) {
     Copy-Item -LiteralPath (Join-Path $pngSource $entry) -Destination (Join-Path $isolatedRoot 'png') -Recurse
 }
-$evidence = @(('Isolated workspace: ' + $isolatedRoot), 'Command: cargo test -p deadlib-image -p deadlib-image-png --offline')
+$testArguments = @('test', '-p', 'deadlib-image', '-p', 'deadlib-image-png', '--offline')
+if ($Test) { $testArguments = @('test', '-p', 'deadlib-image-png', '--offline', '--test', $Test) }
+$evidence = @(('Isolated workspace: ' + $isolatedRoot), ('Command: cargo ' + ($testArguments -join ' ')))
 Push-Location -LiteralPath $isolatedRoot
 try {
     $evidence += (& rustc --version)
@@ -21,7 +23,7 @@ try {
     # PowerShell 5 can treat native stderr progress as terminating records when
     # ErrorActionPreference is Stop. Preserve the actual native exit code.
     $ErrorActionPreference = 'Continue'
-    $evidence += (& cargo test -p deadlib-image -p deadlib-image-png --offline 2>&1 | ForEach-Object { $_.ToString() })
+    $evidence += (& cargo @testArguments 2>&1 | ForEach-Object { $_.ToString() })
     $testExit = $LASTEXITCODE
     $evidence += (& cargo tree -p deadlib-image-png --edges normal --offline 2>&1 | ForEach-Object { $_.ToString() })
     $treeExit = $LASTEXITCODE

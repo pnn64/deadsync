@@ -652,3 +652,43 @@ pairs plus 132 code-width/padding cases, with flate2/C zlib exact answers,
 fragmented native output, EOF/suffix consumption, limits and truncated trailers.
 `primary-pairs-validation.*` and `primary-pairs-independent.log` retain the
 final normal/standalone checks. Competitive decoder performance remains open.
+
+## Initialized output-slice trial (2026-10-27)
+
+A buffered-only trial fills the already allocated Vec tail with zeroes, clips
+it to the configured output limit and decodes into a slice using a separate
+written cursor. At least 258 writable bytes admit any legal match, replacing
+per-token limit/capacity checks. The slice contains initialized bytes, and
+history checks use the written cursor rather than the temporary Vec length.
+The trial adds no allocation, unsafe code, production dependency or table/refill
+change; streaming and encoding logic are unchanged. It passes 27 focused tests
+with three optional checks ignored, but is rejected on measured performance.
+
+`experiments/output-spare.{patch,json}` retain the exact candidate.
+`experiments/output-spare-selection.json` reconstructs all 21 source hashes from
+`861a15e00` and links eight timing groups / two final summaries. The selected
+production files match that baseline byte for byte.
+
+The comparison uses baseline/candidate/candidate/baseline order, three processes
+per position/corpus, twelve iterations, three warmups and CPU 0 affinity.
+The 24-photo and 60-format corpora, harness, toolchain, source/binary identities
+and reported size fields are verified. The harness reports zero in its pipeline
+memory column; equality of that column is not an allocation or peak-memory
+measurement. Builds precede their timed processes. No tests, sanitizer jobs or
+profiling from this task run during timing; external workloads and frequency
+remain uncontrolled, including Cargo-lock contention between timed groups.
+
+| Buffered operation | Original MiB/s | Trial MiB/s | Change relative to reference |
+| --- | ---: | ---: | ---: |
+| Photo PNG decode | 101.24 | 99.03 | -2.59% |
+| Photo IDAT inflate | 128.67 | 126.08 | -2.32% |
+| All-format PNG decode | 248.66 | 256.62 | -3.45% |
+| All-format IDAT inflate | 904.35 | 952.67 | -5.34% |
+
+Decode is normalized against Rust png, inflation against flate2. Unchanged
+reader controls are -1.57% / -1.96% relative on photos / formats; unchanged
+streaming inflation is -1.26% / -8.93%. This drift limits precise regression
+estimates. The results do not establish a benefit for the added output loop,
+so it is not retained and no speedup is claimed. Final summaries are
+`benchmark-output-spare-{photos,formats}-summary.json`; the initial photo
+comparison is exploratory. Competitive decoder performance remains open.

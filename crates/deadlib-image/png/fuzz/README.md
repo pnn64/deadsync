@@ -530,3 +530,20 @@ These are decoder checks. The two paired-literal runtime trials are rejected
 and all production files remain unchanged. Historical successful sanitizer
 executions reach 1,430,000 across twelve targets, including older encoder runs;
 this milestone runs only the raw-stream decoder target.
+
+## APNG control-field seeds
+
+`seed_fuzz --animation-fields-only FRESH_ROOT` exports 10,740 independent files
+to each PNG decoder target; normal full generation includes the same files.
+The seeds sample control lengths, zero/31-bit/high-bit integers, frame-count
+limits, geometry, sequences, byte enums, timing words and empty fdAT chunks
+across all sixty format/interlace/default-role configurations. They supplement
+the 211,532-file normal control/delay audit and Rust png known-value comparison.
+
+`reports/animation-fields-seed-build.json` records full and focused generation.
+The focused archive merged with the immutable scalar-field PNG archive exactly
+equals the full-generator archive: 45,101 files / 10,776,415 bytes, ordered by
+literal UTF-8 filename bytes. `reports/animation-fields-source.json` and the raw
+PNG-stream log retain the fresh ASan campaign, exact sources/binary/corpus hashes
+and native/dependency/harness feedback audits. Production decoder files are
+unchanged; no encoder target is part of this milestone.

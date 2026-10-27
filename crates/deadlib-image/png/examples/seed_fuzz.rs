@@ -4,6 +4,9 @@
 #[path = "../tests/support/ancillary_order.rs"]
 mod ancillary_order;
 #[allow(dead_code)]
+#[path = "../tests/support/animation_fields.rs"]
+mod animation_fields;
+#[allow(dead_code)]
 #[path = "../tests/support/apng_recovery.rs"]
 mod apng_recovery;
 #[allow(dead_code)]
@@ -52,7 +55,37 @@ fn write_primary_pairs(root: &Path) -> std::io::Result<()> {
     );
     Ok(())
 }
+fn write_animation_fields(root: &Path) -> std::io::Result<()> {
+    let cases = animation_fields::seeds();
+    for target in ["decode", "png_stream"] {
+        let directory = root.join(target);
+        fs::create_dir_all(&directory)?;
+        for (name, bytes) in &cases {
+            fs::write(directory.join(name), bytes)?;
+        }
+    }
+    println!(
+        "APNG control fields: {} independent seeds per PNG target",
+        cases.len()
+    );
+    Ok(())
+}
 fn main() -> std::io::Result<()> {
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|s| s == "--animation-fields-only")
+    {
+        let destination = std::env::args_os().nth(2).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "--animation-fields-only requires a fresh output root",
+            )
+        })?;
+        let path = PathBuf::from(destination);
+        fs::create_dir(&path)?;
+        write_animation_fields(&path)?;
+        return Ok(());
+    }
     if std::env::args_os()
         .nth(1)
         .is_some_and(|s| s == "--primary-pairs-only")
@@ -217,6 +250,7 @@ fn main() -> std::io::Result<()> {
     fs::create_dir_all(&zlib)?;
     fs::create_dir_all(&png_stream)?;
     fs::create_dir_all(&inflate_stream)?;
+    write_animation_fields(&corpus)?;
     write_primary_pairs(&corpus)?;
     let decoder_limits = corpus.join("decoder_limits");
     fs::create_dir_all(&decoder_limits)?;
