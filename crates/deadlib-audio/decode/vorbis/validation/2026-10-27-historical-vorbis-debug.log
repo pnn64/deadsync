@@ -1,0 +1,27 @@
+   Compiling deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.52s
+     Running tests\historical.rs (target\debug\deps\historical-7a91acf6a1d97df5.exe)
+
+running 3 tests
+1sec.ogg/raw libvorbis: 89216 samples, peak error 4.563480616e-8, RMS 6.539169770e-9, signal peak 0.125450
+1sec.ogg: libvorbis raw and libvorbisfile declare/emit 44608 frames; encoded EOS 44619
+test ffmpeg_endpoint_exceeds_independent_raw_synthesis ... ok
+ffmpeg/1sec.ogg: invalid Vorbis packet: EOS granule outside final packet overlap
+ffmpeg/virginradio-three-consecutive-chains.ogg: Ogg stream 1151398491: expected page 3, got 1007
+ffmpeg/mgs1-sample1.ogg: Ogg CRC mismatch: stored 442b2d41, computed 32e99750
+ffmpeg/mgs1-sample2.ogg: Ogg CRC mismatch: stored f68f9f2e, computed 1fc62c31
+ffmpeg/mgs1-sample3.ogg: Ogg CRC mismatch: stored 40f0c90f, computed ebf89a80
+1sec.ogg: raw frames 44608, final granule 44619
+test known_bad_endpoints_sequence_gaps_and_game_crcs_stay_rejected ... ok
+coyote.ogg: 3672128 raw frames, 4 nominally truncated packets
+coyote.ogg/raw libvorbis: 7344256 samples, peak error 1.886487007e-5, RMS 1.246807258e-6, signal peak 0.721836
+coyote.ogg/libvorbisfile-1.3.7: 7342848 samples, peak error 1.886487007e-5, RMS 1.246926355e-6, signal peak 0.721836
+coyote.ogg/Symphonia-0.6.1: 7342848 samples, peak error 1.862645149e-5, RMS 1.245805132e-6, signal peak 0.721836
+test6.ogg: 508480 raw frames, 0 nominally truncated packets
+test6.ogg/raw libvorbis: 3050880 samples, peak error 1.797452569e-7, RMS 5.728942719e-9, signal peak 0.613354
+test6.ogg/libvorbisfile-1.3.7: 3050496 samples, peak error 1.797452569e-7, RMS 5.729303272e-9, signal peak 0.613354
+test6.ogg/Symphonia-0.6.1: 3050496 samples, peak error 1.192092896e-7, RMS 3.614739356e-9, signal peak 0.613354
+test historical_floor_zero_and_aotuv_surround_pcm_streaming_reset_and_seeks ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 40.12s

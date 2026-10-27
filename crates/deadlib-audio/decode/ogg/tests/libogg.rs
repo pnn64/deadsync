@@ -161,3 +161,22 @@ fn libogg_local_corpus() {
         paths.len()
     );
 }
+
+#[test]
+#[ignore = "requires libogg oracle and pinned DEADLIB_OGG_EXTERNAL_CORPUS"]
+fn libogg_historical_vorbis_pages_and_packets() {
+    let root =
+        std::env::var_os("DEADLIB_OGG_EXTERNAL_CORPUS").expect("set DEADLIB_OGG_EXTERNAL_CORPUS");
+    let mut counts = (0, 0);
+    // 1sec.ogg is valid Ogg framing with an impossible Vorbis endpoint. The
+    // container must not impose codec-specific sample-count restrictions.
+    for name in ["coyote.ogg", "test6.ogg", "1sec.ogg"] {
+        let result = compare(&Path::new(&root).join("ffmpeg").join(name));
+        counts.0 += result.0;
+        counts.1 += result.1;
+    }
+    eprintln!(
+        "historical libogg parity: 3 files, {} pages, {} packets",
+        counts.0, counts.1
+    );
+}

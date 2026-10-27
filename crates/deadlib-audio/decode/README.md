@@ -64,6 +64,11 @@ ITGmania song and a historical setup page. Two explicit, disabled-by-default
 policies handle these cases; the indexed endpoint policy can trim across prior
 pages using the final length known in advance. Four historical/shipped files
 and 36 native seeks validate those policies; see [vorbis/LEGACY.md](vorbis/LEGACY.md).
+Seven additional pinned FFmpeg samples add strict 2000-era floor-zero and
+six-channel aoTuV comparisons, 512 native seeks, and 40 rejection paths for
+invalid endpoints, sequence gaps and CRCs; see
+[vorbis/HISTORICAL.md](vorbis/HISTORICAL.md). This adds historical encoder
+coverage without expanding the two-song ITGmania sample.
 The requested goal remains open: broader conformance/legacy/fuzzing, index-free
 codec seeking, comparative performance and competitive native encoding remain.
 

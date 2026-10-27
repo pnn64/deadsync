@@ -61,6 +61,10 @@ Evidence on Windows x86-64, rustc 1.99.1:
   libogg's page fields, packet bytes, BOS/EOS and packet granules exactly.
   Command: `cargo test -p deadlib-audio-decode-ogg --release --test libogg --
   --ignored --nocapture` with the oracle/corpus variables described in its README.
+* The additional 2026-10-27 historical comparison matches **381 pages and 4,402
+  packets** from three pinned FFmpeg files against libogg, including a
+  codec-invalid endpoint accepted by the independent container. Sources, hashes,
+  commands and results are linked in [Vorbis HISTORICAL.md](../vorbis/HISTORICAL.md).
 * libogg capture parity at every generated page boundary, plus **114 indexed
   captures across all 38 assets/8,733 indexed pages**: **181,245 returned packets**
   match bytes, flags and granules. Every indexed packet start matches complete

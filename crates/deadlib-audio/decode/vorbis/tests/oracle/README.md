@@ -117,7 +117,7 @@ manifest in `validation/corpus.json`. Fetch/verify them with Python 3.11+:
 
 ```powershell
 python crates/deadlib-audio/decode/scripts/fetch_corpus.py
-# Or select only a group: --group itgmania / --group floor0 / --group legacy
+# Or select a group: --group itgmania / --group floor0 / --group legacy / --group ffmpeg
 ```
 
 Media stays under ignored `target/deadlib-audio-reference/corpus`; it is never
@@ -142,3 +142,9 @@ The diagnostic accepts `--allow-zero-span-granules` and
 `--trim-to-final-granule` separately. The second uses indexed decoding because a
 forward-only reader cannot retract PCM emitted before a decreasing EOS granule.
 Reports keep reference declared/emitted counts separate for the malformed song.
+
+The additional `--test historical` suite uses the `ffmpeg` group with the same
+external-corpus and oracle variables. It checks strict floor-zero and six-channel
+aoTuV files against both independent decoders, streaming/reset/seek PCM bits,
+and five named rejection cases. Set `DEADLIB_VORBIS_HISTORICAL_REPORT` to retain
+its PCM table. See [HISTORICAL.md](../../HISTORICAL.md) for commands and results.

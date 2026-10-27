@@ -258,6 +258,14 @@ counts match without discarding comparison samples.
 * FFmpeg's `Lumme-Badloop.ogg` (libVorbis 20020713) passes strict container/mapping
   decoding with 17,862,912 frames per channel. Its name alone is not treated as
   evidence of a required compatibility exception.
+* Two additional pinned historical files pass strict decoding: the floor-zero
+  `coyote.ogg` (Xiphophorus 20001031) and six-channel `test6.ogg` (aoTuV b2).
+  Their 10,393,344 channel samples per decoder match libvorbisfile/Symphonia
+  counts, timestamps and channel layouts within the existing numerical bounds.
+  Streaming resets and 512 repeated seeks match native sequential PCM bits.
+  Five other pinned files preserve endpoint, sequence or CRC rejection through
+  40 API/policy paths; `1sec.ogg` has a named encoded-endpoint/reference-count
+  discrepancy. See [HISTORICAL.md](HISTORICAL.md) for evidence and limitations.
 
 ## Remaining required work
 
