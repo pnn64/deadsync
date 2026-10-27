@@ -941,3 +941,51 @@ are in `fuzz/reports/huffman-call-source.json`. These 80,000 successful inputs
 bring the historical count to 670,000. Native-only fuzz coverage, longer
 campaigns, remaining conformance audits and competitive pipeline/encoder
 performance remain open.
+
+## Exact Paeth and byte-stride reconstruction (2026-10-27)
+
+The optimized regional predictor matches the Third Edition's independent
+arithmetic and tie order for all 16,777,216 byte triplets. Another 2,550 direct
+row cases check independent filtered bytes, adaptive scores and reconstruction
+for all six byte strides, all five filters, empty/short rows and first-row
+boundaries. All 251 invalid filter bytes retain the original error and leave
+the row unchanged. Pixel arrays carry reconstructed neighbors in registers;
+two-byte pixels use the measured faster scalar recurrence. No new allocation,
+dependency or unsafe code is introduced. Static assembly inspection verifies
+compiler SIMD in the selected Linux predictor; its cycle profile attributes
+11.89% to unfiltering versus the preceding profile's 22.35%.
+
+The new stored-DEFLATE benchmark independently constructs and checks 80 inputs
+covering all filters and eight 8-/16-bit formats (all six byte strides).
+Its controls and photo/synthetic pipeline comparisons are retained in
+`benchmark-filter-*`, with exact baseline/variant reverse patches in
+`experiments/filter-*-checkpoints.json`. The selected hybrid suggests about 12%
+better photo decode and 9% better photo reader throughput relative to reference
+timings. Synthetic buffered encoding regresses about 10%; writer paths about
+5%. An encoder-specific predictor alternative did not consistently remove the
+loss, and was rejected. [BENCHMARKS.md](BENCHMARKS.md#byte-stride-filter-reconstruction)
+records both experiments, selection, limits and reproducible aggregation.
+
+The full release suite passes 117 tests, including all twelve optional checks.
+Strict main/fuzz linting, the 65,652-case strict-window C audit and 19,645-case
+compatibility Huffman audit pass. Exact commands and final source hashes are
+in `filter-validation.log` / `.json`.
+
+An isolated source copy passes 105 normal offline tests (twelve optional checks
+ignored), with only `deadlib-image` in its production dependency tree. The
+self-contained filter benchmark also builds and runs offline there, checking
+all 80 fixtures and producing 240 operation rows. Its smoke-run timings use the
+isolated default release profile and are excluded from comparative results.
+`filter-independent.log` and `filter-independent-benchmark*` retain this evidence.
+
+Fresh ASan runs complete 20,000 structured encoder inputs, 30,000 PNG-stream
+inputs and 30,000 buffered PNG inputs. The encoder harness checks original
+native samples independently through Rust png across all formats, filters,
+plain/Adam7 and static/APNG controls. Fuzzing time / peak RSS are respectively
+88 seconds / 416 MiB, 57 / 501 and 8 / 501. Each instrumented binary defines the
+ASan runtime entry and all final source hashes match the initial snapshot.
+`fuzz/reports/filter-source.json` retains commands, initial-corpus/source/binary
+hashes and full per-target logs. The 80,000 successful inputs bring the
+historical count to 750,000. Competitive pipeline/encoder performance,
+compression ratio, remaining conformance audits, broader high-precision APNG
+composition and native-only fuzz coverage remain open.

@@ -3,7 +3,7 @@ param(
     [int]$Iterations = 40,
     [int]$Runs = 3,
     [ValidateSet('pipeline','deflate')][string]$Stage = 'pipeline',
-    [ValidateSet('pipeline','corpus','inflate')][string]$Target = 'pipeline',
+    [ValidateSet('pipeline','corpus','inflate','filter')][string]$Target = 'pipeline',
     [string]$CorpusDirectory,
     [int]$Cpu = -1
 )
@@ -11,10 +11,11 @@ $ErrorActionPreference = 'Stop'
 if ($Iterations -lt 1 -or $Runs -lt 1) { throw 'Iterations and Runs must be positive' }
 $pngRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $manifest = Join-Path $pngRoot 'Cargo.toml'
-if ($Target -ne 'pipeline') {
+$usesCorpus = $Target -in @('corpus','inflate')
+if ($Target -ne 'pipeline' -and $Stage -ne 'pipeline') { throw 'Stage selection applies only to the synthetic pipeline target' }
+if ($usesCorpus) {
     if (-not $CorpusDirectory) { throw 'CorpusDirectory is required for the corpus target' }
     $CorpusDirectory = (Resolve-Path -LiteralPath $CorpusDirectory).Path
-    if ($Stage -ne 'pipeline') { throw 'Stage selection applies only to the synthetic pipeline target' }
 }
 $absolutePrefix = [System.IO.Path]::GetFullPath($LogPrefix)
 $manifestPath = $absolutePrefix + '-manifest.json'
@@ -26,7 +27,7 @@ New-Item -ItemType Directory -Path (Split-Path -Parent $absolutePrefix) -Force |
 # Cargo reports the exact executable for either workspace layout. Native stderr
 # is progress output, not a PowerShell error; check Cargo's exit code instead.
 $ErrorActionPreference = 'Continue'
-$binaryName = switch ($Target) { 'corpus' { 'corpus_bench' } 'inflate' { 'inflate_bench' } default { 'pipeline' } }
+$binaryName = switch ($Target) { 'corpus' { 'corpus_bench' } 'inflate' { 'inflate_bench' } 'filter' { 'filter_bench' } default { 'pipeline' } }
 if ($Target -ne 'pipeline') {
     $build = & cargo build --manifest-path $manifest -p deadlib-image-png --profile bench --example $binaryName --message-format json
 } else {
@@ -50,10 +51,10 @@ $utf8 = New-Object System.Text.UTF8Encoding($false)
 $sourceEvidence = Get-ChildItem -LiteralPath (Join-Path $pngRoot 'src') -Filter '*.rs' -Recurse | Sort-Object FullName | ForEach-Object {
     [ordered]@{ path=$_.FullName.Substring($pngRoot.Length+1).Replace('\','/'); sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
 }
-$benchmarkSource = switch ($Target) { 'corpus' { 'examples/corpus_bench.rs' } 'inflate' { 'examples/inflate_bench.rs' } default { 'benches/pipeline.rs' } }
+$benchmarkSource = switch ($Target) { 'corpus' { 'examples/corpus_bench.rs' } 'inflate' { 'examples/inflate_bench.rs' } 'filter' { 'examples/filter_bench.rs' } default { 'benches/pipeline.rs' } }
 $benchmarkSourceHash = (Get-FileHash -LiteralPath (Join-Path $pngRoot $benchmarkSource) -Algorithm SHA256).Hash
 $corpusEvidence = @()
-if ($Target -ne 'pipeline') {
+if ($usesCorpus) {
     $corpusEvidence = Get-ChildItem -LiteralPath $CorpusDirectory -Filter '*.png' | Sort-Object Name | ForEach-Object {
         [ordered]@{ file=$_.Name; bytes=$_.Length; sha256=(Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
     }
@@ -70,7 +71,7 @@ for ($run=1; $run -le $Runs; $run++) {
     $start.RedirectStandardError = $true
     $start.EnvironmentVariables['DEADLIB_PNG_BENCH_ITERS'] = $Iterations.ToString()
     $start.EnvironmentVariables['DEADLIB_PNG_BENCH_STAGE'] = $Stage
-    if ($Target -ne 'pipeline') { $start.EnvironmentVariables['DEADLIB_PNG_CORPUS'] = $CorpusDirectory }
+    if ($usesCorpus) { $start.EnvironmentVariables['DEADLIB_PNG_CORPUS'] = $CorpusDirectory }
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $start
     $began = [DateTime]::UtcNow

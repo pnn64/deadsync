@@ -71,7 +71,7 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | 12.1–12.2: color/gamma | Caller supplies stored samples and color metadata; integer metadata stays exact; precedence exposed | Application for selecting/converting color spaces; no implicit CMS |
 | 12.3–12.4: alpha and source precision | Straight native alpha retained; encoder accepts legal PNG sample formats and validates ranges | Covered for native PNG contract; assess arbitrary reference-depth scaling against the encoder conformance boundary before final sign-off |
 | 12.5: suggested palettes | PLTE/sPLT/hIST serialization and usage checks; no automatic quantization | Covered for supplied metadata; palette generation is Application |
-| 12.6–12.7: interlace/filter choice | Plain/Adam7 and all filters selectable; adaptive score shared by both writers | Covered; filter optimization/benchmarking remains Open |
+| 12.6–12.7: interlace/filter choice | Plain/Adam7 and all filters selectable; adaptive score shared by both writers | Covered; predictor exhaustively compared over all byte triplets, independent row/score matrix and filter/photo benchmarks retained; broader performance remains Open |
 | 12.8: compression | Native stored/fixed-Huffman LZ77, bounded 16-candidate chains, per-block coding choice and cross-block streaming history | Format compatibility covered; repeated local measurements improve ratio/throughput, but broader competitive performance remains Open |
 | 12.9: text | UTF-8 serialization, keyword byte/length classes, strict Latin-1 body encoding, native metadata compression and raw/typed APIs | Covered for these wire/encoder rules, including body NBSP and LF, empty/long text and unchanged non-null iTXt controls; line wrapping/display conventions are Application |
 | 12.10: chunking/extensions | Chunk size control, bounded writer chunks, recognized ancillary placement, private-name/property validation | Covered; full ordering mutation matrix remains Open |
@@ -99,8 +99,9 @@ fuzz evidence, independent reuse and no DeadSync integration. Package isolation
 and the production dependency boundary are verified by the retained offline
 build. Performance is explicitly incomplete in `BENCHMARKS.md`; the current
 fixed-Huffman encoder's ratio and pipeline speed require substantial work.
-The later Huffman refill/prefix optimization improves measured photo decoding,
-but the native 78.98 MiB/s still trails Rust png's 202.58 on that corpus.
-Resolve the open rows above, obtain broader external APNG rendering comparisons,
-extend structured malformed/coverage campaigns, and repeat the requirement audit
+The later Huffman and byte-stride filter optimizations improve measured photo
+decoding, but native 109.49 MiB/s still trails Rust png's 226.46 in the selected
+filter comparison, with a recorded synthetic encoding slowdown. Resolve the open
+rows above, extend the WPT rendered-frame evidence with broader high-precision
+APNG/compositor and native-only coverage campaigns, and repeat the requirement audit
 against the resulting implementation and measurements before claiming completion.

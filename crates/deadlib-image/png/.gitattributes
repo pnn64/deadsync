@@ -6,6 +6,7 @@ zlib-conformance.log text eol=lf
 huffman-conformance.log text eol=lf
 inflate-validation.log text eol=lf
 huffman-call-*.log text eol=lf
+filter-*.log text eol=lf
 # perf's raw call-chain reports contain intentional trailing alignment spaces.
 profiling/*.txt text eol=lf -whitespace
 reference-conformance.log text eol=lf

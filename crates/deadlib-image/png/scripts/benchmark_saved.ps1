@@ -14,7 +14,8 @@ $binaryHash = (Get-FileHash -LiteralPath $binary.FullName -Algorithm SHA256).Has
 if ($binaryHash -ne $evidence.executable_sha256) { throw 'Saved executable does not match original manifest' }
 if ($Iterations -eq 0) { $Iterations = $evidence.iterations }
 if ($Iterations -lt 1 -or $Runs -lt 1) { throw 'Iterations and Runs must be positive' }
-if ($evidence.target -ne 'pipeline') {
+$usesCorpus = $evidence.target -in @('corpus','inflate')
+if ($usesCorpus) {
     $CorpusDirectory = (Resolve-Path -LiteralPath $CorpusDirectory).Path
     $files = @(Get-ChildItem -LiteralPath $CorpusDirectory -Filter '*.png' | Sort-Object Name)
     if ($files.Count -ne $evidence.corpus_sha256.Count) { throw 'Corpus file count differs from original manifest' }
@@ -44,7 +45,7 @@ for ($i=1; $i -le $Runs; $i++) {
     $start.RedirectStandardError = $true
     $start.EnvironmentVariables['DEADLIB_PNG_BENCH_ITERS'] = $Iterations.ToString()
     $start.EnvironmentVariables['DEADLIB_PNG_BENCH_STAGE'] = $evidence.stage
-    if ($evidence.target -ne 'pipeline') { $start.EnvironmentVariables['DEADLIB_PNG_CORPUS'] = $CorpusDirectory }
+    if ($usesCorpus) { $start.EnvironmentVariables['DEADLIB_PNG_CORPUS'] = $CorpusDirectory }
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $start
     $began = [DateTime]::UtcNow

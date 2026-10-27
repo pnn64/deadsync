@@ -1,0 +1,75 @@
+{
+  "selected_variant": "hybrid",
+  "selected_source_sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e",
+  "saved_binaries_verified": [
+    {
+      "label": "before-filter",
+      "manifest": "benchmark-filter-before-manifest.json",
+      "binary": "target\\png-filter-before\\filter_bench.exe",
+      "sha256": "9725aa3c19b86c5035becb044dca09a1ca0449e1682bac6a5136d5f0f6b4d0d9"
+    },
+    {
+      "label": "scalar",
+      "manifest": "benchmark-filter-scalar-trial-manifest.json",
+      "binary": "target\\png-filter-scalar-trial\\filter_bench.exe",
+      "sha256": "7587807c304e25d44de1f5f6cbab433b220acb609d2bc3ea83a857190b9d0477"
+    },
+    {
+      "label": "pixels",
+      "manifest": "benchmark-filter-pixels-trial-manifest.json",
+      "binary": "target\\png-filter-pixels-trial\\filter_bench.exe",
+      "sha256": "476d684d78d4fa4b4600a7eb5b119310c18a5e67216b78dc70fca593b40c7782"
+    },
+    {
+      "label": "selected-filter",
+      "manifest": "benchmark-filter-hybrid-trial-manifest.json",
+      "binary": "target\\png-filter-final\\filter_bench.exe",
+      "sha256": "c84ae328f105fbccccda66729842d857d127540712fa94b747df96dd32f0b802"
+    },
+    {
+      "label": "selected-pipeline",
+      "manifest": "benchmark-filter-final-pipeline-manifest.json",
+      "binary": "target\\png-filter-final\\pipeline.exe",
+      "sha256": "458eca38ff711acd0908b0e73863bbbb8a9405570aabd984e803814a99ed078b"
+    },
+    {
+      "label": "selected-corpus",
+      "manifest": "benchmark-filter-final-corpus-manifest.json",
+      "binary": "target\\png-filter-final\\corpus_bench.exe",
+      "sha256": "a0fd35b3b78e5fa56c2f8a35ecad7a23332fcc62b7e9399634004a2360809805"
+    },
+    {
+      "label": "before-pipeline",
+      "manifest": "benchmark-huffman-call-split-trial-pipeline-manifest.json",
+      "binary": "target\\png-huffman-call-selected\\pipeline.exe",
+      "sha256": "ad9894cc5e5769cac01de0ed209402dba29001d72efb0b45604aa58ad43fbad4"
+    },
+    {
+      "label": "before-corpus",
+      "manifest": "benchmark-huffman-call-split-trial-corpus-manifest.json",
+      "binary": "target\\png-huffman-call-selected\\corpus_bench.exe",
+      "sha256": "c139a42ef08a6a5ae37bc815dc7874703fed9d660f07f3b844193d706c3fa5c0"
+    },
+    {
+      "label": "split-encoder-filter",
+      "manifest": "benchmark-filter-split-encoder-trial-manifest.json",
+      "binary": "target\\png-filter-split-encoder-trial\\filter_bench.exe",
+      "sha256": "ade6caeeef047230b84696bc891c9604ffb6a7b3cabdb44c50ff14ffeb0d6607"
+    },
+    {
+      "label": "split-encoder-pipeline",
+      "manifest": "benchmark-filter-split-encoder-pipeline-manifest.json",
+      "binary": "target\\png-filter-split-encoder-trial\\pipeline.exe",
+      "sha256": "60e7595176efbb965404d93176bba7090708e27ed356b3847c8366722ee1ebfb"
+    },
+    {
+      "label": "split-encoder-corpus",
+      "manifest": "benchmark-filter-selected-corpus-manifest.json",
+      "binary": "target\\png-filter-split-encoder-trial\\corpus_bench.exe",
+      "sha256": "841e4b179bb152ec823d8d367004946f6ff6e35052c23b525d3598a9bac05d13"
+    }
+  ],
+  "saved_control_manifests_and_runner_hashes_verified": 24,
+  "comparative_timing_processes": 45,
+  "scope": "Independent benchmark smoke output is excluded. Raw final/interleave-final filenames identify hybrid; later selected-* filenames identify the rejected split-encoder experiment."
+}

@@ -1,0 +1,12 @@
+{
+  "baseline_png_commit": "8c5713343",
+  "variant": "hybrid",
+  "reverse_patch": "filter-hybrid-before.patch",
+  "reverse_patch_sha256": "8c3cd9922c600efb5462d8ed0b66d23e7b68cf654905fab52d890d370c6b5844",
+  "source": "src/scanline.rs",
+  "before_sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3",
+  "candidate_sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e",
+  "reverse_patch_exact_reconstruction_verified": true,
+  "retained_reconstruction": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\deadlib-png-filter-checkpoint-4p35hqie",
+  "selection_role": "Selected: fixed pixel loops except scalar two-byte recurrence, shared regional predictor"
+}

@@ -364,3 +364,99 @@ the twelve optional checks), strict main/fuzz linting, strict-window zlib and
 compatibility Huffman C audits, and the isolated offline 102-test run. Fresh
 ASan campaigns add 80,000 successful executions across four targets; exact
 source/corpus/binary hashes and logs are in `fuzz/reports/huffman-call-source.json`.
+
+## Byte-stride filter reconstruction
+
+The next profile attributed 22.35% of photo decode cycles to unfiltering. The
+selected change rewrites the Paeth predictor as equivalent minimum/maximum
+regions using a signed 16-bit threshold. All 16,777,216 byte triplets match an
+independent implementation of the [Third Edition predictor](https://www.w3.org/TR/2025/REC-png-3-20250624/#9Filter-type-4-Paeth),
+including ties. Another 2,550 row cases independently verify filtered bytes,
+adaptive scores and reconstruction across all six byte strides, all five filter
+types, short rows and first-row boundaries; 251 invalid filter bytes retain the
+original error without changing the row.
+
+Average and Paeth reconstruction use fixed-size pixel arrays, carrying the
+previous pixel and its upper neighbor in registers. Two-byte pixels retain the
+measured faster scalar recurrence. There are no new allocations, explicit
+intrinsics or unsafe blocks. The inspected Linux executable contains packed
+byte minima/maxima and word arithmetic in `unfilter`, demonstrating compiler
+SIMD for the regional predictor. Commands, binary hashes, disassembly and
+instruction counts are in `profiling/filter-selected-assembly.*`. The final
+cycle profile in `profiling/decode-filter-selected.*` attributes 11.89% to
+unfiltering and 66.47% to `decompress_prefix`, with no lost samples. These are
+sampling shares, not isolated kernel timing or a portable speed guarantee.
+
+`examples/filter_bench.rs` constructs 80 independent 513x257 inputs: eight
+8-/16-bit formats, gradient/noise samples and every filter. The eight formats
+cover all six byte strides. It applies the normative predictor independently,
+uses test-only flate2 stored DEFLATE and CRCs, and checks both native decoding
+paths and Rust png against the original bytes/samples before timing. Stored
+DEFLATE emphasizes filtering while retaining PNG parsing, CRCs, copies and
+allocation costs. Native output retains U8/U16 samples; Rust png's benchmark
+output retains its normal wire bytes, including big-endian 16-bit values.
+Sub-byte and Adam7 cases remain covered by the independent conformance suite.
+
+The baseline and `scalar-trial`, `pixels-trial`, `hybrid-trial` and
+`split-encoder-trial` groups each have three repetitions. The selected hybrid
+combines fixed-stride loops with the scalar two-byte path. A subsequent
+split-encoder experiment restored the original predictor for encoding; it did
+not consistently remove the encoding slowdown or establish a broad benefit,
+so the simpler shared predictor is retained. Exact reverse patches and source
+hashes for all four variants are in `experiments/filter-*-checkpoints.json`.
+Each patch reconstructs the exact `8c5713343` native source, with the same new
+benchmark harness left in place.
+
+The selected saved binaries were measured in before/after/after/before order
+for the filter, synthetic and photo targets. Each process has three warmups per
+operation and logical CPU 0 affinity. The filter/synthetic runs use twenty
+iterations and photos use five, with two process repetitions per implementation.
+Rates divide total sample bytes by the sum of per-case medians of run-average
+nanoseconds. The following table uses those selected interleaved groups:
+
+| Operation, MiB/s | Saved baseline | Selected hybrid |
+| --- | ---: | ---: |
+| Stored-DEFLATE filter matrix, native decode | 270.88 | 346.36 |
+| Stored-DEFLATE filter matrix, Rust png | 1183.68 | 1139.68 |
+| Photo native PNG decode | 97.19 | 109.49 |
+| Photo native PNG reader | 79.71 | 87.31 |
+| Photo Rust png decode | 225.08 | 226.46 |
+| Synthetic native PNG decode | 259.69 | 305.42 |
+| Synthetic Rust png decode | 941.20 | 948.89 |
+| Photo native encode | 28.28 | 29.34 |
+| Synthetic native encode | 48.49 | 44.46 |
+
+Relative to the reference timings, these groups suggest approximately 33%
+better filter-matrix decoding, 12% better photo decoding, 9% better photo reader
+decoding and 17% better synthetic decoding. **Synthetic encoding regresses**:
+buffered encoding is about 10% slower relative to the reference, and writer
+paths about 5% slower. Photo encoding suggests a small gain or nearly flat
+throughput, depending on the path. Restoring the original encoder predictor
+did not consistently fix the synthetic loss. Native raw inflation also moves
+between binaries despite unchanged inflation source, showing why these local
+shared-host comparisons cannot isolate causes or establish broad parity.
+CPU frequency, other workloads and linker/code-generation effects are not
+controlled. Encoding/compression ratio and the remaining decoder gap stay open;
+Rust png is still over twice as fast on the photos in this table.
+
+All raw artifacts are retained. Historical `final-*` / `interleave-final*`
+filenames refer to the selected hybrid; later `selected-*` filenames refer to
+the rejected split-encoder experiment. `scripts/summarize_filters.py` makes the
+selection explicit with `selected_variant: hybrid`, separates both interleaved
+comparisons, and reproduces all rates, per-filter/format partitions, hashes and
+case/encoded-size/sample-size/pipeline-capacity invariants. Comparative timing and sampling
+finished before the final validation and sanitizer campaigns started.
+
+```powershell
+./crates/deadlib-image/png/scripts/benchmark_pipeline.ps1 -Target filter -LogPrefix ./target/filter-current -Iterations 10 -Runs 3 -Cpu 0
+python crates/deadlib-image/png/scripts/summarize_filters.py
+```
+
+Final evidence in `filter-validation.log` / `.json` records 117 release tests,
+strict main/fuzz linting, strict-window/compatibility C audits, scoped formatting
+and the isolated offline 105-test run. The isolated copy also builds and runs
+`cargo run -p deadlib-image-png --offline --release --example filter_bench`,
+checking all 80 fixtures. Its one-iteration smoke output is excluded from the
+comparative timing data. Fresh ASan campaigns add 80,000 successful executions
+across structured encoding, PNG streaming and buffered decoding; source, corpus,
+binary hashes and logs are in `fuzz/reports/filter-source.json`.
