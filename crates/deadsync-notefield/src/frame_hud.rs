@@ -231,7 +231,7 @@ pub fn compose_notefield_hud<S>(
                 position: request.options.mini_indicator_position,
                 counter_left: request.options.counter_left,
                 playfield_center_x: prepared.field.playfield_center_x,
-                field_zoom: prepared.field_zoom,
+                column_width: zmod_hud_column_width(prepared.frame_plan.num_cols),
                 layout_add_x: layout.subtractive_scoring_addx,
                 y: layout.subtractive_scoring_y,
                 zoom: request.options.mini_indicator_zoom,

@@ -7,7 +7,6 @@ use deadlib_present::actors::{
 };
 use deadlib_present::dsl::TextBuilder;
 use deadlib_render_core::BlendMode;
-use deadsync_rules::scroll::ScrollSpeedSetting;
 use deadsync_rules::stream::StreamSegment;
 use deadsync_theme::{CounterHudStyle, MiniIndicatorStyle};
 
@@ -394,7 +393,7 @@ pub(crate) struct MiniIndicatorRequest {
     pub position: LayoutMiniIndicatorPosition,
     pub counter_left: bool,
     pub playfield_center_x: f32,
-    pub field_zoom: f32,
+    pub column_width: f32,
     pub layout_add_x: f32,
     pub y: f32,
     pub zoom: f32,
@@ -417,8 +416,9 @@ pub(crate) fn compose_mini_indicator(
     } else {
         request.color
     };
-    let column_width = ScrollSpeedSetting::ARROW_SPACING * request.field_zoom;
-    let mut x = column_width.mul_add(request.style.column_offset, request.playfield_center_x);
+    let mut x = request
+        .column_width
+        .mul_add(request.style.column_offset, request.playfield_center_x);
     if request.position == LayoutMiniIndicatorPosition::UnderUpArrow {
         x += request.style.under_up_x_offset + request.layout_add_x;
     }
@@ -900,7 +900,7 @@ mod tests {
                 position: LayoutMiniIndicatorPosition::UnderUpArrow,
                 counter_left: false,
                 playfield_center_x: 320.0,
-                field_zoom: 1.0,
+                column_width: 64.0,
                 layout_add_x: -10.0,
                 y: 200.0,
                 zoom: 0.4,
@@ -947,7 +947,7 @@ mod tests {
                 position: LayoutMiniIndicatorPosition::UnderUpArrow,
                 counter_left: false,
                 playfield_center_x: 320.0,
-                field_zoom: 1.0,
+                column_width: 64.0,
                 layout_add_x: -10.0,
                 y: 200.0,
                 zoom: 0.4,
