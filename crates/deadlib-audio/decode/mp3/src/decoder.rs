@@ -27,6 +27,7 @@ pub struct Pcm<'a> {
     data: &'a [f32],
     channels: usize,
     samples: usize,
+    stride: usize,
 }
 impl<'a> Pcm<'a> {
     pub fn channels(self) -> usize {
@@ -39,11 +40,11 @@ impl<'a> Pcm<'a> {
         if channel >= self.channels {
             None
         } else {
-            Some(&self.data[channel * self.samples..(channel + 1) * self.samples])
+            Some(&self.data[channel * self.stride..channel * self.stride + self.samples])
         }
     }
-    pub fn planes(self) -> std::slice::ChunksExact<'a, f32> {
-        self.data.chunks_exact(self.samples)
+    pub fn planes(self) -> impl ExactSizeIterator<Item = &'a [f32]> + DoubleEndedIterator {
+        (0..self.channels).map(move |channel| self.plane(channel).unwrap())
     }
 }
 pub struct DecodedFrame<'a> {
@@ -66,6 +67,7 @@ pub struct FrameDecoder {
     subbands: [f64; 576],
     output: [f32; 2304],
     failed: bool,
+    payload_consumed: bool,
 }
 impl Default for FrameDecoder {
     fn default() -> Self {
@@ -87,6 +89,7 @@ impl FrameDecoder {
             subbands: [0.0; 576],
             output: [0.0; 2304],
             failed: false,
+            payload_consumed: false,
         }
     }
     fn reset_dsp(&mut self) {
@@ -101,6 +104,7 @@ impl FrameDecoder {
         self.reservoir.clear();
         self.reset_dsp();
         self.failed = false;
+        self.payload_consumed = false;
     }
     pub fn decode<'a>(
         &'a mut self,
@@ -114,11 +118,7 @@ impl FrameDecoder {
             Ok((header, bytes)) => Ok(DecodedFrame {
                 header,
                 bytes,
-                pcm: Pcm {
-                    data: &self.output[..header.samples() * header.channels()],
-                    channels: header.channels(),
-                    samples: header.samples(),
-                },
+                pcm: self.pcm(header),
             }),
             Err(error) => {
                 match error {
@@ -130,11 +130,30 @@ impl FrameDecoder {
             }
         }
     }
+    pub(crate) fn pcm(&self, header: FrameHeader) -> Pcm<'_> {
+        Pcm {
+            data: &self.output[..header.samples() * header.channels()],
+            channels: header.channels(),
+            samples: header.samples(),
+            stride: header.samples(),
+        }
+    }
+    pub(crate) fn conceal(&mut self, payload: &[u8]) -> Result<(), Error> {
+        self.reset_dsp();
+        self.failed = false;
+        if !self.payload_consumed {
+            self.reservoir.push(0, payload, 0)?;
+            self.payload_consumed = true;
+        }
+        self.output.fill(0.0);
+        Ok(())
+    }
     fn decode_inner(
         &mut self,
         data: &[u8],
         free: Option<FreeFormat>,
     ) -> Result<(FrameHeader, usize), Error> {
+        self.payload_consumed = false;
         let frame = Frame::parse(data, free, self.options.verify_crc, self.options.limits)?;
         self.decode_complete(&frame).map_err(|error| match error {
             Error::Truncated => Error::Invalid("truncated main data in complete frame"),
@@ -148,6 +167,9 @@ impl FrameDecoder {
             return Err(Error::Unsupported("MPEG-2.5 disabled"));
         }
         let bands = Bands::for_rate(header.sample_rate())?;
+        // Missing/truncated main data still retains the physical payload.
+        // Allocation/limit failures are fatal and are never concealed.
+        self.payload_consumed = true;
         let main = self.reservoir.push(
             frame.side_info.main_data_begin as usize,
             frame.main_data,

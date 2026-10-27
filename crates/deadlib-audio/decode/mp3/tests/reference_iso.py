@@ -12,6 +12,7 @@ from reference_pcm import frames
 def main():
     p=argparse.ArgumentParser()
     for name in ['native','corpus','output']:p.add_argument('--'+name,type=Path,required=True)
+    p.add_argument('--stream-chunk',type=int,help='use the streaming CLI with explicit recovery and final-frame discard')
     args=p.parse_args();args.output.mkdir(parents=True,exist_ok=False)
     limits={'rms':2**-15/math.sqrt(3),'max':2**-14}
     full_rms=2**-15/math.sqrt(12)
@@ -21,7 +22,7 @@ def main():
         reference_path=source.with_suffix('.pcm')
         if not reference_path.exists():continue
         target=args.output/(source.stem+'.bin')
-        command=[str(args.native.resolve()),'native',str(source.resolve()),str(target.resolve())]
+        command=[str(args.native.resolve()),'native',str(source.resolve()),str(target.resolve())] if args.stream_chunk is None else [str(args.native.resolve()),str(source.resolve()),str(target.resolve()),str(args.stream_chunk),'recover','discard']
         run=subprocess.run(command,capture_output=True,text=True)
         record={'case':source.name,'command':command,'exit_code':run.returncode,'stderr':run.stderr,
                 'input_sha256':hashlib.sha256(source.read_bytes()).hexdigest(),

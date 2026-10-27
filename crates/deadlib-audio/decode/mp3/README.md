@@ -18,7 +18,10 @@ count. It retains reservoir, hybrid overlap and synthesis history across calls.
 incomplete frame can be retried without consuming state; ordinary decode errors
 require `reset()`. Missing-reservoir errors retain payload for later recovery.
 
-File/streaming APIs, gapless trimming, seeking and encoding remain unfinished.
+`PacketReader<R: Read>` and `StreamDecoder<R: Read>` now read files and blocking
+streams, retaining metadata and exact raw byte/sample coordinates. Recovery and
+truncation are explicit policies; [STREAMING.md](STREAMING.md) documents them.
+Gapless trimming, seeking and encoding remain unfinished.
 No complete standards-conformance or performance-completion claim is made.
 See [PLAN.md](PLAN.md) for the full requested scope and verification gates.
 The foundation's eight tests and 84-file/732-frame libmad comparison are recorded

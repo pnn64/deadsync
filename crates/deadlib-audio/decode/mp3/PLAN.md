@@ -56,9 +56,12 @@ now pass a 2,880-frame all-frequency libmad comparison; see SYNTHESIS.md.
 Raw spectral decoding and framed PCM composition are implemented. The raw gate
 includes 84 generated files, 18 pinned legacy Layer III vector/PCM pairs, and
 seven all-frequency window shapes. See RAW_PCM.md for exact criteria, reference
-disagreements and remaining limits. Native file/streaming APIs, gapless sample
-mapping, seeking, adversarial campaigns, encoding and measured optimization
-remain required. The MPEG-2.5 8 kHz mixed-block disagreement is still open.
+disagreements and remaining limits. Read-backed raw packet/file/stream decoding
+now passes exact PCM/coordinate checks on nine read schedules for all 84 files
+and the 18 legacy PCM fixtures with one-byte reads; see STREAMING.md. Gapless
+sample mapping, seeking, adversarial campaigns, encoding and measured
+optimization remain required. The MPEG-2.5 8 kHz mixed-block disagreement is
+still open.
 
 ## Source material
 
