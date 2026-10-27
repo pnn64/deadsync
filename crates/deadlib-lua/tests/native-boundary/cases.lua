@@ -1448,3 +1448,43 @@ do
   assert(boundary_thread_status(nil)==nil)
   print('native-thread-complete',#all)
 end
+
+do
+  local function pointer(value,visit)
+    local p,stable,delta,formatted,compatible=boundary_pointer(value,visit)
+    assert(stable and delta==0 and compatible)
+    return p,formatted
+  end
+  local null=pointer(nil)
+  for _,value in ipairs{false,true,0,17,'bytes'}do assert(pointer(value)==null)end
+  local objects={{},{},function()end,function()end,print,ipairs,newproxy(),newproxy(),coroutine.create(function()end)}
+  local pointers={}
+  for _,value in ipairs(objects)do
+    local p,formatted=pointer(value,function()collectgarbage()end)
+    assert(p~=null and not pointers[p]);pointers[p]=true
+    assert(tostring(value)==type(value)..': '..formatted)
+    assert(pointer(p)==p and tostring(p)=='userdata: '..formatted)
+  end
+  local main=boundary_thread()
+  assert(pointer(main)==boundary_state())
+  assert(pointer(main)==boundary_thread_pointer(main))
+  local co=objects[#objects]
+  assert(pointer(co)==boundary_thread_pointer(co))
+  local ok=coroutine.resume(co);assert(ok)
+  assert(pointer(co)==boundary_thread_pointer(co))
+  local table_value={};local p=pointer(table_value)
+  setmetatable(table_value,{__tostring=function()return 'custom' end})
+  assert(tostring(table_value)=='custom' and pointer(table_value)==p)
+  local equal=0
+  local mt={__eq=function()equal=equal+1;return true end}
+  local a,b=setmetatable({},mt),setmetatable({},mt)
+  assert(a==b and pointer(a)~=pointer(b) and equal==1)
+  local weak=setmetatable({},{__mode='v'})
+  do local t={};weak[1]=t;local opaque=pointer(t);assert(type(opaque)=='userdata')end
+  collectgarbage();assert(weak[1]==nil)
+  local live={}
+  for i=1,1000 do live[i]={};local p=pointer(live[i]);assert(not pointers[p]);pointers[p]=true end
+  collectgarbage();for i=1,#live do assert(pointers[pointer(live[i])])end
+  local p,formatted=pointer(null);assert(p==null and tostring(null)=='userdata: '..formatted)
+  print('native-pointer-complete',#objects,#live)
+end

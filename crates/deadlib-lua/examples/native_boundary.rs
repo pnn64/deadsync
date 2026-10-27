@@ -51,7 +51,7 @@ mod windows {
         *mut c_void,
         *mut BoundaryValue,
     ) -> c_int;
-    type NewState = unsafe extern "C" fn() -> *mut c_void;
+    type NewState = unsafe extern "C" fn(*mut c_void) -> *mut c_void;
     type FreeState = unsafe extern "C" fn(*mut c_void) -> c_int;
     #[link(name = "kernel32")]
     unsafe extern "system" {
@@ -123,8 +123,8 @@ mod windows {
                     .remove(&self.state)
                     .is_some()
             );
-            // SAFETY: thread ownership outlives every active invocation; the Arc
-            // keeps the allocating DLL loaded until its matching free returns.
+            // SAFETY: the VM-owned opaque token remains live through this drop;
+            // the boundary verifies that no C frame still borrows the handle.
             let freed = unsafe { (self.bridge.free_state)(self.state as *mut c_void) };
             assert_eq!(freed, 1, "C state was still executing during destruction");
             DESTROYED.fetch_add(1, Ordering::Relaxed);
@@ -144,8 +144,12 @@ mod windows {
             assert!(Arc::ptr_eq(&owner.bridge, bridge));
             return Ok(owner.state);
         }
-        // SAFETY: the fixture constructor creates one idle heap-owned C state.
-        let state = unsafe { (bridge.new_state)() } as usize;
+        let identity = stack
+            .object_pointer(Value::Thread(thread))
+            .ok_or_else(|| stack.error(b"invalid Lua thread"))?;
+        // SAFETY: this aligned VM-owned identity outlives the thread resource.
+        // C treats it as an opaque key, never as a dereferenceable state layout.
+        let state = unsafe { (bridge.new_state)(identity as *mut c_void) } as usize;
         if state == 0 {
             return Err(stack.error(b"cannot allocate boundary state"));
         }
@@ -192,6 +196,12 @@ mod windows {
             value: &mut BoundaryValue,
         ) -> Result<(), Error> {
             match op {
+                54 => {
+                    value.userdata = self
+                        .stack
+                        .to_pointer(a as isize)
+                        .map_or(std::ptr::null_mut(), |p| p as *mut c_void)
+                }
                 51 => {
                     value.userdata = match self.stack.to_thread(a as isize) {
                         Some(thread) => state_for(self.stack, &self.bridge, thread)? as *mut c_void,
@@ -705,6 +715,7 @@ mod windows {
             "boundary_thread_status",
             "boundary_thread_pointer",
             "boundary_thread_capture",
+            "boundary_pointer",
             "boundary_cpcall",
         ] {
             let function = vm

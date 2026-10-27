@@ -115,6 +115,17 @@ impl NativeStack<'_, '_> {
     pub fn top(&self) -> usize {
         self.call.results
     }
+    /// Read an indexed object's stable opaque pointer; strings/scalars yield None.
+    /// The pointer does not retain the object and must not be dereferenced.
+    pub fn to_pointer(&mut self, index: isize) -> Option<usize> {
+        let value = self.value(index)?;
+        self.call.vm.object_pointer(value)
+    }
+    /// Get an opaque pointer identity for a live VM-owned value without pushing it.
+    /// This has the lifetime and type rules of [`Vm::object_pointer`].
+    pub fn object_pointer(&mut self, value: Value) -> Option<usize> {
+        self.call.vm.object_pointer(value)
+    }
     /// Read a stack value or Lua 5.1 pseudo-index. Absent indexes return None.
     pub fn value(&self, index: isize) -> Option<Value> {
         match index {

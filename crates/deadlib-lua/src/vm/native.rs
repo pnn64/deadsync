@@ -541,28 +541,14 @@ impl Vm {
             Value::Number(n) => self.intern(format_number(n).as_slice()),
             Value::Nil => self.intern(b"nil"),
             Value::Boolean(b) => self.intern(if b { b"true" } else { b"false" }),
-            Value::Table(id) => self.intern(format!("table: 0x{:x}", id.0).as_bytes()),
-            Value::Function(id) => {
-                self.intern(format!("function: 0x{:x}", u128::from(id.0) << 1).as_bytes())
-            }
-            Value::Native(id) => {
-                self.intern(format!("function: 0x{:x}", (u128::from(id) << 1) | 1).as_bytes())
-            }
-            Value::Thread(id) => self.intern(format!("thread: 0x{:x}", id.0).as_bytes()),
-            Value::Userdata(id) => self.intern(format!("userdata: 0x{:x}", id.0).as_bytes()),
-            Value::LightUserdata(id) => {
-                #[cfg(all(windows, target_env = "msvc"))]
-                let text = format!(
-                    "userdata: {id:0width$X}",
-                    width = std::mem::size_of::<usize>() * 2
-                );
-                #[cfg(not(all(windows, target_env = "msvc")))]
-                let text = if cfg!(target_os = "linux") && id == 0 {
-                    "userdata: (nil)".to_owned()
-                } else {
-                    format!("userdata: 0x{id:x}")
-                };
-                self.intern(text.as_bytes())
+            _ => {
+                let pointer = self
+                    .object_pointer(value)
+                    .expect("live object has an identity");
+                self.intern(
+                    format!("{}: {}", value.type_name(), identity::pointer_text(pointer))
+                        .as_bytes(),
+                )
             }
         }
     }

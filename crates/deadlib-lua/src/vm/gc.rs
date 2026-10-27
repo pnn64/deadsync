@@ -505,6 +505,9 @@ impl Vm {
             + self.sorts.capacity() * std::mem::size_of::<tables::Sort>();
         control += loads::storage_bytes(&self.loads);
         control += self.tracebacks.capacity() * std::mem::size_of::<traces::Traceback>();
+        control += self.object_pointers.capacity()
+            * (std::mem::size_of::<((u8, u64), Box<usize>)>() + 1)
+            + self.object_pointers.len() * std::mem::size_of::<usize>();
         for (_, t) in self.threads.entries() {
             control += t.registers.capacity() * std::mem::size_of::<Value>()
                 + t.frames.capacity() * std::mem::size_of::<Frame>()
@@ -1188,6 +1191,7 @@ impl Vm {
             return;
         }
         self.strings.rebuild();
+        self.prune_object_pointers();
         self.patterns
             .retain(|(id, _), _| self.strings.bytes.contains(id.0));
         self.native_envs.retain(|id, _| {

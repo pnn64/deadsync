@@ -742,3 +742,17 @@ static int thread_capture(lua_State *L) {
 EXPORT int boundary_thread_capture(lua_State *L) {
   lua_pushvalue(L,1);lua_pushcclosure(L,thread_capture,1);return 1;
 }
+EXPORT int boundary_pointer(lua_State *L) {
+  const void *pointer=lua_topointer(L,1),*again;
+  int before=lua_gettop(L);
+  char formatted[80];
+  if(lua_type(L,2)==6){lua_pushvalue(L,2);lua_call(L,0,0);}
+  again=lua_topointer(L,1);
+  lua_pushlightuserdata(L,(void *)pointer);lua_pushboolean(L,pointer==again);
+  lua_pushinteger(L,lua_gettop(L)-before-2);
+  sprintf(formatted,"%p",pointer);lua_pushstring(L,formatted);
+  if(lua_type(L,1)==7 || lua_type(L,1)==2)lua_pushboolean(L,pointer==lua_touserdata(L,1));
+  else if(lua_type(L,1)==8)lua_pushboolean(L,pointer==lua_tothread(L,1));
+  else lua_pushboolean(L,1);
+  return 5;
+}

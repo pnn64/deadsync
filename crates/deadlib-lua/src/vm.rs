@@ -13,6 +13,7 @@ mod errors;
 mod gc;
 mod hooks;
 mod host;
+mod identity;
 mod io;
 mod limits;
 mod loads;
@@ -386,6 +387,7 @@ pub struct Vm {
     gc: gc::Collector,
     roots: Arena<Value>,
     identity: u64,
+    object_pointers: HashMap<(u8, u64), Box<usize>>,
     loads: Vec<loads::Loading>,
     tracebacks: Vec<traces::Traceback>,
     hooks: hooks::Hooks,
@@ -445,6 +447,7 @@ impl Vm {
             gc: gc::Collector::default(),
             roots: Arena::default(),
             identity: gc::new_vm_identity(),
+            object_pointers: HashMap::new(),
             loads: Vec::new(),
             tracebacks: Vec::new(),
             hooks: hooks::Hooks::default(),

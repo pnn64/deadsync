@@ -287,6 +287,20 @@ self cycles, VM moves, collected IDs and quota cancellation. Inactive C stack
 mutation, C coroutine creation/resume/yield, allocator/OOM statuses and the other
 full Lua 5.1 gates remain unfinished. Optimization remains deferred.
 
+The [native pointer checks](testing/2026-10-27-rust-lua-native-pointer.md) add
+`lua_topointer` and shared stable object identities. Tables, Lua/native functions
+and threads receive lazily owned pointer-aligned tokens; userdata returns its
+actual aligned payload and light userdata its unmanaged address. Tokens do not
+retain Lua objects and are pruned after collection. Default object strings use
+the same native pointer formatting and address as the pointer APIs. C thread
+handles now use the thread token; C-only error frames live in a TLS chain rather
+than dereferencing an assumed state layout. The C fixture verifies identity,
+thread/payload agreement, default-string relationships, weak lifetimes and a
+thousand live objects. Rust tests cover VM moves, cross-VM uniqueness, stale
+handles, resurrection, native formatting and token reclamation. Complete C API,
+allocator/OOM, parser scratch and standalone Lua 5.1 gates remain open;
+optimization stays deferred.
+
 The [standalone suite checks](testing/2026-10-27-rust-lua-full-suite.md) invoke
 the real CLIs with the official README's `LUA_PATH="?;./?.lua"` setup. Each run
 gets unchanged suite files and a private `lua` executable on PATH, so child

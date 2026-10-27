@@ -12,38 +12,40 @@ typedef struct BoundaryFrame {
   jmp_buf failure;
   struct BoundaryFrame *previous;
   lua_State *previous_active;
+  lua_State *state;
 } BoundaryFrame;
 struct lua_State {
-  BoundaryFrame *frame;
+  size_t opaque_identity;
 };
 static __declspec(thread) lua_State *active_state;
+static __declspec(thread) BoundaryFrame *active_frame;
 
 API int boundary_read(lua_State *L, void *context, BoundaryDispatch dispatch, lua_Reader reader, void *data, BoundaryValue *result) {
   BoundaryFrame frame;
-  frame.context=context;frame.dispatch=dispatch;frame.previous=L->frame;frame.previous_active=active_state;
-  L->frame=&frame;active_state=L;
+  frame.context=context;frame.dispatch=dispatch;frame.previous=active_frame;frame.previous_active=active_state;frame.state=L;
+  active_frame=&frame;active_state=L;
   if (setjmp(frame.failure)) {
-    L->frame=frame.previous;active_state=frame.previous_active;return -1;
+    active_frame=frame.previous;active_state=frame.previous_active;return -1;
   }
   result->length=0;
   result->bytes=reader(L,data,&result->length);
-  L->frame=frame.previous;active_state=frame.previous_active;
+  active_frame=frame.previous;active_state=frame.previous_active;
   return 0;
 }
 API int boundary_write(lua_State *L, void *context, BoundaryDispatch dispatch, lua_Writer writer, void *data, const void *bytes, size_t length, BoundaryValue *result) {
   BoundaryFrame frame;
-  frame.context=context;frame.dispatch=dispatch;frame.previous=L->frame;frame.previous_active=active_state;
-  L->frame=&frame;active_state=L;
+  frame.context=context;frame.dispatch=dispatch;frame.previous=active_frame;frame.previous_active=active_state;frame.state=L;
+  active_frame=&frame;active_state=L;
   if (setjmp(frame.failure)) {
-    L->frame=frame.previous;active_state=frame.previous_active;return -1;
+    active_frame=frame.previous;active_state=frame.previous_active;return -1;
   }
   result->integer=writer(L,bytes,length,data);
-  L->frame=frame.previous;active_state=frame.previous_active;return 0;
+  active_frame=frame.previous;active_state=frame.previous_active;return 0;
 }
 
 static void operation(lua_State *L, int op, int a, int b, BoundaryValue *value) {
   /* dispatch has returned, releasing every Rust borrow/local, before jumping. */
-  BoundaryFrame *frame = L->frame;
+  BoundaryFrame *frame = active_frame;
   if (!frame || active_state != L) abort(); /* Other/inactive-thread API access remains work. */
   if (frame->dispatch(frame->context, op, a, b, value)) longjmp(frame->failure, 1);
 }
@@ -66,6 +68,9 @@ API int lua_status(lua_State *L) {
   /* Readonly status queries route through the active callback, even when L is
      inactive. Other inactive-state API operations remain unsupported. */
   operation(active_state,53,0,0,&value);return value.integer;
+}
+API const void *lua_topointer(lua_State *L, int index) {
+  BoundaryValue value={0};operation(L,54,index,0,&value);return value.userdata;
 }
 typedef struct BufferReader {const char *bytes;size_t size;} BufferReader;
 static const char *read_buffer(lua_State *L, void *data, size_t *size) {
@@ -166,30 +171,34 @@ API int lua_cpcall(lua_State *L, lua_CFunction function, void *data) {
   return lua_pcall(L, 1, 0, 0);
 }
 
-API lua_State *boundary_state_new(void) {
-  return (lua_State *)calloc(1, sizeof(lua_State));
+API lua_State *boundary_state_new(void *identity) {
+  /* The VM owns the aligned opaque identity. It is never dereferenced here. */
+  return (lua_State *)identity;
 }
-API size_t boundary_state_size(void) { return sizeof(lua_State); }
+API size_t boundary_state_size(void) { return 0; }
 API int boundary_state_free(lua_State *state) {
-  if (!state || state->frame) return 0;
-  free(state); return 1;
+  BoundaryFrame *frame;
+  if (!state) return 0;
+  for(frame=active_frame;frame;frame=frame->previous)if(frame->state==state)return 0;
+  return 1;
 }
 API int boundary_invoke(lua_State *state, void *context, BoundaryDispatch dispatch, lua_CFunction f) {
   BoundaryFrame frame;
   int count;
   frame.context = context;
   frame.dispatch = dispatch;
-  frame.previous = state->frame;
+  frame.previous = active_frame;
   frame.previous_active = active_state;
-  state->frame = &frame;
+  frame.state=state;
+  active_frame = &frame;
   active_state = state;
   if (setjmp(frame.failure)) {
-    state->frame = frame.previous;
+    active_frame = frame.previous;
     active_state = frame.previous_active;
     return -1;
   }
   count = f(state);
-  state->frame = frame.previous;
+  active_frame = frame.previous;
   active_state = frame.previous_active;
   return count;
 }
