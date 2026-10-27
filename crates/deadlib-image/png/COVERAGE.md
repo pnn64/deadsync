@@ -2019,3 +2019,22 @@ remain byte-identical to `e30aac88`; no new performance claim follows from this
 milestone. `CONFORMANCE.md` now maps all twelve decoder conditions to current
 implementation and regression evidence. Competitive decoder throughput and the
 final requirement audit remain open. Encoding is outside the completion scope.
+
+## Refilling literal-loop experiment (2026-10-28)
+
+A decoder-only candidate continues literal runs across conservative four-byte
+refills, retaining the original match, long-code, end-of-block and tail paths.
+It passes 41 focused tests with five optional C checks ignored, strict all-target
+Clippy and scoped rustfmt. Its benchmark harness additionally checks raw output
+and exact native samples against references on all 84 inputs before timing.
+
+Twenty-four timed processes compare fresh baseline/candidate binaries in ABBA
+order. Photo PNG decoding changes -1.92% relative to Rust png, while format raw
+inflation changes +6.36% relative to flate2. These results do not demonstrate an
+overall PNG benefit. The candidate is rejected; all 21 production source files
+and every recorded input to the prior validation remain unchanged. No new
+sanitizer execution or full candidate suite is claimed. `BENCHMARKS.md`, both
+`benchmark-literal-refill-*-summary.json` files and
+`experiments/literal-refill-selection.json` retain the measurement boundaries,
+source reconstruction, binary/input hashes and unchanged-control results.
+Competitive decoder performance and the final requirement audit remain open.

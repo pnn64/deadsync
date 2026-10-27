@@ -30,6 +30,8 @@ row-reuse-*.log text eol=lf
 stored-growth-*.log text eol=lf
 huffman-permutations-*.log text eol=lf
 experiments/huffman-permutations-*.log text eol=lf -whitespace
+# Preserve exact Cargo/Windows diagnostics used by this experiment's hashes.
+experiments/literal-refill-*.log -text -whitespace
 experiments/stored-growth-*.log text eol=lf -whitespace
 experiments/stored-growth-*.ps1 -text
 experiments/row-reuse-*.txt text eol=lf
