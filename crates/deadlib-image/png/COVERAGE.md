@@ -21,11 +21,11 @@ evidence, application responsibilities and explicitly open items.
 | Latin-1 text-body encoder/recovery boundary | `tests/text_body.rs`, shared encoder validator, independent stored-zlib fixtures and C named-metadata oracle | All 256 byte values across 6,144 files; strict graphic Latin-1/LF encoding, non-null decoder recovery, NBSP/long text and iTXt Unicode distinctions verified |
 | sRGB fallback metadata consistency | `tests/metadata_fields.rs` | Both encoders enforce Table 17 gAMA/cHRM values with sRGB; all 15 formats / four intents and incompatible fallback orders pass |
 | cICP code-point validity | `tests/cicp.rs`, H.273 (07/2024) | All 131,072 primaries/transfer/range combinations, all matrix/flag bytes and reserved-code fallback behavior pass |
-| APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
+| APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing/recovery tests | Exact native frames, explicit static recovery and 3,000 independent faults across all formats/layouts/roles pass; broader external rendered-frame corpus pending |
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Nine targets; 410,000 recorded successful sanitizer executions across milestones, including 60,000 with the text-body fix and dedicated target; longer campaigns and native fuzz coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Nine targets; 470,000 recorded successful sanitizer executions across milestones, including 60,000 with APNG recovery; longer campaigns and native fuzz coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -709,3 +709,87 @@ The 60,000 successful executions bring the historical successful count to
 coverage counters include harness/reference code; longer campaigns, native-only
 fuzz coverage, remaining field/APNG audits, broader external rendered-frame
 comparisons and competitive pipeline/encoder performance remain open.
+
+
+## APNG recovery with continued static validation (2026-10-27)
+
+`DecodeOptions::animation_policy` now offers `AnimationPolicy::RecoverDefault`;
+`Strict` remains the default. Recovery emits one `DecodeEvent::AnimationError`,
+retains the first fault in `Png::animation_error` / `StreamDecoder::animation_error`,
+and discards all animation frames. The static image preserves its original
+native representation. Both encoders omit the diagnostic and can write a clean
+static PNG. Valid animations produce identical strict/recovery results.
+
+```rust
+let options = deadlib_image_png::DecodeOptions {
+    animation_policy: deadlib_image_png::AnimationPolicy::RecoverDefault,
+    ..Default::default()
+};
+let png = deadlib_image_png::decode_with_options(bytes, &options)?;
+// png.image is verified; png.animation_error reports any discarded animation.
+```
+
+This implements the recovery recommendation in Third Edition 13.1 without
+silently accepting animation order errors. It is an explicit policy: static
+IDAT/framing/metadata, unknown critical chunks, resource caps and reader IO
+errors remain fatal. Recoverable APNG CRC errors are diagnosed; subsequent APNG
+payloads are skipped with bounded state. A low-level consumer must discard
+cached frames on the event and use the static image only once its own
+`ImageEnd(Default)` has been observed. Fatal later errors still allow an
+application to retain a previously verified static image, while the whole-file
+reader returns an error.
+
+The recovery slice API uses the streaming collector, avoiding a second copy of
+recovery logic. Strict slice parsing remains independent. Fault tags distinguish
+control start, frame payload, completed chunk and frame-end failure. Input-prefix
+accounting commits only container bytes; failed inflater lookahead is replayed
+through the discard/CRC path. Frame output beyond its exact filtered extent is
+classified as malformed frame data, while actual caller limits remain fatal.
+No new production dependencies were added.
+
+`tests/apng_recovery.rs` and independent stored-zlib/CRC/Adam7 fixtures check
+60 valid format/interlace/default-role combinations against literal native
+images and Rust png frames, plus 3,000 malformed animation files. They cover
+control lengths/counts/plays, sequence gaps/range, rectangles (including smaller
+illegal default-frame rectangles), disposal/blend values, missing/duplicate/
+misplaced chunks, bad frame zlib/Adler/filter/output length, APNG CRCs and
+multiple failures. Whole slice, one-/seven-byte reader and one-/seven-/whole-file
+push paths preserve exact static samples/metadata and report one first error.
+
+Additional checks cover all 120 control/data permutations, all truncations of
+a damaged animation, empty and byte-split fdAT data with CRC failures in either
+part, bounded 64 KiB discarded chunks, IO failures, prefix parsing, trailing
+data, diagnostic-free reencoding, palette-policy interactions and fatal resource/
+static faults. The 120-permutation fixture keeps core structure legal; moving
+IDAT can move text from before to after the data, and the expected metadata
+positions are derived from that actual static wire order.
+
+The pinned C oracle returns exact static native pixels for 2,880 fixtures and
+rejects 240 APNG CRC failures. Native recovery deliberately handles the latter
+with an explicit diagnostic; it does not weaken static PNG CRCs. The previous
+1,061-file C native-pixel matrix also passes.
+
+Release and independent offline runs each pass 96 tests, with ten optional C
+tests ignored. Both relevant C tests pass separately, as do main and fuzz
+all-target Clippy with warnings denied. The isolated production dependency tree
+contains only `deadlib-image`. Exact commands and source/oracle hashes are in
+`apng-recovery-validation.log` / `.json` and `independent-build.log`.
+
+The seed generator adds 3,060 independent valid/fault APNG files to each PNG
+corpus. Each fresh PNG corpus now has 9,351 files / 2,316,164 bytes, with a
+63,435-byte largest file. `png_stream` checks three configurations per input:
+repaired CRCs with strict animation handling, repaired CRCs with recovery, and
+original CRCs with recovery. Successful recovered images must equal independent
+strict buffered decoding after stripping only the APNG chunks. Indexed policy
+selection uses input-length parity so both policies are reached with an intact
+PNG signature. These three checks count as one libFuzzer input execution.
+
+Fresh Linux ASan campaigns each complete 20,000 executions: `png_stream` in 21
+fuzzing seconds / 461 MiB peak RSS, `decode` in 3 seconds / 388 MiB, and
+`encode_stream` in 89 seconds / 414 MiB. Each binary defines the ASan runtime
+entry. Source, fresh-corpus and instrumented-binary hashes are recorded in
+`fuzz/reports/apng-recovery-source.json`; all three full target logs are retained.
+The 60,000 new successful input executions bring the historical count to
+470,000. This is smoke evidence; longer campaigns, native-only coverage, broader
+external rendered APNG comparisons, remaining metadata field/order audits and
+competitive pipeline/encoder performance remain open.

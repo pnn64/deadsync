@@ -1,0 +1,608 @@
+COMMAND: ["cargo", "test", "-p", "deadlib-image", "-p", "deadlib-image-png", "--release"]
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 30.86s
+     Running unittests src\lib.rs (target\release\deps\deadlib_image-a6b3617dc1e77064.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\release\deps\deadlib_image_png-e217eeb2c3bd0973.exe)
+
+running 6 tests
+test checksum::tests::known_checksums ... ok
+test zlib::matcher::tests::bounded_history_chains_and_wrapping_head_positions ... ok
+test zlib::tests::every_length_and_distance_code_matches_rfc1951_tables ... ok
+test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
+test checksum::tests::adler_block_and_modulus_boundaries ... ok
+test zlib::matcher::tests::every_prefix_mismatch_and_tail ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\apng.rs (target\release\deps\apng-77c0bbcbea7889e9.exe)
+
+running 4 tests
+test malformed_animation_controls_and_aggregate_limits ... ok
+test decode_independent_reference_apng ... ok
+test independent_twenty_frame_fixture ... ok
+test all_formats_apng_default_roles_and_interlace ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests\apng_recovery.rs (target\release\deps\apng_recovery-d2c2d3b61989e332.exe)
+
+running 7 tests
+test libpng_static_fallback_known_answers_and_crc_policy ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test recovery_never_accepts_bad_core_png_or_bypasses_limits ... ok
+test palette_strictness_keeps_static_and_animation_errors_distinct ... ok
+test discarded_large_chunks_stay_bounded_and_report_only_the_first_fault ... ok
+test animation_chunk_permutations_and_reencoding_clear_diagnostics ... ok
+test all_truncations_io_errors_and_multiple_fdat_boundaries ... ok
+test independent_valid_animation_and_recovered_static_samples_all_formats ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+     Running tests\chunks.rs (target\release\deps\chunks-15218bf4cdb85b68.exe)
+
+running 7 tests
+test libpng_unknown_chunk_and_core_order_comparison ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test unknown_stream_events_and_fused_critical_errors ... ok
+test reencoding_obeys_copy_bits_and_preserves_placement ... ok
+test chunk_lengths_crc_alignment_and_encoder_name_validation ... ok
+test all_core_chunk_permutations_and_unknown_insertions ... ok
+test standard_names_are_literal_not_case_folded ... ok
+test every_property_bit_and_name_byte ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests\cicp.rs (target\release\deps\cicp-084f232061c26f3b.exe)
+
+running 3 tests
+test all_png_matrix_and_full_range_flag_values ... ok
+test reserved_codes_preserve_wire_data_and_fall_back_in_precedence ... ok
+test all_primaries_transfer_pairs_and_range_flags ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+     Running tests\compositing.rs (target\release\deps\compositing-0f1dae3a20ee358a.exe)
+
+running 3 tests
+test explicit_precision_palette_and_transparency_expansion ... ok
+test separate_default_and_first_previous ... ok
+test source_over_and_disposal_known_answers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\compression.rs (target\release\deps\compression-ddb515d2c371b818.exe)
+
+running 5 tests
+test truncation_checksums_limits_and_trailing_data ... ok
+test dynamic_literal_only_and_single_symbol_trees ... ok
+test mixed_block_alignment_and_prefetched_stored_bytes ... ok
+test bidirectional_differential ... ok
+test deterministic_mutation_campaign ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.01s
+
+     Running tests\deflate_stream.rs (target\release\deps\deflate_stream-67b7281eda2a22db.exe)
+
+running 4 tests
+test empty_output_and_input_after_finish ... ok
+test cross_block_history_and_separate_finish ... ok
+test mixed_compressibility_block_transitions_and_full_window_reuse ... ok
+test input_output_fragments_and_block_boundaries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+     Running tests\huffman.rs (target\release\deps\huffman-f4859f1e05b0091f.exe)
+
+running 7 tests
+test c_zlib_huffman_oracle ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+test malformed_and_single_symbol_trees ... ok
+test published_distance_counts_and_reserved_symbols ... ok
+test all_repeat_counts_and_cross_table_runs ... ok
+test every_complete_code_length_histogram ... ok
+test all_dynamic_count_fields ... ok
+test all_length_distance_values_and_fifteen_bit_codes ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.99s
+
+     Running tests\inflate_stream.rs (target\release\deps\inflate_stream-728da3b48ec71039.exe)
+
+running 3 tests
+test zero_capacity_prefix_truncations_and_terminal_errors ... ok
+test every_input_output_fragment_combination ... ok
+test ring_wrap_history_and_long_matches ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+     Running tests\keywords.rs (target\release\deps\keywords-77045a3b3e0667aa.exe)
+
+running 6 tests
+test libpng_exact_named_metadata_and_invalid_name_policies ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test libpng_suggested_palette_field_boundaries ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test names_are_case_sensitive_and_only_suggested_palette_names_must_be_distinct ... ok
+test named_stream_events_and_legal_text_positions ... ok
+test suggested_palette_depth_entry_shape_sample_and_frequency_boundaries ... ok
+test all_keyword_bytes_lengths_and_spacing_in_every_named_wire_form ... ok
+
+test result: ok. 4 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 2.56s
+
+     Running tests\language_registry.rs (target\release\deps\language_registry-88ea3c5ee7049d33.exe)
+
+running 2 tests
+test private_ranges_deprecated_codes_and_registered_extensions ... ok
+test every_pinned_iana_subtag_range_and_extlang_prefix_is_encodable ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\libpng.rs (target\release\deps\libpng-48c7a432a6079b75.exe)
+
+running 2 tests
+test libpng_external_corpus ... ignored, set DEADLIB_LIBPNG_ORACLE and DEADLIB_PNG_CORPUS; fetch inputs with scripts/fetch_corpus.py
+test libpng_native_sample_conformance ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\malformed.rs (target\release\deps\malformed-efd83949295c2a93.exe)
+
+running 2 tests
+test configured_resource_limits ... ok
+test independent_known_answer_and_normative_failures ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\metadata.rs (target\release\deps\metadata-c23ce7b1437048f7.exe)
+
+running 5 tests
+test unknown_chunks_obey_png_editor_copy_rules ... ok
+test icc_and_palette_metadata ... ok
+test metadata_slots_without_palette_have_the_same_wire_position ... ok
+test metadata_constraints_and_expansion_budget ... ok
+test metadata_wire_and_typed_roundtrip_with_reference_text ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\metadata_fields.rs (target\release\deps\metadata_fields-f6c85eb78d9eb2a0.exe)
+
+running 5 tests
+test metadata_access_rejects_invalid_sample_formats_without_panicking ... ok
+test sixteen_bit_transparency_compares_both_bytes_before_scaling ... ok
+test histograms_cannot_claim_used_indices_are_unused ... ok
+test unused_transparency_background_bits_are_masked_and_reencoded_as_zero ... ok
+test srgb_requires_compatible_fallback_gamma_and_chromaticities_when_encoding ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests\palette.rs (target\release\deps\palette-14b9150ceacbb782.exe)
+
+running 2 tests
+test independent_palette_overflow_fixture ... ok
+test out_of_range_indices_preserve_samples_render_black_and_remain_invalid_for_encoders ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests\png_stream.rs (target\release\deps\png_stream-e6881b62bc80f3f6.exe)
+
+running 5 tests
+test prefix_consumption_provisional_rows_and_verified_image_end ... ok
+test apng_image_roles_and_completion ... ok
+test every_truncation_limits_and_reader_errors ... ok
+test row_pipeline_memory_is_independent_of_height ... ok
+test pngsuite_and_apng_arbitrary_reads ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests\png_write.rs (target\release\deps\png_write-219f888ba9167922.exe)
+
+running 4 tests
+test write_failures_and_input_validation ... ok
+test sixteen_bit_gradient_compression_regression ... ok
+test bounded_encoder_scratch_and_maximum_chunk_size ... ok
+test all_formats_fragmented_writes_and_chunks ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests\pngsuite.rs (target\release\deps\pngsuite-10919ea585f5aaaa.exe)
+
+running 1 test
+test pngsuite_native_samples_and_reencoding ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests\profiles.rs (target\release\deps\profiles-7a2d6fff86ad10ba.exe)
+
+running 6 tests
+test libpng_preserves_independent_icc_and_exif_payloads ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+test color_precedence_skips_unsupported_profiles_and_propagates_limits ... ok
+test icc_v44_table_contiguity_and_shared_storage ... ok
+test icc_header_tag_bounds_duplicates_and_overlap_errors_recover_as_raw_metadata ... ok
+test exif_header_endianness_first_directory_bounds_and_future_magic ... ok
+test independent_icc_profiles_all_matching_formats_and_table_orders ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests\static_png.rs (target\release\deps\static_png-7e6561faf550d8ba.exe)
+
+running 3 tests
+test one_byte_idat_and_truncations ... ok
+test decode_reference_encodings ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s
+
+     Running tests\text.rs (target\release\deps\text-2e8087f1ed8711bc.exe)
+
+running 4 tests
+test unregistered_tags_decode_for_forward_compatibility_but_cannot_be_encoded ... ok
+test whatwg_utf8_replacement_bom_and_raw_retention ... ok
+test bcp47_grammar_grandfathered_private_extensions_and_duplicates ... ok
+test uncompressed_method_is_ignored_only_by_decoders ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests\text_body.rs (target\release\deps\text_body-d80ab3a1ab966e65.exe)
+
+running 5 tests
+test libpng_all_body_bytes_and_native_writer_values ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test encoders_reject_text_controls_before_output ... ok
+test empty_and_long_latin1_text_has_no_keyword_length_limit ... ok
+test recovery_events_preserve_non_null_controls_and_itxt_unicode_rules ... ok
+test every_body_byte_context_and_placement_preserves_decode_recovery_but_enforces_encoding ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.02s
+
+     Running tests\zlib_headers.rs (target\release\deps\zlib_headers-ae3863b55d069959.exe)
+
+running 5 tests
+test c_zlib_header_and_history_oracle ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+test distance_must_not_precede_actual_output ... ok
+test every_cmf_and_flg_value_buffered_and_fragmented ... ok
+test every_png_zlib_header_value ... ok
+test advertised_window_distances_and_ring_wrap ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+   Doc-tests deadlib_image
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests deadlib_image_png
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+COMMAND: ["cargo", "clippy", "-p", "deadlib-image", "-p", "deadlib-image-png", "--all-targets", "--", "-D", "warnings"]
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.74s
+
+COMMAND: ["cargo", "clippy", "--manifest-path", "crates/deadlib-image/png/fuzz/Cargo.toml", "--all-targets", "--", "-D", "warnings"]
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.12s
+
+COMMAND: ["cargo", "test", "-p", "deadlib-image-png", "--release", "--test", "apng_recovery", "libpng_static_fallback_known_answers_and_crc_policy", "--", "--ignored", "--nocapture"]
+    Finished `release` profile [optimized] target(s) in 0.70s
+     Running tests\apng_recovery.rs (target\release\deps\apng_recovery-d2c2d3b61989e332.exe)
+
+running 1 test
+libpng APNG static images: exact native defaults=2880, strict CRC rejections=240
+test libpng_static_fallback_known_answers_and_crc_policy ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 42.60s
+
+COMMAND: ["cargo", "test", "-p", "deadlib-image-png", "--release", "--test", "libpng", "libpng_native_sample_conformance", "--", "--ignored", "--nocapture"]
+    Finished `release` profile [optimized] target(s) in 0.55s
+     Running tests\libpng.rs (target\release\deps\libpng-48c7a432a6079b75.exe)
+
+running 1 test
+test libpng_native_sample_conformance ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 19.97s
+
+COMMAND: ["cargo", "run", "-p", "deadlib-image-png", "--release", "--example", "seed_fuzz", "--", "C:\\GitHub\\deadsync\\target\\png-apng-recovery-fresh-20261027-a"]
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 10.99s
+     Running `target\release\examples\seed_fuzz.exe C:\GitHub\deadsync\target\png-apng-recovery-fresh-20261027-a`
+Huffman: 19645 fixtures, 649 seeds
+PNG chunk grammar: 1893 independent seeds
+Named PNG metadata: 3710 independent seeds
+Latin-1 text bodies: 512 PNG seeds and 4304 structured seeds
+Independent APNG validity/recovery: 3060 seeds
+
+COMMAND: ["powershell", "-NoProfile", "-File", "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\verify_independent.ps1"]
+Isolated workspace: C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-73ad6af852994b2baa9fe6520c0e3991
+Command: cargo test -p deadlib-image -p deadlib-image-png --offline
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+cargo 1.99.1 (5f94df478 2026-08-27)
+     Locking 11 packages to highest Rust 1.97 compatible versions
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.3
+   Compiling cfg-if v1.0.5
+   Compiling deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-73ad6af852994b2baa9fe6520c0e3991)
+   Compiling bitflags v2.13.2
+   Compiling deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-73ad6af852994b2baa9fe6520c0e3991\png)
+   Compiling miniz_oxide v0.9.1
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling flate2 v1.1.10
+   Compiling png v0.18.1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.12s
+     Running unittests src\lib.rs (target\debug\deps\deadlib_image-7341d42afe0051e4.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\lib.rs (target\debug\deps\deadlib_image_png-e684ee025b6cad6a.exe)
+
+running 6 tests
+test checksum::tests::known_checksums ... ok
+test zlib::matcher::tests::bounded_history_chains_and_wrapping_head_positions ... ok
+test zlib::tests::every_length_and_distance_code_matches_rfc1951_tables ... ok
+test checksum::tests::adler_block_and_modulus_boundaries ... ok
+test zlib::matcher::tests::every_prefix_mismatch_and_tail ... ok
+test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests\apng.rs (target\debug\deps\apng-38d3302bd0874a61.exe)
+
+running 4 tests
+test malformed_animation_controls_and_aggregate_limits ... ok
+test decode_independent_reference_apng ... ok
+test independent_twenty_frame_fixture ... ok
+test all_formats_apng_default_roles_and_interlace ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.73s
+
+     Running tests\apng_recovery.rs (target\debug\deps\apng_recovery-3d9e5732977c6f48.exe)
+
+running 7 tests
+test libpng_static_fallback_known_answers_and_crc_policy ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test palette_strictness_keeps_static_and_animation_errors_distinct ... ok
+test recovery_never_accepts_bad_core_png_or_bypasses_limits ... ok
+test animation_chunk_permutations_and_reencoding_clear_diagnostics ... ok
+test discarded_large_chunks_stay_bounded_and_report_only_the_first_fault ... ok
+test all_truncations_io_errors_and_multiple_fdat_boundaries ... ok
+test independent_valid_animation_and_recovered_static_samples_all_formats ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 6.61s
+
+     Running tests\chunks.rs (target\debug\deps\chunks-5788c34ed0ba63e6.exe)
+
+running 7 tests
+test libpng_unknown_chunk_and_core_order_comparison ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test unknown_stream_events_and_fused_critical_errors ... ok
+test reencoding_obeys_copy_bits_and_preserves_placement ... ok
+test chunk_lengths_crc_alignment_and_encoder_name_validation ... ok
+test all_core_chunk_permutations_and_unknown_insertions ... ok
+test standard_names_are_literal_not_case_folded ... ok
+test every_property_bit_and_name_byte ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.77s
+
+     Running tests\cicp.rs (target\debug\deps\cicp-14c7b610ee939f85.exe)
+
+running 3 tests
+test all_png_matrix_and_full_range_flag_values ... ok
+test reserved_codes_preserve_wire_data_and_fall_back_in_precedence ... ok
+test all_primaries_transfer_pairs_and_range_flags ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.48s
+
+     Running tests\compositing.rs (target\debug\deps\compositing-e7de915ed00ec819.exe)
+
+running 3 tests
+test explicit_precision_palette_and_transparency_expansion ... ok
+test separate_default_and_first_previous ... ok
+test source_over_and_disposal_known_answers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\compression.rs (target\debug\deps\compression-7233ca6cd596c65e.exe)
+
+running 5 tests
+test truncation_checksums_limits_and_trailing_data ... ok
+test dynamic_literal_only_and_single_symbol_trees ... ok
+test mixed_block_alignment_and_prefetched_stored_bytes ... ok
+test bidirectional_differential ... ok
+test deterministic_mutation_campaign ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.21s
+
+     Running tests\deflate_stream.rs (target\debug\deps\deflate_stream-32b21059cc86bc8e.exe)
+
+running 4 tests
+test empty_output_and_input_after_finish ... ok
+test cross_block_history_and_separate_finish ... ok
+test mixed_compressibility_block_transitions_and_full_window_reuse ... ok
+test input_output_fragments_and_block_boundaries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.64s
+
+     Running tests\huffman.rs (target\debug\deps\huffman-00868d87b3dc2656.exe)
+
+running 7 tests
+test c_zlib_huffman_oracle ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+test malformed_and_single_symbol_trees ... ok
+test published_distance_counts_and_reserved_symbols ... ok
+test all_repeat_counts_and_cross_table_runs ... ok
+test every_complete_code_length_histogram ... ok
+test all_dynamic_count_fields ... ok
+test all_length_distance_values_and_fifteen_bit_codes ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 25.22s
+
+     Running tests\inflate_stream.rs (target\debug\deps\inflate_stream-eb4c90ad5a588dec.exe)
+
+running 3 tests
+test zero_capacity_prefix_truncations_and_terminal_errors ... ok
+test every_input_output_fragment_combination ... ok
+test ring_wrap_history_and_long_matches ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.33s
+
+     Running tests\keywords.rs (target\debug\deps\keywords-bee9e10564deae42.exe)
+
+running 6 tests
+test libpng_exact_named_metadata_and_invalid_name_policies ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test libpng_suggested_palette_field_boundaries ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test names_are_case_sensitive_and_only_suggested_palette_names_must_be_distinct ... ok
+test suggested_palette_depth_entry_shape_sample_and_frequency_boundaries ... ok
+test named_stream_events_and_legal_text_positions ... ok
+test all_keyword_bytes_lengths_and_spacing_in_every_named_wire_form ... ok
+
+test result: ok. 4 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 48.77s
+
+     Running tests\language_registry.rs (target\debug\deps\language_registry-119602f934b7c2ce.exe)
+
+running 2 tests
+test private_ranges_deprecated_codes_and_registered_extensions ... ok
+test every_pinned_iana_subtag_range_and_extlang_prefix_is_encodable ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests\libpng.rs (target\debug\deps\libpng-62f7916e9ecec2bd.exe)
+
+running 2 tests
+test libpng_external_corpus ... ignored, set DEADLIB_LIBPNG_ORACLE and DEADLIB_PNG_CORPUS; fetch inputs with scripts/fetch_corpus.py
+test libpng_native_sample_conformance ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\malformed.rs (target\debug\deps\malformed-541d596ab5ad1183.exe)
+
+running 2 tests
+test configured_resource_limits ... ok
+test independent_known_answer_and_normative_failures ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\metadata.rs (target\debug\deps\metadata-1646e145bfecec85.exe)
+
+running 5 tests
+test unknown_chunks_obey_png_editor_copy_rules ... ok
+test metadata_slots_without_palette_have_the_same_wire_position ... ok
+test icc_and_palette_metadata ... ok
+test metadata_wire_and_typed_roundtrip_with_reference_text ... ok
+test metadata_constraints_and_expansion_budget ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests\metadata_fields.rs (target\debug\deps\metadata_fields-c7f911043138b3dc.exe)
+
+running 5 tests
+test metadata_access_rejects_invalid_sample_formats_without_panicking ... ok
+test sixteen_bit_transparency_compares_both_bytes_before_scaling ... ok
+test histograms_cannot_claim_used_indices_are_unused ... ok
+test unused_transparency_background_bits_are_masked_and_reencoded_as_zero ... ok
+test srgb_requires_compatible_fallback_gamma_and_chromaticities_when_encoding ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests\palette.rs (target\debug\deps\palette-8325ee86f273abb5.exe)
+
+running 2 tests
+test independent_palette_overflow_fixture ... ok
+test out_of_range_indices_preserve_samples_render_black_and_remain_invalid_for_encoders ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests\png_stream.rs (target\debug\deps\png_stream-f660d07fc3cdfbcb.exe)
+
+running 5 tests
+test prefix_consumption_provisional_rows_and_verified_image_end ... ok
+test apng_image_roles_and_completion ... ok
+test every_truncation_limits_and_reader_errors ... ok
+test row_pipeline_memory_is_independent_of_height ... ok
+test pngsuite_and_apng_arbitrary_reads ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.16s
+
+     Running tests\png_write.rs (target\debug\deps\png_write-7cd4ecec7e75e861.exe)
+
+running 4 tests
+test write_failures_and_input_validation ... ok
+test sixteen_bit_gradient_compression_regression ... ok
+test bounded_encoder_scratch_and_maximum_chunk_size ... ok
+test all_formats_fragmented_writes_and_chunks ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.23s
+
+     Running tests\pngsuite.rs (target\debug\deps\pngsuite-97e00989336d2ad3.exe)
+
+running 1 test
+test pngsuite_native_samples_and_reencoding ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.21s
+
+     Running tests\profiles.rs (target\debug\deps\profiles-c1679cd0a8b01709.exe)
+
+running 6 tests
+test libpng_preserves_independent_icc_and_exif_payloads ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+test color_precedence_skips_unsupported_profiles_and_propagates_limits ... ok
+test icc_v44_table_contiguity_and_shared_storage ... ok
+test icc_header_tag_bounds_duplicates_and_overlap_errors_recover_as_raw_metadata ... ok
+test exif_header_endianness_first_directory_bounds_and_future_magic ... ok
+test independent_icc_profiles_all_matching_formats_and_table_orders ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.28s
+
+     Running tests\static_png.rs (target\debug\deps\static_png-8ceb40fc0dd143b8.exe)
+
+running 3 tests
+test decode_reference_encodings ... ok
+test one_byte_idat_and_truncations ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.78s
+
+     Running tests\text.rs (target\debug\deps\text-d49ce81f1b5141db.exe)
+
+running 4 tests
+test unregistered_tags_decode_for_forward_compatibility_but_cannot_be_encoded ... ok
+test whatwg_utf8_replacement_bom_and_raw_retention ... ok
+test bcp47_grammar_grandfathered_private_extensions_and_duplicates ... ok
+test uncompressed_method_is_ignored_only_by_decoders ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+
+     Running tests\text_body.rs (target\debug\deps\text_body-93bbb970290327af.exe)
+
+running 5 tests
+test libpng_all_body_bytes_and_native_writer_values ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test encoders_reject_text_controls_before_output ... ok
+test empty_and_long_latin1_text_has_no_keyword_length_limit ... ok
+test recovery_events_preserve_non_null_controls_and_itxt_unicode_rules ... ok
+test every_body_byte_context_and_placement_preserves_decode_recovery_but_enforces_encoding ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 13.70s
+
+     Running tests\zlib_headers.rs (target\debug\deps\zlib_headers-9c977d26a2826339.exe)
+
+running 5 tests
+test c_zlib_header_and_history_oracle ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+test distance_must_not_precede_actual_output ... ok
+test advertised_window_distances_and_ring_wrap ... ok
+test every_cmf_and_flg_value_buffered_and_fragmented ... ok
+test every_png_zlib_header_value ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 12.89s
+
+   Doc-tests deadlib_image
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests deadlib_image_png
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-73ad6af852994b2baa9fe6520c0e3991\png)
+└── deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-73ad6af852994b2baa9fe6520c0e3991)
+Independent build passed. The temporary source copy is retained for inspection.

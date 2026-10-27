@@ -1,5 +1,5 @@
 use crate::codec::Header;
-use crate::{AncillaryChunk, ColorType, FrameControl, Metadata, Transparency};
+use crate::{AncillaryChunk, ColorType, Error, FrameControl, Metadata, Transparency};
 mod decode;
 mod encode_rows;
 mod read;
@@ -67,7 +67,8 @@ pub struct DecodeProgress {
 
 /// Events borrow decoder-owned buffers until the next `process` call.
 /// Rows are provisional until `ImageEnd` verifies the image's zlib stream and
-/// all its data-chunk CRCs. `Done` additionally proves the entire PNG grammar.
+/// all its data-chunk CRCs. `Done` completes all checks under the selected
+/// policy; `AnimationError` explicitly reports any discarded APNG fault.
 #[derive(Debug)]
 pub enum DecodeEvent<'a> {
     Header(ImageInfo),
@@ -81,6 +82,9 @@ pub enum DecodeEvent<'a> {
         frames: u32,
         plays: u32,
     },
+    /// Animation playback must stop and cached frames be discarded. The static
+    /// image remains provisional until its own `ImageEnd(Default)` event.
+    AnimationError(&'a Error),
     FrameControl {
         index: u32,
         control: FrameControl,

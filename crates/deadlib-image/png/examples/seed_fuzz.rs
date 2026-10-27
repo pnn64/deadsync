@@ -1,5 +1,8 @@
 //! Extract independent PNGSuite zlib streams and PNG files for fuzz campaigns.
 //! An optional first argument creates a fresh corpus root instead of merging seeds.
+#[allow(dead_code)]
+#[path = "../tests/support/apng_recovery.rs"]
+mod apng_recovery;
 #[path = "../tests/support/chunks.rs"]
 mod chunks;
 #[path = "../tests/support/huffman.rs"]
@@ -171,6 +174,30 @@ fn main() -> std::io::Result<()> {
         }
     }
     println!("Latin-1 text bodies: 512 PNG seeds and 4304 structured seeds");
+    let mut animation_count = 0;
+    for (color, depth) in apng_recovery::formats() {
+        for interlaced in [false, true] {
+            for default_is_frame in [false, true] {
+                let fixture =
+                    apng_recovery::Fixture::new(color, depth, interlaced, default_is_frame);
+                let mut cases = fixture.cases();
+                cases.push(("valid".into(), fixture.wire()));
+                for (name, bytes) in cases {
+                    let label = format!(
+                        "apng-{}-{depth}-{}-{}-{name}",
+                        color as u8,
+                        u8::from(interlaced),
+                        u8::from(default_is_frame)
+                    );
+                    for directory in [&png, &png_stream] {
+                        fs::write(directory.join(&label), &bytes)?;
+                    }
+                    animation_count += 1;
+                }
+            }
+        }
+    }
+    println!("Independent APNG validity/recovery: {animation_count} seeds");
     for entry in fs::read_dir(root.join("tests/fixtures/pngsuite"))? {
         let path = entry?.path();
         if path.extension().is_none_or(|v| v != "png") {

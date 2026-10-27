@@ -11,8 +11,8 @@ mod stream;
 pub mod zlib;
 
 pub use codec::{
-    AncillaryChunk, ChunkPosition, DecodeOptions, EncodeOptions, Filter, Limits, PalettePolicy,
-    Png, Transparency, decode, decode_with_options, encode,
+    AncillaryChunk, AnimationPolicy, ChunkPosition, DecodeOptions, EncodeOptions, Filter, Limits,
+    PalettePolicy, Png, Transparency, decode, decode_with_options, encode,
 };
 
 pub use apng::{Animation, BlendOp, DisposeOp, Frame, FrameControl};

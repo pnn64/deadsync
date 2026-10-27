@@ -1,7 +1,7 @@
 use super::{DecodeEvent, DecodeProgress, DecodeStatus, ImageInfo, ImageKind, rows::ImageRows};
 use crate::{
-    AncillaryChunk, ChunkPosition, ColorType, DecodeOptions, Error, FrameControl, Metadata,
-    Transparency,
+    AncillaryChunk, AnimationPolicy, ChunkPosition, ColorType, DecodeOptions, Error, FrameControl,
+    Metadata, Transparency,
     checksum::Crc32,
     codec::{Header, SIGNATURE, be16, be32},
     metadata::Validator,
@@ -24,6 +24,7 @@ enum Event {
     Transparency,
     Metadata,
     Animation,
+    AnimationError,
     Control {
         index: u32,
         control: FrameControl,
@@ -31,6 +32,17 @@ enum Event {
     },
     Row,
     ImageEnd(ImageKind),
+}
+
+#[derive(Clone, Copy)]
+enum AnimationFault {
+    Begin,
+    Body,
+    Complete,
+    EndFrame,
+}
+fn animation_chunk(kind: &[u8; 4]) -> bool {
+    matches!(kind, b"acTL" | b"fcTL" | b"fdAT")
 }
 
 /// Incremental PNG/APNG parser and native-row decoder.
@@ -65,6 +77,8 @@ pub struct StreamDecoder {
     seen_data: bool,
     idat_closed: bool,
     animation: Option<(u32, u32)>,
+    animation_error: Option<Error>,
+    animation_fault: Option<AnimationFault>,
     controls: u32,
     sequence: u32,
     default_control: bool,
@@ -120,6 +134,8 @@ impl StreamDecoder {
             seen_data: false,
             idat_closed: false,
             animation: None,
+            animation_error: None,
+            animation_fault: None,
             controls: 0,
             sequence: 0,
             default_control: false,
@@ -143,6 +159,10 @@ impl StreamDecoder {
     pub fn is_done(&self) -> bool {
         matches!(self.state, State::Done) && self.failure.is_none()
     }
+    /// First APNG fault recovered under `AnimationPolicy::RecoverDefault`.
+    pub fn animation_error(&self) -> Option<&Error> {
+        self.animation_error.as_ref()
+    }
     pub fn finish(&self) -> Result<(), Error> {
         if let Some(error) = &self.failure {
             Err(error.clone())
@@ -165,6 +185,7 @@ impl StreamDecoder {
                 let (frames, plays) = self.animation?;
                 DecodeEvent::Animation { frames, plays }
             }
+            Event::AnimationError => DecodeEvent::AnimationError(self.animation_error.as_ref()?),
             Event::Control {
                 index,
                 control,
@@ -188,11 +209,70 @@ impl StreamDecoder {
             self.data.clear();
         }
         self.metadata = None;
-        let result = self.run(input);
-        if let Err(error) = &result {
-            self.failure = Some(error.clone());
+        let initial = self.total_in();
+        loop {
+            self.animation_fault = None;
+            let consumed = self.total_in() - initial;
+            match self.run(&input[consumed..]) {
+                Ok(mut progress) => {
+                    progress.consumed += consumed;
+                    return Ok(progress);
+                }
+                Err(error) => {
+                    if self.options.animation_policy == AnimationPolicy::RecoverDefault
+                        && matches!(
+                            error,
+                            Error::Invalid(_) | Error::Checksum | Error::Truncated
+                        )
+                        && let Some(fault) = self.animation_fault.take()
+                    {
+                        let first = self.animation_error.is_none();
+                        // Only container-committed bytes count as consumed.
+                        // An errored frame inflater may have inspected more;
+                        // discard it and replay those bytes through CRC/skip.
+                        self.recover_animation(error, fault);
+                        if first {
+                            return Ok(self.emit(Event::AnimationError, self.total_in() - initial));
+                        }
+                    } else {
+                        self.failure = Some(error.clone());
+                        return Err(error);
+                    }
+                }
+            }
         }
-        result
+    }
+    fn animation_result<T>(
+        &mut self,
+        result: Result<T, Error>,
+        fault: AnimationFault,
+    ) -> Result<T, Error> {
+        result.inspect_err(|_| self.animation_fault = Some(fault))
+    }
+    fn discarded_animation_chunk(&self) -> bool {
+        self.animation_error.is_some() && animation_chunk(&self.kind)
+    }
+    fn recover_animation(&mut self, error: Error, fault: AnimationFault) {
+        if self.animation_error.is_none() {
+            self.animation_error = Some(error);
+        }
+        self.animation = None;
+        self.default_control = false;
+        if matches!(self.image_kind, Some(ImageKind::AnimationFrame(_))) {
+            self.rows = None;
+            self.image_kind = None;
+        }
+        match fault {
+            AnimationFault::Begin | AnimationFault::Body | AnimationFault::EndFrame => (),
+            AnimationFault::Complete => {
+                self.have = 0;
+                self.state = if &self.kind == b"IEND" {
+                    State::Done
+                } else {
+                    State::ChunkHeader
+                };
+            }
+        }
     }
     fn emit(&mut self, event: Event, consumed: usize) -> DecodeProgress {
         self.event = Some(event);
@@ -247,6 +327,7 @@ impl StreamDecoder {
             return Err(Error::Invalid("IHDR must be first"));
         }
         match &self.kind {
+            _ if self.discarded_animation_chunk() => (),
             b"IHDR" => {
                 if self.header.is_some() || self.length != 13 {
                     return Err(Error::Invalid("IHDR length or duplication"));
@@ -319,7 +400,7 @@ impl StreamDecoder {
         self.crc = Crc32::new();
         self.crc.update(&self.kind);
         self.data.clear();
-        if !matches!(&self.kind, b"IDAT" | b"fdAT") {
+        if !matches!(&self.kind, b"IDAT" | b"fdAT") && !self.discarded_animation_chunk() {
             reserve(&mut self.data, self.length)?;
             self.data.resize(self.length, 0);
         }
@@ -327,6 +408,9 @@ impl StreamDecoder {
         Ok(())
     }
     fn complete_chunk(&mut self) -> Result<Option<Event>, Error> {
+        if self.discarded_animation_chunk() {
+            return Ok(None);
+        }
         let h = self.header;
         let d = self.data.as_slice();
         let event = match &self.kind {
@@ -413,6 +497,7 @@ impl StreamDecoder {
                 if self.animation.is_some_and(|(frames, _)| {
                     frames != self.controls || frames != self.frames_ended
                 }) {
+                    self.animation_fault = Some(AnimationFault::Complete);
                     return Err(Error::Invalid("APNG frame count mismatch"));
                 }
                 self.state = State::Done;
@@ -497,13 +582,28 @@ impl StreamDecoder {
                     let close_frame = matches!(self.image_kind, Some(ImageKind::AnimationFrame(_)))
                         && matches!(&self.kind, b"fcTL" | b"IEND");
                     if close_default || close_frame {
-                        let kind = self.end_image()?;
+                        let result = self.end_image();
+                        let kind = if close_frame {
+                            self.animation_result(result, AnimationFault::EndFrame)?
+                        } else {
+                            result?
+                        };
                         return Ok(self.emit(Event::ImageEnd(kind), pos));
                     }
                 }
-                State::ChunkStart => self.begin_chunk()?,
+                State::ChunkStart => {
+                    let result = self.begin_chunk();
+                    if self.header.is_some() && animation_chunk(&self.kind) {
+                        self.animation_result(result, AnimationFault::Begin)?;
+                    } else {
+                        result?;
+                    }
+                }
                 State::ChunkBody => {
-                    if &self.kind == b"fdAT" && self.prefix_have < 4 {
+                    if &self.kind == b"fdAT"
+                        && self.prefix_have < 4
+                        && !self.discarded_animation_chunk()
+                    {
                         let start = pos;
                         let complete = fill(
                             input,
@@ -517,20 +617,37 @@ impl StreamDecoder {
                         if !complete {
                             break;
                         }
-                        self.sequence(be32(&self.prefix))?;
+                        let result = self.sequence(be32(&self.prefix));
+                        self.animation_result(result, AnimationFault::Body)?;
                     }
-                    if matches!(&self.kind, b"IDAT" | b"fdAT") {
+                    if matches!(&self.kind, b"IDAT" | b"fdAT") && !self.discarded_animation_chunk()
+                    {
                         let available = self.left.min(input.len() - pos).min(self.input_left);
                         let rows = self
                             .rows
                             .as_mut()
                             .ok_or(Error::Invalid("missing image decoder"))?;
                         if !rows.is_done() {
-                            let (used, event) = rows.feed(
+                            let result = rows.feed(
                                 &input[pos..pos + available],
                                 self.palette.len(),
                                 self.options.palette_policy,
-                            )?;
+                            );
+                            let (used, event) = if &self.kind == b"fdAT" {
+                                // This inflater is capped at the exact filtered
+                                // frame length; exceeding it is malformed frame
+                                // data, not a caller resource-limit exception.
+                                let result = result.map_err(|error| {
+                                    if error == Error::LimitExceeded {
+                                        Error::Invalid("APNG frame data length")
+                                    } else {
+                                        error
+                                    }
+                                });
+                                self.animation_result(result, AnimationFault::Body)?
+                            } else {
+                                result?
+                            };
                             self.crc.update(&input[pos..pos + used]);
                             self.left -= used;
                             self.input_left -= used;
@@ -550,7 +667,9 @@ impl StreamDecoder {
                     } else {
                         let n = self.left.min(input.len() - pos).min(self.input_left);
                         let start = self.length - self.left;
-                        self.data[start..start + n].copy_from_slice(&input[pos..pos + n]);
+                        if !self.discarded_animation_chunk() {
+                            self.data[start..start + n].copy_from_slice(&input[pos..pos + n]);
+                        }
                         self.crc.update(&input[pos..pos + n]);
                         self.left -= n;
                         self.input_left -= n;
@@ -576,9 +695,17 @@ impl StreamDecoder {
                         break;
                     }
                     if be32(&self.fixed) != self.crc.finish() {
+                        if animation_chunk(&self.kind) {
+                            self.animation_fault = Some(AnimationFault::Complete);
+                        }
                         return Err(Error::Checksum);
                     }
-                    let event = self.complete_chunk()?;
+                    let result = self.complete_chunk();
+                    let event = if animation_chunk(&self.kind) {
+                        self.animation_result(result, AnimationFault::Complete)?
+                    } else {
+                        result?
+                    };
                     if !matches!(self.state, State::Done) {
                         self.have = 0;
                         self.state = State::ChunkHeader;

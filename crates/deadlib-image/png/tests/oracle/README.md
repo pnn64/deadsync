@@ -184,3 +184,20 @@ native encoders reject the control/NUL inputs before output. Recovery behavior
 is recorded separately from encoder conformance. `text-body-validation.log`
 and `.json` retain results and hashes; `text-body-before.log` and `.json` show
 the final regression test failing against the isolated pre-fix source.
+
+
+## APNG static recovery
+
+```powershell
+cargo test -p deadlib-image-png --release --test apng_recovery libpng_static_fallback_known_answers_and_crc_policy -- --ignored --nocapture
+```
+
+The test constructs native known answers independently for all 15 formats,
+plain/Adam7 layout and both default-image roles. The unpatched pinned libpng
+reads their static images: 60 static-only files, 60 valid animations and 3,000
+animation faults. It returns exact native pixels for 2,880 files, including
+well-framed animation syntax/data errors that it ignores, and rejects the 240
+APNG-CRC cases under the oracle's strict CRC setting. The opt-in native recovery
+policy reports those animation faults and completes static/core PNG checks.
+No C reference rejection is silently treated as a sample mismatch.
+`apng-recovery-validation.log` and `.json` retain the results and hashes.

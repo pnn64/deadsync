@@ -73,6 +73,10 @@ pub(super) fn collect(png: &mut Option<Png>, event: DecodeEvent<'_>) -> Result<(
                 frames: Vec::new(),
             })
         }
+        DecodeEvent::AnimationError(error) => {
+            png.animation = None;
+            png.animation_error = Some(error.clone());
+        }
         DecodeEvent::FrameControl {
             index,
             control,

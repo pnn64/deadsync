@@ -32,7 +32,7 @@ and length boundaries across seven named-metadata wire forms. That milestone's P
 corpora contain 5,779 files each; `reports/named-source.json` records their exact
 hashes and the corresponding 40,000-execution ASan campaigns.
 Text-body seeds add all 256 byte values in both tEXt/zTXt to the PNG corpora,
-bringing current fresh counts to 6,291 files each. The dedicated `text_body`
+bringing that milestone's fresh counts to 6,291 files each. The dedicated `text_body`
 target has 4,304 initial inputs: flags/single-byte values plus 79-/80-/4096-byte
 plain, graphic, late-control and embedded-NUL bodies.
 Working corpora, crash artifacts and builds are
@@ -60,10 +60,21 @@ Integration tests separately check generated valid streams and
 native output rejected for truncation/checksum/limit errors. Coverage counters
 include the harness and reference codecs, not just the native implementation.
 
-`png_stream` repairs complete chunk CRCs to explore deeper grammar and DEFLATE
-paths. It compares whole-file acceptance with the buffered implementation and
-every emitted default-image / APNG-frame row sample, under varying input splits.
-It selects both opaque-black recovery and strict indexed-color policies.
+`png_stream` checks each input in three configurations: repaired CRCs with
+strict animation handling, repaired CRCs with APNG recovery, and original CRCs
+with recovery. It compares whole-file acceptance and native row samples under
+varying input splits. Valid animation results must match the strict buffered
+decoder; recovered static images must match independent buffered decoding after
+removing only APNG chunks. Previously emitted animation rows are discarded on
+recovery. Indexed policy uses input-length parity, allowing both policies with
+an intact PNG signature. The APNG fixtures add 3,060 valid/fault files per PNG
+corpus; current fresh PNG corpora contain 9,351 files each.
+The fresh APNG recovery campaigns complete 20,000 inputs each on `png_stream`,
+`decode` and `encode_stream` under Linux ASan. The three configurations within
+`png_stream` count as one input execution. Exact source/corpus/binary hashes,
+commands and statistics are in `reports/apng-recovery-source.json` and its three
+target logs. These smoke runs do not establish native-only coverage.
+
 `inflate_stream` compares fragmented decoding, prefix byte counts and fused
 errors against buffered native zlib decoding. Independent reference parity is
 provided by the other targets and integration/oracle tests.

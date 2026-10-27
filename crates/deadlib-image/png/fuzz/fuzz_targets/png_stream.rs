@@ -1,7 +1,7 @@
 #![no_main]
 use deadlib_image_png::{
-    DecodeEvent, DecodeOptions, DecodeStatus, Image, ImageKind, Limits, PalettePolicy, Row,
-    RowSamples, Samples, StreamDecoder, decode_with_options,
+    AnimationPolicy, DecodeEvent, DecodeOptions, DecodeStatus, Image, ImageKind, Limits,
+    PalettePolicy, Row, RowSamples, Samples, StreamDecoder, decode_with_options,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -24,23 +24,25 @@ fn samples(image: &Image, row: Row<'_>) {
         }
     }
 }
-fuzz_target!(|bytes: &[u8]| {
+fn check(bytes: &[u8], repair_crc: bool, animation_policy: AnimationPolicy) {
     if bytes.len() > 65536 {
         return;
     }
     let mut fixed = bytes.to_vec();
-    let mut pos = 8usize;
-    while pos + 12 <= fixed.len() {
-        let n = u32::from_be_bytes(fixed[pos..pos + 4].try_into().unwrap()) as usize;
-        let Some(end) = pos.checked_add(12).and_then(|p| p.checked_add(n)) else {
-            break;
-        };
-        if end > fixed.len() {
-            break;
+    if repair_crc {
+        let mut pos = 8usize;
+        while pos + 12 <= fixed.len() {
+            let n = u32::from_be_bytes(fixed[pos..pos + 4].try_into().unwrap()) as usize;
+            let Some(end) = pos.checked_add(12).and_then(|p| p.checked_add(n)) else {
+                break;
+            };
+            if end > fixed.len() {
+                break;
+            }
+            let crc = crc32fast::hash(&fixed[pos + 4..end - 4]);
+            fixed[end - 4..end].copy_from_slice(&crc.to_be_bytes());
+            pos = end;
         }
-        let crc = crc32fast::hash(&fixed[pos + 4..end - 4]);
-        fixed[end - 4..end].copy_from_slice(&crc.to_be_bytes());
-        pos = end;
     }
     let options = DecodeOptions {
         limits: Limits {
@@ -50,13 +52,45 @@ fuzz_target!(|bytes: &[u8]| {
             max_chunks: 4096,
             max_frames: 64,
         },
-        palette_policy: if bytes.first().copied().unwrap_or(0) & 1 == 0 {
+        palette_policy: if bytes.len() & 1 == 0 {
             PalettePolicy::RecoverBlack
         } else {
             PalettePolicy::Strict
         },
+        animation_policy,
     };
     let expected = decode_with_options(&fixed, &options);
+    if options.animation_policy == AnimationPolicy::RecoverDefault {
+        let strict_options = DecodeOptions {
+            animation_policy: AnimationPolicy::Strict,
+            ..options
+        };
+        if let Ok(strict) = decode_with_options(&fixed, &strict_options) {
+            assert_eq!(expected.as_ref().unwrap(), &strict);
+        } else if let Ok(png) = &expected {
+            assert!(png.animation.is_none());
+            assert!(png.animation_error.is_some());
+            // Independently run the buffered static parser after removing only
+            // APNG chunks. Keep every core/metadata byte and relative position.
+            let mut static_bytes = fixed[..8].to_vec();
+            let mut offset = 8;
+            while offset < fixed.len() {
+                let len =
+                    u32::from_be_bytes(fixed[offset..offset + 4].try_into().unwrap()) as usize;
+                let end = offset + 12 + len;
+                if !matches!(&fixed[offset + 4..offset + 8], b"acTL" | b"fcTL" | b"fdAT") {
+                    static_bytes.extend_from_slice(&fixed[offset..end]);
+                }
+                offset = end;
+            }
+            let mut actual = png.clone();
+            actual.animation_error = None;
+            assert_eq!(
+                decode_with_options(&static_bytes, &strict_options).unwrap(),
+                actual
+            );
+        }
+    }
     let mut decoder = StreamDecoder::new(options);
     let mut offset = 0;
     let chunk = 1 + usize::from(bytes.last().copied().unwrap_or(0) % 31);
@@ -75,10 +109,15 @@ fuzz_target!(|bytes: &[u8]| {
         if let (Some(DecodeEvent::Row(row)), Ok(png)) = (decoder.event(), &expected) {
             let image = match row.image {
                 ImageKind::Default => &png.image,
-                ImageKind::AnimationFrame(n) => png.animation.as_ref().unwrap().frames[n as usize]
-                    .image
-                    .as_ref()
-                    .unwrap(),
+                ImageKind::AnimationFrame(n) => {
+                    if let Some(animation) = &png.animation {
+                        animation.frames[n as usize].image.as_ref().unwrap()
+                    } else {
+                        assert!(png.animation_error.is_some());
+                        // A later APNG fault discarded these earlier frames.
+                        continue;
+                    }
+                }
             };
             samples(image, row);
         }
@@ -101,4 +140,9 @@ fuzz_target!(|bytes: &[u8]| {
             DecodeStatus::Event => (),
         }
     }
+}
+fuzz_target!(|bytes: &[u8]| {
+    check(bytes, true, AnimationPolicy::Strict);
+    check(bytes, true, AnimationPolicy::RecoverDefault);
+    check(bytes, false, AnimationPolicy::RecoverDefault);
 });

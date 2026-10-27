@@ -26,6 +26,19 @@ impl Default for Limits {
 pub struct DecodeOptions {
     pub limits: Limits,
     pub palette_policy: PalettePolicy,
+    pub animation_policy: AnimationPolicy,
+}
+
+/// Handling of animation faults when the static PNG can still be verified.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum AnimationPolicy {
+    /// Report the first error and stop decoding.
+    #[default]
+    Strict,
+    /// Report an animation error, discard animation frames and decode the
+    /// static image. PNG framing, static data, metadata and resource errors
+    /// remain fatal. See `Png::animation_error` and `DecodeEvent::AnimationError`.
+    RecoverDefault,
 }
 
 /// Handling of pixel indices outside PLTE. Native samples always retain their
@@ -105,6 +118,10 @@ pub struct Png {
     pub transparency: Option<Transparency>,
     pub ancillary: Vec<AncillaryChunk>,
     pub animation: Option<crate::Animation>,
+    /// First recovered animation fault. The animation is discarded while the
+    /// static image and remaining PNG checks are completed. This diagnostic
+    /// is not serialized by either encoder.
+    pub animation_error: Option<Error>,
 }
 impl Png {
     pub fn new(image: Image) -> Self {
@@ -115,6 +132,7 @@ impl Png {
             transparency: None,
             ancillary: Vec::new(),
             animation: None,
+            animation_error: None,
         }
     }
 }
@@ -205,6 +223,9 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
     let limits = options.limits;
     if input.len() > limits.max_input_bytes {
         return Err(Error::LimitExceeded);
+    }
+    if options.animation_policy == AnimationPolicy::RecoverDefault {
+        return crate::decode_reader(input, options);
     }
     if input.len() < 8 {
         return Err(Error::Truncated);
@@ -352,6 +373,7 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
         transparency,
         ancillary,
         animation,
+        animation_error: None,
     };
     validate_pixels(&png, options.palette_policy)?;
     Ok(png)
