@@ -1,0 +1,19 @@
+{
+  "reason": "Free /tmp tmpfs inodes by relocating one completed mutable fuzz corpus after verifying every archive entry; preserve binaries, logs, manifests, invocation records and object audits.",
+  "source": "/tmp/deadlib-image-literal-block-asan-20261027-a/corpus",
+  "prior_evidence": "fuzz/reports/literal-block-source.json",
+  "prior_evidence_sha256": "68bb5cb969c909ee76c75b8b2ccc3f5757df937534866a9eb540b9b5a5389024",
+  "archive": "target/png-fuzz-corpus-literal-block-20261027.zip",
+  "archive_sha256": "11b03b10e9ca6c2f268064fdc2a9d0c79ab6a47c34d147b9241bc100dc3682e4",
+  "archive_bytes": 20876444,
+  "files": 55523,
+  "source_bytes": 15683440,
+  "tree_sha256": "03ec86259b722d4d75fa127205d588022e7bb4a6fce7481e96ffe3780adca635",
+  "hash_method": "Ascending literal UTF-8 relative filename bytes, NUL, contents",
+  "all_archive_entries_match_original": true,
+  "before_free_inodes": 26278,
+  "runner_sha256": "ecaa6b13c8170275895f77c2b26651dd4c7d7d897de037de6309a8b52f0359aa",
+  "temporary_corpus_removed_after_verification": true,
+  "after_free_inodes": 81804,
+  "wall_seconds": 52.175
+}

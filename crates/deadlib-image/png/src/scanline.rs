@@ -140,7 +140,7 @@ pub(crate) fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> R
 }
 
 pub(crate) fn decode(
-    raw: &mut [u8],
+    mut raw: Vec<u8>,
     width: u32,
     height: u32,
     color: ColorType,
@@ -158,7 +158,10 @@ pub(crate) fn decode(
     if bytes > limit {
         return Err(Error::LimitExceeded);
     }
-    let mut samples = if depth == 16 {
+    let reuse = depth == 8 && !interlaced;
+    let mut samples = if reuse {
+        Samples::U8(Vec::new())
+    } else if depth == 16 {
         let mut v = Vec::new();
         reserve(&mut v, count)?;
         v.resize(count, 0u16);
@@ -188,10 +191,19 @@ pub(crate) fn decode(
             let row = after.get_mut(1..1 + stride).ok_or(Error::Truncated)?;
             let previous = if row_index == 0 {
                 &zeros
+            } else if reuse {
+                &before[(row_index - 1) * stride..row_index * stride]
             } else {
                 &before[position - stride..position]
             };
             unfilter(row, previous, bpp, filter)?;
+            if reuse {
+                // Read the next row's predictor from the compacted output.
+                // Moving this row left cannot overwrite any unread row.
+                raw.copy_within(position + 1..position + 1 + stride, row_index * stride);
+                position += stride + 1;
+                continue;
+            }
             let dst_y = y as usize + row_index * dy as usize;
             if dx == 1 && depth >= 8 {
                 let dst = (dst_y * width as usize + x as usize) * channels;
@@ -237,7 +249,12 @@ pub(crate) fn decode(
         height,
         color_type: color,
         bit_depth: depth,
-        samples,
+        samples: if reuse {
+            raw.truncate(count);
+            Samples::U8(raw)
+        } else {
+            samples
+        },
     })
 }
 

@@ -511,8 +511,10 @@ dependency graph remains only the local shared image crate, and production
 source is byte-for-byte the `cafedc93d` implementation. Validation records are
 `reference-conformance.log` / `.json`. Broader native fuzz coverage remains open.
 
-The requested end state is not yet achieved. Continue without application
-integration, preserving unrelated work and committing verified milestones:
+The following list records the plan at this historical milestone; later sections
+supersede completed items. The current decoder-only completion requirements are
+listed in `CONFORMANCE.md`. Continue without application integration, preserving
+unrelated work and committing verified milestones:
 
 1. Continue the clause-by-clause field and error-behavior audit beyond the now-
    covered indexed-color recovery, text decoding and encoder field distinctions.
@@ -1858,3 +1860,59 @@ reader; raw format inflation improves 9.43% relative to flate2, compared with
 -0.60% for unchanged streaming inflation. Format end-to-end results remain
 inconclusive, and shared-host effects prevent a broad speedup claim. Remaining
 corpus gaps, the completion audit and competitive decoder performance stay open.
+
+## Owned byte-sample buffers and bounded allocation requests (2026-10-27)
+
+Buffered static images and APNG frames transfer ownership of inflated data into
+scanline reconstruction. Noninterlaced 8-bit rows reuse that allocation as native
+sample storage, reading the preceding row from already compacted output before
+moving the next row over its filter byte. Exact sample length, output limits and
+error checks remain intact. Packed, 16-bit and Adam7 reconstruction retain their
+existing algorithms. On-demand inflation growth requests are capped at the
+logical output limit; no full declared-image allocation is introduced. Four PNG
+production files change; the other seventeen, shared primitives and all existing
+test/helper/harness/generator inputs retain their recorded baseline bytes.
+
+The candidate passes 41 focused tests with four optional checks ignored, then
+134 normal release tests with nineteen optional checks ignored. The explicitly
+run C zlib batch passes 19,645 fixtures: 3,091 successful outputs, 16,554 error
+records and 68 documented published-range reference-policy rejections. Strict
+main/fuzz all-target Clippy and scoped rustfmt pass. A complete standalone copy
+passes the offline static PNG target, including multi-row geometry, all native
+formats, filters and Adam7 (three tests, none ignored). All 885 copied source,
+fixture, example and benchmark files match current bytes, and its production
+dependency tree contains only the shared image crate. `row-reuse-validation.*`,
+the independent log and `row-reuse-audit.json` retain exact evidence and scope.
+
+An independent untimed probe builds baseline/current native sources in separate
+projects, compares saved native sample bytes on all 84 corpus images and records
+actual inflation/sample vector capacities. Across 24 photos, inflation capacity
+falls from 51,036,160 to 28,325,376 bytes; reconstruction no longer allocates a
+second 28,311,552-byte sample cohort. Returned samples retain 13,824 filter-byte
+capacity overhead in total. These cohort sums and separately observed capacities
+are not simultaneous peak-memory or process-RSS measurements.
+
+Fresh native-feedback ASan campaigns complete 55,460 PNG-stream executions
+against a 50,000 request and 20,000 raw-stream executions. Completion/statistics
+counts agree. Native feedback isolation, ASan runtime definitions, dependency
+archives and four harness objects are audited. The immutable 48,167-file PNG /
+6,927-file raw seed ZIP is reused with fresh mutable corpora because fixture,
+generator and harness bytes are unchanged. `fuzz/reports/row-reuse-*` retains
+sources, binaries, logs, seed provenance and exact counts. Historical successful
+sanitizer executions total 1,836,312; the 75,460 new executions are decoder-only.
+
+The preceding completed literal-block corpus is relocated to
+`target/png-fuzz-corpus-literal-block-20261027.zip` to free temporary inodes.
+All 55,523 entries match the original before removal; the ordered filename/
+content digest is verified again from the saved archive. Its report preserves
+the original path, archive/hash and linked campaign evidence. Binaries, logs,
+manifests and object audits retain their original locations.
+
+`BENCHMARKS.md` records local PNG throughput gains and the remaining stored-only
+raw-inflate loss. Longer checks of one photo and nine format files clear the
+initial PNG regressions; gray8 Adam7 raw inflation remains 9.02 to 11.02
+microseconds under the lower-capacity allocation policy. The explicit tradeoff
+is retained rather than claiming every input improves. All sixteen timing groups
+/ 48 processes, six summaries, exact sources and buffer probes are verified by
+`experiments/row-reuse-selection.json`. Competitive decoder performance, remaining
+corpus gaps and the final requirements audit remain open.

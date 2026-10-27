@@ -1,0 +1,522 @@
+{
+  "baseline_png_commit": "7a393042f9c5c0aebb8a92a44bd3b34f058b6768",
+  "selected": "row-reuse",
+  "reason": "Reuse ordinary eight-bit filtered buffers for native samples and cap on-demand inflation growth requests at the output limit. Repeated photo decode +5.28% relative to Rust png (unchanged reader +1.86%); format decode +10.28% (reader +0.26%) and raw inflate +18.36% relative to flate2 (unchanged streaming +2.78%). Photo raw inflation is inconclusive. Exact native bytes agree on 84 inputs; cohort capacities show lower inflation storage and removal of the second full byte-sample buffer. Shared-host measurements do not prove broad parity. Longer checks clear the original PNG regressions, but stored-only gray8 Adam7 raw inflation remains 9.02 to 11.02 microseconds, -28.49% relative to flate2 and -12.03% relative to unchanged streaming inflation. Retain this explicit allocation/throughput tradeoff; no uniform raw-inflate speedup is claimed.",
+  "production_sources_changed": [
+    "src/apng.rs",
+    "src/codec.rs",
+    "src/scanline.rs",
+    "src/zlib.rs"
+  ],
+  "production_sources_unchanged": 17,
+  "source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "b75b671c306d42a95a561d8ef1f24e3c536de230d6218141ffea8651adfc0fb7"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "0d1d2e79057fff589a802015ebe3f942468efc6ff891e3964d88ed2034e84a1d"
+    }
+  ],
+  "reconstruction": [
+    {
+      "patch": "experiments/row-reuse.patch",
+      "patch_sha256": "f0e07fc9b8a633ecbe2426c802f07410ffeddf197b08279f81fc665ce35ce2b8",
+      "all_21_source_hashes_reconstructed": true,
+      "destination": "C:\\Users\\PERFEC~1\\AppData\\Local\\Temp\\png-row-reuse-6qketzzf"
+    }
+  ],
+  "benchmark_groups": [
+    {
+      "manifest": "benchmark-row-reuse-before-photos-a-manifest.json",
+      "sha256": "5d51d7189fd87a069d5fbe20a649c8b85f30c0f60e2500ccc2b5ffe1fdd38d21",
+      "source_variant": "baseline",
+      "iterations": 12,
+      "binary_sha256": "058ba28999a63147352568e7ff96e4edd07cddf8a3c12a8f394791a8c31fb60a"
+    },
+    {
+      "manifest": "benchmark-row-reuse-trial-photos-a-manifest.json",
+      "sha256": "ac736e5529b46007074f8ad5c672f0dcbbfe7364ccf5b44813697e3cbaab47be",
+      "source_variant": "candidate",
+      "iterations": 12,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-row-reuse-repeat-photos-a-manifest.json",
+      "sha256": "d189d59212adc6a1541b9772e09c8942341e380eadf6dff488ea00020094dd58",
+      "source_variant": "candidate",
+      "iterations": 12,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-row-reuse-control-photos-a-manifest.json",
+      "sha256": "4fea99a1cfbf8b62724dfef6db2b1dc195a63ac7b6362ce1ac7f6ca5e12014df",
+      "source_variant": "baseline",
+      "iterations": 12,
+      "binary_sha256": "058ba28999a63147352568e7ff96e4edd07cddf8a3c12a8f394791a8c31fb60a"
+    },
+    {
+      "manifest": "benchmark-row-reuse-before-formats-a-manifest.json",
+      "sha256": "785f007989f7035255e8fdfabcd0e4aba959cf2bbc388517e34e354f91e2ef7e",
+      "source_variant": "baseline",
+      "iterations": 12,
+      "binary_sha256": "058ba28999a63147352568e7ff96e4edd07cddf8a3c12a8f394791a8c31fb60a"
+    },
+    {
+      "manifest": "benchmark-row-reuse-trial-formats-a-manifest.json",
+      "sha256": "78547ddef037c0fde43bb1be39cf83cad72ebb2717e981f79d8a16de914c0940",
+      "source_variant": "candidate",
+      "iterations": 12,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-row-reuse-repeat-formats-a-manifest.json",
+      "sha256": "21c35fec51d67f3c9a397c60cd2604a0341d7a5ae191e3fd077f3cfd76bc49a5",
+      "source_variant": "candidate",
+      "iterations": 12,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-row-reuse-control-formats-a-manifest.json",
+      "sha256": "11192d6b6a610651fe40ae34c77af38d049d24558de1440aac8fd8d7e9ddfb9f",
+      "source_variant": "baseline",
+      "iterations": 12,
+      "binary_sha256": "058ba28999a63147352568e7ff96e4edd07cddf8a3c12a8f394791a8c31fb60a"
+    },
+    {
+      "manifest": "benchmark-row-reuse-focus-before-photos-a-manifest.json",
+      "sha256": "283c7d1da676ebb569e456148d765008c4e64c972b68fda0a323f16f60b9a6c7",
+      "source_variant": "baseline",
+      "iterations": 48,
+      "binary_sha256": "058ba28999a63147352568e7ff96e4edd07cddf8a3c12a8f394791a8c31fb60a"
+    },
+    {
+      "manifest": "benchmark-row-reuse-focus-trial-photos-a-manifest.json",
+      "sha256": "d6d48af9bca9ed91d09dd2445965a82986418d67e4fdd638043b8213004716eb",
+      "source_variant": "candidate",
+      "iterations": 48,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-row-reuse-focus-repeat-photos-a-manifest.json",
+      "sha256": "67a017c767ba9766547ea37a5fbb42b29d028cd5b983f78270bd4bf48352af8d",
+      "source_variant": "candidate",
+      "iterations": 48,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-row-reuse-focus-control-photos-a-manifest.json",
+      "sha256": "731a378d997e3f41932d7a4824993377f1fb9d5b0702557efb1eae38d18c7a45",
+      "source_variant": "baseline",
+      "iterations": 48,
+      "binary_sha256": "058ba28999a63147352568e7ff96e4edd07cddf8a3c12a8f394791a8c31fb60a"
+    },
+    {
+      "manifest": "benchmark-row-reuse-focus-before-formats-a-manifest.json",
+      "sha256": "be2c65272293e189ae2b3269d70d211b1b0d62953a743e3ffb17559e6858aba8",
+      "source_variant": "baseline",
+      "iterations": 4096,
+      "binary_sha256": "058ba28999a63147352568e7ff96e4edd07cddf8a3c12a8f394791a8c31fb60a"
+    },
+    {
+      "manifest": "benchmark-row-reuse-focus-trial-formats-a-manifest.json",
+      "sha256": "9a402d90947cdab4f218ca89d48677a4ac56826ffc120066628e56bdbc2c9574",
+      "source_variant": "candidate",
+      "iterations": 4096,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-row-reuse-focus-repeat-formats-a-manifest.json",
+      "sha256": "b68811ee9046fc691d57bca9289d88a88fef1135c606e35c2290beb78944417a",
+      "source_variant": "candidate",
+      "iterations": 4096,
+      "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b"
+    },
+    {
+      "manifest": "benchmark-row-reuse-focus-control-formats-a-manifest.json",
+      "sha256": "37c21d79c3228aa6d303369df847e492cbf6f76a69381ce21b064cec34c26b28",
+      "source_variant": "baseline",
+      "iterations": 4096,
+      "binary_sha256": "058ba28999a63147352568e7ff96e4edd07cddf8a3c12a8f394791a8c31fb60a"
+    }
+  ],
+  "summaries": [
+    {
+      "path": "benchmark-row-reuse-focus-formats-summary.json",
+      "sha256": "5e38138dda0f078a84aebc1ef52a014a26a0cc04b759f72239c0f2f0194ae128",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 391.7450027401036,
+          "after_mib_s": 385.17246941591645,
+          "absolute_change_percent": -1.6777580513381962,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 2.874455620732075
+        },
+        "decode-reader": {
+          "before_mib_s": 303.37333630395455,
+          "after_mib_s": 297.68192703863156,
+          "absolute_change_percent": -1.8760413603457482,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 2.6669920085467425
+        },
+        "inflate": {
+          "before_mib_s": 1418.159635915646,
+          "after_mib_s": 1388.2861019326847,
+          "absolute_change_percent": -2.1065000883115137,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 4.1490783562436295
+        },
+        "inflate-stream": {
+          "before_mib_s": 783.3641780194788,
+          "after_mib_s": 744.9347918144354,
+          "absolute_change_percent": -4.90568592275965,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 1.1710192913555462
+        }
+      }
+    },
+    {
+      "path": "benchmark-row-reuse-focus-photos-summary.json",
+      "sha256": "0e725b31fca02c76cd1711e1c4aca7986f8b4cb647084ce77c3bf7e248307eb9",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 97.45812321903401,
+          "after_mib_s": 100.11640200339595,
+          "absolute_change_percent": 2.7276113027413285,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 2.015999952251102
+        },
+        "decode-reader": {
+          "before_mib_s": 86.26017625675998,
+          "after_mib_s": 89.19313747207462,
+          "absolute_change_percent": 3.400133575642683,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 2.683863550850729
+        },
+        "inflate": {
+          "before_mib_s": 120.07597044638747,
+          "after_mib_s": 125.95931312345193,
+          "absolute_change_percent": 4.899683637944285,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 0.8396513896424818
+        },
+        "inflate-stream": {
+          "before_mib_s": 95.36076133249051,
+          "after_mib_s": 97.39524763789186,
+          "absolute_change_percent": 2.133462733490332,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -1.8195058356037075
+        }
+      }
+    },
+    {
+      "path": "benchmark-row-reuse-formats-initial.json",
+      "sha256": "5d97a772ffa8f6ced1a896b1a178815b53b3753e9b8fe38446ce5f5d1b78dfa5",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 257.72877341807424,
+          "after_mib_s": 261.8817097437271,
+          "absolute_change_percent": 1.6113592093639273,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 6.98597943667727
+        },
+        "decode-reader": {
+          "before_mib_s": 266.8424632295038,
+          "after_mib_s": 251.14470032516704,
+          "absolute_change_percent": -5.8827829402982035,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": -0.9045570560714866
+        },
+        "inflate": {
+          "before_mib_s": 985.6545007873907,
+          "after_mib_s": 1032.2075349807997,
+          "absolute_change_percent": 4.72305804480373,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 16.69683826032351
+        },
+        "inflate-stream": {
+          "before_mib_s": 569.229051717467,
+          "after_mib_s": 528.1031263226902,
+          "absolute_change_percent": -7.22484653070542,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 3.3828392821667164
+        }
+      }
+    },
+    {
+      "path": "benchmark-row-reuse-formats-summary.json",
+      "sha256": "3316b6b4b268003b637ac5f75e5c752bae6a6665a3c4691a53134d2217dde636",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 258.11351841682114,
+          "after_mib_s": 263.2452169701677,
+          "absolute_change_percent": 1.9881556707384451,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 10.284302932428634
+        },
+        "decode-reader": {
+          "before_mib_s": 267.1663665121657,
+          "after_mib_s": 247.7033648787009,
+          "absolute_change_percent": -7.284974485206597,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 0.2568572106750544
+        },
+        "inflate": {
+          "before_mib_s": 991.0100869509372,
+          "after_mib_s": 1038.728464376887,
+          "absolute_change_percent": 4.815125300365608,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 18.35543855693793
+        },
+        "inflate-stream": {
+          "before_mib_s": 575.8605901098394,
+          "after_mib_s": 524.1358204535674,
+          "absolute_change_percent": -8.982168695796,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": 2.775771241413416
+        }
+      }
+    },
+    {
+      "path": "benchmark-row-reuse-photos-initial.json",
+      "sha256": "b94a710d0acdb8c51dc8894aa568a715aecdde6038cb01fbb68213e12892a622",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 92.40180536290016,
+          "after_mib_s": 105.42769826633365,
+          "absolute_change_percent": 14.097011256734016,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 2.167485776291045
+        },
+        "decode-reader": {
+          "before_mib_s": 86.19371898516549,
+          "after_mib_s": 97.37231222485289,
+          "absolute_change_percent": 12.969150619445147,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 1.1575497196965046
+        },
+        "inflate": {
+          "before_mib_s": 122.38732538302129,
+          "after_mib_s": 129.7107798848331,
+          "absolute_change_percent": 5.9838340930259415,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -4.741948876742952
+        },
+        "inflate-stream": {
+          "before_mib_s": 95.63568101603637,
+          "after_mib_s": 104.97272911028423,
+          "absolute_change_percent": 9.763142788393186,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -1.3451140292899955
+        }
+      }
+    },
+    {
+      "path": "benchmark-row-reuse-photos-summary.json",
+      "sha256": "1833ef0ffe215329067c2d3209b04591b4ddbfc04a51e340cf8dee4c3b1bb06f",
+      "native_changes": {
+        "decode": {
+          "before_mib_s": 96.90022548951639,
+          "after_mib_s": 103.77103618821373,
+          "absolute_change_percent": 7.0906034160268305,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 5.283307133356541
+        },
+        "decode-reader": {
+          "before_mib_s": 92.39952495761561,
+          "after_mib_s": 95.73781760382738,
+          "absolute_change_percent": 3.612889403644748,
+          "reference": "png-0.18.1/decode",
+          "reference_relative_change_percent": 1.864284167679564
+        },
+        "inflate": {
+          "before_mib_s": 124.42487467772787,
+          "after_mib_s": 127.54819002212962,
+          "absolute_change_percent": 2.5102017201073634,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -0.5007625310531783
+        },
+        "inflate-stream": {
+          "before_mib_s": 102.07308175062312,
+          "after_mib_s": 103.60338068711644,
+          "absolute_change_percent": 1.4992189030130776,
+          "reference": "flate2-1.1.10/inflate",
+          "reference_relative_change_percent": -1.4820504195478867
+        }
+      }
+    }
+  ],
+  "derived_templates": [
+    {
+      "path": "experiments/row-reuse-focus-baseline-photos-source.json",
+      "sha256": "0d56b9368abf0ab3456bde783ba61ce325f1db95cdd59e934a46ea89c07b99bd"
+    },
+    {
+      "path": "experiments/row-reuse-focus-candidate-photos-source.json",
+      "sha256": "ebbd55ad8ce20ccf63d67effb89f1b91b3f8e86da764b9cb7c1bc9bf593b72d3"
+    },
+    {
+      "path": "experiments/row-reuse-focus-baseline-formats-source.json",
+      "sha256": "5695b50bc171106924cc32fcedaf4b59df28111d711de8dc0ad56fc67b64b3d5"
+    },
+    {
+      "path": "experiments/row-reuse-focus-candidate-formats-source.json",
+      "sha256": "8bf76e45147527a5ea550b15a89787517419149197ee20b5e1c5c0a27606ff7f"
+    }
+  ],
+  "case_audits": [
+    {
+      "path": "benchmark-row-reuse-photos-per-case.json",
+      "sha256": "01439e73a1bf10c75629e61dfb182e0f9c3e80b742b626e21cc75502349b6f92"
+    },
+    {
+      "path": "benchmark-row-reuse-formats-per-case.json",
+      "sha256": "334c120c7af2dfeca4f7cabe60a5f2861fdad437a80f745b8d0e42344d104b53"
+    },
+    {
+      "path": "benchmark-row-reuse-focus-photos-per-case.json",
+      "sha256": "8dd43b10759a1d1e22001d60d847a16c4d3d58f3d3fa2ada4bbe3dafd04870f4"
+    },
+    {
+      "path": "benchmark-row-reuse-focus-formats-per-case.json",
+      "sha256": "f4266515bfd2cd5fa1b76dd25873af4fdf7d46012bb6b320e6303668f168a089"
+    }
+  ],
+  "focused_validation": [
+    {
+      "path": "row-reuse-focused.json",
+      "sha256": "6a5e03ad267254366c96e225eedf9fa8ee7ca0b6f63cef686e72fa9b19601ba3",
+      "log": "row-reuse-focused.log",
+      "log_sha256": "5d08e8776d582a5ee4d9ffa304cc4080ec69b7ae966b0a2a31b99a58557be96b"
+    }
+  ],
+  "scope": "Eight normal and eight longer flagged-case timing groups / 48 processes; no task tests, builds, fuzzing or profiling overlap timed processes. Buffer probes observe capacities, not peak allocation or RSS. No encoder change.",
+  "evidence": [
+    {
+      "path": "row-reuse-focused.json",
+      "sha256": "6a5e03ad267254366c96e225eedf9fa8ee7ca0b6f63cef686e72fa9b19601ba3"
+    },
+    {
+      "path": "experiments/row-reuse-buffers.json",
+      "sha256": "5d26fbfd3484c8be569e231297ac7d7f0e47e15989fb12b591a0d2ad238e2d22"
+    },
+    {
+      "path": "experiments/row-reuse-buffer-summary.json",
+      "sha256": "dff48120f16d30083ea30e73486e436cf99df861cb5ea80a24368b4c5c56c248"
+    },
+    {
+      "path": "experiments/row-reuse-codegen.json",
+      "sha256": "f129b9af9a8aab1cec2f72cef6d938973e8caeb20b65ec6eb89abedaa9bac0e3"
+    },
+    {
+      "path": "fuzz/reports/row-reuse-corpus-storage.json",
+      "sha256": "2bdaa86ecf9818cd0ba4f34d13c4a35f7b1e96edb99d992acfed35603f0d28dc"
+    }
+  ],
+  "verifier_sha256": "520ec85e6a518fac38bf431626a8419639bd6d93294086ed4dfc16b8f1f4683c",
+  "longer_check_scope": {
+    "photo_cases": 1,
+    "format_cases": 9,
+    "photo_iterations": 48,
+    "format_iterations": 4096,
+    "png_cases_below_minus_5_percent_against_both_controls": 0,
+    "remaining_raw_regression": {
+      "case": "color-0-depth-08-adam7-1-noise-1",
+      "before_ns": 9019.0,
+      "after_ns": 11023.5,
+      "reference_relative_percent": -28.488470808354037,
+      "unchanged_control_relative_percent": -12.028440350711234
+    }
+  },
+  "final_validation_evidence": [
+    {
+      "path": "row-reuse-validation.json",
+      "sha256": "028ca910503b6d88c85f1b180e61170f5f8e7cfeaf309590d55e664473ab3cac"
+    },
+    {
+      "path": "fuzz/reports/row-reuse-source.json",
+      "sha256": "6ac5fc031844a3bf7b01821afc1668f43986e9362aee5c08060851b046ab3baf"
+    },
+    {
+      "path": "fuzz/reports/row-reuse-seeds.json",
+      "sha256": "a93d6c12e2466048314696291711aee02a4211480f5b6cab2fc7af8d32fef35a"
+    }
+  ]
+}

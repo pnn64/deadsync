@@ -1016,3 +1016,67 @@ tests, fuzzing or profiling. Shared-host frequency and unrelated workloads remai
 uncontrolled; normalization does not eliminate their effects. Reported pipeline
 byte fields are invariant checks, not measured peak memory. The broader decoder
 performance requirement remains open.
+
+## Owned 8-bit reconstruction and bounded growth requests (2026-10-27)
+
+Ordinary noninterlaced 8-bit images now retain the inflated vector as their native
+sample storage. Each row is unfiltered against the already compacted previous
+row, then moved left over its filter byte. The destination ends before the next
+unread row. This removes the second full-image allocation and its zero fill;
+row movement remains. Packed, 16-bit and Adam7 reconstruction keep their existing
+sample representation and algorithms. Buffered APNG frames use the same owned
+reconstruction entry point; public APIs and incremental decoding are unchanged.
+
+Buffered inflation still allocates only as output is produced. Its geometric
+growth requests are capped at the logical output limit rather than retaining
+unused space from the last doubling. No allocation based on the entire declared
+PNG size is added. On the measured global allocator, final inflation capacity
+equals filtered size on all 84 corpus images. The reused sample vector retains
+only the removed filter-byte overhead beyond its exact sample length.
+
+An untimed probe builds exact baseline/current native sources in separate
+projects and saves native sample bytes for byte-for-byte comparison. Its four
+tables and source/binary hashes are retained in `experiments/row-reuse-buffers.json`.
+The original incomplete-copy manifest parse error and successful continuation
+are separate logs; no measurement preceded the copy correction.
+
+| Summed capacities across 24 photos | Baseline | Selected |
+| --- | ---: | ---: |
+| Inflation buffer, bytes | 51,036,160 | 28,325,376 |
+| Returned sample buffer, bytes | 28,311,552 | 28,325,376 |
+| Separate sample buffer allocated during reconstruction | Yes | No |
+
+These are observed vector capacities from separate calls, not a measured
+simultaneous allocation peak or process RSS. The selected sample vector is the
+inflation allocation itself. Native sample bytes are identical for all 84 files;
+the other 50 format-corpus layouts retain their previous sample capacity.
+
+Baseline/candidate/candidate/baseline timing uses three processes per position,
+twelve iterations, three warmups and CPU 0. Each final comparison combines six
+baseline and six candidate processes. Rates include allocations. No task builds,
+tests, fuzzing or profiling overlap timed runs; unrelated host load and frequency
+remain uncontrolled.
+
+| Corpus | Buffered PNG | Unchanged reader | Buffered inflate | Unchanged streaming inflate |
+| --- | ---: | ---: | ---: | ---: |
+| Photos, reference-relative change | +5.28% | +1.86% | -0.50% | -1.48% |
+| Formats, reference-relative change | +10.28% | +0.26% | +18.36% | +2.78% |
+
+PNG uses Rust png normalization; raw inflation uses flate2. Photo decode changes
+from 96.90 to 103.77 MiB/s, while Rust png changes from 190.47 to 193.74. Format
+decode changes from 258.11 to 263.25 MiB/s. The controls support local PNG gains;
+photo raw inflation remains inconclusive, and broad parity remains unproved.
+
+Longer checks cover every case flagged below -5% against both controls: one
+photo and nine format files, using 48 / 4,096 iterations. None retains a PNG
+decode loss beyond that threshold against both controls. One stored-only raw
+case, gray8 Adam7 noise, remains slower: 9.02 to 11.02 microseconds, -28.49%
+relative to flate2 and -12.03% relative to unchanged streaming inflation.
+The lower-capacity allocation policy has a documented per-input tradeoff;
+no uniform raw-inflate speedup is claimed.
+
+`experiments/row-reuse-selection.json` reconstructs all 21 production source
+hashes, verifies sixteen timing groups / 48 processes and recomputes six
+final/interim summaries. It links per-case checks, buffer probes, generated code,
+full validation and sanitizer evidence. The final decoder performance and
+requirements audits remain open.

@@ -1,0 +1,35 @@
+{
+  "baseline_png_commit": "7a393042f9c5c0aebb8a92a44bd3b34f058b6768",
+  "production_changes": [
+    "src/apng.rs",
+    "src/codec.rs",
+    "src/scanline.rs",
+    "src/zlib.rs"
+  ],
+  "all_test_helper_tool_inputs_unchanged": true,
+  "existing_fixture_scope": "Native-format/filter/Adam7 geometry matrix, APNG render/recovery, exact native sample bytes on 84 external/format files; primary lookup all 65,536 two-byte values and independent widths/padding; one-bit literal lengths 0..63; every legal match length/distance at eight bit offsets, fixed/dynamic trees and both padding values; prefix/suffix and exact/short limits; PNG/APNG/Adam7 and metadata in the full release suite.",
+  "c_zlib_batch_cases": 19645,
+  "c_zlib_successful_outputs": 3091,
+  "c_zlib_error_records": 16554,
+  "documented_reference_policy_rejections": 68,
+  "performance_scope": "Reuse ordinary eight-bit filtered buffers for native samples and cap on-demand inflation growth requests at the output limit. Repeated photo decode +5.28% relative to Rust png (unchanged reader +1.86%); format decode +10.28% (reader +0.26%) and raw inflate +18.36% relative to flate2 (unchanged streaming +2.78%). Photo raw inflation is inconclusive. Exact native bytes agree on 84 inputs; cohort capacities show lower inflation storage and removal of the second full byte-sample buffer. Shared-host measurements do not prove broad parity. Longer checks clear the original PNG regressions, but stored-only gray8 Adam7 raw inflation remains 9.02 to 11.02 microseconds, -28.49% relative to flate2 and -12.03% relative to unchanged streaming inflation. Retain this explicit allocation/throughput tradeoff; no uniform raw-inflate speedup is claimed.",
+  "new_successful_sanitizer_executions": 75460,
+  "evidence": [
+    {
+      "path": "row-reuse-validation.json",
+      "sha256": "028ca910503b6d88c85f1b180e61170f5f8e7cfeaf309590d55e664473ab3cac"
+    },
+    {
+      "path": "fuzz/reports/row-reuse-source.json",
+      "sha256": "6ac5fc031844a3bf7b01821afc1668f43986e9362aee5c08060851b046ab3baf"
+    },
+    {
+      "path": "fuzz/reports/row-reuse-seeds.json",
+      "sha256": "a93d6c12e2466048314696291711aee02a4211480f5b6cab2fc7af8d32fef35a"
+    },
+    {
+      "path": "experiments/row-reuse-selection.json",
+      "sha256": "2683d95d004d6af9e9bdef2b7c10f69dcf2e97b5fe1687163d7a1b7b4334122d"
+    }
+  ]
+}

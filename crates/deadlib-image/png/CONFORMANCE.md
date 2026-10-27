@@ -18,6 +18,12 @@ the current completion requirements.
 All test paths below are relative to the PNG package. `COVERAGE.md` records exact
 campaign counts, external tool versions, isolated builds and remaining milestones.
 
+As checked on 2026-10-27, the [published errata](https://www.w3.org/2025/06/REC-PNG-20250624-errata)
+list a proposed correction to an mDCV example, categorized as not affecting
+conformance. The twelve decoder conditions in
+[15.3.3](https://www.w3.org/TR/2025/REC-png-3-20250624/)
+remain the final traceability checklist; this review does not close the audit.
+
 ## Representation, framing and compression
 
 | Clauses | Implementation and evidence | Audit |
@@ -122,9 +128,9 @@ The clarified decoder deliverable still requires competitive performance,
 comprehensive differential and fuzz evidence, independent reuse and no DeadSync
 integration. Package isolation and the production dependency boundary are
 verified by retained offline builds. Decoder performance remains incomplete in
-`BENCHMARKS.md`: the latest buffered-literal comparison measures buffered
-photo decoding at 108.58 MiB/s against Rust png's 212.21 on the same shared host,
-and reader decoding at 104.23 MiB/s. Local decoder gains do not establish
+`BENCHMARKS.md`: the latest owned-buffer comparison measures buffered
+photo decoding at 103.77 MiB/s against Rust png's 193.74 on the same shared host,
+and reader decoding at 95.74 MiB/s. Local decoder gains do not establish
 competitive end-to-end performance. Native-precision APNG render answers and scoped native compositor
 corpus coverage are now retained. Native-crate feedback isolation and a
 whole-package source replay are verified; package totals also contain untouched

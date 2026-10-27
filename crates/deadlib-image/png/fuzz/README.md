@@ -629,3 +629,20 @@ ASan runtime. The raw-stream harness exercises buffered decompression as well as
 incremental inflation. These campaigns validate the buffered literal run and
 per-coded-block extraction; only decoder targets run. They are bounded campaigns,
 not a proof that all malformed inputs or source branches have been covered.
+
+## Owned row-buffer follow-up
+
+`reports/row-reuse-source.json` records 55,460 PNG-stream executions against a
+50,000 request and 20,000 raw-stream executions, with completion/statistics
+agreement and native/dependency/harness feedback isolation. Both targets retain
+ASan, and the raw harness exercises buffered inflation as well as incremental
+decoding. Sources, binaries, logs and initial corpus hashes are preserved.
+`reports/row-reuse-seeds.json` reuses the same immutable seed ZIP with fresh
+mutable extractions; existing fixture/generator/harness bytes are unchanged.
+
+`reports/row-reuse-corpus-storage.json` relocates the preceding completed
+literal-block mutable corpus to `target/png-fuzz-corpus-literal-block-20261027.zip`.
+Its 55,523 entries are verified byte for byte before the temporary source is
+removed, then checked again by ordered filename/content digest. Restore the
+archive beneath its recorded source path to replay that mutated corpus.
+The original binaries, logs, manifests and object audits remain in place.
