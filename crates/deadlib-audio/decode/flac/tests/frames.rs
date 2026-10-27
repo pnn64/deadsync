@@ -109,6 +109,66 @@ fn all_depths_channels_stereo_assignments_and_wasted_bits() {
 }
 
 #[test]
+fn stereo_decorrelation_rejects_out_of_range_pcm() {
+    for bits in 4..=32u8 {
+        let low = -(1i64 << (bits - 1));
+        let high = -low - 1;
+        let side_low = -(1i64 << bits);
+        let side_high = -side_low - 1;
+        for (assignment, a, b) in [
+            (8, low, side_high),
+            (8, high, side_low),
+            (9, side_high, high),
+            (9, side_low, low),
+            (10, high, side_high),
+            (10, low, side_low),
+        ] {
+            let mut w = BitWriter::new();
+            w.write(0, 8).unwrap();
+            w.signed(a, bits as u32 + u32::from(assignment == 9))
+                .unwrap();
+            w.write(0, 8).unwrap();
+            w.signed(b, bits as u32 + u32::from(assignment != 9))
+                .unwrap();
+            let frame = finish(header(16, assignment, false, 0), w);
+            let mut decoder = FrameDecoder::new(Some(info(bits, 2))).unwrap();
+            assert_eq!(
+                decoder.decode(&frame).unwrap_err(),
+                Error::Invalid("sample outside declared bit depth"),
+                "bits {bits} assignment {assignment}"
+            );
+        }
+    }
+}
+
+#[test]
+fn fixed_predictors_reject_reconstructed_overflow() {
+    for bits in 4..=32u8 {
+        for order in 1..=4usize {
+            let mut w = BitWriter::new();
+            w.write(((8 + order) * 2) as u64, 8).unwrap();
+            for _ in 0..order {
+                w.signed((1i64 << (bits - 1)) - 1, bits.into()).unwrap();
+            }
+            w.write(0, 2).unwrap();
+            w.write(0, 4).unwrap();
+            w.write(0, 4).unwrap();
+            w.unary(2).unwrap();
+            for _ in order + 1..16 {
+                w.unary(0).unwrap();
+            }
+            let data = finish(header(16, 0, false, 0), w);
+            let mut decoder = FrameDecoder::new(Some(info(bits, 1))).unwrap();
+            assert_eq!(
+                decoder.decode(&data).unwrap_err(),
+                Error::Invalid("sample outside declared bit depth"),
+                "bits {bits} order {order}"
+            );
+        }
+    }
+}
+
+#[test]
 fn fixed_orders_and_all_lpc_orders_with_rice_and_escape() {
     for kind in (8..=12).chain(32..=63) {
         let order = if kind < 32 { kind - 8 } else { kind - 31 };

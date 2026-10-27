@@ -266,38 +266,64 @@ impl FrameDecoder {
         if r.read(16)? as u16 != crc16(&data[..crc_pos]) {
             return Err(Error::Checksum("frame CRC-16"));
         }
-        if header.channel_assignment >= 8 {
-            let (left, right) = self.work.split_at_mut(n);
-            match header.channel_assignment {
-                8 => {
-                    for (l, r) in left.iter_mut().zip(right) {
-                        *r = *l - *r;
-                    }
-                }
-                9 => {
-                    for (l, r) in left.iter_mut().zip(right) {
-                        *l += *r;
-                    }
-                }
-                10 => {
-                    for (l, r) in left.iter_mut().zip(right) {
-                        let mid = (*l << 1) | (*r & 1);
-                        let side = *r;
-                        *l = (mid + side) >> 1;
-                        *r = (mid - side) >> 1;
-                    }
-                }
-                _ => unreachable!(),
-            }
-        }
         if len > self.output.len() {
             let additional = len - self.output.len();
             reserve(&mut self.output, additional)?;
         }
         self.output.resize(len, 0);
-        for (dst, &src) in self.output.iter_mut().zip(&self.work) {
-            check_sample(src, header.bits_per_sample.into())?;
-            *dst = src as i32;
+        if header.channel_assignment >= 8 {
+            let (left, right) = self.work.split_at(n);
+            let (out_left, out_right) = self.output.split_at_mut(n);
+            match header.channel_assignment {
+                8 => {
+                    for ((out_l, out_r), (&l, &side)) in out_left
+                        .iter_mut()
+                        .zip(out_right)
+                        .zip(left.iter().zip(right))
+                    {
+                        let r = l - side;
+                        check_sample(r, header.bits_per_sample.into())?;
+                        *out_l = l as i32;
+                        *out_r = r as i32;
+                    }
+                }
+                9 => {
+                    for ((out_l, out_r), (&side, &r)) in out_left
+                        .iter_mut()
+                        .zip(out_right)
+                        .zip(left.iter().zip(right))
+                    {
+                        let l = side + r;
+                        check_sample(l, header.bits_per_sample.into())?;
+                        *out_l = l as i32;
+                        *out_r = r as i32;
+                    }
+                }
+                10 => {
+                    for ((out_l, out_r), (&mid, &side)) in out_left
+                        .iter_mut()
+                        .zip(out_right)
+                        .zip(left.iter().zip(right))
+                    {
+                        let mid = (mid << 1) | (side & 1);
+                        let l = (mid + side) >> 1;
+                        let r = (mid - side) >> 1;
+                        check_sample(l, header.bits_per_sample.into())?;
+                        check_sample(r, header.bits_per_sample.into())?;
+                        *out_l = l as i32;
+                        *out_r = r as i32;
+                    }
+                }
+                _ => unreachable!(),
+            }
+        } else {
+            // Signed raw/warm-up fields and every reconstructed sample already
+            // fit the subframe width. Restoring wasted bits keeps them within
+            // the declared channel depth, which is at most 32 here. Only stereo
+            // decorrelation above can create a new out-of-range PCM value.
+            for (dst, &src) in self.output.iter_mut().zip(&self.work) {
+                *dst = src as i32;
+            }
         }
         Ok(Frame {
             header,
@@ -336,11 +362,7 @@ fn subframe(r: &mut BitReader<'_>, output: &mut [i64], bits: u32) -> Result<(), 
     let width = bits - wasted;
     match kind {
         0 => output.fill(r.signed(width)?),
-        1 => {
-            for sample in output.iter_mut() {
-                *sample = r.signed(width)?;
-            }
-        }
+        1 => verbatim(r, output, width)?,
         8..=12 | 32..=63 => {
             let order = if kind < 32 { kind - 8 } else { kind - 31 };
             if order >= output.len() {
@@ -365,26 +387,21 @@ fn subframe(r: &mut BitReader<'_>, output: &mut [i64], bits: u32) -> Result<(), 
                 }
             } else {
                 shift = 0;
-                let fixed: &[i64] = match order {
-                    0 => &[],
-                    1 => &[1],
-                    2 => &[2, -1],
-                    3 => &[3, -3, 1],
-                    4 => &[4, -6, 4, -1],
-                    _ => unreachable!(),
-                };
-                coeff[..order].copy_from_slice(fixed);
             }
             residual(r, output, order)?;
             // Each previous sample was range checked. With <=33-bit samples,
             // <=15-bit coefficients and <=32 taps, this sum fits in i64.
-            for i in order..output.len() {
-                let mut sum = 0i64;
-                for j in 0..order {
-                    sum += coeff[j] * output[i - j - 1];
+            if kind < 32 {
+                restore_fixed(output, order, width)?;
+            } else {
+                for i in order..output.len() {
+                    let mut sum = 0i64;
+                    for j in 0..order {
+                        sum += coeff[j] * output[i - j - 1];
+                    }
+                    output[i] += sum >> shift;
+                    check_sample(output[i], width)?;
                 }
-                output[i] += sum >> shift;
-                check_sample(output[i], width)?;
             }
         }
         _ => return Err(Error::Invalid("reserved subframe type")),
@@ -393,6 +410,90 @@ fn subframe(r: &mut BitReader<'_>, output: &mut [i64], bits: u32) -> Result<(), 
         for sample in output {
             *sample <<= wasted;
         }
+    }
+    Ok(())
+}
+
+// Keep the format-specific copy loops out of the predictor's hot code.
+#[inline(never)]
+fn verbatim(r: &mut BitReader<'_>, output: &mut [i64], width: u32) -> Result<(), Error> {
+    if r.position().is_multiple_of(8) && matches!(width, 8 | 16 | 24 | 32) {
+        let bytes = r.aligned_bytes(output.len() * (width / 8) as usize)?;
+        match width {
+            8 => {
+                for (sample, &byte) in output.iter_mut().zip(bytes) {
+                    *sample = i64::from(byte as i8);
+                }
+            }
+            16 => {
+                for (sample, &bytes) in output.iter_mut().zip(bytes.as_chunks::<2>().0) {
+                    *sample = i64::from(i16::from_be_bytes(bytes));
+                }
+            }
+            24 => {
+                for (sample, &bytes) in output.iter_mut().zip(bytes.as_chunks::<3>().0) {
+                    *sample = i64::from(i32::from_be_bytes([bytes[0], bytes[1], bytes[2], 0]) >> 8);
+                }
+            }
+            32 => {
+                for (sample, &bytes) in output.iter_mut().zip(bytes.as_chunks::<4>().0) {
+                    *sample = i64::from(i32::from_be_bytes(bytes));
+                }
+            }
+            _ => unreachable!(),
+        }
+    } else {
+        for sample in output.iter_mut() {
+            *sample = r.signed(width)?;
+        }
+    }
+    Ok(())
+}
+
+fn restore_fixed(output: &mut [i64], order: usize, width: u32) -> Result<(), Error> {
+    match order {
+        0 => {
+            for &sample in output.iter() {
+                check_sample(sample, width)?;
+            }
+        }
+        1 => {
+            let mut previous = output[0];
+            for sample in &mut output[1..] {
+                let value = *sample + previous;
+                check_sample(value, width)?;
+                *sample = value;
+                previous = value;
+            }
+        }
+        2 => {
+            let (mut a, mut b) = (output[1], output[0]);
+            for sample in &mut output[2..] {
+                let value = *sample + 2 * a - b;
+                check_sample(value, width)?;
+                *sample = value;
+                (a, b) = (value, a);
+            }
+        }
+        3 => {
+            let (mut a, mut b, mut c) = (output[2], output[1], output[0]);
+            for sample in &mut output[3..] {
+                let value = *sample + 3 * a - 3 * b + c;
+                check_sample(value, width)?;
+                *sample = value;
+                (a, b, c) = (value, a, b);
+            }
+        }
+        4 => {
+            let (mut a, mut b, mut c, mut d) = (output[3], output[2], output[1], output[0]);
+            for sample in &mut output[4..] {
+                let value = *sample + 4 * a - 6 * b + 4 * c - d;
+                check_sample(value, width)?;
+                *sample = value;
+                (a, b, c, d) = (value, a, b, c);
+            }
+        }
+        _ => unreachable!(),
     }
     Ok(())
 }

@@ -151,3 +151,43 @@ The decoder remains about 1.7–2.1x slower than the fastest reference in severa
 compute-heavy classes. Rice/predictor kernels, output buffers, streaming, MD5 and
 the broader benchmark remain active work; this milestone does not meet the full
 performance goal.
+
+## Scalar kernels and output, 2026-10-27
+
+Rice unary reads now inline into residual decoding. Fixed predictors keep their
+one to four preceding samples in rolling registers. Byte-aligned 8/16/24/32-bit
+verbatim planes use checked bulk reads. Stereo decorrelation writes final PCM
+directly, avoiding an extra scratch traversal. Independent-channel conversion
+uses the range checks already performed on every reconstructed sample. New
+negative tests cover fixed-predictor and stereo reconstruction overflow at every
+declared depth. No validation or checksum is disabled.
+
+Seven interleaved trials against the preserved first-optimization binary give
+these median raw-frame times. All times are milliseconds per complete file;
+Symphonia's direct mode still omits footer CRC as described above.
+
+| Case | Previous | Current | Speedup | libFLAC | FFmpeg | Symphonia |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 01: block 4096 | 11.552 | 9.914 | 1.165x | 5.431 | 8.304 | 6.813 |
+| 03: block 16 | 13.366 | 9.855 | 1.356x | 15.340 | 20.697 | 7.774 |
+| 15: verbatim | 2.297 | 0.961 | 2.390x | 4.632 | 2.327 | 1.918 |
+| 17: fixed | 7.731 | 4.976 | 1.554x | 4.141 | 4.413 | 4.030 |
+| 28: high resolution | 35.530 | 30.596 | 1.161x | 17.074 | 22.926 | 19.256 |
+| 31: LPC-32 | 58.971 | 58.228 | 1.013x | 39.843 | 39.632 | 31.258 |
+| 44: 8-channel LPC-32 | 855.842 | 832.387 | 1.028x | 573.470 | 582.127 | 453.605 |
+
+An initial combined version put the verbatim loops inside the predictor's hot
+function and regressed LPC-32 despite unchanged arithmetic. Keeping verbatim in
+a separate function restored its performance. The retained version improves
+verbatim and fixed inputs substantially; the small LPC-32 differences above are
+not evidence that its predictor kernel improved. LPC remains the main gap.
+
+Reports: [raw trials](benches/validation/2026-10-27-scalar-raw.tsv),
+[summary](benches/validation/2026-10-27-scalar-summary.json),
+[provenance](benches/validation/2026-10-27-scalar-manifest.json).
+All 43 integration/external gates and three doctests pass, as does Clippy.
+Four fresh ASan campaigns complete 56,647 executions without a failure; see the
+[validation record](benches/validation/2026-10-27-scalar-validation.json),
+[fuzz results](benches/validation/2026-10-27-scalar-fuzz-results.json) and
+[compiler audit](benches/validation/2026-10-27-scalar-compiler-audit.json).
+Full performance parity remains unachieved.

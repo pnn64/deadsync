@@ -24,6 +24,19 @@ impl<'a> BitReader<'a> {
         self.data.len() * 8 - self.position()
     }
 
+    /// Borrow an aligned byte field and discard only the speculative cache.
+    pub(crate) fn aligned_bytes(&mut self, len: usize) -> Result<&'a [u8], Error> {
+        let bit_position = self.position();
+        debug_assert!(bit_position.is_multiple_of(8));
+        let start = bit_position / 8;
+        let end = start.checked_add(len).ok_or(Error::Truncated)?;
+        let bytes = self.data.get(start..end).ok_or(Error::Truncated)?;
+        self.next = end;
+        self.cache = 0;
+        self.bits = 0;
+        Ok(bytes)
+    }
+
     #[inline]
     fn refill(&mut self) {
         if self.bits <= 56 && self.data.len() - self.next >= 8 {
@@ -75,7 +88,7 @@ impl<'a> BitReader<'a> {
     }
 
     /// Count zero bits before a one, rejecting values beyond a caller's bound.
-    #[inline]
+    #[inline(always)]
     pub fn unary(&mut self, limit: u64) -> Result<u64, Error> {
         let mut total = 0u64;
         loop {

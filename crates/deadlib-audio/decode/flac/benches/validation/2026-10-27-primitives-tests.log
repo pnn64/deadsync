@@ -4,7 +4,7 @@ At line:16 char:1
 + ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     + CategoryInfo          : NotSpecified: (   Compiling de...io\decode\flac):String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
- 
+
     Finished `release` profile [optimized] target(s) in 48.74s
      Running unittests src\lib.rs (target/deadlib-flac\release\deps\deadlib_audio_decode_flac-a8fda9deec1e3495.exe)
 
