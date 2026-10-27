@@ -17,7 +17,7 @@ Milestones (commit each when verified):
    streaming encoder and exact PCM roundtrips.
 4. Ogg FLAC (implemented; evidence in OGG.md): mapping lifecycle, native Ogg crate, streaming and seeking,
    encoding; retain a container-independent codec API.
-5. Validation: libFLAC and Symphonia differential tests, official conformance
+5. Validation (implemented bounded campaigns and differential gates; see PARITY.md and fuzz/README.md): libFLAC, FFmpeg and Symphonia differential tests, official conformance
    corpus, malformed/truncated inputs, streaming splits, metadata, checksums,
    seek positions, fuzz targets and reproducible runs.
 6. Performance: reproducible whole-file/stream/startup/seek/encode benchmarks,

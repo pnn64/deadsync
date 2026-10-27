@@ -1,0 +1,132 @@
+{
+  "date": "2026-10-27",
+  "git_parent": "4709b82d3dff3ac7d4c75c0cd0f5084348d09cda",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "cargo": "cargo 1.99.1 (5f94df478 2026-08-27)",
+  "native_platform": "Windows x86_64 MSVC",
+  "ffmpeg_platform": "Debian WSL x86_64, GCC 14.2.0",
+  "ffmpeg_version": "9.0.2",
+  "ffmpeg_source": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
+  "ffmpeg_tag_commit": "946fcce07b6dcd0331c8cc609192aeff5e1924f8",
+  "ffmpeg_archive_sha256": "8c3850283eb25fa026482078a04051e0be17347b09ef81a0849bec15a96e002e",
+  "ffmpeg_oracle_sha256": "eac7016f210c6bc5334a9d960e1dbc44f3fd09fc2c81d8d2a505d6ef8eff37c7",
+  "ffmpeg_build_options": [
+    "--disable-everything",
+    "--disable-programs",
+    "--disable-doc",
+    "--disable-network",
+    "--disable-autodetect",
+    "--disable-x86asm",
+    "--enable-decoder=flac",
+    "--enable-parser=flac",
+    "--enable-demuxer=flac,ogg",
+    "--enable-protocol=file"
+  ],
+  "libFLAC_version": "1.5.0",
+  "libFLAC_commit": "1507800de4b70e21be71f38caa0d9079d0bc6e45",
+  "symphonia": "0.6.1",
+  "official_corpus_commit": "aa7b0c6cf32994c106ae517a08134c28a96ff5b2",
+  "gates": {
+    "local_tests": 32,
+    "doctests": 3,
+    "explicit_wire_exact_libFLAC_FFmpeg": 1279,
+    "accepted_fuzz_frames_exact_libFLAC_FFmpeg": 2162,
+    "raw_fuzz_source_inputs": 2621,
+    "official_native_FFmpeg_exact": 74,
+    "official_native_FFmpeg_rejections": 1,
+    "official_Ogg_FFmpeg_exact": 72,
+    "official_Ogg_FFmpeg_rejections": 1,
+    "official_native_libFLAC_exact": 75,
+    "official_Ogg_libFLAC_exact": 73,
+    "borrowed_native_seeks": 1533,
+    "file_backed_native_seeks": 1533,
+    "Ogg_seeks": 1533,
+    "ASan_decoder_executions": 173174
+  },
+  "ffmpeg_pinned_rejection": "uncommon/04 - changing bitdepth.flac: switching bps mid-stream is not supported",
+  "final_external_command": "cargo test -p deadlib-audio-decode-flac --target-dir target/deadlib-flac --test decoder_parity --release -- --include-ignored --test-threads=1",
+  "final_external_result": "4 passed, 0 failed; 150.95 seconds",
+  "logs": "target/deadlib-flac-reference/parity-audited-final.log; target/deadlib-flac-reference/parity-package-tests.log",
+  "sources_and_reports": [
+    {
+      "path": "Cargo.toml",
+      "sha256": "7fc4d176249bc8da43daebe73471c2012f9439792fd2011c53ec11ec728ffaca"
+    },
+    {
+      "path": "src/bitstream.rs",
+      "sha256": "64164d78152a71a34497c1ccf2ff6fb1f38820f5ff7630815e22a24894a45bad"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "173f85580ecd35cd8d5b5635cdf708387ffe3267cb7cf94cb7b7d27aceb00989"
+    },
+    {
+      "path": "src/encode.rs",
+      "sha256": "7d5a4964f53343ffeb269f958f68872c1137a37071a20185ae72e4c6d45926a6"
+    },
+    {
+      "path": "src/encoder.rs",
+      "sha256": "e009f29eb87ece5ca05d26f22030b524f5d247d45939539505ff4826fb77e596"
+    },
+    {
+      "path": "src/frame.rs",
+      "sha256": "2f57e300e8e61e7d57cb89a0587263c08153977258793714202f388e18119be6"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "7ce54346d29f7646d35dbe6e4fbe2050bfc402020ae037534ece0607836d71a5"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "088f01f53f6d47f107bef663b24c9256ce55e9673cced1f37e4316363caf48fa"
+    },
+    {
+      "path": "src/native.rs",
+      "sha256": "31ba12718a3e997ea08629f1d8e66b4b1dfeff7fb16864649a4d336672b86b59"
+    },
+    {
+      "path": "src/ogg.rs",
+      "sha256": "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85"
+    },
+    {
+      "path": "src/ogg_encode.rs",
+      "sha256": "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d"
+    },
+    {
+      "path": "src/ogg_seek.rs",
+      "sha256": "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1"
+    },
+    {
+      "path": "tests/decoder_parity.rs",
+      "sha256": "6d607ac04cd85ee1b9764485b0060ed3b19de1636c28cecaa13ad2afe92e8333"
+    },
+    {
+      "path": "tests/ffmpeg/build.sh",
+      "sha256": "4942715ff34f725a81b03ba3bdde7ac2bfe95c61337c4c639a2a41682f348bdc"
+    },
+    {
+      "path": "tests/ffmpeg/oracle.c",
+      "sha256": "861a479e28a5df48e291d8994e8f6c26f994762771c7d261cbdbad4de4b21cac"
+    },
+    {
+      "path": "tests/support/decoder_vectors.rs",
+      "sha256": "7dd00f0fdd2451605d37c92997b094f00ae6b0ed14d80dc9b7d350fe884e83c3"
+    },
+    {
+      "path": "validation/ffmpeg-corpus.tsv",
+      "sha256": "a77abfb93be9337a1c72965d54466ed7d588fa4459daa3b6d0595a9593442a6b"
+    },
+    {
+      "path": "validation/fuzz-frame-parity.tsv",
+      "sha256": "37c13094de6cfb2bab216d95c8ea3bd5b690835cfe3e89eefa6db537168bdbbb"
+    },
+    {
+      "path": "validation/fuzz-frame-source.json",
+      "sha256": "a71a920979421b723e1e65b3b384ea990f37e76501ae28b0848579833368f35a"
+    },
+    {
+      "path": "validation/wire-parity.tsv",
+      "sha256": "5378f109adf366e0edae1ffd42ead3e51c2cb4bf455d6ad94b74c2de57c58195"
+    }
+  ]
+}

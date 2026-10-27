@@ -4,7 +4,7 @@
 
 Implemented against RFC 9639 sections 8 and 9, with pre-2007 variable blocking
 compatibility from appendix B.1. Native, raw frame and borrowed-input seek APIs
-are available. The production dependency graph has no dependencies. Symphonia
+are available. The current production graph uses only the sibling Ogg container. Symphonia
 and the separately compiled C oracle are test-only.
 
 Local gate: `cargo test -p deadlib-audio-decode-flac`, 13 integration tests and
@@ -23,6 +23,9 @@ backwards. Invalid digest, short frame, count and byte-budget cases are checked.
 This matrix does not replace the outstanding fuzz campaign or encoder tests.
 
 ## External references
+
+The current three-reference decoder parity gate, explicit wire cases and
+accepted fuzz-frame differential replay are documented in [PARITY.md](PARITY.md).
 
 - [Official CELLAR FLAC corpus](https://github.com/ietf-wg-cellar/flac-test-files),
   commit `aa7b0c6cf32994c106ae517a08134c28a96ff5b2`, CC0. Corpus stays in ignored
@@ -93,8 +96,8 @@ Native encoding is covered in [ENCODING.md](ENCODING.md) and Ogg mapping,
 streaming, encoding and indexed file seeking in [OGG.md](OGG.md).
 Native file-backed seeking and validated SEEKTABLE acceleration are covered in
 [SEEKING.md](SEEKING.md), including another 1,533 exact official-corpus seeks.
-No fuzz campaign or performance benchmark has
-run. Current decoded scratch uses i64 intermediates plus i32 output to keep
+Recorded ASan/libFuzzer campaigns are described in [fuzz/README.md](fuzz/README.md).
+No performance benchmark has run. Current decoded scratch uses i64 intermediates plus i32 output to keep
 reconstruction safe; optimization needs measurements. The borrowed-input decoder's initial forward seek
 scans/decompresses frames up to its target, and the lazy index retains one entry
 per visited frame. Whole-stream MD5 is unavailable after a nonzero seek until a

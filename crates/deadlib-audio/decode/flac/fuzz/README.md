@@ -82,11 +82,11 @@ timeouts or RSS-limit failures. The generated-PCM campaign also exits zero.
 
 | Target | Executions | Feedback counters | Features | Peak sanitizer RSS, MiB |
 | --- | ---: | ---: | ---: | ---: |
-| primitives | 32,615 | see results | see results | 471 |
-| frame | 124,925 | see results | see results | 531 |
-| native | 11,382 | see results | see results | 540 |
-| ogg | 4,252 | see results | see results | 478 |
-| encode | 869 | see results | see results | 227 |
+| primitives | 32,615 | 501 | 1,314 | 471 |
+| frame | 124,925 | 1,324 | 4,326 | 531 |
+| native | 11,382 | 1,357 | 4,638 | 540 |
+| ogg | 4,252 | 2,297 | 6,028 | 478 |
+| encode | 869 | 2,999 | 9,138 | 227 |
 
 Total: **174,043 executions**, including seed initialization. Most encoder
 executions are initial seeds; this is a short smoke campaign, not extensive
