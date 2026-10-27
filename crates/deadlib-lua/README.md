@@ -575,6 +575,7 @@ cargo tree -p deadlib-lua --edges normal,build
 cargo run -p deadlib-lua --bin deadlua -- -e 'assert(6*7 == 42)'
 python scripts/check_rust_lua_suite.py --output docs/testing/rust-lua-suite.json
 python scripts/check_rust_lua_full_suite.py --output docs/testing/rust-lua-full-suite.json
+python scripts/check_rust_lua_unpack.py --run-root target/unpack-runs --output docs/testing/rust-lua-unpack.json
 ```
 
 Tests use the official vendored Lua 5.1 interpreter through the legacy binding
@@ -592,3 +593,8 @@ independent files pass in reference, Rust and both cache modes; unchanged
 `all.lua` still fails at `big.lua:11` in both 64-bit engines. See the
 [suite report](../../docs/testing/2026-10-26-rust-lua-boolean-hooks.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.
+The [portable regression checks](../../docs/testing/2026-10-27-rust-lua-portable-tests.md)
+also retain GNU C crashes on overflowing `unpack` ranges in separate processes.
+The strict standalone audit continues to fail on those inputs. Sanitizer and
+signed-wrapping builds are diagnostic controls, while the default reference
+and production engines keep their existing compiler flags.

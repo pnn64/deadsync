@@ -93,7 +93,7 @@ fn native_partial_errors_preserve_coerced_arguments_for_handlers() {
 
 #[test]
 fn generated_gsub_buffer_argument_changes_match_native_stack_effects() {
-    for width in [0, 511, 512, 513, 1024, 4096, 8192, 10000] {
+    for width in [0, 511, 512, 513, 1024, 4096, 8191, 8192, 8193, 10000] {
         for replacement in ["nil", "false", "true", "17"] {
             for extra in ["", ",3", ",3,'extra'"] {
                 compare(format!("local n=0;local ok,s,c=pcall(function()return string.gsub('abc','.',function(x)n=n+1;debug.setlocal(2,3,{replacement});return string.rep('O',{width})end{extra})end);return ok,s,c,n").as_bytes());
@@ -104,19 +104,21 @@ fn generated_gsub_buffer_argument_changes_match_native_stack_effects() {
 
 #[test]
 fn gsub_pending_buffer_calls_keep_errors_yield_rules_and_nested_jobs() {
+    let width = if cfg!(windows) { 513 } else { 8193 };
     for body in [
         "error('stop',0)",
         "return coroutine.yield('x')",
         "return string.gsub('aaa','a','b')",
         "debug.setlocal(2,3,17);return 'C'",
     ] {
-        compare(format!("debug.setmetatable(false,{{__concat=function(a,b){body} end}});local n=0;local ok,s,c=pcall(function()return string.gsub('abc','.',function()n=n+1;debug.setlocal(2,3,false);return string.rep('O',513)end)end);return ok,s,c,n").as_bytes());
+        compare(format!("debug.setmetatable(false,{{__concat=function(a,b){body} end}});local n=0;local ok,s,c=pcall(function()return string.gsub('abc','.',function()n=n+1;debug.setlocal(2,3,false);return string.rep('O',{width})end)end);return ok,s,c,n").as_bytes());
     }
 }
 
 #[test]
 fn aborting_a_pending_gsub_buffer_call_does_not_retain_its_job() {
-    let source=compile(b"debug.setmetatable(false,{__concat=function()started=true;local n=0;for i=1,1000000 do n=n+i end;return 'C'end});return string.gsub('abc','.',function()debug.setlocal(2,3,false);return string.rep('O',513)end)").unwrap();
+    let width = if cfg!(windows) { 513 } else { 8193 };
+    let source=compile(format!("debug.setmetatable(false,{{__concat=function()started=true;local n=0;for i=1,1000000 do n=n+i end;return 'C'end}});return string.gsub('abc','.',function()debug.setlocal(2,3,false);return string.rep('O',{width})end)").as_bytes()).unwrap();
     let mut vm = Vm::new();
     vm.set_instruction_limit(Some(1000));
     assert_eq!(vm.execute(&source).unwrap_err().kind(), ErrorKind::Limit);

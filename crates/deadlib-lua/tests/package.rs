@@ -374,7 +374,8 @@ fn import_quota_aborts_recover_and_keep_initialized_sentinels() {
 
 #[test]
 fn file_import_abort_releases_reader_records_and_executable_handles() {
-    let body = format!("--[=[{}]=]\nreturn 42", "x".repeat(100_000));
+    // Stay in the file reader beyond the quota with either native buffer size.
+    let body = format!("--[=[{}]=]\nreturn 42", "x".repeat(2 * 1024 * 1024));
     let files = Fixture::new(&[("long.lua", body.as_bytes())]);
     let program = compile(&files.script("package.path=@PATH@;return require('long')")).unwrap();
     let mut vm = Vm::new();

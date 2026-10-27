@@ -1,0 +1,225 @@
+{
+  "parent_revision": "18458ee31056d7c1172f6cb456223f37e564ac08",
+  "parent_audit": {
+    "path": "docs/testing/2026-10-27-rust-lua-ucrt-streams-linux-audit.json",
+    "sha256": "9e1b70557b81bf67e56fa350edd861e7dee0b7ee99d0b75a84179e3942f499d2"
+  },
+  "current": {
+    "log_path": "target/lua-portable-tests-linux-tests.log",
+    "log_sha256": "ff480894bfac4fa105c484f1915efe87f8dbb39046b7b8457e553075115cb7f9",
+    "exit_code": 0,
+    "total": 629,
+    "unit": 73,
+    "integration": 552,
+    "documentation": 4,
+    "failed_targets": [],
+    "targets": {
+      "cache_persistence": {
+        "status": "ok",
+        "passed": 2,
+        "failed": 0
+      },
+      "calendar": {
+        "status": "ok",
+        "passed": 14,
+        "failed": 0
+      },
+      "call_limits": {
+        "status": "ok",
+        "passed": 16,
+        "failed": 0
+      },
+      "capture_limits": {
+        "status": "ok",
+        "passed": 10,
+        "failed": 0
+      },
+      "codegen": {
+        "status": "ok",
+        "passed": 32,
+        "failed": 0
+      },
+      "constant_pool": {
+        "status": "ok",
+        "passed": 3,
+        "failed": 0
+      },
+      "coroutines": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0
+      },
+      "debug": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0
+      },
+      "debug_console": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0
+      },
+      "debug_locals": {
+        "status": "ok",
+        "passed": 32,
+        "failed": 0
+      },
+      "file_loading": {
+        "status": "ok",
+        "passed": 16,
+        "failed": 0
+      },
+      "gc": {
+        "status": "ok",
+        "passed": 22,
+        "failed": 0
+      },
+      "gnu_numbers": {
+        "status": "ok",
+        "passed": 2,
+        "failed": 0
+      },
+      "hooks": {
+        "status": "ok",
+        "passed": 42,
+        "failed": 0
+      },
+      "host_calls": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0
+      },
+      "host_closures": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0
+      },
+      "host_functions": {
+        "status": "ok",
+        "passed": 15,
+        "failed": 0
+      },
+      "host_reentry": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0
+      },
+      "interning": {
+        "status": "ok",
+        "passed": 4,
+        "failed": 0
+      },
+      "io": {
+        "status": "ok",
+        "passed": 23,
+        "failed": 0
+      },
+      "loading": {
+        "status": "ok",
+        "passed": 19,
+        "failed": 0
+      },
+      "lua51": {
+        "status": "ok",
+        "passed": 22,
+        "failed": 0
+      },
+      "native_auxiliary": {
+        "status": "ok",
+        "passed": 4,
+        "failed": 0
+      },
+      "native_errors": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0
+      },
+      "native_objects": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0
+      },
+      "native_protected": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0
+      },
+      "native_stack": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0
+      },
+      "native_tables": {
+        "status": "ok",
+        "passed": 10,
+        "failed": 0
+      },
+      "native_values": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0
+      },
+      "os": {
+        "status": "ok",
+        "passed": 17,
+        "failed": 0
+      },
+      "package": {
+        "status": "ok",
+        "passed": 25,
+        "failed": 0
+      },
+      "posix_locale": {
+        "status": "ok",
+        "passed": 3,
+        "failed": 0
+      },
+      "register_limits": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0
+      },
+      "runtime_errors": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0
+      },
+      "standalone": {
+        "status": "ok",
+        "passed": 6,
+        "failed": 0
+      },
+      "stdlib": {
+        "status": "ok",
+        "passed": 31,
+        "failed": 0
+      },
+      "syntax": {
+        "status": "ok",
+        "passed": 16,
+        "failed": 0
+      },
+      "thread_state": {
+        "status": "ok",
+        "passed": 5,
+        "failed": 0
+      },
+      "tracebacks": {
+        "status": "ok",
+        "passed": 14,
+        "failed": 0
+      },
+      "unprotected_calls": {
+        "status": "ok",
+        "passed": 7,
+        "failed": 0
+      },
+      "userdata": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0
+      }
+    }
+  },
+  "limitations": "The in-process Rust regression suite passes. Crashing GNU C unpack programs now run in the separate strict standalone audit, which still fails on five inputs. Its outcomes are preserved rather than treated as parity. No runtime implementation or default reference compiler flags changed."
+}

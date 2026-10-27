@@ -264,7 +264,17 @@ fn rename_preserves_data_result_counts_nul_boundaries_and_full_failure_tuples() 
         f=assert(io.open(other,'rb'));out[#out+1]=f:read('*a');f:close()
         save(os.rename(other,other));save(os.rename(other,path));save(os.rename('',other))
         save(os.rename(path,other..'/missing'));save(os.rename(path..'.missing',other))
-        save(os.rename(path,path..'*'));save(os.rename(path,path..'?'))
+        local function attempt(target)
+          local function finish(...)
+            save(...)
+            if (...)then
+              local f=assert(io.open(target,'rb'));assert(f:read('*a')=='before\0after');f:close()
+              assert(os.rename(target,path))
+            end
+          end
+          finish(os.rename(path,target))
+        end
+        attempt(path..'*');attempt(path..'?')
         save(os.rename(path,path..string.rep('x',300)))
         save(os.rename(path..string.rep('x',300),other))
         assert(os.remove(path));return unpack(out)

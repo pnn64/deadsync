@@ -196,8 +196,6 @@ fn unpack_defaults_empty_ranges_and_overflow_keep_native_error_precedence() {
     for arguments in [
         "{},3,1",
         "{},0/0,0/0",
-        "{},-2147483648,2147483647",
-        "{},0,2147483647",
         "{},2147483647,-2147483648",
         "{},nil,false",
         "false,false,false",
@@ -205,6 +203,37 @@ fn unpack_defaults_empty_ranges_and_overflow_keep_native_error_precedence() {
     ] {
         compare(format!("return pcall(function()return unpack({arguments})end)").as_bytes());
     }
+    // The GNU C oracle overflows its signed element count on these inputs.
+    // Keep its raw failures in check_rust_lua_unpack.py, outside this process.
+    #[cfg(windows)]
+    for arguments in ["{},-2147483648,2147483647", "{},0,2147483647"] {
+        compare(format!("return pcall(function()return unpack({arguments})end)").as_bytes());
+    }
+}
+
+#[test]
+fn unpack_overflow_is_a_catchable_error_and_preserves_later_calls() {
+    let mut vm = Vm::new();
+    vm.set_instruction_limit(Some(1000));
+    let program = compile(
+        br#"
+      for _,bounds in ipairs{{-2147483648,2147483647},{0,2147483647},{-1,2147483647},
+        {-2147483648,-1},{-2147483648,0}}do
+        local ok,e=pcall(unpack,{},bounds[1],bounds[2])
+        assert(not ok and e:find('too many results to unpack',1,true))
+      end
+      local a,b,c=unpack({11,22,33});return a,b,c
+    "#,
+    )
+    .unwrap();
+    assert_eq!(
+        vm.execute(&program).unwrap(),
+        &[
+            Value::Number(11.0),
+            Value::Number(22.0),
+            Value::Number(33.0)
+        ]
+    );
 }
 
 #[test]
