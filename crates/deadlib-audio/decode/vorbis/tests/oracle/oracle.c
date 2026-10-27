@@ -1,12 +1,14 @@
 /* External test oracle. Private codebook APIs are deliberately confined here. */
 #include <vorbis/codec.h>
 #include <vorbis/vorbisfile.h>
-#include "codebook.h"
-#include "mdct.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "codebook.h"
+#include "mdct.h"
+#include "codec_internal.h"
+#include "registry.h"
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
@@ -61,6 +63,50 @@ static void bookheaders(FILE *file) {
         free(data);
     }
     if (fgetc(file) != EOF) fail("trailing codebook headers");
+}
+/* The prefix layout is pinned to floor0.c. Copying its object representation
+   avoids aliasing the opaque look through an incompatible structure type. */
+typedef struct { int ln, m; int **linearmap; int n[2]; } floor0_look_prefix;
+static void floor0cases(FILE *file) {
+    vorbis_info info; vorbis_comment comments; vorbis_dsp_state dsp;
+    codec_setup_info *ci; vorbis_look_floor *look; const vorbis_func_floor *floor;
+    uint64_t count, c; int i;
+    vorbis_info_init(&info); vorbis_comment_init(&comments);
+    for (i = 0; i < 3; ++i) {
+        ogg_packet op; memset(&op, 0, sizeof(op));
+        op.packet = packet(file, &op.bytes); op.b_o_s = i == 0; op.packetno = i;
+        if (vorbis_synthesis_headerin(&info, &comments, &op)) fail("floor0 header");
+        free(op.packet);
+    }
+    ci = (codec_setup_info *)info.codec_setup;
+    if (ci->floor_type[0] != 0 || vorbis_synthesis_init(&dsp, &info)) fail("floor0 init");
+    floor = _floor_P[0]; look = floor->look(&dsp, ci->floor_param[0]);
+    count = get64(file); if (count > (1u << 20)) fail("floor0 case count");
+    put64(count);
+    for (c = 0; c < count; ++c) {
+        uint64_t w = get64(file), prefix = get64(file);
+        long size; unsigned char *data = packet(file, &size); vorbis_block block;
+        floor0_look_prefix view; void *memo; float *curve; uint32_t raw; int n;
+        if (w > 1 || prefix > 7 || vorbis_block_init(&dsp, &block)) fail("floor0 case");
+        block.W = (long)w; block.pcmend = ci->blocksizes[w]; n = block.pcmend / 2;
+        oggpack_readinit(&block.opb, data, size); oggpack_adv(&block.opb, (int)prefix);
+        memo = floor->inverse1(&block, look);
+        put8(memo != NULL); put64((uint64_t)oggpack_bits(&block.opb)); put8(block.opb.ptr == NULL);
+        put32((uint32_t)n);
+        if (memo) memcpy(&raw, (float *)memo + ((vorbis_info_floor0 *)ci->floor_param[0])->order, 4);
+        else raw = 0;
+        put32(raw);
+        curve = (float *)malloc((size_t)n * sizeof(*curve)); if (!curve) fail("floor0 curve");
+        for (i = 0; i < n; ++i) curve[i] = 1.f;
+        floor->inverse2(&block, look, memo, curve);
+        memcpy(&view, look, sizeof(view));
+        if (view.n[w] != n || !view.linearmap[w] || view.linearmap[w][n] != -1) fail("floor0 look layout");
+        for (i = 0; i < n; ++i) put32((uint32_t)view.linearmap[w][i]);
+        for (i = 0; i < n; ++i) { memcpy(&raw, curve + i, 4); put32(raw); }
+        free(curve); free(data); vorbis_block_clear(&block);
+    }
+    if (fgetc(file) != EOF) fail("trailing floor0 cases");
+    floor->free_look(look); vorbis_dsp_clear(&dsp); vorbis_comment_clear(&comments); vorbis_info_clear(&info);
 }
 static void books(FILE *file) {
     long size; unsigned char *data = packet(file, &size); oggpack_buffer bits;
@@ -211,7 +257,7 @@ static void ogg_seek(FILE *file, const char *requests_path) {
     fclose(requests); ov_clear(&reader);
 }
 int main(int argc, char **argv) {
-    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|books|pcm|pcm-cases|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
+    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|floor0cases|books|pcm|pcm-cases|mdct-cases|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
@@ -219,8 +265,15 @@ int main(int argc, char **argv) {
     if (!strcmp(argv[1], "headers")) headers(file);
     else if (!strcmp(argv[1], "books")) books(file);
     else if (!strcmp(argv[1], "bookheaders")) bookheaders(file);
+    else if (!strcmp(argv[1], "floor0cases")) floor0cases(file);
     else if (!strcmp(argv[1], "pcm")) pcm(file, 0);
     else if (!strcmp(argv[1], "pcm-cases")) pcm(file, 1);
+    else if (!strcmp(argv[1], "mdct-cases")) {
+        uint64_t count = get64(file), i;
+        if (count > (1u << 20)) fail("MDCT case count");
+        for (i = 0; i < count; ++i) transform(file, 0);
+        if (fgetc(file) != EOF) fail("trailing MDCT cases");
+    }
     else if (!strcmp(argv[1], "mdct")) transform(file, 0);
     else if (!strcmp(argv[1], "mdctforward")) transform(file, 1);
     else if (!strcmp(argv[1], "oggpcm")) ogg_pcm(file, 0);

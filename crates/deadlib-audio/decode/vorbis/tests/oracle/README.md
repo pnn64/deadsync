@@ -48,6 +48,16 @@ calls only `vorbis_staticbook_unpack`, emitting the count and one accepted byte 
 u64 consumed-bit position per declaration. It neither builds synthesis tables nor
 evaluates VQ data. The codebook extent suite independently checks its decisions
 against complete three-header `pcm` initialization without audio packets.
+`floor0cases` reads three headers, a u64 case count, then u64 long-block flag,
+u64 prefix-bit count and a length-prefixed floor payload per case. It invokes
+the unmodified private floor-zero callbacks, emitting count, presence (u8),
+consumed bits (u64), sticky EOF (u8), bins (u32), amplitude bits (u32), then every
+Bark index (u32) and curve sample (f32). A pinned object-layout prefix is copied
+with `memcpy` to inspect the actual integer maps without aliasing the opaque
+look object. [Floor-zero parameters](../../FLOOR0_PARAMETERS.md) records scope.
+`mdct-cases` reads a u64 count and that many existing length-prefixed `mdct`
+requests, emitting their concatenated f32 outputs. It calls `mdct_backward`
+unchanged, allowing every nonfinite spectral position to be checked in batches.
 `mdctforward` receives N time samples instead of N/2 coefficients and emits the
 N/2 coefficients from `mdct_forward`, with the same length-prefixed protocol.
 

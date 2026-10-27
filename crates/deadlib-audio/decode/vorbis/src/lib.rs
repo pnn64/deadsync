@@ -40,6 +40,19 @@ pub enum Residue2Layout {
     Libvorbis,
 }
 
+/// Floor-zero amplitude reads, Bark-grid rounding and partial-LSP concealment.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Floor0Behavior {
+    /// Published unsigned amplitude field (0..=63 bits) and f64 Bark equation.
+    #[default]
+    Vorbis,
+    /// Pinned libvorbis 1.3.7 behavior: signed 32-bit amplitude read, EOF for
+    /// larger widths, f32 Bark intermediates and the observed x86 width-32
+    /// normalization. Incomplete LSP words conceal the floor without sticky EOF.
+    /// Use `allow_nonfinite` to retain its IEEE results.
+    Libvorbis,
+}
+
 /// Header parsing policy, shared by complete setup and standalone codebooks.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ParseOptions {

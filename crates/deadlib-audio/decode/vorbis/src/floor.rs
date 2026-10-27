@@ -1,10 +1,13 @@
 use crate::{
-    Error, Floor, Floor0, Floor1,
+    Error, Floor, Floor0, Floor0Behavior, Floor1,
     bitpack::{BitReader, ilog},
     codebook::Codebook,
     floor_table::INVERSE_DB,
 };
 use core::f64::consts::PI;
+#[cfg(test)]
+#[path = "floor_reference.rs"]
+mod reference_tests;
 
 /// EndOfPacket is deliberately preserved so the packet decoder can implement
 /// section 4.3.2's all-channel zeroing rule before overlap/add, or the reference's
@@ -15,9 +18,10 @@ pub(crate) fn decode(
     bits: &mut BitReader<'_>,
     output: &mut [f32],
     allow_nonfinite: bool,
+    behavior: Floor0Behavior,
 ) -> Result<bool, Error> {
     match config {
-        Floor::Type0(config) => decode0(config, books, bits, output, allow_nonfinite),
+        Floor::Type0(config) => decode0(config, books, bits, output, allow_nonfinite, behavior),
         Floor::Type1(config) => decode1(config, books, bits, output),
     }
 }
@@ -158,9 +162,19 @@ fn decode0(
     bits: &mut BitReader<'_>,
     output: &mut [f32],
     allow_nonfinite: bool,
+    behavior: Floor0Behavior,
 ) -> Result<bool, Error> {
     let width = config.amplitude_bits as u32;
-    let amplitude = if width <= 32 {
+    let amplitude = if behavior == Floor0Behavior::Libvorbis {
+        if width > 32 {
+            // The reference bit reader turns an unsupported width into sticky
+            // EOF. Preserve the native reader's last-successful-position API.
+            bits.mark_exhausted();
+            return Err(Error::EndOfPacket);
+        }
+        let raw = bits.read(width)?;
+        if (raw as i32) > 0 { raw as u64 } else { 0 }
+    } else if width <= 32 {
         bits.read(width)? as u64
     } else {
         bits.read(32)? as u64 | (bits.read(width - 32)? as u64) << 32
@@ -180,7 +194,17 @@ fn decode0(
     let mut position = 0;
     let mut last = 0.0;
     while position < order && !book.is_empty() {
-        let values = book.decode_vector(bits)?;
+        let values = match book.decode_vector(bits) {
+            Ok(values) => values,
+            Err(Error::EndOfPacket) if behavior == Floor0Behavior::Libvorbis => {
+                // Reference codeword decoding uses lookahead, consuming an
+                // incomplete prefix without setting the bit reader's EOF flag.
+                // Amplitude/selector reads above still preserve sticky EOF.
+                bits.clear_exhausted();
+                return Ok(false);
+            }
+            Err(error) => return Err(error),
+        };
         let count = (order - position).min(values.len());
         for (&value, coefficient) in values
             .iter()
@@ -198,13 +222,12 @@ fn decode0(
     for (value, &coefficient) in cosine.iter_mut().zip(&coefficients[..order]) {
         *value = (2.0 * (coefficient as f64).cos()) as f32;
     }
-    let scale = config.bark_map_size as f64 / bark(config.rate as f64 * 0.5);
+    let mapping = BarkMap::new(config.rate, config.bark_map_size, behavior);
     let mut previous_map = usize::MAX;
     let mut gain = 0.0;
     let n = output.len();
     for (i, value) in output.iter_mut().enumerate() {
-        let map = ((bark(config.rate as f64 * 0.5 * i as f64 / n as f64) * scale).floor() as usize)
-            .min(config.bark_map_size as usize - 1);
+        let map = mapping.index(i, n);
         if map != previous_map {
             gain = floor0_gain(
                 config,
@@ -213,6 +236,7 @@ fn decode0(
                 &cosine[..order],
                 map,
                 allow_nonfinite,
+                behavior,
             );
             if !gain.is_finite() && !allow_nonfinite {
                 return Err(Error::Invalid("nonfinite floor0 curve"));
@@ -230,9 +254,17 @@ fn floor0_gain(
     cosine: &[f32],
     map: usize,
     allow_nonfinite: bool,
+    behavior: Floor0Behavior,
 ) -> f32 {
-    let amplitude = raw_amplitude as f32 / ((1u64 << config.amplitude_bits) - 1) as f32
-        * config.amplitude_offset as f32;
+    let denominator = if behavior == Floor0Behavior::Libvorbis {
+        // Deterministic model of the pinned x86 build's variable-width shift;
+        // no Rust integer overflow or undefined shift is performed.
+        1u32.wrapping_shl(config.amplitude_bits as u32)
+            .wrapping_sub(1) as u64
+    } else {
+        (1u64 << config.amplitude_bits) - 1
+    };
+    let amplitude = raw_amplitude as f32 / denominator as f32 * config.amplitude_offset as f32;
     let angle_step = (PI / config.bark_map_size as f64) as f32;
     let omega = (2.0 * ((angle_step * map as f32) as f64).cos()) as f32;
     let mut p = 0.5f32;
@@ -282,17 +314,145 @@ fn floor0_gain(
         p *= (1.0 - omega) * 0.5;
         q *= (1.0 + omega) * 0.5;
     }
-    let amplitude = raw_amplitude as f64 * config.amplitude_offset as f64
-        / ((1u64 << config.amplitude_bits) - 1) as f64;
+    let amplitude = raw_amplitude as f64 * config.amplitude_offset as f64 / denominator as f64;
     ((amplitude / (p + q).sqrt() - config.amplitude_offset as f64) * 0.11512925).exp() as f32
 }
 fn bark(value: f64) -> f64 {
     13.1 * (0.00074 * value).atan() + 2.24 * (0.0000000185 * value * value).atan() + 0.0001 * value
 }
 
+struct BarkMap {
+    rate: u16,
+    size: u16,
+    scale: f64,
+    behavior: Floor0Behavior,
+}
+impl BarkMap {
+    fn new(rate: u16, size: u16, behavior: Floor0Behavior) -> Self {
+        let scale = if behavior == Floor0Behavior::Libvorbis {
+            (size as f64 / bark_reference(rate as f32 / 2.0)) as f32 as f64
+        } else {
+            size as f64 / bark(rate as f64 * 0.5)
+        };
+        Self {
+            rate,
+            size,
+            scale,
+            behavior,
+        }
+    }
+    fn index(&self, i: usize, n: usize) -> usize {
+        let value = if self.behavior == Floor0Behavior::Libvorbis {
+            bark_reference((self.rate as f32 / 2.0) / n as f32 * i as f32)
+        } else {
+            bark(self.rate as f64 * 0.5 * i as f64 / n as f64)
+        };
+        ((value * self.scale).floor() as usize).min(self.size as usize - 1)
+    }
+}
+fn bark_reference(value: f32) -> f64 {
+    13.1f32 as f64 * ((0.00074f32 * value) as f64).atan()
+        + 2.24f32 as f64 * ((value * value * 1.85e-8f32) as f64).atan()
+        + (1e-4f32 * value) as f64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unsigned_amplitude_default_and_reference_integer_edges_stay_separate() {
+        use crate::bitpack::BitWriter;
+        let book = lsp_book(1);
+        for width in [32u8, 33, 63] {
+            let config = Floor0 {
+                order: 1,
+                rate: 8000,
+                bark_map_size: 63,
+                amplitude_bits: width,
+                amplitude_offset: 30,
+                books: vec![0],
+            };
+            let amplitude = 1u64 << (width - 1);
+            let mut packet = BitWriter::new();
+            packet
+                .write(amplitude as u32, (width as u32).min(32))
+                .unwrap();
+            if width > 32 {
+                packet
+                    .write((amplitude >> 32) as u32, width as u32 - 32)
+                    .unwrap();
+            }
+            packet.write(0, 2).unwrap();
+            packet.write(21, 5).unwrap();
+            let data = packet.finish().unwrap();
+            let mut bits = BitReader::new(&data);
+            let mut output = [0.0; 32];
+            assert!(
+                decode0(
+                    &config,
+                    std::slice::from_ref(&book),
+                    &mut bits,
+                    &mut output,
+                    false,
+                    Floor0Behavior::Vorbis
+                )
+                .unwrap()
+            );
+            assert_eq!(bits.position(), width as usize + 2);
+            assert_eq!(bits.read(5), Ok(21));
+            let amp = amplitude as f64 / ((1u64 << width) - 1) as f64 * 30.0;
+            let expected = ((amp / (1.0 - 1.0f64.cos()) - 30.0) * 0.11512925).exp();
+            assert!((output[0] as f64 - expected).abs() < 2e-6 * expected.max(1.0));
+            let mut bits = BitReader::new(&data);
+            let result = decode0(
+                &config,
+                std::slice::from_ref(&book),
+                &mut bits,
+                &mut output,
+                true,
+                Floor0Behavior::Libvorbis,
+            );
+            if width == 32 {
+                assert_eq!(result, Ok(false));
+                assert_eq!(bits.position(), 32);
+                assert!(!bits.is_exhausted());
+                assert_eq!(bits.read(7), Ok(21 << 2));
+            } else {
+                assert_eq!(result, Err(Error::EndOfPacket));
+                assert!(bits.is_exhausted());
+                assert_eq!(bits.read(0), Err(Error::EndOfPacket));
+            }
+        }
+        let config = Floor0 {
+            order: 1,
+            rate: 8000,
+            bark_map_size: 63,
+            amplitude_bits: 32,
+            amplitude_offset: 30,
+            books: vec![0],
+        };
+        let mut packet = BitWriter::new();
+        packet.write(1, 32).unwrap();
+        packet.write(0, 2).unwrap();
+        let data = packet.finish().unwrap();
+        for allow in [false, true] {
+            let mut output = [0.0; 32];
+            let result = decode0(
+                &config,
+                std::slice::from_ref(&book),
+                &mut BitReader::new(&data),
+                &mut output,
+                allow,
+                Floor0Behavior::Libvorbis,
+            );
+            if allow {
+                assert_eq!(result, Ok(true));
+                assert!(output.iter().all(|v| *v == f32::INFINITY));
+            } else {
+                assert_eq!(result, Err(Error::Invalid("nonfinite floor0 curve")));
+            }
+        }
+    }
     #[test]
     fn empty_floor_books_preserve_following_channel_bits() {
         use crate::{FloorClass, bitpack::BitWriter, codebook::empty_test_book};
@@ -340,7 +500,14 @@ mod tests {
         for allow in [false, true] {
             let mut bits = BitReader::new(&bytes);
             let mut output = [0.0; 32];
-            let result = decode0(&config, &books, &mut bits, &mut output, allow);
+            let result = decode0(
+                &config,
+                &books,
+                &mut bits,
+                &mut output,
+                allow,
+                Floor0Behavior::Vorbis,
+            );
             if allow {
                 assert_eq!(result, Ok(true));
                 assert_eq!(output[0], f32::INFINITY);
@@ -390,7 +557,15 @@ mod tests {
         let mut coefficients = [PI as f32; 254];
         coefficients[253] = (PI / 96.0) as f32 * 32.0;
         let cosine = coefficients.map(|x| (2.0 * (x as f64).cos()) as f32);
-        let gain = floor0_gain(&config, 7, &coefficients, &cosine, 32, false);
+        let gain = floor0_gain(
+            &config,
+            7,
+            &coefficients,
+            &cosine,
+            32,
+            false,
+            Floor0Behavior::Vorbis,
+        );
         let expected = (-30.0f64 * 0.11512925).exp() as f32;
         assert!(gain.is_finite());
         assert_eq!(gain, expected);
@@ -422,7 +597,8 @@ mod tests {
                         std::slice::from_ref(&book),
                         &mut bits,
                         &mut output,
-                        false
+                        false,
+                        Floor0Behavior::Vorbis,
                     )
                     .unwrap()
                 );
@@ -470,6 +646,7 @@ mod tests {
                         &mut BitReader::new(&packet),
                         &mut output,
                         false,
+                        Floor0Behavior::Vorbis,
                     )
                     .unwrap()
                 );

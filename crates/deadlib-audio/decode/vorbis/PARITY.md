@@ -123,3 +123,8 @@ documented strict/legacy/reference acceptance differences, including historical
 endpoint discrepancies, instead of hiding them in PCM tolerances. Named
 reference disagreements need individual assessment. Performance results cannot
 close these gaps. Application integration remains outside the requested scope.
+
+The [floor-zero parameter follow-up](FLOOR0_PARAMETERS.md) records amplitude-width,
+Bark-map and incomplete-LSP reader differences, plus the IEEE transform-class
+regression. The default unsigned field policy and explicit reference policy are
+checked separately; the original finite PCM tolerances are unchanged.

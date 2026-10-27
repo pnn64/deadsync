@@ -30,6 +30,11 @@ The [codebook extent follow-up](CODEBOOK_LIMITS.md) adds a configurable 24-bit
 reference declaration guard before lengths/allocation, 475 exact declaration and
 whole-initialization checks, plus a full-wire-field override under other limits.
 
+The [floor-zero parameter follow-up](FLOOR0_PARAMETERS.md) separates unsigned
+amplitudes from the pinned reference's signed reader, sticky EOF for widths above
+32, Bark-grid rounding and incomplete LSP concealment. Explicit IEEE synthesis
+also matches whole-block NaN propagation from nonfinite spectra.
+
 ## Implemented and tested (2026-10-26)
 
 * Bitpacking/unpacking with widths 0..=32, unaligned 32-bit fields, zero-width

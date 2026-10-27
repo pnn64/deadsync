@@ -59,6 +59,36 @@ def table(path, rows):
         writer.writeheader(); writer.writerows(rows)
 
 
+def generate(run: Path, driver: Path) -> list[Path]:
+    """Keep the copied decoder inside its own crate's privacy boundary."""
+    generated = run / 'src'; generated.mkdir()
+    copied = run / 'profiled-vorbis'; (copied / 'src').mkdir(parents=True)
+    for source in (DECODE / 'vorbis/src').glob('*.rs'):
+        text = source.read_text(encoding='utf-8')
+        if source.name == 'decoder.rs': text = instrument(text)
+        (copied / 'src' / source.name).write_text(text, encoding='utf-8', newline='\n')
+    cargo = '[package]\nname = "deadlib-profiled-vorbis"\nversion = "0.0.0"\nedition = "2024"\npublish = false\n\n[features]\nbench-alloc = []\n\n[dependencies]\n'
+    cargo += f'deadlib-audio-decode-ogg = {{ path = {json.dumps((DECODE / "ogg").as_posix(), ensure_ascii=False)} }}\n'
+    (copied / 'Cargo.toml').write_text(cargo, encoding='utf-8', newline='\n')
+    text = driver.read_text(encoding='utf-8')
+    anchor = 'profiled_decoder::PacketDecoder::new(setup(&packets))'
+    if text.count(anchor) != 1: raise RuntimeError('profile driver setup anchor changed')
+    text = text.replace(anchor, 'profiled_decoder::PacketDecoder::new(profiled_setup(&packets))')
+    text = 'use deadlib_profiled_vorbis as profiled_decoder;\n' + text + """
+fn profiled_setup(packets: &[Vec<u8>]) -> profiled_decoder::Setup {
+    let id = profiled_decoder::Identification::parse(&packets[0]).unwrap();
+    profiled_decoder::Setup::parse(&packets[2], &id, &profiled_decoder::Limits::default()).unwrap()
+}
+"""
+    (generated / 'main.rs').write_text(text, encoding='utf-8', newline='\n')
+    cargo = '[package]\nname = "deadlib-vorbis-synthesis-probe"\nversion = "0.0.0"\nedition = "2024"\npublish = false\n\n[workspace]\n\n[dependencies]\n'
+    for package in ('ogg', 'vorbis'):
+        cargo += f'deadlib-audio-decode-{package} = {{ path = {json.dumps((DECODE / package).as_posix(), ensure_ascii=False)} }}\n'
+    cargo += 'deadlib-profiled-vorbis = { path = "profiled-vorbis" }\n'
+    (run / 'Cargo.toml').write_text(cargo, encoding='utf-8', newline='\n')
+    return sorted([*(generated.glob('*.rs')), *(copied / 'src').glob('*.rs')])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('files', type=Path, nargs='*')
@@ -83,24 +113,11 @@ def main():
     driver = DECODE / 'vorbis/benches/support/synthesis_profile.rs'
     source_files += [Path(__file__).resolve(), driver, DECODE / 'scripts/benchmark.py', REPO / 'Cargo.toml', REPO / '.cargo/config.toml', DECODE / 'ogg/Cargo.toml', DECODE / 'vorbis/Cargo.toml']
     sources = {label(p): sha(p) for p in sorted(source_files)}
-    generated = run / 'src'; generated.mkdir()
-    original = (DECODE / 'vorbis/src/decoder.rs').read_text(encoding='utf-8')
-    (generated / 'profiled_decoder.rs').write_bytes(instrument(original).encode())
-    setup_source = (DECODE / 'vorbis/src/setup.rs').read_text(encoding='utf-8')
-    begin = setup_source.index('pub(crate) fn read_audio_header(')
-    end = setup_source.index('\nfn storage<', begin)
-    (generated / 'profile_setup.rs').write_bytes(('use crate::{Mode, AudioHeader, Error, bitpack::{BitReader, ilog}};\n' + setup_source[begin:end]).encode())
-    modules = ''.join(f'#[path = {json.dumps((DECODE / "vorbis/src" / (n + ".rs")).as_posix(), ensure_ascii=False)}]\nmod {n};\n'
-                      for n in ('floor', 'floor_table', 'residue'))
-    modules += '#[allow(dead_code)]\nmod profiled_decoder;\n#[path = "profile_setup.rs"]\nmod setup;\n'
-    (generated / 'main.rs').write_bytes((modules + driver.read_text(encoding='utf-8')).encode())
+    generated_files = generate(run, driver)
     profiles = tomllib.loads((REPO / 'Cargo.toml').read_text(encoding='utf-8'))['profile']
     profile = profiles['release'] | profiles['bench']
-    cargo = '[package]\nname = "deadlib-vorbis-synthesis-probe"\nversion = "0.0.0"\nedition = "2024"\npublish = false\n\n[workspace]\n\n[dependencies]\n'
-    for package in ('ogg', 'vorbis'):
-        cargo += f'deadlib-audio-decode-{package} = {{ path = {json.dumps((DECODE / package).as_posix(), ensure_ascii=False)} }}\n'
-    cargo += '\n[profile.release]\n' + ''.join(f'{k} = {json.dumps(v)}\n' for k,v in profile.items())
-    (run / 'Cargo.toml').write_bytes(cargo.encode())
+    with (run / 'Cargo.toml').open('a', encoding='utf-8', newline='\n') as f:
+        f.write('\n[profile.release]\n' + ''.join(f'{k} = {json.dumps(v)}\n' for k,v in profile.items()))
     build = subprocess.run(['cargo', 'build', '--offline', '--release', '--manifest-path', str(run / 'Cargo.toml'), '--message-format=json'], cwd=REPO, capture_output=True)
     (run / 'build.log').write_bytes(build.stdout + build.stderr)
     if build.returncode:
@@ -113,7 +130,7 @@ def main():
     manifest = {'started_utc': datetime.now(timezone.utc).isoformat(), 'git_head': subprocess.check_output(['git','rev-parse','HEAD'],cwd=REPO,text=True).strip(),
                 'rustc': subprocess.check_output(['rustc','-Vv'],cwd=REPO,text=True), 'source_sha256':sources,
                 'input_sha256':{label(p):sha(p) for p in files}, 'binary_path':label(binary), 'binary_sha256':sha(binary),
-                'generated_sha256':{p.relative_to(run).as_posix():sha(p) for p in generated.glob('*.rs')},
+                'generated_sha256':{p.relative_to(run).as_posix():sha(p) for p in generated_files},
                 'cargo_artifact_profile':artifact['profile'], 'profile_release':profile,
                 'rustflags_environment':{k:os.environ.get(k) for k in ('RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS')},
                 'repeats':args.repeats,'min_seconds':args.min_seconds,'seed':args.seed,'stages':STAGES,

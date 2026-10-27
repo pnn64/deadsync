@@ -69,7 +69,12 @@ replaying. The manifest records its exact external source hash.
 Header and streaming inputs also exercise both `Residue2Layout` policies. The
 header target's high control bit selects the libvorbis layout when `kind % 3`
 selects setup parsing. Bits six and five enable empty books and IEEE propagation
-respectively (controls 2 / 224 exercise strict / all three compatibility options).
+respectively (controls 2 / 224 exercise strict / those three compatibility options).
+Header bit three selects `Floor0Behavior::Libvorbis`; control 233 combines it
+with those options. Streaming bit seven selects the same floor-zero policy,
+including selected setup reparsing and overlap pre-roll. Procedural seeds cover
+unsigned/signed amplitude boundaries, unsupported widths, partial LSP words and
+Bark-grid rounding; the default published-amplitude policy remains exercised.
 Header control bit four raises the codebook extent cap from 24 to the full
 40 wire-field bits. Streaming bit six makes the same choice, preserved during
 indexing and selected setup reparsing. Entry/value/memory caps remain independent;

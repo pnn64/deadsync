@@ -149,3 +149,9 @@ differences in the [parity ledger](PARITY.md) still require independent work.
 The subsequent [extent-limit follow-up](CODEBOOK_LIMITS.md) applies the reference
 guard before lengths for every book and exposes it through
 `Limits::max_codebook_extent_bits` (default 24, configurable independently).
+
+The [floor-zero parameter follow-up](FLOOR0_PARAMETERS.md) adds signed-reference
+amplitude and Bark policies, incomplete-LSP concealment, and reference all-NaN
+blocks when a spectrum contains a nonfinite value. The standalone f64 transform
+retains its independently derived arithmetic; explicit packet IEEE synthesis
+matches the reference's classes before overlap.

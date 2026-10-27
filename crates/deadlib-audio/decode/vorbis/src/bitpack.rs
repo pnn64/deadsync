@@ -28,6 +28,12 @@ impl<'a> BitReader<'a> {
     pub fn is_exhausted(&self) -> bool {
         self.exhausted
     }
+    pub(crate) fn mark_exhausted(&mut self) {
+        self.exhausted = true;
+    }
+    pub(crate) fn clear_exhausted(&mut self) {
+        self.exhausted = false;
+    }
 
     /// Speculative lookahead. Insufficient bits do not set end-of-packet;
     /// `read` does. Useful for a Huffman fast table near a packet boundary.

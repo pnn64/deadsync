@@ -43,6 +43,10 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
   uses the published interleave rule. The same field in `OggOptions` and
   `SeekOptions` preserves the choice through streaming/reset/seeking. See
   [residue geometry](RESIDUE_GEOMETRY.md) for the difference and evidence.
+  `Floor0Behavior::Libvorbis` selects the reference amplitude reader, Bark-grid
+  rounding and partial-LSP concealment through raw/Ogg/seek options. The unsigned
+  0..=63-bit published amplitude remains the default; see
+  [floor-zero parameters](FLOOR0_PARAMETERS.md).
   `DecodeOptions::allow_nonfinite` selects libvorbis IEEE propagation. It and
   `allow_empty_codebooks` are preserved by Ogg/reset/seek options; see
   [degenerate books](DEGENERATE_BOOKS.md) for consumer behavior and validation.

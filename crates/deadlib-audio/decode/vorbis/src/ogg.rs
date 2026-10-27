@@ -1,7 +1,7 @@
 //! Vorbis I Appendix A mapping on the independent Ogg container.
 use crate::{
-    Comments, DecodeOptions, Error, Identification, Limits, Metadata, PacketDecoder, ParseOptions,
-    PcmBlock, Residue2Layout, Setup, reserve,
+    Comments, DecodeOptions, Error, Floor0Behavior, Identification, Limits, Metadata,
+    PacketDecoder, ParseOptions, PcmBlock, Residue2Layout, Setup, reserve,
 };
 use deadlib_audio_decode_ogg::{
     self as container, Demuxer, Packet, Page, PageDecoder, PageHeader, PageReader,
@@ -17,6 +17,7 @@ pub struct OggOptions {
     pub allow_zero_span_granules: bool,
     /// Explicit reference behavior for unaligned type-two residue ranges.
     pub residue2_layout: Residue2Layout,
+    pub floor0_behavior: Floor0Behavior,
     /// Use `ParseOptions::allow_empty_codebooks` for every logical stream.
     pub allow_empty_codebooks: bool,
     /// Use `DecodeOptions::allow_nonfinite` for every logical stream.
@@ -33,6 +34,7 @@ impl Default for OggOptions {
             container_limits: container::Limits::default(),
             allow_zero_span_granules: false,
             residue2_layout: Residue2Layout::Interleaved,
+            floor0_behavior: Floor0Behavior::Vorbis,
             allow_empty_codebooks: false,
             allow_nonfinite: false,
             max_active_streams: 16,
@@ -438,6 +440,7 @@ impl OggDecoder {
                     DecodeOptions {
                         limits,
                         residue2_layout: options.residue2_layout,
+                        floor0_behavior: options.floor0_behavior,
                         allow_nonfinite: options.allow_nonfinite,
                     },
                 )?;

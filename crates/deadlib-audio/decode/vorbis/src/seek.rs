@@ -1,7 +1,7 @@
 //! Indexed, sample-accurate seeking with one-packet overlap pre-roll.
 use crate::{
-    DecodeOptions, Error, Limits, Metadata, OggEvent, OggPcm, PacketDecoder, ParseOptions,
-    Residue2Layout, Setup, StreamEnd, StreamId, StreamInfo,
+    DecodeOptions, Error, Floor0Behavior, Limits, Metadata, OggEvent, OggPcm, PacketDecoder,
+    ParseOptions, Residue2Layout, Setup, StreamEnd, StreamId, StreamInfo,
     ogg::{Timing, granule, read_identification, read_metadata},
 };
 use core::ops::ControlFlow;
@@ -17,6 +17,7 @@ pub struct SeekOptions {
     pub container_limits: container::Limits,
     pub allow_zero_span_granules: bool,
     pub residue2_layout: Residue2Layout,
+    pub floor0_behavior: Floor0Behavior,
     /// Retained for index parsing and every selected setup reparse.
     pub allow_empty_codebooks: bool,
     /// Retained for every synthesized pre-roll and returned PCM block.
@@ -44,6 +45,7 @@ impl Default for SeekOptions {
             container_limits: container::Limits::default(),
             allow_zero_span_granules: false,
             residue2_layout: Residue2Layout::Interleaved,
+            floor0_behavior: Floor0Behavior::Vorbis,
             allow_empty_codebooks: false,
             allow_nonfinite: false,
             trim_to_final_granule: false,
@@ -585,6 +587,7 @@ impl<R: Read + Seek> OggSeekReader<R> {
                     DecodeOptions {
                         limits,
                         residue2_layout: self.index.options.residue2_layout,
+                        floor0_behavior: self.index.options.floor0_behavior,
                         allow_nonfinite: self.index.options.allow_nonfinite,
                     },
                 )?);

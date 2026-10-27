@@ -375,6 +375,11 @@ pub fn vorbis_headers(input: &[u8]) {
                     vorbis::DecodeOptions {
                         limits: setup_limits,
                         allow_nonfinite: kind & 32 != 0,
+                        floor0_behavior: if kind & 8 != 0 {
+                            vorbis::Floor0Behavior::Libvorbis
+                        } else {
+                            vorbis::Floor0Behavior::Vorbis
+                        },
                         residue2_layout: if kind & 0x80 != 0 {
                             vorbis::Residue2Layout::Libvorbis
                         } else {
@@ -521,6 +526,11 @@ pub fn vorbis_stream(input: &[u8]) {
         },
         allow_empty_codebooks: control & 16 != 0,
         allow_nonfinite: control & 32 != 0,
+        floor0_behavior: if control & 128 != 0 {
+            vorbis::Floor0Behavior::Libvorbis
+        } else {
+            vorbis::Floor0Behavior::Vorbis
+        },
     };
     let mut reader = vorbis::OggReader::with_options(data, options);
     let mut expected = Digest::with_nonfinite(options.allow_nonfinite);
@@ -575,6 +585,7 @@ pub fn vorbis_stream(input: &[u8]) {
             residue2_layout: options.residue2_layout,
             allow_empty_codebooks: options.allow_empty_codebooks,
             allow_nonfinite: options.allow_nonfinite,
+            floor0_behavior: options.floor0_behavior,
             packet_preroll: control & 4 == 0,
             max_index_pages: MAX_PAGES,
             max_index_memory: 8 << 20,

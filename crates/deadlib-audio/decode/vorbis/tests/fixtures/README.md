@@ -118,3 +118,17 @@ cargo test -p deadlib-audio-decode-vorbis --release --test book_limits regenerat
 
 See [codebook limits](../../CODEBOOK_LIMITS.md) for reference protocol, policies
 and exact reader-position evidence.
+
+The floor-zero parameter fixtures contain only procedural synthetic C responses:
+
+| Fixture | Wire format and coverage | Bytes | SHA-256 |
+| --- | --- | --- | --- |
+| `floor0-components-v1.libvorbis` | `DVF0CMP1`, u32 set count (69), then u64-length request/response pairs; reader decisions, actual maps and curves | 1,133,914 | `3d6fbe7bf8bfc0bc3475cccdda7714374296bf15f8a69a551df97bf02a3d6c5a` |
+| `floor0-bark-v1.libvorbis` | `DVF0MAP1`, u32 map count (1,088), then u16 rate/grid/bins and u16 indices; 1,436,160 indices | 2,878,860 | `86d98084a0a375654641b61913ec57563375424a9b14cdeebc8a5cf3218ef52b` |
+| `floor0-parameters-v1.libvorbis-pcm` | `DVF0PCM1`, u32 set count (7), then u64-length `pcm-cases` responses | 118,355 | `337578d91287d6bc811399ce14ef9b0fdb0f9f6d22bec6d405d5f2ef1103a708` |
+
+`tests/support/floor0_vectors.rs`, `src/floor_reference.rs` and
+`regressions` in `tests/floor_zero_parameters.rs` define the inputs independently
+of the native encoder. Normal tests compare finite values within the original
+bounds and nonfinite classes/signs per position. Manual generators are documented
+in [floor-zero parameters](../../FLOOR0_PARAMETERS.md).
