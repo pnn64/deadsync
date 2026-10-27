@@ -1,0 +1,101 @@
+
+/mnt/c/GitHub/deadsync/target/png-huffman-lookahead-trial/decode_bench.exe:	file format coff-x86-64
+
+Disassembly of section .text:
+
+0000000140001000 <.text>:
+140019f50:     	pushq	%rsi
+140019f51:     	pushq	%rdi
+140019f52:     	pushq	%rbx
+140019f53:     	subq	$0x20, %rsp
+140019f57:     	movq	%rcx, %rax
+140019f5a:     	movzbl	0x20(%r8), %r9d
+140019f5f:     	cmpq	$0x9, %r9
+140019f63:     	jae	0x140019fb7 <.text+0x18fb7>
+140019f65:     	movq	0x8(%r8), %r11
+140019f69:     	movq	0x10(%r8), %r10
+140019f6d:     	movq	%r11, %rcx
+140019f70:     	subq	%r10, %rcx
+140019f73:     	cmpq	$0x3, %rcx
+140019f77:     	jbe	0x14001a007 <.text+0x19007>
+140019f7d:     	leaq	0x4(%r10), %rsi
+140019f81:     	cmpq	$-0x5, %r10
+140019f85:     	ja	0x14001a07c <.text+0x1907c>
+140019f8b:     	cmpq	%r11, %rsi
+140019f8e:     	ja	0x14001a07c <.text+0x1907c>
+140019f94:     	movq	(%r8), %rcx
+140019f97:     	movl	(%rcx,%r10), %edi
+140019f9b:     	movl	%r9d, %ecx
+140019f9e:     	shlq	%cl, %rdi
+140019fa1:     	orq	0x18(%r8), %rdi
+140019fa5:     	movq	%rdi, 0x18(%r8)
+140019fa9:     	movq	%rsi, 0x10(%r8)
+140019fad:     	addl	$0x20, %r9d
+140019fb1:     	movb	%r9b, 0x20(%r8)
+140019fb5:     	jmp	0x140019fbb <.text+0x18fbb>
+140019fb7:     	movq	0x18(%r8), %rdi
+140019fbb:     	movl	%edi, %ecx
+140019fbd:     	andl	$0x1ff, %ecx            # imm = 0x1FF
+140019fc3:     	movzwl	(%rdx,%rcx,2), %r10d
+140019fc8:     	testq	%r10, %r10
+140019fcb:     	je	0x140019ff8 <.text+0x18ff8>
+140019fcd:     	movl	%r10d, %ecx
+140019fd0:     	andb	$0xf, %cl
+140019fd3:     	shrq	%cl, %rdi
+140019fd6:     	movq	%rdi, 0x18(%r8)
+140019fda:     	subb	%cl, %r9b
+140019fdd:     	movb	%r9b, 0x20(%r8)
+140019fe1:     	shrl	$0x4, %r10d
+140019fe5:     	movq	%r10, 0x8(%rax)
+140019fe9:     	movq	$-0x1, (%rax)
+140019ff0:     	addq	$0x20, %rsp
+140019ff4:     	popq	%rbx
+140019ff5:     	popq	%rdi
+140019ff6:     	popq	%rsi
+140019ff7:     	retq
+140019ff8:     	movq	%rax, %rcx
+140019ffb:     	addq	$0x20, %rsp
+140019fff:     	popq	%rbx
+14001a000:     	popq	%rdi
+14001a001:     	popq	%rsi
+14001a002:     	jmp	0x1400180e0 <.text+0x170e0>
+14001a007:     	cmpq	%r11, %r10
+14001a00a:     	cmovaq	%r10, %r11
+14001a00e:     	jae	0x14001a048 <.text+0x19048>
+14001a010:     	movq	(%r8), %rsi
+14001a013:     	movzbl	(%rsi,%r10), %edi
+14001a018:     	movl	%r9d, %ecx
+14001a01b:     	shlq	%cl, %rdi
+14001a01e:     	orq	0x18(%r8), %rdi
+14001a022:     	movq	%rdi, 0x18(%r8)
+14001a026:     	leaq	0x1(%r10), %rcx
+14001a02a:     	movq	%rcx, 0x10(%r8)
+14001a02e:     	leal	0x8(%r9), %ebx
+14001a032:     	movb	%bl, 0x20(%r8)
+14001a036:     	testb	%r9b, %r9b
+14001a039:     	je	0x14001a043 <.text+0x19043>
+14001a03b:     	movl	%ebx, %r9d
+14001a03e:     	jmp	0x140019fbb <.text+0x18fbb>
+14001a043:     	cmpq	%r11, %rcx
+14001a046:     	jne	0x14001a057 <.text+0x19057>
+14001a048:     	movq	%rax, %rcx
+14001a04b:     	addq	$0x20, %rsp
+14001a04f:     	popq	%rbx
+14001a050:     	popq	%rdi
+14001a051:     	popq	%rsi
+14001a052:     	jmp	0x140018410 <.text+0x17410>
+14001a057:     	movzbl	0x1(%rsi,%r10), %ecx
+14001a05d:     	shll	$0x8, %ecx
+14001a060:     	orq	%rcx, %rdi
+14001a063:     	movq	%rdi, 0x18(%r8)
+14001a067:     	addq	$0x2, %r10
+14001a06b:     	movq	%r10, 0x10(%r8)
+14001a06f:     	movb	$0x10, 0x20(%r8)
+14001a074:     	movb	$0x10, %r9b
+14001a077:     	jmp	0x140019fbb <.text+0x18fbb>
+14001a07c:     	leaq	0x5b845(%rip), %r9      # 0x1400758c8
+14001a083:     	movq	%r10, %rcx
+14001a086:     	movq	%rsi, %rdx
+14001a089:     	movq	%r11, %r8
+14001a08c:     	callq	0x14006a600 <.text+0x69600>
+14001a091:     	ud2

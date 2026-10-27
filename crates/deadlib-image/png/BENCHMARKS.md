@@ -841,3 +841,55 @@ All 885 copied source/fixture/example/benchmark files match. Fresh decoder ASan
 campaigns complete 70,852 observed executions; their count-check recovery and
 exact source/binary/corpus evidence are documented in `COVERAGE.md` and
 `fuzz/reports/stream-copy-source.json`.
+
+## Rejected full-lookahead Huffman split (2026-10-27)
+
+The nine-bit primary table only contains code lengths 1-9. Two experiments
+return lookahead completeness from the unchanged refill and move the original
+short-code/count check into an outlined partial-input helper. The complete-input
+path checks only for a nonzero table entry. The second experiment additionally
+forces only the primary `Huffman::decode` function inline. Both patches are
+independently reconstructible from `76d754d2a`; only `src/zlib.rs` differs in each.
+Neither experiment is selected, and all 21 production sources are restored.
+
+Measurements run baseline/split/baseline/forced-inline/baseline, with three
+processes per corpus at every position, twelve iterations, three warmups and
+CPU 0. Each final comparison combines its two adjacent baseline positions
+(six processes) against its three candidate processes. The native sample,
+reader and raw outputs agree with references on 24 photos and 60 format files.
+Ten manifests bind all thirty processes to exact sources, harnesses, corpora,
+toolchains and saved binaries. No task builds, tests, fuzzing or profiling run
+during timed processes. Shared-host scheduling and frequency remain uncontrolled.
+
+All entries below are percentage changes relative to Rust png for PNG operations
+and flate2 for raw inflation; they do not claim absolute gains.
+
+| Candidate / corpus | Buffered PNG | Reader PNG | Buffered inflate | Streaming inflate |
+| --- | ---: | ---: | ---: | ---: |
+| Split / photos | -9.77% | -0.26% | -12.10% | -1.06% |
+| Split / formats | -0.03% | +2.63% | -5.31% | +4.81% |
+| Forced inline / photos | -1.28% | +1.08% | -1.85% | -4.07% |
+| Forced inline / formats | -0.07% | -2.18% | +0.31% | +2.07% |
+
+The first variant emits a 323-byte outlined primary decoder, called by the
+buffered decompression loop. The forced-inline variant removes that outlined
+function and grows buffered `decompress_prefix` from 3,225 to 3,700 code bytes.
+It recovers much of the first variant's buffered loss, but still establishes
+no consistent decoder benefit. Exact PE/PDB hashes and extracted assembly are
+retained in `experiments/huffman-lookahead*-codegen.json` and companion text.
+This is generated-code evidence, not a standalone kernel timing.
+
+`experiments/huffman-lookahead-build-inputs.json` also checks declared build
+inputs against the saved baseline's recorded source commit. Profiles, patches,
+package manifests and native/reference lock nodes agree; an unrelated workspace
+release-version increment is recorded separately. The raw run manifests retain
+their original source bindings.
+
+`experiments/huffman-lookahead-selection.json` reconstructs both candidates,
+recomputes all four final summaries and verifies restored source bytes. The
+first candidate passes 29 focused tests with three external checks ignored;
+the second changes only its inline annotation and is checked on the benchmark
+corpora. No full second-candidate suite or fresh sanitizer campaign is claimed.
+Existing full validation remains applicable to the byte-identical restored
+sources. Initial pair summaries remain exploratory. Decoder performance remains
+open; encoding remains outside the deliverable.

@@ -1735,3 +1735,40 @@ Earlier source-coverage snapshots retain their original source bindings; no new
 whole-decoder coverage percentage follows from these campaigns. Remaining
 corpus gaps, the final requirements audit and competitive decoder performance
 stay open. Encoder functionality, conformance and speed remain outside scope.
+
+## Rejected Huffman lookahead split and corpus relocation (2026-10-27)
+
+Two source-checkpointed candidates separate complete nine-bit primary lookups
+from partial input. The second also forces only the primary decode function
+inline. The first passes 29 library/Huffman/primary-pair/prefix/fragmented-stream
+and PNG-reader tests, with three external C checks ignored. Its exact candidate
+source and normalized log hashes are in `huffman-lookahead-focused.{json,log}`.
+The second differs only in its inline annotation; its PNG, reader and raw outputs
+agree with references on all 84 benchmark files. No full second-candidate suite
+or new sanitizer executions are claimed.
+
+`BENCHMARKS.md` records the ten timing groups and four final comparisons. The
+first split regresses buffered photo decode/inflation; forced primary inlining
+recovers much of that loss but still produces mixed reference-relative results.
+Both candidates are rejected. All twenty-one production files, shared primitives
+and recorded regression inputs retain the selected `76d754d2a` bytes. The prior
+134-test release suite and 70,852-execution decoder ASan validation are reused
+with that exact-source check; they are not counted again. The reconstruction,
+timing/source/binary checks and validation links are retained in
+`experiments/huffman-lookahead-selection.json`.
+
+The /tmp tmpfs had only 27,539 free inodes. The completed match-header campaign's
+mutable corpus is relocated from
+`/tmp/deadlib-image-stream-matches-asan-20261027-a/corpus` into
+`target/png-fuzz-corpus-stream-matches-20261027.zip`. All 55,463 files / 15,741,565
+source bytes are verified against the original before removing that temporary
+corpus, and the retained archive is reopened to reproduce the same ordered
+UTF-8 filename/NUL/content digest. Binaries, manifests, logs, compiler invocations
+and object audits remain at their original locations. The archive and previous
+campaign evidence hashes, exact source path and post-verification removal are
+recorded in `fuzz/reports/huffman-lookahead-corpus-storage.json`. The immutable
+seed ZIP used by later campaigns is unchanged.
+
+This milestone adds no production change and no fuzz executions. Remaining
+corpus gaps, the final completion audit and competitive decoder performance
+stay open. Encoder requirements remain excluded.

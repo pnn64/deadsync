@@ -600,3 +600,16 @@ Recovery preserves the completed PNG campaign and runs only the missing raw
 target. The original helper and pre-recovery manifest are retained beside the
 campaign manifest, whose source-archive mapping identifies the as-run helper.
 Only decoder targets run in this milestone.
+
+## Retained match-header mutable corpus
+
+`reports/huffman-lookahead-corpus-storage.json` records relocation of the completed
+match-header campaign's mutable corpus into the workspace archive
+`target/png-fuzz-corpus-stream-matches-20261027.zip`. Its 55,463 entries are checked
+byte for byte against the original before the temporary corpus is removed, then
+the archive's ordered filename/content digest is verified again. The report links
+the original campaign manifest and exact archive path/hash. Restore the archive
+beneath the recorded corpus path when that mutated corpus is needed for replay.
+Binaries, logs, compiler records and object audits remain in their original paths;
+the immutable starting seed ZIP is unaffected. No new fuzz campaign is part of
+the rejected Huffman lookahead experiments.
