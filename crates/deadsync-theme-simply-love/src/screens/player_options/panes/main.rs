@@ -668,6 +668,7 @@ fn push_combo_font_row(b: &mut RowBuilder) {
             tr("PlayerOptions", "ComboFontWork").to_string(),
             tr("PlayerOptions", "ComboFontWendyCursed").to_string(),
             tr("PlayerOptions", "ComboFontMega").to_string(),
+            tr("PlayerOptions", "ComboFontUnprofessional").to_string(),
             tr("PlayerOptions", "ComboFontNone").to_string(),
         ],
     ));

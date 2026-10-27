@@ -28,6 +28,7 @@ pub(super) const fn zmod_small_combo_font(combo_font: profile_data::ComboFont) -
         profile_data::ComboFont::SourceCode => "combo_source_code",
         profile_data::ComboFont::Work => "combo_work",
         profile_data::ComboFont::Mega => "combo_mega",
+        profile_data::ComboFont::Unprofessional => "combo_unprofessional",
         profile_data::ComboFont::None => "wendy",
     }
 }
@@ -45,6 +46,7 @@ pub(super) const fn zmod_combo_font_name(
         profile_data::ComboFont::Work => Some("combo_work"),
         profile_data::ComboFont::WendyCursed => Some("combo_wendy_cursed"),
         profile_data::ComboFont::Mega => Some("combo_mega"),
+        profile_data::ComboFont::Unprofessional => Some("combo_unprofessional"),
         profile_data::ComboFont::None => None,
     }
 }

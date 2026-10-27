@@ -2240,7 +2240,10 @@ fn split_import_specs(value: Option<&str>) -> impl Iterator<Item = &str> {
 }
 
 fn import_specs<'a>(ini: &'a ParsedFontIni<'a>) -> impl Iterator<Item = &'a str> {
-    split_import_specs(ini.get("main").and_then(|section| section.value("import")))
+    // ITGmania renames the legacy section before reading imports, provided
+    // there is no explicit main section.
+    let main = ini.get("main").or_else(|| ini.get("char widths"));
+    split_import_specs(main.and_then(|section| section.value("import")))
 }
 
 fn import_path_candidates(base_ini: &Path, spec: &str) -> Option<[Option<PathBuf>; 2]> {
@@ -2951,9 +2954,10 @@ pub fn measure_line_width_logical(font: &Font, text: &str, all_fonts: &FontMap) 
 
 #[inline(always)]
 fn apply_space_nbsp_symmetry<S: BuildHasher>(char_to_frame: &mut HashMap<char, usize, S>) {
-    // If SPACE exists but NBSP doesn't, map NBSP -> SPACE frame.
+    // ITGmania always maps NBSP to an authored SPACE, even when the page
+    // also explicitly maps NBSP to another frame.
     if let Some(&space_idx) = char_to_frame.get(&' ') {
-        char_to_frame.entry('\u{00A0}').or_insert(space_idx);
+        char_to_frame.insert('\u{00A0}', space_idx);
     } else if let Some(&nbsp_idx) = char_to_frame.get(&'\u{00A0}') {
         // SPACE is absent: map it to NBSP's frame. (Wendy relies on this)
         char_to_frame.entry(' ').or_insert(nbsp_idx);
@@ -3033,7 +3037,7 @@ mod tests {
     }
 
     #[test]
-    fn space_nbsp_symmetry_fills_only_missing_mappings() {
+    fn space_nbsp_symmetry_prefers_authored_space() {
         for (space, nbsp) in [
             (None, None),
             (Some(3), None),
@@ -3049,7 +3053,7 @@ mod tests {
             }
             apply_space_nbsp_symmetry(&mut frames);
             assert_eq!(frames.get(&' ').copied(), space.or(nbsp));
-            assert_eq!(frames.get(&'\u{00A0}').copied(), nbsp.or(space));
+            assert_eq!(frames.get(&'\u{00A0}').copied(), space.or(nbsp));
             assert_eq!(frames[&'A'], 11);
             let once = frames.clone();
             apply_space_nbsp_symmetry(&mut frames);
@@ -3138,6 +3142,21 @@ mod tests {
         }
         assert_eq!(split_import_specs(None).count(), 0);
         assert_eq!(split_import_specs(Some(" , , ")).count(), 0);
+    }
+
+    #[test]
+    fn import_specs_accept_legacy_section_without_overriding_main() {
+        for (source, expected) in [
+            ("[Char Widths]\nimport=Buttons\n", vec!["Buttons"]),
+            (
+                "[Char Widths]\nimport=Buttons\n[main]\nimport=Explicit\n",
+                vec!["Explicit"],
+            ),
+            ("[Char Widths]\nimport=Buttons\n[main]\n0=12\n", vec![]),
+        ] {
+            let ini = parse_font_ini(source);
+            assert_eq!(import_specs(&ini).collect::<Vec<_>>(), expected);
+        }
     }
 
     #[test]

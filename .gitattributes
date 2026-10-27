@@ -2,3 +2,7 @@
 crates/deadsync-song-lua/assets/simply-love/**/*.lua text eol=lf
 # Keep the unmodified FoF module fixture identical to the captured source.
 crates/deadsync-song-lua/tests/fixtures/fof-input-system.lua -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Preserve upstream font definitions; trailing spaces in glyph rows are data.
+assets/fonts/Unprofessional/*.ini text eol=lf whitespace=-blank-at-eol
+assets/fonts/_combo/Unprofessional/*.ini text eol=lf
+"assets/fonts/miso/_miso unprof.ini" text eol=lf

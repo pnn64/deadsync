@@ -1259,9 +1259,8 @@ impl FromStr for SrpgShopFolder {
 /// Machine-wide font preference, ported from Simply Love's `ThemeFont` pref.
 ///
 /// Controls which font is used for the Bold / Header / Footer / numbers /
-/// `ScreenEval` roles in static UI text. The Normal (body) role stays Miso
-/// regardless of this pref -- matches SL's `Mega Normal.redir ->
-/// Miso/_miso light`.
+/// `ScreenEval` roles in static UI text. Unprofessional also selects its
+/// matching Miso variant for the Normal (body) role.
 ///
 /// Gameplay-side fonts (combo, judgment, hold judgment) are not affected;
 /// those follow each player's `ComboFont` profile pref.
@@ -1272,6 +1271,8 @@ pub enum MachineFont {
     Wendy,
     /// Bold/Header/Footer = Mega alphanumeric, numbers = Mega monospace.
     Mega,
+    /// Unprofessional headers/numbers with its matching Miso body font.
+    Unprofessional,
 }
 
 impl MachineFont {
@@ -1280,6 +1281,7 @@ impl MachineFont {
         match self {
             Self::Wendy => "Wendy",
             Self::Mega => "Mega",
+            Self::Unprofessional => "Unprofessional",
         }
     }
 }
@@ -1291,12 +1293,17 @@ impl FromStr for MachineFont {
         match s.trim().to_ascii_lowercase().as_str() {
             "common" | "wendy" => Ok(Self::Wendy),
             "mega" => Ok(Self::Mega),
+            "unprofessional" => Ok(Self::Unprofessional),
             _ => Err(()),
         }
     }
 }
 
-pub const MACHINE_FONT_VARIANTS: [MachineFont; 2] = [MachineFont::Wendy, MachineFont::Mega];
+pub const MACHINE_FONT_VARIANTS: [MachineFont; 3] = [
+    MachineFont::Wendy,
+    MachineFont::Mega,
+    MachineFont::Unprofessional,
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 pub enum MachineBarColor {
@@ -2536,11 +2543,39 @@ MachineEvaluationStyle=Default\n\
     }
 
     #[test]
+    fn machine_font_choices_survive_ini_save_and_reload() {
+        for font in MACHINE_FONT_VARIANTS {
+            let mut machine = default_machine_flow_options();
+            machine.machine_font = font;
+            let mut content = String::from("[Theme]\n");
+            push_theme_option_lines(
+                &mut content,
+                default_theme_presentation_options(),
+                machine,
+                ThemeShortcutTokens {
+                    practice: "KeyP",
+                    song_search: "KeyS",
+                    load_songs: "KeyL",
+                    test_input: "KeyT",
+                },
+            );
+            let mut conf = SimpleIni::new();
+            conf.load_str(&content);
+            let loaded = load_machine_flow_options(&conf, default_machine_flow_options());
+            assert_eq!(loaded.machine_font, font);
+        }
+    }
+
+    #[test]
     fn machine_font_from_str_is_case_insensitive_and_accepts_common_alias() {
         assert_eq!(MachineFont::from_str("Wendy"), Ok(MachineFont::Wendy));
         assert_eq!(MachineFont::from_str("wendy"), Ok(MachineFont::Wendy));
         assert_eq!(MachineFont::from_str("Mega"), Ok(MachineFont::Mega));
         assert_eq!(MachineFont::from_str("mega"), Ok(MachineFont::Mega));
+        assert_eq!(
+            MachineFont::from_str(" UNPROFESSIONAL "),
+            Ok(MachineFont::Unprofessional)
+        );
         // SL/Arrow Cloud use Common as the font-redir family internally;
         // accept old saved DeadSync configs and hand-edited ini values.
         assert_eq!(MachineFont::from_str("common"), Ok(MachineFont::Wendy));
@@ -2550,7 +2585,7 @@ MachineEvaluationStyle=Default\n\
     #[test]
     fn machine_font_from_str_rejects_unknown() {
         assert_eq!(MachineFont::from_str(""), Err(()));
-        assert_eq!(MachineFont::from_str("Unprofessional"), Err(()));
+        assert_eq!(MachineFont::from_str("unknown"), Err(()));
         assert_eq!(MachineFont::from_str("miso"), Err(()));
     }
 
@@ -2559,9 +2594,10 @@ MachineEvaluationStyle=Default\n\
         // Sanity: every enum variant is in MACHINE_FONT_VARIANTS so the
         // operator UI cycles through everything the type can represent.
         // Update this if a new variant is added.
-        assert_eq!(MACHINE_FONT_VARIANTS.len(), 2);
+        assert_eq!(MACHINE_FONT_VARIANTS.len(), 3);
         assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Wendy));
         assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Mega));
+        assert!(MACHINE_FONT_VARIANTS.contains(&MachineFont::Unprofessional));
     }
 
     #[test]
@@ -3045,7 +3081,7 @@ MachineEvaluationStyle=Default\n\
             MachineDefaultSyncOffset=ITG
             MachinePreferredStyle=Double
             MachinePreferredPlayMode=Marathon
-            MachineFont=Mega
+            MachineFont=Unprofessional
             MachineBarColor=Transparent
             MachineEvaluationStyle=Transparent
             "#,
@@ -3076,7 +3112,7 @@ MachineEvaluationStyle=Default\n\
             loaded.machine_preferred_play_mode,
             MachinePreferredPlayMode::Marathon
         );
-        assert_eq!(loaded.machine_font, MachineFont::Mega);
+        assert_eq!(loaded.machine_font, MachineFont::Unprofessional);
         assert_eq!(loaded.machine_bar_color, MachineBarColor::Transparent);
         assert_eq!(
             loaded.machine_evaluation_style,

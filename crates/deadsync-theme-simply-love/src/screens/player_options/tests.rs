@@ -6062,7 +6062,7 @@ pub(super) mod tests {
         // CycleInit / NumericInit contract.
         let p = &mut state.player_options[P1];
         p.perspective = Perspective::Distant;
-        p.combo_font = ComboFont::Wendy;
+        p.combo_font = ComboFont::Unprofessional;
         p.background_filter = BackgroundFilter::from_i32(42);
         p.visual_delay_ms = 35;
         p.global_offset_shift_ms = -45;
@@ -6118,7 +6118,7 @@ pub(super) mod tests {
 
         let p = &mut state.player_options[P1];
         p.perspective = Perspective::Distant;
-        p.combo_font = ComboFont::Wendy;
+        p.combo_font = ComboFont::Unprofessional;
         p.background_filter = BackgroundFilter::from_i32(42);
         p.spacing_percent = 95;
         p.judgment_offset_x = -25;

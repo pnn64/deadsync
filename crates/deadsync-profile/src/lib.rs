@@ -4836,6 +4836,7 @@ pub enum ComboFont {
     Work,
     WendyCursed,
     Mega,
+    Unprofessional,
     None,
 }
 
@@ -4852,6 +4853,7 @@ impl FromStr for ComboFont {
             "work" => Ok(Self::Work),
             "wendy (cursed)" | "wendy cursed" | "wendycursed" => Ok(Self::WendyCursed),
             "mega" => Ok(Self::Mega),
+            "unprofessional" => Ok(Self::Unprofessional),
             "none" => Ok(Self::None),
             other => Err(format!("'{other}' is not a valid ComboFont setting")),
         })
@@ -4869,6 +4871,7 @@ impl core::fmt::Display for ComboFont {
             Self::Work => write!(f, "Work"),
             Self::WendyCursed => write!(f, "Wendy (Cursed)"),
             Self::Mega => write!(f, "Mega"),
+            Self::Unprofessional => write!(f, "Unprofessional"),
             Self::None => write!(f, "None"),
         }
     }
@@ -11677,7 +11680,7 @@ mod tests {
             ("HoldJudgmentGraphic", "itg2"),
             ("HeldGraphic", "none"),
             ("JudgmentGraphic", "custom.png"),
-            ("ComboFont", "BebasNeue"),
+            ("ComboFont", "Unprofessional"),
             ("ComboColors", "RainbowScroll"),
             ("ComboMode", "CurrentCombo"),
             ("ComboContinuesBetweenSongs", "1"),
@@ -11718,7 +11721,7 @@ mod tests {
         );
         assert_eq!(options.held_miss_graphic.as_str(), "None");
         assert_eq!(options.judgment_graphic.as_str(), "judgements/custom.png");
-        assert_eq!(options.combo_font, ComboFont::BebasNeue);
+        assert_eq!(options.combo_font, ComboFont::Unprofessional);
         assert_eq!(options.combo_colors, ComboColors::RainbowScroll);
         assert_eq!(options.combo_mode, ComboMode::CurrentCombo);
         assert!(options.carry_combo_between_songs);
@@ -14678,6 +14681,7 @@ ApiKey = gs-key
             ComboFont::Work,
             ComboFont::WendyCursed,
             ComboFont::Mega,
+            ComboFont::Unprofessional,
             ComboFont::None,
         ] {
             assert_eq!(setting.to_string().parse::<ComboFont>(), Ok(setting));

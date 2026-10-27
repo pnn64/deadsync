@@ -19,6 +19,7 @@ pub(in crate::screens::options) const MACHINE_OPTIONS_ROWS: &[SubRow] = &[
         choices: &[
             localized_choice("OptionsMachine", "MachineFontWendy"),
             localized_choice("OptionsMachine", "MachineFontMega"),
+            localized_choice("OptionsMachine", "MachineFontUnprofessional"),
         ],
         inline: true,
     },

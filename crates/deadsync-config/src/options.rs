@@ -2329,6 +2329,7 @@ pub const fn machine_font_choice_index(font: MachineFont) -> usize {
     match font {
         MachineFont::Wendy => 0,
         MachineFont::Mega => 1,
+        MachineFont::Unprofessional => 2,
     }
 }
 
@@ -2336,6 +2337,7 @@ pub const fn machine_font_choice_index(font: MachineFont) -> usize {
 pub const fn machine_font_from_choice(idx: usize) -> MachineFont {
     match idx {
         1 => MachineFont::Mega,
+        2 => MachineFont::Unprofessional,
         _ => MachineFont::Wendy,
     }
 }
@@ -4162,6 +4164,8 @@ mod tests {
 
         assert_eq!(machine_font_choice_index(MachineFont::Wendy), 0);
         assert_eq!(machine_font_from_choice(1), MachineFont::Mega);
+        assert_eq!(machine_font_choice_index(MachineFont::Unprofessional), 2);
+        assert_eq!(machine_font_from_choice(2), MachineFont::Unprofessional);
         assert_eq!(machine_font_from_choice(99), MachineFont::Wendy);
 
         assert_eq!(machine_bar_color_choice_index(MachineBarColor::Default), 0);
