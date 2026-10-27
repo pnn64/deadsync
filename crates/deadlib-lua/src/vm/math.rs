@@ -169,8 +169,29 @@ impl Vm {
             self.registers[base] = Value::Number(ldexp(x, exponent));
             return Ok(1);
         }
+        if matches!(id, 42 | 45 | 52) {
+            // The pinned Linux/glibc GCC oracle checks the second C-call
+            // operand first; the MSVC oracle checks the first operand first.
+            #[cfg(all(target_os = "linux", target_env = "gnu"))]
+            let (x, y) = {
+                let y = self.math_number(base, count, 1)?;
+                (self.math_number(base, count, 0)?, y)
+            };
+            #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+            let (x, y) = {
+                let x = self.math_number(base, count, 0)?;
+                (x, self.math_number(base, count, 1)?)
+            };
+            let value = match id {
+                42 => x.powf(y),
+                45 => x % y,
+                52 => x.atan2(y),
+                _ => unreachable!("binary math IDs are fixed"),
+            };
+            self.registers[base] = Value::Number(value);
+            return Ok(1);
+        }
         let x = self.math_number(base, count, 0)?;
-        let y = |vm: &Self| vm.math_number(base, count, 1);
         let result = match id {
             32 => x.abs(),
             33 => x.floor(),
@@ -182,15 +203,12 @@ impl Vm {
             39 => x.exp(),
             40 => x.ln(),
             41 => x.log10(),
-            42 => x.powf(y(self)?),
-            45 => x % y(self)?,
             46 => x.asin(),
             47 => x.acos(),
             48 => x.atan(),
             49 => x.sinh(),
             50 => x.cosh(),
             51 => x.tanh(),
-            52 => x.atan2(y(self)?),
             53 => x / (std::f64::consts::PI / 180.0),
             54 => x * (std::f64::consts::PI / 180.0),
             43 | 44 => {

@@ -181,6 +181,16 @@ pub(crate) fn map_case(source: &[u8], upper: bool, output: &mut Vec<u8>) {
         );
     }
 }
+pub(crate) fn lower(byte: u8) -> u8 {
+    let ctype = CTYPE
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if ctype.is_c {
+        byte.to_ascii_lowercase()
+    } else {
+        ctype.values[usize::from(byte)] as u8
+    }
+}
 pub(crate) fn compare(left: &[u8], right: &[u8]) -> Ordering {
     if COLLATE_C.load(AtomicOrdering::Acquire) {
         return left.cmp(right);

@@ -113,6 +113,13 @@ int main(void) {
           local f,e=loadstring('return 4.5.');print(f==nil,e)
           local f=assert(io.tmpfile());f:write(' 3,4|0x1,8p1|5.6|');f:seek('set')
           for i=1,3 do print(f:read('*n'),f:read(1))end;print(f:read('*a'));f:close()
+          for _,text in ipairs{'INF','INFINITY',string.char(221)..'NF',string.char(253)..'nf','nan(snan)','nan(x y)',
+            'nan('..string.char(233)..')','1e+','0x.','0x1p+'}do
+            local f=assert(io.tmpfile());f:write(text..'!');f:seek('set')
+            local n=f:read('*n');local position=f:seek();local tail=f:read('*a');f:close()
+            print('scan',text,n==nil and 'nil' or n~=n and 'nan' or tostring(n),position,
+              (tail:gsub('.',function(c)return string.format('%02x',c:byte())end)))
+          end
         """)
         case('bytes_and_lexer_'+name, setup+encode+r"""
           local bytes={};for i=0,255 do bytes[#bytes+1]=string.char(i)end;bytes=table.concat(bytes)

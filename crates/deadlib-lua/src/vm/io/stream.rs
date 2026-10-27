@@ -62,6 +62,7 @@ pub(in crate::vm) struct Stream {
     position: usize,
     peek: Option<(u8, u8)>,
     control_eof: bool,
+    eof: bool,
     raw_len: usize,
     lookahead: Option<u8>,
     write: Vec<u8>,
@@ -80,6 +81,7 @@ impl Stream {
             position: 0,
             peek: None,
             control_eof: false,
+            eof: false,
             raw_len: 0,
             lookahead: None,
             write: Vec::new(),
@@ -95,7 +97,7 @@ impl Stream {
             return Err(9);
         }
         if self.position == self.read.len() {
-            if self.control_eof {
+            if self.control_eof || self.eof {
                 return Ok(None);
             }
             let size = if self.buffering == 0 { 1 } else { self.size };
@@ -119,6 +121,7 @@ impl Stream {
             self.read.truncate(count);
             self.position = 0;
             if count == 0 {
+                self.eof = cfg!(all(target_os = "linux", target_env = "gnu"));
                 return Ok(None);
             }
             if cfg!(windows) && self.text {
@@ -182,6 +185,9 @@ impl Stream {
             Some(p) => Some(p.0),
             None => self.decoded()?.map(|p| p.0),
         })
+    }
+    pub fn clear_eof(&mut self) {
+        self.eof = false;
     }
     pub fn read_chars(&mut self, out: &mut Vec<u8>, mut count: usize) -> Result<bool, i32> {
         self.flush()?;
@@ -357,7 +363,9 @@ impl Stream {
             1 => SeekFrom::Current(offset),
             _ => SeekFrom::End(offset),
         };
-        f.seek(position).map_err(errno)
+        let result = f.seek(position).map_err(errno)?;
+        self.eof = false;
+        Ok(result)
     }
     pub fn close(&mut self) -> Result<Option<i32>, i32> {
         let flush = self.flush();

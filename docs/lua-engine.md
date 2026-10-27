@@ -37,7 +37,7 @@ performance JSON keeps its recorded measurement provenance.
 | Machine code | Optional; defer until full standalone Lua 5.1 parity, then use profiles to identify profitable paths. |
 | Song integration | Deferred until engine gates pass. Implement live callbacks, independent baking, auto by default, dynamic fallback, and shared state/identity across strategies. |
 | Noteskin integration | Deferred. Create `deadsync-noteskin-lua` with the shared engine, reusable programs, static actor/asset caches and necessary dynamic callbacks. |
-| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records seventeen reference and Rust passes among eighteen probes, including `attrib.lua` and `verybig.lua`. `files.lua` is retained with the Windows open-file rename failure at line 59 in both engines. A separate standalone CLI audit records remaining mismatches against a checksum-pinned official executable. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
+| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records all eighteen independent files passing on Linux in reference, Rust and both cache modes. Windows retains seventeen passes and the common `files.lua:59` open-file rename failure. Standalone CLI audits retain remaining mismatches against a checksum-pinned official executable. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
 | Performance | Deferred until full standalone Lua 5.1 parity. Preserve existing reference harnesses and historical measurements; later work covers throughput, startup, compile cost, allocations, live/peak memory and representative scaling. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
@@ -45,10 +45,12 @@ Unchanged `all.lua` and `main.lua` run against both standalone CLIs, with retain
 failures directing compatibility fixes. Linux `main.lua` passes in both engines.
 Linux/glibc locale support now lets Rust `all.lua` reach the same `big.lua:11`
 overflow assertion as the 64-bit C reference. Windows stops in `main.lua:53` in
-both engines. The broad Linux Rust audit retains six failing targets, also
-present in the parent: debug locals, I/O, native errors, OS, package and stdlib.
-Next work should resolve Linux numeric-stream consumption and argument-error
-order, repair platform-dependent fixtures/reference-bridge failures, and find
+both engines. The [GNU numeric and I/O fixes](testing/2026-10-27-rust-lua-gnu-numbers.md)
+resolve the Linux I/O and native-error targets. Four existing Linux targets
+remain red: debug locals, OS, package and stdlib. The expanded stream audit
+also retains 62 Windows byte-consumption mismatches, unchanged from the parent.
+Next work should close those Windows mismatches, repair platform-dependent
+fixtures/reference-bridge failures, and find
 a valid target for the full suite's large-string overflow test. The C/auxiliary APIs, production native loading and
 remaining language, library, debug, GC and resource behavior must also be
 completed. Selected passing probes and declaration counts do not close these

@@ -1,0 +1,339 @@
+{
+  "parent_revision": "9ae0ecbd5cfc506b8fc98718785ef7079abebd36",
+  "parent_audit": {
+    "path": "docs/testing/2026-10-27-rust-lua-posix-locale-linux-audit.json",
+    "sha256": "55d7e652e2eae48ab33e9471fccc460a07cc120236476a52b9dd369da1999e44"
+  },
+  "current": {
+    "log_path": "target/lua-gnu-numbers-linux-tests.log",
+    "log_sha256": "82ff2f2825e903539e5a4b3651e39ccd531ef2ce70224a0ca16883a8642c44ae",
+    "exit_code": 101,
+    "failed_targets": [
+      "debug_locals",
+      "os",
+      "package",
+      "stdlib"
+    ],
+    "targets": {
+      "cache_persistence": {
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "calendar": {
+        "status": "ok",
+        "passed": 14,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "call_limits": {
+        "status": "ok",
+        "passed": 16,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "capture_limits": {
+        "status": "ok",
+        "passed": 10,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "codegen": {
+        "status": "ok",
+        "passed": 32,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "constant_pool": {
+        "status": "ok",
+        "passed": 3,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "coroutines": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "debug": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "debug_console": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "debug_locals": {
+        "status": "FAILED",
+        "passed": 31,
+        "failed": 1,
+        "failed_tests": [
+          "aborting_a_pending_gsub_buffer_call_does_not_retain_its_job"
+        ],
+        "details": {
+          "aborting_a_pending_gsub_buffer_call_does_not_retain_its_job": {
+            "secondary_mutex_poison": false,
+            "detail_sha256": "f2ddc34ec5a818af553d83c6d363c4edf0a7b0e33986359f7e2cc032a1f03a1a",
+            "detail_head": "\nthread 'aborting_a_pending_gsub_buffer_call_does_not_retain_its_job' (281646) panicked at crates/deadlib-lua/tests/debug_locals.rs:122:36:\ncalled `Result::unwrap_err()` on an `Ok` value: [String(StringId(4294967473)), Number(3.0)]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n",
+            "detail_tail": "\nthread 'aborting_a_pending_gsub_buffer_call_does_not_retain_its_job' (281646) panicked at crates/deadlib-lua/tests/debug_locals.rs:122:36:\ncalled `Result::unwrap_err()` on an `Ok` value: [String(StringId(4294967473)), Number(3.0)]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n"
+          }
+        }
+      },
+      "file_loading": {
+        "status": "ok",
+        "passed": 16,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "gc": {
+        "status": "ok",
+        "passed": 22,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "gnu_numbers": {
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "hooks": {
+        "status": "ok",
+        "passed": 42,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "host_calls": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "host_closures": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "host_functions": {
+        "status": "ok",
+        "passed": 15,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "host_reentry": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "interning": {
+        "status": "ok",
+        "passed": 4,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "io": {
+        "status": "ok",
+        "passed": 22,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "loading": {
+        "status": "ok",
+        "passed": 19,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "lua51": {
+        "status": "ok",
+        "passed": 22,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_auxiliary": {
+        "status": "ok",
+        "passed": 4,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_errors": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_objects": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_protected": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_stack": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_tables": {
+        "status": "ok",
+        "passed": 10,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_values": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "os": {
+        "status": "FAILED",
+        "passed": 16,
+        "failed": 1,
+        "failed_tests": [
+          "rename_preserves_data_result_counts_nul_boundaries_and_full_failure_tuples"
+        ],
+        "details": {
+          "rename_preserves_data_result_counts_nul_boundaries_and_full_failure_tuples": {
+            "secondary_mutex_poison": false,
+            "detail_sha256": "5983fd5a1e9fe7220e41dee7bfd874169a961634cb1ec5803095e4e187282e71",
+            "detail_head": "\nthread 'rename_preserves_data_result_counts_nul_boundaries_and_full_failure_tuples' (282000) panicked at crates/deadlib-lua/tests/os.rs:18:14:\ncalled `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 12, message: \"/mnt/c/GitHub/deadsync/target/lua-gnu-numbers-1793071449178079000/crates/deadlib-lua/../../target/lua-os-fixtures/281988-3/file.dat: No such file or directory\", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294967495))) }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n",
+            "detail_tail": "ll_failure_tuples' (282000) panicked at crates/deadlib-lua/tests/os.rs:18:14:\ncalled `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 12, message: \"/mnt/c/GitHub/deadsync/target/lua-gnu-numbers-1793071449178079000/crates/deadlib-lua/../../target/lua-os-fixtures/281988-3/file.dat: No such file or directory\", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294967495))) }\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n"
+          }
+        }
+      },
+      "package": {
+        "status": "FAILED",
+        "passed": 24,
+        "failed": 1,
+        "failed_tests": [
+          "file_import_abort_releases_reader_records_and_executable_handles"
+        ],
+        "details": {
+          "file_import_abort_releases_reader_records_and_executable_handles": {
+            "secondary_mutex_poison": false,
+            "detail_sha256": "ab31933b0c06f18e1b5ebd82b30ec9bf0573aa893a2db332b19489eee74c4849",
+            "detail_head": "\nthread 'file_import_abort_releases_reader_records_and_executable_handles' (282010) panicked at crates/deadlib-lua/tests/package.rs:383:30:\ncalled `Result::unwrap_err()` on an `Ok` value: [Number(42.0)]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n",
+            "detail_tail": "\nthread 'file_import_abort_releases_reader_records_and_executable_handles' (282010) panicked at crates/deadlib-lua/tests/package.rs:383:30:\ncalled `Result::unwrap_err()` on an `Ok` value: [Number(42.0)]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n"
+          }
+        }
+      },
+      "posix_locale": {
+        "status": "ok",
+        "passed": 3,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "register_limits": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "runtime_errors": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "standalone": {
+        "status": "ok",
+        "passed": 6,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "stdlib": {
+        "status": "abort",
+        "passed": null,
+        "failed": null,
+        "failed_tests": [],
+        "details": {}
+      },
+      "syntax": {
+        "status": "ok",
+        "passed": 16,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "thread_state": {
+        "status": "ok",
+        "passed": 5,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "tracebacks": {
+        "status": "ok",
+        "passed": 14,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "unprotected_calls": {
+        "status": "ok",
+        "passed": 7,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "userdata": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      }
+    }
+  },
+  "resolved_failed_targets": [
+    "io",
+    "native_errors"
+  ],
+  "limitations": "The broad Linux run still exits 101. Four existing targets remain red, including an assertion in the development C reference bridge. Fewer failing targets does not prove full parity or absence of other regressions."
+}

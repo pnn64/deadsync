@@ -709,6 +709,8 @@ impl Vm {
                 Ok(self.io_result(base, status))
             }
             READ | FREAD => {
+                // Lua 5.1 g_read calls clearerr; its line iterator does not.
+                self.io.files[slot].clear_eof();
                 let formats = count.saturating_sub(first).max(1);
                 let mut results = 0;
                 for index in 0..formats {

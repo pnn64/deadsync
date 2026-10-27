@@ -191,8 +191,10 @@ other CRT random sequences are not emulated. `compile_named` assigns
 chunk names for error locations. `print` writes to stdout unless capture is
 enabled through `Vm::set_output_capture`.
 
-`math.ldexp` checks its exponent before its mantissa, matching the pinned MSVC
-Lua build when both arguments are invalid. The
+`math.ldexp` checks its exponent before its mantissa. Binary `pow`, `fmod`/`mod`
+and `atan2` check their second operand first on Linux/glibc and their first
+operand first elsewhere. These error orders follow the pinned GCC and MSVC
+reference builds; C itself does not specify the evaluation order. The
 [library argument audit](../../docs/testing/2026-10-26-rust-lua-stdlib-arguments.md)
 also retains failures for unsupported native module loading. It does not
 establish full standard-library parity.
@@ -317,6 +319,15 @@ and finalizer machinery. Lua 5.1 writes return booleans; iterator closures retai
 their file. Windows text files translate newlines and Ctrl+Z, including the
 reference's buffered seek cookies. Captured stdout keeps logical byte order across
 `print` and I/O writes; the Windows CLI emits translated newlines.
+
+Numeric stream reads preserve the native runtime's consumed prefix on failure.
+The Linux/glibc profile consumes incomplete exponents while converting their
+mantissa, accepts `0x.` as zero, and consumes the mismatching byte of a failed
+infinity or NaN token. Special-token matching follows ctype before ASCII numeric
+conversion, including Turkish casing. GNU end-of-file state remains set across
+line-iterator calls; ordinary reads and successful seeks clear it. The
+[numeric stream checks](../../docs/testing/2026-10-27-rust-lua-gnu-numbers.md)
+retain values, file offsets, unread bytes and math error messages from real CLIs.
 
 The partial `os` library supplies `difftime`, `getenv`, `remove` and `tmpname`.
 Time differences use the pinned MSVC 64-bit integer conversion and validation
@@ -555,7 +566,6 @@ remains open.
 cargo test -p deadlib-lua
 cargo clippy -p deadlib-lua --all-targets --no-deps -- -D warnings
 cargo tree -p deadlib-lua --edges normal,build
-cargo bench -p deadlib-lua --bench baseline
 cargo run -p deadlib-lua --bin deadlua -- -e 'assert(6*7 == 42)'
 python scripts/check_rust_lua_suite.py --output docs/testing/rust-lua-suite.json
 python scripts/check_rust_lua_full_suite.py --output docs/testing/rust-lua-full-suite.json
@@ -565,12 +575,14 @@ Tests use the official vendored Lua 5.1 interpreter through the legacy binding
 as a development-only oracle. Production builds link no C Lua or third-party
 crates. Observations compare number bits (including signed zero), byte strings,
 booleans, arity and identity predicates. NaN payloads are excluded. This corpus
-provides regression coverage, not full compatibility. The official suite runner
-currently exits unsuccessfully: seventeen of eighteen reference and Rust probes pass. The Rust engine
+provides regression coverage, not full compatibility. On Windows, the official
+file runner exits unsuccessfully: seventeen of eighteen reference and Rust probes pass. The Rust engine
 passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `pm.lua`, `events.lua`, `gc.lua`, `closure.lua`, `db.lua`, `math.lua`, `errors.lua`,
 `sort.lua`, `literals.lua`, `strings.lua`, `calls.lua`, `attrib.lua` and `verybig.lua`. The retained
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
-archive checksum and keeps the test files unchanged. See the
+archive checksum and keeps the test files unchanged. On Linux, all eighteen
+independent files pass in reference, Rust and both cache modes; unchanged
+`all.lua` still fails at `big.lua:11` in both 64-bit engines. See the
 [suite report](../../docs/testing/2026-10-26-rust-lua-boolean-hooks.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.
