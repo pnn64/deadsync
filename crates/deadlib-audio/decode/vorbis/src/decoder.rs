@@ -7,10 +7,16 @@ use core::f64::consts::FRAC_PI_2;
 pub struct DecodeOptions {
     pub limits: Limits,
     pub residue2_layout: Residue2Layout,
+    /// Match libvorbis's IEEE propagation, including floor0's f32 products and
+    /// channel-local floor concealment at EOF. May return NaN/infinity PCM.
+    /// Disabled by default: require finite PCM and use all-channel floor EOF
+    /// concealment from section 4.3.2.
+    pub allow_nonfinite: bool,
 }
 
 /// Borrowed planar, unclipped f32 PCM in Vorbis mapping-zero channel order.
 /// Frame positions are raw overlap output positions, before container trimming.
+/// Samples are finite unless `DecodeOptions::allow_nonfinite` was enabled.
 pub struct PcmBlock<'a> {
     data: &'a [f32],
     stride: usize,
@@ -47,6 +53,7 @@ pub struct PacketDecoder {
     setup: Setup,
     limits: Limits,
     residue2_layout: Residue2Layout,
+    allow_nonfinite: bool,
     short: Imdct,
     long: Option<Imdct>,
     short_slope: Vec<f32>,
@@ -78,6 +85,7 @@ impl PacketDecoder {
         let DecodeOptions {
             limits,
             residue2_layout,
+            allow_nonfinite,
         } = options;
         let channels = setup.channels() as usize;
         let [small, large] = setup.block_sizes();
@@ -102,6 +110,7 @@ impl PacketDecoder {
             setup,
             limits,
             residue2_layout,
+            allow_nonfinite,
             short,
             long,
             short_slope,
@@ -175,23 +184,30 @@ impl PacketDecoder {
                 self.setup.codebooks(),
                 &mut bits,
                 output,
+                self.allow_nonfinite,
             ) {
                 Ok(true) => *nonzero = true,
                 Ok(false) => output.fill(0.0),
                 Err(Error::EndOfPacket) => {
                     truncated = true;
-                    break;
+                    output.fill(0.0);
+                    if !self.allow_nonfinite {
+                        break;
+                    }
                 }
                 Err(error) => return Err(error),
             }
         }
-        if truncated {
+        if truncated && !self.allow_nonfinite {
             // Section 4.3.2: a truncated floor zeros every channel, then laps
             // with previously synthesized right-hand data at the normal step.
             for ch in 0..channels {
                 self.current[ch * large..ch * large + n].fill(0.0);
             }
         } else {
+            // The reference keeps earlier channel floors after a later floor
+            // runs out of bits. Finite zero spectra still produce zero PCM,
+            // but 0 * infinity must propagate when explicitly requested.
             for &[magnitude, angle] in &mapping.coupling {
                 if nonzero[magnitude as usize] || nonzero[angle as usize] {
                     nonzero[magnitude as usize] = true;
@@ -244,7 +260,7 @@ impl PacketDecoder {
                 let floor = &self.floors[ch * stride..ch * stride + bins];
                 for (value, &gain) in spectrum.iter_mut().zip(floor) {
                     *value *= gain;
-                    if !value.is_finite() {
+                    if !value.is_finite() && !self.allow_nonfinite {
                         return Err(Error::Invalid("nonfinite audio spectrum"));
                     }
                 }
@@ -255,7 +271,7 @@ impl PacketDecoder {
                 };
                 let output = &mut self.current[ch * large..ch * large + n];
                 transform.inverse(spectrum, output)?;
-                if output.iter().any(|value| !value.is_finite()) {
+                if !self.allow_nonfinite && output.iter().any(|value| !value.is_finite()) {
                     return Err(Error::Invalid("nonfinite MDCT output"));
                 }
                 let left = if n == small || self.previous_size != large {
@@ -302,7 +318,7 @@ impl PacketDecoder {
                     0.0
                 };
                 *value = prior + next;
-                if !value.is_finite() {
+                if !value.is_finite() && !self.allow_nonfinite {
                     return Err(Error::Invalid("nonfinite overlap output"));
                 }
             }

@@ -1,6 +1,6 @@
 //! Vorbis section 3: entry-order Huffman assignment and lookup types 0/1/2.
 use crate::{
-    Budget, Error, Limits,
+    Budget, Error, Limits, ParseOptions,
     bitpack::{BitReader, ilog},
     reserve,
 };
@@ -22,16 +22,28 @@ impl Huffman {
         let mut budget = Budget {
             remaining: usize::MAX,
         };
-        let mut tree = Self::build(lengths, max_nodes, &mut budget)?;
+        let mut tree = Self::build(lengths, max_nodes, &mut budget, false)?;
         tree.accelerate(lengths, &mut budget)?;
         Ok(tree)
     }
-    fn build(lengths: &[u8], max_nodes: usize, budget: &mut Budget) -> Result<Self, Error> {
+    fn build(
+        lengths: &[u8],
+        max_nodes: usize,
+        budget: &mut Budget,
+        allow_empty: bool,
+    ) -> Result<Self, Error> {
         if lengths.len() >= LEAF as usize {
             return Err(Error::LimitExceeded("Huffman entries"));
         }
         let used = lengths.iter().filter(|&&n| n != 0).count();
         if used == 0 {
+            if allow_empty {
+                return Ok(Self {
+                    nodes: Vec::new(),
+                    singleton: MISSING,
+                    prefix_bits: 0,
+                });
+            }
             return Err(Error::Invalid("empty Huffman tree"));
         }
         if used == 1 {
@@ -141,6 +153,9 @@ impl Huffman {
             bits.read(1)?;
             return Ok(self.singleton);
         }
+        if self.nodes.is_empty() {
+            return Err(Error::EndOfPacket);
+        }
         let mut node = 0usize;
         let width = self.prefix_bits as u32;
         if width != 0
@@ -180,6 +195,11 @@ impl Huffman {
             } else {
                 1usize << (self.prefix_bits - 1)
             }
+    }
+    /// Empty books are available only through the explicit parsing policy.
+    /// Their scalar reads fail without consuming or exhausting the bit reader.
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty() && self.singleton == MISSING
     }
     fn storage_bytes(&self) -> usize {
         self.nodes.capacity() * core::mem::size_of::<[u32; 2]>()
@@ -251,9 +271,26 @@ impl Codebook {
     pub fn huffman(&self) -> &Huffman {
         &self.huffman
     }
+    pub fn is_empty(&self) -> bool {
+        self.huffman.is_empty()
+    }
     pub fn read(bits: &mut BitReader<'_>, limits: &Limits) -> Result<Self, Error> {
+        Self::read_with_options(
+            bits,
+            ParseOptions {
+                limits: *limits,
+                ..ParseOptions::default()
+            },
+        )
+    }
+    pub fn read_with_options(
+        bits: &mut BitReader<'_>,
+        options: ParseOptions,
+    ) -> Result<Self, Error> {
+        let limits = &options.limits;
         let mut budget = Budget::new(limits);
-        let mut book = Self::read_with_budget(bits, limits, &mut budget)?;
+        let mut book =
+            Self::read_with_budget(bits, limits, &mut budget, options.allow_empty_codebooks)?;
         book.accelerate(&mut budget)?;
         Ok(book)
     }
@@ -264,14 +301,15 @@ impl Codebook {
         bits: &mut BitReader<'_>,
         limits: &Limits,
         budget: &mut Budget,
+        allow_empty: bool,
     ) -> Result<Self, Error> {
         if bits.read(24)? != 0x564342 {
             return Err(Error::Invalid("codebook sync"));
         }
         let dimensions = bits.read(16)? as u16;
         let entries = bits.read(24)? as usize;
-        if dimensions == 0 || entries == 0 {
-            return Err(Error::Invalid("zero codebook dimensions/entries"));
+        if entries == 0 && !allow_empty {
+            return Err(Error::Invalid("zero codebook entries"));
         }
         if entries > limits.max_codebook_entries {
             return Err(Error::LimitExceeded("codebook entries"));
@@ -303,12 +341,20 @@ impl Codebook {
                 }
             }
         }
-        let huffman = Huffman::build(&lengths, limits.max_huffman_nodes, budget)?;
+        let huffman = Huffman::build(&lengths, limits.max_huffman_nodes, budget, allow_empty)?;
+        if huffman.is_empty() && ilog(dimensions as u32) + ilog(entries as u32) > 24 {
+            return Err(Error::Invalid(
+                "empty codebook dimensions/entries exceed libvorbis range",
+            ));
+        }
         let lookup_type = bits.read(4)? as u8;
         let mut vectors = Vec::new();
         if lookup_type != 0 {
             if lookup_type > 2 {
                 return Err(Error::Invalid("codebook lookup type"));
+            }
+            if dimensions == 0 && lookup_type == 1 && !huffman.is_empty() {
+                return Err(Error::Invalid("zero-dimensional lookup-one codebook"));
             }
             let minimum = float32_unpack(bits.read(32)?);
             let delta = float32_unpack(bits.read(32)?);
@@ -329,37 +375,45 @@ impl Codebook {
             if lookup_count > bits.remaining() / value_bits as usize {
                 return Err(Error::EndOfPacket);
             }
-            budget.charge(
-                lookup_count
-                    .checked_mul(2)
-                    .ok_or(Error::LimitExceeded("setup memory"))?,
-            )?;
-            let mut multiplicands = Vec::new();
-            reserve(&mut multiplicands, lookup_count)?;
-            for _ in 0..lookup_count {
-                multiplicands.push(bits.read(value_bits)? as u16);
-            }
-            budget.charge(
-                value_count
-                    .checked_mul(4)
-                    .ok_or(Error::LimitExceeded("setup memory"))?,
-            )?;
-            reserve(&mut vectors, value_count)?;
-            for entry in 0..entries {
-                let mut last = 0.0;
-                let mut quotient = entry;
-                for dimension in 0..dimensions as usize {
-                    let offset = if lookup_type == 1 {
-                        let offset = quotient % lookup_count;
-                        quotient /= lookup_count;
-                        offset
-                    } else {
-                        entry * dimensions as usize + dimension
-                    };
-                    let value = multiplicands[offset] as f64 * delta + minimum + last;
-                    vectors.push(value as f32);
-                    if sequence {
-                        last = (value as f32) as f64;
+            if huffman.is_empty() {
+                // Packed lookup values are still present, but no vector can
+                // be returned. The reference skips decoded-vector creation.
+                for _ in 0..lookup_count {
+                    bits.read(value_bits)?;
+                }
+            } else {
+                budget.charge(
+                    lookup_count
+                        .checked_mul(2)
+                        .ok_or(Error::LimitExceeded("setup memory"))?,
+                )?;
+                let mut multiplicands = Vec::new();
+                reserve(&mut multiplicands, lookup_count)?;
+                for _ in 0..lookup_count {
+                    multiplicands.push(bits.read(value_bits)? as u16);
+                }
+                budget.charge(
+                    value_count
+                        .checked_mul(4)
+                        .ok_or(Error::LimitExceeded("setup memory"))?,
+                )?;
+                reserve(&mut vectors, value_count)?;
+                for entry in 0..entries {
+                    let mut last = 0.0;
+                    let mut quotient = entry;
+                    for dimension in 0..dimensions as usize {
+                        let offset = if lookup_type == 1 {
+                            let offset = quotient % lookup_count;
+                            quotient /= lookup_count;
+                            offset
+                        } else {
+                            entry * dimensions as usize + dimension
+                        };
+                        let value = multiplicands[offset] as f64 * delta + minimum + last;
+                        vectors.push(value as f32);
+                        if sequence {
+                            last = (value as f32) as f64;
+                        }
                     }
                 }
             }
@@ -427,8 +481,8 @@ pub fn lookup1_values(entries: u32, dimensions: u32) -> u32 {
     low
 }
 pub(crate) fn power_at_most(base: u32, exponent: u32, limit: u32) -> bool {
-    if base == 1 {
-        return true;
+    if exponent == 0 || base == 1 {
+        return limit >= 1;
     }
     let mut product = 1u64;
     for _ in 0..exponent {
@@ -441,8 +495,51 @@ pub(crate) fn power_at_most(base: u32, exponent: u32, limit: u32) -> bool {
 }
 
 #[cfg(test)]
+pub(crate) fn empty_test_book(dimensions: u16, lookup: u8) -> Codebook {
+    use crate::bitpack::BitWriter;
+    let mut bits = BitWriter::new();
+    for (value, width) in [
+        (0x564342, 24),
+        (dimensions as u32, 16),
+        (0, 24),
+        (0, 1),
+        (1, 1),
+        (lookup as u32, 4),
+    ] {
+        bits.write(value, width).unwrap();
+    }
+    if lookup != 0 {
+        for (value, width) in [(0, 32), (0, 32), (0, 4), (0, 1)] {
+            bits.write(value, width).unwrap();
+        }
+    }
+    Codebook::read_with_options(
+        &mut BitReader::new(&bits.finish().unwrap()),
+        ParseOptions {
+            allow_empty_codebooks: true,
+            ..ParseOptions::default()
+        },
+    )
+    .unwrap()
+}
+
+#[cfg(test)]
 mod prefix_tests {
     use super::*;
+    #[test]
+    fn cardinality_bound_matches_checked_integer_powers_including_zero_entries() {
+        for base in [0u32, 1, 2, 3, 64, u32::MAX] {
+            for exponent in [0, 1, 2, 3, 16, 65_535] {
+                for limit in [0, 1, 2, 64, u32::MAX] {
+                    assert_eq!(
+                        power_at_most(base, exponent, limit),
+                        base.checked_pow(exponent).is_some_and(|n| n <= limit),
+                        "{base}^{exponent} <= {limit}"
+                    );
+                }
+            }
+        }
+    }
     #[test]
     fn lookup_matches_tree_at_every_prefix_alignment_and_packet_tail() {
         let mut deep: Vec<_> = (1..=32).collect();
@@ -455,6 +552,7 @@ mod prefix_tests {
                 &mut Budget {
                     remaining: usize::MAX,
                 },
+                false,
             )
             .unwrap();
             assert!(fast.prefix_bits != 0);
@@ -490,7 +588,7 @@ mod prefix_tests {
     fn prefix_memory_is_optional_and_logical_node_limits_are_unchanged() {
         let lengths = [3; 8];
         let mut budget = Budget { remaining: 7 * 8 };
-        let mut tree = Huffman::build(&lengths, 7, &mut budget).unwrap();
+        let mut tree = Huffman::build(&lengths, 7, &mut budget, false).unwrap();
         assert_eq!(budget.remaining, 0);
         tree.accelerate(&lengths, &mut budget).unwrap();
         assert_eq!(tree.prefix_bits, 0);

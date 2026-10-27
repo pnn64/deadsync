@@ -7,15 +7,17 @@ use crate::{
 use core::f64::consts::PI;
 
 /// EndOfPacket is deliberately preserved so the packet decoder can implement
-/// section 4.3.2's all-channel zeroing rule before overlap/add.
+/// section 4.3.2's all-channel zeroing rule before overlap/add, or the reference's
+/// channel-local concealment when IEEE propagation is explicitly enabled.
 pub(crate) fn decode(
     config: &Floor,
     books: &[Codebook],
     bits: &mut BitReader<'_>,
     output: &mut [f32],
+    allow_nonfinite: bool,
 ) -> Result<bool, Error> {
     match config {
-        Floor::Type0(config) => decode0(config, books, bits, output),
+        Floor::Type0(config) => decode0(config, books, bits, output, allow_nonfinite),
         Floor::Type1(config) => decode1(config, books, bits, output),
     }
 }
@@ -38,13 +40,25 @@ fn decode1(
     for &class in &config.partition_classes {
         let class = &config.classes[class as usize];
         let mut selection = match class.masterbook {
-            Some(book) => books[book as usize].decode_scalar(bits)?,
+            Some(book) => {
+                let book = &books[book as usize];
+                if book.is_empty() {
+                    return Ok(false);
+                }
+                book.decode_scalar(bits)?
+            }
             None => 0,
         };
         let mask = (1 << class.subclasses) - 1;
         for value in &mut y[offset..offset + class.dimensions as usize] {
             *value = match class.books[(selection & mask) as usize] {
-                Some(book) => books[book as usize].decode_scalar(bits)? as i64,
+                Some(book) => {
+                    let book = &books[book as usize];
+                    if book.is_empty() {
+                        return Ok(false);
+                    }
+                    book.decode_scalar(bits)? as i64
+                }
                 None => 0,
             };
             selection >>= class.subclasses;
@@ -143,6 +157,7 @@ fn decode0(
     books: &[Codebook],
     bits: &mut BitReader<'_>,
     output: &mut [f32],
+    allow_nonfinite: bool,
 ) -> Result<bool, Error> {
     let width = config.amplitude_bits as u32;
     let amplitude = if width <= 32 {
@@ -164,7 +179,7 @@ fn decode0(
     let mut coefficients = [0.0f32; 255];
     let mut position = 0;
     let mut last = 0.0;
-    while position < order {
+    while position < order && !book.is_empty() {
         let values = book.decode_vector(bits)?;
         let count = (order - position).min(values.len());
         for (&value, coefficient) in values
@@ -197,8 +212,9 @@ fn decode0(
                 &coefficients[..order],
                 &cosine[..order],
                 map,
+                allow_nonfinite,
             );
-            if !gain.is_finite() {
+            if !gain.is_finite() && !allow_nonfinite {
                 return Err(Error::Invalid("nonfinite floor0 curve"));
             }
             previous_map = map;
@@ -213,6 +229,7 @@ fn floor0_gain(
     coefficients: &[f32],
     cosine: &[f32],
     map: usize,
+    allow_nonfinite: bool,
 ) -> f32 {
     let amplitude = raw_amplitude as f32 / ((1u64 << config.amplitude_bits) - 1) as f32
         * config.amplitude_offset as f32;
@@ -241,12 +258,12 @@ fn floor0_gain(
     let gain = ((amplitude as f64 / ((p + q) as f64).sqrt() - config.amplitude_offset as f64)
         * 0.11512925f32 as f64)
         .exp() as f32;
-    if gain.is_finite() {
+    if gain.is_finite() || allow_nonfinite {
         return gain;
     }
     // Preserve the existing wide-range synthesis for high-order floors whose
-    // f32 products overflow/underflow. Nonfinite final gains are still rejected
-    // by the caller; no nonfinite PCM is permitted.
+    // f32 products overflow/underflow. This default finite-output policy rejects
+    // nonfinite final gains; explicit IEEE propagation returns above instead.
     let omega = (PI * map as f64 / config.bark_map_size as f64).cos();
     let mut p = 1.0;
     let mut q = 1.0;
@@ -276,6 +293,66 @@ fn bark(value: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn empty_floor_books_preserve_following_channel_bits() {
+        use crate::{FloorClass, bitpack::BitWriter, codebook::empty_test_book};
+        let books = [empty_test_book(1, 2)];
+        for master in [false, true] {
+            let config = Floor1 {
+                partition_classes: vec![0],
+                classes: vec![FloorClass {
+                    dimensions: 1,
+                    subclasses: u8::from(master),
+                    masterbook: master.then_some(0),
+                    books: [Some(0); 8],
+                }],
+                multiplier: 1,
+                x: vec![0, 32, 16],
+                neighbors: vec![[0, 0], [0, 0], [0, 1]],
+                sorted_order: vec![0, 2, 1],
+            };
+            let mut packet = BitWriter::new();
+            for (value, width) in [(1, 1), (200, 8), (200, 8), (21, 5)] {
+                packet.write(value, width).unwrap();
+            }
+            let bytes = packet.finish().unwrap();
+            let mut bits = BitReader::new(&bytes);
+            let mut output = [0.125; 32];
+            assert!(!decode1(&config, &books, &mut bits, &mut output).unwrap());
+            assert_eq!(output, [0.125; 32]);
+            assert_eq!(bits.position(), 17);
+            assert!(!bits.is_exhausted());
+            assert_eq!(bits.read(5), Ok(21));
+        }
+        let config = Floor0 {
+            order: 1,
+            rate: 8000,
+            bark_map_size: 63,
+            amplitude_bits: 6,
+            amplitude_offset: 30,
+            books: vec![0],
+        };
+        let mut packet = BitWriter::new();
+        for (value, width) in [(7, 6), (0, 1), (21, 5)] {
+            packet.write(value, width).unwrap();
+        }
+        let bytes = packet.finish().unwrap();
+        for allow in [false, true] {
+            let mut bits = BitReader::new(&bytes);
+            let mut output = [0.0; 32];
+            let result = decode0(&config, &books, &mut bits, &mut output, allow);
+            if allow {
+                assert_eq!(result, Ok(true));
+                assert_eq!(output[0], f32::INFINITY);
+                assert!(output[1..].iter().all(|n| n.is_finite()));
+            } else {
+                assert_eq!(result, Err(Error::Invalid("nonfinite floor0 curve")));
+            }
+            assert_eq!(bits.position(), 7);
+            assert!(!bits.is_exhausted());
+            assert_eq!(bits.read(5), Ok(21));
+        }
+    }
     fn lsp_book(order: u32) -> Codebook {
         use crate::{Limits, bitpack::BitWriter};
         let mut bits = BitWriter::new();
@@ -313,7 +390,7 @@ mod tests {
         let mut coefficients = [PI as f32; 254];
         coefficients[253] = (PI / 96.0) as f32 * 32.0;
         let cosine = coefficients.map(|x| (2.0 * (x as f64).cos()) as f32);
-        let gain = floor0_gain(&config, 7, &coefficients, &cosine, 32);
+        let gain = floor0_gain(&config, 7, &coefficients, &cosine, 32, false);
         let expected = (-30.0f64 * 0.11512925).exp() as f32;
         assert!(gain.is_finite());
         assert_eq!(gain, expected);
@@ -340,7 +417,14 @@ mod tests {
                 let mut bits = BitReader::new(&bytes);
                 let mut output = [0.125; 32];
                 assert!(
-                    !decode0(&config, std::slice::from_ref(&book), &mut bits, &mut output).unwrap()
+                    !decode0(
+                        &config,
+                        std::slice::from_ref(&book),
+                        &mut bits,
+                        &mut output,
+                        false
+                    )
+                    .unwrap()
                 );
                 assert_eq!(output, [0.125; 32]);
                 assert_eq!(bits.position(), 6 + ilog(count as u32) as usize);
@@ -384,7 +468,8 @@ mod tests {
                         &config,
                         std::slice::from_ref(&book),
                         &mut BitReader::new(&packet),
-                        &mut output
+                        &mut output,
+                        false,
                     )
                     .unwrap()
                 );

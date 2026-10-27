@@ -33,6 +33,11 @@ pub(crate) fn decode(
         return Ok(());
     }
     let classbook = &books[config.classbook as usize];
+    // A zero-used-entry scalar book fails without reading bits. Stop this
+    // residue only, so later submaps can still consume their own data.
+    if classbook.is_empty() {
+        return Ok(());
+    }
     let dimensions = classbook.dimensions();
     let vectors = if interleaved { 1 } else { channels };
     let classifications = config.books.len() as u32;
@@ -83,6 +88,11 @@ pub(crate) fn decode(
                         continue;
                     };
                     let book = &books[book as usize];
+                    // All three reference vector-add routines are no-ops for
+                    // empty books, including zero-dimensional empty VQ books.
+                    if book.is_empty() {
+                        continue;
+                    }
                     let start = begin + partition * partition_size;
                     decode_partition(config.kind, bits, book, output, ch, start, partition_size)?;
                 }
@@ -164,6 +174,58 @@ fn decode_partition(
 mod tests {
     use super::*;
     use crate::{Limits, bitpack::BitWriter};
+    #[test]
+    fn empty_vector_stage_preserves_earlier_additions_later_stages_and_reader() {
+        use crate::codebook::empty_test_book;
+        for dimensions in [0, 1, 3, u16::MAX] {
+            let books = [vector_book(), empty_test_book(dimensions, 2)];
+            let mut packet = BitWriter::new();
+            packet.write(0, 32).unwrap();
+            packet.write(0, 9).unwrap();
+            packet.write(21, 5).unwrap();
+            let bytes = packet.finish().unwrap();
+            for kind in 0..=2 {
+                let config = Residue {
+                    kind,
+                    begin: 1,
+                    end: 41,
+                    partition_size: 20,
+                    classbook: 0,
+                    books: vec![[Some(0), Some(1), Some(0), None, None, None, None, None]],
+                };
+                let mut actual = [0.125; 3 * 68];
+                let mut expected = actual;
+                for i in 0..40 {
+                    expected[2 * 68 + 1 + i] += 2.0
+                        * if kind == 0 {
+                            if i % 20 < 10 { 1.0 } else { 2.0 }
+                        } else {
+                            (i % 2 + 1) as f32
+                        };
+                }
+                let mut bits = BitReader::new(&bytes);
+                decode(
+                    &config,
+                    &books,
+                    &mut bits,
+                    &mut Output {
+                        layout: Residue2Layout::Interleaved,
+                        spectrum: &mut actual,
+                        stride: 68,
+                        bins: 64,
+                        bundle: &[2],
+                        nonzero: &[false, false, true],
+                        classes: &mut [255; 2],
+                    },
+                )
+                .unwrap();
+                assert_eq!(actual, expected, "kind {kind}, dimensions {dimensions}");
+                assert_eq!(bits.position(), 41);
+                assert!(!bits.is_exhausted());
+                assert_eq!(bits.read(5), Ok(21));
+            }
+        }
+    }
     fn vector_book() -> Codebook {
         vector_book_dimensions(2)
     }

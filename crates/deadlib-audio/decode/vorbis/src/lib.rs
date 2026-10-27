@@ -40,6 +40,15 @@ pub enum Residue2Layout {
     Libvorbis,
 }
 
+/// Header parsing policy, shared by complete setup and standalone codebooks.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ParseOptions {
+    pub limits: Limits,
+    /// Accept zero-active-entry books and their libvorbis consumer behavior.
+    /// Other incomplete/overspecified Huffman trees remain invalid.
+    pub allow_empty_codebooks: bool,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {
     EndOfPacket,

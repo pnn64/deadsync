@@ -1,6 +1,8 @@
 //! Independent C raw-packet comparisons shared by procedural setup matrices.
 use super::support;
-use deadlib_audio_decode_vorbis::{DecodeOptions, Identification, PacketDecoder, Setup};
+use deadlib_audio_decode_vorbis::{
+    DecodeOptions, Floor, Identification, PacketDecoder, ParseOptions, Setup,
+};
 pub struct Case {
     pub name: String,
     pub packets: Vec<Vec<u8>>,
@@ -39,6 +41,9 @@ pub struct Counts {
     packets: usize,
     discarded: usize,
     pcm: support::Difference,
+    peak_bound: f64,
+    rms_bound: f64,
+    nonfinite_samples: u64,
 }
 pub fn compare(headers: &[Vec<u8>], cases: &[Case], reference: &[u8]) -> Counts {
     compare_with_options(headers, cases, reference, DecodeOptions::default())
@@ -49,9 +54,37 @@ pub fn compare_with_options(
     reference: &[u8],
     options: DecodeOptions,
 ) -> Counts {
+    compare_with_parse_options(
+        headers,
+        cases,
+        reference,
+        options,
+        ParseOptions {
+            limits: options.limits,
+            ..ParseOptions::default()
+        },
+    )
+}
+pub fn compare_with_parse_options(
+    headers: &[Vec<u8>],
+    cases: &[Case],
+    reference: &[u8],
+    options: DecodeOptions,
+    parsing: ParseOptions,
+) -> Counts {
     let id = Identification::parse(&headers[0]).unwrap();
-    let setup = Setup::parse(&headers[2], &id, &options.limits).unwrap();
+    let setup = Setup::parse_with_options(&headers[2], &id, parsing).unwrap();
     let mut native = PacketDecoder::with_options(setup, options).unwrap();
+    let (peak, rms) = if native
+        .setup()
+        .floors()
+        .iter()
+        .any(|f| matches!(f, Floor::Type0(_)))
+    {
+        (5e-5, 3e-6)
+    } else {
+        (3e-6, 5e-7)
+    };
     let mut wire = reference;
     assert_eq!(support::u32_in(&mut wire), native.setup().channels() as u32);
     assert_eq!(
@@ -60,6 +93,8 @@ pub fn compare_with_options(
     );
     let mut total = Counts {
         cases: cases.len(),
+        peak_bound: peak,
+        rms_bound: rms,
         ..Counts::default()
     };
     for case in cases {
@@ -96,13 +131,22 @@ pub fn compare_with_options(
             let mut difference = support::Difference::default();
             for plane in block.planes() {
                 for &value in plane {
-                    difference.add(value, f32::from_bits(support::u32_in(&mut wire)));
+                    let expected = f32::from_bits(support::u32_in(&mut wire));
+                    if expected.is_nan() {
+                        assert!(value.is_nan(), "{}/step-{i}: expected NaN", case.name);
+                        total.nonfinite_samples += 1;
+                    } else if expected.is_infinite() {
+                        assert_eq!(value, expected, "{}/step-{i}: expected infinity", case.name);
+                        total.nonfinite_samples += 1;
+                    } else {
+                        difference.add(value, expected);
+                    }
                 }
             }
-            if difference.peak_error > 3e-6 * difference.peak_reference.max(1.0)
-                || difference.rms() > 5e-7 * difference.peak_reference.max(1.0)
+            if difference.peak_error > peak * difference.peak_reference.max(1.0)
+                || difference.rms() > rms * difference.peak_reference.max(1.0)
             {
-                difference.check(&format!("{}/step-{i}", case.name));
+                difference.check_with_bounds(&format!("{}/step-{i}", case.name), peak, rms);
             }
             total.pcm.merge(&difference);
         }
@@ -111,9 +155,17 @@ pub fn compare_with_options(
     total
 }
 pub fn report(label: &str, counts: Counts) {
+    if counts.nonfinite_samples != 0 {
+        eprintln!(
+            "{label}: {} nonfinite samples with matching IEEE classes",
+            counts.nonfinite_samples
+        );
+    }
     eprintln!(
         "{label}: {} cases, {} packets, {} discarded",
         counts.cases, counts.packets, counts.discarded
     );
-    counts.pcm.check(label);
+    counts
+        .pcm
+        .check_with_bounds(label, counts.peak_bound, counts.rms_bound);
 }

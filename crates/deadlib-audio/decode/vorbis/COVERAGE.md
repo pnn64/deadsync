@@ -11,8 +11,10 @@ work. Performance measurements do not establish completion.
 
 The [bit-mutation follow-up](BIT_MUTATIONS.md) adds 55,845 finite-reference
 cases and corrects floor-zero selector/rounding plus VQ sequence offsets.
-Eleven nonfinite-reference cases remain an explicit, separately tested
-divergence rather than being counted as PCM parity.
+The [degenerate-book follow-up](DEGENERATE_BOOKS.md) matches all eleven nonfinite
+cases under explicit IEEE propagation, adds empty-book consumer behavior and
+accepts nonempty zero-dimensional scalar books. Default finite-output rejection
+remains a separately tested policy.
 
 The [configuration matrix](CONFIGURATION_PARITY.md) adds every mode-table size,
 both mode block orders, surplus residue classwords and stage-free submaps.
@@ -67,7 +69,8 @@ explicit libvorbis layout through raw, Ogg and indexed APIs.
   output in Vorbis channel order. No clipping, resampling or hidden reordering.
 * Reusable overlap/reset lifecycle; nominal floor/residue truncation behavior,
   prefix/non-audio discard, error preservation of previous overlap, explicit
-  decode-memory policy and rejection of nonfinite spectral/PCM results.
+  decode-memory policy and default rejection of nonfinite spectral/PCM results;
+  explicit libvorbis IEEE propagation is available.
 * Page, incremental-byte and pull-reader Ogg mapping APIs; exact header page
   boundaries/granules, nonfatal comment truncation/framing errors, flat owned
   metadata, independent logical stream state, multiplexing, chains and unknown

@@ -12,7 +12,9 @@ with DeadSync. `Cargo.lock` pins the fuzz tooling dependencies.
 | `vorbis_stream` | Control byte then Ogg bytes, with arbitrary input chunks. Pull and two reset/push replays must match PCM/event summaries, errors and exception counts. Accepted indices compare page, packet, and mixed reads after end/middle/start/last-frame seeks, including deterministic payload errors and recovery by seeking. |
 | `vorbis_encode` | Six policy bytes then little-endian i16 PCM, or raw f32 for range/NaN rejection. Vary legal blocks, 1..255 channels, four precision stages, rates, input chunks and page targets. Whole interleaved and reset/chunked planar encoding must produce identical bytes. Native decoding checks framing, finite PCM, exact positions and final trimming. Invalid PCM must emit nothing and preserve position. |
 
-Every returned PCM sample must be finite. Summaries use an order-sensitive
+PCM must be finite under the default synthesis policy. Explicit libvorbis IEEE
+propagation accepts NaN/infinity and canonicalizes NaN payload bits in the hash;
+finite samples and infinity signs retain their exact bits. Summaries use an order-sensitive
 64-bit hash plus exact counts rather than retaining untrusted output; a matching
 hash is a practical fuzz oracle, not a mathematical proof of equality. Separate
 normal/reference tests compare complete PCM values and exact positions.
@@ -66,9 +68,11 @@ replaying. The manifest records its exact external source hash.
 
 Header and streaming inputs also exercise both `Residue2Layout` policies. The
 header target's high control bit selects the libvorbis layout when `kind % 3`
-selects setup parsing (controls 2 / 194 select the two layouts). Streaming
-control bit three selects the libvorbis layout for pull, push, reset and indexed
-seeking. The raw target uses its normative fixture contexts. Procedural unaligned
+selects setup parsing. Bits six and five enable empty books and IEEE propagation
+respectively (controls 2 / 224 exercise strict / all three compatibility options).
+Streaming control bits three, four and five select layout, empty books and IEEE
+propagation for pull, push, reset and indexed seeking. The raw target uses its
+normative fixture contexts. Procedural empty-book and unaligned
 geometry streams seed both policies with strict framing and independent C sample
 counts; these are bounded-state oracles, separately from C PCM parity tests.
 

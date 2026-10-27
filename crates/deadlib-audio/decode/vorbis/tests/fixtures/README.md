@@ -85,3 +85,19 @@ cargo test -p deadlib-audio-decode-vorbis --release --test residue_geometry rege
 
 See [residue geometry](../../RESIDUE_GEOMETRY.md) for the normative/reference
 distinction and validation scope.
+
+`degenerate-books-v1.libvorbis-pcm` contains eleven independent C setup responses
+(twelve cases) for nonempty dimension-zero scalar books, empty floor/residue
+consumers, later-floor EOF and maximum 16-bit dimensions. Format: `DVCBOOK1`,
+little-endian u32 set count, then u64-length-delimited `pcm-cases` responses.
+`tests/support/degenerate_books.rs` and `regressions` / `regression_cases` in
+`tests/codebook_compatibility.rs` define the inputs. Size: 44,932 bytes; SHA-256:
+`6b4615db3c606000482307cc37e03e945a116dfb9d68d99ba1c7f142fb6850cf`.
+Normal tests explicitly enable empty-book/IEEE policies where required.
+Regenerate with the pinned oracle configured:
+
+```powershell
+cargo test -p deadlib-audio-decode-vorbis --release --test codebook_compatibility regenerate_degenerate_book_golden -- --ignored
+```
+
+See [degenerate books](../../DEGENERATE_BOOKS.md) for policy distinctions and evidence.

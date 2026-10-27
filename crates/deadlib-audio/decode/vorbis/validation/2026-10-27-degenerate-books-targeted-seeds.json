@@ -1,0 +1,1032 @@
+{
+  "scope": "Eleven procedural degenerate-codebook configurations, a later-floor EOF recovery case and eleven pinned external floor0 nonfinite cases. Header and stream controls exercise strict, empty-book, IEEE and combined residue-layout policies. Counts/granules come independently from libvorbis. No external media redistributed. Inherits previous corpus without modifying it.",
+  "reference_binary_sha256": "5df5f64698c957d0a890db76e2f43e30200539268e289fd93270a93f3e4fe58a",
+  "seeds": [
+    {
+      "path": "vorbis_headers/synthetic-book-golden-0-control-2.bin",
+      "bytes": 186,
+      "sha256": "11d247e94e24b4750eff582254ebe5a5a2607d9aee0c4ecb4ad07ec6f0079806",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-0.bin",
+      "source_sha256": "e14da9824134fa367f049e58538d8d57a2c9cba4c6edaa423ace124d1906053d",
+      "reference_pcm_sha256": "44fd366ac2d8fc57d9483e1f6258321a78fb2bc438a7fce2c51fb9d95f51f0f0",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-0-control-65.bin",
+      "bytes": 186,
+      "sha256": "a852366668ef6bf94172f16f75bfeec43236d8099beee10258fe8ff51f050496",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-0.bin",
+      "source_sha256": "e14da9824134fa367f049e58538d8d57a2c9cba4c6edaa423ace124d1906053d",
+      "reference_pcm_sha256": "44fd366ac2d8fc57d9483e1f6258321a78fb2bc438a7fce2c51fb9d95f51f0f0",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-0-control-98.bin",
+      "bytes": 186,
+      "sha256": "98e6812631d7c7235058ddd9c3c4e70e130c464ac07408260b2b6d050d2c2819",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-0.bin",
+      "source_sha256": "e14da9824134fa367f049e58538d8d57a2c9cba4c6edaa423ace124d1906053d",
+      "reference_pcm_sha256": "44fd366ac2d8fc57d9483e1f6258321a78fb2bc438a7fce2c51fb9d95f51f0f0",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-0-control-224.bin",
+      "bytes": 186,
+      "sha256": "6a00aa2334e81fd4ec8ae8cb0c624a53fb76d22c405a63d5873878cb81967b7b",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-0.bin",
+      "source_sha256": "e14da9824134fa367f049e58538d8d57a2c9cba4c6edaa423ace124d1906053d",
+      "reference_pcm_sha256": "44fd366ac2d8fc57d9483e1f6258321a78fb2bc438a7fce2c51fb9d95f51f0f0",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-0-case-0-control-0.bin",
+      "bytes": 549,
+      "sha256": "2511aa1693e6e188898bf1633b5533f2cc6593bf96d4bbfc5e89b2380b6251dc",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-0.bin",
+      "source_sha256": "e14da9824134fa367f049e58538d8d57a2c9cba4c6edaa423ace124d1906053d",
+      "reference_pcm_sha256": "44fd366ac2d8fc57d9483e1f6258321a78fb2bc438a7fce2c51fb9d95f51f0f0",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-0-case-0-control-16.bin",
+      "bytes": 549,
+      "sha256": "2a79e881b636d3066f3b2b8bb8e8d524ca98ea7dae3f9b13ea3b74779cf58604",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-0.bin",
+      "source_sha256": "e14da9824134fa367f049e58538d8d57a2c9cba4c6edaa423ace124d1906053d",
+      "reference_pcm_sha256": "44fd366ac2d8fc57d9483e1f6258321a78fb2bc438a7fce2c51fb9d95f51f0f0",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-0-case-0-control-48.bin",
+      "bytes": 549,
+      "sha256": "90d81e9bf290222b4804fbcc2c4122ef9cd82a86234f0eaa0eaaf5ee4e75166b",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-0.bin",
+      "source_sha256": "e14da9824134fa367f049e58538d8d57a2c9cba4c6edaa423ace124d1906053d",
+      "reference_pcm_sha256": "44fd366ac2d8fc57d9483e1f6258321a78fb2bc438a7fce2c51fb9d95f51f0f0",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-0-case-0-control-56.bin",
+      "bytes": 549,
+      "sha256": "0c899108e01424b7e0fe1b411631738e034c484953cd9a32cd665e681c74f677",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-0.bin",
+      "source_sha256": "e14da9824134fa367f049e58538d8d57a2c9cba4c6edaa423ace124d1906053d",
+      "reference_pcm_sha256": "44fd366ac2d8fc57d9483e1f6258321a78fb2bc438a7fce2c51fb9d95f51f0f0",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-1-control-2.bin",
+      "bytes": 195,
+      "sha256": "df9c3c33adde4bc1e7873a2a10a47f44d3084df8b02c6558f581855447477cc1",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-1.bin",
+      "source_sha256": "b79550d23d4567dacbd9d45a8432af0c4cf137e7d28f05decfc5b6ffb02a37fa",
+      "reference_pcm_sha256": "e50bc79381b79f5b78e5e9c5c069705363d1842bdd7bf60e6579d8980e9f7a04",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-1-control-65.bin",
+      "bytes": 195,
+      "sha256": "5bb21f0e2bbe5686f88cec9610b27b455954b9733b7dfc8c456dab433e38be5c",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-1.bin",
+      "source_sha256": "b79550d23d4567dacbd9d45a8432af0c4cf137e7d28f05decfc5b6ffb02a37fa",
+      "reference_pcm_sha256": "e50bc79381b79f5b78e5e9c5c069705363d1842bdd7bf60e6579d8980e9f7a04",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-1-control-98.bin",
+      "bytes": 195,
+      "sha256": "651627b20e9520be5e88aa081f3f7bf2c907cb98bfccd3cd12a7ab26c4f9dfab",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-1.bin",
+      "source_sha256": "b79550d23d4567dacbd9d45a8432af0c4cf137e7d28f05decfc5b6ffb02a37fa",
+      "reference_pcm_sha256": "e50bc79381b79f5b78e5e9c5c069705363d1842bdd7bf60e6579d8980e9f7a04",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-1-control-224.bin",
+      "bytes": 195,
+      "sha256": "a9bd5b622fe27982e598e7f4d4d48e79c72e114346cd9bc69410adc5f9df2814",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-1.bin",
+      "source_sha256": "b79550d23d4567dacbd9d45a8432af0c4cf137e7d28f05decfc5b6ffb02a37fa",
+      "reference_pcm_sha256": "e50bc79381b79f5b78e5e9c5c069705363d1842bdd7bf60e6579d8980e9f7a04",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-1-case-0-control-0.bin",
+      "bytes": 589,
+      "sha256": "916135a4fe033b706f0ab41f9cca9b587b96cacbba38a79d442eaf256760efcf",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-1.bin",
+      "source_sha256": "b79550d23d4567dacbd9d45a8432af0c4cf137e7d28f05decfc5b6ffb02a37fa",
+      "reference_pcm_sha256": "e50bc79381b79f5b78e5e9c5c069705363d1842bdd7bf60e6579d8980e9f7a04",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-1-case-0-control-16.bin",
+      "bytes": 589,
+      "sha256": "cc257f886f22116728532623c3df8c6934b65f28acfc23a4853312f98de06d0a",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-1.bin",
+      "source_sha256": "b79550d23d4567dacbd9d45a8432af0c4cf137e7d28f05decfc5b6ffb02a37fa",
+      "reference_pcm_sha256": "e50bc79381b79f5b78e5e9c5c069705363d1842bdd7bf60e6579d8980e9f7a04",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-1-case-0-control-48.bin",
+      "bytes": 589,
+      "sha256": "f32d77d11457b74608bf620bf29697bc1ef6700e87d2502b73b7c9d929d861e6",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-1.bin",
+      "source_sha256": "b79550d23d4567dacbd9d45a8432af0c4cf137e7d28f05decfc5b6ffb02a37fa",
+      "reference_pcm_sha256": "e50bc79381b79f5b78e5e9c5c069705363d1842bdd7bf60e6579d8980e9f7a04",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-1-case-0-control-56.bin",
+      "bytes": 589,
+      "sha256": "51964cdaf3379b11f1e97c89e53edfa94d6cbd569adbee40f9e241632f7495c4",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-1.bin",
+      "source_sha256": "b79550d23d4567dacbd9d45a8432af0c4cf137e7d28f05decfc5b6ffb02a37fa",
+      "reference_pcm_sha256": "e50bc79381b79f5b78e5e9c5c069705363d1842bdd7bf60e6579d8980e9f7a04",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-10-control-2.bin",
+      "bytes": 179,
+      "sha256": "ce13cd342b5445d10aba4871d539f2732dd6e1a96c615853b4b64caa5b90075b",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-10.bin",
+      "source_sha256": "29107b2195acb58723a018e53d71a0b0e745671b595692f0e064a1a417f6f15d",
+      "reference_pcm_sha256": "b77601a8dc84b4a09caa19754b95cc0df0a5be1ec3a31e3bf0ccf1f7216f2363",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-10-control-65.bin",
+      "bytes": 179,
+      "sha256": "aa70737bcfe3022d9bfb855e102427676e2102d26c9ff8a34143f3c10db03198",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-10.bin",
+      "source_sha256": "29107b2195acb58723a018e53d71a0b0e745671b595692f0e064a1a417f6f15d",
+      "reference_pcm_sha256": "b77601a8dc84b4a09caa19754b95cc0df0a5be1ec3a31e3bf0ccf1f7216f2363",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-10-control-98.bin",
+      "bytes": 179,
+      "sha256": "2f94f6d7b29638cb41389bdc3fccfcf6bb2a31b34c48b12f76ee7c9c4636b689",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-10.bin",
+      "source_sha256": "29107b2195acb58723a018e53d71a0b0e745671b595692f0e064a1a417f6f15d",
+      "reference_pcm_sha256": "b77601a8dc84b4a09caa19754b95cc0df0a5be1ec3a31e3bf0ccf1f7216f2363",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-10-control-224.bin",
+      "bytes": 179,
+      "sha256": "38837f2fbf725faef5eca22ad616e86deba15316e4241019ee639b4bd381115c",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-10.bin",
+      "source_sha256": "29107b2195acb58723a018e53d71a0b0e745671b595692f0e064a1a417f6f15d",
+      "reference_pcm_sha256": "b77601a8dc84b4a09caa19754b95cc0df0a5be1ec3a31e3bf0ccf1f7216f2363",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-10-case-0-control-0.bin",
+      "bytes": 510,
+      "sha256": "61804b95b3c5ad8a5865506bcddc3fe0eee1b7a479f06c26666f57a32a39fa37",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-10.bin",
+      "source_sha256": "29107b2195acb58723a018e53d71a0b0e745671b595692f0e064a1a417f6f15d",
+      "reference_pcm_sha256": "b77601a8dc84b4a09caa19754b95cc0df0a5be1ec3a31e3bf0ccf1f7216f2363",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-10-case-0-control-16.bin",
+      "bytes": 510,
+      "sha256": "2127c61c70b09f98ce619b0f4e74f22ff64b7989788d141f967168a6146e6f8d",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-10.bin",
+      "source_sha256": "29107b2195acb58723a018e53d71a0b0e745671b595692f0e064a1a417f6f15d",
+      "reference_pcm_sha256": "b77601a8dc84b4a09caa19754b95cc0df0a5be1ec3a31e3bf0ccf1f7216f2363",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-10-case-0-control-48.bin",
+      "bytes": 510,
+      "sha256": "ca6b7e8e7228920f0185f1a260dbc956365a19aee26184166f5a9749eaae4a08",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-10.bin",
+      "source_sha256": "29107b2195acb58723a018e53d71a0b0e745671b595692f0e064a1a417f6f15d",
+      "reference_pcm_sha256": "b77601a8dc84b4a09caa19754b95cc0df0a5be1ec3a31e3bf0ccf1f7216f2363",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-10-case-0-control-56.bin",
+      "bytes": 510,
+      "sha256": "bb7d9b71a0221bb7c77ba92feabe07a8cb9914eeb25bb636f4e54ac31c5b40e0",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-10.bin",
+      "source_sha256": "29107b2195acb58723a018e53d71a0b0e745671b595692f0e064a1a417f6f15d",
+      "reference_pcm_sha256": "b77601a8dc84b4a09caa19754b95cc0df0a5be1ec3a31e3bf0ccf1f7216f2363",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-2-control-2.bin",
+      "bytes": 188,
+      "sha256": "7f7f48a702b460e9df3cf97d1f5bf2eb44641783a4464a0e2fd8540bf89b662c",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-2.bin",
+      "source_sha256": "0326dbc8a707a23cd2c38f5b0490cd55b3d37eb94300b3fea1a7a8ff9650c6e5",
+      "reference_pcm_sha256": "a4efb334276148ed77fc282ca9cc0ca2eddd1e8a0eb03635449c38ace7932012",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-2-control-65.bin",
+      "bytes": 188,
+      "sha256": "3d1d94ecf23ab80bd02f313ff9601ee4c086bb99956fd5bafaeb035f25899939",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-2.bin",
+      "source_sha256": "0326dbc8a707a23cd2c38f5b0490cd55b3d37eb94300b3fea1a7a8ff9650c6e5",
+      "reference_pcm_sha256": "a4efb334276148ed77fc282ca9cc0ca2eddd1e8a0eb03635449c38ace7932012",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-2-control-98.bin",
+      "bytes": 188,
+      "sha256": "0485b51b7f760ebe265a36c36ed32c07283c6a53e2ff4693c0d87ad82b923399",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-2.bin",
+      "source_sha256": "0326dbc8a707a23cd2c38f5b0490cd55b3d37eb94300b3fea1a7a8ff9650c6e5",
+      "reference_pcm_sha256": "a4efb334276148ed77fc282ca9cc0ca2eddd1e8a0eb03635449c38ace7932012",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-2-control-224.bin",
+      "bytes": 188,
+      "sha256": "07852259c6a84b1a50d28dac5c3cfdee9e429f218e143ab822a701adb634351d",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-2.bin",
+      "source_sha256": "0326dbc8a707a23cd2c38f5b0490cd55b3d37eb94300b3fea1a7a8ff9650c6e5",
+      "reference_pcm_sha256": "a4efb334276148ed77fc282ca9cc0ca2eddd1e8a0eb03635449c38ace7932012",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-2-case-0-control-0.bin",
+      "bytes": 539,
+      "sha256": "f9261b747e5c00d52f2a5813df841b75cb7a80ff638463621d9e52565bcd66fd",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-2.bin",
+      "source_sha256": "0326dbc8a707a23cd2c38f5b0490cd55b3d37eb94300b3fea1a7a8ff9650c6e5",
+      "reference_pcm_sha256": "a4efb334276148ed77fc282ca9cc0ca2eddd1e8a0eb03635449c38ace7932012",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-2-case-0-control-16.bin",
+      "bytes": 539,
+      "sha256": "42a82f70a5c17c5af9c9c2a0f0fb4e29fe2e32367c5eddc18844181291ebdd7e",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-2.bin",
+      "source_sha256": "0326dbc8a707a23cd2c38f5b0490cd55b3d37eb94300b3fea1a7a8ff9650c6e5",
+      "reference_pcm_sha256": "a4efb334276148ed77fc282ca9cc0ca2eddd1e8a0eb03635449c38ace7932012",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-2-case-0-control-48.bin",
+      "bytes": 539,
+      "sha256": "f63b2156af6c6d4a4e15b9cdbf59e3e78a73b719458b28db6f8c9996edc1422c",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-2.bin",
+      "source_sha256": "0326dbc8a707a23cd2c38f5b0490cd55b3d37eb94300b3fea1a7a8ff9650c6e5",
+      "reference_pcm_sha256": "a4efb334276148ed77fc282ca9cc0ca2eddd1e8a0eb03635449c38ace7932012",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-2-case-0-control-56.bin",
+      "bytes": 539,
+      "sha256": "44f1088660cc634a09a8dca4a0fef6625581451ebda78dc9665fc54c00fde578",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-2.bin",
+      "source_sha256": "0326dbc8a707a23cd2c38f5b0490cd55b3d37eb94300b3fea1a7a8ff9650c6e5",
+      "reference_pcm_sha256": "a4efb334276148ed77fc282ca9cc0ca2eddd1e8a0eb03635449c38ace7932012",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-3-control-2.bin",
+      "bytes": 185,
+      "sha256": "eee38a69f2f7184bb112d38da4afe4c530cfa6bd8535c89ed3e3e2e5e882d058",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-3.bin",
+      "source_sha256": "042def3db6f5359acac0b1aa29743295b290ccd411153de7dd1136ebca8ff03f",
+      "reference_pcm_sha256": "470e504f790428a118306c902eafe89fe36ea6484dd8883020e1801250cac0a6",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-3-control-65.bin",
+      "bytes": 185,
+      "sha256": "79a096d363f5c690e5fb989cd050ff56b8db2ede404720baf632ba4af8478c77",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-3.bin",
+      "source_sha256": "042def3db6f5359acac0b1aa29743295b290ccd411153de7dd1136ebca8ff03f",
+      "reference_pcm_sha256": "470e504f790428a118306c902eafe89fe36ea6484dd8883020e1801250cac0a6",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-3-control-98.bin",
+      "bytes": 185,
+      "sha256": "673ee48ed2dacdd14642e0b9cd72fa2eb71cdf7e9cf1d62089efdfac3b414ab8",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-3.bin",
+      "source_sha256": "042def3db6f5359acac0b1aa29743295b290ccd411153de7dd1136ebca8ff03f",
+      "reference_pcm_sha256": "470e504f790428a118306c902eafe89fe36ea6484dd8883020e1801250cac0a6",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-3-control-224.bin",
+      "bytes": 185,
+      "sha256": "f61e7738bbd1cfc8c7037b2e83a834831a145380ebfa4bc27b5095ecb03715f5",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-3.bin",
+      "source_sha256": "042def3db6f5359acac0b1aa29743295b290ccd411153de7dd1136ebca8ff03f",
+      "reference_pcm_sha256": "470e504f790428a118306c902eafe89fe36ea6484dd8883020e1801250cac0a6",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-3-case-0-control-0.bin",
+      "bytes": 536,
+      "sha256": "3746358e736a4d4f407304b420e527727482ea685448e8d0156b6bb8354702c7",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-3.bin",
+      "source_sha256": "042def3db6f5359acac0b1aa29743295b290ccd411153de7dd1136ebca8ff03f",
+      "reference_pcm_sha256": "470e504f790428a118306c902eafe89fe36ea6484dd8883020e1801250cac0a6",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-3-case-0-control-16.bin",
+      "bytes": 536,
+      "sha256": "7c32951e766f6a607ba05ae53beced668e2bc4cfb94882fb4d034ad9d9b1a1e9",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-3.bin",
+      "source_sha256": "042def3db6f5359acac0b1aa29743295b290ccd411153de7dd1136ebca8ff03f",
+      "reference_pcm_sha256": "470e504f790428a118306c902eafe89fe36ea6484dd8883020e1801250cac0a6",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-3-case-0-control-48.bin",
+      "bytes": 536,
+      "sha256": "1bb6425f1dae56b06cd504048d7112345eed2f7e9c23733dd621511467283781",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-3.bin",
+      "source_sha256": "042def3db6f5359acac0b1aa29743295b290ccd411153de7dd1136ebca8ff03f",
+      "reference_pcm_sha256": "470e504f790428a118306c902eafe89fe36ea6484dd8883020e1801250cac0a6",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-3-case-0-control-56.bin",
+      "bytes": 536,
+      "sha256": "42c896b44e4252c4e9db1001b3906f0f6c92a27e675488506ea2ea9d61d480a8",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-3.bin",
+      "source_sha256": "042def3db6f5359acac0b1aa29743295b290ccd411153de7dd1136ebca8ff03f",
+      "reference_pcm_sha256": "470e504f790428a118306c902eafe89fe36ea6484dd8883020e1801250cac0a6",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-4-control-2.bin",
+      "bytes": 196,
+      "sha256": "4466e4e664388bb7cf27b2489f29d40d2dcb3aba432917d4bc2cf9ed05ca3cee",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-4.bin",
+      "source_sha256": "6d5aca541009071fe923530597192bbcb97647dc6ce2c7944c0fab4c6c525759",
+      "reference_pcm_sha256": "52c5740032ee79b6a8cf083a1b573328adf35aa9ea033889600c5959b98610ad",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-4-control-65.bin",
+      "bytes": 196,
+      "sha256": "c1c80ac315322aaa3fd7df78a65768ee660a192fd5644a4974979fd21cdedea1",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-4.bin",
+      "source_sha256": "6d5aca541009071fe923530597192bbcb97647dc6ce2c7944c0fab4c6c525759",
+      "reference_pcm_sha256": "52c5740032ee79b6a8cf083a1b573328adf35aa9ea033889600c5959b98610ad",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-4-control-98.bin",
+      "bytes": 196,
+      "sha256": "133c41ca478c18aeef71c4812701687024b8d5c3f2c04079d83ced474fb25bd0",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-4.bin",
+      "source_sha256": "6d5aca541009071fe923530597192bbcb97647dc6ce2c7944c0fab4c6c525759",
+      "reference_pcm_sha256": "52c5740032ee79b6a8cf083a1b573328adf35aa9ea033889600c5959b98610ad",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-4-control-224.bin",
+      "bytes": 196,
+      "sha256": "14430a0396ae2722bfda4a9bb663a4f1b57e9a79a5415bbf00c92261b7ee849d",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-4.bin",
+      "source_sha256": "6d5aca541009071fe923530597192bbcb97647dc6ce2c7944c0fab4c6c525759",
+      "reference_pcm_sha256": "52c5740032ee79b6a8cf083a1b573328adf35aa9ea033889600c5959b98610ad",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-4-case-0-control-0.bin",
+      "bytes": 585,
+      "sha256": "494695e1ff84aaf685f9e52c14c5b483dd251e7f31ea0e0a229eca7c9dd830b4",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-4.bin",
+      "source_sha256": "6d5aca541009071fe923530597192bbcb97647dc6ce2c7944c0fab4c6c525759",
+      "reference_pcm_sha256": "52c5740032ee79b6a8cf083a1b573328adf35aa9ea033889600c5959b98610ad",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-4-case-0-control-16.bin",
+      "bytes": 585,
+      "sha256": "02118f32fb299321128eee9d2f9f96de598e46ba8e45680a2a924f3ff14d67a5",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-4.bin",
+      "source_sha256": "6d5aca541009071fe923530597192bbcb97647dc6ce2c7944c0fab4c6c525759",
+      "reference_pcm_sha256": "52c5740032ee79b6a8cf083a1b573328adf35aa9ea033889600c5959b98610ad",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-4-case-0-control-48.bin",
+      "bytes": 585,
+      "sha256": "4a3b96fcef1de54d82de24204ac61a88755fc8c5022a96e5c8a1b100700e4afd",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-4.bin",
+      "source_sha256": "6d5aca541009071fe923530597192bbcb97647dc6ce2c7944c0fab4c6c525759",
+      "reference_pcm_sha256": "52c5740032ee79b6a8cf083a1b573328adf35aa9ea033889600c5959b98610ad",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-4-case-0-control-56.bin",
+      "bytes": 585,
+      "sha256": "bff3f388ecc55e00984fb1ef32a4dfe715587e686de163d7c97227a81ef4b8aa",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-4.bin",
+      "source_sha256": "6d5aca541009071fe923530597192bbcb97647dc6ce2c7944c0fab4c6c525759",
+      "reference_pcm_sha256": "52c5740032ee79b6a8cf083a1b573328adf35aa9ea033889600c5959b98610ad",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-5-control-2.bin",
+      "bytes": 183,
+      "sha256": "696e121824116eb3b370270e346d3cc24b3c215f2956a9c23a8c90ecedc52745",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-5.bin",
+      "source_sha256": "2fae7df3298a079b69b353faa5a1976b3a8142d334aa7e2ef3400f68bb128c4f",
+      "reference_pcm_sha256": "cf246aec7e0168e5f89dc51c81cf5a41a882e898f473c200ac716b9882d88c59",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-5-control-65.bin",
+      "bytes": 183,
+      "sha256": "635f34575614176ed745316a8869f19f10dc2029aea60f9fe9f8d34dea43047e",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-5.bin",
+      "source_sha256": "2fae7df3298a079b69b353faa5a1976b3a8142d334aa7e2ef3400f68bb128c4f",
+      "reference_pcm_sha256": "cf246aec7e0168e5f89dc51c81cf5a41a882e898f473c200ac716b9882d88c59",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-5-control-98.bin",
+      "bytes": 183,
+      "sha256": "38223f8fc44f1b2471b50f622dd75e53cdcfe0dca4162cc26de363a5d8a045bf",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-5.bin",
+      "source_sha256": "2fae7df3298a079b69b353faa5a1976b3a8142d334aa7e2ef3400f68bb128c4f",
+      "reference_pcm_sha256": "cf246aec7e0168e5f89dc51c81cf5a41a882e898f473c200ac716b9882d88c59",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-5-control-224.bin",
+      "bytes": 183,
+      "sha256": "8abcba182968ccb68392a3e16b8c50735ef71d8231e44563cd8815028b387aae",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-5.bin",
+      "source_sha256": "2fae7df3298a079b69b353faa5a1976b3a8142d334aa7e2ef3400f68bb128c4f",
+      "reference_pcm_sha256": "cf246aec7e0168e5f89dc51c81cf5a41a882e898f473c200ac716b9882d88c59",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-5-case-0-control-0.bin",
+      "bytes": 531,
+      "sha256": "5984b50de61022a18a11cfb46864edbda53ecc4e95383abd8568f5a4a7f7760e",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-5.bin",
+      "source_sha256": "2fae7df3298a079b69b353faa5a1976b3a8142d334aa7e2ef3400f68bb128c4f",
+      "reference_pcm_sha256": "cf246aec7e0168e5f89dc51c81cf5a41a882e898f473c200ac716b9882d88c59",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-5-case-0-control-16.bin",
+      "bytes": 531,
+      "sha256": "45077e0bb55371d6fd349b9153b4dc1b36d717ef85848380dbf54aeec7c146e5",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-5.bin",
+      "source_sha256": "2fae7df3298a079b69b353faa5a1976b3a8142d334aa7e2ef3400f68bb128c4f",
+      "reference_pcm_sha256": "cf246aec7e0168e5f89dc51c81cf5a41a882e898f473c200ac716b9882d88c59",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-5-case-0-control-48.bin",
+      "bytes": 531,
+      "sha256": "1865abbff3360d4489b3110e00a2d2d8cf5f299e63d0d592c427012e01ff488e",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-5.bin",
+      "source_sha256": "2fae7df3298a079b69b353faa5a1976b3a8142d334aa7e2ef3400f68bb128c4f",
+      "reference_pcm_sha256": "cf246aec7e0168e5f89dc51c81cf5a41a882e898f473c200ac716b9882d88c59",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-5-case-0-control-56.bin",
+      "bytes": 531,
+      "sha256": "108fdb4bf9eb58ce793d21d6dd4a3193ab5fe6a448604620199834ce3cd6aba2",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-5.bin",
+      "source_sha256": "2fae7df3298a079b69b353faa5a1976b3a8142d334aa7e2ef3400f68bb128c4f",
+      "reference_pcm_sha256": "cf246aec7e0168e5f89dc51c81cf5a41a882e898f473c200ac716b9882d88c59",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-5-case-1-control-0.bin",
+      "bytes": 515,
+      "sha256": "f4f1d3db0515a9cedc3890a9add6cdedac1c7bd1f03378e8ebcd39b854f994c1",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-5.bin",
+      "source_sha256": "2fae7df3298a079b69b353faa5a1976b3a8142d334aa7e2ef3400f68bb128c4f",
+      "reference_pcm_sha256": "cf246aec7e0168e5f89dc51c81cf5a41a882e898f473c200ac716b9882d88c59",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-5-case-1-control-16.bin",
+      "bytes": 515,
+      "sha256": "9c2df64175742557761705b0153d4de3ce42fce6b86b5010c3820eacf18dbd9a",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-5.bin",
+      "source_sha256": "2fae7df3298a079b69b353faa5a1976b3a8142d334aa7e2ef3400f68bb128c4f",
+      "reference_pcm_sha256": "cf246aec7e0168e5f89dc51c81cf5a41a882e898f473c200ac716b9882d88c59",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-5-case-1-control-48.bin",
+      "bytes": 515,
+      "sha256": "1eb5a097b53040d433ea58497fb63228a661a44aa56fe4bb74c88136c9c800b2",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-5.bin",
+      "source_sha256": "2fae7df3298a079b69b353faa5a1976b3a8142d334aa7e2ef3400f68bb128c4f",
+      "reference_pcm_sha256": "cf246aec7e0168e5f89dc51c81cf5a41a882e898f473c200ac716b9882d88c59",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-5-case-1-control-56.bin",
+      "bytes": 515,
+      "sha256": "44ba88c4c483613d69be71c02e932535fe5ee06fedbce896d237cf5bc452cb1e",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-5.bin",
+      "source_sha256": "2fae7df3298a079b69b353faa5a1976b3a8142d334aa7e2ef3400f68bb128c4f",
+      "reference_pcm_sha256": "cf246aec7e0168e5f89dc51c81cf5a41a882e898f473c200ac716b9882d88c59",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-6-control-2.bin",
+      "bytes": 180,
+      "sha256": "14a01a7c8738ace17975fcda261f027545e543367070f3f02ee22fd7de19adb1",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-6.bin",
+      "source_sha256": "e0da90bf4b85d8f4689df19e0348c35dd32a11528ebea844b08870093ee65fc7",
+      "reference_pcm_sha256": "35dd4e7ae3483c1175ebc0d6d33784acef82fea5d43f9cbd0d2482957b43c9e9",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-6-control-65.bin",
+      "bytes": 180,
+      "sha256": "fea44ea5b3eb0cb45f3b069f554e5c835bd3c0a2a131386173fe90e1f9ac4d28",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-6.bin",
+      "source_sha256": "e0da90bf4b85d8f4689df19e0348c35dd32a11528ebea844b08870093ee65fc7",
+      "reference_pcm_sha256": "35dd4e7ae3483c1175ebc0d6d33784acef82fea5d43f9cbd0d2482957b43c9e9",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-6-control-98.bin",
+      "bytes": 180,
+      "sha256": "3e30ef996abc07643deaa721f0a23893e2fd1e55c303155357f71f154de5e1f6",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-6.bin",
+      "source_sha256": "e0da90bf4b85d8f4689df19e0348c35dd32a11528ebea844b08870093ee65fc7",
+      "reference_pcm_sha256": "35dd4e7ae3483c1175ebc0d6d33784acef82fea5d43f9cbd0d2482957b43c9e9",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-6-control-224.bin",
+      "bytes": 180,
+      "sha256": "52f4949fa8c16ca9e9b573cd4efb48eca9695e502a7b619602a30ca6aa3c3135",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-6.bin",
+      "source_sha256": "e0da90bf4b85d8f4689df19e0348c35dd32a11528ebea844b08870093ee65fc7",
+      "reference_pcm_sha256": "35dd4e7ae3483c1175ebc0d6d33784acef82fea5d43f9cbd0d2482957b43c9e9",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-6-case-0-control-0.bin",
+      "bytes": 549,
+      "sha256": "7c6bf9b8e9ecc644072e624db28e4d4343aba7ac3a337ce9635cf7ebd72e3028",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-6.bin",
+      "source_sha256": "e0da90bf4b85d8f4689df19e0348c35dd32a11528ebea844b08870093ee65fc7",
+      "reference_pcm_sha256": "35dd4e7ae3483c1175ebc0d6d33784acef82fea5d43f9cbd0d2482957b43c9e9",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-6-case-0-control-16.bin",
+      "bytes": 549,
+      "sha256": "69f17e3a0280f284bbdc122c09fa93c4490a49ca79daa54013d43157bb49e0c5",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-6.bin",
+      "source_sha256": "e0da90bf4b85d8f4689df19e0348c35dd32a11528ebea844b08870093ee65fc7",
+      "reference_pcm_sha256": "35dd4e7ae3483c1175ebc0d6d33784acef82fea5d43f9cbd0d2482957b43c9e9",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-6-case-0-control-48.bin",
+      "bytes": 549,
+      "sha256": "98b58087e2dc65ae460bac51d0d2ad2a81fd655920f286e56e3e2bcc8e3bbfe9",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-6.bin",
+      "source_sha256": "e0da90bf4b85d8f4689df19e0348c35dd32a11528ebea844b08870093ee65fc7",
+      "reference_pcm_sha256": "35dd4e7ae3483c1175ebc0d6d33784acef82fea5d43f9cbd0d2482957b43c9e9",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-6-case-0-control-56.bin",
+      "bytes": 549,
+      "sha256": "c5a941e1fbf6a2e3dac4c24ad32b34b3f2a7255afb17bf4d2b4c04dafea9652f",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-6.bin",
+      "source_sha256": "e0da90bf4b85d8f4689df19e0348c35dd32a11528ebea844b08870093ee65fc7",
+      "reference_pcm_sha256": "35dd4e7ae3483c1175ebc0d6d33784acef82fea5d43f9cbd0d2482957b43c9e9",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-7-control-2.bin",
+      "bytes": 178,
+      "sha256": "c47fe736ba186788bd91b1667620e4b48bfe7e93aafa748370d5c7b16986ad4a",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-7.bin",
+      "source_sha256": "96731b2651c64fa8948f5387821710456191076b19a4130ed58bdf7630abe9b1",
+      "reference_pcm_sha256": "9162e017c9d37e22cf1b3ed6efb5e1e8b4d3ef98078a6a974254b3fc40231cbb",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-7-control-65.bin",
+      "bytes": 178,
+      "sha256": "2d2d5b0f9e6f467f7d16d7db04ec6cc5a4b66ae10477a86f40ba15b79664036d",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-7.bin",
+      "source_sha256": "96731b2651c64fa8948f5387821710456191076b19a4130ed58bdf7630abe9b1",
+      "reference_pcm_sha256": "9162e017c9d37e22cf1b3ed6efb5e1e8b4d3ef98078a6a974254b3fc40231cbb",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-7-control-98.bin",
+      "bytes": 178,
+      "sha256": "248a42b26124a50556ce221810cb389377f11c5b4ba255120b7a74ad85522f85",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-7.bin",
+      "source_sha256": "96731b2651c64fa8948f5387821710456191076b19a4130ed58bdf7630abe9b1",
+      "reference_pcm_sha256": "9162e017c9d37e22cf1b3ed6efb5e1e8b4d3ef98078a6a974254b3fc40231cbb",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-7-control-224.bin",
+      "bytes": 178,
+      "sha256": "8a83f4df0157d63e2c71f6a5e6fbc1986d9d27280f7a12de9e964bf55f31ae45",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-7.bin",
+      "source_sha256": "96731b2651c64fa8948f5387821710456191076b19a4130ed58bdf7630abe9b1",
+      "reference_pcm_sha256": "9162e017c9d37e22cf1b3ed6efb5e1e8b4d3ef98078a6a974254b3fc40231cbb",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-7-case-0-control-0.bin",
+      "bytes": 603,
+      "sha256": "d2b2c2225ee23b7ae41f5587dc0fcc5f64e39c110512e47b6b79f56abb1f17f4",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-7.bin",
+      "source_sha256": "96731b2651c64fa8948f5387821710456191076b19a4130ed58bdf7630abe9b1",
+      "reference_pcm_sha256": "9162e017c9d37e22cf1b3ed6efb5e1e8b4d3ef98078a6a974254b3fc40231cbb",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-7-case-0-control-16.bin",
+      "bytes": 603,
+      "sha256": "a292b727345f735a162522a1c8c3461d40ab627825449cfd6f8508af7cb4d546",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-7.bin",
+      "source_sha256": "96731b2651c64fa8948f5387821710456191076b19a4130ed58bdf7630abe9b1",
+      "reference_pcm_sha256": "9162e017c9d37e22cf1b3ed6efb5e1e8b4d3ef98078a6a974254b3fc40231cbb",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-7-case-0-control-48.bin",
+      "bytes": 603,
+      "sha256": "b225e913184598a3b7703b62eb29f8cabee62e334222fc0e50039ca089b7cbb2",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-7.bin",
+      "source_sha256": "96731b2651c64fa8948f5387821710456191076b19a4130ed58bdf7630abe9b1",
+      "reference_pcm_sha256": "9162e017c9d37e22cf1b3ed6efb5e1e8b4d3ef98078a6a974254b3fc40231cbb",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-7-case-0-control-56.bin",
+      "bytes": 603,
+      "sha256": "dcccc4944046a02bc85e733b8c0fc8e7e347154d5f00191db08309843a240fc8",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-7.bin",
+      "source_sha256": "96731b2651c64fa8948f5387821710456191076b19a4130ed58bdf7630abe9b1",
+      "reference_pcm_sha256": "9162e017c9d37e22cf1b3ed6efb5e1e8b4d3ef98078a6a974254b3fc40231cbb",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-8-control-2.bin",
+      "bytes": 177,
+      "sha256": "0bfc5a8f0a59af4f1478f801a6bebcc74d5195ed032d052d1925d124528061c5",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-8.bin",
+      "source_sha256": "4afa58043ada574bb248c46e8d60354688d98621ab6f880a465f3e438c8868ad",
+      "reference_pcm_sha256": "77f18a4d858c483d6ff287470f54474a6d9915aecb6e823946f3e1c9a918af3e",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-8-control-65.bin",
+      "bytes": 177,
+      "sha256": "ac6a3301eec83d8f1728cf011601975a11a6f5894bc74e315ccd5f0743c4fc56",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-8.bin",
+      "source_sha256": "4afa58043ada574bb248c46e8d60354688d98621ab6f880a465f3e438c8868ad",
+      "reference_pcm_sha256": "77f18a4d858c483d6ff287470f54474a6d9915aecb6e823946f3e1c9a918af3e",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-8-control-98.bin",
+      "bytes": 177,
+      "sha256": "d14120be682acfabf7751a33370422af49244b6a007a9e25dd0da40947343962",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-8.bin",
+      "source_sha256": "4afa58043ada574bb248c46e8d60354688d98621ab6f880a465f3e438c8868ad",
+      "reference_pcm_sha256": "77f18a4d858c483d6ff287470f54474a6d9915aecb6e823946f3e1c9a918af3e",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-8-control-224.bin",
+      "bytes": 177,
+      "sha256": "62e225b2de77c8e013f8f9170924def9ca2e1953b0fadc6c9828fb74a8dcd863",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-8.bin",
+      "source_sha256": "4afa58043ada574bb248c46e8d60354688d98621ab6f880a465f3e438c8868ad",
+      "reference_pcm_sha256": "77f18a4d858c483d6ff287470f54474a6d9915aecb6e823946f3e1c9a918af3e",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-8-case-0-control-0.bin",
+      "bytes": 522,
+      "sha256": "741fd31636c37692c8ac1d6e0c4246c4282a4896fa706e0f748a722fe67ecb45",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-8.bin",
+      "source_sha256": "4afa58043ada574bb248c46e8d60354688d98621ab6f880a465f3e438c8868ad",
+      "reference_pcm_sha256": "77f18a4d858c483d6ff287470f54474a6d9915aecb6e823946f3e1c9a918af3e",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-8-case-0-control-16.bin",
+      "bytes": 522,
+      "sha256": "dc1eb4eefee1ab35ac37b62508a8dc4ed3363f9d3c605e77727c81d760a8bb10",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-8.bin",
+      "source_sha256": "4afa58043ada574bb248c46e8d60354688d98621ab6f880a465f3e438c8868ad",
+      "reference_pcm_sha256": "77f18a4d858c483d6ff287470f54474a6d9915aecb6e823946f3e1c9a918af3e",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-8-case-0-control-48.bin",
+      "bytes": 522,
+      "sha256": "f9e87a76c705c9af181d8e5538c940d13cbdbc6ebd86c2b0461530c7f9dcf168",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-8.bin",
+      "source_sha256": "4afa58043ada574bb248c46e8d60354688d98621ab6f880a465f3e438c8868ad",
+      "reference_pcm_sha256": "77f18a4d858c483d6ff287470f54474a6d9915aecb6e823946f3e1c9a918af3e",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-8-case-0-control-56.bin",
+      "bytes": 522,
+      "sha256": "4f6af6fc927c3ff01b0908ad77654681354a834dce1d34a12a9c4aad676184bb",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-8.bin",
+      "source_sha256": "4afa58043ada574bb248c46e8d60354688d98621ab6f880a465f3e438c8868ad",
+      "reference_pcm_sha256": "77f18a4d858c483d6ff287470f54474a6d9915aecb6e823946f3e1c9a918af3e",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-9-control-2.bin",
+      "bytes": 98479,
+      "sha256": "74fa0d0b9dff914443806acd8b94a3d4668b3d9008cde44f6efbacdd0d02fc86",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-9.bin",
+      "source_sha256": "8a38cb7ff41f85931211892abe3f9a1c4dfdc9f339ccaff2c9c8238a5b2f6ce5",
+      "reference_pcm_sha256": "1c9622a516ba05b00716aea3601102c111f9f48eb59b3e58b93102f7507925c8",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-9-control-65.bin",
+      "bytes": 98479,
+      "sha256": "5e7c3181ec67d08be3d89679b4de9df248cf5758a848d1dcfdbcb8e8faf92ec0",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-9.bin",
+      "source_sha256": "8a38cb7ff41f85931211892abe3f9a1c4dfdc9f339ccaff2c9c8238a5b2f6ce5",
+      "reference_pcm_sha256": "1c9622a516ba05b00716aea3601102c111f9f48eb59b3e58b93102f7507925c8",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-9-control-98.bin",
+      "bytes": 98479,
+      "sha256": "7f6e5725f1203cf570db5ab00721e98245e532f5eb389bd6c5ba3a676776b160",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-9.bin",
+      "source_sha256": "8a38cb7ff41f85931211892abe3f9a1c4dfdc9f339ccaff2c9c8238a5b2f6ce5",
+      "reference_pcm_sha256": "1c9622a516ba05b00716aea3601102c111f9f48eb59b3e58b93102f7507925c8",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_headers/synthetic-book-golden-9-control-224.bin",
+      "bytes": 98479,
+      "sha256": "95e7cf3e7fc3d279447744b04caed656e25600d717ceb8c8c59d33c6963969e7",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-9.bin",
+      "source_sha256": "8a38cb7ff41f85931211892abe3f9a1c4dfdc9f339ccaff2c9c8238a5b2f6ce5",
+      "reference_pcm_sha256": "1c9622a516ba05b00716aea3601102c111f9f48eb59b3e58b93102f7507925c8",
+      "final_granule": null
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-9-case-0-control-0.bin",
+      "bytes": 99237,
+      "sha256": "8ed314c6996a6394ab0f618ebd3b83c4510d030c810ddfd3c1616f2aabc27b4a",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-9.bin",
+      "source_sha256": "8a38cb7ff41f85931211892abe3f9a1c4dfdc9f339ccaff2c9c8238a5b2f6ce5",
+      "reference_pcm_sha256": "1c9622a516ba05b00716aea3601102c111f9f48eb59b3e58b93102f7507925c8",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-9-case-0-control-16.bin",
+      "bytes": 99237,
+      "sha256": "8c8e540352f141a9dbe1ca97f7901c71360463424dd4a9d280afd4fff4a0f18f",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-9.bin",
+      "source_sha256": "8a38cb7ff41f85931211892abe3f9a1c4dfdc9f339ccaff2c9c8238a5b2f6ce5",
+      "reference_pcm_sha256": "1c9622a516ba05b00716aea3601102c111f9f48eb59b3e58b93102f7507925c8",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-9-case-0-control-48.bin",
+      "bytes": 99237,
+      "sha256": "5c8a5cb262fc9b30cfadff4a61372d84a3294c05b7d70ff383d0a9f0523a519f",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-9.bin",
+      "source_sha256": "8a38cb7ff41f85931211892abe3f9a1c4dfdc9f339ccaff2c9c8238a5b2f6ce5",
+      "reference_pcm_sha256": "1c9622a516ba05b00716aea3601102c111f9f48eb59b3e58b93102f7507925c8",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/synthetic-book-golden-9-case-0-control-56.bin",
+      "bytes": 99237,
+      "sha256": "d1ec9ff9c73d49a78d7c165bbd554a200ca853c9756eb5a3c493740cd864aec4",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/golden-inputs/book-golden-9.bin",
+      "source_sha256": "8a38cb7ff41f85931211892abe3f9a1c4dfdc9f339ccaff2c9c8238a5b2f6ce5",
+      "reference_pcm_sha256": "1c9622a516ba05b00716aea3601102c111f9f48eb59b3e58b93102f7507925c8",
+      "final_granule": 368
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-0-control-32.bin",
+      "bytes": 14192,
+      "sha256": "f033960e723b3fd401893fec78d261145f49e9e206f998a5346b2688e155b868",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-0-control-40.bin",
+      "bytes": 14192,
+      "sha256": "7eb4988b2eb58ae9a4f21bfcda160f516c2c7f558f7d19ec69e17e9e44d43bf3",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-1-control-32.bin",
+      "bytes": 14123,
+      "sha256": "90142caf5adf9ea2565f5e60106275e1de4b13aaf85df18300accd9c3d98ba8b",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-1-control-40.bin",
+      "bytes": 14123,
+      "sha256": "de94a89a47635642de43d8971092d9bafb9bfb141916890c5ee8329a917ee4a5",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-2-control-32.bin",
+      "bytes": 14123,
+      "sha256": "822397d32670dcd733a09e38b8f27b903d53e777d637f3265e7d31702c8d691e",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-2-control-40.bin",
+      "bytes": 14123,
+      "sha256": "b7ae06fd69a58c980f8f1417778021fa1f545ee5fb73609f53f0bf2cc2cb6b44",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-3-control-32.bin",
+      "bytes": 14123,
+      "sha256": "5f054977112029b84fbb1c8630767aa4a8871f1f782fa92785d2c8f05253c317",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-3-control-40.bin",
+      "bytes": 14123,
+      "sha256": "df9d49a7eb88f8cef0075a60beed06760b8be5a7f1ba00840a1f0a11e2eda8f9",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-4-control-32.bin",
+      "bytes": 14123,
+      "sha256": "1a0da44eb73bcd64f5b9fe94cf306ad4304f2de4a1f353346eb79362d10fc56c",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-4-control-40.bin",
+      "bytes": 14123,
+      "sha256": "42ce355c5c77df5c71edb03a074da56620b589a63d7f2e68a85263d781b7488d",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-5-control-32.bin",
+      "bytes": 14123,
+      "sha256": "fc4bb8eb1c20ba1d0fecbf08bd15612f7347eb1644a27876a8383e69c8362d0e",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-5-control-40.bin",
+      "bytes": 14123,
+      "sha256": "4dbb8591bb1c7988be223aa6c28db20671b9c0807defb2caaa30ecaff6cf6454",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-6-control-32.bin",
+      "bytes": 14123,
+      "sha256": "f5ea712970e3b6192fb359e56f93de91c7ba857f193762a58d77f5ab8001dae1",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-6-control-40.bin",
+      "bytes": 14123,
+      "sha256": "47d5533fc737f5cd54568eef845766f383fa0dc02467ee49f2023a2f07ad7893",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-7-control-32.bin",
+      "bytes": 14123,
+      "sha256": "a183256787c845a85979466541756c123e983e1f701b6f194c5382d9b9f90cea",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-7-control-40.bin",
+      "bytes": 14123,
+      "sha256": "9b9e9f10ea9d0474d4e614aaabe2a05659f7f2a286575fbd81952ba3d6d7a246",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-8-control-32.bin",
+      "bytes": 14123,
+      "sha256": "92e254c498b31fccaad425271c3e0c1015674565e95719e0cc4c2be2aebe01dd",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-8-control-40.bin",
+      "bytes": 14123,
+      "sha256": "e84471dfc38cc51510d9c76c6ea63d5b355cc15352b9e1340ed42eef6c2950b5",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-9-control-32.bin",
+      "bytes": 14123,
+      "sha256": "3627fa831b061286030b507641d7ca213545b46a29a4b787d494eaf78cae0de3",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-9-control-40.bin",
+      "bytes": 14123,
+      "sha256": "f168175c9cd368a5152ece09e5b170c843efab8c07a1e5f8c20d21a84b3a069d",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 2752
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-10-control-32.bin",
+      "bytes": 12778,
+      "sha256": "b0c982ef667c459a1e24cc4ede1bcdd3bc32f65d90e1138c0d32a6e974f06b44",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 960
+    },
+    {
+      "path": "vorbis_stream/external-floor0-ieee-10-control-40.bin",
+      "bytes": 12778,
+      "sha256": "93ce48a75b158883e9777a861962b1e9426584c87fec7ca6962d3eef409689ac",
+      "source_request": "target/deadlib-audio-reference/degenerate-books-20261027/matrix-inputs/nonfinite-reference.bin",
+      "source_sha256": "44efba92eaef70ace4151a37d97e6299efcfd5534f57e564093bc8138ad6bc00",
+      "reference_pcm_sha256": "866c883c1176cd0854eff46959e7a7f3ec7fbfa002689f2a07bd866822766467",
+      "final_granule": 960
+    }
+  ]
+}

@@ -41,7 +41,7 @@ def instrument(source: str) -> str:
     pub fn setup(&self)''')
     replace('        let Some((header, mut bits)) = packet_header', '        ' + begin('header') + '        let Some((header, mut bits)) = packet_header')
     replace('        self.spectrum.fill(0.0);', end('header') + begin('clear_floor') + '        self.spectrum.fill(0.0);')
-    replace('        if truncated {\n', end('clear_floor') + '        if truncated {\n')
+    replace('        if truncated && !self.allow_nonfinite {\n', end('clear_floor') + '        if truncated && !self.allow_nonfinite {\n')
     replace('            for &[magnitude, angle] in &mapping.coupling {', begin('residue') + '            for &[magnitude, angle] in &mapping.coupling {')
     replace('            for &[magnitude, angle] in mapping.coupling.iter().rev() {', end('residue') + begin('coupling') + '            for &[magnitude, angle] in mapping.coupling.iter().rev() {')
     replace('            for ch in 0..channels {\n                let spectrum', end('coupling') + '            for ch in 0..channels {\n' + begin('floor_gain') + '                let spectrum')

@@ -1,7 +1,7 @@
 //! Indexed, sample-accurate seeking with one-packet overlap pre-roll.
 use crate::{
-    DecodeOptions, Error, Limits, Metadata, OggEvent, OggPcm, PacketDecoder, Residue2Layout, Setup,
-    StreamEnd, StreamId, StreamInfo,
+    DecodeOptions, Error, Limits, Metadata, OggEvent, OggPcm, PacketDecoder, ParseOptions,
+    Residue2Layout, Setup, StreamEnd, StreamId, StreamInfo,
     ogg::{Timing, granule, read_identification, read_metadata},
 };
 use core::ops::ControlFlow;
@@ -17,6 +17,10 @@ pub struct SeekOptions {
     pub container_limits: container::Limits,
     pub allow_zero_span_granules: bool,
     pub residue2_layout: Residue2Layout,
+    /// Retained for index parsing and every selected setup reparse.
+    pub allow_empty_codebooks: bool,
+    /// Retained for every synthesized pre-roll and returned PCM block.
+    pub allow_nonfinite: bool,
     /// Explicit legacy endpoint policy. The index knows the final granule in
     /// advance and can trim across earlier packets/pages, including a decreasing
     /// EOS granule. Streaming APIs deliberately do not offer this exception.
@@ -40,6 +44,8 @@ impl Default for SeekOptions {
             container_limits: container::Limits::default(),
             allow_zero_span_granules: false,
             residue2_layout: Residue2Layout::Interleaved,
+            allow_empty_codebooks: false,
+            allow_nonfinite: false,
             trim_to_final_granule: false,
             packet_preroll: true,
             max_index_pages: 1 << 20,
@@ -277,7 +283,14 @@ impl IndexBuilder {
                 }
                 let mut limits = options.limits;
                 limits.max_setup_memory = limits.max_setup_memory.min(options.max_stream_memory);
-                let setup = Setup::parse(packet.data, &stream.info.identification, &limits)?;
+                let setup = Setup::parse_with_options(
+                    packet.data,
+                    &stream.info.identification,
+                    ParseOptions {
+                        limits,
+                        allow_empty_codebooks: options.allow_empty_codebooks,
+                    },
+                )?;
                 check_decoder_memory(&setup, options)?;
                 reserve_index(
                     &mut stream.setup_packet,
@@ -558,14 +571,21 @@ impl<R: Read + Seek> OggSeekReader<R> {
                 limits.max_setup_memory = limits
                     .max_setup_memory
                     .min(self.index.options.max_stream_memory);
-                let setup =
-                    Setup::parse(&stream.setup_packet, &stream.info.identification, &limits)?;
+                let setup = Setup::parse_with_options(
+                    &stream.setup_packet,
+                    &stream.info.identification,
+                    ParseOptions {
+                        limits,
+                        allow_empty_codebooks: self.index.options.allow_empty_codebooks,
+                    },
+                )?;
                 check_decoder_memory(&setup, self.index.options)?;
                 self.decoder = Some(PacketDecoder::with_options(
                     setup,
                     DecodeOptions {
                         limits,
                         residue2_layout: self.index.options.residue2_layout,
+                        allow_nonfinite: self.index.options.allow_nonfinite,
                     },
                 )?);
             }

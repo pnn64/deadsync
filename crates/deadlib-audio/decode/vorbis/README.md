@@ -19,6 +19,9 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
 * `codebook::{Codebook, Huffman}`: ordered/unordered/sparse entry lengths,
   entry-order Huffman assignment, scalar and VQ decode, lookup types 0/1/2,
   exact integer lattice sizes and the specification's single-entry erratum.
+  Nonempty dimension-zero scalar books work with lookup zero/two.
+  `Codebook::read_with_options` / `Setup::parse_with_options` expose
+  `ParseOptions::allow_empty_codebooks` for explicit reference acceptance.
   Optional, budget-bounded prefix lookup shares the tree allocation.
   [HUFFMAN.md](HUFFMAN.md) documents exact tail/fallback behavior and the measured
   throughput/startup tradeoff.
@@ -38,6 +41,9 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
   uses the published interleave rule. The same field in `OggOptions` and
   `SeekOptions` preserves the choice through streaming/reset/seeking. See
   [residue geometry](RESIDUE_GEOMETRY.md) for the difference and evidence.
+  `DecodeOptions::allow_nonfinite` selects libvorbis IEEE propagation. It and
+  `allow_empty_codebooks` are preserved by Ogg/reset/seek options; see
+  [degenerate books](DEGENERATE_BOOKS.md) for consumer behavior and validation.
   `reset_at` also seeds the raw position for caller-managed packet seeks; supply
   the actual preceding packet to prime overlap before consuming output.
 * `Imdct` / `Mdct`: reusable native inverse/forward transforms for all legal 64..=8192 block sizes,
@@ -198,7 +204,7 @@ Perceptual/rate control and competitive encoder quality/performance remain open.
 Raw decoder positions count overlap output before container initial/final trim.
 There is no synthetic final flush; the container mapping supplies final length.
 Do not replace the existing decoding
-pipeline until the remaining conformance/performance gates pass.
+pipeline. Application integration remains outside this task.
 See [COVERAGE.md](COVERAGE.md) and the parent work plan for the remaining scope.
 The separate [fuzz workspace](../fuzz/README.md) covers headers, raw packet
 synthesis, streaming/reset and indexed seek error recovery under AddressSanitizer.

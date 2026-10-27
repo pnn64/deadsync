@@ -138,3 +138,7 @@ streaming and seeking gates remain separate evidence. Neither this matrix nor
 fuzzing proves full conformance. The [existing discrepancy ledger](COVERAGE.md)
 and [nonfinite-reference cases](BIT_MUTATIONS.md) still apply. Application
 integration and performance optimization remain outside this milestone.
+
+The subsequent [degenerate-book follow-up](DEGENERATE_BOOKS.md) provides explicit
+empty-book acceptance and IEEE propagation, including all eleven named nonfinite
+cases. The strict/default outcomes above describe this historical milestone.

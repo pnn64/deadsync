@@ -87,3 +87,7 @@ Complete parity remains unproven. Broader legal setup/mode/codebook combinations
 reference acceptance differences, malformed-input classes, official material
 and real-song coverage remain required. The eleven nonfinite cases are not
 silently counted toward completion.
+
+The subsequent [degenerate-book follow-up](DEGENERATE_BOOKS.md) provides explicit
+empty-book acceptance and IEEE propagation, including all eleven named nonfinite
+cases. The strict/default outcomes above describe this historical milestone.

@@ -1,5 +1,5 @@
 use crate::{
-    Budget, Error, Identification, Limits,
+    Budget, Error, Identification, Limits, ParseOptions,
     bitpack::{BitReader, ilog},
     codebook::{Codebook, power_at_most},
     headers::header,
@@ -80,6 +80,21 @@ impl Setup {
         identification: &Identification,
         limits: &Limits,
     ) -> Result<Self, Error> {
+        Self::parse_with_options(
+            packet,
+            identification,
+            ParseOptions {
+                limits: *limits,
+                ..ParseOptions::default()
+            },
+        )
+    }
+    pub fn parse_with_options(
+        packet: &[u8],
+        identification: &Identification,
+        options: ParseOptions,
+    ) -> Result<Self, Error> {
+        let limits = &options.limits;
         if packet.len() > limits.max_packet_bytes {
             return Err(Error::LimitExceeded("setup packet bytes"));
         }
@@ -90,7 +105,12 @@ impl Setup {
         let count = bits.read(8)? as usize + 1;
         let mut codebooks = storage(count, &mut budget)?;
         for _ in 0..count {
-            codebooks.push(Codebook::read_with_budget(&mut bits, limits, &mut budget)?);
+            codebooks.push(Codebook::read_with_budget(
+                &mut bits,
+                limits,
+                &mut budget,
+                options.allow_empty_codebooks,
+            )?);
         }
         let times = bits.read(6)? + 1;
         for _ in 0..times {
@@ -291,7 +311,11 @@ fn read_floor0(
     }
     let mut floor_books = storage(count, budget)?;
     for _ in 0..count {
-        floor_books.push(book_index(bits, books, true)?);
+        let book = book_index(bits, books, true)?;
+        if books[book as usize].dimensions() == 0 {
+            return Err(Error::Invalid("zero floor0 codebook dimensions"));
+        }
+        floor_books.push(book);
     }
     Ok(Floor0 {
         order,
@@ -407,6 +431,9 @@ fn read_residue(
     let classifications = bits.read(6)? as usize + 1;
     let classbook = book_index(bits, books, false)?;
     let class_config = &books[classbook as usize];
+    if class_config.dimensions() == 0 {
+        return Err(Error::Invalid("zero residue classbook dimensions"));
+    }
     if !power_at_most(
         classifications as u32,
         class_config.dimensions() as u32,
@@ -430,7 +457,9 @@ fn read_residue(
                 continue;
             }
             let book = book_index(bits, books, true)?;
-            if !(partition_size as usize).is_multiple_of(books[book as usize].dimensions()) {
+            if !books[book as usize].is_empty()
+                && !(partition_size as usize).is_multiple_of(books[book as usize].dimensions())
+            {
                 return Err(Error::Invalid(
                     "residue partition is not a codebook dimension multiple",
                 ));

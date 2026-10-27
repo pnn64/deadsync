@@ -65,10 +65,17 @@ pub fn repair_checksums(data: &mut [u8]) {
 
 #[derive(Debug, Default, Eq, PartialEq)]
 struct Digest {
+    allow_nonfinite: bool,
     hash: u64,
     units: u64,
 }
 impl Digest {
+    fn with_nonfinite(allow_nonfinite: bool) -> Self {
+        Self {
+            allow_nonfinite,
+            ..Self::default()
+        }
+    }
     fn bytes(&mut self, bytes: &[u8]) {
         // An order-sensitive bounded summary avoids storing untrusted PCM.
         for &byte in bytes {
@@ -93,8 +100,13 @@ impl Digest {
         self.number(pcm.truncated as u64);
         for plane in pcm.planes() {
             for &sample in plane {
-                assert!(sample.is_finite());
-                self.bytes(&sample.to_bits().to_le_bytes());
+                assert!(self.allow_nonfinite || sample.is_finite());
+                let bits = if sample.is_nan() {
+                    f32::NAN.to_bits()
+                } else {
+                    sample.to_bits()
+                };
+                self.bytes(&bits.to_le_bytes());
             }
         }
         self.units += pcm.frames as u64;
@@ -345,11 +357,19 @@ pub fn vorbis_headers(input: &[u8]) {
                 return;
             }
             if let Ok(id) = vorbis::Identification::parse(&data[..30])
-                && let Ok(setup) = vorbis::Setup::parse(&data[30..], &id, &limits())
+                && let Ok(setup) = vorbis::Setup::parse_with_options(
+                    &data[30..],
+                    &id,
+                    vorbis::ParseOptions {
+                        limits: limits(),
+                        allow_empty_codebooks: kind & 64 != 0,
+                    },
+                )
                 && let Ok(mut decoder) = vorbis::PacketDecoder::with_options(
                     setup,
                     vorbis::DecodeOptions {
                         limits: limits(),
+                        allow_nonfinite: kind & 32 != 0,
                         residue2_layout: if kind & 0x80 != 0 {
                             vorbis::Residue2Layout::Libvorbis
                         } else {
@@ -360,7 +380,7 @@ pub fn vorbis_headers(input: &[u8]) {
             {
                 for packet in [&[][..], &[0][..], &[0xff; 16][..]] {
                     if let Ok(Some(pcm)) = decoder.decode(packet) {
-                        Digest::default().pcm(&pcm);
+                        Digest::with_nonfinite(kind & 32 != 0).pcm(&pcm);
                     }
                 }
             }
@@ -491,9 +511,11 @@ pub fn vorbis_stream(input: &[u8]) {
         } else {
             vorbis::Residue2Layout::Interleaved
         },
+        allow_empty_codebooks: control & 16 != 0,
+        allow_nonfinite: control & 32 != 0,
     };
     let mut reader = vorbis::OggReader::with_options(data, options);
-    let mut expected = Digest::default();
+    let mut expected = Digest::with_nonfinite(options.allow_nonfinite);
     let pull = (|| {
         for _ in 0..MAX_PAGES {
             if !reader.read_next(|e| expected.event(e))? {
@@ -505,7 +527,7 @@ pub fn vorbis_stream(input: &[u8]) {
     let mut stream = vorbis::OggStreamDecoder::new(options);
     for _ in 0..2 {
         stream.reset();
-        let mut actual = Digest::default();
+        let mut actual = Digest::with_nonfinite(options.allow_nonfinite);
         let push = (|| {
             let mut pages = 0;
             // Count pages independently so push and pull share the work fence.
@@ -543,6 +565,8 @@ pub fn vorbis_stream(input: &[u8]) {
             allow_zero_span_granules: control & 1 != 0,
             trim_to_final_granule: control & 2 != 0,
             residue2_layout: options.residue2_layout,
+            allow_empty_codebooks: options.allow_empty_codebooks,
+            allow_nonfinite: options.allow_nonfinite,
             packet_preroll: control & 4 == 0,
             max_index_pages: MAX_PAGES,
             max_index_memory: 8 << 20,
@@ -556,7 +580,7 @@ pub fn vorbis_stream(input: &[u8]) {
                 for mode in 0..3 {
                     seek.seek(id, target).unwrap();
                     let mut position = target;
-                    let mut digest = Digest::default();
+                    let mut digest = Digest::with_nonfinite(options.allow_nonfinite);
                     let result = (|| {
                         let mut step = 0;
                         loop {

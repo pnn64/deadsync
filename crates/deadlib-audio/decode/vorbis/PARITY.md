@@ -26,6 +26,12 @@ channel participation and multiple active submaps through 255 channels. It adds
 an explicit libvorbis layout for type-two ranges whose endpoints are not channel
 aligned, alongside the published interleave rule.
 
+The [degenerate-book follow-up](DEGENERATE_BOOKS.md) adds empty-book consumer
+behavior and explicit IEEE propagation through raw/Ogg/seek APIs. All eleven
+previously recorded nonfinite cases match under that policy; the default finite
+guard remains separately tested. Nonempty zero-dimensional scalar books are
+also accepted where vector reconstruction is unnecessary.
+
 ## Corrected discard and truncation behavior
 
 The 2026-10-27 work independently reproduced two differences against pinned

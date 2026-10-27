@@ -1,7 +1,7 @@
 //! Vorbis I Appendix A mapping on the independent Ogg container.
 use crate::{
-    Comments, DecodeOptions, Error, Identification, Limits, Metadata, PacketDecoder, PcmBlock,
-    Residue2Layout, Setup, reserve,
+    Comments, DecodeOptions, Error, Identification, Limits, Metadata, PacketDecoder, ParseOptions,
+    PcmBlock, Residue2Layout, Setup, reserve,
 };
 use deadlib_audio_decode_ogg::{
     self as container, Demuxer, Packet, Page, PageDecoder, PageHeader, PageReader,
@@ -17,6 +17,10 @@ pub struct OggOptions {
     pub allow_zero_span_granules: bool,
     /// Explicit reference behavior for unaligned type-two residue ranges.
     pub residue2_layout: Residue2Layout,
+    /// Use `ParseOptions::allow_empty_codebooks` for every logical stream.
+    pub allow_empty_codebooks: bool,
+    /// Use `DecodeOptions::allow_nonfinite` for every logical stream.
+    pub allow_nonfinite: bool,
     pub max_active_streams: usize,
     /// Combined retained setup, metadata and synthesis elements across active
     /// streams. Container assembly storage has its own independent limit.
@@ -29,6 +33,8 @@ impl Default for OggOptions {
             container_limits: container::Limits::default(),
             allow_zero_span_granules: false,
             residue2_layout: Residue2Layout::Interleaved,
+            allow_empty_codebooks: false,
+            allow_nonfinite: false,
             max_active_streams: 16,
             max_stream_memory: 256 << 20,
         }
@@ -412,7 +418,14 @@ impl OggDecoder {
                 limits.max_setup_memory = limits
                     .max_setup_memory
                     .min(options.max_stream_memory - *memory);
-                let setup = Setup::parse(packet.data, &info.identification, &limits)?;
+                let setup = Setup::parse_with_options(
+                    packet.data,
+                    &info.identification,
+                    ParseOptions {
+                        limits,
+                        allow_empty_codebooks: options.allow_empty_codebooks,
+                    },
+                )?;
                 let setup_memory = setup.storage_bytes();
                 let available = options
                     .max_stream_memory
@@ -425,6 +438,7 @@ impl OggDecoder {
                     DecodeOptions {
                         limits,
                         residue2_layout: options.residue2_layout,
+                        allow_nonfinite: options.allow_nonfinite,
                     },
                 )?;
                 charge(memory, setup_memory + decoder.storage_bytes(), options)?;
