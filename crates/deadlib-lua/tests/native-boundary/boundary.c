@@ -46,7 +46,8 @@ API int boundary_write(lua_State *L, void *context, BoundaryDispatch dispatch, l
 static void operation(lua_State *L, int op, int a, int b, BoundaryValue *value) {
   /* dispatch has returned, releasing every Rust borrow/local, before jumping. */
   BoundaryFrame *frame = active_frame;
-  if (!frame || active_state != L) abort(); /* Other/inactive-thread API access remains work. */
+  if (!frame) abort();
+  value->state=L;
   if (frame->dispatch(frame->context, op, a, b, value)) longjmp(frame->failure, 1);
 }
 API int lua_load(lua_State *L, lua_Reader reader, void *data, const char *name) {
@@ -59,6 +60,12 @@ API int lua_dump(lua_State *L, lua_Writer writer, void *data) {
 }
 API lua_State *lua_tothread(lua_State *L, int index) {
   BoundaryValue value={0};operation(L,51,index,0,&value);return (lua_State *)value.userdata;
+}
+API lua_State *lua_newthread(lua_State *L) {
+  BoundaryValue value={0};operation(L,55,0,0,&value);return (lua_State *)value.userdata;
+}
+API void lua_xmove(lua_State *from, lua_State *to, int count) {
+  BoundaryValue value={0};value.userdata=to;operation(from,56,count,0,&value);
 }
 API int lua_pushthread(lua_State *L) {
   BoundaryValue value={0};operation(L,52,0,0,&value);return value.integer;

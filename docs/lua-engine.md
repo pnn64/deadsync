@@ -319,6 +319,25 @@ Arbitrary mutation of private parser state, remaining C APIs, allocator/OOM
 behavior and full standalone Lua 5.1 parity remain unfinished. Optimization and
 benchmarks stay deferred.
 
+The [native thread-stack checks](testing/2026-10-27-rust-lua-native-transfer.md)
+add `lua_newthread` and `lua_xmove`. Empty threads share the creator's heap,
+registry and thread globals, inherit hook controls, and hold their eventual entry
+on the actual stack. A fresh empty thread reports dead to `coroutine.status` but
+native status zero; adding an entry makes it suspended. Successfully completed
+threads can accept another entry, while failed threads retain their error status.
+`NativeThreadStack` borrows an inactive stack without executing Lua. Primitive
+indexing, coercion, stack edits, pointer/thread conversion and cross-thread moves
+preserve values and collector edges. The C adapter routes these operations by
+opaque thread identity while retaining its active C-only error boundary. Waiting
+resumers expose their remaining argument window; return hooks see arguments and
+transferred results, with writes aliased to the actual return values. Supported
+failed-thread windows retain their diagnostics. The Windows fixture checks a
+thousand transfer cycles, weak lifetimes, stable string pointers, globals,
+inherited controls, native/Lua entries, limits and five diagnostic layouts.
+Inactive operations that execute Lua, remaining C coroutine execution APIs,
+broader diagnostic scratch behavior, lifecycle/allocator APIs and full standalone
+Lua 5.1 parity remain unfinished. Optimization stays deferred.
+
 The [standalone suite checks](testing/2026-10-27-rust-lua-full-suite.md) invoke
 the real CLIs with the official README's `LUA_PATH="?;./?.lua"` setup. Each run
 gets unchanged suite files and a private `lua` executable on PATH, so child

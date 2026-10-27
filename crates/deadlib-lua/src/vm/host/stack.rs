@@ -9,6 +9,8 @@ mod protected;
 mod scalars;
 mod tables;
 mod thread;
+mod thread_stack;
+pub use thread_stack::NativeThreadStack;
 mod upvalues;
 pub use loader::NativeLoadStatus;
 pub use protected::NativeCallStatus;

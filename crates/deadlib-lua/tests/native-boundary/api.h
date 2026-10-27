@@ -30,6 +30,7 @@ typedef struct BoundaryValue {
   lua_Reader reader;
   lua_Writer writer;
   void *userdata;
+  lua_State *state;
 } BoundaryValue;
 typedef int (*BoundaryDispatch)(void *, int, int, int, BoundaryValue *);
 API lua_State *boundary_state_new(void *);
@@ -40,6 +41,8 @@ API int boundary_read(lua_State *, void *, BoundaryDispatch, lua_Reader, void *,
 API int boundary_write(lua_State *, void *, BoundaryDispatch, lua_Writer, void *, const void *, size_t, BoundaryValue *);
 API int lua_dump(lua_State *, lua_Writer, void *);
 API lua_State *lua_tothread(lua_State *, int);
+API lua_State *lua_newthread(lua_State *);
+API void lua_xmove(lua_State *, lua_State *, int);
 API int lua_pushthread(lua_State *);
 API int lua_status(lua_State *);
 API const void *lua_topointer(lua_State *, int);

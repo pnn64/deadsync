@@ -74,7 +74,8 @@ pub(super) struct Thread {
     pub(super) loads: Vec<loads::Loading>,
     pub(super) tracebacks: Vec<traces::Traceback>,
     pub(super) hooks: hooks::Hooks,
-    pub(super) entry: Option<FunctionId>,
+    pub(super) entry: Option<(usize, usize)>,
+    pub(super) api_stack: std::ops::Range<usize>,
     pub(super) status: Status,
     pub(super) resume_status: NativeThreadStatus,
     pub(super) resumer: Option<ThreadId>,
@@ -98,6 +99,7 @@ impl Thread {
             tracebacks: Vec::new(),
             hooks: hooks::Hooks::default(),
             entry: None,
+            api_stack: 0..0,
             status: Status::Running,
             resume_status: NativeThreadStatus::Ok,
             resumer: None,
@@ -108,7 +110,9 @@ impl Thread {
     }
     fn new(entry: FunctionId, globals: TableId) -> Self {
         Self {
-            entry: Some(entry),
+            registers: vec![Value::Function(entry)],
+            top: 1,
+            api_stack: 0..1,
             globals,
             status: Status::Suspended,
             ..Self::main(globals)
@@ -117,6 +121,33 @@ impl Thread {
 }
 
 impl Vm {
+    pub(super) fn allocate_thread(&mut self) -> ThreadId {
+        let id = ThreadId(self.threads.insert(Thread {
+            status: Status::Suspended,
+            hooks: self.hooks.inherited(),
+            ..Thread::main(self.globals)
+        }));
+        self.gc_new_value(Value::Thread(id));
+        id
+    }
+    pub(super) fn coroutine_status(&self, id: ThreadId) -> Status {
+        if id == self.thread {
+            return Status::Running;
+        }
+        let state = &self.threads[slot_index(id.0)];
+        if state.resume_status == NativeThreadStatus::Ok
+            && state.frames.is_empty()
+            && state.status != Status::Normal
+        {
+            if state.api_stack.is_empty() {
+                Status::Dead
+            } else {
+                Status::Suspended
+            }
+        } else {
+            state.status
+        }
+    }
     pub(super) fn open_threads(&mut self) {
         let table = self.new_table();
         for (i, name) in [
@@ -252,20 +283,23 @@ impl Vm {
         self.exchange_thread(id, line);
         self.thread = id;
     }
-    pub(super) fn apply_transition(&mut self, line: &mut u32) -> Result<(), Error> {
+    pub(super) fn apply_transition(&mut self, line: &mut u32) -> Result<Option<usize>, Error> {
         match self.transition.take() {
             None => {}
             Some(Transition::Resume(id)) => {
                 self.switch_thread(id, line);
-                if let Some(entry) = self.threads[slot_index(id.0)].entry.take() {
-                    self.push_frame(entry, 0, self.top, OPEN)?;
+                if let Some((call, count)) = self.threads[slot_index(id.0)].entry.take()
+                    && let Some(actual) = self.start_lua_call(call, count, OPEN, false)?
+                {
+                    self.top = call + actual;
+                    return Ok(Some(self.top));
                 }
             }
             Some(Transition::Yield { source, count }) => {
                 self.finish_thread(source, count, false, true, line)
             }
         }
-        Ok(())
+        Ok(None)
     }
     pub(super) fn finish_thread(
         &mut self,
@@ -287,17 +321,25 @@ impl Vm {
             .expect("resumer has an awaiting frame");
         let prefix = usize::from(matches!(frame.function, FrameKind::Native(CO_RESUME)));
         let base = frame.base;
+        let arguments = frame.argc();
         caller.registers.resize(
-            caller.registers.len().max(base + prefix + count),
+            caller
+                .registers
+                .len()
+                .max(base + arguments + prefix + count),
             Value::Nil,
         );
         if prefix != 0 {
-            caller.registers[base] = Value::Boolean(!failed);
+            caller.registers[base + arguments] = Value::Boolean(!failed);
         }
-        caller.registers[base + prefix..base + prefix + count]
+        caller.registers[base + arguments + prefix..base + arguments + prefix + count]
             .copy_from_slice(&self.registers[source..source + count]);
-        caller.top = base + prefix + count;
-        frame.pc = if failed { 3 } else { 2 };
+        caller.top = base + arguments + prefix + count;
+        frame.vararg_start = base;
+        frame.vararg_count = (arguments + prefix + count) as u32;
+        // Low two bits select the continuation; higher bits retain the C
+        // argument prefix below its results, including return-hook aliases.
+        frame.pc = ((arguments as u32) << 2) | if failed { 3 } else { 2 };
         caller.status = Status::Running;
         self.threads[slot_index(id.0)].status = if suspended {
             Status::Suspended
@@ -311,6 +353,13 @@ impl Vm {
         } else {
             NativeThreadStatus::Ok
         };
+        if suspended {
+            self.threads[slot_index(id.0)].api_stack = source..source;
+            self.top = source;
+        } else if !failed {
+            self.threads[slot_index(id.0)].api_stack = 0..0;
+            self.top = 0;
+        }
         if !suspended && !failed {
             self.registers.clear();
         }
@@ -322,6 +371,44 @@ impl Vm {
             let value = self.intern(error.message().as_bytes());
             self.located_error(value, 1)
         });
+        if let Some(frame) = self.frames.last().copied() {
+            let (base, values) = match frame.function {
+                FrameKind::Native(id) => {
+                    let base = frame.vararg_start;
+                    let count = if id == 1 {
+                        frame.argc().min(1)
+                    } else {
+                        frame.argc()
+                    };
+                    let mut values = self.registers[base..base + count].to_vec();
+                    if self.scheduled_native(id) != 1
+                        && (id != 1 || values.last().copied() != Some(value))
+                    {
+                        values.push(value);
+                    }
+                    (base, values)
+                }
+                FrameKind::Lua(id) => {
+                    let f = &self.functions[slot_index(id.0)];
+                    let count =
+                        self.programs[f.program].data.prototypes[f.prototype].debug_registers();
+                    let mut values = self.registers[frame.base..frame.base + count].to_vec();
+                    values.push(self.intern(error.message_bytes()));
+                    values.push(value);
+                    (frame.base, values)
+                }
+            };
+            self.resize_registers(self.registers.len().max(base + values.len()));
+            self.registers[base..base + values.len()].copy_from_slice(&values);
+            self.top = base + values.len();
+            self.threads[slot_index(self.thread.0)].api_stack = base..self.top;
+            if matches!(frame.function, FrameKind::Native(_)) {
+                let f = self.frames.last_mut().unwrap();
+                f.base = base;
+                f.stack_start = base;
+                f.vararg_count = values.len() as u32;
+            }
+        }
         let source = self.registers.len();
         self.registers.push(value);
         // Keep faulting frames and open cells for debug inspection and escaped
@@ -350,6 +437,7 @@ impl Vm {
             self.trim_hooks();
             self.registers.clear();
             self.top = 0;
+            self.threads[slot_index(id.0)].api_stack = 0..0;
             self.threads[slot_index(id.0)].status = Status::Dead;
             self.threads[slot_index(id.0)].resume_status = NativeThreadStatus::RuntimeError;
             self.switch_thread(parent, line);
@@ -368,6 +456,7 @@ impl Vm {
                     return Err(self.argument_error(0, b"Lua function expected"));
                 };
                 let thread = ThreadId(self.threads.insert(Thread::new(entry, self.globals)));
+                self.threads.note_alloc(size_of::<Value>());
                 self.threads[slot_index(thread.0)].hooks = self.hooks.inherited();
                 self.gc_new_value(Value::Thread(thread));
                 if id == CO_WRAP {
@@ -387,11 +476,7 @@ impl Vm {
                 let Value::Thread(thread) = self.argument(base, count, 0) else {
                     return Err(self.argument_error(0, b"coroutine expected"));
                 };
-                let status = if thread == self.thread {
-                    Status::Running
-                } else {
-                    self.threads[slot_index(thread.0)].status
-                };
+                let status = self.coroutine_status(thread);
                 self.intern(status.name())
             }
             _ => unreachable!("coroutine continuations are scheduled"),
@@ -479,9 +564,12 @@ impl Vm {
             return Ok(self.return_frame(frame, base, self.top - base));
         }
         let wrapped = id != CO_RESUME;
-        if frame.pc() >= 2 {
-            if wrapped && frame.pc() == 3 {
-                let value = self.located_error(self.registers[base], 1);
+        let phase = frame.pc & 3;
+        if phase >= 2 {
+            let source = base + (frame.pc >> 2) as usize;
+            if wrapped && phase == 3 {
+                let value = self.located_error(self.registers[source], 1);
+                self.registers[source] = value;
                 let message = match value {
                     Value::String(s) => {
                         String::from_utf8_lossy(&self.strings.bytes[slot_index(s.0)]).into_owned()
@@ -490,7 +578,7 @@ impl Vm {
                 };
                 return Err(Error::raised(value, message));
             }
-            return Ok(self.return_frame(frame, base, self.top - base));
+            return Ok(self.return_frame(frame, source, self.top - source));
         }
         let thread = if wrapped {
             let Value::Thread(thread) = self.native_closures[slot_index(id)].captures[0] else {
@@ -508,11 +596,7 @@ impl Vm {
             };
             thread
         };
-        let status = if thread == self.thread {
-            Status::Running
-        } else {
-            self.threads[slot_index(thread.0)].status
-        };
+        let status = self.coroutine_status(thread);
         // A resumed thread inherits the caller's C-call count. Suspended native
         // callbacks and tag-method continuations each add one boundary; ordinary
         // Lua calls do not. The host's initial call accounts for the remaining one.
@@ -528,24 +612,33 @@ impl Vm {
             };
             if status == Status::Suspended
                 && depth >= 199
-                && self.threads[slot_index(thread.0)].entry.is_some()
+                && self.threads[slot_index(thread.0)].frames.is_empty()
             {
                 // lua_resume's initial-stack overflow error replaces the entry
                 // function; auxresume removes that error, leaving a dead thread.
                 let state = &mut self.threads[slot_index(thread.0)];
                 state.entry = None;
                 state.registers.clear();
+                state.top = 0;
+                state.api_stack = 0..0;
                 state.status = Status::Dead;
             }
             let value = self.intern(message.as_bytes());
+            let arguments =
+                self.registers[frame.vararg_start..frame.vararg_start + frame.argc()].to_vec();
+            let start = base + arguments.len();
+            self.resize_registers(self.registers.len().max(start + 2));
+            self.registers[base..start].copy_from_slice(&arguments);
             if wrapped {
-                self.registers[base] = value;
+                self.registers[start] = value;
             } else {
-                self.registers[base] = Value::Boolean(false);
-                self.registers[base + 1] = value;
+                self.registers[start] = Value::Boolean(false);
+                self.registers[start + 1] = value;
             }
-            self.top = base + if wrapped { 1 } else { 2 };
-            self.frames[owner].pc = 3;
+            self.top = start + if wrapped { 1 } else { 2 };
+            self.frames[owner].vararg_start = base;
+            self.frames[owner].vararg_count = (self.top - base) as u32;
+            self.frames[owner].pc = ((arguments.len() as u32) << 2) | 3;
             return Ok(None);
         }
         let offset = usize::from(!wrapped);
@@ -554,11 +647,12 @@ impl Vm {
             &self.registers[frame.vararg_start + offset..frame.vararg_start + offset + count];
         let state = &mut self.threads[slot_index(thread.0)];
         let capacity = state.registers.capacity();
-        if let Some(entry) = state.entry {
-            state.registers.clear();
-            state.registers.push(Value::Function(entry));
+        if state.frames.is_empty() {
+            let call = state.api_stack.end - 1;
+            state.registers.truncate(state.api_stack.end);
             state.registers.extend_from_slice(args);
-            state.top = count;
+            state.top = state.registers.len();
+            state.entry = Some((call, count));
         } else {
             let call = state
                 .frames
@@ -577,7 +671,18 @@ impl Vm {
         state.depth = (depth + 1) as u16;
         let growth = (state.registers.capacity() - capacity) * std::mem::size_of::<Value>();
         self.threads.note_alloc(growth);
+        // These are the caller's owned call temporaries. auxresume has moved
+        // them away; the child now owns the values and the remaining C window
+        // below retains only the explicit thread argument.
+        self.registers[frame.vararg_start..frame.vararg_start + frame.argc()].fill(Value::Nil);
         self.threads[slot_index(self.thread.0)].status = Status::Normal;
+        // auxresume has moved its arguments off the C window. Keep the thread
+        // argument in its owned native result area while the child executes.
+        if !wrapped {
+            self.registers[frame.base] = Value::Thread(thread);
+        }
+        self.frames[owner].vararg_start = frame.base;
+        self.frames[owner].vararg_count = usize::from(!wrapped) as u32;
         self.frames[owner].pc = 1;
         self.transition = Some(Transition::Resume(thread));
         Ok(None)

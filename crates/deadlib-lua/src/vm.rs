@@ -33,6 +33,7 @@ use crate::arena::{Arena, index as slot_index};
 pub use gc::{GcOperation, HeapStats, Root};
 pub use host::{
     HostCall, HostFunction, HostThreadState, NativeCallStatus, NativeLoadStatus, NativeStack,
+    NativeThreadStack,
 };
 use native::format_number;
 pub use threads::NativeThreadStatus;
@@ -1039,11 +1040,18 @@ impl Vm {
         }
         self.close_upvalues(frame.base);
         if self.frames.len() == 1 {
-            self.registers.copy_within(source..source + count, 0);
-            self.registers.truncate(count);
-            self.top = count;
+            let destination = if self.thread == self.main {
+                0
+            } else {
+                frame.result
+            };
+            let total = destination + count;
+            self.registers
+                .copy_within(source..source + count, destination);
+            self.registers.truncate(total);
+            self.top = total;
             self.frames.clear();
-            return Some(count);
+            return Some(total);
         }
         let wanted = if frame.wanted == FRAME_OPEN {
             count
@@ -1296,7 +1304,9 @@ impl Vm {
                     if let Some(count) = result? {
                         return Ok(count);
                     }
-                    self.apply_transition(error_line)?;
+                    if let Some(count) = self.apply_transition(error_line)? {
+                        return Ok(count);
+                    }
                     continue;
                 }
                 FrameKind::Lua(id) => id,

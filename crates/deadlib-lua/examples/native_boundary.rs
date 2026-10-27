@@ -26,6 +26,7 @@ mod windows {
         reader: Option<Reader>,
         writer: Option<Writer>,
         userdata: *mut c_void,
+        state: *mut c_void,
     }
     type Dispatch =
         unsafe extern "C" fn(*mut c_void, c_int, c_int, c_int, *mut BoundaryValue) -> c_int;
@@ -195,7 +196,38 @@ mod windows {
             b: c_int,
             value: &mut BoundaryValue,
         ) -> Result<(), Error> {
+            if op == 56 {
+                let states = self.bridge.states.lock().unwrap();
+                let from = *states
+                    .get(&(value.state as usize))
+                    .ok_or_else(|| self.stack.error(b"unknown source thread"))?;
+                let to = *states
+                    .get(&(value.userdata as usize))
+                    .ok_or_else(|| self.stack.error(b"unknown destination thread"))?;
+                drop(states);
+                if from == to {
+                    return Ok(());
+                }
+                let count =
+                    usize::try_from(a).map_err(|_| self.stack.error(b"invalid move count"))?;
+                return self.stack.move_thread_values(from, to, count);
+            }
+            if value.state as usize != self.state {
+                let thread = self
+                    .bridge
+                    .states
+                    .lock()
+                    .unwrap()
+                    .get(&(value.state as usize))
+                    .copied()
+                    .ok_or_else(|| self.stack.error(b"unknown target thread"))?;
+                return self.inactive_operation(thread, op, a, b, value);
+            }
             match op {
+                55 => {
+                    let thread = self.stack.new_thread()?;
+                    value.userdata = state_for(self.stack, &self.bridge, thread)? as *mut c_void;
+                }
                 54 => {
                     value.userdata = self
                         .stack
@@ -367,7 +399,7 @@ mod windows {
                     self.stack
                         .call_unprotected(count, (b >= 0).then_some(b as usize))?;
                 }
-                9 => value.integer = c_int::from(a >= 0 && self.stack.check_stack(a as usize)),
+                9 => value.integer = c_int::from(a < 0 || self.stack.check_stack(a as usize)),
                 10 => {
                     let top = if a >= 0 {
                         a as isize
@@ -555,6 +587,129 @@ mod windows {
             }
             Ok(())
         }
+        fn inactive_operation(
+            &mut self,
+            thread: ThreadId,
+            op: c_int,
+            a: c_int,
+            b: c_int,
+            value: &mut BoundaryValue,
+        ) -> Result<(), Error> {
+            if op == 51 {
+                let target = self.stack.thread_stack(thread)?.to_thread(a as isize);
+                value.userdata = match target {
+                    Some(id) => state_for(self.stack, &self.bridge, id)? as *mut c_void,
+                    None => std::ptr::null_mut(),
+                };
+                return Ok(());
+            }
+            let mut stack = self.stack.thread_stack(thread)?;
+            match op {
+                0 => value.integer = stack.top() as c_int,
+                1 => stack.push(Value::Number(value.number))?,
+                2 => stack.push(Value::Boolean(value.integer != 0))?,
+                3 => stack.push(Value::Nil)?,
+                4 => {
+                    // SAFETY: the C primitive lends these bytes until dispatch returns.
+                    let bytes = if value.length == 0 {
+                        &[]
+                    } else {
+                        unsafe { std::slice::from_raw_parts(value.bytes.cast(), value.length) }
+                    };
+                    let v = stack.intern(bytes);
+                    stack.push(v)?;
+                }
+                5 => {
+                    let v = stack.value(a as isize).unwrap_or(Value::Nil);
+                    stack.push(v)?;
+                }
+                6 => {
+                    value.number = stack
+                        .to_number(a as isize)
+                        .ok_or_else(|| stack.error(b"number expected"))?
+                }
+                9 => value.integer = c_int::from(a < 0 || stack.check_stack(a as usize)),
+                10 => {
+                    let top = if a >= 0 {
+                        a as isize
+                    } else {
+                        stack.top() as isize + a as isize + 1
+                    };
+                    let top =
+                        usize::try_from(top).map_err(|_| stack.error(b"invalid stack top"))?;
+                    stack.set_top(top)?;
+                }
+                11 => {
+                    let v = stack
+                        .value(-1)
+                        .ok_or_else(|| stack.error(b"empty replacement stack"))?;
+                    stack.set(a as isize, v)?;
+                    stack.set_top(stack.top() - 1)?;
+                }
+                12 => stack.push(Value::LightUserdata(value.bytes as usize as u64))?,
+                13 => {
+                    value.bytes = stack
+                        .userdata_pointer(a as isize)
+                        .map_or(std::ptr::null(), |p| p as *const c_char)
+                }
+                25 => {
+                    value.integer = match stack.value(a as isize) {
+                        None => -1,
+                        Some(Value::Nil) => 0,
+                        Some(Value::Boolean(_)) => 1,
+                        Some(Value::LightUserdata(_)) => 2,
+                        Some(Value::Number(_)) => 3,
+                        Some(Value::String(_)) => 4,
+                        Some(Value::Table(_)) => 5,
+                        Some(Value::Function(_) | Value::Native(_)) => 6,
+                        Some(Value::Userdata(_)) => 7,
+                        Some(Value::Thread(_)) => 8,
+                        Some(Value::ParserPrototype(_)) => 9,
+                    }
+                }
+                26 => {
+                    value.integer = c_int::from(
+                        matches!((stack.value(a as isize),stack.value(b as isize)),(Some(x),Some(y))if x==y),
+                    )
+                }
+                27 => stack.remove(a as isize)?,
+                28 => stack.insert(a as isize)?,
+                30 => value.length = stack.object_len(a as isize)?,
+                31 => match stack.to_c_bytes(a as isize)? {
+                    Some(bytes) => {
+                        value.bytes = bytes.as_ptr().cast();
+                        value.length = bytes.len() - 1;
+                    }
+                    None => {
+                        value.bytes = std::ptr::null();
+                        value.length = 0;
+                    }
+                },
+                35 => {
+                    let n = stack.to_number(a as isize);
+                    value.integer = c_int::from(n.is_some());
+                    value.number = n.unwrap_or(0.);
+                }
+                36 => value.wide_integer = stack.to_integer(a as isize).unwrap_or(0),
+                37 => {
+                    value.integer =
+                        c_int::from(stack.value(a as isize).is_some_and(Value::is_truthy))
+                }
+                38 => stack.push(Value::Number(value.wide_integer as f64))?,
+                41 => {
+                    value.integer =
+                        c_int::from(matches!(stack.value(a as isize), Some(Value::Native(_))))
+                }
+                52 => value.integer = c_int::from(stack.push_thread()?),
+                54 => {
+                    value.userdata = stack
+                        .to_pointer(a as isize)
+                        .map_or(std::ptr::null_mut(), |p| p as *mut c_void)
+                }
+                _ => return Err(stack.error(b"inactive operation requires execution support")),
+            }
+            Ok(())
+        }
     }
     unsafe extern "C" fn dispatch(
         raw: *mut c_void,
@@ -718,6 +873,14 @@ mod windows {
             "boundary_thread_pointer",
             "boundary_thread_capture",
             "boundary_pointer",
+            "boundary_newthread",
+            "boundary_thread_values",
+            "boundary_thread_push",
+            "boundary_thread_move",
+            "boundary_thread_primitives",
+            "boundary_thread_selfmove",
+            "boundary_thread_resize",
+            "boundary_thread_hold",
             "boundary_cpcall",
         ] {
             let function = vm

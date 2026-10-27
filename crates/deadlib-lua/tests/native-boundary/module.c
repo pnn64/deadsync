@@ -794,3 +794,56 @@ EXPORT int boundary_pointer(lua_State *L) {
   else lua_pushboolean(L,1);
   return 5;
 }
+EXPORT int boundary_newthread(lua_State *L) {
+  lua_State *co=lua_newthread(L);
+  if(lua_gettop(L)>1){lua_pushvalue(L,1);lua_xmove(L,co,1);}
+  return 1;
+}
+EXPORT int boundary_thread_values(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);int i,n=lua_gettop(co);
+  lua_checkstack(co,1);lua_pushinteger(L,n);lua_newtable(L);
+  for(i=1;i<=n;++i){lua_pushvalue(co,i);lua_xmove(co,L,1);lua_rawseti(L,-2,i);}
+  return 2;
+}
+EXPORT int boundary_thread_push(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);int n=lua_gettop(L)-1;
+  lua_checkstack(co,n);lua_xmove(L,co,n);return 0;
+}
+EXPORT int boundary_thread_move(lua_State *L) {
+  lua_State *from=lua_tothread(L,1),*to=lua_tothread(L,2);
+  int n=(int)luaL_checkinteger(L,3);
+  lua_checkstack(to,n);lua_xmove(from,to,n);
+  lua_pushinteger(L,lua_gettop(from));lua_pushinteger(L,lua_gettop(to));return 2;
+}
+EXPORT int boundary_thread_primitives(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);
+  const char bytes[]={'a',0,'b'};size_t length;const char *text;
+  int main;
+  lua_settop(co,0);lua_pushinteger(co,17);lua_pushboolean(co,0);lua_pushnil(co);lua_pushlstring(co,bytes,sizeof(bytes));
+  lua_pushvalue(co,1);lua_insert(co,1);lua_remove(co,2);lua_pushinteger(co,42);lua_replace(co,1);
+  lua_pushnumber(co,-0.0);text=lua_tolstring(co,-1,&length);
+  lua_pushlstring(L,text,length);lua_pushinteger(L,lua_objlen(co,4));
+  lua_pushboolean(L,lua_type(co,-1)==4 && lua_tonumber(co,1)==42 && lua_tointeger(co,1)==42 && !lua_toboolean(co,2));
+  lua_pushboolean(L,lua_isnumber(co,1) && lua_isstring(co,1) && !lua_isuserdata(co,1) && !lua_iscfunction(co,1));
+  lua_pushboolean(L,lua_checkstack(co,-1) && !lua_checkstack(co,8001));
+  lua_pushvalue(co,LUA_REGISTRYINDEX);lua_xmove(co,L,1);
+  lua_pushvalue(co,LUA_GLOBALSINDEX);lua_xmove(co,L,1);
+  main=lua_pushthread(co);lua_pushboolean(L,lua_tothread(co,-1)==co && lua_topointer(co,-1)==co);
+  lua_settop(co,-2);lua_pushboolean(L,main);return 9;
+}
+EXPORT int boundary_thread_selfmove(lua_State *L) {
+  int before=lua_gettop(L);lua_xmove(L,L,8001);lua_xmove(L,L,-17);
+  lua_pushboolean(L,lua_gettop(L)==before && lua_checkstack(L,-1));return 1;
+}
+EXPORT int boundary_thread_resize(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);int n=(int)luaL_checkinteger(L,2),old=lua_gettop(co);
+  if(n>old && !lua_checkstack(co,n-old)){lua_pushboolean(L,0);lua_pushinteger(L,old);return 2;}
+  lua_settop(co,n);lua_pushboolean(L,1);lua_pushinteger(L,lua_gettop(co));return 2;
+}
+EXPORT int boundary_thread_hold(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);int index=(int)luaL_checkinteger(L,2);
+  size_t before_length,after_length;const char *before=lua_tolstring(co,index,&before_length),*after;
+  lua_pushvalue(L,3);lua_call(L,0,0);after=lua_tolstring(co,index,&after_length);
+  lua_pushboolean(L,before==after && before_length==after_length && !memcmp(before,after,before_length));
+  lua_pushlstring(L,after,after_length);return 2;
+}

@@ -103,12 +103,14 @@ def main():
     names+=['boundary_dump','boundary_dump_null']
     names+=['boundary_thread','boundary_thread_status','boundary_thread_pointer','boundary_thread_capture']
     names+=['boundary_pointer']
+    names+=['boundary_newthread','boundary_thread_values','boundary_thread_push','boundary_thread_move','boundary_thread_primitives','boundary_thread_selfmove','boundary_thread_resize','boundary_thread_hold']
     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
     runs={}
     # Keep the original regression independently from the broader root traces.
     scratch_source="do local co=coroutine.create(function()boundary_state()end);assert(coroutine.resume(co))end;collectgarbage();local trace={};assert(type(boundary_loadtop(function(i,n)trace[i]=n end))=='function');print('parser-scratch-slots',unpack(trace))"
     scratch_runs={}
     root_runs={}
+    thread_stack_runs={}
     for engine in ['reference','rust']:
         with tempfile.TemporaryDirectory(prefix='deadlua-native-boundary-')as temporary:
             work=Path(temporary);(work/'boundary.lua').write_bytes((fixture/'cases.lua').read_bytes())
@@ -131,6 +133,10 @@ def main():
             command=command[:-1]+[str(work/'reader-roots.lua')]
             run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=60)
             root_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
+            (work/'thread-stacks.lua').write_bytes((fixture/'thread-stacks.lua').read_bytes())
+            command=command[:-1]+[str(work/'thread-stacks.lua')]
+            run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=60)
+            thread_stack_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
     assert hashes()==before,'sources changed during boundary proof'
     reference_run=runs['reference'];rust=runs['rust']
     buffers={engine:bool(re.search(rb'(?m)^aux-buffer-complete\t99\t40\r*$',bytes.fromhex(run.get('stdout_hex',''))))for engine,run in runs.items()}
@@ -153,6 +159,9 @@ def main():
     roots_complete=all(run['returncode']==0 and b'native-reader-roots-complete'in bytes.fromhex(run['stdout_hex'])for run in root_runs.values())
     roots_equal=roots_complete and root_runs['reference']['stdout_hex']==root_runs['rust']['stdout_hex'] and not root_runs['reference']['stderr_hex']
     result['native_reader_roots_probe']=dict(runs=root_runs,completed=roots_complete,observations_equal=roots_equal,fixture='crates/deadlib-lua/tests/native-boundary/reader-roots.lua',binary_source=root_wire_source,binary_command=root_wire_command,chunks={name:dict(sha256=hashlib.sha256(chunk).hexdigest(),hex=chunk.hex())for name,chunk in root_chunks.items()})
+    thread_stacks_complete=all(run['returncode']==0 and b'native-thread-stacks-complete\t1000'in bytes.fromhex(run['stdout_hex'])for run in thread_stack_runs.values())
+    thread_stacks_equal=thread_stacks_complete and thread_stack_runs['reference']['stdout_hex']==thread_stack_runs['rust']['stdout_hex'] and not thread_stack_runs['reference']['stderr_hex']
+    result['native_thread_stacks_probe']=dict(runs=thread_stack_runs,completed=thread_stacks_complete,observations_equal=thread_stacks_equal,fixture='crates/deadlib-lua/tests/native-boundary/thread-stacks.lua',complete_inactive_api_proven=False)
     result['native_file_complete']=file_loaders
     result['native_dump_complete']=dumpers
     result['native_thread_complete']=threads
@@ -163,6 +172,6 @@ def main():
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
     print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,'state lifetimes balanced:',states,flush=True)
-    if not matched or not returned or not states or not scratch_complete or not result['parser_scratch_probe']['observations_equal'] or not roots_equal:raise SystemExit(1)
+    if not matched or not returned or not states or not scratch_complete or not result['parser_scratch_probe']['observations_equal'] or not roots_equal or not thread_stacks_equal:raise SystemExit(1)
 
 if __name__=='__main__':main()

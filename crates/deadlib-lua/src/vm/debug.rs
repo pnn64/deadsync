@@ -412,7 +412,10 @@ impl Vm {
             }
             FrameKind::Native(id) => {
                 let current = thread == self.thread && index + 1 == frames.len();
-                if matches!(id, strings::STR_DUMP | CONSOLE) && n == frame.argc() {
+                if (matches!(id, strings::STR_DUMP | CONSOLE | threads::CO_RESUME)
+                    || self.scheduled_native(id) == 1)
+                    && n == frame.argc()
+                {
                     let hook = frames[index + 1..].iter().find(|f| {
                         matches!(f.function, FrameKind::Native(CONT_HOOK))
                             && f.vararg_start == index

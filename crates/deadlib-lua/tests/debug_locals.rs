@@ -9,6 +9,54 @@ enum Scalar {
 }
 
 #[test]
+fn coroutine_return_hooks_see_remaining_arguments_and_transferred_results() {
+    compare(br#"
+local rows={}
+local co=coroutine.create(function(a,b)coroutine.yield(a,b);return 42,nil end)
+local wrapped=coroutine.wrap(function(a)coroutine.yield(a);return 42,nil end)
+debug.sethook(function(event)
+ local fn=debug.getinfo(2,'f').func
+ if event=='return' and (fn==coroutine.resume or fn==wrapped)then
+  local row={}
+  for i=1,20 do local name,v=debug.getlocal(2,i);if not name then break end
+   local t=type(v);row[#row+1]=t..':'..((t=='string'or t=='number'or t=='boolean')and tostring(v)or'')
+  end
+  rows[#rows+1]=table.concat(row,',')
+ end
+end,'r')
+coroutine.resume(co,17,29);coroutine.resume(co);coroutine.resume(co)
+wrapped(17);wrapped()
+debug.sethook();return table.concat(rows,'|')
+"#);
+    compare(
+        br#"
+local token={};local co=coroutine.create(function()return 17 end)
+local wrapped=coroutine.wrap(function()return 19 end)
+debug.sethook(function(event)
+ local fn=debug.getinfo(2,'f').func
+ if event=='return'and fn==coroutine.resume then assert(debug.setlocal(2,3,token));collectgarbage()
+ elseif event=='return'and fn==wrapped then assert(debug.setlocal(2,1,token));collectgarbage()end
+end,'r')
+local ok,a=coroutine.resume(co);local b=wrapped();debug.sethook()
+return ok,a==token,b==token
+"#,
+    );
+    compare(
+        br#"
+local weak=setmetatable({},{__mode='k'});local gone
+debug.sethook(function(event)
+ if event=='return'and debug.getinfo(2,'f').func==coroutine.resume then
+  local _,co=debug.getlocal(2,1);weak[co]=true;debug.setlocal(2,1,nil);co=nil
+  collectgarbage();gone=next(weak)==nil
+ end
+end,'r')
+coroutine.resume(coroutine.create(function()return 17 end));debug.sethook()
+return gone
+"#,
+    );
+}
+
+#[test]
 fn native_string_coercions_update_observable_argument_slots() {
     for (name, arguments, count) in [
         ("string.sub", "12345,2", 2),

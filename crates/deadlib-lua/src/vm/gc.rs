@@ -282,6 +282,14 @@ fn frames_roots(
         );
         return;
     }
+    if let Some(frame) = frames.first() {
+        register_roots(
+            registers,
+            0..frame.result.min(registers.len()).min(cutoff),
+            live,
+            work,
+        );
+    }
     for (i, frame) in frames.iter().enumerate() {
         match frame.function {
             FrameKind::Lua(function) => {
@@ -800,9 +808,6 @@ impl Vm {
         for state in &t.host_states {
             work.extend(state.roots().iter().copied().filter_map(edge));
         }
-        if let Some(entry) = t.entry {
-            work.push(Trace::Value(Value::Function(entry)));
-        }
         if let Some(parent) = t.resumer {
             work.push(Trace::Value(Value::Thread(parent)));
         }
@@ -829,7 +834,11 @@ impl Vm {
         };
         work.push(Trace::Value(Value::Table(env)));
         work.extend(open.iter().map(|&i| Trace::Cell(i as usize)));
-        let cutoff = if t.status == threads::Status::Suspended {
+        let cutoff = if id != self.thread
+            && matches!(t.status, threads::Status::Suspended | threads::Status::Dead)
+        {
+            t.api_stack.end.min(registers.len())
+        } else if t.status == threads::Status::Suspended {
             frames
                 .last()
                 .filter(|f| matches!(f.function, FrameKind::Native(threads::CO_YIELD)))
@@ -839,6 +848,10 @@ impl Vm {
         };
         let mut live = vec![0; registers.len().div_ceil(64)];
         frames_roots(self, registers, frames, top, cutoff, &mut live, work);
+        if id != self.thread && t.status != threads::Status::Normal {
+            let end = t.api_stack.end.min(registers.len());
+            register_roots(registers, t.api_stack.start.min(end)..end, &mut live, work);
+        }
         for &cell in open {
             if let Cell::Open(owner, position) = self.upvalues[cell as usize]
                 && owner == id
