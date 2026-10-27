@@ -14,7 +14,7 @@ pub(super) fn compile(source: &[u8], name: &[u8], depth: usize) -> Result<Progra
 pub(super) fn protected(function: FrameKind) -> bool {
     matches!(
         function,
-        FrameKind::Native(LOAD_READER | LOAD_FILE | DO_FILE | CONT_FILE)
+        FrameKind::Native(LOAD_READER | LOAD_FILE | DO_FILE | CONT_FILE | CONT_HOST_LOAD)
     )
 }
 
@@ -146,6 +146,61 @@ impl Loading {
 }
 
 impl Vm {
+    pub(super) fn start_native_load(&mut self, owner: usize, name: &[u8], depth: usize) -> usize {
+        let index = self.loads.len();
+        let capacity = self.loads.capacity();
+        let source = self.take_buffer(0);
+        self.loads.push(Loading {
+            owner,
+            parser: crate::parser::Parser::with_native_depth(depth),
+            decoder: None,
+            native_depth: depth,
+            binary_mode: false,
+            source,
+            name: name.into(),
+            awaiting: false,
+            closed: false,
+            probed: false,
+            file: None,
+        });
+        self.gc_note_control(
+            (self.loads.capacity() - capacity) * std::mem::size_of::<Loading>() + name.len(),
+        );
+        index
+    }
+    pub(super) fn feed_native_load(&mut self, index: usize, bytes: Option<&[u8]>) -> bool {
+        let job = &mut self.loads[index];
+        let first = !job.probed;
+        job.probed = true;
+        let bytes = bytes.unwrap_or_default();
+        if first {
+            job.binary_mode = bytes.first() == Some(&27);
+        } else if bytes.is_empty() {
+            job.closed = true;
+        }
+        let capacity = job.source.capacity();
+        job.source.extend_from_slice(bytes);
+        let growth = job.source.capacity() - capacity;
+        self.gc_note_control(growth);
+        first
+    }
+    pub(super) fn resume_native_load(&mut self, index: usize) -> Result<Option<Program>, Error> {
+        let job = &mut self.loads[index];
+        let before = job.arena_bytes();
+        let result = job.resume();
+        let growth = job.arena_bytes().saturating_sub(before);
+        self.gc_note_control(growth);
+        result
+    }
+    pub(super) fn native_load_message(&self, index: usize, error: &Error) -> Vec<u8> {
+        let job = &self.loads[index];
+        message(&job.name, error, job.binary_mode)
+    }
+    pub(super) fn end_native_load(&mut self, owner: usize) {
+        if let Some(job) = self.loads.pop_if(|job| job.owner == owner) {
+            self.buffers.push(job.source);
+        }
+    }
     /// Load a file, or stdin when `path` is absent, through the native Lua loader.
     ///
     /// This uses the VM's file streams, header handling and source/binary verifier.

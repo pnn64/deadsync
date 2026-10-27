@@ -80,8 +80,13 @@ def main():
     names+=['boundary_auxbuffer_info','boundary_auxbuffer','boundary_auxgsub']
     names+=['boundary_upget','boundary_upset','boundary_upbind']
     names+=['boundary_gc','boundary_gc_counts']
+    names+=['boundary_load','boundary_loadbuffer','boundary_loadtop']
     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
     runs={}
+    # This independent probe deliberately retains a known compatibility gap.
+    # lua_gettop can observe PUC's private parser table/prototype roots.
+    scratch_source="do local co=coroutine.create(function()boundary_state()end);assert(coroutine.resume(co))end;collectgarbage();local trace={};assert(type(boundary_loadtop(function(i,n)trace[i]=n end))=='function');print('parser-scratch-slots',unpack(trace))"
+    scratch_runs={}
     for engine in ['reference','rust']:
         with tempfile.TemporaryDirectory(prefix='deadlua-native-boundary-')as temporary:
             work=Path(temporary);(work/'boundary.lua').write_bytes((fixture/'cases.lua').read_bytes())
@@ -94,21 +99,29 @@ def main():
                 run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=30)
                 runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
             except subprocess.TimeoutExpired:runs[engine]=dict(command=command,timeout=True)
+            (work/'scratch.lua').write_text(scratch_source,encoding='utf-8')
+            command=command[:-1]+[str(work/'scratch.lua')]
+            run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=30)
+            scratch_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
     assert hashes()==before,'sources changed during boundary proof'
     reference_run=runs['reference'];rust=runs['rust']
     buffers={engine:bool(re.search(rb'(?m)^aux-buffer-complete\t99\t40\r*$',bytes.fromhex(run.get('stdout_hex',''))))for engine,run in runs.items()}
     upvalues={engine:b'native-upvalues-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
     collectors={engine:b'native-gc-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
-    matched=reference_run.get('returncode')==rust.get('returncode')==0 and reference_run.get('stdout_hex')==rust.get('stdout_hex')and not reference_run.get('stderr_hex')and all(buffers.values())and all(upvalues.values())and all(collectors.values())
+    loaders={engine:b'native-load-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
+    matched=reference_run.get('returncode')==rust.get('returncode')==0 and reference_run.get('stdout_hex')==rust.get('stdout_hex')and not reference_run.get('stderr_hex')and all(buffers.values())and all(upvalues.values())and all(collectors.values())and all(loaders.values())
     match=re.fullmatch(rb'BOUNDARY operations=(\d+) drops=(\d+) panic_abort=true\r?\nSTATES created=(\d+) collected=(\d+) destroyed=(\d+)\r?\n',bytes.fromhex(rust.get('stderr_hex','')))
     returned=bool(match and int(match[1])==int(match[2])and int(match[1])>1000)
     states=bool(match and int(match[3])==int(match[5]) and 0<int(match[4])<int(match[3]))
     artifacts=[reference,runner,*directory.rglob('*.dll')]
     result=dict(source_hashes=before,reference=metadata,runner=dict(path=str(runner),sha256=sha(runner),prebuilt=args.runner is not None),artifacts={str(p):sha(p)for p in artifacts},commands=commands,runs=runs,program_observations_equal=matched,every_dispatch_returned_before_jump=returned,persistent_state_lifetimes_balanced=states,buffer_api_checks_complete=buffers,limitations=__doc__+' The probe uses VM-owned stacks, persistent C states, unprotected calls, private owned function bindings, up to 255 actual C upvalues and Lua 5.1 pseudo-indexes, aligned stable userdata payloads, environments and NUL-terminated string conversions, plus protected calls and error functions, scalar conversions, comparison and native-window concatenation, formatted messages, auxiliary checks/registration/references and auxiliary buffers/literal replacement. Cross-thread/inactive-state API access, complete C APIs, production library caching/unload, package.loadlib and require integration remain unfinished.')
-    result.update(native_gc_complete=collectors,native_upvalues_complete=upvalues,native_upvalue_fixture=dict(source=wire_source,command=wire_command,original_chunk_hex=original.hex(),chunks={name:dict(sha256=hashlib.sha256(chunk).hexdigest(),hex=chunk.hex())for name,chunk in chunks.items()}))
+    result.update(native_load_complete=loaders,native_gc_complete=collectors,native_upvalues_complete=upvalues,native_upvalue_fixture=dict(source=wire_source,command=wire_command,original_chunk_hex=original.hex(),chunks={name:dict(sha256=hashlib.sha256(chunk).hexdigest(),hex=chunk.hex())for name,chunk in chunks.items()}))
+    scratch_complete=all(run['returncode']==0 and b'parser-scratch-slots'in bytes.fromhex(run['stdout_hex'])for run in scratch_runs.values())
+    result['parser_scratch_probe']=dict(source=scratch_source,runs=scratch_runs,completed=scratch_complete,observations_equal=scratch_complete and scratch_runs['reference']['stdout_hex']==scratch_runs['rust']['stdout_hex'],full_native_loader_parity_proven=False)
+    result['limitations']+=' Native reader/buffer/string loading is a development subset: the independent parser_scratch_probe retains the observable lua_gettop mismatch from PUC parser roots. luaL_loadfile, allocator/OOM statuses, full native loader/C API parity and production loading remain unfinished.'
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
     print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,'state lifetimes balanced:',states,flush=True)
-    if not matched or not returned or not states:raise SystemExit(1)
+    if not matched or not returned or not states or not scratch_complete:raise SystemExit(1)
 
 if __name__=='__main__':main()

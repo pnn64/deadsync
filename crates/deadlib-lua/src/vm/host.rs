@@ -3,7 +3,7 @@ use super::*;
 use std::any::Any;
 mod stack;
 mod thread;
-pub use stack::{NativeCallStatus, NativeStack};
+pub use stack::{NativeCallStatus, NativeLoadStatus, NativeStack};
 pub use thread::HostThreadState;
 pub(super) use thread::ThreadData;
 
@@ -15,6 +15,7 @@ enum Action<'a> {
     Compare(Op, [Value; 2]),
     Concat { first: usize, last: usize },
     Finalize,
+    GcCheck,
 }
 impl Action<'_> {
     fn arguments(&self) -> &[Value] {
@@ -22,7 +23,7 @@ impl Action<'_> {
             Self::Call(_, values) | Self::ProtectedCall(_, values, _) => values,
             Self::Get(values) => values,
             Self::Set(values) => values,
-            Self::Compare(..) | Self::Concat { .. } | Self::Finalize => &[],
+            Self::Compare(..) | Self::Concat { .. } | Self::Finalize | Self::GcCheck => &[],
         }
     }
 }
@@ -456,7 +457,7 @@ impl HostCall<'_> {
             wanted: match action {
                 Action::Call(..) | Action::ProtectedCall(..) => FRAME_OPEN,
                 Action::Get(..) | Action::Compare(..) | Action::Concat { .. } => 1,
-                Action::Set(..) | Action::Finalize => 0,
+                Action::Set(..) | Action::Finalize | Action::GcCheck => 0,
             },
             barriers: self.vm.frames.last().unwrap().barriers,
             vararg_start: match action {
@@ -491,6 +492,10 @@ impl HostCall<'_> {
             }
             Action::Finalize => {
                 self.vm.push_finalizers(false);
+                Ok(None)
+            }
+            Action::GcCheck => {
+                self.vm.maybe_gc();
                 Ok(None)
             }
         }

@@ -14,17 +14,29 @@ mod windows {
     };
 
     #[repr(C)]
+    #[derive(Default)]
     struct BoundaryValue {
         integer: c_int,
         number: f64,
         bytes: *const c_char,
         length: usize,
         wide_integer: isize,
+        reader: Option<Reader>,
+        userdata: *mut c_void,
     }
     type Dispatch =
         unsafe extern "C" fn(*mut c_void, c_int, c_int, c_int, *mut BoundaryValue) -> c_int;
     type CFunction = unsafe extern "C" fn(*mut c_void) -> c_int;
     type Invoke = unsafe extern "C" fn(*mut c_void, *mut c_void, Dispatch, CFunction) -> c_int;
+    type Reader = unsafe extern "C" fn(*mut c_void, *mut c_void, *mut usize) -> *const c_char;
+    type Read = unsafe extern "C" fn(
+        *mut c_void,
+        *mut c_void,
+        Dispatch,
+        Reader,
+        *mut c_void,
+        *mut BoundaryValue,
+    ) -> c_int;
     type NewState = unsafe extern "C" fn() -> *mut c_void;
     type FreeState = unsafe extern "C" fn(*mut c_void) -> c_int;
     #[link(name = "kernel32")]
@@ -67,6 +79,7 @@ mod windows {
         module: Library,
         _library: Library,
         invoke: Invoke,
+        read: Read,
         new_state: NewState,
         free_state: FreeState,
         state_bytes: usize,
@@ -103,12 +116,13 @@ mod windows {
             DROPS.fetch_add(1, Ordering::Relaxed);
         }
     }
-    struct Context<'a, 'vm> {
-        stack: NativeStack<'a, 'vm>,
+    struct Context<'stack, 'a, 'vm> {
+        stack: &'stack mut NativeStack<'a, 'vm>,
         error: Option<Error>,
         bridge: Arc<Bridge>,
+        state: usize,
     }
-    impl Context<'_, '_> {
+    impl Context<'_, '_, '_> {
         fn operation(
             &mut self,
             op: c_int,
@@ -117,6 +131,61 @@ mod windows {
             value: &mut BoundaryValue,
         ) -> Result<(), Error> {
             match op {
+                48 => {
+                    let reader = value
+                        .reader
+                        .ok_or_else(|| self.stack.error(b"missing C reader"))?;
+                    // SAFETY: lua_load supplies an optional terminated name for this call.
+                    let name = if value.bytes.is_null() {
+                        None
+                    } else {
+                        Some(
+                            unsafe { std::ffi::CStr::from_ptr(value.bytes) }
+                                .to_bytes()
+                                .to_vec(),
+                        )
+                    };
+                    let data = value.userdata;
+                    let bridge = self.bridge.clone();
+                    let state = self.state;
+                    let status = self.stack.load_reader(name.as_deref(), |stack| {
+                        let mut context = Context {
+                            stack,
+                            error: None,
+                            bridge: bridge.clone(),
+                            state,
+                        };
+                        let mut output = BoundaryValue::default();
+                        // SAFETY: the C-only reader boundary borrows this reborrowed
+                        // stack until it returns, and jumps only after dispatch exits.
+                        let result = unsafe {
+                            (bridge.read)(
+                                state as *mut c_void,
+                                (&mut context as *mut Context<'_, '_, '_>).cast(),
+                                dispatch,
+                                reader,
+                                data,
+                                &mut output,
+                            )
+                        };
+                        if let Some(error) = context.error.take() {
+                            return Err(error);
+                        }
+                        if result != 0 {
+                            return Err(context.stack.error(b"C reader failed without an error"));
+                        }
+                        if output.bytes.is_null() || output.length == 0 {
+                            return Ok(None);
+                        }
+                        // SAFETY: the reader contract keeps this block live until
+                        // its next invocation; copy it before any Lua reentry.
+                        let bytes = unsafe {
+                            std::slice::from_raw_parts(output.bytes.cast(), output.length)
+                        };
+                        Ok(Some(bytes.to_vec()))
+                    })?;
+                    value.integer = status as c_int;
+                }
                 0 => value.integer = self.stack.top() as c_int,
                 1 => self.stack.push(Value::Number(value.number))?,
                 2 => self.stack.push(Value::Boolean(value.integer != 0))?,
@@ -349,7 +418,7 @@ mod windows {
         let _returned = Returned;
         // SAFETY: boundary_invoke borrows this unique Context for this call.
         // C jumps only after this function returns, including its Drop guard.
-        let context = unsafe { &mut *raw.cast::<Context<'_, '_>>() };
+        let context = unsafe { &mut *raw.cast::<Context<'_, '_, '_>>() };
         let value = unsafe { &mut *value };
         match context.operation(op, a, b, value) {
             Ok(()) => 0,
@@ -382,17 +451,19 @@ mod windows {
         // both of which provide lua_CFunction's C signature.
         let function: CFunction = unsafe { std::mem::transmute(function) };
         let invoke = bridge.invoke;
+        let mut stack = call.native_stack()?;
         let mut context = Context {
-            stack: call.native_stack()?,
+            stack: &mut stack,
             error: None,
             bridge,
+            state: state as usize,
         };
         // SAFETY: trusted C functions borrow the Context only until return.
         // setjmp/longjmp and every skipped frame are within the C DLLs.
         let count = unsafe {
             invoke(
                 state,
-                (&mut context as *mut Context<'_, '_>).cast(),
+                (&mut context as *mut Context<'_, '_, '_>).cast(),
                 dispatch,
                 function,
             )
@@ -400,9 +471,10 @@ mod windows {
         if let Some(error) = context.error.take() {
             return Err(error);
         }
+        drop(context);
         let count = usize::try_from(count)
-            .map_err(|_| context.stack.error(b"invalid boundary-probe result count"))?;
-        context.stack.finish(count)
+            .map_err(|_| stack.error(b"invalid boundary-probe result count"))?;
+        stack.finish(count)
     }
     pub fn run() {
         let args: Vec<_> = std::env::args().skip(1).collect();
@@ -415,6 +487,7 @@ mod windows {
         let bridge = unsafe {
             Arc::new(Bridge {
                 invoke: std::mem::transmute::<usize, Invoke>(library.symbol("boundary_invoke")),
+                read: std::mem::transmute::<usize, Read>(library.symbol("boundary_read")),
                 new_state: std::mem::transmute::<usize, NewState>(
                     library.symbol("boundary_state_new"),
                 ),
@@ -495,6 +568,9 @@ mod windows {
             "boundary_upbind",
             "boundary_gc",
             "boundary_gc_counts",
+            "boundary_load",
+            "boundary_loadbuffer",
+            "boundary_loadtop",
             "boundary_cpcall",
         ] {
             let function = vm

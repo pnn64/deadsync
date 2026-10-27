@@ -29,7 +29,9 @@ mod traces;
 mod userdata;
 use crate::arena::{Arena, index as slot_index};
 pub use gc::{GcOperation, HeapStats, Root};
-pub use host::{HostCall, HostFunction, HostThreadState, NativeCallStatus, NativeStack};
+pub use host::{
+    HostCall, HostFunction, HostThreadState, NativeCallStatus, NativeLoadStatus, NativeStack,
+};
 use native::format_number;
 
 // Lua 5.1's lua_Integer is ptrdiff_t. The supported SSE2/MSVC profiles
@@ -251,6 +253,7 @@ const CONT_HOST_CALL: u64 = 268;
 const CONT_HOST_META: u64 = 269;
 const CONT_HOST_PCALL: u64 = 270;
 const CONT_HOST_CONCAT: u64 = 271;
+const CONT_HOST_LOAD: u64 = 272;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]

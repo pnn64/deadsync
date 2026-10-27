@@ -428,7 +428,9 @@ impl Vm {
                     )
                 ) || (matches!(f.function, FrameKind::Native(id) if self.scheduled_native(id) == 3))
                     || (matches!(f.function, FrameKind::Native(id) if self.host_callback(id).is_some()))
-                    || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
+                    || (loads::protected(f.function)
+                        && !matches!(f.function, FrameKind::Native(CONT_HOST_LOAD))
+                        && matches!(f.pc, 1 | 3))
             })
             .count();
         usize::from(self.threads[slot_index(self.thread.0)].depth)

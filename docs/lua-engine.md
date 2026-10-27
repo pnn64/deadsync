@@ -228,6 +228,21 @@ Storage counts describe this engine's estimated live bytes; PUC work units and
 complete incremental/resource behavior remain open. Full C API coverage,
 production native loading and standalone Lua 5.1 parity remain unfinished.
 
+The [native loader checks](testing/2026-10-27-rust-lua-native-load.md) add
+`NativeStack::load_reader`/`load_buffer`, loader statuses and development C
+`lua_load`, `luaL_loadbuffer` and `luaL_loadstring` entry points. A protected
+continuation shares the existing incremental source/binary loader, preserves
+caller slots and permits reader reentry without a visible Lua loader frame.
+Reader errors inherit the enclosing error function; syntax errors bypass it.
+Initial empty probes, binary upvalue initialization, coroutine environments,
+reader consumption and parser/native depth are covered. The shared C fixture
+uses identical official binary chunks for both engines. A separate executed
+probe retains an observable mismatch: C readers see PUC's private parser roots
+through `lua_gettop`, whereas this engine exposes the caller stack. Consequently
+native loader parity is explicitly unproven. File-loading auxiliary APIs,
+allocator/OOM statuses, full C API coverage and standalone Lua 5.1 parity remain
+open. Performance work stays deferred.
+
 The [standalone suite checks](testing/2026-10-27-rust-lua-full-suite.md) invoke
 the real CLIs with the official README's `LUA_PATH="?;./?.lua"` setup. Each run
 gets unchanged suite files and a private `lua` executable on PATH, so child

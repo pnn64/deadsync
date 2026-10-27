@@ -236,7 +236,11 @@ impl Vm {
         self.restore_calls();
         self.trim_substitutions();
         self.trim_sorts();
-        self.registers.truncate(frame.base);
+        if matches!(frame.function, FrameKind::Native(CONT_HOST_LOAD)) {
+            self.resize_registers(frame.base);
+        } else {
+            self.registers.truncate(frame.base);
+        }
         let first = if loads::protected(frame.function) {
             Value::Nil
         } else {
@@ -290,7 +294,10 @@ impl Vm {
             };
             if error.bypass_handler {
                 self.protected_failure(index, value);
-                if matches!(frame.function, FrameKind::Native(CONT_HOST_PCALL)) {
+                if matches!(
+                    frame.function,
+                    FrameKind::Native(CONT_HOST_PCALL | CONT_HOST_LOAD)
+                ) {
                     self.frames[index].pc = 5;
                 }
                 return Ok(true);
@@ -381,7 +388,12 @@ impl Vm {
                 value
             };
             self.protected_failure(index, value);
-            if handler_failed && matches!(frame.function, FrameKind::Native(CONT_HOST_PCALL)) {
+            if handler_failed
+                && matches!(
+                    frame.function,
+                    FrameKind::Native(CONT_HOST_PCALL | CONT_HOST_LOAD)
+                )
+            {
                 self.frames[index].pc = 5;
             }
             return Ok(true);
@@ -392,6 +404,12 @@ impl Vm {
         let index = self.frames.len() - 1;
         let scheduled = self.scheduled_native(id);
         match id {
+            CONT_HOST_LOAD if matches!(frame.pc, 2 | 5) => {
+                self.frames.pop();
+                self.registers[base] = Value::Number(if frame.pc == 5 { 5. } else { 2. });
+                self.top = base + 2;
+                Ok(Some(2))
+            }
             CONT_HOST_CALL | CONT_HOST_CONCAT => self.host_return(frame),
             CONT_HOST_PCALL => Ok(self.host_protected_return(frame)),
             CONT_HOST_META => {

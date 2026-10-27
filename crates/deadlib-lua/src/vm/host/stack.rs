@@ -1,10 +1,12 @@
 //! Mutable native argument/temporary storage in the VM register window.
 use super::*;
+mod loader;
 mod objects;
 mod protected;
 mod scalars;
 mod tables;
 mod upvalues;
+pub use loader::NativeLoadStatus;
 pub use protected::NativeCallStatus;
 
 /// A rooted mutable stack for one synchronous native callback.

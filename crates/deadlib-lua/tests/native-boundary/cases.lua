@@ -1133,3 +1133,112 @@ do
   gc(6,pause);gc(7,stepmul)
   print('native-gc-complete')
 end
+
+do
+  local checked=0
+  local chunk_file=assert(io.open('upvalues-2-original.luac','rb'))
+  local native_chunk=chunk_file:read('*a');assert(chunk_file:close())
+  local function buffer(source,name,mode)
+    local status,value,delta=boundary_loadbuffer(mode or 0,source,name)
+    assert(delta==1)
+    return status,value
+  end
+  local function reader(parts,name,visit)
+    local status,value,delta,calls,last=boundary_load(function(i)
+      if visit then visit(i)end
+      return parts[i]
+    end,name)
+    assert(delta==1)
+    return status,value,calls,last
+  end
+  local sources={
+    'return 17+25', 'local a=17;return function(b)return a+b end',
+    '--[=[comment]=]\nreturn "a\\000z"', 'return [==[a\nb]==]',
+    'return 1 .. "z"', 'return -0', 'local =', 'return "unfinished',
+    'return 0x12g', '\27Lua', 'return 1\0', '',
+    native_chunk
+  }
+  for case,source in ipairs(sources)do
+    local expected,message=buffer(source,'=native chunk')
+    for split=1,#source+1 do
+      local parts={source:sub(1,split),source:sub(split+1)}
+      local status,value,calls,last=reader(parts,'=native chunk')
+      assert(status==expected)
+      if status~=0 then assert(value==message)end
+      if status==0 and case==1 then assert(value()==42)end
+      if status==0 and case==2 then assert(value()(25)==42)end
+      if status==0 and case==13 then local g=value();local a,b=g();assert(a==17 and b==29)end
+      checked=checked+1
+      print('native-load-split',case,split,status,calls)
+    end
+    local parts={};for i=1,#source do parts[i]=source:sub(i,i)end
+    local status,value,calls=reader(parts,'=native chunk')
+    assert(status==expected and (status==0 or value==message))
+    print('native-load-bytes',case,status,calls)
+  end
+  for _,name in ipairs{'=named','@dir/chunk.lua','long\0ignored','',string.rep('x',100)}do
+    local status,value=buffer('local =',name)
+    local s,v=reader({'local ='},name)
+    assert(status==3 and s==3 and v==value)
+    print('native-load-name',value)
+  end
+  local status,f=reader({false,'return 42'})
+  assert(status==0 and f()==42)
+  status,f=reader({'','return 17'})
+  assert(status==0 and f()==17)
+  status,f=buffer('return 42\0invalid','ignored',1)
+  assert(status==0 and f()==42)
+  status,f=buffer('local =','ignored',1)
+  assert(status==3);print('native-load-cstring',f)
+  status,f=buffer('return 42\0invalid')
+  assert(status==0 and f()==42);print('native-load-null',f())
+
+  local seen=0
+  status,f=reader({'return ','42'},'=reentry',function(i)
+    assert(debug.getinfo(3,'f').func==boundary_load)
+    collectgarbage()
+    local s,g=buffer('return 17');assert(s==0 and g()==17)
+    local co=coroutine.create(function()coroutine.yield(29)end)
+    local ok,value=coroutine.resume(co);assert(ok and value==29)
+    seen=seen+1
+  end)
+  assert(status==0 and f()==42 and seen==3)
+  local marker,replacement={},{}
+  local function failure()error(marker)end
+  local ok,s,e=xpcall(function()return reader({1},'=runtime',function()failure()end)end,
+    function(value)assert(value==marker);return replacement end)
+  assert(ok and s==2 and e==replacement)
+  local used=false
+  ok,s,e=xpcall(function()return reader({'local ='})end,function()used=true end)
+  assert(ok and s==3 and not used)
+  ok,s,e=xpcall(function()return reader({},'=handler',function()failure()end)end,
+    function()error('handler failed')end)
+  assert(ok and s==5 and e=='error in error handling')
+  print('native-load-errors',ok,s,e)
+  local co=coroutine.create(function()
+    local old=getfenv(0)
+    local env=setmetatable({answer=42},{__index=old})
+    local status,f=reader({'return answer'},'=environment',function()setfenv(0,env)end)
+    setfenv(0,old)
+    assert(status==0 and getfenv(f)==env and f()==42)
+  end)
+  assert(coroutine.resume(co))
+  -- Parser depth contributes to nested native calls made by a reader.
+  for _,depth in ipairs{0,1,10,100,190,195,196,197,198,199,200}do
+    local source='return '..string.rep('(',depth)..'42'..string.rep(')',depth)
+    local status,value,calls=reader({source:sub(1,-2),source:sub(-1)},'=depth')
+    print('native-load-depth',depth,status,calls,status==0 and value()or value)
+  end
+  for _,outer in ipairs{0,10,100,190}do
+    local parts={'return '..string.rep('(',outer)..'42',string.rep(')',outer)..' '}
+    for _,inner in ipairs{0,5,90,190,195,196,197}do
+      local status,value,calls=reader(parts,'=outer',function(i)
+        local source='return '..string.rep('(',inner)..'17'..string.rep(')',inner)
+        local s,v=buffer(source,'=inner')
+        print('native-load-reader-depth',outer,inner,i,s,s==0 and v()or v)
+      end)
+      assert(status==0 and value()==42)
+    end
+  end
+  print('native-load-complete',checked)
+end

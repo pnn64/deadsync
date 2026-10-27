@@ -18,11 +18,41 @@ struct lua_State {
 };
 static __declspec(thread) lua_State *active_state;
 
+API int boundary_read(lua_State *L, void *context, BoundaryDispatch dispatch, lua_Reader reader, void *data, BoundaryValue *result) {
+  BoundaryFrame frame;
+  frame.context=context;frame.dispatch=dispatch;frame.previous=L->frame;frame.previous_active=active_state;
+  L->frame=&frame;active_state=L;
+  if (setjmp(frame.failure)) {
+    L->frame=frame.previous;active_state=frame.previous_active;return -1;
+  }
+  result->length=0;
+  result->bytes=reader(L,data,&result->length);
+  L->frame=frame.previous;active_state=frame.previous_active;
+  return 0;
+}
+
 static void operation(lua_State *L, int op, int a, int b, BoundaryValue *value) {
   /* dispatch has returned, releasing every Rust borrow/local, before jumping. */
   BoundaryFrame *frame = L->frame;
   if (!frame || active_state != L) abort(); /* Other/inactive-thread API access remains work. */
   if (frame->dispatch(frame->context, op, a, b, value)) longjmp(frame->failure, 1);
+}
+API int lua_load(lua_State *L, lua_Reader reader, void *data, const char *name) {
+  BoundaryValue value={0};value.bytes=name;value.reader=reader;value.userdata=data;
+  operation(L,48,0,0,&value);return value.integer;
+}
+typedef struct BufferReader {const char *bytes;size_t size;} BufferReader;
+static const char *read_buffer(lua_State *L, void *data, size_t *size) {
+  BufferReader *input=(BufferReader *)data;
+  const char *result=input->bytes;(void)L;
+  *size=input->size;input->size=0;return result;
+}
+API int luaL_loadbuffer(lua_State *L, const char *bytes, size_t length, const char *name) {
+  BufferReader input;input.bytes=bytes;input.size=length;
+  return lua_load(L,read_buffer,&input,name);
+}
+API int luaL_loadstring(lua_State *L, const char *string) {
+  return luaL_loadbuffer(L,string,strlen(string),string);
 }
 
 API double lua_tonumber(lua_State *L, int index) {

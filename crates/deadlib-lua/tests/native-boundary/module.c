@@ -639,3 +639,47 @@ EXPORT int boundary_gc_counts(lua_State *L) {
   lua_pushboolean(L,whole==repeated && part==remainder);
   return 2;
 }
+
+/* Reserve slot four before lua_load: parser-owned roots must remain untouched. */
+typedef struct ReaderData { int calls; } ReaderData;
+static const char *reader_lua(lua_State *L, void *data, size_t *size) {
+  ReaderData *reader=(ReaderData *)data;
+  ++reader->calls;
+  lua_pushvalue(L,1);lua_pushinteger(L,reader->calls);lua_call(L,1,1);
+  lua_replace(L,4);
+  return lua_tolstring(L,4,size);
+}
+EXPORT int boundary_load(lua_State *L) {
+  ReaderData reader={0};
+  const char *name=lua_tolstring(L,2,NULL);
+  int status,before;
+  lua_settop(L,4);before=lua_gettop(L);
+  status=lua_load(L,reader_lua,&reader,name);
+  lua_pushinteger(L,status);lua_insert(L,-2);
+  lua_pushinteger(L,lua_gettop(L)-before-1);
+  lua_pushinteger(L,reader.calls);lua_pushvalue(L,4);
+  return 5;
+}
+EXPORT int boundary_loadbuffer(lua_State *L) {
+  size_t length;
+  int mode=(int)luaL_checkinteger(L,1),before=lua_gettop(L),status;
+  const char *source=luaL_checklstring(L,2,&length);
+  const char *name=lua_tolstring(L,3,NULL);
+  status=mode ? luaL_loadstring(L,source) : luaL_loadbuffer(L,source,length,name);
+  lua_pushinteger(L,status);lua_insert(L,-2);
+  lua_pushinteger(L,lua_gettop(L)-before-1);
+  return 3;
+}
+/* Separate observation of implementation scratch slots, not a parity assertion. */
+static const char *reader_top(lua_State *L, void *data, size_t *size) {
+  int *calls=(int *)data;
+  lua_pushvalue(L,1);lua_pushinteger(L,++*calls);lua_pushinteger(L,lua_gettop(L)-2);
+  lua_call(L,2,0);
+  *size=*calls==1?7:0;
+  return "return ";
+}
+EXPORT int boundary_loadtop(lua_State *L) {
+  int calls=0;
+  lua_load(L,reader_top,&calls,"=scratch");
+  return 1;
+}
