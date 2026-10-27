@@ -1916,3 +1916,43 @@ is retained rather than claiming every input improves. All sixteen timing groups
 / 48 processes, six summaries, exact sources and buffer probes are verified by
 `experiments/row-reuse-selection.json`. Competitive decoder performance, remaining
 corpus gaps and the final requirements audit remain open.
+
+## Nonfinal stored-block reservations and measured allocator calls (2026-10-27)
+
+`src/zlib.rs` anticipates up to one additional stored payload only for nonfinal
+blocks, within the remaining output limit. Final blocks retain their previous
+reservation, and decoding/validation behavior is unchanged. The other twenty
+production files, shared primitives and recorded regression/fixture/harness/
+generator inputs retain their baseline bytes. Standalone untimed System allocator
+instrumentation observes one fewer realloc call for 21 format files in both PNG
+decode and raw inflation, with identical logical peak/retained requested bytes
+and native samples across all 84 corpus images. These are allocator-interface
+measurements, excluding allocator overhead, internal realloc overlap and RSS.
+
+Validation passes 41 focused tests (four optional checks ignored), 134 normal
+release tests (nineteen ignored), strict main/fuzz all-target Clippy and scoped
+rustfmt. The allocator helper also passes strict Clippy and four method
+calibrations. The explicit C zlib batch checks 19,645 fixtures: 3,091 successful
+outputs, 16,554 error records and 68 documented published-range policy rejections.
+A fresh standalone copy passes the offline Huffman target (six tests, one optional
+C check ignored); all 885 copied source/fixture/example/benchmark files match and
+the production tree contains only the shared image crate.
+
+Fresh decoder ASan campaigns pass 52,160 PNG-stream executions against a 50,000
+request and 20,000 raw-stream executions, with matching completion/statistics
+counts and native/dependency/harness feedback audits. Historical successful
+sanitizer executions total 1,908,472, including 72,160 new decoder executions.
+Unchanged fixture/generator/harness bytes permit reuse of the immutable seed ZIP
+with fresh mutable extractions. `fuzz/reports/stored-growth-*` retains exact
+sources, binaries, logs, initial corpus digests and provenance.
+
+The benchmark runner separately fixes inherited control-lineage metadata when
+reusing an already saved manifest. Its three completed stdout files from the
+initial metadata-write failure are preserved but excluded; the corrected long
+comparison has fresh names and verified parent/runner hashes. `BENCHMARKS.md`
+records all sixteen final timing groups / 48 processes, four summaries, the
+allocation reduction and inconclusive broad throughput results. Larger short-run
+outliers do not repeat in the longer checks. `stored-growth-validation.*`,
+`stored-growth-audit.json` and `experiments/stored-growth-selection.json` retain
+the exact validation and measurement boundaries. Competitive decoder performance,
+remaining corpus gaps and the final requirement audit remain open.

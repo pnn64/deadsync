@@ -1,0 +1,126 @@
+COMMAND: ["cargo", "clippy", "-p", "deadlib-image", "-p", "deadlib-image-png", "--all-targets", "--", "-D", "warnings"]
+    Checking deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+    Checking deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.42s
+COMMAND: ["cargo", "test", "-p", "deadlib-image-png", "--release", "--lib", "--test", "static_png", "--test", "pngsuite", "--test", "apng", "--test", "apng_rendered", "--test", "compositing", "--test", "compositor_precision", "--test", "decoder_boundaries", "--test", "deflate_prefix", "--test", "huffman", "--test", "primary_pairs", "--", "--nocapture"]
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 1m 01s
+     Running unittests src\lib.rs (target\release\deps\deadlib_image_png-e217eeb2c3bd0973.exe)
+
+running 11 tests
+test checksum::tests::known_checksums ... ok
+test zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow ... ok
+test scanline::tests::invalid_filter_bytes_do_not_change_the_row ... ok
+test zlib::matcher::tests::bounded_history_chains_and_wrapping_head_positions ... ok
+test zlib::tests::every_length_and_distance_code_matches_rfc1951_tables ... ok
+test checksum::tests::adler_block_and_modulus_boundaries ... ok
+test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
+test scanline::tests::independent_filter_bytes_scores_and_short_row_boundaries ... ok
+test zlib::matcher::tests::every_prefix_mismatch_and_tail ... ok
+test checksum::tests::adler_fragmentation_and_tail_lengths_match_scalar_oracle ... ok
+test scanline::tests::every_paeth_triplet_matches_the_specification ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests\apng.rs (target\release\deps\apng-77c0bbcbea7889e9.exe)
+
+running 4 tests
+test malformed_animation_controls_and_aggregate_limits ... ok
+test decode_independent_reference_apng ... ok
+test independent_twenty_frame_fixture ... ok
+test all_formats_apng_default_roles_and_interlace ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests\apng_rendered.rs (target\release\deps\apng_rendered-fa325d642438bc3b.exe)
+
+running 3 tests
+test regenerate_exact_render_goldens_with_independent_libpng_and_fractions ... ignored, build tests/oracle, set DEADLIB_LIBPNG_ORACLE, and provide Python 3
+WPT display references: 28 checked, 1 requires color management; maximum RGB difference=0/255, differing channels=0
+test wpt_published_final_states_at_reference_precision ... ok
+test external_wpt_all_rendered_rgba16_frames_and_both_writers ... ok
+
+test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.80s
+
+     Running tests\compositing.rs (target\release\deps\compositing-0f1dae3a20ee358a.exe)
+
+running 3 tests
+test explicit_precision_palette_and_transparency_expansion ... ok
+test source_over_and_disposal_known_answers ... ok
+test separate_default_and_first_previous ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\compositor_precision.rs (target\release\deps\compositor_precision-eae43670fcd8c69d.exe)
+
+running 5 tests
+test regenerate_precision_goldens_from_independent_c_frames_and_python_fractions ... ignored, requires DEADLIB_LIBPNG_ORACLE and Python 3
+test exact_canvas_and_previous_snapshot_limits_fail_before_advancing_and_reset_cleanly ... ok
+High-precision APNG: 240 independent wire files, 1920 displayed canvases, all six disposal/blend states and nine disposal transitions
+test all_native_formats_disposal_geometry_default_roles_and_adam7_match_rational_model ... ok
+test independent_libpng_and_python_fraction_canvases_retain_all_sixteen_bits ... ok
+test every_source_alpha_at_fifteen_destination_boundaries_matches_exact_fractions ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 4.70s
+
+     Running tests\decoder_boundaries.rs (target\release\deps\decoder_boundaries-4099308e19535f87.exe)
+
+running 4 tests
+Native resource fuzzer contract: 6376 independent format/policy/IO/budget seeds
+test native_resource_fuzzer_contract_accepts_independent_boundary_and_io_seeds ... ok
+Independent resource audit: 120 files, 4680 budget/policy probes, 2400 accepted, 2280 rejected, 32760 buffered/reader/push API checks
+test exact_input_sample_inflation_metadata_chunk_and_frame_budgets ... ok
+IHDR audit: 960 dimension pairs, 65536 color/depth pairs, 11520 method bytes, 468096 parser/policy API checks; no giant allocation
+test ihdr_integer_color_depth_and_method_fields_fail_before_large_allocation ... ok
+Reader fault audit: 80760 interruption/short-read/IO/oversized-count checks across all formats, interlace modes, animation roles and EOF probing
+test interruptions_and_reader_faults_at_chunk_boundaries_and_final_eof_probe ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+
+     Running tests\deflate_prefix.rs (target\release\deps\deflate_prefix-a108b293004a10da.exe)
+
+running 2 tests
+Mixed/one-bit prefix audit: 740 independent streams, 45140 suffix/padding combinations, three streaming fragment shapes each
+test one_bit_end_codes_and_huffman_stored_huffman_transitions_at_every_alignment ... ok
+Prefix audit: 3091 independent positive Huffman fixtures, 43274 suffix placements, 24728 trailer/body truncations and three streaming fragment shapes each
+test every_valid_huffman_fixture_keeps_exact_prefix_trailer_limits_and_truncations ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.85s
+
+     Running tests\huffman.rs (target\release\deps\huffman-f4859f1e05b0091f.exe)
+
+running 7 tests
+test c_zlib_huffman_oracle ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+test malformed_and_single_symbol_trees ... ok
+test published_distance_counts_and_reserved_symbols ... ok
+test all_repeat_counts_and_cross_table_runs ... ok
+test every_complete_code_length_histogram ... ok
+test all_dynamic_count_fields ... ok
+test all_length_distance_values_and_fifteen_bit_codes ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.03s
+
+     Running tests\pngsuite.rs (target\release\deps\pngsuite-10919ea585f5aaaa.exe)
+
+running 1 test
+test pngsuite_native_samples_and_reencoding ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+     Running tests\primary_pairs.rs (target\release\deps\primary_pairs-94e2582b21b93e9e.exe)
+
+running 2 tests
+test c_zlib_literal_pair_values_and_widths ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+Primary literal audit: 65536 byte pairs plus 132 width/padding/long-code fixtures; independent flate2 and fragmented native samples, exact EOF/suffix consumption, output limits 0/1 and four trailer truncations
+test every_two_byte_value_and_short_code_width_keeps_samples_prefixes_and_limits ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.62s
+
+     Running tests\static_png.rs (target\release\deps\static_png-7e6561faf550d8ba.exe)
+
+running 3 tests
+test one_byte_idat_and_truncations ... ok
+test decode_reference_encodings ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s

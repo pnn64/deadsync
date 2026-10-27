@@ -646,3 +646,18 @@ Its 55,523 entries are verified byte for byte before the temporary source is
 removed, then checked again by ordered filename/content digest. Restore the
 archive beneath its recorded source path to replay that mutated corpus.
 The original binaries, logs, manifests and object audits remain in place.
+
+## Nonfinal stored-block allocation follow-up
+
+`reports/stored-growth-source.json` records 52,160 successful PNG-stream
+executions against a 50,000 request and 20,000 raw-stream executions. Both retain
+ASan, with verified completion/statistics agreement and native-only feedback.
+`reports/stored-growth-seeds.json` reuses the unchanged immutable seed ZIP with
+fresh mutable extractions; fixture, seed-generator and harness bytes are unchanged.
+
+The preceding completed row-reuse corpus is relocated to
+`target/png-fuzz-corpus-row-reuse-20261027.zip`, freeing temporary inodes for this
+campaign. All 55,508 entries are verified before removing the original corpus,
+then checked again by ordered filename/content digest. The storage report keeps
+the original source path, archive hashes and linked campaign evidence. Binaries,
+logs, manifests and object audits remain at their original locations.

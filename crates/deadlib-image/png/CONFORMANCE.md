@@ -128,9 +128,9 @@ The clarified decoder deliverable still requires competitive performance,
 comprehensive differential and fuzz evidence, independent reuse and no DeadSync
 integration. Package isolation and the production dependency boundary are
 verified by retained offline builds. Decoder performance remains incomplete in
-`BENCHMARKS.md`: the latest owned-buffer comparison measures buffered
-photo decoding at 103.77 MiB/s against Rust png's 193.74 on the same shared host,
-and reader decoding at 95.74 MiB/s. Local decoder gains do not establish
+`BENCHMARKS.md`: the latest stored-growth comparison measures buffered
+photo decoding at 103.44 MiB/s against Rust png's 192.08 on the same shared host,
+and reader decoding at 93.89 MiB/s. Local decoder gains do not establish
 competitive end-to-end performance. Native-precision APNG render answers and scoped native compositor
 corpus coverage are now retained. Native-crate feedback isolation and a
 whole-package source replay are verified; package totals also contain untouched

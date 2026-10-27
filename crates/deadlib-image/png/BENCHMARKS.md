@@ -1080,3 +1080,57 @@ hashes, verifies sixteen timing groups / 48 processes and recomputes six
 final/interim summaries. It links per-case checks, buffer probes, generated code,
 full validation and sanitizer evidence. The final decoder performance and
 requirements audits remain open.
+
+## Stored-block allocation requests and allocator observations (2026-10-27)
+
+Nonfinal buffered stored blocks now request room for up to one additional payload,
+clipped to the remaining output limit. Final blocks keep their previous request.
+LEN/NLEN and logical output checks still precede allocation; no complete declared-
+image allocation is introduced. Only `src/zlib.rs` changes in production.
+
+An untimed, single-threaded [System](https://doc.rust-lang.org/std/alloc/struct.System.html)
+wrapper observes successful [GlobalAlloc](https://doc.rust-lang.org/std/alloc/trait.GlobalAlloc.html)
+calls and requested layout bytes. Its four methods are calibrated before each
+probe process. One fewer realloc call is observed for 21 format-corpus images,
+in both PNG decoding and raw inflation. Photos have unchanged counts. All 84
+images retain identical native sample bytes and logical peak/retained requested
+bytes. The gray8 Adam7 stored case changes from two realloc calls to one, with
+the same 33,397-byte raw peak and retained allocation.
+
+The instrumented binaries are never timed. Logical peaks exclude allocator
+overhead, usable-size rounding, internal realloc overlap and process RSS; compiler
+allocation elision can affect observed calls. Inputs and prior caller-owned
+results are outside each measured API call. The standalone instrumentation uses
+System forwarding; the native codec retains `forbid(unsafe_code)`.
+`experiments/stored-growth-allocations.{rs,py,json,lock}` retain its source,
+as-run Windows driver, dependency lock, binary/source hashes and four result tables.
+
+| Corpus | Buffered PNG | Unchanged reader | Buffered inflate | Unchanged streaming inflate |
+| --- | ---: | ---: | ---: | ---: |
+| Photos, reference-relative change | +0.41% | -1.41% | +1.39% | +0.76% |
+| Formats, reference-relative change | -0.63% | +0.14% | +2.56% | +4.22% |
+
+PNG uses Rust png normalization and raw inflation uses flate2. Broad throughput
+results are inconclusive; retain the change for the verified allocation reduction.
+The longer three-file stored subset improves raw inflation 3.22% relative to
+flate2 while unchanged streaming inflation moves -4.24%. Gray8 raw inflation
+changes from 7.59 to 6.60 microseconds, but normalized gains there are only
+1.73% / 1.58% against flate2 / unchanged streaming inflation. Palette results
+remain inconclusive. Two additional longer outlier checks do not repeat the
+short-run gray8 PNG or RGB16 raw regressions; their unchanged-control changes
+are -1.52% and +3.50%, respectively. No uniform or broad speedup is claimed.
+
+Sixteen final ABBA groups / 48 processes use three runs per position, CPU 0,
+three warmups, twelve iterations for the full corpora and 4,096 for subsets.
+Task builds/tests/fuzzing/profiling do not overlap timed runs; shared-host load
+and frequency remain uncontrolled. The old zero pipeline-byte column is not
+used as a memory measurement.
+
+The saved-binary runner now replaces inherited control lineage with the immediate
+parent and current runner hashes. Previously, deriving an already saved manifest
+ran its three processes but failed to write metadata. Those three stdout files
+are retained and excluded; the corrected comparison uses fresh `-b` names.
+`experiments/stored-growth-focus-recovery.json` binds the archived/fixed runners,
+failure/completion logs and exact parent lineage. `stored-growth-selection.json`
+in the same directory reconstructs all 21 native source hashes and verifies four
+summaries, per-case results, allocator observations and full validation evidence.
