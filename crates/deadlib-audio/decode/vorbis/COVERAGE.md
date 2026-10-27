@@ -9,6 +9,11 @@ and the original PCM tolerances. The [parity ledger](PARITY.md) records two
 corrected discard/truncation differences, 7,014 independent cases and remaining
 work. Performance measurements do not establish completion.
 
+The [bit-mutation follow-up](BIT_MUTATIONS.md) adds 55,845 finite-reference
+cases and corrects floor-zero selector/rounding plus VQ sequence offsets.
+Eleven nonfinite-reference cases remain an explicit, separately tested
+divergence rather than being counted as PCM parity.
+
 ## Implemented and tested (2026-10-26)
 
 * Bitpacking/unpacking with widths 0..=32, unaligned 32-bit fields, zero-width

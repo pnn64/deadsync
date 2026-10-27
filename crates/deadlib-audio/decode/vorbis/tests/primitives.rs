@@ -41,6 +41,37 @@ fn packed_book(lookup: u32, sequence: bool) -> Vec<u8> {
     }
     bits.finish().unwrap()
 }
+
+#[test]
+fn sequence_vectors_accumulate_the_returned_f32_value() {
+    for lookup in [1, 2] {
+        let mut bits = BitWriter::new();
+        for (value, width) in [
+            (0x564342, 24),
+            (3, 16),
+            (1, 24),
+            (0, 1),
+            (0, 1),
+            (0, 5),
+            (lookup, 4),
+            ((788 << 21) | 1, 32),
+            ((764 << 21) | 1, 32),
+            (0, 4),
+            (1, 1),
+        ] {
+            bits.write(value, width).unwrap();
+        }
+        for _ in 0..if lookup == 1 { 1 } else { 3 } {
+            bits.write(1, 1).unwrap();
+        }
+        let bytes = bits.finish().unwrap();
+        let book = Codebook::read(&mut BitReader::new(&bytes), &Limits::default()).unwrap();
+        // Minimum 1, delta 2^-24 and multiplicands 1: each returned scalar is
+        // rounded before becoming the next sequence offset. A hidden f64 offset
+        // incorrectly makes the third scalar one f32 ULP larger than three.
+        assert_eq!(book.vector(0).unwrap(), &[1.0, 2.0, 3.0], "lookup={lookup}");
+    }
+}
 fn minimal_setup(floor0: bool, residue: u32) -> Vec<u8> {
     let mut bits = BitWriter::new();
     bits.write(0, 8).unwrap(); // One codebook, dimension=1, one entry.

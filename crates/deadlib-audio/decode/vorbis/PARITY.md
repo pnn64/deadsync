@@ -11,6 +11,11 @@ historical floor-zero bounds remain `5e-5` / `3e-6`. Counts and behavior receive
 no tolerance. This compares decoders reading identical encoded data, separately
 from a lossy encoder's source-reconstruction error.
 
+The subsequent [bit-mutation matrix](BIT_MUTATIONS.md) fixes floor-zero selector/
+rounding and VQ sequence-offset differences. It adds 55,845 finite-reference
+cases and explicitly separates eleven cases where libvorbis emits nonfinite
+PCM. Its final validation passes 128 release / 97 offline tests.
+
 ## Corrected discard and truncation behavior
 
 The 2026-10-27 work independently reproduced two differences against pinned
@@ -91,8 +96,8 @@ record the independent reference checks. External audio stays in ignored storage
 
 ## Remaining work
 
-This does not prove 100% parity. Continue independent comparisons for arbitrary
-bit mutations, malformed codewords, unusual legal setup/mode/partition
+This does not prove 100% parity. Beyond the recorded prefix/bit-mutation fixtures,
+continue independent comparisons for malformed codewords, unusual legal setup/mode/partition
 combinations, wider official conformance material and real songs. Review all
 documented strict/legacy/reference acceptance differences, including historical
 endpoint discrepancies, instead of hiding them in PCM tolerances. Named

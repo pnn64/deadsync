@@ -154,10 +154,11 @@ fn decode0(
         return Ok(false);
     }
     let book = bits.read(ilog(config.books.len() as u32))? as usize;
-    let book = config
-        .books
-        .get(book)
-        .ok_or(Error::Invalid("floor0 book number"))?;
+    let Some(book) = config.books.get(book) else {
+        // Invalid selectors conceal this channel's floor. They do not exhaust
+        // the packet or prevent following channels from reading their floors.
+        return Ok(false);
+    };
     let book = &books[*book as usize];
     let order = config.order as usize;
     let mut coefficients = [0.0f32; 255];
@@ -175,14 +176,13 @@ fn decode0(
         position += count;
         last = coefficients[position - 1];
     }
-    // Evaluate the normative LSP products in f64 to preserve the full dynamic
-    // range of high-order floors. Only the final linear gain is rounded to f32.
-    let mut cosine = [0.0; 255];
+    // Match the reference's f32 LSP/product boundaries before its double
+    // square root and exponential. Small rounding differences become audible
+    // at the sharp resonances reachable through damaged packet codewords.
+    let mut cosine = [0.0f32; 255];
     for (value, &coefficient) in cosine.iter_mut().zip(&coefficients[..order]) {
-        *value = (coefficient as f64).cos();
+        *value = (2.0 * (coefficient as f64).cos()) as f32;
     }
-    let amplitude =
-        amplitude as f64 * config.amplitude_offset as f64 / ((1u64 << width) - 1) as f64;
     let scale = config.bark_map_size as f64 / bark(config.rate as f64 * 0.5);
     let mut previous_map = usize::MAX;
     let mut gain = 0.0;
@@ -191,26 +191,13 @@ fn decode0(
         let map = ((bark(config.rate as f64 * 0.5 * i as f64 / n as f64) * scale).floor() as usize)
             .min(config.bark_map_size as usize - 1);
         if map != previous_map {
-            let omega = (PI * map as f64 / config.bark_map_size as f64).cos();
-            let mut p = 1.0;
-            let mut q = 1.0;
-            for (j, &coefficient) in cosine[..order].iter().enumerate() {
-                let term = 2.0 * (coefficient - omega);
-                if j & 1 == 0 {
-                    q *= term * term;
-                } else {
-                    p *= term * term;
-                }
-            }
-            if order & 1 != 0 {
-                p *= 1.0 - omega * omega;
-                q *= 0.25;
-            } else {
-                p *= (1.0 - omega) * 0.5;
-                q *= (1.0 + omega) * 0.5;
-            }
-            gain = ((amplitude / (p + q).sqrt() - config.amplitude_offset as f64) * 0.11512925)
-                .exp() as f32;
+            gain = floor0_gain(
+                config,
+                amplitude,
+                &coefficients[..order],
+                &cosine[..order],
+                map,
+            );
             if !gain.is_finite() {
                 return Err(Error::Invalid("nonfinite floor0 curve"));
             }
@@ -220,6 +207,68 @@ fn decode0(
     }
     Ok(true)
 }
+fn floor0_gain(
+    config: &Floor0,
+    raw_amplitude: u64,
+    coefficients: &[f32],
+    cosine: &[f32],
+    map: usize,
+) -> f32 {
+    let amplitude = raw_amplitude as f32 / ((1u64 << config.amplitude_bits) - 1) as f32
+        * config.amplitude_offset as f32;
+    let angle_step = (PI / config.bark_map_size as f64) as f32;
+    let omega = (2.0 * ((angle_step * map as f32) as f64).cos()) as f32;
+    let mut p = 0.5f32;
+    let mut q = 0.5f32;
+    for (j, &coefficient) in cosine.iter().enumerate() {
+        if j & 1 == 0 {
+            q *= omega - coefficient;
+        } else {
+            p *= omega - coefficient;
+        }
+    }
+    // Preserve the inner multiplication's f32 rounding before the outer one.
+    if coefficients.len() & 1 != 0 {
+        let scaled = p * (4.0 - omega * omega);
+        p *= scaled;
+        q *= q;
+    } else {
+        let scaled_p = p * (2.0 - omega);
+        let scaled_q = q * (2.0 + omega);
+        p *= scaled_p;
+        q *= scaled_q;
+    }
+    let gain = ((amplitude as f64 / ((p + q) as f64).sqrt() - config.amplitude_offset as f64)
+        * 0.11512925f32 as f64)
+        .exp() as f32;
+    if gain.is_finite() {
+        return gain;
+    }
+    // Preserve the existing wide-range synthesis for high-order floors whose
+    // f32 products overflow/underflow. Nonfinite final gains are still rejected
+    // by the caller; no nonfinite PCM is permitted.
+    let omega = (PI * map as f64 / config.bark_map_size as f64).cos();
+    let mut p = 1.0;
+    let mut q = 1.0;
+    for (j, &coefficient) in coefficients.iter().enumerate() {
+        let term = 2.0 * ((coefficient as f64).cos() - omega);
+        if j & 1 == 0 {
+            q *= term * term;
+        } else {
+            p *= term * term;
+        }
+    }
+    if coefficients.len() & 1 != 0 {
+        p *= 1.0 - omega * omega;
+        q *= 0.25;
+    } else {
+        p *= (1.0 - omega) * 0.5;
+        q *= (1.0 + omega) * 0.5;
+    }
+    let amplitude = raw_amplitude as f64 * config.amplitude_offset as f64
+        / ((1u64 << config.amplitude_bits) - 1) as f64;
+    ((amplitude / (p + q).sqrt() - config.amplitude_offset as f64) * 0.11512925).exp() as f32
+}
 fn bark(value: f64) -> f64 {
     13.1 * (0.00074 * value).atan() + 2.24 * (0.0000000185 * value * value).atan() + 0.0001 * value
 }
@@ -227,6 +276,79 @@ fn bark(value: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn lsp_book(order: u32) -> Codebook {
+        use crate::{Limits, bitpack::BitWriter};
+        let mut bits = BitWriter::new();
+        for (value, width) in [
+            (0x564342, 24),
+            (order, 16),
+            (1, 24),
+            (0, 1),
+            (0, 1),
+            (0, 5),
+            (2, 4),
+            (0, 32),
+            ((788 << 21) | 1, 32),
+            (1, 4),
+            (0, 1),
+        ] {
+            bits.write(value, width).unwrap();
+        }
+        for value in 1..=order {
+            bits.write(value, 2).unwrap();
+        }
+        let bytes = bits.finish().unwrap();
+        Codebook::read(&mut BitReader::new(&bytes), &Limits::default()).unwrap()
+    }
+    #[test]
+    fn floor0_high_order_gain_keeps_wide_range_fallback() {
+        let config = Floor0 {
+            order: 254,
+            rate: 8000,
+            bark_map_size: 96,
+            amplitude_bits: 6,
+            amplitude_offset: 30,
+            books: vec![0],
+        };
+        let mut coefficients = [PI as f32; 254];
+        coefficients[253] = (PI / 96.0) as f32 * 32.0;
+        let cosine = coefficients.map(|x| (2.0 * (x as f64).cos()) as f32);
+        let gain = floor0_gain(&config, 7, &coefficients, &cosine, 32);
+        let expected = (-30.0f64 * 0.11512925).exp() as f32;
+        assert!(gain.is_finite());
+        assert_eq!(gain, expected);
+    }
+    #[test]
+    fn floor0_invalid_selectors_leave_following_floor_bits_available() {
+        use crate::bitpack::BitWriter;
+        let book = lsp_book(1);
+        for count in [1usize, 2, 3, 4, 7, 8, 15, 16] {
+            for selector in count..1 << ilog(count as u32) {
+                let config = Floor0 {
+                    order: 1,
+                    rate: 8000,
+                    bark_map_size: 63,
+                    amplitude_bits: 6,
+                    amplitude_offset: 30,
+                    books: vec![0; count],
+                };
+                let mut packet = BitWriter::new();
+                packet.write(7, 6).unwrap();
+                packet.write(selector as u32, ilog(count as u32)).unwrap();
+                packet.write(21, 5).unwrap();
+                let bytes = packet.finish().unwrap();
+                let mut bits = BitReader::new(&bytes);
+                let mut output = [0.125; 32];
+                assert!(
+                    !decode0(&config, std::slice::from_ref(&book), &mut bits, &mut output).unwrap()
+                );
+                assert_eq!(output, [0.125; 32]);
+                assert_eq!(bits.position(), 6 + ilog(count as u32) as usize);
+                assert!(!bits.is_exhausted());
+                assert_eq!(bits.read(5), Ok(21));
+            }
+        }
+    }
     #[test]
     fn render_integer_line_and_prediction_use_spec_rounding() {
         let mut output = [0.0; 7];
@@ -236,29 +358,9 @@ mod tests {
     }
     #[test]
     fn floor0_odd_even_products_match_closed_form_at_dc() {
-        use crate::{Limits, bitpack::BitWriter};
+        use crate::bitpack::BitWriter;
         for order in [1, 2] {
-            let mut book = BitWriter::new();
-            for (value, width) in [
-                (0x564342, 24),
-                (order, 16),
-                (1, 24),
-                (0, 1),
-                (0, 1),
-                (0, 5),
-                (2, 4),
-                (0, 32),
-                ((788 << 21) | 1, 32),
-                (1, 4),
-                (0, 1),
-            ] {
-                book.write(value, width).unwrap();
-            }
-            for value in 1..=order {
-                book.write(value, 2).unwrap();
-            }
-            let bytes = book.finish().unwrap();
-            let book = Codebook::read(&mut BitReader::new(&bytes), &Limits::default()).unwrap();
+            let book = lsp_book(order);
             for amplitude_bits in [6, 63] {
                 let config = Floor0 {
                     order: order as u8,

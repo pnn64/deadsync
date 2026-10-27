@@ -359,7 +359,7 @@ impl Codebook {
                     let value = multiplicands[offset] as f64 * delta + minimum + last;
                     vectors.push(value as f32);
                     if sequence {
-                        last = value;
+                        last = (value as f32) as f64;
                     }
                 }
             }
