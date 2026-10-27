@@ -30,6 +30,16 @@ API int boundary_read(lua_State *L, void *context, BoundaryDispatch dispatch, lu
   L->frame=frame.previous;active_state=frame.previous_active;
   return 0;
 }
+API int boundary_write(lua_State *L, void *context, BoundaryDispatch dispatch, lua_Writer writer, void *data, const void *bytes, size_t length, BoundaryValue *result) {
+  BoundaryFrame frame;
+  frame.context=context;frame.dispatch=dispatch;frame.previous=L->frame;frame.previous_active=active_state;
+  L->frame=&frame;active_state=L;
+  if (setjmp(frame.failure)) {
+    L->frame=frame.previous;active_state=frame.previous_active;return -1;
+  }
+  result->integer=writer(L,bytes,length,data);
+  L->frame=frame.previous;active_state=frame.previous_active;return 0;
+}
 
 static void operation(lua_State *L, int op, int a, int b, BoundaryValue *value) {
   /* dispatch has returned, releasing every Rust borrow/local, before jumping. */
@@ -40,6 +50,10 @@ static void operation(lua_State *L, int op, int a, int b, BoundaryValue *value) 
 API int lua_load(lua_State *L, lua_Reader reader, void *data, const char *name) {
   BoundaryValue value={0};value.bytes=name;value.reader=reader;value.userdata=data;
   operation(L,48,0,0,&value);return value.integer;
+}
+API int lua_dump(lua_State *L, lua_Writer writer, void *data) {
+  BoundaryValue value={0};value.writer=writer;value.userdata=data;
+  operation(L,50,0,0,&value);return value.integer;
 }
 typedef struct BufferReader {const char *bytes;size_t size;} BufferReader;
 static const char *read_buffer(lua_State *L, void *data, size_t *size) {

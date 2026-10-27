@@ -13,6 +13,7 @@ typedef struct lua_State lua_State;
 typedef ptrdiff_t lua_Integer;
 typedef int (*lua_CFunction)(lua_State *);
 typedef const char *(*lua_Reader)(lua_State *, void *, size_t *);
+typedef int (*lua_Writer)(lua_State *, const void *, size_t, void *);
 typedef struct luaL_Reg { const char *name; lua_CFunction func; } luaL_Reg;
 #define LUA_REGISTRYINDEX (-10000)
 #define LUA_ENVIRONINDEX (-10001)
@@ -27,6 +28,7 @@ typedef struct BoundaryValue {
   size_t length;
   lua_Integer wide_integer;
   lua_Reader reader;
+  lua_Writer writer;
   void *userdata;
 } BoundaryValue;
 typedef int (*BoundaryDispatch)(void *, int, int, int, BoundaryValue *);
@@ -35,6 +37,8 @@ API int boundary_state_free(lua_State *);
 API size_t boundary_state_size(void);
 API int boundary_invoke(lua_State *, void *, BoundaryDispatch, lua_CFunction);
 API int boundary_read(lua_State *, void *, BoundaryDispatch, lua_Reader, void *, BoundaryValue *);
+API int boundary_write(lua_State *, void *, BoundaryDispatch, lua_Writer, void *, const void *, size_t, BoundaryValue *);
+API int lua_dump(lua_State *, lua_Writer, void *);
 API int lua_load(lua_State *, lua_Reader, void *, const char *);
 API int luaL_loadbuffer(lua_State *, const char *, size_t, const char *);
 API int luaL_loadstring(lua_State *, const char *);

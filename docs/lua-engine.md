@@ -259,6 +259,20 @@ Parser scratch slots, allocator/OOM statuses, remaining C APIs, production
 native loading and full standalone Lua 5.1 parity remain open; optimization stays
 deferred.
 
+The [native dump checks](testing/2026-10-27-rust-lua-native-dump.md) add
+`NativeStack::dump` and development `lua_dump` writer callbacks. The shared
+serializer optionally records Lua 5.1 field/vector/string block boundaries,
+including empty debug vectors. Native writers use the existing caller window,
+can reenter Lua or collect, stop on their first nonzero signed status, and
+propagate Lua errors unprotected with fault frames and instruction quotas.
+Imported chunks retain byte-exact writer payloads; source exports use this
+engine's native lowering. The C fixture checks eleven imported chunks, every
+cancellation point of a constants fixture, signed statuses, NULL empty-vector
+buffers, recursion, collection and caller mutation. Rust tests compare writer
+blocks directly with official Lua and verify quota recovery. Native loader
+scratch slots, allocator/OOM behavior, remaining C APIs, complete standalone
+Lua 5.1 parity and later stages remain open. Optimization stays deferred.
+
 The [standalone suite checks](testing/2026-10-27-rust-lua-full-suite.md) invoke
 the real CLIs with the official README's `LUA_PATH="?;./?.lua"` setup. Each run
 gets unchanged suite files and a private `lua` executable on PATH, so child

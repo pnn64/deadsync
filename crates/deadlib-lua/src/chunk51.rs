@@ -386,6 +386,7 @@ pub(crate) fn compile(source: &[u8], name: &[u8], depth: usize) -> Result<crate:
 mod dump;
 mod translate;
 pub(crate) use dump::dump;
+pub(crate) use dump::dump_blocks;
 mod verify;
 use verify::verify;
 

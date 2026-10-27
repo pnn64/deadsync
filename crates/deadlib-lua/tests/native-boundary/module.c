@@ -690,3 +690,33 @@ EXPORT int boundary_loadfile(lua_State *L) {
   lua_pushinteger(L,lua_gettop(L)-before-1);
   return 3;
 }
+typedef struct WriterData { int calls,trace,pieces,stop,status; } WriterData;
+static int writer_lua(lua_State *L, const void *bytes, size_t length, void *data) {
+  WriterData *writer=(WriterData *)data;
+  int status=0;
+  ++writer->calls;
+  lua_pushinteger(L,length);lua_rawseti(L,writer->trace,writer->calls);
+  lua_pushlstring(L,(const char *)bytes,length);lua_rawseti(L,writer->pieces,writer->calls);
+  if (lua_type(L,2)==6) {
+    lua_pushvalue(L,2);lua_pushinteger(L,writer->calls);
+    lua_pushlstring(L,(const char *)bytes,length);lua_pushboolean(L,bytes==NULL);
+    lua_call(L,3,1);status=(int)lua_tointeger(L,-1);lua_settop(L,-2);
+  }
+  return status ? status : writer->calls==writer->stop ? writer->status : 0;
+}
+EXPORT int boundary_dump(lua_State *L) {
+  WriterData writer;
+  int before,status,delta;
+  writer.calls=0;writer.stop=(int)luaL_optinteger(L,3,0);writer.status=(int)luaL_optinteger(L,4,17);
+  lua_settop(L,4);
+  lua_newtable(L);writer.trace=lua_gettop(L);
+  lua_newtable(L);writer.pieces=lua_gettop(L);
+  lua_pushvalue(L,1);before=lua_gettop(L);
+  status=lua_dump(L,writer_lua,&writer);delta=lua_gettop(L)-before;
+  lua_pushinteger(L,status);lua_pushvalue(L,writer.pieces);lua_pushvalue(L,writer.trace);
+  lua_pushinteger(L,delta);lua_pushvalue(L,1);lua_pushinteger(L,writer.calls);
+  return 6;
+}
+EXPORT int boundary_dump_null(lua_State *L) {
+  lua_pushvalue(L,1);lua_pushinteger(L,lua_dump(L,NULL,NULL));return 1;
+}

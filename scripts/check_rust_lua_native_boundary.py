@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import re
+import struct
 import subprocess
 import tempfile
 import time
@@ -76,12 +77,25 @@ def main():
             chunk,targets=rewrite(original,count,style)
             assert targets==3
             chunks[f'upvalues-{count}-{style}.luac']=chunk
+    # Valid unused constants exercise every writer tag without changing code.
+    order='little'if original[6]else'big';width=original[8]
+    position=12
+    length=int.from_bytes(original[position:position+width],order);position+=width+length+12
+    count=int.from_bytes(original[position:position+4],order);position+=4+count*4
+    constant_count_position=position
+    count=int.from_bytes(original[position:position+4],order);position+=4
+    assert count==2
+    for _ in range(count):assert original[position]==3;position+=9
+    binary_text=b'a\0\xff'
+    extra=b'\0\1\1\1\0\4'+(len(binary_text)+1).to_bytes(width,order)+binary_text+b'\0'+b'\3'+struct.pack('=d',-0.0)+b'\3'+int(0x7ff8000000000042).to_bytes(8,order)
+    extra_chunks={'dump-constants.luac':original[:constant_count_position]+(count+6).to_bytes(4,order)+original[constant_count_position+4:position]+extra+original[position:],'dump-stripped.luac':rewrite(original,0,'original',True)[0]}
     names=['boundary_sum','boundary_identity','boundary_raise','boundary_binary','boundary_call','boundary_stack','boundary_mutate','boundary_state','boundary_state_reenter','boundary_cached_top','boundary_make_counter','boundary_snapshot','boundary_set_environment','boundary_set_globals','boundary_registry_roundtrip','boundary_make_many','boundary_table','boundary_get','boundary_set','boundary_field','boundary_raw','boundary_metatable','boundary_count','boundary_shuffle','boundary_userdata','boundary_userdata_read','boundary_userdata_finalize','boundary_bytes','boundary_environment','boundary_capture_bytes','boundary_length','boundary_userdata_empty','boundary_protected','boundary_protected_negative','boundary_protected_argument','boundary_replace_handler','boundary_cpcall','boundary_scalar','boundary_scalar_null','boundary_scalar_capture','boundary_integers','boundary_compare','boundary_concat','boundary_concat_prefix','boundary_format','boundary_format_gc','boundary_auxcheck','boundary_auxwhere','boundary_auxerror','boundary_auxuserdata','boundary_auxget','boundary_auxnewmetatable','boundary_auxmetafield','boundary_auxopen','boundary_auxfind','boundary_auxrefs']
     names+=['boundary_auxbuffer_info','boundary_auxbuffer','boundary_auxgsub']
     names+=['boundary_upget','boundary_upset','boundary_upbind']
     names+=['boundary_gc','boundary_gc_counts']
     names+=['boundary_load','boundary_loadbuffer','boundary_loadtop']
     names+=['boundary_loadfile']
+    names+=['boundary_dump','boundary_dump_null']
     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
     runs={}
     # This independent probe deliberately retains a known compatibility gap.
@@ -92,6 +106,7 @@ def main():
         with tempfile.TemporaryDirectory(prefix='deadlua-native-boundary-')as temporary:
             work=Path(temporary);(work/'boundary.lua').write_bytes((fixture/'cases.lua').read_bytes())
             for name,chunk in chunks.items():(work/name).write_bytes(chunk)
+            for name,chunk in extra_chunks.items():(work/name).write_bytes(chunk)
             env=os.environ.copy()
             for key in ['LUA_INIT','LUA_PATH','LUA_CPATH']:env.pop(key,None)
             env['PATH']=str(directory/engine)+os.pathsep+env.get('PATH','')
@@ -111,7 +126,8 @@ def main():
     collectors={engine:b'native-gc-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
     loaders={engine:b'native-load-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
     file_loaders={engine:b'native-file-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
-    matched=reference_run.get('returncode')==rust.get('returncode')==0 and reference_run.get('stdout_hex')==rust.get('stdout_hex')and not reference_run.get('stderr_hex')and all(buffers.values())and all(upvalues.values())and all(collectors.values())and all(loaders.values())and all(file_loaders.values())
+    dumpers={engine:b'native-dump-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
+    matched=reference_run.get('returncode')==rust.get('returncode')==0 and reference_run.get('stdout_hex')==rust.get('stdout_hex')and not reference_run.get('stderr_hex')and all(buffers.values())and all(upvalues.values())and all(collectors.values())and all(loaders.values())and all(file_loaders.values())and all(dumpers.values())
     match=re.fullmatch(rb'BOUNDARY operations=(\d+) drops=(\d+) panic_abort=true\r?\nSTATES created=(\d+) collected=(\d+) destroyed=(\d+)\r?\n',bytes.fromhex(rust.get('stderr_hex','')))
     returned=bool(match and int(match[1])==int(match[2])and int(match[1])>1000)
     states=bool(match and int(match[3])==int(match[5]) and 0<int(match[4])<int(match[3]))
@@ -121,6 +137,8 @@ def main():
     scratch_complete=all(run['returncode']==0 and b'parser-scratch-slots'in bytes.fromhex(run['stdout_hex'])for run in scratch_runs.values())
     result['parser_scratch_probe']=dict(source=scratch_source,runs=scratch_runs,completed=scratch_complete,observations_equal=scratch_complete and scratch_runs['reference']['stdout_hex']==scratch_runs['rust']['stdout_hex'],full_native_loader_parity_proven=False)
     result['native_file_complete']=file_loaders
+    result['native_dump_complete']=dumpers
+    result['native_dump_fixtures']={name:dict(sha256=hashlib.sha256(chunk).hexdigest(),hex=chunk.hex())for name,chunk in extra_chunks.items()}
     result['stdin_hex']=b'17 return 42\n'.hex()
     result['limitations']+=' Native reader/buffer/string/file loading is a development subset: the independent parser_scratch_probe retains the observable lua_gettop mismatch from PUC parser roots. Allocator/OOM statuses, full native loader/C API parity and production loading remain unfinished.'
     args.output.parent.mkdir(parents=True,exist_ok=True)

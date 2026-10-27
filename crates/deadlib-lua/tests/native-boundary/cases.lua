@@ -1316,3 +1316,73 @@ do
   loadfile=original
   print('native-file-complete',#cases)
 end
+
+do
+  local function hex(s)return(s:gsub('.',function(c)return string.format('%02x',c:byte())end))end
+  local function dump(f,writer,stop,status)
+    local s,pieces,trace,delta,argument,calls=boundary_dump(f,writer,stop,status)
+    assert(delta==0 and #pieces==calls and #trace==calls)
+    return s,table.concat(pieces),trace,argument,calls
+  end
+  local names={}
+  for count=0,2 do for _,style in ipairs{'original','empty','nul'}do
+    names[#names+1]='upvalues-'..count..'-'..style..'.luac'
+  end end
+  names[#names+1]='dump-constants.luac';names[#names+1]='dump-stripped.luac'
+  local canonical,canonical_bytes,canonical_trace
+  for _,name in ipairs(names)do
+    local f=assert(loadfile(name))
+    local status,bytes,trace,argument,calls=dump(f)
+    assert(status==0 and argument==f and bytes==string.dump(f))
+    assert(trace[1]==12)
+    print('native-dump-chunk',name,calls,table.concat(trace,','),hex(bytes))
+    if name=='dump-constants.luac'then canonical=f;canonical_bytes=bytes;canonical_trace=trace end
+    if name=='dump-stripped.luac'then
+      local zeros=0
+      local s,b=dump(f,function(i,block,null)if #block==0 then assert(null);zeros=zeros+1 end end)
+      assert(s==0 and b==bytes and zeros==4)
+    end
+  end
+  local length=0
+  for stop=1,#canonical_trace do
+    length=length+canonical_trace[stop]
+    local status,bytes,trace,argument,calls=dump(canonical,nil,stop,17)
+    assert(status==17 and calls==stop and argument==canonical)
+    assert(bytes==canonical_bytes:sub(1,length))
+    print('native-dump-stop',stop,calls,#bytes,status)
+  end
+  for _,status in ipairs{-2147483648,-1,1,2147483647}do
+    local s,bytes,trace,argument,calls=dump(canonical,nil,2,status)
+    assert(s==status and calls==2);print('native-dump-status',s)
+  end
+  local calls=0
+  local status,bytes,trace,argument=dump(canonical,function(i,block)
+    assert(debug.getinfo(2,'f').func==boundary_dump)
+    collectgarbage()
+    local co=coroutine.create(function()coroutine.yield(42)end)
+    local ok,value=coroutine.resume(co);assert(ok and value==42)
+    local s,f=boundary_loadbuffer(0,'return 17');assert(s==0 and f()==17)
+    assert(debug.setlocal(2,1,91));calls=calls+1
+  end)
+  assert(status==0 and argument==91 and bytes==canonical_bytes and calls==#trace)
+  local marker={};local retained=false
+  local ok,e=xpcall(function()return dump(canonical,function()error(marker)end)end,function(e)
+    for level=2,15 do
+      local info=debug.getinfo(level,'f');if not info then break end
+      if info.func==boundary_dump then retained=select(2,debug.getlocal(level,1))==canonical end
+    end
+    return e
+  end)
+  assert(not ok and e==marker and retained)
+  for _,value in ipairs{false,17,'bytes',{},boundary_sum,newproxy(),coroutine.create(function()end)}do
+    local s,b,t,a,c=dump(value);assert(s==1 and b=='' and c==0 and a==value)
+    assert(boundary_dump_null(value)==1)
+  end
+  assert(select(1,dump(nil))==1 and boundary_dump_null(nil)==1)
+  local f=function(a,...)return a,select('#',...)end
+  local s,b=dump(f);assert(s==0)
+  local g=assert(loadstring(b));local a,n=g(42,1,nil);assert(a==42 and n==2)
+  local saved=string.dump;string.dump=function()error('must not use string.dump')end
+  s,b=dump(f);string.dump=saved;assert(s==0 and assert(loadstring(b))(17)==17)
+  print('native-dump-complete',#names,#canonical_trace)
+end

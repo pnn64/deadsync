@@ -22,6 +22,7 @@ mod windows {
         length: usize,
         wide_integer: isize,
         reader: Option<Reader>,
+        writer: Option<Writer>,
         userdata: *mut c_void,
     }
     type Dispatch =
@@ -29,6 +30,17 @@ mod windows {
     type CFunction = unsafe extern "C" fn(*mut c_void) -> c_int;
     type Invoke = unsafe extern "C" fn(*mut c_void, *mut c_void, Dispatch, CFunction) -> c_int;
     type Reader = unsafe extern "C" fn(*mut c_void, *mut c_void, *mut usize) -> *const c_char;
+    type Writer = unsafe extern "C" fn(*mut c_void, *const c_void, usize, *mut c_void) -> c_int;
+    type Write = unsafe extern "C" fn(
+        *mut c_void,
+        *mut c_void,
+        Dispatch,
+        Writer,
+        *mut c_void,
+        *const c_void,
+        usize,
+        *mut BoundaryValue,
+    ) -> c_int;
     type Read = unsafe extern "C" fn(
         *mut c_void,
         *mut c_void,
@@ -80,6 +92,7 @@ mod windows {
         _library: Library,
         invoke: Invoke,
         read: Read,
+        write: Write,
         new_state: NewState,
         free_state: FreeState,
         state_bytes: usize,
@@ -131,6 +144,50 @@ mod windows {
             value: &mut BoundaryValue,
         ) -> Result<(), Error> {
             match op {
+                50 => {
+                    let writer = value.writer;
+                    let data = value.userdata;
+                    let bridge = self.bridge.clone();
+                    let state = self.state;
+                    value.integer = self.stack.dump(|stack, bytes| {
+                        let writer = writer.ok_or_else(|| stack.error(b"missing C writer"))?;
+                        let mut context = Context {
+                            stack,
+                            error: None,
+                            bridge: bridge.clone(),
+                            state,
+                        };
+                        let mut output = BoundaryValue::default();
+                        // Empty native vectors have NULL storage in PUC Lua.
+                        let pointer = if bytes.is_empty() {
+                            std::ptr::null()
+                        } else {
+                            bytes.as_ptr().cast()
+                        };
+                        // SAFETY: bytes and the reborrowed Context remain valid
+                        // until this C-only boundary returns. Dispatch exits
+                        // before any reader/writer error jumps within C.
+                        let result = unsafe {
+                            (bridge.write)(
+                                state as *mut c_void,
+                                (&mut context as *mut Context<'_, '_, '_>).cast(),
+                                dispatch,
+                                writer,
+                                data,
+                                pointer,
+                                bytes.len(),
+                                &mut output,
+                            )
+                        };
+                        if let Some(error) = context.error.take() {
+                            return Err(error);
+                        }
+                        if result != 0 {
+                            return Err(context.stack.error(b"C writer failed without an error"));
+                        }
+                        Ok(output.integer)
+                    })?;
+                }
                 49 => {
                     // SAFETY: luaL_loadfile lends an optional C-string path;
                     // copy it before loading can reenter Lua and mutate slots.
@@ -502,6 +559,7 @@ mod windows {
             Arc::new(Bridge {
                 invoke: std::mem::transmute::<usize, Invoke>(library.symbol("boundary_invoke")),
                 read: std::mem::transmute::<usize, Read>(library.symbol("boundary_read")),
+                write: std::mem::transmute::<usize, Write>(library.symbol("boundary_write")),
                 new_state: std::mem::transmute::<usize, NewState>(
                     library.symbol("boundary_state_new"),
                 ),
@@ -586,6 +644,8 @@ mod windows {
             "boundary_loadbuffer",
             "boundary_loadtop",
             "boundary_loadfile",
+            "boundary_dump",
+            "boundary_dump_null",
             "boundary_cpcall",
         ] {
             let function = vm
