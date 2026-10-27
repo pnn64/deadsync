@@ -132,3 +132,16 @@ The floor-zero parameter fixtures contain only procedural synthetic C responses:
 of the native encoder. Normal tests compare finite values within the original
 bounds and nonfinite classes/signs per position. Manual generators are documented
 in [floor-zero parameters](../../FLOOR0_PARAMETERS.md).
+
+The codebook value/bounds fixtures contain procedural C responses:
+
+| Fixture | Format | Bytes | SHA-256 |
+| --- | --- | --- | --- |
+| `codebook-floats-v1.libvorbis` | `DVQFLT01`, u64-length float and bound responses, u32 VQ set count (8), then u64-length request/response pairs | 927,296 | `183b4a69df3d03b5207de9f5e942fcf01c48420b39a0044f3ad0425d65b39289` |
+| `codebook-float-pcm-v1.libvorbis-pcm` | `DVQPCM01`, u32 set count (6), then u64-length `pcm-cases` responses | 38,674 | `82e262b4e7acfaed05d33c91840d11af4f7343bce2618775f81a5667627137b2` |
+
+`tests/support/float_vectors.rs`, `tests/codebook_floats.rs` and
+`tests/codebook_float_packets.rs` define the inputs independently of the native
+encoder. The first fixture includes all 20,480 custom-float probes and 83,968
+byte-bound/initialization probes across every starting bit alignment. Manual
+regeneration is documented in [codebook values and bounds](../../CODEBOOK_VALUES.md).

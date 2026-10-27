@@ -70,11 +70,16 @@ Header and streaming inputs also exercise both `Residue2Layout` policies. The
 header target's high control bit selects the libvorbis layout when `kind % 3`
 selects setup parsing. Bits six and five enable empty books and IEEE propagation
 respectively (controls 2 / 224 exercise strict / those three compatibility options).
-Header bit three selects `Floor0Behavior::Libvorbis`; control 233 combines it
-with those options. Streaming bit seven selects the same floor-zero policy,
-including selected setup reparsing and overlap pre-roll. Procedural seeds cover
+Header bit two selects `CodebookBehavior::Libvorbis` (clamped custom floats and
+whole-byte array guards). Header bit three selects `Floor0Behavior::Libvorbis`;
+control 254 selects all reference options and the full extent override. Control
+233 combines floor zero with the earlier layout/empty/IEEE options. Streaming bit
+seven selects both reference codebook and floor-zero policies, including selected
+setup reparsing and overlap pre-roll. Procedural seeds cover
 unsigned/signed amplitude boundaries, unsupported widths, partial LSP words and
-Bark-grid rounding; the default published-amplitude policy remains exercised.
+Bark-grid rounding. Further seeds exercise every custom-float exponent boundary,
+sequence VQ cancellation and padded/unpadded book tails; published defaults remain
+exercised independently by the header control.
 Header control bit four raises the codebook extent cap from 24 to the full
 40 wire-field bits. Streaming bit six makes the same choice, preserved during
 indexing and selected setup reparsing. Entry/value/memory caps remain independent;

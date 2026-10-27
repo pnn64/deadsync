@@ -35,6 +35,10 @@ amplitudes from the pinned reference's signed reader, sticky EOF for widths abov
 32, Bark-grid rounding and incomplete LSP concealment. Explicit IEEE synthesis
 also matches whole-block NaN propagation from nonfinite spectra.
 
+The [codebook-value follow-up](CODEBOOK_VALUES.md) adds explicit reference
+exponent clamps and byte-rounded array guards, checked across all exponents,
+all bit alignments, VQ sequence reconstruction and raw/Ogg/seek APIs.
+
 ## Implemented and tested (2026-10-26)
 
 * Bitpacking/unpacking with widths 0..=32, unaligned 32-bit fields, zero-width

@@ -1,6 +1,6 @@
 //! Vorbis section 3: entry-order Huffman assignment and lookup types 0/1/2.
 use crate::{
-    Budget, Error, Limits, ParseOptions,
+    Budget, CodebookBehavior, Error, Limits, ParseOptions,
     bitpack::{BitReader, ilog},
     reserve,
 };
@@ -289,8 +289,13 @@ impl Codebook {
     ) -> Result<Self, Error> {
         let limits = &options.limits;
         let mut budget = Budget::new(limits);
-        let mut book =
-            Self::read_with_budget(bits, limits, &mut budget, options.allow_empty_codebooks)?;
+        let mut book = Self::read_with_budget(
+            bits,
+            limits,
+            &mut budget,
+            options.allow_empty_codebooks,
+            options.codebook_behavior,
+        )?;
         book.accelerate(&mut budget)?;
         Ok(book)
     }
@@ -302,6 +307,7 @@ impl Codebook {
         limits: &Limits,
         budget: &mut Budget,
         allow_empty: bool,
+        behavior: CodebookBehavior,
     ) -> Result<Self, Error> {
         if bits.read(24)? != 0x564342 {
             return Err(Error::Invalid("codebook sync"));
@@ -316,6 +322,9 @@ impl Codebook {
         }
         if entries > limits.max_codebook_entries {
             return Err(Error::LimitExceeded("codebook entries"));
+        }
+        if behavior == CodebookBehavior::Libvorbis {
+            reference_length_guard(bits, entries)?;
         }
         budget.charge(entries)?;
         let mut lengths = Vec::new();
@@ -354,8 +363,8 @@ impl Codebook {
             if dimensions == 0 && lookup_type == 1 && !huffman.is_empty() {
                 return Err(Error::Invalid("zero-dimensional lookup-one codebook"));
             }
-            let minimum = float32_unpack(bits.read(32)?);
-            let delta = float32_unpack(bits.read(32)?);
+            let minimum = float32_unpack_with_behavior(bits.read(32)?, behavior);
+            let delta = float32_unpack_with_behavior(bits.read(32)?, behavior);
             let value_bits = bits.read(4)? + 1;
             let sequence = bits.flag()?;
             let value_count = entries
@@ -369,6 +378,12 @@ impl Codebook {
             } else {
                 value_count
             };
+            if behavior == CodebookBehavior::Libvorbis
+                && (lookup_count as u64 * value_bits as u64).div_ceil(8)
+                    > (bits.remaining() / 8) as u64
+            {
+                return Err(Error::EndOfPacket);
+            }
             // Check packet availability before allocating large lookup tables.
             if lookup_count > bits.remaining() / value_bits as usize {
                 return Err(Error::EndOfPacket);
@@ -447,15 +462,46 @@ impl Codebook {
     }
 }
 
+// Match the reference's byte-rounded preallocation guard, retaining the
+// consumed prefix on rejection. Successful probes leave the real reader at
+// the original position so the common grammar remains shared by both policies.
+fn reference_length_guard(bits: &mut BitReader<'_>, entries: usize) -> Result<(), Error> {
+    let mut probe = bits.clone();
+    let result = (|| {
+        if !probe.flag()? {
+            let sparse = probe.flag()?;
+            let required = (entries * if sparse { 1 } else { 5 }).div_ceil(8);
+            if required > probe.remaining() / 8 {
+                return Err(Error::EndOfPacket);
+            }
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        *bits = probe;
+    }
+    result
+}
+
 /// Vorbis's custom float representation (not IEEE binary32).
 pub fn float32_unpack(value: u32) -> f64 {
+    float32_unpack_with_behavior(value, CodebookBehavior::Vorbis)
+}
+/// Unpack with the published range or explicit libvorbis exponent clamp.
+pub fn float32_unpack_with_behavior(value: u32, behavior: CodebookBehavior) -> f64 {
     let mantissa = (value & 0x1fffff) as f64;
     let signed = if value & 0x80000000 != 0 {
         -mantissa
     } else {
         mantissa
     };
-    signed * 2.0f64.powi(((value >> 21) & 0x3ff) as i32 - 788)
+    let exponent = ((value >> 21) & 0x3ff) as i32 - 788;
+    let exponent = if behavior == CodebookBehavior::Libvorbis {
+        exponent.clamp(-63, 63)
+    } else {
+        exponent
+    };
+    signed * 2.0f64.powi(exponent)
 }
 /// Exact integer root, avoiding floating-point rounding around perfect powers.
 pub fn lookup1_values(entries: u32, dimensions: u32) -> u32 {

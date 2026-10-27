@@ -53,6 +53,18 @@ pub enum Floor0Behavior {
     Libvorbis,
 }
 
+/// Codebook wire-value interpretation and packet-availability checks.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CodebookBehavior {
+    /// Published mantissa * 2^(exponent - 788), retaining the full field range
+    /// and checking coded arrays against the exact available bit count.
+    #[default]
+    Vorbis,
+    /// Match libvorbis 1.3.7: clamp the unbiased exponent to -63..=63 and
+    /// check whole remaining bytes before reading length/quantized arrays.
+    Libvorbis,
+}
+
 /// Header parsing policy, shared by complete setup and standalone codebooks.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ParseOptions {
@@ -60,6 +72,8 @@ pub struct ParseOptions {
     /// Accept zero-active-entry books and their libvorbis consumer behavior.
     /// Other incomplete/overspecified Huffman trees remain invalid.
     pub allow_empty_codebooks: bool,
+    /// Wire-value and array-availability interpretation for every codebook.
+    pub codebook_behavior: CodebookBehavior,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

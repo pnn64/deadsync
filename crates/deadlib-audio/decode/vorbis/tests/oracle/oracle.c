@@ -49,16 +49,27 @@ static void headers(FILE *file) {
 }
 /* Header-only unpacking: never initialize or evaluate potentially degenerate VQ
    books. Report the reference bit reader's position even on an early rejection. */
-static void bookheaders(FILE *file) {
+static void bookheaders(FILE *file, int offsets) {
     uint64_t count = get64(file), i;
     if (count > (1u << 20)) fail("codebook header count");
     put64(count);
     for (i = 0; i < count; ++i) {
+        uint64_t prefix = offsets ? get64(file) : 0;
         long size; unsigned char *data = packet(file, &size);
         oggpack_buffer bits; static_codebook *book;
-        oggpack_readinit(&bits, data, size);
+        if (prefix > 7) fail("codebook prefix");
+        oggpack_readinit(&bits, data, size); oggpack_adv(&bits, (int)prefix);
         book = vorbis_staticbook_unpack(&bits);
         put8(book != NULL); put64((uint64_t)oggpack_bits(&bits));
+        if (offsets) {
+            int initialized = 0;
+            if (book) {
+                codebook decoded;
+                initialized = vorbis_book_init_decode(&decoded, book) == 0;
+                vorbis_book_clear(&decoded);
+            }
+            put8((unsigned char)initialized);
+        }
         if (book) vorbis_staticbook_destroy(book);
         free(data);
     }
@@ -107,6 +118,17 @@ static void floor0cases(FILE *file) {
     }
     if (fgetc(file) != EOF) fail("trailing floor0 cases");
     floor->free_look(look); vorbis_dsp_clear(&dsp); vorbis_comment_clear(&comments); vorbis_info_clear(&info);
+}
+static void floatcases(FILE *file) {
+    uint64_t count = get64(file), i;
+    if (count > (1u << 20)) fail("float count");
+    put64(count);
+    for (i = 0; i < count; ++i) {
+        uint64_t word = get64(file); uint32_t raw; float value;
+        if (word > UINT32_MAX) fail("float word");
+        value = _float32_unpack((long)word); memcpy(&raw, &value, 4); put32(raw);
+    }
+    if (fgetc(file) != EOF) fail("trailing floats");
 }
 static void books(FILE *file) {
     long size; unsigned char *data = packet(file, &size); oggpack_buffer bits;
@@ -257,14 +279,16 @@ static void ogg_seek(FILE *file, const char *requests_path) {
     fclose(requests); ov_clear(&reader);
 }
 int main(int argc, char **argv) {
-    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|floor0cases|books|pcm|pcm-cases|mdct-cases|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
+    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|bookcases|floor0cases|floatcases|books|pcm|pcm-cases|mdct-cases|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
 #endif
     if (!strcmp(argv[1], "headers")) headers(file);
+    else if (!strcmp(argv[1], "floatcases")) floatcases(file);
     else if (!strcmp(argv[1], "books")) books(file);
-    else if (!strcmp(argv[1], "bookheaders")) bookheaders(file);
+    else if (!strcmp(argv[1], "bookheaders")) bookheaders(file, 0);
+    else if (!strcmp(argv[1], "bookcases")) bookheaders(file, 1);
     else if (!strcmp(argv[1], "floor0cases")) floor0cases(file);
     else if (!strcmp(argv[1], "pcm")) pcm(file, 0);
     else if (!strcmp(argv[1], "pcm-cases")) pcm(file, 1);

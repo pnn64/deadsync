@@ -24,6 +24,10 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
   `ParseOptions::allow_empty_codebooks` for explicit reference acceptance.
   `Limits::max_codebook_extent_bits` defaults to the reference's 24-bit
   declaration guard; see [codebook limits](CODEBOOK_LIMITS.md).
+  `ParseOptions::codebook_behavior` selects published values/bit bounds or
+  `CodebookBehavior::Libvorbis` exponent clamps and whole-byte array guards.
+  Ogg/seek options preserve the policy through resets and selected setup reparsing;
+  see [codebook values and bounds](CODEBOOK_VALUES.md).
   Optional, budget-bounded prefix lookup shares the tree allocation.
   [HUFFMAN.md](HUFFMAN.md) documents exact tail/fallback behavior and the measured
   throughput/startup tradeoff.

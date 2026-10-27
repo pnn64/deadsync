@@ -42,6 +42,7 @@ fn extent_limit_precedes_lengths_entry_limits_and_allocation() {
                     ..Limits::default()
                 },
                 allow_empty_codebooks: true,
+                ..ParseOptions::default()
             },
         )
         .unwrap();
@@ -59,6 +60,7 @@ fn extent_limit_precedes_lengths_entry_limits_and_allocation() {
                         ..Limits::default()
                     },
                     allow_empty_codebooks: true,
+                    ..ParseOptions::default()
                 }
             ),
             Err(Error::LimitExceeded("setup memory"))
@@ -97,6 +99,7 @@ fn compare(shapes: &[Shape], mut response: &[u8]) {
             ParseOptions {
                 limits: limits(),
                 allow_empty_codebooks: true,
+                ..ParseOptions::default()
             },
         );
         assert_eq!(actual.is_ok(), accepted, "{shape:?}, C consumed {consumed}");
@@ -172,6 +175,7 @@ fn whole_setup_extent_acceptance_matches_libvorbis_initialization() {
             ParseOptions {
                 limits: limits(),
                 allow_empty_codebooks: true,
+                ..ParseOptions::default()
             },
         );
         assert_eq!(native.is_ok(), accepted, "setup {shape:?}");

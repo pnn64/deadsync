@@ -128,3 +128,8 @@ The [floor-zero parameter follow-up](FLOOR0_PARAMETERS.md) records amplitude-wid
 Bark-map and incomplete-LSP reader differences, plus the IEEE transform-class
 regression. The default unsigned field policy and explicit reference policy are
 checked separately; the original finite PCM tolerances are unchanged.
+
+The [codebook values and bounds follow-up](CODEBOOK_VALUES.md) separates the
+published custom-float range and exact bit availability from libvorbis's exponent
+clamp and whole-byte checks. Reference values, guard decisions/positions and
+initialization are independently checked before packet and Ogg comparisons.

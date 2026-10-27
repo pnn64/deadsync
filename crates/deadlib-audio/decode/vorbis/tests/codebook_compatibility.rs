@@ -127,7 +127,8 @@ fn degenerate_books_retain_context_and_resource_validation() {
                     max_codebook_entries: 0,
                     ..Limits::default()
                 },
-                allow_empty_codebooks: true
+                allow_empty_codebooks: true,
+                ..ParseOptions::default()
             }
         ),
         Err(Error::LimitExceeded(_))

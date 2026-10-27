@@ -58,6 +58,14 @@ look object. [Floor-zero parameters](../../FLOOR0_PARAMETERS.md) records scope.
 `mdct-cases` reads a u64 count and that many existing length-prefixed `mdct`
 requests, emitting their concatenated f32 outputs. It calls `mdct_backward`
 unchanged, allowing every nonfinite spectral position to be checked in batches.
+`floatcases` receives a u64 count and that many u64 packed words (upper 32 bits
+must be zero). It calls unmodified `_float32_unpack` and emits count plus f32 bits.
+`bookcases` receives count, then prefix bits (u64, 0..7) and a length-prefixed
+buffer per case. It advances that prefix, calls `vorbis_staticbook_unpack`, and
+emits acceptance (u8), absolute consumed bits (u64) and successful
+`vorbis_book_init_decode` (u8). The existing `bookheaders` format remains unchanged.
+The synthetic bounds grid uses only complete valid Huffman trees and avoids
+nonempty dimension-zero lookup-one books; no undefined VQ context is evaluated.
 `mdctforward` receives N time samples instead of N/2 coefficients and emits the
 N/2 coefficients from `mdct_forward`, with the same length-prefixed protocol.
 

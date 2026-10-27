@@ -110,6 +110,7 @@ impl Setup {
                 limits,
                 &mut budget,
                 options.allow_empty_codebooks,
+                options.codebook_behavior,
             )?);
         }
         let times = bits.read(6)? + 1;

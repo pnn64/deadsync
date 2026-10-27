@@ -368,6 +368,11 @@ pub fn vorbis_headers(input: &[u8]) {
                     vorbis::ParseOptions {
                         limits: setup_limits,
                         allow_empty_codebooks: kind & 64 != 0,
+                        codebook_behavior: if kind & 4 != 0 {
+                            vorbis::CodebookBehavior::Libvorbis
+                        } else {
+                            vorbis::CodebookBehavior::Vorbis
+                        },
                     },
                 )
                 && let Ok(mut decoder) = vorbis::PacketDecoder::with_options(
@@ -525,6 +530,11 @@ pub fn vorbis_stream(input: &[u8]) {
             vorbis::Residue2Layout::Interleaved
         },
         allow_empty_codebooks: control & 16 != 0,
+        codebook_behavior: if control & 128 != 0 {
+            vorbis::CodebookBehavior::Libvorbis
+        } else {
+            vorbis::CodebookBehavior::Vorbis
+        },
         allow_nonfinite: control & 32 != 0,
         floor0_behavior: if control & 128 != 0 {
             vorbis::Floor0Behavior::Libvorbis
@@ -584,6 +594,7 @@ pub fn vorbis_stream(input: &[u8]) {
             trim_to_final_granule: control & 2 != 0,
             residue2_layout: options.residue2_layout,
             allow_empty_codebooks: options.allow_empty_codebooks,
+            codebook_behavior: options.codebook_behavior,
             allow_nonfinite: options.allow_nonfinite,
             floor0_behavior: options.floor0_behavior,
             packet_preroll: control & 4 == 0,
