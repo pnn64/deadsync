@@ -1,0 +1,159 @@
+# To display the perf.data header info, please use --header/--header-only options.
+#
+#
+# Total Lost Samples: 0
+#
+# Samples: 6K of event 'cycles:u'
+# Event count (approx.): 35689911348
+#
+# Overhead  Symbol                                                                                      IPC   [IPC Coverage]
+# ........  ..........................................................................................  ....................
+#
+    81.68%  [.] _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix                         -      -            
+            |          
+            |--26.84%--_RNvMs0_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB5_15BufferedHuffman6decode (inlined)
+            |          _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+            |          
+            |--15.45%--_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+            |          
+            |--12.13%--_RNvMNtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB2_4Bits12fill_huffman (inlined)
+            |          _RNvMs0_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB5_15BufferedHuffman6decode (inlined)
+            |          _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+            |          
+            |--6.43%--_RNvMNtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB2_4Bits4read (inlined)
+            |          _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+            |          
+            |--5.93%--_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler326update (inlined)
+            |          _RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32 (inlined)
+            |          _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+            |          
+            |--3.48%--_RNvMNtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB2_4Bits4fill (inlined)
+            |          _RNvMNtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB2_4Bits4read (inlined)
+            |          _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+            |          
+            |--3.25%--_RNvMsG_NtCsgFX3jaOk65H_5alloc3vecINtB5_3VechE8push_mutCsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |          _RNvMsG_NtCsgFX3jaOk65H_5alloc3vecINtB5_3VechE4pushCsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |          _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+            |          
+            |--1.98%--_RNvXsp_NtCskADBYZwJmSU_4core6resultINtB5_6ResultmNtCsbAPiY69f4r2_17deadlib_image_png5ErrorENtNtNtB7_3ops9try_trait3Try6branchBN_ (inlined)
+            |          _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+            |          
+            |--1.19%--_RNvMs_NtCsgFX3jaOk65H_5alloc3vecINtB4_3VechE3lenCsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |          _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+            |          
+            |--0.62%--_RNvMs2_NtCsgFX3jaOk65H_5alloc7raw_vecNtB5_11RawVecInner8capacityCsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |          _RNvMs2_NtCsgFX3jaOk65H_5alloc7raw_vecNtB5_11RawVecInner13needs_to_growCsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |          |          
+            |           --0.56%--_RNvMs2_NtCsgFX3jaOk65H_5alloc7raw_vecNtB5_11RawVecInner7reserveCsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |                     _RNvMs0_NtCsgFX3jaOk65H_5alloc7raw_vecINtB5_6RawVechE7reserveCsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |                     _RNvMs_NtCsgFX3jaOk65H_5alloc3vecINtB4_3VechE7reserveCsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |                     _RINvMs1_NtCsgFX3jaOk65H_5alloc3vecINtB6_3VechE18extend_from_withinINtNtNtCskADBYZwJmSU_4core3ops5range5RangejEECsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |                     _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+            |          
+            |--0.58%--_RNvMs9_NtCskADBYZwJmSU_4core3numj11checked_sub (inlined)
+            |          _RNvXs2_NtNtCskADBYZwJmSU_4core5slice5indexINtNtNtB9_3ops5range5RangejEINtB5_10SliceIndexShE5indexCsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |          _RNvXNtNtCskADBYZwJmSU_4core5slice5indexShINtNtNtB6_3ops5index5IndexINtNtBI_5range5RangejEE5indexCsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |          _RNvMNtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB2_4Bits12fill_huffman (inlined)
+            |          _RNvMs0_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB5_15BufferedHuffman6decode (inlined)
+            |          _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+            |          
+            |--0.57%--_RNvNtNtCskADBYZwJmSU_4core5slice5index16into_slice_range (inlined)
+            |          _RINvNtNtCskADBYZwJmSU_4core5slice5index5rangeINtNtNtB6_3ops5range5RangejEECsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |          _RINvMs1_NtCsgFX3jaOk65H_5alloc3vecINtB6_3VechE18extend_from_withinINtNtNtCskADBYZwJmSU_4core3ops5range5RangejEECsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |          _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+            |          
+            |--0.50%--_RNvMs9_NtCskADBYZwJmSU_4core3numj12wrapping_sub (inlined)
+            |          _RNvMs2_NtCsgFX3jaOk65H_5alloc7raw_vecNtB5_11RawVecInner13needs_to_growCsbAPiY69f4r2_17deadlib_image_png (inlined)
+            |          
+             --0.50%--_RNvXsd_NtNtCskADBYZwJmSU_4core3ptr8non_nullINtB5_7NonNullhENtNtB9_3cmp9PartialEq2eqCsbAPiY69f4r2_17deadlib_image_png (inlined)
+                       _RNvXs2J_NtNtCskADBYZwJmSU_4core5slice4iterINtB6_4IterhENtNtNtNtBa_4iter6traits8iterator8Iterator4nextCsbAPiY69f4r2_17deadlib_image_png (inlined)
+                       _RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png8checksumNtB4_7Adler326update (inlined)
+                       _RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32 (inlined)
+                       _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+
+     4.46%  [.] _RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB4_7Huffman11decode_slow               -      -            
+            |          
+             --3.69%--_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB4_7Huffman11decode_slow
+                       _RNvMs0_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB5_15BufferedHuffman11decode_slow
+                       _RNvMs0_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB5_15BufferedHuffman6decode (inlined)
+                       _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+
+     1.60%  [.] _RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB4_7Huffman3new                        -      -            
+            |          
+             --1.00%--_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB4_7Huffman3new
+                       _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib7dynamic
+
+     1.52%  [.] _RNvMs0_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB5_15BufferedHuffman11decode_slow     -      -            
+            |          
+             --1.00%--_RNvMs0_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB5_15BufferedHuffman11decode_slow
+                       _RNvMs0_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB5_15BufferedHuffman6decode (inlined)
+                       _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+
+     1.52%  [.] 0x000000000016b329                                                                      -      -            
+            |          
+             --1.48%--_RINvNtCskADBYZwJmSU_4core3ptr19copy_nonoverlappinghECsbAPiY69f4r2_17deadlib_image_png (inlined)
+                       _RNvXs7_NtCsgFX3jaOk65H_5alloc3vecINtB5_3VechENtB5_20ExtendFromWithinSpec23spec_extend_from_withinCsbAPiY69f4r2_17deadlib_image_png (inlined)
+                       _RINvMs1_NtCsgFX3jaOk65H_5alloc3vecINtB6_3VechE18extend_from_withinINtNtNtCskADBYZwJmSU_4core3ops5range5RangejEECsbAPiY69f4r2_17deadlib_image_png (inlined)
+                       _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+
+     0.86%  [.] _RNvNtNtCsekoSBQJCGr_11miniz_oxide7inflate4core15decompress_fast                        -      -            
+     0.64%  [.] 0x000000000016b325                                                                      -      -            
+            |          
+             --0.63%--_RINvNtCskADBYZwJmSU_4core3ptr19copy_nonoverlappinghECsbAPiY69f4r2_17deadlib_image_png (inlined)
+                       _RNvXs7_NtCsgFX3jaOk65H_5alloc3vecINtB5_3VechENtB5_20ExtendFromWithinSpec23spec_extend_from_withinCsbAPiY69f4r2_17deadlib_image_png (inlined)
+                       _RINvMs1_NtCsgFX3jaOk65H_5alloc3vecINtB6_3VechE18extend_from_withinINtNtNtCskADBYZwJmSU_4core3ops5range5RangejEECsbAPiY69f4r2_17deadlib_image_png (inlined)
+                       _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+
+     0.60%  [.] 0x000000000016b5c7                                                                      -      -            
+            |          
+             --0.54%--0x79c395de11e7
+                       realloc
+                       _RNvNtNtNtCs8ZKwes1zzDd_3std3sys5alloc4unix7realloc (inlined)
+                       _RNvCs5fGHjzWXRav_7___rustc13___rdl_realloc (inlined)
+                       _RNvNtCsgFX3jaOk65H_5alloc5alloc15realloc_nonnull (inlined)
+                       _RNvMs0_NtCsgFX3jaOk65H_5alloc5allocNtB5_6Global17grow_impl_runtime (inlined)
+                       _RNvMs0_NtCsgFX3jaOk65H_5alloc5allocNtB5_6Global9grow_impl (inlined)
+                       _RNvXs1_NtCsgFX3jaOk65H_5alloc5allocNtB5_6GlobalNtNtCskADBYZwJmSU_4core5alloc9Allocator4grow (inlined)
+                       |          
+                        --0.53%--_RNvMs5_NtCsgFX3jaOk65H_5alloc7raw_vecNtB5_11RawVecInner11finish_growCsbAPiY69f4r2_17deadlib_image_png
+                                  _RNvMs5_NtCsgFX3jaOk65H_5alloc7raw_vecNtB5_11RawVecInner14grow_amortizedCsbAPiY69f4r2_17deadlib_image_png (inlined)
+                                  _RNvMs2_NtCsgFX3jaOk65H_5alloc7raw_vecNtB5_11RawVecInner11try_reserveCsbAPiY69f4r2_17deadlib_image_png (inlined)
+                                  _RNvMs0_NtCsgFX3jaOk65H_5alloc7raw_vecINtB5_6RawVechE11try_reserveCsbAPiY69f4r2_17deadlib_image_png (inlined)
+                                  _RNvMs_NtCsgFX3jaOk65H_5alloc3vecINtB4_3VechE11try_reserveCsbAPiY69f4r2_17deadlib_image_png (inlined)
+                                  _RINvCsbAPiY69f4r2_17deadlib_image_png7reservehEB2_ (inlined)
+                                  _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+
+     0.60%  [.] 0x000000000016b300                                                                      -      -            
+            |          
+             --0.58%--_RINvNtCskADBYZwJmSU_4core3ptr19copy_nonoverlappinghECsbAPiY69f4r2_17deadlib_image_png (inlined)
+                       _RNvXs7_NtCsgFX3jaOk65H_5alloc3vecINtB5_3VechENtB5_20ExtendFromWithinSpec23spec_extend_from_withinCsbAPiY69f4r2_17deadlib_image_png (inlined)
+                       _RINvMs1_NtCsgFX3jaOk65H_5alloc3vecINtB6_3VechE18extend_from_withinINtNtNtCskADBYZwJmSU_4core3ops5range5RangejEECsbAPiY69f4r2_17deadlib_image_png (inlined)
+                       _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+
+     0.58%  [.] 0x000000000016b30f                                                                      -      -            
+            |
+            ---_RINvNtCskADBYZwJmSU_4core3ptr19copy_nonoverlappinghECsbAPiY69f4r2_17deadlib_image_png (inlined)
+               _RNvXs7_NtCsgFX3jaOk65H_5alloc3vecINtB5_3VechENtB5_20ExtendFromWithinSpec23spec_extend_from_withinCsbAPiY69f4r2_17deadlib_image_png (inlined)
+               _RINvMs1_NtCsgFX3jaOk65H_5alloc3vecINtB6_3VechE18extend_from_withinINtNtNtCskADBYZwJmSU_4core3ops5range5RangejEECsbAPiY69f4r2_17deadlib_image_png (inlined)
+               _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+
+     0.56%  [.] 0x000000000016b355                                                                      -      -            
+            |
+            ---_RINvNtCskADBYZwJmSU_4core3ptr19copy_nonoverlappinghECsbAPiY69f4r2_17deadlib_image_png (inlined)
+               _RNvXs7_NtCsgFX3jaOk65H_5alloc3vecINtB5_3VechENtB5_20ExtendFromWithinSpec23spec_extend_from_withinCsbAPiY69f4r2_17deadlib_image_png (inlined)
+               _RINvMs1_NtCsgFX3jaOk65H_5alloc3vecINtB6_3VechE18extend_from_withinINtNtNtCskADBYZwJmSU_4core3ops5range5RangejEECsbAPiY69f4r2_17deadlib_image_png (inlined)
+               _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+
+     0.52%  [.] _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib7dynamic                                    -      -            
+     0.50%  [.] 0x000000000016b314                                                                      -      -            
+            |
+            ---_RINvNtCskADBYZwJmSU_4core3ptr19copy_nonoverlappinghECsbAPiY69f4r2_17deadlib_image_png (inlined)
+               _RNvXs7_NtCsgFX3jaOk65H_5alloc3vecINtB5_3VechENtB5_20ExtendFromWithinSpec23spec_extend_from_withinCsbAPiY69f4r2_17deadlib_image_png (inlined)
+               _RINvMs1_NtCsgFX3jaOk65H_5alloc3vecINtB6_3VechE18extend_from_withinINtNtNtCskADBYZwJmSU_4core3ops5range5RangejEECsbAPiY69f4r2_17deadlib_image_png (inlined)
+               _RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix
+
+
+
+#
+# (Tip: See assembly instructions with percentage: perf annotate <symbol>)
+#

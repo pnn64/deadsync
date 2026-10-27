@@ -73,7 +73,8 @@ impl<'a> Bits<'a> {
         Ok(value)
     }
     fn consumed(&self) -> usize {
-        (self.pos * 8 - usize::from(self.count)).div_ceil(8)
+        // ceil((pos * 8 - count) / 8), without overflowing the byte cursor.
+        self.pos - usize::from(self.count / 8)
     }
     fn align(&mut self) {
         let n = self.count % 8;
@@ -565,6 +566,36 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn consumed_prefix_byte_count_avoids_large_position_overflow() {
+        for pos in [
+            0,
+            1,
+            2,
+            7,
+            8,
+            9,
+            usize::MAX / 8,
+            usize::MAX / 8 + 1,
+            usize::MAX - 7,
+            usize::MAX,
+        ] {
+            for count in 0..=64u8 {
+                if pos as u128 * 8 < u128::from(count) {
+                    continue;
+                }
+                let bits = Bits {
+                    input: &[],
+                    pos,
+                    word: 0,
+                    count,
+                };
+                let expected = (pos as u128 * 8 - u128::from(count)).div_ceil(8);
+                assert_eq!(bits.consumed() as u128, expected, "pos={pos} count={count}");
+            }
+        }
+    }
 
     #[test]
     fn every_length_and_distance_code_matches_rfc1951_tables() {

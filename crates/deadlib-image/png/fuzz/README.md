@@ -74,6 +74,26 @@ compositor corpus is separately replayed for scoped native source coverage in
 fuzz totals. The 80,000 successful ASan inputs bring historical campaigns across
 all eleven targets to 1,000,000, including earlier encoder runs. Whole-decoder
 feedback coverage and longer campaigns remain open.
+
+## Exact zlib prefixes and consumed-byte overflow
+
+`zlib` now accepts a prefix result, validates that exact stream independently
+with libdeflate, checks strict trailing-data rejection, and verifies stable output
+and consumption after appending a sentinel. Its 256 KiB input and 1 MiB output
+limits remain unchanged. The deterministic prefix suite separately checks
+88,414 suffix/padding placements and 24,728 body/trailer truncations; a virtual
+cursor regression covers the overflow-safe consumed-byte calculation.
+
+Fresh ASan campaigns pass 10,000 `huffman`, 20,000 `zlib`, 20,000 `inflate_stream`,
+30,000 `png_stream` and 30,000 `decode` executions. Initial corpus counts are
+649, 810, 161, 27,867 and 27,867; the last two each total 6,368,086 bytes.
+Fuzzing seconds / peak RSS are 132 / 410 MiB, 18 / 382, 16 / 398, 30 / 511 and
+7 / 482 respectively. `reports/prefix-source.json` and per-target logs retain
+commands, source/corpus/binary hashes, defined ASan runtime entries and matching
+final sources. These 110,000 decoder executions bring historical successful
+campaigns to 1,110,000 across eleven targets, including earlier encoder runs.
+No encoder target is used in this continuation. Feedback still includes
+reference code; this is not a whole-decoder native-only coverage claim.
 Working corpora, crash artifacts and builds are
 ignored. Committed fixtures and the seed generator reproduce the initial corpus;
 do not reuse a previously mutated corpus when reproducing an exact smoke run.

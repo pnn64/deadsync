@@ -1,0 +1,169 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index 2d01ace40..ffa785b84 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -62,6 +62,22 @@ impl<'a> Bits<'a> {
+             }
+         }
+     }
++    #[inline]
++    fn fill_buffered(&mut self) {
++        // A primary distance code plus its extra field needs at most 22 bits.
++        // The full input remains borrowed, so lookahead past Adler is harmless:
++        // consumed() subtracts it. Starting below 22, +32 stays within u64.
++        if self.count < 22 {
++            if self.input.len() - self.pos >= 4 {
++                let bytes = self.input[self.pos..self.pos + 4].try_into().unwrap();
++                self.word |= u64::from(u32::from_le_bytes(bytes)) << self.count;
++                self.pos += 4;
++                self.count += 32;
++            } else {
++                self.fill(22);
++            }
++        }
++    }
+     fn read(&mut self, n: u8) -> Result<u32, Error> {
+         self.fill(n);
+         if self.count < n {
+@@ -73,7 +89,8 @@ impl<'a> Bits<'a> {
+         Ok(value)
+     }
+     fn consumed(&self) -> usize {
+-        (self.pos * 8 - usize::from(self.count)).div_ceil(8)
++        // ceil((pos * 8 - count) / 8), without overflowing the byte cursor.
++        self.pos - usize::from(self.count / 8)
+     }
+     fn align(&mut self) {
+         let n = self.count % 8;
+@@ -191,6 +208,65 @@ impl Huffman {
+     }
+ }
+ 
++// The buffered loop needs values and extra-bit counts, rather than symbol
++// numbers. Decode them into its primary entries once per block. Streaming
++// keeps its compact symbol tables and fixed working-memory contract.
++struct BufferedHuffman {
++    tree: Huffman,
++    fast: [u32; 512],
++    distance: bool,
++}
++impl BufferedHuffman {
++    fn value(symbol: usize, distance: bool) -> u32 {
++        if distance {
++            if symbol >= 30 {
++                return 0;
++            }
++            (DIST_BASE[symbol] as u32) << 4 | u32::from(DIST_EXTRA[symbol])
++        } else {
++            match symbol {
++                0..=256 => (symbol as u32) << 4,
++                257..=285 => {
++                    let index = symbol - 257;
++                    ((LENGTH_BASE[index] as u32 + 512) << 4) | u32::from(LENGTH_EXTRA[index])
++                }
++                _ => 257 << 4,
++            }
++        }
++    }
++    fn new(tree: Huffman, distance: bool) -> Self {
++        let fast = core::array::from_fn(|index| {
++            let entry = tree.fast[index];
++            Self::value((entry >> 4) as usize, distance) << 4 | u32::from(entry & 15)
++        });
++        Self {
++            tree,
++            fast,
++            distance,
++        }
++    }
++    #[inline]
++    fn decode(&self, bits: &mut Bits<'_>) -> Result<u32, Error> {
++        bits.fill_buffered();
++        let entry = self.fast[(bits.word & 511) as usize];
++        let n = (entry & 15) as u8;
++        let extra = ((entry >> 4) & 15) as u8;
++        let total = n + extra;
++        if n != 0 && total <= bits.count {
++            let value = (entry >> 8) + ((bits.word >> n) & ((1u64 << extra) - 1)) as u32;
++            bits.word >>= total;
++            bits.count -= total;
++            return Ok(value);
++        }
++        self.decode_slow(bits)
++    }
++    #[inline(never)]
++    fn decode_slow(&self, bits: &mut Bits<'_>) -> Result<u32, Error> {
++        let value = Self::value(self.tree.decode(bits)?, self.distance);
++        Ok((value >> 4) + bits.read((value & 15) as u8)?)
++    }
++}
++
+ fn fixed() -> (Huffman, Huffman) {
+     let mut lengths = [8; 288];
+     lengths[144..256].fill(9);
+@@ -295,6 +371,8 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+             } else {
+                 dynamic(&mut bits)?
+             };
++            let lit = BufferedHuffman::new(lit, false);
++            let dist = BufferedHuffman::new(dist, true);
+             loop {
+                 match lit.decode(&mut bits)? {
+                     literal @ 0..=255 => {
+@@ -307,14 +385,13 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+                         output.push(literal as u8);
+                     }
+                     256 => break,
+-                    symbol @ 257..=285 => {
+-                        let index = symbol - 257;
+-                        let len = LENGTH_BASE[index] + bits.read(LENGTH_EXTRA[index])? as usize;
+-                        let symbol = dist.decode(&mut bits)?;
+-                        if symbol >= 30 {
++                    value @ 515..=770 => {
++                        let len = (value - 512) as usize;
++                        let value = dist.decode(&mut bits)?;
++                        if value == 0 {
+                             return Err(Error::Invalid("reserved distance symbol"));
+                         }
+-                        let distance = DIST_BASE[symbol] + bits.read(DIST_EXTRA[symbol])? as usize;
++                        let distance = value as usize;
+                         if distance > output.len() || distance > window {
+                             return Err(Error::Invalid("distance outside history window"));
+                         }
+@@ -566,6 +643,36 @@ pub fn compress(input: &[u8], mode: Compression) -> Result<Vec<u8>, Error> {
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn consumed_prefix_byte_count_avoids_large_position_overflow() {
++        for pos in [
++            0,
++            1,
++            2,
++            7,
++            8,
++            9,
++            usize::MAX / 8,
++            usize::MAX / 8 + 1,
++            usize::MAX - 7,
++            usize::MAX,
++        ] {
++            for count in 0..=64u8 {
++                if pos as u128 * 8 < u128::from(count) {
++                    continue;
++                }
++                let bits = Bits {
++                    input: &[],
++                    pos,
++                    word: 0,
++                    count,
++                };
++                let expected = (pos as u128 * 8 - u128::from(count)).div_ceil(8);
++                assert_eq!(bits.consumed() as u128, expected, "pos={pos} count={count}");
++            }
++        }
++    }
++
+     #[test]
+     fn every_length_and_distance_code_matches_rfc1951_tables() {
+         for length in 3..=258 {

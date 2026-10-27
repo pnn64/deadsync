@@ -441,7 +441,7 @@ did not consistently fix the synthetic loss. Native raw inflation also moves
 between binaries despite unchanged inflation source, showing why these local
 shared-host comparisons cannot isolate causes or establish broad parity.
 CPU frequency, other workloads and linker/code-generation effects are not
-controlled. Encoding/compression ratio and the remaining decoder gap stay open;
+controlled. The remaining decoder gap stays open;
 Rust png is still over twice as fast on the photos in this table.
 
 All raw artifacts are retained. Historical `final-*` / `interleave-final*`
@@ -465,3 +465,55 @@ checking all 80 fixtures. Its one-iteration smoke output is excluded from the
 comparative timing data. Fresh ASan campaigns add 80,000 successful executions
 across structured encoding, PNG streaming and buffered decoding; source, corpus,
 binary hashes and logs are in `fuzz/reports/filter-source.json`.
+
+## Decoder-only inflate experiments (2026-10-27)
+
+`examples/decode_bench.rs` times six operations on identical static inputs:
+native buffered/reader decode, Rust png decode, native buffered/streaming IDAT
+inflate and flate2 inflate. Native channel counts, unpacked sub-byte samples and
+u16 precision are compared before timing. No encoder runs in this harness.
+The independent Python fixture builder supplies sixty 257x129 files: all fifteen
+formats, plain/Adam7 and gradient/noise data, with the five filter types
+distributed across images. Each image uses one filter type. Inputs use Python
+zlib 1.3.1; framing, filters, packing and Adam7 are constructed independently.
+`experiments/decode-corpus.json` retains generator and input hashes.
+
+Eight trials explored wider buffered refill, literal pairs and packed Huffman
+tokens with fused extra-bit decoding. **None is retained.** Every trial's patch
+reconstructs its native source from `39e258611`, and recorded hashes were checked
+against that reconstruction. `experiments/decoder-evidence.json` indexes all
+nine reconstructions, including the separate failing arithmetic regression.
+Linux cycle samples in `profiling/decode-packed-{trial,split}.*` explain inlining
+decisions; samples are diagnostic and are not comparative speed claims.
+
+The final forced-inline token candidate and saved original binary were run in
+candidate/original/original/candidate order, two process repetitions at each
+position and on each corpus, seven iterations and three warmups per operation,
+pinned to CPU 0. No builds, profiling or fuzz campaigns from this task ran during
+timing. The host and CPU frequency remain shared and uncontrolled. Weighted
+rates divide total sample bytes by the sum of per-case median run-average times.
+
+| Operation | Original MiB/s | Rejected token MiB/s | Change relative to reference |
+| --- | ---: | ---: | ---: |
+| 24 photos, native decode | 105.89 | 93.74 | -2.71% |
+| 24 photos, native IDAT inflate | 136.64 | 116.88 | -4.26% |
+| 60 formats, native decode | 222.63 | 188.81 | -7.12% |
+| 60 formats, native IDAT inflate | 682.32 | 612.09 | -6.50% |
+
+Decode changes are normalized against Rust png, inflation against flate2. The
+unchanged streaming inflater's relative control changes are -0.04% on photos
+and -0.13% on the format corpus. Absolute reference rates also drift, so the
+relative results support rejecting the added complexity, not a precise portable
+regression estimate. Raw groups and reproducible summaries are
+`benchmark-token-{control,forced}-{photos,formats}-{b,c}*` and
+`benchmark-token-forced-{photos,formats}-summary.json`. Earlier `refill56`,
+`literals`, `packed` and `token-trial` groups are exploratory, not selected gains.
+The retained runtime uses the original refill and symbol loop with a separately
+verified overflow fix in consumed-byte arithmetic. Decoder performance remains
+incomplete; no speedup is claimed for this milestone.
+
+```powershell
+python crates/deadlib-image/png/scripts/generate_decode_corpus.py --output target/decode-corpus-fresh
+./crates/deadlib-image/png/scripts/benchmark_pipeline.ps1 -Target decode -CorpusDirectory target/decode-corpus-fresh -LogPrefix target/decode-current -Iterations 7 -Runs 2 -Cpu 0
+python crates/deadlib-image/png/scripts/summarize_decoder.py --before crates/deadlib-image/png/benchmark-token-control-photos-b crates/deadlib-image/png/benchmark-token-control-photos-c --after crates/deadlib-image/png/benchmark-token-forced-photos-b crates/deadlib-image/png/benchmark-token-forced-photos-c --output target/decode-comparison-fresh.json
+```

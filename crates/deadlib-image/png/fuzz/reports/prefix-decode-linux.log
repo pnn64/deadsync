@@ -1,0 +1,60 @@
+   Compiling deadlib-image-png-fuzz v0.0.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 2.53s
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.17s
+     Running `/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/decode -artifact_prefix=/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/artifacts/decode/ -runs=30000 -seed=928671 -max_len=65536 -timeout=10 -rss_limit_mb=1024 -print_final_stats=1 /tmp/deadlib-image-prefix-corpus-20261027-a/decode`
+INFO: Running with entropic power schedule (0xFF, 100).
+INFO: Seed: 928671
+INFO: Loaded 1 modules   (20564 inline 8-bit counters): 20564 [0x5c2943df77a0, 0x5c2943dfc7f4), 
+INFO: Loaded 1 PC tables (20564 PCs): 20564 [0x5c2943dfc7f8,0x5c2943e4cd38), 
+INFO:    27867 files found in /tmp/deadlib-image-prefix-corpus-20261027-a/decode
+INFO: seed corpus: files: 27867 min: 61b max: 63435b total: 6368086b rss: 59Mb
+#8192	pulse  cov: 2508 ft: 4449 corp: 239/25Kb exec/s: 4096 rss: 299Mb
+#16384	pulse  cov: 2589 ft: 4681 corp: 254/28Kb exec/s: 4096 rss: 445Mb
+#27868	INITED cov: 3766 ft: 11488 corp: 698/502Kb exec/s: 3981 rss: 476Mb
+#27884	NEW    cov: 3767 ft: 11489 corp: 699/502Kb lim: 63450 exec/s: 3983 rss: 476Mb L: 681/63435 MS: 1 CopyPart-
+#27900	NEW    cov: 3769 ft: 11508 corp: 700/504Kb lim: 63450 exec/s: 3985 rss: 476Mb L: 1727/63435 MS: 1 ChangeBinInt-
+#27902	NEW    cov: 3771 ft: 11511 corp: 701/504Kb lim: 63450 exec/s: 3986 rss: 476Mb L: 223/63435 MS: 2 ChangeBit-CrossOver-
+#27928	NEW    cov: 3772 ft: 11512 corp: 702/504Kb lim: 63450 exec/s: 3989 rss: 476Mb L: 105/63435 MS: 1 ChangeByte-
+#27944	NEW    cov: 3772 ft: 11513 corp: 703/505Kb lim: 63450 exec/s: 3992 rss: 476Mb L: 590/63435 MS: 1 EraseBytes-
+#27945	NEW    cov: 3773 ft: 11514 corp: 704/505Kb lim: 63450 exec/s: 3992 rss: 476Mb L: 172/63435 MS: 1 CopyPart-
+#27972	NEW    cov: 3774 ft: 11515 corp: 705/505Kb lim: 63450 exec/s: 3996 rss: 476Mb L: 117/63435 MS: 2 EraseBytes-ChangeByte-
+#27993	NEW    cov: 3775 ft: 11516 corp: 706/506Kb lim: 63450 exec/s: 3999 rss: 477Mb L: 1024/63435 MS: 1 ChangeBinInt-
+#28012	NEW    cov: 3776 ft: 11517 corp: 707/506Kb lim: 63450 exec/s: 4001 rss: 477Mb L: 170/63435 MS: 4 ShuffleBytes-ChangeBit-CopyPart-EraseBytes-
+#28014	NEW    cov: 3777 ft: 11518 corp: 708/506Kb lim: 63450 exec/s: 4002 rss: 477Mb L: 113/63435 MS: 2 CMP-ChangeBinInt- DE: "\327y\310q"-
+#28047	REDUCE cov: 3777 ft: 11518 corp: 708/506Kb lim: 63450 exec/s: 4006 rss: 477Mb L: 217/63435 MS: 3 InsertByte-ChangeByte-EraseBytes-
+#28153	NEW    cov: 3778 ft: 11519 corp: 709/507Kb lim: 63450 exec/s: 4021 rss: 477Mb L: 262/63435 MS: 1 ChangeBinInt-
+#28272	NEW    cov: 3779 ft: 11520 corp: 710/509Kb lim: 63450 exec/s: 4038 rss: 477Mb L: 2153/63435 MS: 4 CopyPart-ChangeByte-CrossOver-ChangeBinInt-
+#28458	NEW    cov: 3779 ft: 11530 corp: 711/537Kb lim: 63450 exec/s: 4065 rss: 478Mb L: 28791/63435 MS: 1 ShuffleBytes-
+#28544	NEW    cov: 3779 ft: 11531 corp: 712/538Kb lim: 63450 exec/s: 4077 rss: 478Mb L: 1400/63435 MS: 1 CopyPart-
+#28605	NEW    cov: 3779 ft: 11534 corp: 713/540Kb lim: 63450 exec/s: 4086 rss: 478Mb L: 1480/63435 MS: 1 PersAutoDict- DE: "\327y\310q"-
+#28697	NEW    cov: 3779 ft: 11539 corp: 714/541Kb lim: 63450 exec/s: 4099 rss: 478Mb L: 881/63435 MS: 2 CopyPart-ChangeBinInt-
+#28713	NEW    cov: 3779 ft: 11679 corp: 715/569Kb lim: 63450 exec/s: 4101 rss: 479Mb L: 28891/63435 MS: 1 InsertRepeatedBytes-
+#28739	NEW    cov: 3779 ft: 11682 corp: 716/571Kb lim: 63450 exec/s: 4105 rss: 479Mb L: 2070/63435 MS: 1 CrossOver-
+#28830	NEW    cov: 3779 ft: 11694 corp: 717/573Kb lim: 63450 exec/s: 4118 rss: 479Mb L: 2350/63435 MS: 1 ChangeByte-
+#28921	NEW    cov: 3779 ft: 11695 corp: 718/574Kb lim: 63450 exec/s: 4131 rss: 481Mb L: 1269/63435 MS: 1 ChangeByte-
+#29017	REDUCE cov: 3779 ft: 11695 corp: 718/574Kb lim: 63450 exec/s: 4145 rss: 481Mb L: 80/63435 MS: 1 EraseBytes-
+#29206	REDUCE cov: 3779 ft: 11695 corp: 718/574Kb lim: 63450 exec/s: 4172 rss: 481Mb L: 150/63435 MS: 4 CopyPart-ChangeBinInt-ShuffleBytes-EraseBytes-
+#29282	NEW    cov: 3779 ft: 11697 corp: 719/575Kb lim: 63450 exec/s: 4183 rss: 481Mb L: 940/63435 MS: 1 PersAutoDict- DE: "\327y\310q"-
+#29330	REDUCE cov: 3779 ft: 11697 corp: 719/575Kb lim: 63450 exec/s: 4190 rss: 481Mb L: 90/63435 MS: 3 ChangeBinInt-PersAutoDict-EraseBytes- DE: "\327y\310q"-
+#29341	NEW    cov: 3780 ft: 11698 corp: 720/576Kb lim: 63450 exec/s: 4191 rss: 481Mb L: 437/63435 MS: 1 CopyPart-
+#29383	REDUCE cov: 3780 ft: 11698 corp: 720/576Kb lim: 63450 exec/s: 4197 rss: 481Mb L: 86/63435 MS: 2 ShuffleBytes-EraseBytes-
+#29446	REDUCE cov: 3780 ft: 11698 corp: 720/576Kb lim: 63450 exec/s: 4206 rss: 481Mb L: 72/63435 MS: 3 ChangeByte-CopyPart-EraseBytes-
+#29482	NEW    cov: 3780 ft: 11701 corp: 721/577Kb lim: 63450 exec/s: 4211 rss: 481Mb L: 1182/63435 MS: 1 ChangeBit-
+#29524	NEW    cov: 3782 ft: 11705 corp: 722/578Kb lim: 63450 exec/s: 4217 rss: 481Mb L: 1418/63435 MS: 2 ShuffleBytes-ChangeBinInt-
+#29553	REDUCE cov: 3782 ft: 11705 corp: 722/578Kb lim: 63450 exec/s: 4221 rss: 481Mb L: 59/63435 MS: 4 CMP-PersAutoDict-PersAutoDict-EraseBytes- DE: "k\000\000\000\000\000\000\000"-"\327y\310q"-"\327y\310q"-
+#29669	REDUCE cov: 3782 ft: 11705 corp: 722/578Kb lim: 63450 exec/s: 4238 rss: 481Mb L: 206/63435 MS: 1 EraseBytes-
+#29760	NEW    cov: 3782 ft: 11708 corp: 723/581Kb lim: 63450 exec/s: 4251 rss: 481Mb L: 2989/63435 MS: 1 CopyPart-
+#29768	REDUCE cov: 3782 ft: 11708 corp: 723/581Kb lim: 63450 exec/s: 4252 rss: 481Mb L: 103/63435 MS: 3 InsertByte-PersAutoDict-EraseBytes- DE: "\327y\310q"-
+#29924	NEW    cov: 3782 ft: 11710 corp: 724/582Kb lim: 63450 exec/s: 4274 rss: 481Mb L: 681/63435 MS: 1 CrossOver-
+#29930	NEW    cov: 3782 ft: 11712 corp: 725/583Kb lim: 63450 exec/s: 4275 rss: 482Mb L: 1160/63435 MS: 1 ChangeBit-
+#30000	DONE   cov: 3782 ft: 11712 corp: 725/583Kb lim: 63450 exec/s: 4285 rss: 482Mb
+###### Recommended dictionary. ######
+"\327y\310q" # Uses: 164
+"k\000\000\000\000\000\000\000" # Uses: 20
+###### End of recommended dictionary. ######
+Done 30000 runs in 7 second(s)
+stat::number_of_executed_units: 30000
+stat::average_exec_per_sec:     4285
+stat::new_units_added:          36
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              482

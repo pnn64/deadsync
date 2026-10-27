@@ -14,7 +14,7 @@ $binaryHash = (Get-FileHash -LiteralPath $binary.FullName -Algorithm SHA256).Has
 if ($binaryHash -ne $evidence.executable_sha256) { throw 'Saved executable does not match original manifest' }
 if ($Iterations -eq 0) { $Iterations = $evidence.iterations }
 if ($Iterations -lt 1 -or $Runs -lt 1) { throw 'Iterations and Runs must be positive' }
-$usesCorpus = $evidence.target -in @('corpus','inflate')
+$usesCorpus = $evidence.target -in @('corpus','inflate','decode')
 if ($usesCorpus) {
     $CorpusDirectory = (Resolve-Path -LiteralPath $CorpusDirectory).Path
     $files = @(Get-ChildItem -LiteralPath $CorpusDirectory -Filter '*.png' | Sort-Object Name)

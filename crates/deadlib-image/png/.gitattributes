@@ -13,6 +13,8 @@ reference-conformance.log text eol=lf
 reference-samples-*.log text eol=lf
 ancillary-order-*.log text eol=lf
 compositor-*.log text eol=lf
+prefix-*.log text eol=lf
+experiments/consumed-before.log text eol=lf
 tests/fixtures/compositor-precision/*.png -text
 tests/fixtures/compositor-precision/*.rgba16.z -text
 coverage-reports/*.txt text eol=lf

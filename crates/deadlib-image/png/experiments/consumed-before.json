@@ -1,0 +1,24 @@
+{
+  "baseline": "39e258611",
+  "command": [
+    "cargo",
+    "test",
+    "-p",
+    "deadlib-image-png",
+    "--release",
+    "--lib",
+    "zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow",
+    "--",
+    "--exact",
+    "--nocapture"
+  ],
+  "expected_failure": "Original pos*8 arithmetic overflows before converting a prefetched bit count to consumed bytes. On 32-bit hosts this can affect zlib streams above 512 MiB. The boundary test uses virtual cursor positions without allocating such inputs.",
+  "exit_code": 101,
+  "wall_seconds": 11.994,
+  "source_sha256": "3a8f642d076510244926dac56f29e94d67e5fd98da8ae05f64ca9b33797b4edc",
+  "patch": "experiments/consumed-before.patch",
+  "patch_sha256": "90c4f7169ed794bff675a040bef612f6fc2dbec573373bed0ab9a998e543dc74",
+  "log": "experiments/consumed-before.log",
+  "log_sha256": "6108548c05091ad5cdf7f5308f46e0def1fed4c978b30980cf75d25b85c303b2",
+  "log_as_run_sha256": "6108548c05091ad5cdf7f5308f46e0def1fed4c978b30980cf75d25b85c303b2"
+}

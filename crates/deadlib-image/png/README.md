@@ -10,12 +10,11 @@ remain available, but encoder feature completeness and speed are outside the
 completion requirements clarified by the user on 2026-10-27.
 
 ```rust
-use deadlib_image_png::{decode, encode, EncodeOptions};
+use deadlib_image_png::decode;
 # fn example(bytes: &[u8]) -> Result<(), deadlib_image_png::Error> {
 let png = decode(bytes)?;
 // png.image.samples retains U8 or U16 precision, original channel count,
 // unpacked sub-byte values, and original palette indices.
-let encoded = encode(&png, &EncodeOptions::default())?;
 # Ok(())
 # }
 ```
@@ -24,6 +23,12 @@ Build/test independently using `cargo test -p deadlib-image-png` or
 `cargo test --manifest-path crates/deadlib-image/png/Cargo.toml`. Development
 dependencies supply independent Rust png and flate2 reference implementations.
 `cargo tree -p deadlib-image-png --edges normal` verifies the production graph.
+
+Decoder-only comparisons use `examples/decode_bench.rs` on identical input files.
+It checks native samples against Rust png before timing buffered/reader decoding
+and raw IDAT inflation. `scripts/generate_decode_corpus.py` independently builds
+all fifteen formats with plain/Adam7 and gradient/noise data. Reproduction and
+the rejected optimization trials are recorded in [BENCHMARKS.md](BENCHMARKS.md).
 
 For reference color samples with 1–16 significant bits per channel, use
 `Png::from_reference_samples(width, height, color_type, channel_depths, samples)`.

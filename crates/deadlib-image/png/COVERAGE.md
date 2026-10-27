@@ -1,8 +1,10 @@
 # PNG Third Edition implementation and verification
 
 This is an incremental implementation, not yet a claim of complete conformance.
-The target remains complete independent PNG support and measured competitive
-performance. Milestones are committed only after their relevant checks pass.
+The current deliverable is independent PNG/APNG decoding, exact native samples,
+rendering and measured competitive decoder performance. Encoder features,
+compression ratio and encoder speed are outside the completion requirements.
+Milestones are committed only after their relevant checks pass.
 The [clause audit](CONFORMANCE.md) maps the Third Edition to current code,
 evidence, application responsibilities and explicitly open items.
 
@@ -11,25 +13,24 @@ evidence, application responsibilities and explicitly open items.
 | Separate packages, no application integration | Package names, production tree, isolated offline workspace tests (`independent-build.log`) | Verified outside the application workspace; production dependency is only `deadlib-image` |
 | Native samples, all legal formats | Shared `Image`, `Samples`, `ColorType` | Primitives implemented |
 | CRC-32 / Adler-32 | Known-answer tests | Verified known answers |
-| Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, advertised/actual history and output limits; compression / zlib-header / Huffman suites | All 65,536 headers, 92 window fixtures and 19,645 Huffman fixtures pass; C default/strict/compatibility policies recorded; arbitrary tree permutations and coverage review remain open |
-| Native compression | Stored/fixed Huffman LZ77, bounded 16-candidate chains and per-block coding choice; `zlib::Deflater`, `tests/deflate_stream.rs` | Independent flate2 checks, arbitrary fragments, mixed coding and 32 KiB block/history boundaries pass |
+| Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, advertised/actual history and output limits; compression / zlib-header / Huffman / prefix suites | All 65,536 headers, 92 window fixtures, 19,645 Huffman fixtures, 88,414 prefix/suffix cases and virtual cursor overflow boundaries pass; arbitrary tree permutations and coverage review remain open |
 | PNG chunk framing and normative ordering | Independent `tests/chunks.rs` fixtures, malformed/metadata/APNG suites | All 16 property bits, all name-byte values, 25 standard names' case variants, 720 core permutations and every small-stream IDAT split pass; broader ancillary/APNG ordering audit remains open |
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
-| Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
-| Indexed-color error recovery (13.1) | `tests/palette.rs`; all indexed depths, Adam7, APNG, one-byte reads/events, independent Rust png encoding | Native indices retained, opaque-black expansion/rendering; opt-in strict decode and always-strict encoding |
+| Five filters and Adam7 decode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
+| Indexed-color error recovery (13.1) | `tests/palette.rs`; all indexed depths, Adam7, APNG, one-byte reads/events, independent Rust png fixtures | Native indices retained, opaque-black expansion/rendering; opt-in strict decode |
 | Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / field / IANA / profile tests, PNGSuite | Typed wire roundtrips, UTF-8, BCP47 registration, method distinctions, sample masks, histogram usage and profile containers checked; extension-specific and payload semantics still require audit |
-| Latin-1 text-body encoder/recovery boundary | `tests/text_body.rs`, shared encoder validator, independent stored-zlib fixtures and C named-metadata oracle | All 256 byte values across 6,144 files; strict graphic Latin-1/LF encoding, non-null decoder recovery, NBSP/long text and iTXt Unicode distinctions verified |
-| sRGB fallback metadata consistency | `tests/metadata_fields.rs` | Both encoders enforce Table 17 gAMA/cHRM values with sRGB; all 15 formats / four intents and incompatible fallback orders pass |
+| Latin-1 text-body recovery | `tests/text_body.rs`, independent stored-zlib fixtures and C named-metadata oracle | All 256 byte values across 6,144 files; non-null decoder recovery, NBSP/long text and iTXt Unicode distinctions verified |
+| sRGB fallback metadata | `tests/metadata_fields.rs`, metadata selection API | All 15 formats / four intents and fallback orders pass; original metadata values remain available |
 | cICP code-point validity | `tests/cicp.rs`, H.273 (07/2024) | All 131,072 primaries/transfer/range combinations, all matrix/flag bytes and reserved-code fallback behavior pass |
-| mDCV/cLLI exact fixed-point metadata | `tests/hdr.rs`, independent stored-zlib/CRC fixtures, C fixed-point getters and Rust png metadata | All 8,192 field-byte mutations, 60 integer boundaries, 132 length cases and 120 ordering permutations pass; exact units/order and both writers checked across all 15 formats |
-| APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing/recovery/rendered tests | Exact native frames, 4,530 independent faults, legal fcTL-before-acTL ordering and 201 independent RGBA16 WPT canvases pass, including reset and 280 writer outputs |
-| Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
+| mDCV/cLLI exact fixed-point metadata | `tests/hdr.rs`, independent stored-zlib/CRC fixtures, C fixed-point getters and Rust png metadata | All 8,192 field-byte mutations, 60 integer boundaries, 132 length cases and 120 ordering permutations pass; exact units/order checked across all 15 formats |
+| APNG frame decoding and compositing | `apng.rs`, `composite.rs`, APNG/compositing/recovery/rendered tests | Exact native frames, 4,530 independent faults, legal fcTL-before-acTL ordering, 983,040 rational alpha pairs and 2,121 independent RGBA16 canvases pass, including replay/reset |
+| Bounded streaming with arbitrary input boundaries | `zlib::Inflater`, `StreamDecoder`, `decode_reader` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Nine targets; 590,000 recorded successful sanitizer executions across milestones, including 60,000 with pending-control/WPT seeds; longer campaigns and native fuzz coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eleven targets; 1,110,000 recorded successful sanitizer executions across milestones, including historical encoder runs; newest 110,000 executions use five decoder targets; longer campaigns and whole-decoder native-only feedback review remain open |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
-Milestones: (1) shared primitives and native compression; (2) static PNG codec and
+Historical milestones: (1) shared primitives and native compression; (2) static PNG codec and
 sample matrix; (3) metadata and APNG; (4) streaming and external conformance;
 (5) fuzzing, benchmarks, measured optimization, and final requirement audit.
 
@@ -1155,3 +1156,61 @@ match. The standalone production dependency remains only `deadlib-image`.
 `compositor-independent.log` retain commands, hashes and counts. No comparative
 timings were taken. Remaining decoder field audits, scoped corpus gaps,
 whole-decoder feedback review and measured decoder performance remain open.
+
+## Exact zlib prefix consumption and overflow (2026-10-27)
+
+The buffered bit reader previously computed consumed bytes as
+`ceil((pos * 8 - buffered_bits) / 8)`. Its intermediate multiplication can
+overflow before the result is converted back to bytes. The retained fix uses
+`pos - buffered_bits / 8`, which is equivalent for valid reader states without
+overflowing the byte cursor. The regression compares 474 virtual cursor/bit-count
+states against u128 arithmetic, including usize limits. It fails on the original
+release code and passes with the fix. This models positions that can affect
+32-bit streams above 512 MiB; no giant input allocation or actual 32-bit run is
+claimed. `experiments/consumed-before.{patch,json,log}` retains the failing
+command, exit 101 and reconstructible source.
+
+`tests/deflate_prefix.rs` tests all 3,091 positive independent Huffman fixtures
+with fourteen suffix lengths, exact prefix consumption, strict trailing-data
+rejection, output limits, three streaming fragment shapes and 24,728 final
+body/trailer truncations. Another 740 literal streams cover fixed/stored/fixed
+transitions at all tested alignments, empty stored blocks, one-bit dynamic end
+codes and zero/nonzero unused padding bits. Sixteen suffix lengths and four
+patterns exercise buffered lookahead beyond the Adler trailer. Together the
+two tests check 88,414 prefix/suffix/padding placements over 3,831 independent
+streams, with 11,493 streaming fragment-shape checks. Inputs are constructed
+independently of the native encoder.
+
+The final source passes 123 normal release tests and 123 standalone offline
+tests, with fifteen optional checks ignored in each. Separate C audits pass
+19,645 default-policy Huffman, 65,652 strict-window header/history and 19,645
+compatibility-policy Huffman cases. Strict main/fuzz all-target Clippy and
+scoped rustfmt pass. The standalone copy also builds the decoder-only example
+offline and checks all sixty independent static fixtures across six operations
+(360 result rows). Its one-iteration timings are a correctness smoke, excluded
+from comparative performance claims. Final production, test, harness, C binary
+and copied-fixture hashes are retained in `prefix-validation.json` with
+`prefix-validation.log` and `prefix-independent.log`.
+
+Eight buffered inflate performance trials were rejected. Their patches all
+reconstruct the recorded source from `39e258611`; twenty-one measurement groups
+match those snapshots exactly, and both final interleaved summaries recompute
+from the raw TSV. `BENCHMARKS.md` documents the negative results. Only consumed
+byte arithmetic and its regression test change in production source. The
+original 32-bit refill, symbol loop and streaming inflater remain selected.
+Decoder performance is still incomplete; no speedup is claimed here.
+
+The raw zlib fuzzer now independently validates each accepted exact prefix,
+checks strict rejection of trailing bytes and confirms that appending a sentinel
+cannot alter the decoded bytes or consumption count. Fresh Linux ASan campaigns
+pass 10,000 `huffman`, 20,000 `zlib`, 20,000 `inflate_stream`, 30,000 `png_stream`
+and 30,000 `decode` executions. Fuzzing seconds / peak RSS are respectively
+132 / 410 MiB, 18 / 382, 16 / 398, 30 / 511 and 7 / 482. Each binary defines
+the ASan runtime entry; final sources match the initial snapshots. Fresh raw
+corpora have 649, 810 and 161 files; each PNG corpus has 27,867 files / 6,368,086
+bytes. Exact commands, source/corpus/binary hashes and full logs are retained in
+`fuzz/reports/prefix-source.json` and `prefix-*-linux.log`. These 110,000 successful
+decoder executions bring historical campaigns to 1,110,000 across eleven targets,
+including earlier encoder runs. No new encoder campaign or encoder change was
+added. Whole-decoder native-only feedback review, remaining field audits and
+competitive decoder performance remain open.
