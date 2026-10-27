@@ -17,6 +17,16 @@ impl<'a> BitReader<'a> {
             bits: 0,
         }
     }
+    pub(crate) fn at_position(data: &'a [u8], position: usize) -> Result<Self, Error> {
+        if position / 8 > data.len() || (position / 8 == data.len() && !position.is_multiple_of(8))
+        {
+            return Err(Error::Truncated);
+        }
+        let mut reader = Self::new(data);
+        reader.next = position / 8;
+        reader.read((position % 8) as u32)?;
+        Ok(reader)
+    }
     pub fn position(&self) -> usize {
         self.next * 8 - self.bits as usize
     }

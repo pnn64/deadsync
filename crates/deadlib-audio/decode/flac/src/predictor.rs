@@ -93,8 +93,8 @@ mod x86 {
                 match coeff.len() {
                     // SAFETY: AVX2 is detected above. The kernel reads only
                     // N initialized coefficients and N earlier, checked samples
-                    // in the same output slice. It checks each new sample before
-                    // allowing the next iteration to use its low 32 bits.
+                    // in the same output slice. It checks all four new samples
+                    // before the next batch can use their low 32 bits.
                     $($n => unsafe { kernel::<$n>(output, &padded, shift, width) },)*
                     _ => unreachable!(),
                 }
@@ -124,6 +124,7 @@ mod x86 {
         unsafe {
             let base = output.as_mut_ptr();
             let mut i = N;
+            let bias = 1u64 << (width - 1);
             while output.len() - i >= 4 {
                 let mut sums = [_mm256_setzero_si256(); 4];
                 for j in 0..N {
@@ -140,14 +141,36 @@ mod x86 {
                 // Lane a contains the terms from samples before this batch.
                 // Add the a newly reconstructed samples before shifting, so
                 // the original LPC rounding is preserved separately per output.
+                let mut range_bits = 0u64;
                 for a in 0..4 {
                     let mut prediction = partial[a];
                     for b in 0..a {
-                        prediction += coeff[a - b - 1] * *base.add(i + b);
+                        if N >= 16 {
+                            prediction = prediction
+                                .wrapping_add(coeff[a - b - 1].wrapping_mul(*base.add(i + b)));
+                        } else {
+                            prediction += coeff[a - b - 1] * *base.add(i + b);
+                        }
                     }
-                    let value = *base.add(i + a) + (prediction >> shift);
-                    check_sample(value, width)?;
+                    let value = if N >= 16 {
+                        (*base.add(i + a)).wrapping_add(prediction >> shift)
+                    } else {
+                        *base.add(i + a) + (prediction >> shift)
+                    };
+                    if N >= 16 {
+                        range_bits |= (value as u64).wrapping_add(bias);
+                    } else {
+                        check_sample(value, width)?;
+                    }
                     *base.add(i + a) = value;
+                }
+                // Each biased value is in 0..2^width iff it fits. OR keeps any
+                // invalid high bit set, checking every sample with one branch.
+                // New terms use full i64 arithmetic, wrapping only to avoid
+                // overflow after an already-invalid value. Such a batch always
+                // fails here, before SIMD can reuse any unchecked low 32 bits.
+                if N >= 16 && range_bits >= (1u64 << width) {
+                    return Err(Error::Invalid("sample outside declared bit depth"));
                 }
                 i += 4;
             }
@@ -260,14 +283,27 @@ mod tests {
                     let extreme = if sign < 0 { -bound } else { bound - 1 };
                     let mut residual = vec![0; 65];
                     residual[..order].fill(extreme);
-                    residual[order] = sign;
-                    let mut coeff = vec![0; order];
-                    coeff[0] = 1;
-                    let mut reference = residual.clone();
-                    assert!(scalar(&mut reference, &coeff, 0, width).is_err());
-                    assert!(restore(&mut residual, &coeff, 0, width).is_err());
+                    for position in 0..4 {
+                        let mut residual = residual.clone();
+                        residual[order + position] = sign;
+                        let mut coeff = vec![0; order];
+                        coeff[0] = 1;
+                        let mut reference = residual.clone();
+                        assert!(scalar(&mut reference, &coeff, 0, width).is_err());
+                        assert!(restore(&mut residual, &coeff, 0, width).is_err());
+                    }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn invalid_batch_cannot_overflow_before_range_rejection() {
+        for order in 4..=32 {
+            let mut residual = vec![0; 65];
+            residual[..order].fill(i32::MAX as i64);
+            let coeff = vec![16383; order];
+            assert!(restore(&mut residual, &coeff, 0, 32).is_err());
         }
     }
 }

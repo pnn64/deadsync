@@ -260,3 +260,66 @@ verify it. It also tests invalid native and CRC-valid Ogg expected digests.
 The [audit passes](benches/validation/2026-10-27-kernels/pipeline-oracle-audit.json).
 New pipeline modes include Ogg readers and native/Symphonia/libFLAC construction
 and destruction inside the timer. Their measured baseline is active work.
+
+## Streaming buffers and PCM MD5, 2026-10-27
+
+Native readers advance a buffer cursor and compact when more input is needed.
+Completed channel planes survive input refills; incomplete planes restart from
+their own bit position. Public raw decoding and seeking reset these checkpoints.
+The complete frame CRC is checked before PCM is returned. Tests append every
+prefix of representative frames, including 33-bit stereo, and exercise error
+recovery and replacement input.
+
+MD5 compression uses constant round indices and rotate counts. PCM serialization
+specializes byte width and channel count in a separate private module, using a
+4 KiB stack buffer. Tests compare it with direct interleaving at every depth and
+channel count, batch boundaries and trims, alongside the million-`a` digest.
+
+High-order AVX2 kernels combine four biased sample ranges with bitwise OR and
+check the result before the next SIMD batch. Any invalid high bit remains set.
+Dependent scalar terms use explicit wrapping after an invalid sample so that
+even malformed batches reject without an arithmetic panic. Valid samples retain
+the same exact i64 arithmetic. Negative tests cover every position in the batch
+and maximum coefficients. Shorter kernels retain individual range branches.
+
+Five interleaved trials compare the preserved preceding milestone with this
+candidate. Full native decoding with MD5 improves 1.50–2.13x, and Ogg with MD5
+improves 1.29–1.84x across the six selected classes. Times below are complete-file
+milliseconds. libFLAC columns use the corrected fresh-decoder MD5 modes.
+
+| Case | Raw speedup | Reader speedup, MD5 off | Native + MD5 | libFLAC + MD5 | Ogg + MD5 | libFLAC Ogg + MD5 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 01: block 4096 | 1.022x | 1.096x | 10.030 | 7.500 | 9.976 | 8.097 |
+| 03: block 16 | 1.008x | 1.221x | 13.162 | 16.846 | 16.890 | 18.097 |
+| 15: verbatim | 0.979x | 1.098x | 3.114 | 6.028 | 4.115 | 6.931 |
+| 28: high resolution | 0.997x | 1.361x | 36.815 | 28.780 | 35.547 | 31.668 |
+| 44: 8-channel LPC-32 | 0.956x | 1.771x | 681.617 | 739.869 | 741.707 | 780.032 |
+| uncommon 08: block 65535 | 0.996x | 1.296x | 21.000 | 14.258 | 18.724 | 15.045 |
+
+The initial version regressed raw LPC-32. A nine-trial repeat and hardware
+counters confirmed extra branch misses with nearly unchanged instruction counts;
+a cold-error experiment was rejected. The retained grouped checks reduce branch
+pressure, but the final table still records a 4.6% raw slowdown on case 44.
+Profiles also expose an indexed accumulator loop in LPC-32. Its unrolling and
+the remaining common-file gaps are follow-up work. This milestone improves the
+pipelines substantially and does not establish complete performance parity.
+
+Reports: [paired timings](benches/validation/2026-10-27-pipelines/raw.tsv),
+[summary](benches/validation/2026-10-27-pipelines/summary.json),
+[manifest](benches/validation/2026-10-27-pipelines/manifest.json),
+[initial raw repeat](benches/validation/2026-10-27-pipelines/initial-lpc32-repeat-raw.tsv).
+The artifact directory retains the initial pipeline measurements and hardware
+counters as well as the final results. Startup's first-frame work and MD5 after
+warm-up pass the [oracle audit](benches/validation/2026-10-27-pipelines/oracle-audit.json).
+
+All 10 unit tests, 43 integration/external gates and three doctests pass. Clippy
+passes all targets. Four fresh 60-second ASan campaigns complete 121,315
+executions without failures. Test, fuzz and benchmark build source hashes agree;
+see the [final validation record](benches/validation/2026-10-27-pipelines/final-validation.json).
+
+`benches/build_native.py --output /tmp/new-benchmark --target-dir /tmp/flac-build`
+builds and preserves a Linux/WSL benchmark with a JSON sidecar containing compiler
+versions, flags, workspace manifests/lockfile and codec/Ogg source hashes. It
+requires a new output path and fails if inputs change while building. The runner
+can pair any native pipeline mode with its `baseline-` equivalent. Allocation
+and retained-buffer measurements remain in progress.

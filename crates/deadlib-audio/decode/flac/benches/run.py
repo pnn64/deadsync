@@ -34,7 +34,8 @@ def main():
     parser.add_argument('--rounds', type=int, default=5)
     parser.add_argument('--milliseconds', type=int, default=100)
     parser.add_argument('--cpu', type=int, default=2)
-    parser.add_argument('--modes', nargs='+', choices=MODES+['baseline-frames', 'baseline-crc'], default=MODES)
+    baseline_modes = ['baseline-' + mode for mode in MODES if not mode.startswith(('libflac', 'ffmpeg'))]
+    parser.add_argument('--modes', nargs='+', choices=MODES+baseline_modes, default=MODES)
     parser.add_argument('--quick', action='store_true')
     parser.add_argument('--all', action='store_true')
     parser.add_argument('--case', action='append', help='case prefix, e.g. subset/44; repeat to select several')
@@ -47,7 +48,7 @@ def main():
     # Baseline binaries are identified separately by their preserved binary hash.
     native_sources = {str(p.relative_to(root)): sha(p) for p in sorted((root/'src').rglob('*.rs'))}
     driver_files = ['benches/decode.rs', 'benches/run.py', 'benches/build.sh',
-                    'benches/oracle/CMakeLists.txt', 'benches/oracle/benchmark.cpp']
+                    'benches/oracle/CMakeLists.txt', 'benches/oracle/benchmark.cpp', 'benches/build_native.py']
     driver_sources = {name: sha(root/name) for name in driver_files}
     os.sched_setaffinity(0, {args.cpu})
     paths = []
@@ -156,6 +157,9 @@ def main():
                 'cpuinfo': Path('/proc/cpuinfo').read_text().split('\n\n')[0],
                 'native_sources': native_sources, 'driver_sources': driver_sources,
                 'cases': case_info, 'unsupported': errors}
+    for label, binary in [('native_build', args.native), ('baseline_build', args.baseline)]:
+        sidecar = Path(str(binary)+'.json') if binary else None
+        manifest[label] = json.loads(sidecar.read_text()) if sidecar and sidecar.is_file() else None
     (args.output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
 
 

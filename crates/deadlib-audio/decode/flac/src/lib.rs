@@ -12,6 +12,7 @@ pub mod native;
 pub mod ogg;
 mod ogg_encode;
 mod ogg_seek;
+mod pcm_md5;
 mod predictor;
 
 pub use encode::{EncodeOptions, FrameEncoder};

@@ -132,35 +132,101 @@ fn compress(state: &mut [u32; 4], block: &[u8; 64]) {
         0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb,
         0xeb86d391,
     ];
-    const S: [[u32; 4]; 4] = [
-        [7, 12, 17, 22],
-        [5, 9, 14, 20],
-        [4, 11, 16, 23],
-        [6, 10, 15, 21],
-    ];
     let mut words = [0u32; 16];
     for (word, bytes) in words.iter_mut().zip(block.as_chunks::<4>().0) {
         *word = u32::from_le_bytes(*bytes);
     }
     let [mut a, mut b, mut c, mut d] = *state;
-    for i in 0..64 {
-        let (f, g) = match i {
-            0..=15 => ((b & c) | (!b & d), i),
-            16..=31 => ((d & b) | (!d & c), (5 * i + 1) % 16),
-            32..=47 => (b ^ c ^ d, (3 * i + 5) % 16),
-            _ => (c ^ (b | !d), (7 * i) % 16),
+    // Constant word indices and rotate counts avoid per-round dispatch in this
+    // serial compression chain. Variables rotate by the macro argument order.
+    macro_rules! mix {
+        (f, $b:ident, $c:ident, $d:ident) => {
+            $d ^ ($b & ($c ^ $d))
         };
-        let next = b.wrapping_add(
-            a.wrapping_add(f)
-                .wrapping_add(K[i])
-                .wrapping_add(words[g])
-                .rotate_left(S[i / 16][i % 4]),
-        );
-        a = d;
-        d = c;
-        c = b;
-        b = next;
+        (g, $b:ident, $c:ident, $d:ident) => {
+            $c ^ ($d & ($b ^ $c))
+        };
+        (h, $b:ident, $c:ident, $d:ident) => {
+            $b ^ $c ^ $d
+        };
+        (i, $b:ident, $c:ident, $d:ident) => {
+            $c ^ ($b | !$d)
+        };
     }
+    macro_rules! step {
+        ($f:ident, $a:ident, $b:ident, $c:ident, $d:ident, $i:literal, $g:literal, $s:literal) => {
+            $a = $b.wrapping_add(
+                $a.wrapping_add(mix!($f, $b, $c, $d))
+                    .wrapping_add(words[$g])
+                    .wrapping_add(K[$i])
+                    .rotate_left($s),
+            );
+        };
+    }
+    step!(f, a, b, c, d, 0, 0, 7);
+    step!(f, d, a, b, c, 1, 1, 12);
+    step!(f, c, d, a, b, 2, 2, 17);
+    step!(f, b, c, d, a, 3, 3, 22);
+    step!(f, a, b, c, d, 4, 4, 7);
+    step!(f, d, a, b, c, 5, 5, 12);
+    step!(f, c, d, a, b, 6, 6, 17);
+    step!(f, b, c, d, a, 7, 7, 22);
+    step!(f, a, b, c, d, 8, 8, 7);
+    step!(f, d, a, b, c, 9, 9, 12);
+    step!(f, c, d, a, b, 10, 10, 17);
+    step!(f, b, c, d, a, 11, 11, 22);
+    step!(f, a, b, c, d, 12, 12, 7);
+    step!(f, d, a, b, c, 13, 13, 12);
+    step!(f, c, d, a, b, 14, 14, 17);
+    step!(f, b, c, d, a, 15, 15, 22);
+    step!(g, a, b, c, d, 16, 1, 5);
+    step!(g, d, a, b, c, 17, 6, 9);
+    step!(g, c, d, a, b, 18, 11, 14);
+    step!(g, b, c, d, a, 19, 0, 20);
+    step!(g, a, b, c, d, 20, 5, 5);
+    step!(g, d, a, b, c, 21, 10, 9);
+    step!(g, c, d, a, b, 22, 15, 14);
+    step!(g, b, c, d, a, 23, 4, 20);
+    step!(g, a, b, c, d, 24, 9, 5);
+    step!(g, d, a, b, c, 25, 14, 9);
+    step!(g, c, d, a, b, 26, 3, 14);
+    step!(g, b, c, d, a, 27, 8, 20);
+    step!(g, a, b, c, d, 28, 13, 5);
+    step!(g, d, a, b, c, 29, 2, 9);
+    step!(g, c, d, a, b, 30, 7, 14);
+    step!(g, b, c, d, a, 31, 12, 20);
+    step!(h, a, b, c, d, 32, 5, 4);
+    step!(h, d, a, b, c, 33, 8, 11);
+    step!(h, c, d, a, b, 34, 11, 16);
+    step!(h, b, c, d, a, 35, 14, 23);
+    step!(h, a, b, c, d, 36, 1, 4);
+    step!(h, d, a, b, c, 37, 4, 11);
+    step!(h, c, d, a, b, 38, 7, 16);
+    step!(h, b, c, d, a, 39, 10, 23);
+    step!(h, a, b, c, d, 40, 13, 4);
+    step!(h, d, a, b, c, 41, 0, 11);
+    step!(h, c, d, a, b, 42, 3, 16);
+    step!(h, b, c, d, a, 43, 6, 23);
+    step!(h, a, b, c, d, 44, 9, 4);
+    step!(h, d, a, b, c, 45, 12, 11);
+    step!(h, c, d, a, b, 46, 15, 16);
+    step!(h, b, c, d, a, 47, 2, 23);
+    step!(i, a, b, c, d, 48, 0, 6);
+    step!(i, d, a, b, c, 49, 7, 10);
+    step!(i, c, d, a, b, 50, 14, 15);
+    step!(i, b, c, d, a, 51, 5, 21);
+    step!(i, a, b, c, d, 52, 12, 6);
+    step!(i, d, a, b, c, 53, 3, 10);
+    step!(i, c, d, a, b, 54, 10, 15);
+    step!(i, b, c, d, a, 55, 1, 21);
+    step!(i, a, b, c, d, 56, 8, 6);
+    step!(i, d, a, b, c, 57, 15, 10);
+    step!(i, c, d, a, b, 58, 6, 15);
+    step!(i, b, c, d, a, 59, 13, 21);
+    step!(i, a, b, c, d, 60, 4, 6);
+    step!(i, d, a, b, c, 61, 11, 10);
+    step!(i, c, d, a, b, 62, 2, 15);
+    step!(i, b, c, d, a, 63, 9, 21);
     for (word, value) in state.iter_mut().zip([a, b, c, d]) {
         *word = word.wrapping_add(value);
     }

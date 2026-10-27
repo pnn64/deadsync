@@ -44,7 +44,7 @@ def main():
     paths = sorted((root / 'src').glob('*.rs')) + sorted((root / 'tests').rglob('*'))
     paths = [p for p in paths if p.is_file()]
     before = {p.relative_to(root).as_posix(): sha(p) for p in paths}
-    common = ['-p', 'deadlib-audio-decode-flac', '--target-dir', str(args.target_dir.resolve())]
+    common = ['--locked', '-p', 'deadlib-audio-decode-flac', '--target-dir', str(args.target_dir.resolve())]
     commands = [['cargo', 'test'] + common + ['--release', '--', '--include-ignored', '--test-threads=1'],
                 ['cargo', 'clippy'] + common + ['--all-targets', '--', '-D', 'warnings']]
     results = []

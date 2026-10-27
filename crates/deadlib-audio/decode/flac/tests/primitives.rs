@@ -67,6 +67,13 @@ fn checksum_known_answers_and_chunking() {
             assert_eq!(actual, expected);
         }
     }
+    let million_a = vec![b'a'; 1_000_000];
+    let mut md5 = Md5::new();
+    for chunk in million_a.chunks(373) {
+        md5.update(chunk);
+    }
+    let actual: String = md5.finalize().iter().map(|x| format!("{x:02x}")).collect();
+    assert_eq!(actual, "7707d6ae4e027c70eea2a935c2296f21");
 }
 
 #[test]

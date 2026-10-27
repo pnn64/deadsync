@@ -156,21 +156,7 @@ impl<'a> Pcm<'a> {
     }
     /// Feed little-endian, sign-extended interleaved PCM to the stream digest.
     pub fn update_md5(&self, digest: &mut crate::checksum::Md5, bits: u8) {
-        let bytes = usize::from(bits.div_ceil(8));
-        let mut buffer = [0u8; 4096];
-        let mut used = 0;
-        for sample in 0..self.samples {
-            for channel in 0..self.channels as usize {
-                let value = self.data[channel * self.stride + self.offset + sample].to_le_bytes();
-                if used + bytes > buffer.len() {
-                    digest.update(&buffer[..used]);
-                    used = 0;
-                }
-                buffer[used..used + bytes].copy_from_slice(&value[..bytes]);
-                used += bytes;
-            }
-        }
-        digest.update(&buffer[..used]);
+        crate::pcm_md5::update(self, digest, bits);
     }
 }
 
@@ -187,6 +173,13 @@ pub struct FrameDecoder {
     info: Option<StreamInfo>,
     work: Vec<i64>,
     output: Vec<i32>,
+    partial: Option<PartialFrame>,
+}
+#[derive(Clone, Copy)]
+struct PartialFrame {
+    header: FrameHeader,
+    channel: usize,
+    position: usize,
 }
 impl FrameDecoder {
     /// Change header defaults while retaining allocated PCM and predictor buffers.
@@ -195,6 +188,7 @@ impl FrameDecoder {
             info.validate()?;
         }
         self.info = info;
+        self.partial = None;
         Ok(())
     }
     /// Find the first complete CRC-valid frame in a bounded input slice. Useful
@@ -243,6 +237,19 @@ impl FrameDecoder {
         })
     }
     pub fn decode(&mut self, data: &[u8]) -> Result<Frame<'_>, Error> {
+        self.partial = None;
+        self.decode_inner::<false>(data)
+    }
+    pub(crate) fn clear_partial(&mut self) {
+        self.partial = None;
+    }
+    /// The reader appends to the same frame prefix until decoding succeeds.
+    /// Retain completed planes, restarting only the incomplete subframe.
+    pub(crate) fn decode_buffer(&mut self, data: &[u8]) -> Result<Frame<'_>, Error> {
+        self.decode_inner::<true>(data)
+    }
+    fn decode_inner<const RESUME: bool>(&mut self, data: &[u8]) -> Result<Frame<'_>, Error> {
+        let partial = if RESUME { self.partial.take() } else { None };
         let header = FrameHeader::parse(data, self.info.as_ref())?;
         let n = header.block_size;
         let len = n * header.channels as usize;
@@ -251,21 +258,50 @@ impl FrameDecoder {
             reserve(&mut self.work, additional)?;
         }
         self.work.resize(len, 0);
-        let mut r = BitReader::new(&data[header.header_bytes..]);
-        for (channel, plane) in self.work.chunks_exact_mut(n).enumerate() {
+        let partial = partial.filter(|p| p.header == header);
+        let first_channel = partial.map_or(0, |p| p.channel);
+        let mut r = BitReader::at_position(
+            &data[header.header_bytes..],
+            partial.map_or(0, |p| p.position),
+        )?;
+        for (channel, plane) in self
+            .work
+            .chunks_exact_mut(n)
+            .enumerate()
+            .skip(first_channel)
+        {
             let side = (header.channel_assignment == 9 && channel == 0)
                 || (matches!(header.channel_assignment, 8 | 10) && channel == 1);
-            subframe(
+            let position = r.position();
+            if let Err(error) = subframe(
                 &mut r,
                 plane,
                 u32::from(header.bits_per_sample) + u32::from(side),
-            )?;
+            ) {
+                if RESUME && error == Error::Truncated {
+                    self.partial = Some(PartialFrame {
+                        header,
+                        channel,
+                        position,
+                    });
+                }
+                return Err(error);
+            }
         }
-        r.align_zero()?;
-        let crc_pos = header.header_bytes + r.position() / 8;
-        if r.read(16)? as u16 != crc16(&data[..crc_pos]) {
-            return Err(Error::Checksum("frame CRC-16"));
-        }
+        let position = r.position();
+        let crc_pos = match footer(&mut r, data, header.header_bytes) {
+            Ok(position) => position,
+            Err(error) => {
+                if RESUME && error == Error::Truncated {
+                    self.partial = Some(PartialFrame {
+                        header,
+                        channel: header.channels as usize,
+                        position,
+                    });
+                }
+                return Err(error);
+            }
+        };
         if len > self.output.len() {
             let additional = len - self.output.len();
             reserve(&mut self.output, additional)?;
@@ -337,6 +373,15 @@ impl FrameDecoder {
             bytes: crc_pos + 2,
         })
     }
+}
+
+fn footer(r: &mut BitReader<'_>, data: &[u8], header_bytes: usize) -> Result<usize, Error> {
+    r.align_zero()?;
+    let crc_pos = header_bytes + r.position() / 8;
+    if r.read(16)? as u16 != crc16(&data[..crc_pos]) {
+        return Err(Error::Checksum("frame CRC-16"));
+    }
+    Ok(crc_pos)
 }
 
 #[inline]
@@ -526,6 +571,136 @@ fn residual(r: &mut BitReader<'_>, output: &mut [i64], order: usize) -> Result<(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn packed_md5_covers_every_width_channel_count_batch_tail_and_trim() {
+        use crate::checksum::Md5;
+        for bits in 4u8..=32 {
+            for channels in 1..=8 {
+                for samples in [0, 1, 127, 257, 4097] {
+                    let stride = samples + 7;
+                    let data: Vec<i32> = (0..stride * channels)
+                        .map(|i| {
+                            let value = (i as i32).wrapping_mul(123456789).wrapping_add(i32::MIN);
+                            value >> (32 - bits)
+                        })
+                        .collect();
+                    let pcm = Pcm {
+                        data: &data,
+                        stride,
+                        offset: 3,
+                        samples,
+                        channels: channels as u8,
+                    };
+                    for skip in [0, samples / 3] {
+                        let pcm = pcm.trim_start(skip);
+                        let mut bytes = Vec::new();
+                        for sample in 0..pcm.samples() {
+                            for channel in 0..channels {
+                                bytes.extend_from_slice(
+                                    &pcm.plane(channel)[sample].to_le_bytes()
+                                        [..usize::from(bits.div_ceil(8))],
+                                );
+                            }
+                        }
+                        let mut expected = Md5::new();
+                        expected.update(&bytes);
+                        let mut actual = Md5::new();
+                        pcm.update_md5(&mut actual, bits);
+                        assert_eq!(
+                            actual.finalize(),
+                            expected.finalize(),
+                            "bits={bits}, channels={channels}, samples={samples}, skip={skip}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn resumable_planes_match_full_decode_at_every_prefix_and_reset() {
+        use crate::{EncodeOptions, FrameEncoder};
+        for bits in [4, 12, 17, 24, 32] {
+            for channels in [1, 2, 8] {
+                let options = EncodeOptions {
+                    bits_per_sample: bits,
+                    channels,
+                    block_size: 96,
+                    ..Default::default()
+                };
+                let planes: Vec<Vec<i32>> = (0..channels)
+                    .map(|ch| {
+                        (0..96)
+                            .map(|i| {
+                                if bits == 32 && channels == 2 {
+                                    if (i + ch as usize).is_multiple_of(2) {
+                                        i32::MIN
+                                    } else {
+                                        i32::MAX
+                                    }
+                                } else {
+                                    let value = match ch % 4 {
+                                        0 => 0x12340000,
+                                        1 => (i as i32 - 48).wrapping_mul(128123),
+                                        2 => ((i as f64 * 0.27).sin() * 1e9) as i32,
+                                        _ => (i as i32).wrapping_mul(123456789),
+                                    };
+                                    value >> (32 - bits)
+                                }
+                            })
+                            .collect()
+                    })
+                    .collect();
+                let refs: Vec<_> = planes.iter().map(Vec::as_slice).collect();
+                let mut encoder = FrameEncoder::new(options).unwrap();
+                let data = encoder.encode(&refs, 0).unwrap().to_vec();
+                let mut decoder = FrameDecoder::new(Some(options.stream_info().unwrap())).unwrap();
+                let mut resumed_plane = false;
+                for end in 0..data.len() {
+                    assert!(
+                        matches!(decoder.decode_buffer(&data[..end]), Err(Error::Truncated)),
+                        "bits={bits}, channels={channels}, end={end}"
+                    );
+                    if let Some(partial) = decoder.partial {
+                        resumed_plane |= (1..channels as usize).contains(&partial.channel);
+                    }
+                }
+                let frame = decoder.decode_buffer(&data).unwrap();
+                assert_eq!(frame.bytes, data.len());
+                for (actual, expected) in frame.pcm.planes().zip(&planes) {
+                    assert_eq!(actual, expected);
+                }
+                assert!(decoder.partial.is_none());
+                if channels > 1 {
+                    assert!(resumed_plane);
+                }
+
+                let other = vec![vec![1; 96]; channels as usize];
+                let refs: Vec<_> = other.iter().map(Vec::as_slice).collect();
+                let different = encoder.encode(&refs, 0).unwrap().to_vec();
+                assert!(decoder.decode_buffer(&data[..data.len() - 1]).is_err());
+                let frame = decoder.decode(&different).unwrap();
+                assert!(frame.pcm.planes().all(|p| p == [1; 96]));
+                let mut bad = data.clone();
+                *bad.last_mut().unwrap() ^= 1;
+                assert!(decoder.decode_buffer(&data[..data.len() - 1]).is_err());
+                assert!(matches!(
+                    decoder.decode_buffer(&bad),
+                    Err(Error::Checksum(_))
+                ));
+                assert!(decoder.partial.is_none());
+                assert!(
+                    decoder
+                        .decode_buffer(&different)
+                        .unwrap()
+                        .pcm
+                        .planes()
+                        .all(|p| p == [1; 96])
+                );
+            }
+        }
+    }
 
     #[test]
     fn biased_range_check_covers_signed_and_wrapping_extremes() {

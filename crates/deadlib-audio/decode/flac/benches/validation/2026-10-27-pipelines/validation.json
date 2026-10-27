@@ -1,0 +1,101 @@
+{
+  "finished_utc": "2026-10-27T16:09:14Z",
+  "passed": true,
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-flac",
+        "--target-dir",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac",
+        "--release",
+        "--",
+        "--include-ignored",
+        "--test-threads=1"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-flac",
+        "--target-dir",
+        "C:\\GitHub\\deadsync\\target\\deadlib-flac",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "unit_tests": 10,
+  "integration_and_external_gates": 43,
+  "doctests": 3,
+  "source_sha256": {
+    "src/bitstream.rs": "5f5b2ea145163e3c5eaa500b26ca90720fc7016855241e56bf2359c0ae72e326",
+    "src/checksum.rs": "74ae9f13eb0a8a00d30dd5aff689a2e5bfdd9833eb361413c4296d1e60661b07",
+    "src/encode.rs": "7d5a4964f53343ffeb269f958f68872c1137a37071a20185ae72e4c6d45926a6",
+    "src/encoder.rs": "e009f29eb87ece5ca05d26f22030b524f5d247d45939539505ff4826fb77e596",
+    "src/frame.rs": "6c5c2eadb42462d9a0de3fec7323aa004c373120d97ebf2784734a0c58f30540",
+    "src/lib.rs": "4d23c4454ced22579bc58878045ebb22a261ef2dd74ac1618242b8c7881f7f4e",
+    "src/metadata.rs": "088f01f53f6d47f107bef663b24c9256ce55e9673cced1f37e4316363caf48fa",
+    "src/native.rs": "ce68f01d63182232dd8f444ee20c0c5fe08442637e2f11fec700fc86cfa16675",
+    "src/ogg.rs": "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85",
+    "src/ogg_encode.rs": "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d",
+    "src/ogg_seek.rs": "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1",
+    "src/pcm_md5.rs": "4527bf3d8f717fc2e1931c27ce710db91cbe557ddc65232be4b6170600a9ea5b",
+    "src/predictor.rs": "804b8786dfd4a3958471598ee98b6e2c7c8cbcdb6a1af929c440501a02b35afd",
+    "tests/conformance.rs": "8c989c38d07b0958fc9c7c24b84a574fccbe51ebd278609a27876101e856dffe",
+    "tests/decoder_parity.rs": "6d607ac04cd85ee1b9764485b0060ed3b19de1636c28cecaa13ad2afe92e8333",
+    "tests/encoding.rs": "e793c70bf7f257f2c09e2c5e0eabe01003c582b3a3deeeaf564aa396bdff0ba4",
+    "tests/ffmpeg/build.sh": "4942715ff34f725a81b03ba3bdde7ac2bfe95c61337c4c639a2a41682f348bdc",
+    "tests/ffmpeg/oracle.c": "861a479e28a5df48e291d8994e8f6c26f994762771c7d261cbdbad4de4b21cac",
+    "tests/frames.rs": "36e26878ca4a6e33c2d79e6ad556c914b7318a9936903ae5f99ae197a36f4623",
+    "tests/ogg_mapping.rs": "df53758a79d5959ab64ce1e272be21f87b2aa968c79a6287ba15862acef4dc38",
+    "tests/ogg_reference.rs": "76ad70e9d70f23b45e3e7979dc6d836d96cce1a7362c2a596087401bd005953e",
+    "tests/oracle/CMakeLists.txt": "e3795a6dfd7255d1c81124e74e66449b4f1fd205df5c0d8c0d3333ef19684d0b",
+    "tests/oracle/oracle.c": "1d97b81330d0bd4415576d6c48f13a4e2b3ab2e40d82e79f58a4ec08a6f706a4",
+    "tests/primitives.rs": "01cb3c7793c4388801f54e98c491c06365d51e7c6613c942e85a7b59808dbc60",
+    "tests/seeking.rs": "371153aeb486393b0e8e6ccb08e2f76d9e33c03070690e840b2f95748c642436",
+    "tests/streaming.rs": "4851d8018cb255357277701a14f14a8a35c13acefc10344e6161ff39e10a811d",
+    "tests/support/decoder_vectors.rs": "7dd00f0fdd2451605d37c92997b094f00ae6b0ed14d80dc9b7d350fe884e83c3"
+  },
+  "source_changed": false,
+  "driver_sha256": "0482a35ed8ca26e9a1e64716b5127a42e3e3c36d9aeb375b28ca9efa85347f0d",
+  "oracle_sha256": "b0509810fc33e6a8d5319fae5ae65ea46beb6bd3d38616fdc45da8cb98a3c56c",
+  "reference_environment": {
+    "DEADLIB_FLAC_ORACLE": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\oracle-build\\Release\\deadlib_flac_oracle.exe",
+    "DEADLIB_FLAC_CORPUS": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\conformance",
+    "DEADLIB_FLAC_GENERATED": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\generated",
+    "DEADLIB_FLAC_FFMPEG_ORACLE": "/tmp/deadlib-flac-ffmpeg-9.0.2-parity/ffmpeg-flac-oracle-audited",
+    "DEADLIB_FLAC_RAW_FUZZ_CORPUS": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-decoder-parity-20261027\\corpus\\frame",
+    "DEADLIB_FLAC_FFMPEG_WSL": "Debian",
+    "DEADLIB_FLAC_REPORT": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\perf-pipelines-verified-validation\\native-corpus.tsv",
+    "DEADLIB_FLAC_SEEK_REPORT": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\perf-pipelines-verified-validation\\native-seeking.tsv",
+    "DEADLIB_FLAC_ENCODING_REPORT": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\perf-pipelines-verified-validation\\encoding-matrix.tsv",
+    "DEADLIB_FLAC_OGG_REPORT": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\perf-pipelines-verified-validation\\ogg-matrix.tsv",
+    "DEADLIB_FLAC_OGG_CORPUS_REPORT": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\perf-pipelines-verified-validation\\ogg-corpus.tsv",
+    "DEADLIB_FLAC_FFMPEG_REPORT": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\perf-pipelines-verified-validation\\ffmpeg-corpus.tsv",
+    "DEADLIB_FLAC_WIRE_REPORT": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\perf-pipelines-verified-validation\\wire-parity.tsv",
+    "DEADLIB_FLAC_FUZZ_FRAME_REPORT": "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\perf-pipelines-verified-validation\\fuzz-frame-parity.tsv"
+  },
+  "report_sha256": {
+    "clippy.log": "f98d943933efa27cb1b6f757355516003b9f4cd21a5c6ba2517e3c230ac72053",
+    "encoding-matrix.tsv": "1854f9436a790e41eec3afd871def268900e360f0f326fe063795fcd415880d8",
+    "ffmpeg-corpus.tsv": "a77abfb93be9337a1c72965d54466ed7d588fa4459daa3b6d0595a9593442a6b",
+    "fuzz-frame-parity.tsv": "37c13094de6cfb2bab216d95c8ea3bd5b690835cfe3e89eefa6db537168bdbbb",
+    "native-corpus.tsv": "31c4455882665732451a09f86114762531cc00c5daa7cbf571d94c5adf3d8621",
+    "native-seeking.tsv": "714daf191488ffe585da6a92d05bfd74c5c7af8de6e6c0430a262013383a92df",
+    "ogg-corpus.tsv": "5704b9bfef0c7d7b31ff55aa827d8282add4cfe3719dad3da857150d8ea2d70b",
+    "ogg-matrix.tsv": "b74830ae1262224049bff6d77a280801d2c3aae6e2094b878843f484f260c76e",
+    "tests.log": "3c9f66bbbdb0fc610960607bce5a5a8989447a26b22b1992fa1c0c18d0cd42e0",
+    "wire-parity.tsv": "5378f109adf366e0edae1ffd42ead3e51c2cb4bf455d6ad94b74c2de57c58195"
+  }
+}

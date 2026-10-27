@@ -372,9 +372,8 @@ impl<R: Read> Reader<R> {
         if self.done {
             return Ok(None);
         }
-        if self.consumed != 0 {
-            self.buffer.copy_within(self.consumed.., 0);
-            self.buffer.truncate(self.buffer.len() - self.consumed);
+        if self.consumed == self.buffer.len() {
+            self.buffer.clear();
             self.consumed = 0;
         }
         loop {
@@ -383,15 +382,23 @@ impl<R: Read> Reader<R> {
                 self.done = true;
                 return Ok(None);
             }
-            match self.decoder.decode(&self.buffer) {
+            match self.decoder.decode_buffer(&self.buffer[self.consumed..]) {
                 Ok(frame) => {
                     let start = self.sequence.accept(frame.header, frame.pcm)?;
-                    self.consumed = frame.bytes;
+                    self.consumed += frame.bytes;
                     self.offset += frame.bytes as u64;
                     return Ok(Some((frame.header, start)));
                 }
                 Err(Error::Truncated) if !self.eof => (),
                 Err(error) => return Err(error),
+            }
+            // Compact only when more input is needed, rather than copying the
+            // remaining buffer after every small frame. Checkpoints are bit
+            // offsets within the unchanged current-frame prefix.
+            if self.consumed != 0 {
+                self.buffer.copy_within(self.consumed.., 0);
+                self.buffer.truncate(self.buffer.len() - self.consumed);
+                self.consumed = 0;
             }
             // Doubling avoids quadratic restart work on very large frames. A
             // short Read (including one-byte readers) is accumulated before retry.
@@ -613,6 +620,7 @@ impl<R: Read + Seek> SeekReader<R> {
         }
         self.reader.offset = point.offset;
         self.reader.buffer.clear();
+        self.reader.decoder.clear_partial();
         self.reader.consumed = 0;
         self.reader.eof = false;
         self.reader.done = false;
