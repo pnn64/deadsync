@@ -92,6 +92,8 @@ Removing unit-twiddle FFT multiplications then improves the isolated kernel
 1.14-1.27x, with observed longer-track full decoding gains of 1.03x / 1.11x.
 Transform storage and the numerical gates stay unchanged; mixed short-clip
 movements and overlapping trial ranges remain explicit in the report.
+A [bit-checked synthesis diagnostic](vorbis/SYNTHESIS_PROFILE.md) now separates
+actual song packet stages and identifies residue as the next throughput target.
 
 The [resource and arbitrary-seek baseline](vorbis/RESOURCES.md) separates
 requested-heap instrumentation, fresh-process memory and uninstrumented timing.

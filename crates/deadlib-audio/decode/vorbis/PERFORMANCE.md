@@ -394,7 +394,11 @@ in [RESOURCES.md](RESOURCES.md#one-pass-container-and-vorbis-indexing-2026-10-27
 Ogg-only container throughput and truly cold startup still need comparative
 measurements. Sanitizer RSS is not a production memory result.
 
-Add actual symbol-frequency/profile evidence and floor/residue component
-measurements to explain the remaining pipeline gap. Optimize a measured bottleneck,
+The [real-packet component diagnostic](SYNTHESIS_PROFILE.md) now measures floor,
+residue, transform and overlap work with a bit-checked instrumented copy.
+Residue takes about 55% / 42% of recorded stage time on the two songs; floor-zero
+has a different dominant cost. Its timers affect layout and execution, so the
+next residue change still needs an uninstrumented paired pipeline comparison.
+Add actual codebook-frequency evidence to refine the remaining gap. Optimize a measured bottleneck,
 then rerun the same corpus/count/PCM gates and benchmark manifest. Broader files,
 platforms and controlled machines remain necessary before performance claims.
