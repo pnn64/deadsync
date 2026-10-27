@@ -1,0 +1,11 @@
+[package]
+name = "deadlib-audio-decode-flac"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "GPL-3.0"
+description = "Independent pure-Rust FLAC codec with integer PCM and raw frame support"
+repository = "https://github.com/pnn64/deadsync"
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }
