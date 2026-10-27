@@ -1549,9 +1549,7 @@ pub fn runtime_read_best_itg_score_for_profile(
         runtime_get_local_itg_score_for_profile(profile_id, chart_hash, score_paths);
     let (gs, gs_result) = runtime_get_gs_score_for_profile(profile_id, chart_hash, score_paths);
     let (ac, ac_result) = runtime_get_ac_scores_for_profile(profile_id, chart_hash, score_paths);
-    let ac = ac
-        .and_then(|scores| scores.itg)
-        .map(|score| score.to_cached_score());
+    let ac = ac.and_then(|scores| scores.to_cached_itg_score());
     ScoreCacheAccess {
         value: best_cached_itg_score([local, gs, ac]),
         results: smallvec![
@@ -2116,8 +2114,7 @@ impl HeldProfileScores<'_> {
                     [
                         local_itg.copied(),
                         self.gs.and_then(|scores| scores.get(chart_hash).copied()),
-                        ac.and_then(|scores| scores.itg)
-                            .map(|score| score.to_cached_score()),
+                        ac.and_then(ArrowCloudScores::to_cached_itg_score),
                     ]
                     .into_iter()
                     .flatten()
@@ -2152,9 +2149,8 @@ impl HeldProfileScores<'_> {
         let gs = self.gs.and_then(|scores| scores.get(chart_hash).copied());
         let ac = self
             .ac
-            .and_then(|scores| scores.get(chart_hash).copied())
-            .and_then(|score| score.itg)
-            .map(|score| score.to_cached_score());
+            .and_then(|scores| scores.get(chart_hash))
+            .and_then(ArrowCloudScores::to_cached_itg_score);
         best_cached_itg_score([local, gs, ac])
     }
 }
@@ -2201,8 +2197,8 @@ fn merged_profile_scores_from_sources<'a>(
                 .count();
             let mut merged = Vec::with_capacity(itg_count);
             for (chart_hash, scores) in scores {
-                if let Some(score) = scores.itg {
-                    merged.push((chart_hash.clone(), score.to_cached_score()));
+                if let Some(score) = scores.to_cached_itg_score() {
+                    merged.push((chart_hash.clone(), score));
                 }
             }
             sort_profile_scores(&mut merged);
@@ -2235,8 +2231,8 @@ fn merged_profile_scores_from_sources<'a>(
     }
     if let Some(scores) = ac {
         for (chart_hash, score) in scores {
-            if let Some(score) = score.itg {
-                insert(chart_hash, score.to_cached_score());
+            if let Some(score) = score.to_cached_itg_score() {
+                insert(chart_hash, score);
             }
         }
     }
@@ -2999,7 +2995,8 @@ impl<'de, C> bincode::BorrowDecode<'de, C> for ArrowCloudScore {
 }
 
 impl ArrowCloudScore {
-    /// Adapter used to merge AC cache entries with local and `GrooveStats` scores.
+    /// Convert an ITG entry without EX evidence, so its grade is at most a quad.
+    /// Use [`ArrowCloudScores::to_cached_itg_score`] when merging cached scores.
     #[must_use]
     pub fn to_cached_score(&self) -> CachedScore {
         let score_10000 = (self.score_percent * 10000.0).clamp(0.0, 10000.0);
@@ -3026,6 +3023,25 @@ pub struct ArrowCloudScores {
     pub itg: Option<ArrowCloudScore>,
     pub ex: Option<ArrowCloudScore>,
     pub hard_ex: Option<ArrowCloudScore>,
+}
+
+impl ArrowCloudScores {
+    /// Resolve the ITG grade and lamp using EX evidence for quints.
+    #[must_use]
+    pub fn to_cached_itg_score(&self) -> Option<CachedScore> {
+        let mut score = self.itg?.to_cached_score();
+        // A 100% ITG score alone only proves a quad. The best EX play may
+        // differ from the best ITG play, but a passed 100% EX proves a quint.
+        if score.grade != Grade::Failed
+            && self
+                .ex
+                .is_some_and(|ex| !ex.is_fail && ex.score_percent >= 1.0)
+        {
+            score.grade = Grade::Quint;
+            score.lamp_index = Some(0);
+        }
+        Some(score)
+    }
 }
 
 #[inline]
@@ -9961,6 +9977,67 @@ mod tests {
             played_at: None,
             play_id: None,
             is_fail,
+        }
+    }
+
+    #[test]
+    fn arrowcloud_quints_reach_wheel_grades_lamps_and_profile_snapshots() {
+        let quad = cached_score(Grade::Tier01, 1.0, Some(1), None);
+        let quint = cached_score(Grade::Quint, 1.0, Some(0), None);
+        let failed = cached_score(Grade::Failed, 1.0, None, None);
+        for (ex_percent, ex_failed, itg_failed, expected) in [
+            (Some(100.0), false, false, quint),
+            (Some(99.9999), false, false, quad),
+            (None, false, false, quad),
+            (Some(100.0), true, false, quad),
+            (Some(100.0), false, true, failed),
+        ] {
+            let scores = ArrowCloudScores {
+                itg: arrowcloud_score_from_retrieve_fields(
+                    Some(100.0),
+                    Some("Quad"),
+                    None,
+                    Some(1),
+                    itg_failed,
+                ),
+                ex: arrowcloud_score_from_retrieve_fields(
+                    ex_percent,
+                    None,
+                    None,
+                    Some(2),
+                    ex_failed,
+                ),
+                hard_ex: None,
+            };
+            // Existing on-disk imports must gain quints without re-importing.
+            let config = bincode::config::standard();
+            let bytes = bincode::encode_to_vec(scores, config).unwrap();
+            let (scores, _): (ArrowCloudScores, _) =
+                bincode::decode_from_slice(&bytes, config).unwrap();
+            let ac = HashMap::from([("chart".to_string(), scores)]);
+            let mut local = LocalScoreIndex::default();
+            local.best_itg.insert("chart".to_string(), quad);
+            let gs = HashMap::from([("chart".to_string(), quad)]);
+            for (local, gs) in [(None, None), (Some(&local), Some(&gs))] {
+                let profile = HeldProfileScores {
+                    profile_id: "player",
+                    local,
+                    gs,
+                    ac: Some(&ac),
+                };
+                assert_eq!(profile.merged("chart"), Some(expected));
+                assert_eq!(
+                    merged_profile_scores_from_sources(
+                        local.map(|index| &index.best_itg),
+                        gs,
+                        Some(&ac),
+                    ),
+                    vec![("chart".to_string(), expected)]
+                );
+                let expected_lamp = CachedLamp::from_score(expected)
+                    .or_else(|| local.and_then(|_| CachedLamp::from_score(quad)));
+                assert_eq!(profile.wheel_scores("chart").lamp, expected_lamp);
+            }
         }
     }
 
