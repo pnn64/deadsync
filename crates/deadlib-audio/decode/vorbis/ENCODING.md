@@ -240,5 +240,9 @@ files shrink 26–29% with bit-identical PCM, zero raw warmed allocations and
 documented tiny-file header costs. The baseline measurements retain their
 original provenance. Perceptual/rate control and broader resource/quality
 comparisons remain open.
+The [scalar-book evaluation](SCALAR_BOOK_EVALUATION.md) adds paired decoding
+costs for native, Symphonia and libvorbisfile. It rejects a further smaller-book
+candidate as the default because its decode throughput cost outweighs the
+default-stage size saving; production encoding remains unchanged.
 The broader decoder conformance, sparse seeking and performance work in
 [COVERAGE.md](COVERAGE.md) also remains part of the requested goal.

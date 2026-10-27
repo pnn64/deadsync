@@ -127,6 +127,10 @@ two-stage song outputs shrink 26–29% in paired runs with bit-identical PCM thr
 three decoders. Larger headers increase tiny-file sizes; raw retained buffers
 grow modestly and warmed encoding still allocates nothing. Competitive quality,
 rate control and broader decoder/encoder performance work remain open.
+The [scalar-book evaluation](vorbis/SCALAR_BOOK_EVALUATION.md) adds 1,008 paired
+decoder timing rows and rejects a candidate that saves less than 1% at default
+precision while slowing native song decoding 12–15%. The validated pair book
+remains in production; the candidate and measurements are preserved.
 
 ## Normative sources
 

@@ -1,7 +1,7 @@
 """Profile native encoder packets after independent round-trip checks.
 
-Recognizes the flat-floor setup with the original eight-bit or compact first
-book. Other configurations are rejected rather than guessed.
+Recognizes the flat-floor setup with the original eight-bit, compact pair or
+compact scalar first book. Other configurations are rejected rather than guessed.
 """
 import argparse
 import csv
@@ -95,13 +95,20 @@ def configuration(packets, stages):
     bits.expect(8, stages)
     for book in range(stages + 1):
         bits.expect(24, 0x564342)
-        bits.expect(16, 1 if book == 0 else 2)
-        bits.expect(24, 2 if book == 0 else 256)
+        dimensions = bits.read(16)
+        entries = bits.read(24)
+        if book == 1:
+            if (dimensions, entries) not in {(2,256),(1,16)}:
+                raise ValueError('unsupported first-stage geometry')
+            first_dimensions = dimensions
+        elif (dimensions, entries) != ((1,2) if book == 0 else (2,256)):
+            raise ValueError('unsupported classifier/later-stage geometry')
         ordered = bits.read(1)
         if book == 1 and not ordered:
             bits.expect(1, 0)
-            lengths = [bits.read(5) + 1 for _ in range(256)]
-            expected = [3 if i in {119,120,135,136} else 8 if i in {0,15,240,255} else 9 for i in range(256)]
+            lengths = [bits.read(5) + 1 for _ in range(entries)]
+            expected = ([1 if i == 8 else 2 if i == 7 else 5 if i in {0,15} else 6 for i in range(16)]
+                        if dimensions == 1 else [3 if i in {119,120,135,136} else 8 if i in {0,15,240,255} else 9 for i in range(256)])
             if lengths != expected:
                 raise ValueError('unsupported first-stage tree')
         else:
@@ -110,6 +117,8 @@ def configuration(packets, stages):
             bits.expect(5, 0 if book == 0 else 7)
             bits.expect(2 if book == 0 else 9, 2 if book == 0 else 256)
             if book == 1:
+                if (dimensions, entries) != (2,256):
+                    raise ValueError('unsupported ordered first stage')
                 lengths = [8] * 256
         bits.expect(4, 0 if book == 0 else 1)
         if book:
@@ -134,12 +143,12 @@ def configuration(packets, stages):
                          (8, 0), (6, 0), (1, 0), (16, 0), (16, 0), (8, 0), (1, 1)]:
         bits.expect(count, value)
     bits.finish()
-    return channels, block, lengths, first_decoder(lengths)
+    return channels, block, lengths, first_decoder(lengths), first_dimensions
 
 
 def profile(path, stages):
     stream = packets(path)
-    channels, block, lengths, decoder = configuration(stream, stages)
+    channels, block, lengths, decoder, first_dimensions = configuration(stream, stages)
     partitions = block // 32
     counts = [0] * 256
     digest = hashlib.sha256()
@@ -171,6 +180,10 @@ def profile(path, stages):
                             if stage == 0:
                                 symbol, length = decoder[bits.peek9()]
                                 bits.read(length)
+                                if first_dimensions == 1:
+                                    high, length = decoder[bits.peek9()]
+                                    bits.read(length)
+                                    symbol |= high << 4
                                 counts[symbol] += 1
                             else:
                                 symbol = reversal[bits.read(8)]
@@ -184,13 +197,17 @@ def profile(path, stages):
     def scalar_length(digit):
         return 1 if digit == 8 else 2 if digit == 7 else 5 if digit in {0,15} else 6
     scalar_bits = sum(n * (scalar_length(i & 15) + scalar_length(i >> 4)) for i, n in enumerate(counts))
+    pair_lengths = ([lengths[i & 15] + lengths[i >> 4] for i in range(256)]
+                    if first_dimensions == 1 else lengths)
     entropy = -sum((n / total) * math.log2(n / total) for n in counts if n) if total else 0
     return counts, {'channels': channels, 'block_size': block, 'stages': stages, 'first_stage_symbols': total,
+                    'canonical_pair_count': total, 'actual_first_stage_codewords': total * (2 if first_dimensions == 1 else 1),
+                    'first_book_dimensions': first_dimensions, 'first_book_entries': len(lengths),
                     'decoded_floor_class_symbol_sha256': digest.hexdigest(),
                     'central_symbols': sum(counts[i] for i in common),
                     'central_fraction': sum(counts[i] for i in common) / total if total else 0,
                     'entropy_bits_per_symbol': entropy,
-                    'current_first_stage_bits': sum(n * length for n, length in zip(counts, lengths)),
+                    'current_first_stage_bits': sum(n * length for n, length in zip(counts, pair_lengths)),
                     'fixed_eight_bit_first_stage_bits': total * 8, 'proposed_first_stage_bits': proposed_bits,
                     'candidate_scalar_stage_bits': scalar_bits,
                     'candidate_scalar_additional_payload_saving_bytes': (proposed_bits - scalar_bits) / 8,
@@ -228,10 +245,10 @@ def main():
                 raise ValueError('baseline/current decoded packet symbols changed')
     write_json(run / 'symbols.json', {'analyzer_sha256': sha(Path(__file__)),
         'producer_manifest_sha256': sha(run / 'manifest.json'), 'quality_report_sha256': sha(run / 'quality.tsv'),
-        'schema': 'Flat-floor setup with ordered eight-bit or compact first stage; every audio packet consumed through zero padding; first tree assignment uses an independent exhaustive prefix oracle',
+        'schema': 'Flat-floor setup with original fixed, compact pair or compact scalar first stage; dimension-one entries combine into canonical digit pairs for equality checks; every packet consumed through zero padding; independent exhaustive prefix oracle',
         'proposal': 'First-stage four central pair symbols length 3, four corner pairs length 8, other 248 length 9; complete tree; unchanged VQ values and quantizer',
         'projection_limit': 'Savings column compares symbol costs to the initial fixed eight-bit book; payload bits only, excluding setup, rounding, Ogg lacing/pages and CPU. Current compact-book bits are measured separately.',
-        'scalar_candidate': 'Projection only: dimension-one 16-entry book, digit 8 length 1, digit 7 length 2, digits 0/15 length 5, other 12 length 6; Kraft 1/2+1/4+2/32+12/64=1. Costs two scalar symbols per original pair. Header, rounding, mux and CPU effects are excluded.',
+        'scalar_layout': 'Dimension-one 16-entry book, digit 8 length 1, digit 7 length 2, digits 0/15 length 5, other 12 length 6; Kraft 1/2+1/4+2/32+12/64=1. Two scalar symbols per canonical pair. Payload cost is measured for scalar inputs and projected for pair inputs; header, rounding, mux and CPU effects excluded.',
         'first_stage_histograms_for_two_stage_song_cases': histograms})
     print(f'Profiled {len(rows)} native outputs: {run / "symbols.tsv"}')
 

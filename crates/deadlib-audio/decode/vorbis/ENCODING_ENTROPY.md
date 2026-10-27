@@ -163,9 +163,11 @@ digit eight at length one, seven at length two, zero/fifteen at length five and
 the other twelve at length six. Its Kraft sum is
 `1/2 + 1/4 + 2/32 + 12/64 = 1`. Coding two scalar entries per current pair would
 save a projected additional 4,908 / 5,796 first-stage payload bytes in the
-two-stage songs and reduce length-list overhead. This candidate is not yet
-implemented; changing VQ dimension also changes decoder work, which needs
-paired measurement and the same exact-symbol/PCM gates.
+two-stage songs and reduce length-list overhead. The subsequent
+[scalar-book evaluation](SCALAR_BOOK_EVALUATION.md) validates that representation
+and measures all three decoders. Its default-stage size gain is only 0.8–0.9%
+while native song decoding slows 12–15%, so the pair book remains the production
+default. The experimental source and exact-PCM comparisons are retained.
 
 Adaptive floors, transient blocks, channel coupling, perceptual/rate control,
 broader encoder resource/quality comparisons, decoder throughput/startup work

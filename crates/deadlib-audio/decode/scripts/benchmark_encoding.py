@@ -76,9 +76,12 @@ def main():
     parser.add_argument('--min-seconds', type=float, default=0.15)
     parser.add_argument('--seed', type=int, default=4187)
     parser.add_argument('--baseline-revision', help='interleave prior production sources using the exact same encoding adapter')
+    parser.add_argument('--decode-cost', action='store_true', help='time three decoders on the paired native output representations')
     args = parser.parse_args()
     if not (args.seconds > 0 and args.skip_seconds >= 0 and args.repeats > 0 and math.isfinite(args.min_seconds) and args.min_seconds > 0):
         parser.error('invalid duration/repeat limits')
+    if args.decode_cost and not args.baseline_revision:
+        parser.error('--decode-cost requires --baseline-revision')
     run = (args.run_root or REPO / 'target/deadlib-audio-reference' / ('encoding-' + uuid.uuid4().hex)).resolve()
     run.mkdir(parents=True, exist_ok=False)
     reference = args.reference_root.resolve()
@@ -103,6 +106,14 @@ def main():
     invoke(configure, run / 'c-configure.log')
     invoke(['cmake', '--build', cbuild, '--config', 'Release', '--target', 'deadlib_vorbis_encoding', '--parallel', '4'], run / 'c-build.log')
     c = cbuild / ('Release/deadlib_vorbis_encoding.exe' if os.name == 'nt' else 'deadlib_vorbis_encoding')
+    decoder_rust, decoder_c = None, None
+    if args.decode_cost:
+        decoder_build = invoke(['cargo', 'bench', '--locked', '-p', 'deadlib-audio-decode-vorbis', '--bench', 'pipeline', '--no-run', '--message-format=json'], run / 'decode-rust-build.log')
+        decoder_rust, decoder_profile = rust_worker(decoder_build)
+        if decoder_profile != profile or registry_packages(decoder_build) != registry_packages(build):
+            raise RuntimeError('encoding/decoding worker profiles or registry artifacts differ')
+        invoke(['cmake', '--build', cbuild, '--config', 'Release', '--target', 'deadlib_vorbis_benchmark', '--parallel', '4'], run / 'decode-c-build.log')
+        decoder_c = cbuild / ('Release/deadlib_vorbis_benchmark.exe' if os.name == 'nt' else 'deadlib_vorbis_benchmark')
     files = args.files or [DECODE / 'vorbis/tests/fixtures/mono.ogg', DECODE / 'vorbis/tests/fixtures/stereo.ogg',
                           DECODE / 'vorbis/tests/fixtures/eight-channel.ogg',
                           REPO / 'assets/sounds/boom.ogg', REPO / 'assets/music/in_two (loop).ogg']
@@ -134,7 +145,12 @@ def main():
         'scope_limit': 'Precision stages and Xiph VBR quality are distinct configurations, not matched perceptual quality or bitrate. Source excerpts are decoded lossy files, not original studio PCM.',
     }
     write_json(run / 'manifest.json', manifest)
-    rows, qualities = [], []
+    if args.decode_cost:
+        manifest['decode_binary_paths'] = {'rust': str(decoder_rust), 'libvorbis': str(decoder_c)}
+        manifest['decode_binary_sha256'] = {'rust': sha(decoder_rust), 'libvorbis': sha(decoder_c)}
+        manifest['decode_cost_policy'] = 'Same current native/Symphonia/libvorbisfile workers decode both paired representations; full resident-input forward decode including fresh setup/cleanup, no PCM retention; original pipeline adapter and common exact sample counts'
+        write_json(run / 'manifest.json', manifest)
+    rows, qualities, decode_rows = [], [], []
     rng = random.Random(args.seed)
     for number, path in enumerate(files):
         pcm = run / f'input-{number}.pcm'
@@ -195,6 +211,35 @@ def main():
                 row['trial'] = trial
                 rows.append(row)
             write_tsv(run / 'trials.tsv', rows)
+        if args.decode_cost:
+            def decode_worker(producer, setting, engine, iterations):
+                source = run / f'output-{number}-{producer}-{setting}.ogg'
+                command = ([decoder_c, 'full', iterations, source] if engine == 'libvorbis'
+                           else [decoder_rust, engine, 'full', iterations, source])
+                values = invoke(command).strip().split('\t')
+                if len(values) != 7 or values[:2] != [engine, 'full']:
+                    raise RuntimeError(f'invalid decoder worker output: {values}')
+                n, elapsed, samples, reads, consumed = map(int, values[2:])
+                if n != iterations or elapsed <= 0 or samples != geometry['frames'] * geometry['channels'] * iterations:
+                    raise RuntimeError(f'decoder count/timing disagreement: {values}')
+                return {'path': label(path), 'producer': producer, 'setting': setting, 'decoder': engine,
+                        'iterations': n, 'elapsed_ns': elapsed, 'samples': samples,
+                        'read_calls': reads, 'bytes_read': consumed, 'ns_per_run': elapsed / n}
+            decode_configs = [(producer, str(stage), engine) for stage in range(1, 5)
+                              for producer in ['native', 'native-baseline']
+                              for engine in ['native', 'symphonia', 'libvorbis']]
+            decode_iterations = {}
+            for config in decode_configs:
+                pilot = decode_worker(*config, 1)
+                decode_iterations[config] = min(10000, max(1, math.ceil(args.min_seconds * 1e9 / pilot['elapsed_ns'])))
+            for trial in range(args.repeats):
+                order = list(decode_configs)
+                rng.shuffle(order)
+                for config in order:
+                    row = decode_worker(*config, decode_iterations[config])
+                    row['trial'] = trial
+                    decode_rows.append(row)
+                write_tsv(run / 'decode-trials.tsv', decode_rows)
         print(f'{label(path)}: {len(configs)} configurations verified and timed', flush=True)
     summary = []
     for path in files:
@@ -210,6 +255,17 @@ def main():
                               phase + '_mad_ns': statistics.median(abs(t - median) for t in times)})
             summary.append(entry)
     write_tsv(run / 'summary.tsv', summary)
+    if decode_rows:
+        decode_summary = []
+        for key in dict.fromkeys((r['path'], r['producer'], r['setting'], r['decoder']) for r in decode_rows):
+            group = [r for r in decode_rows if (r['path'], r['producer'], r['setting'], r['decoder']) == key]
+            times = [r['ns_per_run'] for r in group]
+            median = statistics.median(times)
+            decode_summary.append(dict(zip(['path', 'producer', 'setting', 'decoder'], key)) | {
+                'median_ns': median, 'min_ns': min(times), 'max_ns': max(times),
+                'mad_ns': statistics.median(abs(t - median) for t in times),
+                'samples_per_run': group[0]['samples'] // group[0]['iterations']})
+        write_tsv(run / 'decode-summary.tsv', decode_summary)
     if source_snapshot() != manifest['source_sha256']:
         raise RuntimeError('benchmark sources/build configuration changed during run')
     for path in files:
@@ -219,9 +275,12 @@ def main():
         raise RuntimeError('worker binary changed during run')
     if baseline and sha(baseline) != baseline_metadata['binary_sha256']:
         raise RuntimeError('baseline worker changed during run')
+    if args.decode_cost and {'rust': sha(decoder_rust), 'libvorbis': sha(decoder_c)} != manifest['decode_binary_sha256']:
+        raise RuntimeError('decoder worker changed during run')
     manifest['completed_utc'] = datetime.now(timezone.utc).isoformat()
     manifest['quality_cases'] = len(qualities)
     manifest['timing_rows'] = len(rows)
+    manifest['decode_timing_rows'] = len(decode_rows)
     manifest['final_hashes_verified'] = True
     write_json(run / 'manifest.json', manifest)
     print(f'Retained encoding evidence: {run}', flush=True)
