@@ -1,0 +1,21 @@
+    Checking smallvec v1.16.4
+    Checking deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+    Checking deadlib-audio-decode-flac v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\flac)
+    Checking symphonia-core v0.6.1
+error: the loop variable `j` is used to index `coeff`
+   --> crates\deadlib-audio\decode\flac\src\predictor.rs:152:26
+    |
+152 |                 for j in 0..N {
+    |                          ^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#needless_range_loop
+    = note: `-D clippy::needless-range-loop` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_range_loop)]`
+help: consider using an iterator and enumerate()
+    |
+152 -                 for j in 0..N {
+152 +                 for (j, <item>) in coeff.iter().enumerate().take(N) {
+    |
+
+error: could not compile `deadlib-audio-decode-flac` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

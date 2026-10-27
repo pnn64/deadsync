@@ -1,6 +1,6 @@
 //! Independent integer-PCM FLAC codec. See the package coverage ledger.
 #![doc = include_str!("../README.md")]
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 pub mod bitstream;
 pub mod checksum;
@@ -12,6 +12,7 @@ pub mod native;
 pub mod ogg;
 mod ogg_encode;
 mod ogg_seek;
+mod predictor;
 
 pub use encode::{EncodeOptions, FrameEncoder};
 pub use encoder::{EncodedStream, Encoder};

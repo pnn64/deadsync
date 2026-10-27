@@ -13,7 +13,11 @@ import time
 DEFAULT_SUBSET = [1, 3, 6, 11, 12, 14, 15, 16, 17, 22, 23, 24, 28, 31, 38, 41, 43, 44, 60, 61, 62, 63, 64]
 DEFAULT_UNCOMMON = [5, 7, 8, 9]
 MODES = ['frames', 'symphonia', 'symphonia-crc', 'libflac-frames', 'ffmpeg',
-         'borrowed', 'stream', 'stream-md5', 'libflac', 'libflac-md5', 'startup', 'libflac-startup', 'crc']
+         'borrowed', 'stream', 'stream-md5', 'libflac', 'libflac-md5', 'startup', 'libflac-startup', 'crc',
+         'libflac-new', 'libflac-new-md5', 'libflac-new-startup',
+         'symphonia-new', 'symphonia-new-crc', 'symphonia-new-startup',
+         'ogg-stream', 'ogg-stream-md5', 'libflac-new-ogg', 'libflac-new-ogg-md5',
+         'symphonia-new-ogg', 'symphonia-new-ogg-crc']
 
 
 def sha(path):
@@ -59,16 +63,25 @@ def main():
     rng = random.Random(9639)
     rows, errors = [], []
     case_info = []
+    needs_ogg = any('ogg' in mode for mode in args.modes)
+
+    def is_crc(mode):
+        return mode in ['crc', 'baseline-crc']
 
     def execute(mode, path, iterations, index, create_index=False):
         if mode.startswith(('libflac', 'ffmpeg')):
-            command = [str(args.oracle), mode, str(path), str(index), str(iterations)]
+            input_path = index.with_suffix('.oga') if 'ogg' in mode else path
+            command = [str(args.oracle), mode, str(input_path), str(index), str(iterations)]
         else:
             executable = args.baseline if mode.startswith('baseline-') else args.native
             assert executable is not None, 'baseline mode needs --baseline'
             command = [str(executable), mode.removeprefix('baseline-'), str(path), str(iterations)]
             if create_index:
                 command.append(str(index))
+                if needs_ogg:
+                    command.append(str(index.with_suffix('.oga')))
+            elif 'ogg' in mode:
+                command += [str(index), str(index.with_suffix('.oga'))]
         result = subprocess.run(command, capture_output=True, text=True)
         if result.returncode:
             return None, {'mode': mode, 'file': str(path), 'exit_code': result.returncode,
@@ -83,8 +96,16 @@ def main():
         index = args.output / (sha(path) + '.index')
         base, failure = execute('frames', path, 1, index, True)
         assert not failure, failure
-        case_info.append({'case': case, 'sha256': sha(path), 'bytes': path.stat().st_size,
-                          'frames': base['frames'], 'bits': base['bits'], 'channels': base['channels']})
+        details = {'case': case, 'sha256': sha(path), 'bytes': path.stat().st_size,
+                   'frames': base['frames'], 'bits': base['bits'], 'channels': base['channels']}
+        if needs_ogg:
+            ogg = index.with_suffix('.oga')
+            details.update(ogg_sha256=sha(ogg), ogg_bytes=ogg.stat().st_size)
+        case_info.append(details)
+        startup = None
+        if any('startup' in mode for mode in args.modes):
+            startup, error = execute('startup', path, 1, index)
+            assert not error, error
         cells = []
         for mode in args.modes:
             pilot, error = execute(mode, path, 1, index)
@@ -92,9 +113,10 @@ def main():
                 errors.append(error)
                 print(f'UNSUPPORTED {case}: {mode}', flush=True)
                 continue
-            if mode not in ['crc', 'baseline-crc', 'startup', 'libflac-startup']:
-                assert pilot['units'] == base['units'], (case, mode, 'sample count')
-                assert pilot['checksum'] == base['checksum'], (case, mode, 'PCM endpoint checksum')
+            if not is_crc(mode):
+                expected = startup if 'startup' in mode else base
+                assert pilot['units'] == expected['units'], (case, mode, 'sample count')
+                assert pilot['checksum'] == expected['checksum'], (case, mode, 'PCM endpoint checksum')
             iterations = max(1, min(100000, round(args.milliseconds * 1e6 / max(1, pilot['ns']))))
             cells.append((mode, iterations))
         for trial in range(args.rounds):
@@ -102,12 +124,13 @@ def main():
             for mode, iterations in cells:
                 value, error = execute(mode, path, iterations, index)
                 assert error is None, error
-                if mode not in ['crc', 'baseline-crc', 'startup', 'libflac-startup']:
-                    assert value['units'] == base['units'] * iterations, (case, mode)
-                    assert value['checksum'] == base['checksum'] * iterations % (1 << 64), (case, mode)
+                if not is_crc(mode):
+                    expected = startup if 'startup' in mode else base
+                    assert value['units'] == expected['units'] * iterations, (case, mode)
+                    assert value['checksum'] == expected['checksum'] * iterations % (1 << 64), (case, mode)
                 value.update(case=case, trial=trial, ns_per_unit=value['ns']/value['units'],
                              ns_per_iteration=value['ns']/iterations,
-                             unit='encoded byte' if mode.endswith('crc') and not mode.startswith('symphonia') else 'channel sample')
+                             unit='encoded byte' if is_crc(mode) else 'channel sample')
                 rows.append(value)
         print(f'{case}: {len(cells)} modes x {args.rounds} rounds', flush=True)
         with (args.output / 'raw.tsv').open('w', newline='') as output:

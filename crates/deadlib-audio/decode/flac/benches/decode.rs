@@ -1,9 +1,12 @@
 //! Resident-input benchmark CLI. Output is one TSV row; file I/O is untimed.
 use deadlib_audio_decode_flac::*;
-use std::{hint::black_box, io::Cursor, time::Instant};
+use std::{hint::black_box, io::Cursor, sync::Arc, time::Instant};
 use symphonia::core::{
     audio::{Audio, GenericAudioBufferRef},
     codecs::audio::{AudioCodecParameters, AudioDecoderOptions, well_known::CODEC_ID_FLAC},
+    formats::{FormatOptions, TrackType, probe::Hint},
+    io::MediaSourceStream,
+    meta::MetadataOptions,
     packet::PacketRef,
     units::{Duration, Timestamp},
 };
@@ -29,7 +32,7 @@ fn main() {
         "decode MODE INPUT ITERATIONS [INDEX_OUTPUT]"
     );
     let mode = &args[0];
-    let data = std::fs::read(&args[1]).unwrap();
+    let data: Arc<[u8]> = std::fs::read(&args[1]).unwrap().into();
     let iterations: usize = args[2].parse().unwrap();
     assert!(iterations > 0);
     let options = DecodeOptions {
@@ -69,11 +72,34 @@ fn main() {
         }
         std::fs::write(path, index).unwrap();
     }
+    let ogg_data: Option<Arc<[u8]>> = if mode.contains("ogg") && args.get(4).is_some() {
+        Some(std::fs::read(&args[4]).unwrap().into())
+    } else if mode.contains("ogg") || args.get(4).is_some() {
+        let mut muxer = OggMuxer::new(
+            Vec::new(),
+            info,
+            &metadata.blocks[1..],
+            OggWriteOptions::default(),
+        )
+        .unwrap();
+        for f in &frames {
+            muxer
+                .write_frame(&data[f.offset..f.offset + f.bytes])
+                .unwrap();
+        }
+        let output = muxer.finish().unwrap().output;
+        if let Some(path) = args.get(4) {
+            std::fs::write(path, &output).unwrap();
+        }
+        Some(output.into())
+    } else {
+        None
+    };
     let mut params = AudioCodecParameters::new();
     params
         .for_codec(CODEC_ID_FLAC)
         .with_extra_data(info.encode().unwrap().to_vec().into_boxed_slice());
-    let mut symphonia = if mode.starts_with("symphonia") {
+    let mut symphonia = if matches!(mode.as_str(), "symphonia" | "symphonia-crc") {
         Some(
             symphonia::default::get_codecs()
                 .make_audio_decoder(&params, &AudioDecoderOptions::default())
@@ -137,6 +163,80 @@ fn main() {
                     count += pcm.frames() as u64 * info.channels as u64;
                 }
             }
+            "symphonia-new"
+            | "symphonia-new-crc"
+            | "symphonia-new-startup"
+            | "symphonia-new-ogg"
+            | "symphonia-new-ogg-crc" => {
+                let ogg = mode.contains("ogg");
+                let input = if ogg {
+                    ogg_data.as_ref().unwrap()
+                } else {
+                    &data
+                };
+                let mut hint = Hint::new();
+                hint.with_extension(if ogg { "oga" } else { "flac" });
+                let mut format = symphonia::default::get_probe()
+                    .probe(
+                        &hint,
+                        MediaSourceStream::new(
+                            Box::new(Cursor::new(Arc::clone(input))),
+                            Default::default(),
+                        ),
+                        FormatOptions::default(),
+                        MetadataOptions::default(),
+                    )
+                    .unwrap();
+                let track = format.default_track(TrackType::Audio).unwrap();
+                let id = track.id;
+                let mut decoder = symphonia::default::get_codecs()
+                    .make_audio_decoder(
+                        track.codec_params.as_ref().and_then(|p| p.audio()).unwrap(),
+                        &AudioDecoderOptions::default(),
+                    )
+                    .unwrap();
+                while let Some(packet) = format.next_packet().unwrap() {
+                    assert_eq!(packet.track_id, id);
+                    if mode.ends_with("crc") {
+                        assert_eq!(checksum::crc16(&packet.data), 0);
+                    }
+                    let GenericAudioBufferRef::S32(pcm) = decoder.decode(&packet).unwrap() else {
+                        panic!("expected integer PCM")
+                    };
+                    for c in 0..info.channels as usize {
+                        let plane = pcm.plane(c).unwrap();
+                        black_box(plane);
+                        sum = sum
+                            .wrapping_add((plane[0] >> (32 - info.bits_per_sample)) as u32 as u64)
+                            .wrapping_add(
+                                (plane[plane.len() - 1] >> (32 - info.bits_per_sample)) as u32
+                                    as u64,
+                            );
+                    }
+                    count += pcm.frames() as u64 * info.channels as u64;
+                    if mode.contains("startup") {
+                        break;
+                    }
+                }
+            }
+            "ogg-stream" | "ogg-stream-md5" => {
+                let mut mapping = OggOptions {
+                    decode: options,
+                    ..Default::default()
+                };
+                mapping.decode.verify_md5 = mode.ends_with("md5");
+                let mut decoder =
+                    OggReader::new(Cursor::new(ogg_data.as_ref().unwrap().as_ref()), mapping);
+                while decoder
+                    .read_next(|event| {
+                        if let OggEvent::Pcm(frame) = event {
+                            sum = sum.wrapping_add(consume(frame.pcm));
+                            count += frame.pcm.samples() as u64 * frame.pcm.channels() as u64;
+                        }
+                    })
+                    .unwrap()
+                {}
+            }
             "borrowed" => {
                 let mut decoder = Decoder::with_options(&data, options).unwrap();
                 while let Some(frame) = decoder.read_next().unwrap() {
@@ -173,7 +273,7 @@ fn main() {
         }
         let ns = begin.elapsed().as_nanos();
         black_box(sum);
-        if !matches!(mode.as_str(), "startup" | "seek" | "crc") {
+        if !mode.contains("startup") && !matches!(mode.as_str(), "seek" | "crc") {
             assert_eq!(count, samples);
             assert_eq!(sum, expected, "PCM endpoint check");
         }
@@ -185,7 +285,11 @@ fn main() {
     }
     println!(
         "{mode}\t{iterations}\t{elapsed}\t{units}\t{checksum}\t{}\t{}\t{}\t{}",
-        data.len(),
+        if mode.contains("ogg") {
+            ogg_data.as_ref().unwrap().len()
+        } else {
+            data.len()
+        },
         frames.len(),
         info.bits_per_sample,
         info.channels

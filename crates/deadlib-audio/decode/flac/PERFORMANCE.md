@@ -27,10 +27,12 @@ The C++ reference CLI links pinned libFLAC 1.5.0 and FFmpeg 9.0.2, using their
 public APIs. FFmpeg receives padded, prebuilt frame packets and runs with one
 decoder thread and CRC checking. libFLAC uses a resident-input callback; its
 raw-frame mode excludes metadata/reset time but includes the bit-reader's input
-copies. Full-stream modes include libFLAC reset and metadata parsing; native
-full-stream modes currently construct a new reader each iteration. This lifecycle
-difference must be considered before comparing startup, allocations or full
-pipeline results. No allocation or memory-parity conclusion is drawn yet.
+copies. The original full-stream modes include libFLAC reset and metadata parsing;
+native full-stream modes construct a new reader each iteration. The added
+`libflac-new*` and `symphonia-new*` modes include allocation, initialization and
+destruction on every pass, matching that lifecycle. Metadata APIs still differ:
+native readers retain metadata while libFLAC's callback ignores it. No allocation
+or memory-parity conclusion is drawn yet.
 
 The Linux/WSL reference build enables x86 assembly and runtime SIMD, including
 AVX2, and LTO. It does not use the assembly-disabled correctness oracle. Rust
@@ -191,3 +193,70 @@ Four fresh ASan campaigns complete 56,647 executions without a failure; see the
 [fuzz results](benches/validation/2026-10-27-scalar-fuzz-results.json) and
 [compiler audit](benches/validation/2026-10-27-scalar-compiler-audit.json).
 Full performance parity remains unachieved.
+
+## Rice and dispatched LPC kernels, 2026-10-27
+
+Rice decoding consumes a cached unary prefix and remainder together, retaining
+checked reads for long quotients and exact tails. On CPUs with both BMI2 and
+LZCNT, the same safe loop is compiled with those instruction sets enabled.
+Runtime detection selects it; other CPUs retain the portable implementation.
+Short scalar LPC kernels specialize the order. AVX2 prepares the historical
+terms for four outputs together, then adds newly reconstructed terms and applies
+the original shift separately for each output. This preserves LPC rounding.
+Every reconstructed sample remains range checked before reuse.
+
+SIMD is limited to effective depths up to 32 bits, LPC orders 4–32 and blocks
+of at least 64 samples. The 33-bit stereo side signal uses full-width scalar
+arithmetic. Unsafe code is denied except in the two private CPU-dispatch modules;
+the AVX2 loads/stores have local bounds and width preconditions. Input bit reads
+remain safe Rust without padding requirements. The signed range test uses an
+unsigned bias and one comparison; tests include i64 wrapping extremes.
+
+Five interleaved trials over 27 files give a median 1.436x raw-frame speedup
+against the preceding scalar milestone. Representative complete-file times in
+milliseconds are below. The full report retains every case, including small
+differences in the unchanged verbatim path.
+
+| Case | Previous | Current | Speedup | libFLAC | FFmpeg | Symphonia | Symphonia + CRC |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 01: block 4096 | 9.687 | 6.747 | 1.436x | 5.336 | 8.277 | 6.744 | 7.083 |
+| 03: block 16 | 9.781 | 9.221 | 1.061x | 15.357 | 20.429 | 7.755 | 8.498 |
+| 15: verbatim | 0.981 | 0.992 | 0.989x | 4.708 | 2.388 | 1.946 | 2.549 |
+| 17: fixed | 4.926 | 3.716 | 1.326x | 4.153 | 4.369 | 4.092 | 4.510 |
+| 28: high resolution | 29.483 | 18.298 | 1.611x | 16.441 | 21.216 | 18.248 | 20.204 |
+| 31: LPC-32 | 58.144 | 34.567 | 1.682x | 38.994 | 39.305 | 30.856 | 32.956 |
+| 44: 8-channel LPC-32 | 861.301 | 510.691 | 1.687x | 595.747 | 598.535 | 463.106 | 503.064 |
+
+The median time is still 1.142x the fastest CRC-checking reference across these
+27 cases; the worst is 1.375x on case 43. This is substantial progress, not full
+performance parity. Streaming restarts and PCM MD5 are now prominent gaps.
+The baseline source driver is revision `5d6a0c00e`; the recorded native binaries
+and source hashes identify the candidate separately. Reports:
+[raw trials](benches/validation/2026-10-27-kernels/raw.tsv),
+[summary](benches/validation/2026-10-27-kernels/summary.json),
+[provenance](benches/validation/2026-10-27-kernels/manifest.json).
+
+All seven new unit tests, 43 integration/external gates and three doctests pass.
+Four fresh 120-second ASan campaigns complete 113,826 executions without failure.
+The final Clippy check passes all targets. Its sole post-test source change is a
+local lint attribute retaining constant tap indices in the measured kernel;
+the [final validation record](benches/validation/2026-10-27-kernels/final-validation.json)
+verifies that removing it reproduces every tested source hash. Full logs, exact
+parity reports and the sanitizer compiler audit are retained beside that record.
+`benches/validate.py --help` describes the immutable full-gate runner.
+
+### MD5 benchmark correction
+
+**All earlier `libflac-md5` timing columns are invalid.** libFLAC `finish()`
+restores default settings, and the original driver failed to enable MD5 again
+after its untimed warm-up. These columns remain in the raw historical artifacts
+for audit, but must not be used for performance conclusions. Raw-frame, stream
+modes with MD5 disabled, and native MD5 measurements are unaffected.
+
+The corrected driver sets and asserts the policy at every initialization.
+`benches/check_oracle.py` checks complete-file endpoints, first-frame work and
+corrupts the expected digest only after warm-up to prove repeated passes still
+verify it. It also tests invalid native and CRC-valid Ogg expected digests.
+The [audit passes](benches/validation/2026-10-27-kernels/pipeline-oracle-audit.json).
+New pipeline modes include Ogg readers and native/Symphonia/libFLAC construction
+and destruction inside the timer. Their measured baseline is active work.

@@ -26,27 +26,38 @@ int main(int argc,char**argv){
     require(argc==5,"benchmark MODE INPUT INDEX ITERATIONS");std::string mode=argv[1];auto data=load(argv[2]);auto index=load(argv[3]);size_t iterations=std::strtoull(argv[4],nullptr,10);require(iterations>0,"iterations");
     require(index.size()>=46&&std::memcmp(index.data(),"DLFPERF1",8)==0,"index signature");size_t pos=42;auto count=word(index,pos,4);
     struct Location{uint64_t offset;uint32_t length,samples;};std::vector<Location> frames;
-    for(size_t i=0;i<count;i++){Location f{word(index,pos,8),uint32_t(word(index,pos,4)),uint32_t(word(index,pos,4))};require(f.offset+f.length<=data.size(),"frame bounds");frames.push_back(f);}
+    for(size_t i=0;i<count;i++){Location f{word(index,pos,8),uint32_t(word(index,pos,4)),uint32_t(word(index,pos,4))};if(mode.find("ogg")==std::string::npos)require(f.offset+f.length<=data.size(),"frame bounds");frames.push_back(f);}
     uint64_t ns=0,units=0,sum=0;uint64_t expected_samples=0,expected_sum=0;
     if(mode.rfind("libflac",0)==0){
-        Source source{data};auto* decoder=FLAC__stream_decoder_new();require(decoder,"libFLAC allocation");
-        bool md5=mode=="libflac-md5";bool raw=mode=="libflac-frames";bool startup=mode=="libflac-startup";
-        FLAC__stream_decoder_set_md5_checking(decoder,md5);
-        require(FLAC__stream_decoder_init_stream(decoder,read_flac,nullptr,nullptr,nullptr,nullptr,pcm_flac,nullptr,error_flac,&source)==FLAC__STREAM_DECODER_INIT_STATUS_OK,"libFLAC init");
+        Source source{data};FLAC__StreamDecoder* decoder=nullptr;
+        bool md5=mode.find("md5")!=std::string::npos;bool raw=mode=="libflac-frames";bool startup=mode.find("startup")!=std::string::npos;
+        bool fresh=mode.find("new")!=std::string::npos;bool ogg=mode.find("ogg")!=std::string::npos;
+        auto init=[&](){
+            if(!decoder){decoder=FLAC__stream_decoder_new();require(decoder,"libFLAC allocation");}
+            require(FLAC__stream_decoder_set_md5_checking(decoder,md5),"libFLAC MD5 config");
+            auto status=ogg?FLAC__stream_decoder_init_ogg_stream(decoder,read_flac,nullptr,nullptr,nullptr,nullptr,pcm_flac,nullptr,error_flac,&source):FLAC__stream_decoder_init_stream(decoder,read_flac,nullptr,nullptr,nullptr,nullptr,pcm_flac,nullptr,error_flac,&source);
+            require(status==FLAC__STREAM_DECODER_INIT_STATUS_OK,"libFLAC init");
+        };
+        if(!fresh)init();
         for(size_t i=0;i<=iterations;i++){
             source.pos=0;source.samples=0;source.sum=0;source.failed=false;
             if(raw){require(FLAC__stream_decoder_reset(decoder),"libFLAC reset");require(FLAC__stream_decoder_process_until_end_of_metadata(decoder),"libFLAC metadata");}
             auto start=Clock::now();
-            if(!raw)require(FLAC__stream_decoder_reset(decoder),"libFLAC reset");
+            if(fresh)init();else if(!raw)require(FLAC__stream_decoder_reset(decoder),"libFLAC reset");
+            require(bool(FLAC__stream_decoder_get_md5_checking(decoder))==md5,"libFLAC MD5 policy changed");
             if(startup){while(!source.samples&&!source.failed){require(FLAC__stream_decoder_process_single(decoder),"libFLAC first frame");require(FLAC__stream_decoder_get_state(decoder)!=FLAC__STREAM_DECODER_END_OF_STREAM,"empty startup");}}
             else require(FLAC__stream_decoder_process_until_end_of_stream(decoder),"libFLAC decode");
-            if(md5)require(FLAC__stream_decoder_finish(decoder),"libFLAC digest");
+            if(md5||fresh)require(FLAC__stream_decoder_finish(decoder),"libFLAC digest/finish");
+            if(fresh){FLAC__stream_decoder_delete(decoder);decoder=nullptr;}
             auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now()-start).count();require(!source.failed,"libFLAC decode error");
             if(i==0){expected_samples=source.samples;expected_sum=source.sum;}
             else{require(source.samples==expected_samples&&source.sum==expected_sum,"libFLAC repeat mismatch");ns+=elapsed;units+=source.samples;sum+=source.sum;}
-            if(md5&&i<iterations)require(FLAC__stream_decoder_init_stream(decoder,read_flac,nullptr,nullptr,nullptr,nullptr,pcm_flac,nullptr,error_flac,&source)==FLAC__STREAM_DECODER_INIT_STATUS_OK,"libFLAC reinit");
+            // The audit probe corrupts only the second pass's expected digest.
+            // It detects loss of MD5 checking across finish/reinitialization.
+            if(i==0&&std::getenv("DEADLIB_FLAC_BENCH_PROBE_MD5")){require(md5&&!ogg&&data.size()>26,"MD5 probe requires native MD5 mode");data[26]^=1;}
+            if(md5&&!fresh&&i<iterations)init();
         }
-        FLAC__stream_decoder_delete(decoder);
+        if(decoder)FLAC__stream_decoder_delete(decoder);
     }else if(mode=="ffmpeg"){
         av_log_set_level(AV_LOG_ERROR);const AVCodec* implementation=avcodec_find_decoder(AV_CODEC_ID_FLAC);auto* decoder=avcodec_alloc_context3(implementation);require(decoder,"FFmpeg allocation");
         decoder->extradata=static_cast<uint8_t*>(av_mallocz(34+AV_INPUT_BUFFER_PADDING_SIZE));decoder->extradata_size=34;std::memcpy(decoder->extradata,index.data()+8,34);decoder->thread_count=1;decoder->err_recognition=AV_EF_CRCCHECK|AV_EF_EXPLODE;

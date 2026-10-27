@@ -340,9 +340,9 @@ impl FrameDecoder {
 }
 
 #[inline]
-fn check_sample(sample: i64, bits: u32) -> Result<(), Error> {
-    let bound = 1i64 << (bits - 1);
-    if sample < -bound || sample >= bound {
+pub(crate) fn check_sample(sample: i64, bits: u32) -> Result<(), Error> {
+    let bound = 1u64 << (bits - 1);
+    if (sample as u64).wrapping_add(bound) >= (1u64 << bits) {
         Err(Error::Invalid("sample outside declared bit depth"))
     } else {
         Ok(())
@@ -394,14 +394,7 @@ fn subframe(r: &mut BitReader<'_>, output: &mut [i64], bits: u32) -> Result<(), 
             if kind < 32 {
                 restore_fixed(output, order, width)?;
             } else {
-                for i in order..output.len() {
-                    let mut sum = 0i64;
-                    for j in 0..order {
-                        sum += coeff[j] * output[i - j - 1];
-                    }
-                    output[i] += sum >> shift;
-                    check_sample(output[i], width)?;
-                }
+                crate::predictor::restore(output, &coeff[..order], shift as u32, width)?;
             }
         }
         _ => return Err(Error::Invalid("reserved subframe type")),
@@ -524,15 +517,38 @@ fn residual(r: &mut BitReader<'_>, output: &mut [i64], order: usize) -> Result<(
                 *sample = r.signed(width)?;
             }
         } else {
-            for sample in part {
-                let q = r.unary(u64::from(u32::MAX - 1) >> k)?;
-                let folded = (q << k) | r.read(k)?;
-                if folded > u64::from(u32::MAX - 1) {
-                    return Err(Error::Invalid("residual exceeds 31-bit magnitude"));
-                }
-                *sample = ((folded >> 1) as i64) ^ -((folded & 1) as i64);
-            }
+            r.rice(part, k)?;
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn biased_range_check_covers_signed_and_wrapping_extremes() {
+        for bits in 1..=33 {
+            let bound = 1i64 << (bits - 1);
+            for sample in [
+                i64::MIN,
+                i64::MIN + 1,
+                -bound - 1,
+                -bound,
+                -bound + 1,
+                0,
+                bound - 1,
+                bound,
+                bound + 1,
+                i64::MAX - 1,
+                i64::MAX,
+            ] {
+                assert_eq!(
+                    check_sample(sample, bits).is_ok(),
+                    (-bound..bound).contains(&sample)
+                );
+            }
+        }
+    }
 }

@@ -114,12 +114,191 @@ impl<'a> BitReader<'a> {
         }
     }
 
+    /// Decode a Rice partition, fusing the unary prefix and remainder when
+    /// both are already cached. Exact tails and long quotients use checked reads.
+    pub(crate) fn rice(&mut self, output: &mut [i64], k: u32) -> Result<(), Error> {
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        {
+            x86::rice(self, output, k)
+        }
+        #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+        self.rice_inner(output, k)
+    }
+
+    #[inline(always)]
+    fn rice_inner(&mut self, output: &mut [i64], k: u32) -> Result<(), Error> {
+        debug_assert!(k <= 30);
+        let mask = (1u64 << k) - 1;
+        let limit = u64::from(u32::MAX - 1);
+        for sample in output {
+            if self.bits <= k {
+                self.refill();
+            }
+            let q = self.cache.leading_zeros();
+            let used = q + 1 + k;
+            let folded = if used < 64 && used <= self.bits {
+                let value = (u64::from(q) << k) | ((self.cache >> (64 - used)) & mask);
+                self.cache <<= used;
+                self.bits -= used;
+                value
+            } else {
+                let q = self.unary(limit >> k)?;
+                (q << k) | self.read(k)?
+            };
+            if folded > limit {
+                return Err(Error::Invalid("residual exceeds 31-bit magnitude"));
+            }
+            *sample = ((folded >> 1) as i64) ^ -((folded & 1) as i64);
+        }
+        Ok(())
+    }
+
     pub fn align_zero(&mut self) -> Result<(), Error> {
         let count = (8 - self.position() % 8) % 8;
         if self.read(count as u32)? != 0 {
             return Err(Error::Invalid("nonzero frame padding"));
         }
         Ok(())
+    }
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(unsafe_code)]
+mod x86 {
+    use super::*;
+
+    pub(super) fn rice(
+        reader: &mut BitReader<'_>,
+        output: &mut [i64],
+        k: u32,
+    ) -> Result<(), Error> {
+        if output.len() >= 32
+            && std::is_x86_feature_detected!("bmi2")
+            && std::is_x86_feature_detected!("lzcnt")
+        {
+            // SAFETY: both instruction-set extensions are checked at runtime.
+            // The same safe, checked implementation is compiled for each path.
+            unsafe { accelerated(reader, output, k) }
+        } else {
+            reader.rice_inner(output, k)
+        }
+    }
+
+    #[target_feature(enable = "bmi2,lzcnt")]
+    unsafe fn accelerated(
+        reader: &mut BitReader<'_>,
+        output: &mut [i64],
+        k: u32,
+    ) -> Result<(), Error> {
+        reader.rice_inner(output, k)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rice_dispatch_matches_portable_cache_and_tails() {
+        for k in 0..=30 {
+            for offset in 0..8 {
+                let mask = (1u64 << k) - 1;
+                let limit = u64::from(u32::MAX - 1);
+                let mut writer = BitWriter::new();
+                writer.write(0, offset).unwrap();
+                for i in 0..65 {
+                    let folded = match i % 5 {
+                        0 => 0,
+                        1 => 1,
+                        2 => mask,
+                        3 => (65u64 << k).min(limit),
+                        _ => (3u64 << k).min(limit),
+                    };
+                    writer.unary(folded >> k).unwrap();
+                    writer.write(folded & mask, k).unwrap();
+                }
+                let data = writer.into_bytes();
+                for end in 0..=data.len() {
+                    let mut portable = BitReader::new(&data[..end]);
+                    let mut dispatched = portable.clone();
+                    let mut expected = [0; 65];
+                    let mut actual = [0; 65];
+                    let a = portable
+                        .read(offset)
+                        .and_then(|_| portable.rice_inner(&mut expected, k));
+                    let b = dispatched
+                        .read(offset)
+                        .and_then(|_| dispatched.rice(&mut actual, k));
+                    assert_eq!(a, b, "k={k}, offset={offset}, end={end}");
+                    assert_eq!(expected, actual);
+                    assert_eq!(portable.position(), dispatched.position());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fused_rice_matches_separate_reads_and_every_truncated_tail() {
+        for k in 0..=30 {
+            for offset in 0..8 {
+                let mask = (1u64 << k) - 1;
+                let limit = u64::from(u32::MAX - 1);
+                let folded = [
+                    0,
+                    1,
+                    2,
+                    3,
+                    mask,
+                    (63u64 << k).min(limit),
+                    (130u64 << k).min(limit),
+                ];
+                let mut writer = BitWriter::new();
+                writer.write(0, offset).unwrap();
+                for f in folded {
+                    writer.unary(f >> k).unwrap();
+                    writer.write(f & mask, k).unwrap();
+                }
+                let data = writer.into_bytes();
+                let mut fused = BitReader::new(&data);
+                let mut separate = fused.clone();
+                fused.read(offset).unwrap();
+                separate.read(offset).unwrap();
+                let mut actual = [0; 7];
+                fused.rice(&mut actual, k).unwrap();
+                for (i, f) in folded.into_iter().enumerate() {
+                    assert_eq!(actual[i], ((f >> 1) as i64) ^ -((f & 1) as i64));
+                    let q = separate.unary(limit >> k).unwrap();
+                    assert_eq!((q << k) | separate.read(k).unwrap(), f);
+                }
+                assert_eq!(fused.position(), separate.position());
+                assert_eq!(fused.remaining(), separate.remaining());
+                for end in 0..data.len() {
+                    let mut reader = BitReader::new(&data[..end]);
+                    let result = reader
+                        .read(offset)
+                        .and_then(|_| reader.rice(&mut actual, k));
+                    assert!(result.is_err(), "k={k}, offset={offset}, end={end}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn fused_rice_rejects_forbidden_magnitude() {
+        for k in 22..=30 {
+            for offset in 0..8 {
+                let mut writer = BitWriter::new();
+                writer.write(0, offset).unwrap();
+                writer.unary(u64::from(u32::MAX) >> k).unwrap();
+                writer
+                    .write(u64::from(u32::MAX) & ((1u64 << k) - 1), k)
+                    .unwrap();
+                let data = writer.into_bytes();
+                let mut reader = BitReader::new(&data);
+                reader.read(offset).unwrap();
+                assert!(matches!(reader.rice(&mut [0], k), Err(Error::Invalid(_))));
+            }
+        }
     }
 }
 
