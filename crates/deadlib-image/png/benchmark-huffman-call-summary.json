@@ -1,0 +1,2634 @@
+{
+  "method": "Sum sample bytes divided by sum of per-case medians of run-average nanoseconds. CPU 0, three warmups per operation. Reference-relative ratios are an inference on a shared host, not a controlled causal estimate.",
+  "groups": {
+    "before-corpus": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 83.863042,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 211.958544,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 68.686959,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 28.055824,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 10.296891,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 27.280244,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 28.471206,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      }
+    ],
+    "before-inflate": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 116.298798,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 79.249175,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 153.197153,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "before-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 597.545879,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 542.976598,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 238.27735,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 826.82097,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 310.894682,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 373.148252,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 42.229171,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 37.792585,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 46.598102,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 48.319107,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "combined-trial-corpus": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 84.42225,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 218.419529,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 74.651869,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 26.764607,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 10.76336,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 28.425146,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 29.719788,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      }
+    ],
+    "combined-trial-inflate": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 107.994793,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 83.22294,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 144.174256,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "combined-trial-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 653.253912,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 628.059829,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 276.030606,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 984.155103,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 389.096731,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 473.859913,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 50.633168,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 48.245345,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 55.584717,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 59.839248,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "control-corpus": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 82.717628,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 213.042426,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 68.881621,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 28.611907,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 10.68181,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 27.836493,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 28.766333,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      }
+    ],
+    "control-inflate": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 115.744657,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 78.942136,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 150.203711,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "control-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 685.623392,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 595.492125,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 270.691183,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 948.715597,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 363.253516,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 438.235139,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 45.889126,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 46.014588,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 55.016445,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 58.516513,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "interleave-before1-corpus": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 87.017123,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 224.237704,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 72.939523,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 30.23287,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 11.27654,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 29.365795,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 30.600678,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      }
+    ],
+    "interleave-before1-inflate": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 119.689638,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 82.026965,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 156.238907,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 20
+      }
+    ],
+    "interleave-before1-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 601.526675,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 561.169852,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 246.300919,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 863.529273,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 323.040109,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 390.661497,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 44.399075,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 42.777551,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 50.066378,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 51.898634,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      }
+    ],
+    "interleave-before2-corpus": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 81.223063,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 212.515193,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 68.377821,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 28.370219,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 10.682247,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 27.654445,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 28.388513,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      }
+    ],
+    "interleave-before2-inflate": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 102.628886,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 70.503232,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 135.743117,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 20
+      }
+    ],
+    "interleave-before2-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 706.83575,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 640.990715,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 281.685909,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 997.144013,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 391.142831,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 467.788658,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 51.370092,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 48.871996,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 58.462452,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 60.331585,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      }
+    ],
+    "interleave-split1-corpus": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 97.032634,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 224.130449,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 78.587282,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 27.936132,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 11.248652,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 29.395044,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 30.157438,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      }
+    ],
+    "interleave-split1-inflate": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 131.52595,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 93.454159,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 153.681824,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 20
+      }
+    ],
+    "interleave-split1-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 764.265493,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 627.681376,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 286.16288,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 907.503466,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 346.005097,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 415.740633,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 48.008133,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 47.097776,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 53.87187,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 57.003473,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      }
+    ],
+    "interleave-split2-corpus": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 98.507825,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 231.353705,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 80.704021,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 28.618223,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 11.395439,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 30.224356,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 31.524422,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 5
+      }
+    ],
+    "interleave-split2-inflate": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 120.573838,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 85.910932,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 137.539665,
+        "cases": 24,
+        "runs": 1,
+        "iterations": 20
+      }
+    ],
+    "interleave-split2-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 648.167253,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 585.889725,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 265.416496,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 956.279689,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 377.810437,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 448.684178,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 48.941891,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 45.419737,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 52.189334,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 53.896802,
+        "cases": 4,
+        "runs": 1,
+        "iterations": 20
+      }
+    ],
+    "narrow-trial-corpus": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 89.956617,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 227.467185,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 72.210446,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 30.172022,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 11.254321,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 29.533572,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 30.056333,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      }
+    ],
+    "narrow-trial-inflate": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 111.110427,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 76.730051,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 145.31747,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "narrow-trial-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 657.688488,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 615.719314,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 270.488489,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 969.303765,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 368.05616,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 440.801141,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 49.212861,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 47.912776,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 54.139316,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 57.696846,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "split-trial-corpus": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 86.762197,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 200.701832,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 66.967893,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 25.134004,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 9.894447,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 25.907184,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 26.593469,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 5
+      }
+    ],
+    "split-trial-inflate": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 120.477507,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 83.898211,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 137.559703,
+        "cases": 24,
+        "runs": 3,
+        "iterations": 10
+      }
+    ],
+    "split-trial-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 563.986634,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 542.297389,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 225.695509,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 812.069519,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 317.151556,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 405.832627,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 42.033376,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 38.803976,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 46.288199,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 45.996683,
+        "cases": 4,
+        "runs": 3,
+        "iterations": 10
+      }
+    ]
+  },
+  "interleaved": {
+    "before-inflate": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 110.50464,
+        "cases": 24,
+        "source_groups": [
+          "interleave-before1-inflate",
+          "interleave-before2-inflate"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 75.829786,
+        "cases": 24,
+        "source_groups": [
+          "interleave-before1-inflate",
+          "interleave-before2-inflate"
+        ]
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 145.271657,
+        "cases": 24,
+        "source_groups": [
+          "interleave-before1-inflate",
+          "interleave-before2-inflate"
+        ]
+      }
+    ],
+    "split-inflate": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 125.811994,
+        "cases": 24,
+        "source_groups": [
+          "interleave-split1-inflate",
+          "interleave-split2-inflate"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate-stream",
+        "mib_per_second": 89.52393,
+        "cases": 24,
+        "source_groups": [
+          "interleave-split1-inflate",
+          "interleave-split2-inflate"
+        ]
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 145.163371,
+        "cases": 24,
+        "source_groups": [
+          "interleave-split1-inflate",
+          "interleave-split2-inflate"
+        ]
+      }
+    ],
+    "before-corpus": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 84.020321,
+        "cases": 24,
+        "source_groups": [
+          "interleave-before1-corpus",
+          "interleave-before2-corpus"
+        ]
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 218.219131,
+        "cases": 24,
+        "source_groups": [
+          "interleave-before1-corpus",
+          "interleave-before2-corpus"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 70.585047,
+        "cases": 24,
+        "source_groups": [
+          "interleave-before1-corpus",
+          "interleave-before2-corpus"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 29.271943,
+        "cases": 24,
+        "source_groups": [
+          "interleave-before1-corpus",
+          "interleave-before2-corpus"
+        ]
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 10.971352,
+        "cases": 24,
+        "source_groups": [
+          "interleave-before1-corpus",
+          "interleave-before2-corpus"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 28.484439,
+        "cases": 24,
+        "source_groups": [
+          "interleave-before1-corpus",
+          "interleave-before2-corpus"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 29.453116,
+        "cases": 24,
+        "source_groups": [
+          "interleave-before1-corpus",
+          "interleave-before2-corpus"
+        ]
+      }
+    ],
+    "split-corpus": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 97.764665,
+        "cases": 24,
+        "source_groups": [
+          "interleave-split1-corpus",
+          "interleave-split2-corpus"
+        ]
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 227.684802,
+        "cases": 24,
+        "source_groups": [
+          "interleave-split1-corpus",
+          "interleave-split2-corpus"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 79.631588,
+        "cases": 24,
+        "source_groups": [
+          "interleave-split1-corpus",
+          "interleave-split2-corpus"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 28.273064,
+        "cases": 24,
+        "source_groups": [
+          "interleave-split1-corpus",
+          "interleave-split2-corpus"
+        ]
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 11.32157,
+        "cases": 24,
+        "source_groups": [
+          "interleave-split1-corpus",
+          "interleave-split2-corpus"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 29.803932,
+        "cases": 24,
+        "source_groups": [
+          "interleave-split1-corpus",
+          "interleave-split2-corpus"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 30.825783,
+        "cases": 24,
+        "source_groups": [
+          "interleave-split1-corpus",
+          "interleave-split2-corpus"
+        ]
+      }
+    ],
+    "before-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 649.943089,
+        "cases": 4,
+        "source_groups": [
+          "interleave-before1-pipeline",
+          "interleave-before2-pipeline"
+        ]
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 598.430317,
+        "cases": 4,
+        "source_groups": [
+          "interleave-before1-pipeline",
+          "interleave-before2-pipeline"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 262.807686,
+        "cases": 4,
+        "source_groups": [
+          "interleave-before1-pipeline",
+          "interleave-before2-pipeline"
+        ]
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 925.539213,
+        "cases": 4,
+        "source_groups": [
+          "interleave-before1-pipeline",
+          "interleave-before2-pipeline"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 353.844416,
+        "cases": 4,
+        "source_groups": [
+          "interleave-before1-pipeline",
+          "interleave-before2-pipeline"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 425.760346,
+        "cases": 4,
+        "source_groups": [
+          "interleave-before1-pipeline",
+          "interleave-before2-pipeline"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 47.630874,
+        "cases": 4,
+        "source_groups": [
+          "interleave-before1-pipeline",
+          "interleave-before2-pipeline"
+        ]
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 45.622141,
+        "cases": 4,
+        "source_groups": [
+          "interleave-before1-pipeline",
+          "interleave-before2-pipeline"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 53.939644,
+        "cases": 4,
+        "source_groups": [
+          "interleave-before1-pipeline",
+          "interleave-before2-pipeline"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 55.798285,
+        "cases": 4,
+        "source_groups": [
+          "interleave-before1-pipeline",
+          "interleave-before2-pipeline"
+        ]
+      }
+    ],
+    "split-pipeline": [
+      {
+        "codec": "deadlib-image-png",
+        "operation": "inflate",
+        "mib_per_second": 701.444889,
+        "cases": 4,
+        "source_groups": [
+          "interleave-split1-pipeline",
+          "interleave-split2-pipeline"
+        ]
+      },
+      {
+        "codec": "flate2-1.1.10",
+        "operation": "inflate",
+        "mib_per_second": 606.065963,
+        "cases": 4,
+        "source_groups": [
+          "interleave-split1-pipeline",
+          "interleave-split2-pipeline"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode",
+        "mib_per_second": 275.399524,
+        "cases": 4,
+        "source_groups": [
+          "interleave-split1-pipeline",
+          "interleave-split2-pipeline"
+        ]
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "decode",
+        "mib_per_second": 931.253327,
+        "cases": 4,
+        "source_groups": [
+          "interleave-split1-pipeline",
+          "interleave-split2-pipeline"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-reader",
+        "mib_per_second": 361.208985,
+        "cases": 4,
+        "source_groups": [
+          "interleave-split1-pipeline",
+          "interleave-split2-pipeline"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "decode-rows",
+        "mib_per_second": 431.58466,
+        "cases": 4,
+        "source_groups": [
+          "interleave-split1-pipeline",
+          "interleave-split2-pipeline"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode",
+        "mib_per_second": 48.470515,
+        "cases": 4,
+        "source_groups": [
+          "interleave-split1-pipeline",
+          "interleave-split2-pipeline"
+        ]
+      },
+      {
+        "codec": "png-0.18.1",
+        "operation": "encode",
+        "mib_per_second": 46.243539,
+        "cases": 4,
+        "source_groups": [
+          "interleave-split1-pipeline",
+          "interleave-split2-pipeline"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-writer",
+        "mib_per_second": 53.017256,
+        "cases": 4,
+        "source_groups": [
+          "interleave-split1-pipeline",
+          "interleave-split2-pipeline"
+        ]
+      },
+      {
+        "codec": "deadlib-image-png",
+        "operation": "encode-discard",
+        "mib_per_second": 55.406623,
+        "cases": 4,
+        "source_groups": [
+          "interleave-split1-pipeline",
+          "interleave-split2-pipeline"
+        ]
+      }
+    ]
+  },
+  "comparisons": [
+    {
+      "trial": "split-trial",
+      "target": "inflate",
+      "baseline": "before",
+      "operation": "inflate",
+      "observed_ratio": 1.035931,
+      "reference_relative_ratio": 1.153693
+    },
+    {
+      "trial": "split-trial",
+      "target": "inflate",
+      "baseline": "before",
+      "operation": "inflate-stream",
+      "observed_ratio": 1.058664,
+      "reference_relative_ratio": 1.17901
+    },
+    {
+      "trial": "split-trial",
+      "target": "inflate",
+      "baseline": "control",
+      "operation": "inflate",
+      "observed_ratio": 1.04089,
+      "reference_relative_ratio": 1.136565
+    },
+    {
+      "trial": "split-trial",
+      "target": "inflate",
+      "baseline": "control",
+      "operation": "inflate-stream",
+      "observed_ratio": 1.062781,
+      "reference_relative_ratio": 1.160468
+    },
+    {
+      "trial": "split-trial",
+      "target": "corpus",
+      "baseline": "before",
+      "operation": "decode",
+      "observed_ratio": 1.03457,
+      "reference_relative_ratio": 1.092596
+    },
+    {
+      "trial": "split-trial",
+      "target": "corpus",
+      "baseline": "before",
+      "operation": "decode-reader",
+      "observed_ratio": 0.974972,
+      "reference_relative_ratio": 1.029655
+    },
+    {
+      "trial": "split-trial",
+      "target": "corpus",
+      "baseline": "control",
+      "operation": "decode",
+      "observed_ratio": 1.048896,
+      "reference_relative_ratio": 1.11339
+    },
+    {
+      "trial": "split-trial",
+      "target": "corpus",
+      "baseline": "control",
+      "operation": "decode-reader",
+      "observed_ratio": 0.972217,
+      "reference_relative_ratio": 1.031996
+    },
+    {
+      "trial": "split-trial",
+      "target": "pipeline",
+      "baseline": "before",
+      "operation": "decode",
+      "observed_ratio": 0.947197,
+      "reference_relative_ratio": 0.964403
+    },
+    {
+      "trial": "split-trial",
+      "target": "pipeline",
+      "baseline": "before",
+      "operation": "decode-reader",
+      "observed_ratio": 1.020125,
+      "reference_relative_ratio": 1.038656
+    },
+    {
+      "trial": "split-trial",
+      "target": "pipeline",
+      "baseline": "before",
+      "operation": "decode-rows",
+      "observed_ratio": 1.087591,
+      "reference_relative_ratio": 1.107347
+    },
+    {
+      "trial": "split-trial",
+      "target": "pipeline",
+      "baseline": "control",
+      "operation": "decode",
+      "observed_ratio": 0.833775,
+      "reference_relative_ratio": 0.974073
+    },
+    {
+      "trial": "split-trial",
+      "target": "pipeline",
+      "baseline": "control",
+      "operation": "decode-reader",
+      "observed_ratio": 0.873086,
+      "reference_relative_ratio": 1.019999
+    },
+    {
+      "trial": "split-trial",
+      "target": "pipeline",
+      "baseline": "control",
+      "operation": "decode-rows",
+      "observed_ratio": 0.926061,
+      "reference_relative_ratio": 1.081889
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "inflate",
+      "baseline": "before",
+      "operation": "inflate",
+      "observed_ratio": 0.955388,
+      "reference_relative_ratio": 1.007192
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "inflate",
+      "baseline": "before",
+      "operation": "inflate-stream",
+      "observed_ratio": 0.968213,
+      "reference_relative_ratio": 1.020713
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "inflate",
+      "baseline": "control",
+      "operation": "inflate",
+      "observed_ratio": 0.959962,
+      "reference_relative_ratio": 0.99224
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "inflate",
+      "baseline": "control",
+      "operation": "inflate-stream",
+      "observed_ratio": 0.971978,
+      "reference_relative_ratio": 1.004661
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "corpus",
+      "baseline": "before",
+      "operation": "decode",
+      "observed_ratio": 1.072661,
+      "reference_relative_ratio": 0.999527
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "corpus",
+      "baseline": "before",
+      "operation": "decode-reader",
+      "observed_ratio": 1.051298,
+      "reference_relative_ratio": 0.979621
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "corpus",
+      "baseline": "control",
+      "operation": "decode",
+      "observed_ratio": 1.087514,
+      "reference_relative_ratio": 1.01855
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "corpus",
+      "baseline": "control",
+      "operation": "decode-reader",
+      "observed_ratio": 1.048327,
+      "reference_relative_ratio": 0.981847
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "pipeline",
+      "baseline": "before",
+      "operation": "decode",
+      "observed_ratio": 1.135183,
+      "reference_relative_ratio": 0.968317
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "pipeline",
+      "baseline": "before",
+      "operation": "decode-reader",
+      "observed_ratio": 1.183861,
+      "reference_relative_ratio": 1.00984
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "pipeline",
+      "baseline": "before",
+      "operation": "decode-rows",
+      "observed_ratio": 1.181303,
+      "reference_relative_ratio": 1.007657
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "pipeline",
+      "baseline": "control",
+      "operation": "decode",
+      "observed_ratio": 0.999251,
+      "reference_relative_ratio": 0.978027
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "pipeline",
+      "baseline": "control",
+      "operation": "decode-reader",
+      "observed_ratio": 1.013221,
+      "reference_relative_ratio": 0.9917
+    },
+    {
+      "trial": "narrow-trial",
+      "target": "pipeline",
+      "baseline": "control",
+      "operation": "decode-rows",
+      "observed_ratio": 1.005855,
+      "reference_relative_ratio": 0.984491
+    },
+    {
+      "trial": "combined-trial",
+      "target": "inflate",
+      "baseline": "before",
+      "operation": "inflate",
+      "observed_ratio": 0.928598,
+      "reference_relative_ratio": 0.986712
+    },
+    {
+      "trial": "combined-trial",
+      "target": "inflate",
+      "baseline": "before",
+      "operation": "inflate-stream",
+      "observed_ratio": 1.050143,
+      "reference_relative_ratio": 1.115864
+    },
+    {
+      "trial": "combined-trial",
+      "target": "inflate",
+      "baseline": "control",
+      "operation": "inflate",
+      "observed_ratio": 0.933043,
+      "reference_relative_ratio": 0.972064
+    },
+    {
+      "trial": "combined-trial",
+      "target": "inflate",
+      "baseline": "control",
+      "operation": "inflate-stream",
+      "observed_ratio": 1.054227,
+      "reference_relative_ratio": 1.098316
+    },
+    {
+      "trial": "combined-trial",
+      "target": "corpus",
+      "baseline": "before",
+      "operation": "decode",
+      "observed_ratio": 1.006668,
+      "reference_relative_ratio": 0.97689
+    },
+    {
+      "trial": "combined-trial",
+      "target": "corpus",
+      "baseline": "before",
+      "operation": "decode-reader",
+      "observed_ratio": 1.086842,
+      "reference_relative_ratio": 1.054692
+    },
+    {
+      "trial": "combined-trial",
+      "target": "corpus",
+      "baseline": "control",
+      "operation": "decode",
+      "observed_ratio": 1.020608,
+      "reference_relative_ratio": 0.995482
+    },
+    {
+      "trial": "combined-trial",
+      "target": "corpus",
+      "baseline": "control",
+      "operation": "decode-reader",
+      "observed_ratio": 1.083771,
+      "reference_relative_ratio": 1.05709
+    },
+    {
+      "trial": "combined-trial",
+      "target": "pipeline",
+      "baseline": "before",
+      "operation": "decode",
+      "observed_ratio": 1.158442,
+      "reference_relative_ratio": 0.973246
+    },
+    {
+      "trial": "combined-trial",
+      "target": "pipeline",
+      "baseline": "before",
+      "operation": "decode-reader",
+      "observed_ratio": 1.251539,
+      "reference_relative_ratio": 1.051459
+    },
+    {
+      "trial": "combined-trial",
+      "target": "pipeline",
+      "baseline": "before",
+      "operation": "decode-rows",
+      "observed_ratio": 1.269897,
+      "reference_relative_ratio": 1.066882
+    },
+    {
+      "trial": "combined-trial",
+      "target": "pipeline",
+      "baseline": "control",
+      "operation": "decode",
+      "observed_ratio": 1.019725,
+      "reference_relative_ratio": 0.983005
+    },
+    {
+      "trial": "combined-trial",
+      "target": "pipeline",
+      "baseline": "control",
+      "operation": "decode-reader",
+      "observed_ratio": 1.071144,
+      "reference_relative_ratio": 1.032572
+    },
+    {
+      "trial": "combined-trial",
+      "target": "pipeline",
+      "baseline": "control",
+      "operation": "decode-rows",
+      "observed_ratio": 1.081291,
+      "reference_relative_ratio": 1.042354
+    }
+  ],
+  "interleaved_comparisons": [
+    {
+      "target": "inflate",
+      "operation": "inflate",
+      "observed_ratio": 1.138522,
+      "reference_relative_ratio": 1.139372
+    },
+    {
+      "target": "inflate",
+      "operation": "inflate-stream",
+      "observed_ratio": 1.180591,
+      "reference_relative_ratio": 1.181471
+    },
+    {
+      "target": "corpus",
+      "operation": "decode",
+      "observed_ratio": 1.163584,
+      "reference_relative_ratio": 1.115209
+    },
+    {
+      "target": "corpus",
+      "operation": "decode-reader",
+      "observed_ratio": 1.128165,
+      "reference_relative_ratio": 1.081263
+    },
+    {
+      "target": "pipeline",
+      "operation": "decode",
+      "observed_ratio": 1.047913,
+      "reference_relative_ratio": 1.041483
+    },
+    {
+      "target": "pipeline",
+      "operation": "decode-reader",
+      "observed_ratio": 1.020813,
+      "reference_relative_ratio": 1.014549
+    },
+    {
+      "target": "pipeline",
+      "operation": "decode-rows",
+      "observed_ratio": 1.01368,
+      "reference_relative_ratio": 1.00746
+    }
+  ],
+  "artifact_sha256": [
+    {
+      "path": "benchmark-huffman-call-before-corpus-manifest.json",
+      "sha256": "df598e4428250a47a78537d111a817c5e32ca2733e41488a546b5e6f7aea475c"
+    },
+    {
+      "path": "benchmark-huffman-call-before-corpus-run1.tsv",
+      "sha256": "92186618977c6ed6dde6b1df4cf2c8ab50372e5e99fbc0fa7f4bdd3f4965ff5b"
+    },
+    {
+      "path": "benchmark-huffman-call-before-corpus-run2.tsv",
+      "sha256": "69ad334a94c8132b4d526998d9e0035030e50000bf762c1f7045ad975db12571"
+    },
+    {
+      "path": "benchmark-huffman-call-before-corpus-run3.tsv",
+      "sha256": "3d57293afa2be2e44bc5ad85fd30e15ec70019212b69f7a43c3747740e37207c"
+    },
+    {
+      "path": "benchmark-huffman-call-before-inflate-manifest.json",
+      "sha256": "a62a1f1d0857f0dcedca76671993ffb210375e2e55d55ce6523f305b341fd43d"
+    },
+    {
+      "path": "benchmark-huffman-call-before-inflate-run1.tsv",
+      "sha256": "027a7098178a48aae33ffe9b486e04bbf7597e1ea820eb9613181d18f6ac58d8"
+    },
+    {
+      "path": "benchmark-huffman-call-before-inflate-run2.tsv",
+      "sha256": "3784dd9de185da5fa23bf2fa414546c5d38d1057ca1a024e25a3e8b79a05ddbe"
+    },
+    {
+      "path": "benchmark-huffman-call-before-inflate-run3.tsv",
+      "sha256": "403856b913506f85255ef6e3f88ee6cf407ee0c523df953269d46ba0887c4009"
+    },
+    {
+      "path": "benchmark-huffman-call-before-pipeline-manifest.json",
+      "sha256": "258263e6b2888e3e0a9375e642ba98678123b5bf525fd4d7f1969f460299b837"
+    },
+    {
+      "path": "benchmark-huffman-call-before-pipeline-run1.tsv",
+      "sha256": "0e5a3c91c7e528c66dc8a8c4e44407f3fda6f70cfd3af92cc496d599a223dc9e"
+    },
+    {
+      "path": "benchmark-huffman-call-before-pipeline-run2.tsv",
+      "sha256": "8875cb62ea0fbad5c72b6df089ae0362925b688fb3b5a9b5c0d0050cc4659acd"
+    },
+    {
+      "path": "benchmark-huffman-call-before-pipeline-run3.tsv",
+      "sha256": "1ac0da8ed13ea034ad55c088506bf9730081bf0a46b4d128d1dc7c0ebb8cfcfa"
+    },
+    {
+      "path": "benchmark-huffman-call-combined-trial-corpus-manifest.json",
+      "sha256": "dbb7aeaba032a1f63b7cddcd54c860f03411adce91737d47d16ee934030b7f67"
+    },
+    {
+      "path": "benchmark-huffman-call-combined-trial-corpus-run1.tsv",
+      "sha256": "75555a42dc1336722605da1dbe0c74eeb2ddcac0d85cad1142a9fe06c50d043b"
+    },
+    {
+      "path": "benchmark-huffman-call-combined-trial-corpus-run2.tsv",
+      "sha256": "1d06f320548721fa119b8129590d4664fde9a9c3c1c7689f1b1ffce68300a409"
+    },
+    {
+      "path": "benchmark-huffman-call-combined-trial-corpus-run3.tsv",
+      "sha256": "eafd5321d1982850a48dc432789c94b09d5919a89c6b68ff6e67d082a2903d44"
+    },
+    {
+      "path": "benchmark-huffman-call-combined-trial-inflate-manifest.json",
+      "sha256": "ea6f395cee917b01338f77ce1b1beedd2850e1ca5daa57c69de442e82e546fec"
+    },
+    {
+      "path": "benchmark-huffman-call-combined-trial-inflate-run1.tsv",
+      "sha256": "5c3b5a4113f0ec6cea001826f092f5454ef7e721e80466df960bf2134806bc50"
+    },
+    {
+      "path": "benchmark-huffman-call-combined-trial-inflate-run2.tsv",
+      "sha256": "5b53091e3ecfc8016077f5774f6f50f2ef5402c34cbc3a79d5532c2489dd62d5"
+    },
+    {
+      "path": "benchmark-huffman-call-combined-trial-inflate-run3.tsv",
+      "sha256": "6aa271ad4e1961151cb4b12e99045c7979c08a8c0ed868725ad4aa36a21bdb24"
+    },
+    {
+      "path": "benchmark-huffman-call-combined-trial-pipeline-manifest.json",
+      "sha256": "d35aec2f11d5a504e7e9c537a5a3ce2d0f8e07534800e0cd8ec92ec1b15c88e0"
+    },
+    {
+      "path": "benchmark-huffman-call-combined-trial-pipeline-run1.tsv",
+      "sha256": "428abfb32957d9f565d4241299fce051d0f670607024c86fb8b34097c5238e66"
+    },
+    {
+      "path": "benchmark-huffman-call-combined-trial-pipeline-run2.tsv",
+      "sha256": "4c9b89010decba3d233e10fa4657ebe4f5a97596efaef84b9b2f72e5d7d1fe74"
+    },
+    {
+      "path": "benchmark-huffman-call-combined-trial-pipeline-run3.tsv",
+      "sha256": "490256e6ac2ef2196d7ec0ff02ba620cb36df5f4048f00e4d691c78b78b78b5b"
+    },
+    {
+      "path": "benchmark-huffman-call-control-corpus-manifest.json",
+      "sha256": "87b9111dea2e07944cdf0f99c71eee8800b0715e78207e5ccc5c74a0231986df"
+    },
+    {
+      "path": "benchmark-huffman-call-control-corpus-run1.tsv",
+      "sha256": "4bf0d537b91618011f76fa3c324fe764983f07c141edf7953e76499d8187a3d8"
+    },
+    {
+      "path": "benchmark-huffman-call-control-corpus-run2.tsv",
+      "sha256": "40aaa952ca4e940dee0f3a400b50bed7f5cdc3c868973ef43858cea85cdb2978"
+    },
+    {
+      "path": "benchmark-huffman-call-control-corpus-run3.tsv",
+      "sha256": "99c38300fcb38a15229272eccc5bf011aae52e89f24684751c4c07d0dc9b487a"
+    },
+    {
+      "path": "benchmark-huffman-call-control-inflate-manifest.json",
+      "sha256": "adf339a17da84b514e3c60839d89e9d33c5cbdd321f0788bb353b31750e5bf02"
+    },
+    {
+      "path": "benchmark-huffman-call-control-inflate-run1.tsv",
+      "sha256": "0966618a6f10b1e5364408a669ae8da1fd31eb1803747ea2c825fbff2813fbc5"
+    },
+    {
+      "path": "benchmark-huffman-call-control-inflate-run2.tsv",
+      "sha256": "9ddeb9c12ffcfb10346576d2e95c62864c08049a7ee765c63c466b0e59f2f396"
+    },
+    {
+      "path": "benchmark-huffman-call-control-inflate-run3.tsv",
+      "sha256": "7c91d72fa337f253e53ff52cd78190fdc53dc4602f541d12a1fd02a528c43ee2"
+    },
+    {
+      "path": "benchmark-huffman-call-control-pipeline-manifest.json",
+      "sha256": "84f6f9eb003b6102c362a3b145f7ec16315cbf85d34ddc4578179740566ce975"
+    },
+    {
+      "path": "benchmark-huffman-call-control-pipeline-run1.tsv",
+      "sha256": "3b0fcdf04e259be89ac2bc096e10d074e898b9444461d3d87579afe758d65b86"
+    },
+    {
+      "path": "benchmark-huffman-call-control-pipeline-run2.tsv",
+      "sha256": "279afecd3df1a0a9e3e32009dd1e5eca973942870b2d9c75bdb87d9cf9e00430"
+    },
+    {
+      "path": "benchmark-huffman-call-control-pipeline-run3.tsv",
+      "sha256": "9471227433594e6aa02c51d611ac34f3d9a0931ccd44de6f54b7efc4fd368beb"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-before1-corpus-manifest.json",
+      "sha256": "dbf2b7d90210fb9916914e964d93aa6af61402e26fe24dcd895582ef2ec2f67a"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-before1-corpus-run1.tsv",
+      "sha256": "e02b29825c3e263ddeb78f8c20caabef78072c3ad6264bae3e72bec793c752b3"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-before1-inflate-manifest.json",
+      "sha256": "344fc6673d811a81fef99165cabcd564931c3dae7d70d64ab7882bac84b721b7"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-before1-inflate-run1.tsv",
+      "sha256": "4ad46473b05cbc1096b77ca13b3331e9b08a9caa95fc1f39d865f094aa3079f8"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-before1-pipeline-manifest.json",
+      "sha256": "b17138bf38efa6516bb53e2e53e5c57d3d0bbdb3acfa5fde680186f4b9294b85"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-before1-pipeline-run1.tsv",
+      "sha256": "23e905cd48989da445c0f12a2e41836385c3cccae10d098c2f1f8c9a58091dbb"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-before2-corpus-manifest.json",
+      "sha256": "9b2114b1ce69aab86547398e714dd970fa07b035285d7e35984cc0f6ec3a8902"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-before2-corpus-run1.tsv",
+      "sha256": "9506587be38d6c916304c3fa84efeb1e3e60014887e0b16a4b036c912854c95a"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-before2-inflate-manifest.json",
+      "sha256": "6abcb3d4f6b1e418700f1259ac2f0fba2ae515e096804a50f6cc83b215eb05a7"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-before2-inflate-run1.tsv",
+      "sha256": "d7455d23ab1cbd503681a91eeff579219dd5b72d0f06298104127ae4967509d1"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-before2-pipeline-manifest.json",
+      "sha256": "3898c4917d088ee8caab9b6ae83818731c94719538c6a693043c506d43f1c0cb"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-before2-pipeline-run1.tsv",
+      "sha256": "3395022ae0fa9e246b5b9c6440da9cff71806356a27e82be622772dc47ded72c"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-split1-corpus-manifest.json",
+      "sha256": "cdbef83204d1f5cec029b53fa81fb2efcefc82397f067c0e8be340c11b05089f"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-split1-corpus-run1.tsv",
+      "sha256": "2aa6f137dee91e702403b21c9a6763dee8f576633d2f4dfc52c899e97faa37dc"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-split1-inflate-manifest.json",
+      "sha256": "88b2bd98d3798b1781bb2e9d2a7bcccf23ab0d4230f64e9bd5a88e82e6328a5e"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-split1-inflate-run1.tsv",
+      "sha256": "a01cb0ff5bcec4a69a3a49d93b25d1b21ba9f57daa6fbba278124b5037b26ae7"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-split1-pipeline-manifest.json",
+      "sha256": "b51f9dc2b09d944618308edbff56cbbd00d46594fc7fd550be0191a4ddd911e0"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-split1-pipeline-run1.tsv",
+      "sha256": "e4e1f5bd1737bce4426a88a0ac5df82440414a9d0811b1ab20fbded0036d13bf"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-split2-corpus-manifest.json",
+      "sha256": "7b4710c3b87af236a4f18333c6cb97ba90b3528cb130f5199da98cf9a15e5cfc"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-split2-corpus-run1.tsv",
+      "sha256": "408627db4e186370937423299dac5cae5ed16da1b3580a92aa1618289531b843"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-split2-inflate-manifest.json",
+      "sha256": "9a2ba1a7f7ed7a8b6aba752cacf1c6a6f89912922a1a7369e6350a8bb25e16f9"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-split2-inflate-run1.tsv",
+      "sha256": "3e9a36601af1b21a684df57fea5fdff83f1eee3d2dacdbfebdb62ba1c5c67453"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-split2-pipeline-manifest.json",
+      "sha256": "8d42ceab3506438501f60061f35c7ccc63b9913b65953d7e9667b80b971e4bde"
+    },
+    {
+      "path": "benchmark-huffman-call-interleave-split2-pipeline-run1.tsv",
+      "sha256": "cc0153677d15a8e2ba44133f5095d37191893bf7bffa6f99ece82d7313ed88c6"
+    },
+    {
+      "path": "benchmark-huffman-call-narrow-trial-corpus-manifest.json",
+      "sha256": "4656e0b9d1cfc06c9e5514a311d037d4a711f38efccc975c343f3259eed396f2"
+    },
+    {
+      "path": "benchmark-huffman-call-narrow-trial-corpus-run1.tsv",
+      "sha256": "20c2a804a01f5633a7eedaa22d4fa2c54e168b26dd60994efc4ca31c30d8a339"
+    },
+    {
+      "path": "benchmark-huffman-call-narrow-trial-corpus-run2.tsv",
+      "sha256": "17018f794a8de5de8a49cdbfec729909464f45a5aa71aa0b7e009af3a34a87b6"
+    },
+    {
+      "path": "benchmark-huffman-call-narrow-trial-corpus-run3.tsv",
+      "sha256": "71c61c4c068cae06704007275ae3ef53e8f1a41db52137bc8920a672f48f2c2f"
+    },
+    {
+      "path": "benchmark-huffman-call-narrow-trial-inflate-manifest.json",
+      "sha256": "929c4986b43c4fc70418596b0caeabd540afc2a704b1daf90b0c95e6af4d9b6b"
+    },
+    {
+      "path": "benchmark-huffman-call-narrow-trial-inflate-run1.tsv",
+      "sha256": "93537fff9978e79a43a19d147b7ce5d7b0b259565f66adf18e785163f4cd5b3a"
+    },
+    {
+      "path": "benchmark-huffman-call-narrow-trial-inflate-run2.tsv",
+      "sha256": "e549a99f6280fa448627a57d726280f298995f0941146abb38122a47b816b9b7"
+    },
+    {
+      "path": "benchmark-huffman-call-narrow-trial-inflate-run3.tsv",
+      "sha256": "f82f558dd6695183caf531c3952045df36eb6a329bd316a5cb37d3d8489474cf"
+    },
+    {
+      "path": "benchmark-huffman-call-narrow-trial-pipeline-manifest.json",
+      "sha256": "54193126b9abc390ff29508c07b1a28fba1d5b28a0ab4ef2f2466925a4a26b0c"
+    },
+    {
+      "path": "benchmark-huffman-call-narrow-trial-pipeline-run1.tsv",
+      "sha256": "1e558d131a05a5c47efc0a5db02967b1a6e7fb0bdaa5c33d4552cd955991fb7a"
+    },
+    {
+      "path": "benchmark-huffman-call-narrow-trial-pipeline-run2.tsv",
+      "sha256": "7d0c9c4ce5485f13abd2a0396fc61f3fc3b73df00dc861649d747a7f51a61e96"
+    },
+    {
+      "path": "benchmark-huffman-call-narrow-trial-pipeline-run3.tsv",
+      "sha256": "8ccaf57f15120c233192f3b3db8fecbe2480e30c39e7ae1eadd3d49b361a0234"
+    },
+    {
+      "path": "benchmark-huffman-call-split-trial-corpus-manifest.json",
+      "sha256": "999b65f551fdf371ecc83b1abc2eb602d74437fffc29cf37d880faede7c58d58"
+    },
+    {
+      "path": "benchmark-huffman-call-split-trial-corpus-run1.tsv",
+      "sha256": "769db2e6056910b208a81f6447879ce1eb506a22118e3bde7cc93435643a3460"
+    },
+    {
+      "path": "benchmark-huffman-call-split-trial-corpus-run2.tsv",
+      "sha256": "173392bb01ab57c6193d1e46f2449529135b0e71d996741c0f9a6cef1ad3c6aa"
+    },
+    {
+      "path": "benchmark-huffman-call-split-trial-corpus-run3.tsv",
+      "sha256": "cad48f09fcee2cfd39a60f900579d8cf16c75f1a80ae125eee704cbc5f5ed507"
+    },
+    {
+      "path": "benchmark-huffman-call-split-trial-inflate-manifest.json",
+      "sha256": "ac7d3e1be6c709d1f301298c5e04158ec9a72bff61ff795385db91b583d735ab"
+    },
+    {
+      "path": "benchmark-huffman-call-split-trial-inflate-run1.tsv",
+      "sha256": "b08a7373353a032d48c37edcfe9a8d1d4be960cad21347141415a334224664d0"
+    },
+    {
+      "path": "benchmark-huffman-call-split-trial-inflate-run2.tsv",
+      "sha256": "ab9bfcc5821999f5ba6675f410866ab0460f14b545eb3600596ca1736e26e655"
+    },
+    {
+      "path": "benchmark-huffman-call-split-trial-inflate-run3.tsv",
+      "sha256": "a32af6f7822b396c83e6e0ae20b997cdec1bbae08f5995cce68e8229c5a12654"
+    },
+    {
+      "path": "benchmark-huffman-call-split-trial-pipeline-manifest.json",
+      "sha256": "e63179e1f9de174ff9dcaa0a809f9dc5da3d8412e78c29a49ffdd7f3a798f736"
+    },
+    {
+      "path": "benchmark-huffman-call-split-trial-pipeline-run1.tsv",
+      "sha256": "2ae795e2b8af7b5a5975fec10438ac836d0a3b5bc53e6d7003c56c21387a12eb"
+    },
+    {
+      "path": "benchmark-huffman-call-split-trial-pipeline-run2.tsv",
+      "sha256": "84f9c27a6df57529fa5ca49d65a96aec8541836dbe231c02a1c60bf5cc7e542f"
+    },
+    {
+      "path": "benchmark-huffman-call-split-trial-pipeline-run3.tsv",
+      "sha256": "e9bcc3f70721f71cf9bfa948fd86da48c5ad15522edee4d6d963189cee77f38f"
+    }
+  ],
+  "analysis_sha256": "63fcc3c817cdc1fd746fc0510ae39f2606ba7822fe06ecdb90c389617943f4f9"
+}

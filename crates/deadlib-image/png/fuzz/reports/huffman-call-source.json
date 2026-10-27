@@ -1,0 +1,340 @@
+{
+  "baseline_png_commit": "f1b22d891",
+  "change": "Inline primary Huffman lookup and outline unchanged canonical/error fallback",
+  "commands": [
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "huffman",
+        "/tmp/deadlib-image-huffman-call-corpus-20261027-a/huffman",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=10000",
+        "-seed=845229",
+        "-max_len=64",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "fuzz/reports/huffman-call-huffman-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 156.782
+    },
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "zlib",
+        "/tmp/deadlib-image-huffman-call-corpus-20261027-a/zlib",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=20000",
+        "-seed=845229",
+        "-max_len=262144",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "fuzz/reports/huffman-call-zlib-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 22.247
+    },
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "inflate_stream",
+        "/tmp/deadlib-image-huffman-call-corpus-20261027-a/inflate_stream",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=20000",
+        "-seed=845229",
+        "-max_len=262144",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "fuzz/reports/huffman-call-inflate_stream-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 16.743
+    },
+    {
+      "command": [
+        "rustup",
+        "run",
+        "nightly",
+        "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+        "run",
+        "png_stream",
+        "/tmp/deadlib-image-huffman-call-corpus-20261027-a/png_stream",
+        "--target-dir",
+        "/tmp/deadlib-image-reference-asan-target",
+        "--",
+        "-runs=30000",
+        "-seed=845229",
+        "-max_len=65536",
+        "-timeout=10",
+        "-rss_limit_mb=1024",
+        "-print_final_stats=1"
+      ],
+      "log": "fuzz/reports/huffman-call-png_stream-linux.log",
+      "exit_code": 0,
+      "wall_seconds": 58.421
+    }
+  ],
+  "campaigns": [
+    {
+      "target": "huffman",
+      "runs": 10000,
+      "initial_corpus": {
+        "files": 649,
+        "bytes": 7788,
+        "maximum_file_bytes": 12,
+        "sha256": "8ced47a4e4a4156b0ca5c367135da86a82004425176c5cccecbfff69b1c25b90",
+        "hash_method": "Ascending literal UTF-8 relative filename bytes, each followed by NUL and file contents"
+      },
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/huffman",
+      "binary_sha256": "6beab7a9fc18d34278793ea7e64d0985d035572aa60d71b054f48de9a030ee55",
+      "asan_init_defined": true,
+      "peak_rss_mib": 409,
+      "fuzz_seconds": 140
+    },
+    {
+      "target": "zlib",
+      "runs": 20000,
+      "initial_corpus": {
+        "files": 810,
+        "bytes": 4803389,
+        "maximum_file_bytes": 136426,
+        "sha256": "3e9821a27aee4076cf6d9e55130c06cf10d356ca3a0f3c33224c97c68c87c8c1",
+        "hash_method": "Ascending literal UTF-8 relative filename bytes, each followed by NUL and file contents"
+      },
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/zlib",
+      "binary_sha256": "87719062149902f9747eeaf4f6c9c94d648adbf8d7b0d2f41a27c302191a716f",
+      "asan_init_defined": true,
+      "peak_rss_mib": 406,
+      "fuzz_seconds": 20
+    },
+    {
+      "target": "inflate_stream",
+      "runs": 20000,
+      "initial_corpus": {
+        "files": 161,
+        "bytes": 72709,
+        "maximum_file_bytes": 4107,
+        "sha256": "cff5807714e8d44a8a7cb628ef914b56e529edc72d518ddae711679f5bd61742",
+        "hash_method": "Ascending literal UTF-8 relative filename bytes, each followed by NUL and file contents"
+      },
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/inflate_stream",
+      "binary_sha256": "533f27a783f0b283e2a7dbf1d27b76ca369a03b889bc167a756e0e2a36b55f48",
+      "asan_init_defined": true,
+      "peak_rss_mib": 401,
+      "fuzz_seconds": 15
+    },
+    {
+      "target": "png_stream",
+      "runs": 30000,
+      "initial_corpus": {
+        "files": 19487,
+        "bytes": 4090790,
+        "maximum_file_bytes": 63435,
+        "sha256": "ce20635172eca285efecfab795258af959ea74aa97e130cad14f2c68dbe947b7",
+        "hash_method": "Ascending literal UTF-8 relative filename bytes, each followed by NUL and file contents"
+      },
+      "binary": "/tmp/deadlib-image-reference-asan-target/x86_64-unknown-linux-gnu/release/png_stream",
+      "binary_sha256": "926ef5039bcd4164e6db8066604cb2b91fadb2d0c650418e90a28ec32ffed6b6",
+      "asan_init_defined": true,
+      "peak_rss_mib": 516,
+      "fuzz_seconds": 56
+    }
+  ],
+  "source_sha256": [
+    {
+      "path": "png/examples/seed_fuzz.rs",
+      "sha256": "52c88a21c795e2890eb84892b375568d5e34d3971e7ce2d69d91f25d29093551"
+    },
+    {
+      "path": "png/fuzz/Cargo.lock",
+      "sha256": "20af80c405f3569a32505f7fb3f681ff094714961cbc265585c5e2b00b796b49"
+    },
+    {
+      "path": "png/fuzz/Cargo.toml",
+      "sha256": "8086f7cfbec9a7327d219372396122b5078d70e5ac0f684eb71ee1a252852454"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/decode.rs",
+      "sha256": "4c372f567fca2803a70f44c2c38cf6f0436757fd8f3107623251d23e7d43c44b"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/deflate_stream.rs",
+      "sha256": "aa137e57e530c0c998a174395a08f3657331a7a302efbeb7c86376cd35824783"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/encode_stream.rs",
+      "sha256": "9de7cddbe4bc47c8d50dff62c1cd0a4c008cdf8e0449fcd3cae6a73ab90b6b2a"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/huffman.rs",
+      "sha256": "d625611b80e644192c27dd9f7b8065cfb78515cc55236203985ae4fd9d5c29ca"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/inflate_stream.rs",
+      "sha256": "bcf12e9ac73f10f16a003ac6e807443be9a6f2ac6c43bea6ff89bde367ade022"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/png_stream.rs",
+      "sha256": "706390b3fbcb82f602da089f73e19ce583f97810aa92902e1e752cc1e1f31281"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/profiles.rs",
+      "sha256": "b26e92197b2ef55edd18cd15c0a68974c41d322767728ab2f2e4620351201d9a"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/text_body.rs",
+      "sha256": "65fb88fb2ba33e8151c27ff4696693209c5d5be8033ad0e0a4639604882be497"
+    },
+    {
+      "path": "png/fuzz/fuzz_targets/zlib.rs",
+      "sha256": "fd9554f9bdae4786df4dc5cb054de4df8bcd73aabf295f51035210cd39953e62"
+    },
+    {
+      "path": "png/fuzz/support/reference.rs",
+      "sha256": "68a2bbed1d30d3e431e41ee56162112272f1a6adec395fbf6a80c3f7c50802f9"
+    },
+    {
+      "path": "png/src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "png/src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "png/src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "png/src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "png/src/lib.rs",
+      "sha256": "67e57fcb942e9813593df8c3f36b98f23f215cc1ff99a31e87ad39a5cfa4d8ab"
+    },
+    {
+      "path": "png/src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "png/src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "png/src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "png/src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "png/src/scanline.rs",
+      "sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3"
+    },
+    {
+      "path": "png/src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "png/src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "png/src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "png/src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "png/src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "png/src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "png/src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "png/src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "png/src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "png/src/zlib.rs",
+      "sha256": "2c972535e2fe47cd64c6aa7b21c9b7af30cb156350ae172544c7b63a26d1c37b"
+    },
+    {
+      "path": "png/tests/support/apng_recovery.rs",
+      "sha256": "c756dcde80564c51b2d5fd605331db8eee092c85ed9ca3004a73d03d1dbf06ca"
+    },
+    {
+      "path": "png/tests/support/chunks.rs",
+      "sha256": "414380bb3ffe06aa356d0d494252cd6a92f95e2830eb167b6b2c658777069077"
+    },
+    {
+      "path": "png/tests/support/hdr.rs",
+      "sha256": "d365b2a468d5fc815453616a1e1eb0553a692a871593f944a9b68ddb6b904720"
+    },
+    {
+      "path": "png/tests/support/huffman.rs",
+      "sha256": "ed2db27a8fb2f8c324e49cb42862bbbd848d0697d5b1cc559034aac54d8d27c2"
+    },
+    {
+      "path": "png/tests/support/mod.rs",
+      "sha256": "1580fd6e442fa78ab893ea40a7469d88ef27c9668d967038ca3814390cebc442"
+    },
+    {
+      "path": "png/tests/support/named.rs",
+      "sha256": "0e4c993567f273180885e42c8c74bac7f09c6bac0431b556c9b3ba63c7f0eaa3"
+    },
+    {
+      "path": "png/tests/support/text_body.rs",
+      "sha256": "9f0d0a028ba2cb3c942e98352a87f5db8a4eb8f7f35fcc5234aeb348f82b35c4"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+    }
+  ],
+  "scope": "80,000 fresh ASan smoke executions targeting both Huffman decoder callers and native PNG streaming. Independent positive zlib oracle on native acceptance; not a completeness or native-only coverage claim.",
+  "rustc": "rustc 1.101.0-nightly (76456a688 2026-10-25)",
+  "clang": "Debian clang version 19.1.7 (3+b1)",
+  "environment": {
+    "CC": "/usr/bin/clang",
+    "CFLAGS": "-fsanitize=address",
+    "CARGO_BUILD_JOBS": "4"
+  },
+  "runner_sha256": "b3f9a3e0ae8d43c623e14e48b25f6baaf02b1eb5b4f0b1690e1b5107028d7d0c",
+  "final_source_hashes_verified": true
+}

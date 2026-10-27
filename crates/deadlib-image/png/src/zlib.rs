@@ -152,6 +152,9 @@ impl Huffman {
         }
         Ok(h)
     }
+    // A small primary lookup can inline at symbol call sites; keep the
+    // canonical long-code and error paths in a separate function.
+    #[inline]
     fn decode(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
         bits.fill_huffman(9);
         let entry = self.fast[(bits.word & 511) as usize];
@@ -161,6 +164,11 @@ impl Huffman {
             bits.count -= n;
             return Ok((entry >> 4) as usize);
         }
+        self.decode_slow(bits)
+    }
+
+    #[inline(never)]
+    fn decode_slow(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
         bits.fill_huffman(self.max);
         // A primary-table miss cannot match a code of length 1 through 9.
         // Reverse once, then compare only the remaining canonical lengths.

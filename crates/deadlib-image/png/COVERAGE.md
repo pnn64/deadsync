@@ -911,3 +911,33 @@ are verified, with source/corpus/binary hashes in
 successful input count is now 590,000. Native-only fuzz coverage, remaining
 conformance audits and measured competitive pipeline/encoder performance remain
 open.
+
+## Huffman call-site optimization (2026-10-27)
+
+The measured primary lookup now inlines at symbol call sites, with the unchanged
+canonical/error fallback outlined. No codeword, refill, error, limit or format
+policy changes. Linux sampling and warmed before/after measurements are retained
+in `profiling/` and `benchmark-huffman-call-*`; the interleaved saved-binary
+check supports an approximately 12% reference-relative photo decode improvement.
+See [BENCHMARKS.md](BENCHMARKS.md#huffman-symbol-call-sites) for rates, experimental
+variants, exact source checkpoints, methods and the remaining performance gap.
+
+The full release run passes 114 tests, including all twelve optional C/oracle
+and golden-regeneration checks. Main and fuzz strict Clippy pass, as do the
+65,652-case strict-window C zlib audit and 19,645-case compatibility C Huffman
+audit. An isolated offline source copy passes all 102 normal tests (twelve
+optional checks ignored); its only production dependency is `deadlib-image`.
+`huffman-call-validation.log` / `.json` and `huffman-call-independent.log`
+retain commands, source/oracle hashes and results. Scoped rustfmt checks pass.
+
+Fresh Linux ASan campaigns complete 10,000 structured Huffman, 20,000 raw zlib,
+20,000 fragmented inflater and 30,000 PNG-stream inputs. The initial corpora are
+fresh byte copies of the existing deterministic seeds, including the legal
+distance-count definitions and WPT animations. Respective fuzzing times / peak
+RSS are 140 seconds / 409 MiB, 20 / 406, 15 / 401 and 56 / 516. Each binary
+defines the ASan runtime entry, and all final source hashes match their initial
+snapshot. Exact commands, per-target logs and initial-corpus/source/binary hashes
+are in `fuzz/reports/huffman-call-source.json`. These 80,000 successful inputs
+bring the historical count to 670,000. Native-only fuzz coverage, longer
+campaigns, remaining conformance audits and competitive pipeline/encoder
+performance remain open.

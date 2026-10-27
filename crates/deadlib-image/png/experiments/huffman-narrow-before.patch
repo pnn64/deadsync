@@ -1,0 +1,113 @@
+diff --git b/crates/deadlib-image/png/src/zlib.rs a/crates/deadlib-image/png/src/zlib.rs
+index 7d8b266c6..1cb336d88 100644
+--- b/crates/deadlib-image/png/src/zlib.rs
++++ a/crates/deadlib-image/png/src/zlib.rs
+@@ -84,21 +84,6 @@ impl<'a> Bits<'a> {
+ 
+ // A small primary table handles common codes. Canonical arrays handle longer
+ // codes without a 128 KiB lookup allocation per dynamic block.
+-// Codeword lookup has only these failures; keep its result small and translate
+-// to the public error at callers outside the symbol decoder.
+-enum SymbolError {
+-    Truncated,
+-    Invalid,
+-}
+-impl From<SymbolError> for Error {
+-    fn from(error: SymbolError) -> Self {
+-        match error {
+-            SymbolError::Truncated => Self::Truncated,
+-            SymbolError::Invalid => Self::Invalid("invalid Huffman code"),
+-        }
+-    }
+-}
+-
+ struct Huffman {
+     fast: [u16; 512],
+     counts: [u16; 16],
+@@ -167,14 +152,14 @@ impl Huffman {
+         }
+         Ok(h)
+     }
+-    fn decode(&self, bits: &mut Bits<'_>) -> Result<u16, SymbolError> {
++    fn decode(&self, bits: &mut Bits<'_>) -> Result<usize, Error> {
+         bits.fill_huffman(9);
+         let entry = self.fast[(bits.word & 511) as usize];
+         let n = (entry & 15) as u8;
+         if n != 0 && n <= bits.count {
+             bits.word >>= n;
+             bits.count -= n;
+-            return Ok(entry >> 4);
++            return Ok((entry >> 4) as usize);
+         }
+         bits.fill_huffman(self.max);
+         // A primary-table miss cannot match a code of length 1 through 9.
+@@ -185,13 +170,15 @@ impl Huffman {
+             if code >= self.first[n] && code - self.first[n] < self.counts[n] {
+                 bits.word >>= n;
+                 bits.count -= n as u8;
+-                return Ok(self.symbols[(self.offsets[n] + code - self.first[n]) as usize]);
++                return Ok(
++                    self.symbols[(self.offsets[n] + code - self.first[n]) as usize] as usize,
++                );
+             }
+         }
+         if bits.count < self.max {
+-            Err(SymbolError::Truncated)
++            Err(Error::Truncated)
+         } else {
+-            Err(SymbolError::Invalid)
++            Err(Error::Invalid("invalid Huffman code"))
+         }
+     }
+ }
+@@ -313,9 +300,9 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+                     }
+                     256 => break,
+                     symbol @ 257..=285 => {
+-                        let index = usize::from(symbol - 257);
++                        let index = symbol - 257;
+                         let len = LENGTH_BASE[index] + bits.read(LENGTH_EXTRA[index])? as usize;
+-                        let symbol = usize::from(dist.decode(&mut bits)?);
++                        let symbol = dist.decode(&mut bits)?;
+                         if symbol >= 30 {
+                             return Err(Error::Invalid("reserved distance symbol"));
+                         }
+diff --git b/crates/deadlib-image/png/src/zlib/inflate.rs a/crates/deadlib-image/png/src/zlib/inflate.rs
+index 4a8bca34c..fd71d891f 100644
+--- b/crates/deadlib-image/png/src/zlib/inflate.rs
++++ a/crates/deadlib-image/png/src/zlib/inflate.rs
+@@ -1,4 +1,4 @@
+-use super::{Bits, DIST_BASE, DIST_EXTRA, Huffman, LENGTH_BASE, LENGTH_EXTRA, SymbolError, fixed};
++use super::{Bits, DIST_BASE, DIST_EXTRA, Huffman, LENGTH_BASE, LENGTH_EXTRA, fixed};
+ use crate::{Error, checksum::Adler32, reserve};
+ 
+ /// Why a streaming codec stopped. Only `Done` proves checksum-verified completion.
+@@ -195,8 +195,8 @@ impl Inflater {
+             ($tree:expr) => {
+                 match $tree.decode(bits) {
+                     Ok(value) => value,
+-                    Err(SymbolError::Truncated) => stop!(StreamStatus::NeedInput),
+-                    Err(error) => return Err(error.into()),
++                    Err(Error::Truncated) => stop!(StreamStatus::NeedInput),
++                    Err(error) => return Err(error),
+                 }
+             };
+         }
+@@ -347,7 +347,7 @@ impl Inflater {
+                 State::Codes => match symbol!(&self.literals) {
+                     value @ 0..=255 => self.state = State::Literal(value as u8),
+                     256 => self.end_block(),
+-                    value @ 257..=285 => self.state = State::LengthExtra(usize::from(value - 257)),
++                    value @ 257..=285 => self.state = State::LengthExtra(value - 257),
+                     _ => return Err(Error::Invalid("reserved literal symbol")),
+                 },
+                 State::Literal(value) => {
+@@ -368,7 +368,7 @@ impl Inflater {
+                     )
+                 }
+                 State::DistanceCode(length) => {
+-                    let symbol = usize::from(symbol!(&self.distances));
++                    let symbol = symbol!(&self.distances);
+                     if symbol >= 30 {
+                         return Err(Error::Invalid("reserved distance symbol"));
+                     }

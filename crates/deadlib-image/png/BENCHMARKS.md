@@ -288,3 +288,79 @@ passes 20,000 fresh sanitizer executions across four targets. Native coverage
 and source/binary hashes are retained separately in `coverage-reports/` and
 `fuzz/reports/inflate-source.json`. Broader corpora, comparable libpng timing,
 filter/sample profiling and compression-ratio work remain open.
+
+## Huffman symbol call sites
+
+Linux cycle sampling of the current 24-photo decoder attributed 33.80% of
+samples to `Huffman::decode`, 32.71% to the containing inflation loop, and
+20.35% to unfiltering. The primary nine-bit lookup and canonical fallback shared
+one function. The selected change lets the primary lookup inline at symbol call
+sites while keeping the unchanged long-code/error path in a separate function.
+Tables, refill widths, public errors, bounds and decoded bytes are unchanged.
+
+`examples/decode_profile.rs` loads and validates the corpus before repeating
+40 passes. The before/selected reports in `profiling/` retain commands, source,
+corpus, executable and raw-profile hashes; neither report lost samples. In the
+selected report the primary lookup appears inline inside `decompress_prefix`,
+while the outlined fallback accounts for 3.42% of samples. Unfiltering remains
+22.35%. Sampling attribution is separate from the Windows timing comparisons.
+To reproduce a new Linux profile, with `perf` access and an unused evidence name:
+
+```sh
+python3 crates/deadlib-image/png/scripts/profile_decode.py --name local-decode --corpus target/deadlib-image-reference/kodak --target-dir /tmp/png-profile-target --raw /tmp/png-local-decode.data
+```
+
+`benchmark-huffman-call-before-*`, `split-trial-*`, `narrow-trial-*`,
+`combined-trial-*` and `control-*` retain three repetitions of each of the raw
+inflate, photo and synthetic benchmarks. The smaller private symbol-result
+trial, alone and combined with outlining, did not retain the split-only
+buffered-photo gain. The three-run split-only synthetic group initially showed
+a slowdown, so selection also used saved binaries in before/split/split/before
+order for **each** benchmark target. These twelve later processes verify binary
+and corpus hashes through `scripts/benchmark_saved.ps1`. Their manifests retain
+the original source metadata. All timing and sampling finished before final
+correctness, lint, offline-build and sanitizer work began.
+
+The interleaved groups use two process repetitions per implementation, three
+warmups per operation, logical CPU 0, twenty iterations for raw/synthetic work
+and five for photos. Rates divide total sample bytes by the sum of per-case
+medians of run-average nanoseconds. The split-only trial is the selected source;
+its historical artifact names are retained.
+
+| Operation, MiB/s | Saved baseline | Selected split |
+| --- | ---: | ---: |
+| Photo IDAT native inflation | 110.50 | 125.81 |
+| Photo IDAT native streaming inflation | 75.83 | 89.52 |
+| Photo IDAT flate2 inflation | 145.27 | 145.16 |
+| Photo native PNG decode | 84.02 | 97.76 |
+| Photo native PNG reader | 70.59 | 79.63 |
+| Photo Rust png decode | 218.22 | 227.68 |
+| Synthetic native PNG decode | 262.81 | 275.40 |
+| Synthetic Rust png decode | 925.54 | 931.25 |
+
+Relative native/reference ratios suggest 14% better raw buffered inflation,
+18% better streamed inflation, 12% better photo decoding and 8% better reader
+decoding. Synthetic buffered decode suggests 4% improvement; its reader and row
+paths change by approximately 1%. The initial synthetic slowdown did not recur
+in the interleaved check. These remain shared-host inferences: CPU frequency
+and other workloads are uncontrolled, and the table shows reference drift.
+Photo Rust png decoding is still over twice as fast. This change does not
+establish competitive parity, and encoding/compression-ratio work remains open.
+
+`scripts/summarize_huffman_calls.py` reproduces
+`benchmark-huffman-call-summary.json`, including all group rates,
+reference-relative ratios, artifact hashes and exact case/encoded-size/sample-
+size/pipeline-capacity invariants across all measurements. The selected reverse
+patch and exact source hashes are in
+`experiments/huffman-call-split-checkpoints.json`; applying its patch reconstructs
+the `f1b22d891` baseline. The separate narrow/combined checkpoints reconstruct
+those trial sources from the baseline by reversing their patches. Use
+`git -c core.autocrlf=false apply` so Windows EOL conversion does not alter the
+recorded bytes. Existing benchmark runners can measure each reconstructed
+variant with the same harness and corpus.
+
+`huffman-call-validation.log` / `.json` record all 114 release tests (including
+the twelve optional checks), strict main/fuzz linting, strict-window zlib and
+compatibility Huffman C audits, and the isolated offline 102-test run. Fresh
+ASan campaigns add 80,000 successful executions across four targets; exact
+source/corpus/binary hashes and logs are in `fuzz/reports/huffman-call-source.json`.
