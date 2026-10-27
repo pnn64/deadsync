@@ -460,6 +460,9 @@ mod windows {
             "boundary_auxopen",
             "boundary_auxfind",
             "boundary_auxrefs",
+            "boundary_auxbuffer_info",
+            "boundary_auxbuffer",
+            "boundary_auxgsub",
             "boundary_cpcall",
         ] {
             let function = vm

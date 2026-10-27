@@ -412,3 +412,85 @@ API void luaL_unref(lua_State *L, int index, int reference) {
   lua_rawgeti(L,index,0); lua_rawseti(L,index,reference);
   lua_pushinteger(L,reference); lua_rawseti(L,index,0);
 }
+
+/* Only strings emitted by this buffer occupy its live stack suffix. */
+static int buffer_emit(luaL_Buffer *buffer) {
+  size_t used = (size_t)(buffer->p - buffer->buffer);
+  if (!used) return 0;
+  lua_pushlstring(buffer->L, buffer->buffer, used);
+  buffer->p = buffer->buffer;
+  buffer->lvl++;
+  return 1;
+}
+static void buffer_merge(luaL_Buffer *buffer) {
+  int count = 1;
+  size_t total;
+  if (buffer->lvl < 2) return;
+  total = lua_objlen(buffer->L, -1);
+  while (count < buffer->lvl) {
+    size_t next = lua_objlen(buffer->L, -count-1);
+    if (buffer->lvl-count+1 < 10 && total <= next) break;
+    total += next;
+    count++;
+  }
+  lua_concat(buffer->L, count);
+  buffer->lvl -= count-1;
+}
+API void luaL_buffinit(lua_State *L, luaL_Buffer *buffer) {
+  buffer->L = L;
+  buffer->p = buffer->buffer;
+  buffer->lvl = 0;
+}
+API char *luaL_prepbuffer(luaL_Buffer *buffer) {
+  if (buffer_emit(buffer)) buffer_merge(buffer);
+  return buffer->buffer;
+}
+API void luaL_addlstring(luaL_Buffer *buffer, const char *bytes, size_t length) {
+  while (length) {
+    size_t room = (size_t)(buffer->buffer+LUAL_BUFFERSIZE-buffer->p);
+    size_t part;
+    if (!room) { luaL_prepbuffer(buffer); room = LUAL_BUFFERSIZE; }
+    part = length < room ? length : room;
+    memcpy(buffer->p, bytes, part);
+    buffer->p += part;
+    bytes += part;
+    length -= part;
+  }
+}
+API void luaL_addstring(luaL_Buffer *buffer, const char *string) {
+  luaL_addlstring(buffer, string, strlen(string));
+}
+API void luaL_addvalue(luaL_Buffer *buffer) {
+  size_t length;
+  const char *bytes = lua_tolstring(buffer->L, -1, &length);
+  size_t room = (size_t)(buffer->buffer+LUAL_BUFFERSIZE-buffer->p);
+  if (length <= room) {
+    /* Nonstrings have a null pointer and zero length in Lua 5.1. */
+    if (length) memcpy(buffer->p, bytes, length);
+    buffer->p += length;
+    lua_settop(buffer->L, -2);
+  } else {
+    if (buffer_emit(buffer)) lua_insert(buffer->L, -2);
+    buffer->lvl++;
+    buffer_merge(buffer);
+  }
+}
+API void luaL_pushresult(luaL_Buffer *buffer) {
+  buffer_emit(buffer);
+  lua_concat(buffer->L, buffer->lvl);
+  buffer->lvl = 1;
+}
+API const char *luaL_gsub(lua_State *L, const char *string, const char *pattern, const char *replacement) {
+  luaL_Buffer buffer;
+  const char *match;
+  size_t width = strlen(pattern);
+  luaL_buffinit(L, &buffer);
+  while ((match = strstr(string, pattern)) != NULL) {
+    luaL_addlstring(&buffer, string, (size_t)(match-string));
+    luaL_addstring(&buffer, replacement);
+    string = match+width;
+  }
+  luaL_addstring(&buffer, string);
+  luaL_pushresult(&buffer);
+  return lua_tolstring(L, -1, NULL);
+}

@@ -805,3 +805,89 @@ do
   assert(not ok and detail and observed==3)
   print('aux-error-stack',observed,detail)
 end
+
+do
+  local capacity,bytes,offset=boundary_auxbuffer_info()
+  assert(capacity>0 and bytes>=offset+capacity)
+  print('aux-buffer-abi',capacity,bytes,offset)
+  local checks=0
+  local function check(steps,callback)
+    local expected={}
+    for i,step in ipairs(steps)do
+      local mode,value=step[1],step[2]
+      if mode~=5 and mode~=6 then
+        if type(value)=='number'then value=tostring(value)end
+        if type(value)~='string'then value=''end
+        if mode==1 then value=value:match('^[^%z]*')end
+        expected[#expected+1]=value
+      end
+    end
+    local result,trace=boundary_auxbuffer(steps,callback)
+    assert(result==table.concat(expected) and #trace==#steps)
+    local observation={}
+    for i,row in ipairs(trace)do
+      assert(row[1]==row[3] and row[2]>=0 and row[2]<=capacity)
+      observation[#observation+1]=table.concat(row,',')
+    end
+    checks=checks+1
+    print('aux-buffer',checks,#result,table.concat(observation,';'))
+    return result
+  end
+  check({});check({{5},{5},{6},{5},{6}})
+  local sizes={0,1,capacity-1,capacity,capacity+1,2*capacity-1,2*capacity,2*capacity+1,17*capacity+13}
+  for mode=0,4 do
+    for _,size in ipairs(sizes)do
+      local text=('a\0bc'):rep(math.ceil(size/4)):sub(1,size)
+      check({{mode,text}})
+      check({{0,'prefix'},{mode,text},{0,'suffix'},{5},{5}})
+    end
+  end
+  -- Exact-full buffers defer their flush until the next nonempty append.
+  check({{0,('x'):rep(capacity)},{0,''},{2,''},{1,''},{3,'y'},{6},{2,123.5}})
+  check({{2,nil},{2,false},{2,true},{2,{}},{2,function()end},{2,17},{2,-0.125}})
+  local lengths={capacity*64,capacity*32,capacity*16,capacity*8,capacity*4,capacity*2,capacity,capacity,capacity,capacity,capacity,capacity,capacity}
+  local descending,ascending={},{}
+  for i,length in ipairs(lengths)do
+    descending[i]={2,('d'):rep(length)}
+    ascending[#lengths-i+1]={2,('u'):rep(length)}
+  end
+  check(descending);check(ascending)
+  local seed,mixed=17,{}
+  for i=1,400 do
+    seed=(seed*25173+13849)%65536
+    mixed[i]={seed%7,('m\0'):rep(math.floor((seed%(3*capacity+1))/2))}
+  end
+  check(mixed)
+  local callbacks=0
+  local function collect()
+    callbacks=callbacks+1
+    collectgarbage()
+    assert(boundary_sum(1,2)==3)
+    local nested=boundary_auxbuffer({{0,'inner\0'},{2,17},{4,'tail'}})
+    assert(nested=='inner\0'..'17tail')
+  end
+  local steps={}
+  for i=1,40 do steps[i]={i%5,('z\0'):rep(capacity+i)}end
+  check(steps,collect);assert(callbacks==#steps)
+  local marker={}
+  local ok,e=pcall(boundary_auxbuffer,{{0,('x'):rep(capacity+1)}},function()error(marker)end)
+  assert(not ok and e==marker)
+  check({{2,'after error'},{4,'\0recovered'}})
+  local co=coroutine.create(function()
+    return pcall(boundary_auxbuffer,{{2,'retained'}},function()coroutine.yield()end)
+  end)
+  local resumed,success,message=coroutine.resume(co)
+  assert(resumed and not success and message:find('yield',1,true))
+  print('aux-buffer-yield',message)
+  for _,row in ipairs({
+    {'abc','x','r','abc'}, {'','x','r',''}, {'aaaaa','aa','X','XXa'},
+    {'a+b+a+','a+','R','Rb+R'}, {'x\0x','x','a\0b','a'},
+    {'aba','a\0ignored','R','RbR'}, {'aaa','a','',''},
+    {123412,'12',9,'9349'}, {('ab'):rep(2000),'b',('r'):rep(17),('a'..('r'):rep(17)):rep(2000)},
+  })do
+    local result,same=boundary_auxgsub(row[1],row[2],row[3])
+    assert(result==row[4] and same)
+    print('aux-gsub',#result,same)
+  end
+  print('aux-buffer-complete',checks,callbacks)
+end

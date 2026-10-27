@@ -3,6 +3,7 @@
 #define DEADLUA_BOUNDARY_API_H
 #include <stddef.h>
 #include <stdarg.h>
+#include <stdio.h>
 #ifdef BOUNDARY_BUILD
 #define API __declspec(dllexport)
 #else
@@ -106,4 +107,25 @@ API void luaL_openlib(lua_State *, const char *, const luaL_Reg *, int);
 #define luaI_openlib luaL_openlib
 API int luaL_ref(lua_State *, int);
 API void luaL_unref(lua_State *, int, int);
+
+/* Lua 5.1 auxiliary buffer ABI, including caller-visible storage/macros. */
+#define LUAL_BUFFERSIZE BUFSIZ
+typedef struct luaL_Buffer {
+  char *p;
+  int lvl;
+  lua_State *L;
+  char buffer[LUAL_BUFFERSIZE];
+} luaL_Buffer;
+API void luaL_buffinit(lua_State *, luaL_Buffer *);
+API char *luaL_prepbuffer(luaL_Buffer *);
+API void luaL_addlstring(luaL_Buffer *, const char *, size_t);
+API void luaL_addstring(luaL_Buffer *, const char *);
+API void luaL_addvalue(luaL_Buffer *);
+API void luaL_pushresult(luaL_Buffer *);
+API const char *luaL_gsub(lua_State *, const char *, const char *, const char *);
+#define luaL_addchar(B,c) \
+  ((void)((B)->p < (B)->buffer + LUAL_BUFFERSIZE || luaL_prepbuffer(B)), \
+   (*(B)->p++ = (char)(c)))
+#define luaL_putchar(B,c) luaL_addchar(B,c)
+#define luaL_addsize(B,n) ((B)->p += (n))
 #endif

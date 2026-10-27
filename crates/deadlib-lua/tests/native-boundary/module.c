@@ -511,3 +511,87 @@ EXPORT int boundary_auxrefs(lua_State *L) {
   if (mode) { luaL_unref(L,1,(int)luaL_checkinteger(L,2));lua_pushboolean(L,1);return 1; }
   lua_pushvalue(L,2);reference=luaL_ref(L,1);lua_pushinteger(L,reference);return 1;
 }
+
+EXPORT int boundary_auxbuffer_info(lua_State *L) {
+  lua_pushinteger(L, LUAL_BUFFERSIZE);
+  lua_pushinteger(L, sizeof(luaL_Buffer));
+  lua_pushinteger(L, offsetof(luaL_Buffer, buffer));
+  return 3;
+}
+/* Each operation leaves only the buffer's chunk suffix above the trace. */
+EXPORT int boundary_auxbuffer(lua_State *L) {
+  luaL_Buffer buffer;
+  int i, count, trace, prefix;
+  luaL_checktype(L, 1, 5);
+  count = (int)lua_objlen(L, 1);
+  lua_createtable(L, count, 0);
+  trace = lua_gettop(L);
+  prefix = trace;
+  luaL_buffinit(L, &buffer);
+  for (i=1; i<=count; i++) {
+    int mode, top, used, level;
+    size_t length = 0;
+    const char *bytes = NULL;
+    lua_rawgeti(L, 1, i);
+    lua_rawgeti(L, -1, 1);
+    mode = (int)luaL_checkinteger(L, -1);
+    lua_settop(L, -2);
+    lua_rawgeti(L, -1, 2);
+    if (mode == 2) {
+      lua_remove(L, -2);
+      luaL_addvalue(&buffer);
+    } else {
+      if (mode != 5 && mode != 6) {
+        bytes = luaL_checklstring(L, -1, &length);
+        /* Root a coerced number's string in the original step across GC. */
+        lua_pushvalue(L, -1); lua_rawseti(L, -3, 2);
+      }
+      lua_settop(L, -3);
+      switch (mode) {
+        case 0: luaL_addlstring(&buffer, bytes, length); break;
+        case 1: luaL_addstring(&buffer, bytes); break;
+        case 3: {
+          size_t j; for (j=0; j<length; j++) luaL_addchar(&buffer, bytes[j]);
+          break;
+        }
+        case 4: {
+          size_t position = 0;
+          do {
+            char *destination = luaL_prepbuffer(&buffer);
+            size_t part = length-position;
+            if (part > LUAL_BUFFERSIZE) part = LUAL_BUFFERSIZE;
+            if (part) memcpy(destination, bytes+position, part);
+            luaL_addsize(&buffer, part);
+            position += part;
+          } while (position < length);
+          break;
+        }
+        case 5: luaL_prepbuffer(&buffer); break;
+        case 6: luaL_pushresult(&buffer); break;
+        default: return luaL_error(L, "invalid buffer fixture mode");
+      }
+    }
+    if (lua_type(L, 2) == 6) {
+      lua_pushvalue(L, 2); lua_call(L, 0, 0);
+    }
+    top = lua_gettop(L)-prefix;
+    used = (int)(buffer.p-buffer.buffer);
+    level = buffer.lvl;
+    lua_createtable(L, 3, 0);
+    lua_pushinteger(L, top); lua_rawseti(L, -2, 1);
+    lua_pushinteger(L, used); lua_rawseti(L, -2, 2);
+    lua_pushinteger(L, level); lua_rawseti(L, -2, 3);
+    lua_rawseti(L, trace, i);
+  }
+  luaL_pushresult(&buffer);
+  lua_pushvalue(L, trace);
+  return 2;
+}
+EXPORT int boundary_auxgsub(lua_State *L) {
+  const char *string = luaL_checklstring(L, 1, NULL);
+  const char *pattern = luaL_checklstring(L, 2, NULL);
+  const char *replacement = luaL_checklstring(L, 3, NULL);
+  const char *result = luaL_gsub(L, string, pattern, replacement);
+  lua_pushboolean(L, result == lua_tolstring(L, -1, NULL));
+  return 2;
+}

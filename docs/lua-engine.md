@@ -185,6 +185,15 @@ declares 52 of 80 core and 23 of 36 auxiliary functions; validation lists missin
 names. Complete semantics, production native loading, the full official suite
 and standalone Lua 5.1 parity remain open. Performance work stays deferred.
 
+The [auxiliary buffer checks](testing/2026-10-27-rust-lua-auxbuffer.md)
+add the Lua 5.1 `luaL_Buffer` layout, buffer operations and literal `luaL_gsub`
+replacement to the development C boundary. The unchanged shared C fixture
+compares 99 buffer scenarios, chunk-stack traces and 40 collection callbacks
+with official Lua, including binary strings, numeric coercion, reentry, error
+identity and forbidden yields. The core Rust runtime remains unchanged.
+Production native loading, the remaining C API and full standalone Lua 5.1
+parity remain open; performance work stays deferred.
+
 The [standalone suite checks](testing/2026-10-27-rust-lua-full-suite.md) invoke
 the real CLIs with the official README's `LUA_PATH="?;./?.lua"` setup. Each run
 gets unchanged suite files and a private `lua` executable on PATH, so child
