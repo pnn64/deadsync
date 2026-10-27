@@ -1,5 +1,20 @@
 # PNG and zlib fuzz targets
 
+`compositor` checks bounded native animations, literal independently framed APNG
+bytes, exact expansion and full-canvas composition against a u128 rational model.
+The reference uses full-canvas snapshots and immediate disposal. Native
+composition uses saved rectangles and deferred disposal. All formats, both
+default-image roles, plain/Adam7, partial rectangles, all disposal/blend modes,
+alpha/transparent-key/palette recovery, replay/reset and exact snapshot budgets
+vary. This target calls no external reference codec. Inputs are 16–4,096 bytes;
+generated images are at most 9x7 with eight frames and two palette entries.
+The initial 480 structured seeds include recoverable invalid palette indices;
+240 valid wire fixtures also extend each PNG corpus.
+
+```sh
+cargo +nightly fuzz run compositor -- -runs=20000 -seed=928671 -max_len=4096 -timeout=10 -rss_limit_mb=1024 -print_final_stats=1
+```
+
 `reference_samples` exercises the explicit 1–16-bit reference constructor with
 uniform/mixed channel precision, both input containers, invalid depth/value/
 dimension/count classes, alpha endpoints and high-bit recovery. Its independent
@@ -49,6 +64,16 @@ Text-body seeds add all 256 byte values in both tEXt/zTXt to the PNG corpora,
 bringing that milestone's fresh counts to 6,291 files each. The dedicated `text_body`
 target has 4,304 initial inputs: flags/single-byte values plus 79-/80-/4096-byte
 plain, graphic, late-control and embedded-NUL bodies.
+
+The compositor follow-up passes 20,000 structured compositor, 30,000 PNG-stream
+and 30,000 buffered PNG ASan inputs. Fuzzing seconds / peak RSS are 68 / 430 MiB,
+33 / 500 and 7 / 466. `reports/compositor-source.json` retains source/corpus/binary
+hashes, environment and commands; full target logs are alongside it. The final
+compositor corpus is separately replayed for scoped native source coverage in
+`../coverage-reports/compositor-*`; its fixed-input executions are excluded from
+fuzz totals. The 80,000 successful ASan inputs bring historical campaigns across
+all eleven targets to 1,000,000, including earlier encoder runs. Whole-decoder
+feedback coverage and longer campaigns remain open.
 Working corpora, crash artifacts and builds are
 ignored. Committed fixtures and the seed generator reproduce the initial corpus;
 do not reuse a previously mutated corpus when reproducing an exact smoke run.

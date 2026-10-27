@@ -68,7 +68,7 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | 11.3.4.5 eXIf | Both TIFF byte orders and first-directory framing; unsupported data retained as unknown; encoder rejects unsupported containers | Covered by endian/truncation/offset tests and exact C/Rust payload comparisons; remaining Exif tags/directories/thumbnails are opaque |
 | 11.3.5.1 tIME | Exact fields, documented month/day/time ranges, leap second, singleton and legal placement | Covered by metadata tests; calendar/display/local-time policy is Application |
 | 11.3.6.1 acTL | Before IDAT, singleton, nonzero frame count, plays/frame limits and actual count agreement; explicit recovery diagnostic | Covered by 3,000 independent fault cases across 60 configurations and 120 APNG permutations, with fatal resource/core errors kept distinct |
-| 11.3.6.2 fcTL | Contiguous sequence numbers, legal rectangles, default-image restrictions, timing, blend/disposal enums; first fcTL may precede acTL | Covered by all-format native/recovery matrices, 35 pinned WPT animations, 201 exact independent RGBA16 canvases and 280 writer outputs |
+| 11.3.6.2 fcTL | Contiguous sequence numbers, legal rectangles, default-image restrictions, timing, blend/disposal enums; first fcTL may precede acTL | Covered by native/recovery matrices, 35 pinned WPT animations, 240 generated native-precision animations, 2,121 independent RGBA16 canvases, all disposal/blend states and all nine disposal transitions |
 | 11.3.6.3 fdAT | Sequence prefix, preceding frame control, arbitrary splits/empty frame-data fields, shared image format and independent frame zlib | Covered by native/reference APNG matrix, independent 20-frame fixture and streamed one-byte data |
 
 ## Encoders, decoders, viewers and editors
@@ -83,7 +83,7 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | 12.9: text | UTF-8 serialization, keyword byte/length classes, strict Latin-1 body encoding, native metadata compression and raw/typed APIs | Covered for these wire/encoder rules, including body NBSP and LF, empty/long text and unchanged non-null iTXt controls; line wrapping/display conventions are Application |
 | 12.10: chunking/extensions | Chunk size control, bounded writer chunks, recognized ancillary placement, private-name/property validation | Covered; full ordering mutation matrix remains Open |
 | 13.1: errors/recovery | Strict default plus `AnimationPolicy::RecoverDefault`, first-error event/diagnostic, discarded animation frames and verified native static image; palette/profile recovery | Covered for the APNG fault/CRC/sequence/data classes, all fragments/truncations tested, fatal core/resource/IO cases and diagnostic-free static reencoding; presentation remains Application |
-| 13.2–13.3: checking/security | Mandatory CRCs/checksums, grammar/format checks, checked arithmetic, input/output/chunk/frame/metadata limits; ten sanitizer targets | Covered for tested cases; longer campaigns and native-only coverage review remain Open |
+| 13.2–13.3: checking/security | Mandatory CRCs/checksums, grammar/format checks, checked arithmetic, input/output/chunk/frame/metadata limits; eleven sanitizer targets | Covered for tested cases; native compositor corpus coverage is reported separately, while longer campaigns and whole-decoder native-only feedback review remain Open |
 | 13.4: privacy | Exact hidden color samples, Exif and text are retained; encoder does not claim redaction or metadata scrubbing | Application; native preservation is intentional |
 | 13.5: unknown chunks | Independent property-bit/name-byte/case matrices through buffered, one-/seven-byte reader and direct event paths; literal raw names/data/positions and fused critical errors | Covered for these equivalence classes; reserved-bit ancillary acceptance follows 13.5 despite libpng 1.6.50 rejecting these names |
 | 13.6: pixel dimensions | pHYs values available without changing pixel storage | Application for presentation scaling |
@@ -92,7 +92,7 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | 13.10: progressive display | Adam7 row pass/origin/step exposed; `ImageEnd` separates provisional rows from verified images | Covered for codec events; progressive filling/painting is Application |
 | 13.11–13.12: truecolor/scaling | Native precision retained; explicit full-range RGBA16 expansion | Covered for native values and known expansion cases; display quantization is Application |
 | 13.13–13.14: color/gamma rendering | Supported metadata selection is available; source sample space remains explicit | Application; no automatic ICC, HDR or gamma conversion |
-| 13.15–13.17: backgrounds/alpha/palettes | bKGD/hIST/sPLT retained; explicit APNG SOURCE/OVER and disposal renderer | Covered by known answers and 201 WPT/libpng/fraction RGBA16 canvases, reset and both writers; additional color management remains Application |
+| 13.15–13.17: backgrounds/alpha/palettes | bKGD/hIST/sPLT retained; explicit APNG SOURCE/OVER and disposal renderer | Covered by 983,040 exact rational alpha pairs, 2,121 WPT/generated libpng/Fraction RGBA16 canvases, all formats, rectangles, disposal transitions, budget boundaries, replay/reset and compositor fuzzing; additional color management remains Application |
 | 14.1–14.3: editor copy/order rules | Both encoders tested for all 16 property combinations at three positions; unknown unsafe chunks omitted, repeated safe chunks retain binary payload/order/placement, known unsafe metadata follows its own rules | Covered for reencoding, including prewrite rejection of all nonalphabetic name bytes and reserved-bit names; arbitrary edit operations are not provided |
 | 15.3.1: datastream conditions | Signature, core grammar, per-chunk fields/relationships, known order constraints and encoder validation | Partial until all open field/order audit items are resolved |
 | 15.3.2: encoder conditions | Both native writers agree with independent readers; reference-depth frontend preserves original high bits and legal-depth native input remains strict | Historical utility evidence; encoder conformance is outside the current decoder completion scope |
@@ -107,7 +107,8 @@ integration. Package isolation and the production dependency boundary are
 verified by retained offline builds. Decoder performance remains incomplete in
 `BENCHMARKS.md`: the Huffman and filter optimizations improve measured photo
 decoding, but native 109.49 MiB/s still trails Rust png's 226.46 in the selected
-comparison. Resolve remaining decoder field audits, extend the WPT rendered-frame
-evidence with broader high-precision APNG/compositor and native-only coverage
-campaigns, and repeat the decoder requirement audit against the resulting
-implementation and measurements before claiming completion.
+comparison. Native-precision APNG render answers and scoped native compositor
+corpus coverage are now retained. Resolve remaining decoder field audits and
+whole-decoder native-only feedback coverage, review the scoped corpus gaps,
+improve measured decoder performance, and repeat the requirement audit against
+the resulting implementation and measurements before claiming completion.

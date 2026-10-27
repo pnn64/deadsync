@@ -9,6 +9,9 @@ mod apng_recovery;
 #[path = "../tests/support/chunks.rs"]
 mod chunks;
 #[allow(dead_code)]
+#[path = "../tests/support/compositor.rs"]
+mod compositor;
+#[allow(dead_code)]
 #[path = "../tests/support/hdr.rs"]
 mod hdr;
 #[path = "../tests/support/huffman.rs"]
@@ -146,6 +149,30 @@ fn main() -> std::io::Result<()> {
     fs::create_dir_all(&zlib)?;
     fs::create_dir_all(&png_stream)?;
     fs::create_dir_all(&inflate_stream)?;
+    let compositor_inputs = corpus.join("compositor");
+    fs::create_dir_all(&compositor_inputs)?;
+    for format in 0..compositor::FORMATS.len() {
+        for interlaced in [false, true] {
+            for default_is_frame in [false, true] {
+                for variant in 0..4 {
+                    for recover_indices in [false, true] {
+                        let mut bytes =
+                            compositor::seed(format, interlaced, default_is_frame, variant);
+                        if recover_indices {
+                            bytes[3] |= 4;
+                        }
+                        fs::write(compositor_inputs.join(format!("format-{format}-adam7-{interlaced}-default-{default_is_frame}-pattern-{variant}-recover-{recover_indices}")), bytes)?;
+                    }
+                }
+            }
+        }
+    }
+    for (name, case) in compositor::fixtures() {
+        let data = case.wire();
+        let name = format!("compositor-{name}.png");
+        fs::write(png.join(&name), &data)?;
+        fs::write(png_stream.join(&name), &data)?;
+    }
     // Independent Table 7 placements, with both valid and malformed ordering.
     // Keep a bounded pair subset in addition to all format/single placements.
     let mut order_cases = 0;

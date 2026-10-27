@@ -12,8 +12,13 @@ profiling/*.txt text eol=lf -whitespace
 reference-conformance.log text eol=lf
 reference-samples-*.log text eol=lf
 ancillary-order-*.log text eol=lf
+compositor-*.log text eol=lf
+tests/fixtures/compositor-precision/*.png -text
+tests/fixtures/compositor-precision/*.rgba16.z -text
 coverage-reports/*.txt text eol=lf
 coverage-reports/*.log text eol=lf
+# The corpus replay retains libFuzzer's raw alignment whitespace.
+coverage-reports/compositor-commands.log text eol=lf -whitespace
 tests/fixtures/language/* text eol=lf
 src/metadata/language/registry.rs text eol=lf
 # Keep raw tool diagnostics, including libFuzzer's intentional trailing spaces.

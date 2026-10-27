@@ -87,3 +87,10 @@ path = "fuzz_targets/reference_samples.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "compositor"
+path = "fuzz_targets/compositor.rs"
+test = false
+doc = false
+bench = false

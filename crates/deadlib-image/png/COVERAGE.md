@@ -1096,3 +1096,62 @@ These 60,000 successful decoder inputs bring historical campaigns across all ten
 targets to 920,000 executions, including earlier encoder campaigns. Remaining
 decoder field audits, broader high-precision APNG composition, native-only fuzz
 coverage and competitive decoder performance remain open.
+
+## Native-precision APNG composition (2026-10-27)
+
+`tests/compositor_precision.rs` checks every one of the 65,536 source alpha values
+against fifteen destination-alpha boundaries, for 983,040 exact RGBA16 blends.
+The independent u128 oracle performs reduced rational operations and rounds to
+nearest; production uses a u64 weighted sum. Other checks build 240 literal APNGs
+covering all fifteen native formats, plain/Adam7, both default-image roles and
+four geometry/disposal patterns, with eight frames each. All six disposal/blend
+states and nine adjacent disposal transitions occur. Buffered and one-/seven-byte
+readers retain exact source samples, rectangles, controls, palettes and
+transparency; independent Rust png checks every native frame sample. Explicit
+expansion, full-canvas rendering, replay/reset and exact logical canvas plus
+PREVIOUS-snapshot byte budgets are checked.
+
+The checked-in corpus under `tests/fixtures/compositor-precision/` contains all
+240 PNGs and their 1,920 full-canvas answers. An external C libpng decoder reads
+each original frame as a standalone PNG, then Python `Fraction` composes it with
+full-canvas snapshots and immediate disposal. The Rust oracle independently uses
+the same mathematical operation, while production saves rectangles and defers
+disposal until the next frame. Every displayed 16-bit sample matches, including
+hidden colors, fractional alpha and low bits; no 8-bit display comparison is
+substituted. Golden regeneration independently reproduces every uncompressed
+answer. Manifests retain input/golden hashes and the C/Python tool hashes. PNGs
+total 609,282 bytes; compressed goldens 103,127, representing 1,017,600 uncompressed
+answer bytes. These extend the previous WPT answers to 2,121 independent canvases.
+No production encoder constructs these input files.
+
+The eleventh target, `compositor`, generates bounded native animations and
+independent wire bytes, and compares expansion/rendering with the rational model.
+It varies native formats, geometry, alpha, default roles, Adam7, disposal/blend,
+recovered palette indices, snapshot budgets and reset. It calls no reference
+codec. Its 480 initial structured files total 61,440 bytes. Each PNG corpus gains
+the 240 precision animations, reaching 27,867 files / 6,368,086 bytes each.
+Fresh Linux ASan campaigns pass 20,000 compositor, 30,000 PNG-stream and 30,000
+buffered PNG inputs. Fuzzing time / peak RSS are respectively 68 seconds /
+430 MiB, 33 / 500 and 7 / 466. All binaries define the ASan runtime entry and
+final source hashes match the initial snapshot. Exact commands and
+source/corpus/binary hashes are in `fuzz/reports/compositor-source.json`, with
+full logs alongside it. These 80,000 successful executions bring historical
+campaigns across all eleven targets to 1,000,000, including earlier encoder runs.
+
+A separate LLVM replay of the compositor's final 1,040-file corpus maps only
+native `src/composite.rs`: 97.25% lines, 94.29% regions and 89.13% instrumented
+branch outcomes. The model, harness and reference libraries are excluded from
+reported counts. This replay is excluded from fuzz execution totals. The
+remaining gaps and exact scope are reviewed in `coverage-reports/README.md`;
+whole-decoder native-only feedback coverage remains open.
+
+The release and standalone offline suites each pass 120 normal tests, with
+fifteen optional checks ignored. The focused precision suite also passes its
+independent C/Fraction regeneration check (five tests total). Strict main/fuzz
+all-target Clippy and scoped rustfmt pass. All 21 production files retain their
+baseline bytes; the isolated source, tests/examples and all 480 fixture hashes
+match. The standalone production dependency remains only `deadlib-image`.
+`compositor-validation.json`, `compositor-validation.log` and
+`compositor-independent.log` retain commands, hashes and counts. No comparative
+timings were taken. Remaining decoder field audits, scoped corpus gaps,
+whole-decoder feedback review and measured decoder performance remain open.
