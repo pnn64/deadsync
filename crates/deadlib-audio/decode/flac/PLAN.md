@@ -15,7 +15,7 @@ Milestones (commit each when verified):
 3. Native encoding (implemented; evidence in ENCODING.md): constant/verbatim/fixed/LPC, partitioned Rice and escape,
    stereo choices, compression levels, metadata/MD5/seek table output, reusable
    streaming encoder and exact PCM roundtrips.
-4. Ogg FLAC: mapping lifecycle, native Ogg crate, streaming and seeking,
+4. Ogg FLAC (implemented; evidence in OGG.md): mapping lifecycle, native Ogg crate, streaming and seeking,
    encoding; retain a container-independent codec API.
 5. Validation: libFLAC and Symphonia differential tests, official conformance
    corpus, malformed/truncated inputs, streaming splits, metadata, checksums,
@@ -28,7 +28,7 @@ Completion requires current evidence for every item, not just passing roundtrips
 Record commands, versions, corpus provenance, coverage gaps and measurements in
 the crate documentation as each milestone is reached.
 
-Outstanding decoder improvements: file-backed Read+Seek adapter, SEEKTABLE-assisted
+Outstanding native decoder improvements: file-backed Read+Seek adapter, SEEKTABLE-assisted
 startup/seek acceleration, measured buffer/allocation improvements. Current exact
 seeking uses borrowed input and a lazy validated frame index. Default resource
 budgets deliberately require configuration for extreme metadata/frame payloads.

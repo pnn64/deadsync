@@ -189,6 +189,14 @@ pub struct FrameDecoder {
     output: Vec<i32>,
 }
 impl FrameDecoder {
+    /// Change header defaults while retaining allocated PCM and predictor buffers.
+    pub fn set_stream_info(&mut self, info: Option<StreamInfo>) -> Result<(), Error> {
+        if let Some(info) = info {
+            info.validate()?;
+        }
+        self.info = info;
+        Ok(())
+    }
     /// Find the first complete CRC-valid frame in a bounded input slice. Useful
     /// for joining headerless multicast streams. Returns the skipped byte count.
     /// Input is never silently skipped by `decode`, which requires exact framing.

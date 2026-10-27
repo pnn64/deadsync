@@ -52,7 +52,9 @@ static int encode_file(int argc,char **argv) {
         && FLAC__stream_encoder_set_sample_rate(encoder,rate)
         && FLAC__stream_encoder_set_compression_level(encoder,level)
         && FLAC__stream_encoder_set_blocksize(encoder,block);
-    if(ok)ok=FLAC__stream_encoder_init_file(encoder,argv[3],NULL,NULL)==FLAC__STREAM_ENCODER_INIT_STATUS_OK;
+    if(ok)ok=(strcmp(argv[1],"encode-ogg")==0
+        ? FLAC__stream_encoder_init_ogg_file(encoder,argv[3],NULL,NULL)
+        : FLAC__stream_encoder_init_file(encoder,argv[3],NULL,NULL))==FLAC__STREAM_ENCODER_INIT_STATUS_OK;
     while(ok&&(n=fread(raw,1,4096*channels*4,input))!=0) {
         if(n%(channels*4)!=0){ok=false;break;}
         for(i=0;i<n/4;i++)pcm[i]=(FLAC__int32)((FLAC__uint32)raw[i*4]|((FLAC__uint32)raw[i*4+1]<<8)|((FLAC__uint32)raw[i*4+2]<<16)|((FLAC__uint32)raw[i*4+3]<<24));
@@ -68,15 +70,17 @@ static int encode_file(int argc,char **argv) {
 int main(int argc,char **argv) {
     FLAC__StreamDecoder *d;
     FLAC__bool ok;
-    if(argc>1&&strcmp(argv[1],"encode")==0)return encode_file(argc,argv);
-    if(argc!=2) {fprintf(stderr,"usage: deadlib_flac_oracle INPUT.flac\n       deadlib_flac_oracle encode INPUT.i32le OUTPUT.flac RATE CHANNELS BITS LEVEL BLOCK\n");return 2;}
+    int ogg=argc==3&&strcmp(argv[1],"ogg")==0;
+    if(argc>1&&(strcmp(argv[1],"encode")==0||strcmp(argv[1],"encode-ogg")==0))return encode_file(argc,argv);
+    if(argc!=2&&!ogg) {fprintf(stderr,"usage: deadlib_flac_oracle [ogg] INPUT.flac\n       deadlib_flac_oracle encode[-ogg] INPUT.i32le OUTPUT.flac RATE CHANNELS BITS LEVEL BLOCK\n");return 2;}
 #ifdef _WIN32
     _setmode(_fileno(stdout),_O_BINARY);
 #endif
     d=FLAC__stream_decoder_new();
     if(!d)return 2;
     FLAC__stream_decoder_set_md5_checking(d,true);
-    if(FLAC__stream_decoder_init_file(d,argv[1],write_pcm,NULL,error_cb,NULL)!=FLAC__STREAM_DECODER_INIT_STATUS_OK)return 2;
+    if((ogg ? FLAC__stream_decoder_init_ogg_file(d,argv[2],write_pcm,NULL,error_cb,NULL)
+        : FLAC__stream_decoder_init_file(d,argv[1],write_pcm,NULL,error_cb,NULL))!=FLAC__STREAM_DECODER_INIT_STATUS_OK)return 2;
     ok=FLAC__stream_decoder_process_until_end_of_stream(d);
     if(!FLAC__stream_decoder_finish(d))ok=false;
     FLAC__stream_decoder_delete(d);

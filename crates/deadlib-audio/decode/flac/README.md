@@ -2,7 +2,8 @@
 
 Independent pure-Rust FLAC implementation under development, based on
 [RFC 9639](https://www.rfc-editor.org/rfc/rfc9639.html). Registered in the Cargo
-workspace only; it is not used by DeadSync playback. No production dependencies.
+workspace only; it is not used by DeadSync playback. No production codec
+dependencies; the only production dependency is the sibling Ogg container crate.
 
 Current APIs:
 
@@ -26,6 +27,11 @@ Current APIs:
 - `Encoder<W: Write>`: planar or interleaved streaming input, metadata preservation,
   MD5 and seek-point generation. `finish_seekable` patches the native header;
   `finish` supports forward-only outputs with unknown totals/MD5 in their header.
+- `OggDecoder`, `OggReader` and `OggStreamDecoder`: page, reader and incremental
+  Ogg FLAC decoding with multiplexing, chaining, broadcast offsets and integrity.
+- `OggSeekReader<R: Read + Seek>`: bounded full-file indexing and exact seeks
+  among FLAC logical streams, without retaining the source or decoded PCM.
+- `OggEncoder` and `OggMuxer`: streaming Ogg encoding and validated frame remuxing.
 
 ```rust
 use deadlib_audio_decode_flac::{Reader, Error};
@@ -68,14 +74,17 @@ assert_eq!(decoder.read_next()?.unwrap().pcm.plane(0), &[1, 2, 3]);
 See [ENCODING.md](ENCODING.md) for encoder options, streaming finalization and
 independent roundtrip evidence.
 
-Validation: 19 local integration tests plus two documentation examples; external
+Validation: 27 local integration tests plus three documentation examples; external
 gates compare all 75 valid official corpus files exactly with libFLAC, check
 1,533 seek positions and exercise all 11 faulty files. Symphonia 0.6.1 matches 72
 files; three explicitly recorded reference differences remain. Another 696
 generated encoder cases pass exact bidirectional libFLAC validation; Symphonia
 matches 694, with two named 32-bit stereo reference differences. See
 [COVERAGE.md](COVERAGE.md) for exact scope, commands, provenance and limitations.
+Ogg adds another 696 bidirectional libFLAC cases, all exact with Symphonia's Ogg
+demuxer and FLAC decoder, plus 73 official-file remuxes and 1,533 exact seeks.
+See [OGG.md](OGG.md) for mapping behavior and reproducible evidence.
 
-See [PLAN.md](PLAN.md) for the full scope and unfinished milestones. Ogg mapping,
-fuzz campaigns and pipeline performance measurements remain to be implemented.
+See [PLAN.md](PLAN.md) for the full scope and unfinished milestones. Native
+file-backed seeking, fuzz campaigns and pipeline performance work remain.
 No performance comparison is claimed yet.

@@ -9,11 +9,17 @@ mod encoder;
 pub mod frame;
 pub mod metadata;
 pub mod native;
+pub mod ogg;
+mod ogg_encode;
+mod ogg_seek;
 
 pub use encode::{EncodeOptions, FrameEncoder};
 pub use encoder::{EncodedStream, Encoder};
 pub use frame::{Frame, FrameDecoder, FrameHeader, Pcm};
 pub use native::{DecodeOptions, Decoder, Integrity, Reader, StreamFrame};
+pub use ogg::{OggDecoder, OggEvent, OggOptions, OggPcm, OggReader, OggStreamDecoder, StreamId};
+pub use ogg_encode::{OggEncodedStream, OggEncoder, OggMuxer, OggWriteOptions};
+pub use ogg_seek::{OggSeekOptions, OggSeekReader, OggSeekStream};
 
 pub use metadata::{Metadata, MetadataBlock, StreamInfo};
 
@@ -25,6 +31,7 @@ pub enum Error {
     LimitExceeded(&'static str),
     Allocation,
     Io(String),
+    Ogg(deadlib_audio_decode_ogg::Error),
 }
 
 impl core::fmt::Display for Error {
@@ -36,6 +43,7 @@ impl core::fmt::Display for Error {
             Self::LimitExceeded(reason) => write!(f, "FLAC resource limit: {reason}"),
             Self::Allocation => f.write_str("FLAC allocation failed"),
             Self::Io(reason) => write!(f, "FLAC I/O error: {reason}"),
+            Self::Ogg(error) => write!(f, "FLAC container: {error}"),
         }
     }
 }
@@ -43,6 +51,11 @@ impl std::error::Error for Error {}
 impl From<std::io::Error> for Error {
     fn from(value: std::io::Error) -> Self {
         Self::Io(value.to_string())
+    }
+}
+impl From<deadlib_audio_decode_ogg::Error> for Error {
+    fn from(value: deadlib_audio_decode_ogg::Error) -> Self {
+        Self::Ogg(value)
     }
 }
 
