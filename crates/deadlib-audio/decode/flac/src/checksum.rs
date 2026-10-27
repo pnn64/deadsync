@@ -31,13 +31,42 @@ const fn crc16_table() -> [u16; 256] {
 }
 const CRC8: [u8; 256] = crc8_table();
 const CRC16: [u16; 256] = crc16_table();
+const fn crc16_slices() -> [[u16; 256]; 8] {
+    let mut tables = [[0; 256]; 8];
+    tables[0] = CRC16;
+    let mut slice = 1;
+    while slice < 8 {
+        let mut byte = 0;
+        while byte < 256 {
+            let previous = tables[slice - 1][byte];
+            tables[slice][byte] = (previous << 8) ^ CRC16[(previous >> 8) as usize];
+            byte += 1;
+        }
+        slice += 1;
+    }
+    tables
+}
+const CRC16_SLICES: [[u16; 256]; 8] = crc16_slices();
 pub fn crc8(data: &[u8]) -> u8 {
     data.iter().fold(0, |crc, &x| CRC8[(crc ^ x) as usize])
 }
 pub fn crc16(data: &[u8]) -> u16 {
-    data.iter().fold(0, |crc, &x| {
-        (crc << 8) ^ CRC16[((crc >> 8) as u8 ^ x) as usize]
-    })
+    let (chunks, tail) = data.as_chunks::<8>();
+    let mut crc = 0u16;
+    for b in chunks {
+        crc = CRC16_SLICES[7][((crc >> 8) as u8 ^ b[0]) as usize]
+            ^ CRC16_SLICES[6][(crc as u8 ^ b[1]) as usize]
+            ^ CRC16_SLICES[5][b[2] as usize]
+            ^ CRC16_SLICES[4][b[3] as usize]
+            ^ CRC16_SLICES[3][b[4] as usize]
+            ^ CRC16_SLICES[2][b[5] as usize]
+            ^ CRC16_SLICES[1][b[6] as usize]
+            ^ CRC16_SLICES[0][b[7] as usize];
+    }
+    for &byte in tail {
+        crc = (crc << 8) ^ CRC16[((crc >> 8) as u8 ^ byte) as usize];
+    }
+    crc
 }
 
 #[derive(Clone)]

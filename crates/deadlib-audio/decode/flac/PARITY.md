@@ -6,6 +6,8 @@ positions. No float conversion, sample tolerance, resampling or channel remixing
 is involved. Native FLAC, independent raw frames and Ogg FLAC share the same
 frame decoder. Whole sequential reads verify a supplied STREAMINFO MD5; partial
 seeks retain frame/page checksums and explicitly report partial integrity.
+Performance changes rerun these gates; current source-regression records are
+linked from [PERFORMANCE.md](PERFORMANCE.md).
 
 ## Current evidence, 2026-10-27
 

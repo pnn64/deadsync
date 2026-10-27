@@ -98,3 +98,56 @@ measurement, broader input classes and representative audio. SIMD changes requir
 measured benefit, guarded dispatch, scalar fallback and the same exact parity
 gates. A regression in any class must be investigated rather than hidden in an
 aggregate speedup.
+
+## First optimization: bit-cache and CRC, 2026-10-27
+
+The retained change loads up to eight available bytes into the bit cache at a
+time, without padding or unsafe reads. Exact tails retain the checked byte path.
+CRC-16 uses eight slicing tables (4 KiB) to remove the serial per-byte dependency.
+Format validation, frame checksums, sample precision and public APIs are unchanged.
+An independent bit-polynomial test covers CRC chunk/tail boundaries and offsets.
+
+Interleaved five-trial comparisons against the preserved baseline show these
+ratios of median raw-frame times (larger is faster):
+
+| Case | Decode speedup | CRC speedup |
+| --- | ---: | ---: |
+| 01: block 4096 | 1.134x | 4.50x |
+| 03: block 16 | 1.188x | 4.59x |
+| 15: verbatim | 2.231x | 4.64x |
+| 17: fixed | 1.213x | 4.57x |
+| 28: high resolution | 1.306x | 4.59x |
+| 31: LPC-32 | 1.177x | 4.61x |
+| 44: 8-channel LPC-32, nine-trial repeat | 1.134x | 4.44x in initial run |
+
+The first case-44 run was noisy while correctness jobs ran, with paired ratios
+from 0.789 to 2.281. A separate nine-trial run after those jobs finished produced
+a ratio of medians of 1.134x and a median paired speedup of 1.143x. Eight pairs
+improved; one remained a large scheduling outlier (0.518x). Both complete runs
+are retained. This shared-host result supports improvement but is not a claim of
+isolated-machine timing precision.
+
+An additional forward predictor-traversal experiment was rejected: despite the
+same CRC/cache changes, LPC-32 case 31 slowed to 0.884x. Restoring the original
+predictor loop produced the 1.177x result above. Its source/binary hashes and
+[raw rejected timings](benches/validation/2026-10-27-rejected-predictor-raw.tsv)
+are retained so that gain is not confused with a predictor improvement.
+
+Reports: [paired timings](benches/validation/2026-10-27-primitives-raw.tsv),
+[summary](benches/validation/2026-10-27-primitives-summary.json),
+[source/binary provenance](benches/validation/2026-10-27-primitives-manifest.json),
+[LPC-32 repeat](benches/validation/2026-10-27-primitives-lpc32-repeat-raw.tsv).
+
+All 41 integration/external gates plus three doctests pass in release mode,
+including the official native/Ogg corpus, 1,279 explicit wire cases, 2,162
+accepted fuzz frames and the generated bidirectional libFLAC matrices. Clippy
+passes. Four fresh 60-second ASan campaigns add 54,689 executions without
+failures; the compiler audit preserves native overflow checks, sanitizer and
+feedback instrumentation. See the [validation record](benches/validation/2026-10-27-primitives-validation.json),
+[fuzz results](benches/validation/2026-10-27-primitives-fuzz-results.json) and
+[compiler audit](benches/validation/2026-10-27-primitives-compiler-audit.json).
+
+The decoder remains about 1.7–2.1x slower than the fastest reference in several
+compute-heavy classes. Rice/predictor kernels, output buffers, streaming, MD5 and
+the broader benchmark remain active work; this milestone does not meet the full
+performance goal.

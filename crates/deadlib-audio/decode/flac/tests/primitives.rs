@@ -69,6 +69,33 @@ fn checksum_known_answers_and_chunking() {
     }
 }
 
+#[test]
+fn crc16_matches_wire_polynomial_at_chunk_and_tail_boundaries() {
+    let mut seed = 9639u32;
+    let data: Vec<_> = (0..4120)
+        .map(|_| {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            (seed >> 24) as u8
+        })
+        .collect();
+    for offset in 0..16 {
+        for length in (0..=256).chain([511, 512, 513, 1023, 1024, 1025, 4095, 4096, 4097]) {
+            let input = &data[offset..offset + length];
+            let mut expected = 0u16;
+            for &byte in input {
+                for bit in (0..8).rev() {
+                    let feedback = (expected >> 15) ^ u16::from((byte >> bit) & 1);
+                    expected <<= 1;
+                    if feedback != 0 {
+                        expected ^= 0x8005;
+                    }
+                }
+            }
+            assert_eq!(crc16(input), expected, "offset {offset} length {length}");
+        }
+    }
+}
+
 fn info() -> StreamInfo {
     StreamInfo {
         min_block_size: 16,

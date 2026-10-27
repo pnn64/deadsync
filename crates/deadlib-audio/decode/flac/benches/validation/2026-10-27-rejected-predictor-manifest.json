@@ -1,0 +1,93 @@
+{
+  "timestamp_utc": "2026-10-27T13:07:04Z",
+  "native": "/tmp/deadlib-flac-decode-pass1",
+  "native_sha256": "8441c6a96ed79f0e0feb5913ecb4219afe8c1f5b500ffe25b26a75e533439c9c",
+  "oracle": "/tmp/deadlib-flac-perf-20261027/oracle/flac_decode_benchmark",
+  "oracle_sha256": "f9a28089f468d52cb3663bcdc5979ad283014e9e668abc842f7953846b3a488b",
+  "baseline": "/tmp/deadlib-flac-decode-baseline",
+  "baseline_sha256": "a55176c015cb919aee4fd766ae26f87b3a51acd1fead994a549e9b9c0570035d",
+  "cpu": 2,
+  "rounds": 5,
+  "target_milliseconds": 80,
+  "cpuinfo": "processor\t: 0\nvendor_id\t: GenuineIntel\ncpu family\t: 6\nmodel\t\t: 79\nmodel name\t: Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz\nstepping\t: 1\nmicrocode\t: 0xffffffff\ncpu MHz\t\t: 2194.917\ncache size\t: 56320 KB\nphysical id\t: 0\nsiblings\t: 44\ncore id\t\t: 0\ncpu cores\t: 22\napicid\t\t: 0\ninitial apicid\t: 0\nfpu\t\t: yes\nfpu_exception\t: yes\ncpuid level\t: 20\nwp\t\t: yes\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid tsc_known_freq pni pclmulqdq vmx ssse3 fma cx16 pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch pti ssbd ibrs ibpb stibp tpr_shadow ept vpid ept_ad fsgsbase tsc_adjust bmi1 hle avx2 smep bmi2 erms invpcid rtm rdseed adx smap xsaveopt vnmi md_clear flush_l1d arch_capabilities\nvmx flags\t: vnmi invvpid ept_x_only ept_ad ept_1gb tsc_offset vtpr ept vpid unrestricted_guest tsc_scaling\nbugs\t\t: cpu_meltdown spectre_v1 spectre_v2 spec_store_bypass l1tf mds swapgs taa itlb_multihit mmio_stale_data bhi\nbogomips\t: 4389.83\nclflush size\t: 64\ncache_alignment\t: 64\naddress sizes\t: 46 bits physical, 48 bits virtual\npower management:",
+  "native_sources": {
+    "src\\bitstream.rs": "80e78a1529827105af8d9e589b9ec6f3ea7b0de649d353dec416f1851f0642ed",
+    "src\\checksum.rs": "637a38e891604ba0057eda6fb6c86d26d93ccee702ec509d2af6658085c5192b",
+    "src\\encode.rs": "7d5a4964f53343ffeb269f958f68872c1137a37071a20185ae72e4c6d45926a6",
+    "src\\encoder.rs": "e009f29eb87ece5ca05d26f22030b524f5d247d45939539505ff4826fb77e596",
+    "src\\frame.rs": "3eed9bc49bd6da1ba0c1635e48642035efec785f16911f9f3f7855066ee50420",
+    "src\\lib.rs": "7ce54346d29f7646d35dbe6e4fbe2050bfc402020ae037534ece0607836d71a5",
+    "src\\metadata.rs": "088f01f53f6d47f107bef663b24c9256ce55e9673cced1f37e4316363caf48fa",
+    "src\\native.rs": "31ba12718a3e997ea08629f1d8e66b4b1dfeff7fb16864649a4d336672b86b59",
+    "src\\ogg.rs": "495c8fecd623b74146fbaf218d3432507776a1c1a8742061fc94b8c4d851ab85",
+    "src\\ogg_encode.rs": "db54541c962ef154e0324e089ec3e48dd99da2a3c94a2757c419fa99737f951d",
+    "src\\ogg_seek.rs": "97b32d925aed4e8dbbea51795c8dcf763888766460ea6c64205c180fdb13b2f1"
+  },
+  "driver_sources": {
+    "benches/decode.rs": "0d1795d9c8272c05b2c6bcfdb5cd812fc1f8217c904f0102a6e25d6a24684294",
+    "benches/run.py": "ff0ca3f2eba39563f4b618fded68f42c7d44c5eb848af89d2454aacd4e7906af",
+    "benches/build.sh": "5fb5cbc09f7b05962007b20b8fb7a27674b71659597f2e4534c608a776aaf207",
+    "benches/oracle/CMakeLists.txt": "e29b8acc6a9149b4e85345743abae3b455dabdea88524402764fac119e751227",
+    "benches/oracle/benchmark.cpp": "fe724c88bcfac6363dd34ed9b3157909e3af3aa50c7fd87d15fcb4b28caba525"
+  },
+  "cases": [
+    {
+      "case": "subset/01 - blocksize 4096.flac",
+      "sha256": "02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f",
+      "bytes": 549954,
+      "frames": 76,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/03 - blocksize 16.flac",
+      "sha256": "164d0747e8c4855407990182b784fcd7475da228bf20a6cff67e947c683959b3",
+      "bytes": 959681,
+      "frames": 19294,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/15 - only verbatim subframes.flac",
+      "sha256": "80459f8ad5a9c7edf081a10f9269c55c29136749021e5a55483bc173aaaa82b0",
+      "bytes": 889862,
+      "frames": 54,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/17 - all fixed orders.flac",
+      "sha256": "d6f082cbbbcb03015f861b8fa30cf16708a62b85520905a126da28db29645feb",
+      "bytes": 589534,
+      "frames": 204,
+      "bits": 16,
+      "channels": 2
+    },
+    {
+      "case": "subset/28 - high resolution audio, default settings.flac",
+      "sha256": "62322a5c7821081bae99cc1a3f398f177a17cf9312131a5fbcfcc2ee38539346",
+      "bytes": 3476937,
+      "frames": 205,
+      "bits": 24,
+      "channels": 2
+    },
+    {
+      "case": "subset/31 - high resolution audio, using only 32nd order predictors.flac",
+      "sha256": "caf84fbf740a98e3371a58df03422722a7d6058289b11a291f0b39103ea20133",
+      "bytes": 3235301,
+      "frames": 94,
+      "bits": 24,
+      "channels": 2
+    },
+    {
+      "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+      "sha256": "1a0e8c17392ae03b2cb04e8c82fcc1f924580fdc978884101faa3e9cf7ed9197",
+      "bytes": 42264726,
+      "frames": 177,
+      "bits": 24,
+      "channels": 8
+    }
+  ],
+  "unsupported": [],
+  "source_snapshot": "Frozen before reverting the predictor traversal experiment"
+}

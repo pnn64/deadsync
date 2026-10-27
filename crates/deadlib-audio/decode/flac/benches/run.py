@@ -33,6 +33,7 @@ def main():
     parser.add_argument('--modes', nargs='+', choices=MODES+['baseline-frames', 'baseline-crc'], default=MODES)
     parser.add_argument('--quick', action='store_true')
     parser.add_argument('--all', action='store_true')
+    parser.add_argument('--case', action='append', help='case prefix, e.g. subset/44; repeat to select several')
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     args.native = args.native.resolve()
@@ -48,6 +49,8 @@ def main():
     paths = []
     for group, selected in [('subset', DEFAULT_SUBSET), ('uncommon', DEFAULT_UNCOMMON)]:
         for path in sorted((args.corpus / group).glob('*.flac')):
+            if args.case and not any(f'{group}/{path.name}'.startswith(prefix) for prefix in args.case):
+                continue
             if args.all or int(path.name[:2]) in selected:
                 if path.read_bytes()[:4] == b'fLaC':
                     paths.append(path.resolve())

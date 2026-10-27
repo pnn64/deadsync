@@ -26,6 +26,18 @@ impl<'a> BitReader<'a> {
 
     #[inline]
     fn refill(&mut self) {
+        if self.bits <= 56 && self.data.len() - self.next >= 8 {
+            // Load eight available bytes, retaining only the whole bytes that
+            // fit after the cached prefix. No padding or unaligned access is
+            // required; the tail below handles exact end-of-input slices.
+            let word = u64::from_be_bytes(self.data[self.next..self.next + 8].try_into().unwrap());
+            let bytes = (64 - self.bits) / 8;
+            let added = bytes * 8;
+            self.cache |= (word >> (64 - added)) << (64 - self.bits - added);
+            self.next += bytes as usize;
+            self.bits += added;
+            return;
+        }
         while self.bits <= 56 && self.next < self.data.len() {
             self.cache |= (self.data[self.next] as u64) << (56 - self.bits);
             self.next += 1;

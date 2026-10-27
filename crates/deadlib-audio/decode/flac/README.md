@@ -77,7 +77,7 @@ assert_eq!(decoder.read_next()?.unwrap().pcm.plane(0), &[1, 2, 3]);
 See [ENCODING.md](ENCODING.md) for encoder options, streaming finalization and
 independent roundtrip evidence.
 
-Validation: 32 local integration tests plus three documentation examples; external
+Validation: 33 local integration tests plus three documentation examples; external
 gates compare all 75 valid official corpus files exactly with libFLAC, check
 1,533 seek positions and exercise all 11 faulty files. Symphonia 0.6.1 matches 72
 files; three explicitly recorded reference differences remain. Another 696
