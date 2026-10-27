@@ -80,13 +80,6 @@ fn relative(index: i64, len: usize) -> i64 {
         index
     }
 }
-fn integer(number: f64) -> i64 {
-    if !number.is_finite() || number >= 9223372036854775808.0 || number < -9223372036854775808.0 {
-        i64::MIN
-    } else {
-        number as i64
-    }
-}
 impl Vm {
     pub(super) fn open_strings(&mut self) {
         let table = self.new_table();
@@ -173,7 +166,7 @@ impl Vm {
             return Ok(default);
         }
         self.number(value)
-            .map(integer)
+            .map(lua_integer)
             .ok_or_else(|| self.argument_type_error(base, count, index, "number"))
     }
     fn prepare_pattern(&mut self, id: StringId, anchor: bool) {

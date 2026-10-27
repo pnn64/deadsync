@@ -32,6 +32,17 @@ pub use gc::{HeapStats, Root};
 pub use host::{HostCall, HostFunction, HostThreadState, NativeCallStatus, NativeStack};
 use native::format_number;
 
+// Lua 5.1's lua_Integer is ptrdiff_t. The supported SSE2/MSVC profiles
+// truncate valid numbers and return the native minimum for invalid ranges.
+fn lua_integer(number: f64) -> i64 {
+    let minimum = isize::MIN as f64;
+    if (minimum..-minimum).contains(&number) {
+        number as isize as i64
+    } else {
+        isize::MIN as i64
+    }
+}
+
 /// Stable Lua string storage, including the C API's trailing zero byte.
 #[derive(Debug)]
 struct ByteString(Box<[u8]>);

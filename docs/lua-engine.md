@@ -37,30 +37,33 @@ performance JSON keeps its recorded measurement provenance.
 | Machine code | Optional; defer until full standalone Lua 5.1 parity, then use profiles to identify profitable paths. |
 | Song integration | Deferred until engine gates pass. Implement live callbacks, independent baking, auto by default, dynamic fallback, and shared state/identity across strategies. |
 | Noteskin integration | Deferred. Create `deadsync-noteskin-lua` with the shared engine, reusable programs, static actor/asset caches and necessary dynamic callbacks. |
-| Correctness testing | Differential cases and deterministic generation exist. A checksum-pinned official 5.1 runner records all eighteen independent files passing on Linux in reference, Rust and both cache modes. Windows retains seventeen passes and the common `files.lua:59` open-file rename failure. Standalone CLI audits retain remaining mismatches against a checksum-pinned official executable. Full suite passage, broader source/bytecode fuzzing and per-dialect CI remain open. |
+| Correctness testing | Differential cases and deterministic generation exist. The unchanged stock `main.lua` and `all.lua` pass in both standalone CLIs on Linux i686 SSE2. T/testC and native suite libraries remain absent. All eighteen independent files pass on Linux x64 in reference, Rust and both cache modes; Windows retains seventeen passes and the common `files.lua:59` rename failure. Native x64 full-suite failures, remaining standalone mismatches, broader source/bytecode fuzzing and per-dialect CI remain open. |
 | Performance | Deferred until full standalone Lua 5.1 parity. Preserve existing reference harnesses and historical measurements; later work covers throughput, startup, compile cost, allocations, live/peak memory and representative scaling. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
 Unchanged `all.lua` and `main.lua` run against both standalone CLIs, with retained
 failures directing compatibility fixes. Linux `main.lua` passes in both engines.
-Linux/glibc locale support now lets Rust `all.lua` reach the same `big.lua:11`
-overflow assertion as the 64-bit C reference. Windows stops in `main.lua:53` in
-both engines. The [GNU numeric and I/O fixes](testing/2026-10-27-rust-lua-gnu-numbers.md)
+Linux x64 `all.lua` reaches the same `big.lua:11` overflow assertion in both
+engines. [Linux i686 SSE2](testing/2026-10-27-rust-lua-i686-suite.md) passes
+both complete stock entry points, including that native-width overflow check.
+The assertions remain unchanged. Windows stops in `main.lua:53` in both
+engines. The [GNU numeric and I/O fixes](testing/2026-10-27-rust-lua-gnu-numbers.md)
 resolve the Linux I/O and native-error targets. The expanded stream audit
 closes the retained Windows byte-consumption mismatches and matches 15,883
 stream inputs on both platforms. [Portable regression checks](testing/2026-10-27-rust-lua-portable-tests.md)
-now pass 629 Rust tests on each platform after fixing the remaining fixture
+passed 629 Rust tests on each platform after fixing the remaining fixture
 assumptions. Crashing GNU C `unpack` inputs run in a separate strict audit;
 five native crashes remain recorded, with signed-overflow diagnostics and an
 independent wrapping control. The default reference flags remain unchanged.
-Next work should establish the remaining reference/target assumptions and run
-the unchanged full suite on a valid large-string test target. The C/auxiliary APIs, production native loading and
+The current runs pass 630 Rust tests on Windows x64, Linux x64 and Linux i686
+SSE2. The default x87 arithmetic baseline and five bounded traceback requests
+retain failed/incomplete observations. The C/auxiliary APIs, production native loading and
 remaining language, library, debug, GC and resource behavior must also be
 completed. Selected passing probes and declaration counts do not close these
 gates. Production migration also requires the subsequent performance gates.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 552 differential/adversarial integration tests, seventy-three unit tests and
+crate, 553 differential/adversarial integration tests, seventy-three unit tests and
 four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000

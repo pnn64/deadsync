@@ -30,14 +30,7 @@ fn c_bytes(bytes: &[u8]) -> &[u8] {
     &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
 }
 pub(super) fn integer(value: f64) -> i32 {
-    // MSVC x64's signed conversion returns MIN for non-finite/out-of-range
-    // values; Lua 5.1 then narrows lua_Integer to its 32-bit stack index.
-    let value = if !(-9_223_372_036_854_775_808.0..9_223_372_036_854_775_808.0).contains(&value) {
-        i64::MIN
-    } else {
-        value as i64
-    };
-    value as i32
+    lua_integer(value) as i32
 }
 
 impl Vm {

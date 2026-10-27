@@ -644,7 +644,7 @@ impl Vm {
                         if cfg!(windows) {
                             i64::from(debug::integer(n))
                         } else {
-                            integer(n)
+                            lua_integer(n)
                         }
                     }
                 };
@@ -675,7 +675,7 @@ impl Vm {
                 };
                 let size = match self.argument(base, count, 2) {
                     Value::Nil => stream::LINE_BUFFER,
-                    value => integer(
+                    value => lua_integer(
                         self.number(value)
                             .ok_or_else(|| self.argument_type_error(base, count, 2, "number"))?,
                     ) as usize,
@@ -726,7 +726,7 @@ impl Vm {
                             .map(|ok| (ok, None))
                     } else if let Value::Number(n) = format {
                         self.io.files[slot]
-                            .read_chars(&mut bytes, integer(n) as usize)
+                            .read_chars(&mut bytes, lua_integer(n) as usize)
                             .map(|ok| (ok, None))
                     } else {
                         let text = if let Value::String(s) = format {

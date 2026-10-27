@@ -31,6 +31,24 @@ def unpack(data: bytes, destination: Path) -> None:
         archive.extractall(destination, filter="data")
 
 
+def i686_abi(binary: Path) -> dict:
+    with binary.open('rb') as stream:
+        elf = stream.read(20)
+    if elf[:6] != b'\x7fELF\x01\x01' or int.from_bytes(elf[18:20], 'little') != 3:
+        raise SystemExit('explicit i686 target requires a little-endian ELF32 x86 executable')
+    environment = {k: v for k, v in os.environ.items()
+                   if k.upper() not in {'LUA_INIT', 'LUA_PATH', 'LUA_CPATH'}}
+    command = ['lua', '-e', 'io.write(string.dump(function()end):sub(1,12))']
+    result = subprocess.run(command, executable=binary, env=environment,
+                            capture_output=True, timeout=10)
+    expected = b'\x1bLua\x51\x00\x01\x04\x04\x04\x08\x00'
+    if result.returncode != 0 or result.stdout != expected or result.stderr:
+        raise SystemExit('i686 Lua chunk ABI probe failed')
+    return dict(elf_class=32, elf_machine=3, byte_order='little', size_t_bytes=4,
+                command=command, returncode=result.returncode,
+                stdout_hex=result.stdout.hex(), stderr_hex=result.stderr.hex())
+
+
 def run(binary: Path, entry: str, directory: Path, timeout: float) -> dict:
     environment = os.environ.copy()
     for name in list(environment):
@@ -78,9 +96,17 @@ def main() -> None:
                         default=["main.lua", "all.lua"])
     parser.add_argument("--rust-binary", type=Path,
                         help="Development-only prebuilt runner; source provenance is not established")
+    parser.add_argument("--target", choices=["i686-unknown-linux-gnu"],
+                        help="Build and run both CLIs with the same explicit Linux target")
+    parser.add_argument("--reference-fp-model", choices=['sse2'],
+                        help="Explicit i686 C arithmetic profile; default compiler flags remain unchanged")
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("timeout must be positive")
+    if args.target and sys.platform != 'linux':
+        parser.error('the explicit i686 target requires Linux')
+    if args.reference_fp_model and not args.target:
+        parser.error('the SSE2 reference profile requires the explicit i686 target')
     root = Path(__file__).resolve().parents[1]
     if Path("/a/b/c/d").resolve().parent.is_dir():
         raise SystemExit("unchanged files.lua requires /a/b/c to be absent")
@@ -97,12 +123,16 @@ def main() -> None:
         target = root / target
     target = target.resolve()
     build_command = ["cargo", "build", "--release", "-p", "deadlib-lua", "--bin", "deadlua"]
+    if args.target:
+        build_command += ['--target', args.target]
     if args.rust_binary is None:
         subprocess.run(build_command, cwd=root, check=True)
-    rust = args.rust_binary.resolve() if args.rust_binary else target / "release" / (
+    rust_target = target / args.target if args.target else target
+    rust = args.rust_binary.resolve() if args.rust_binary else rust_target / "release" / (
         "deadlua.exe" if os.name == "nt" else "deadlua")
-    reference, metadata = build(root)
+    reference, metadata = build(root, args.target, args.reference_fp_model)
     metadata["binary_path"] = str(reference)
+    abi = {name: i686_abi(binary) for name, binary in [('reference', reference), ('rust', rust)]} if args.target else None
     cache = root / "target/lua-reference-suites"
     cache.mkdir(parents=True, exist_ok=True)
     archive = cache / "lua5.1-tests.tar.gz"
@@ -140,6 +170,10 @@ def main() -> None:
                   rust_binary=dict(path=str(rust), sha256=sha(rust), prebuilt=args.rust_binary is not None),
                   reference=metadata, results=results,
                   limitations="Stock standalone suite mode without the internal T module. No Lua source, assertion, bootstrap or version output is rewritten. Raw process output is retained, not asserted equal: timing, memory counts and temporary filenames vary. Failures, timeouts and absent completion markers remain failures.")
+    if args.target:
+        result['target'] = args.target
+        result['abi'] = abi
+        result['reference_fp_model'] = args.reference_fp_model
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")

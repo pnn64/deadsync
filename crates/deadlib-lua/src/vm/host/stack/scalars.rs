@@ -12,20 +12,8 @@ impl NativeStack<'_, '_> {
     /// Invalid types return None. Out-of-range numbers and NaNs yield the
     /// minimum integer, matching the Windows/MSVC Lua 5.1 reference.
     pub fn to_integer(&self, index: isize) -> Option<isize> {
-        self.to_number(index).map(|number| {
-            #[cfg(target_pointer_width = "64")]
-            {
-                io::integer(number) as isize
-            }
-            #[cfg(target_pointer_width = "32")]
-            {
-                if (-2147483648.0..2147483648.0).contains(&number) {
-                    number as isize
-                } else {
-                    isize::MIN
-                }
-            }
-        })
+        self.to_number(index)
+            .map(|number| lua_integer(number) as isize)
     }
     /// Lua truth conversion: absent values, nil and false are false.
     pub fn to_boolean(&self, index: isize) -> bool {

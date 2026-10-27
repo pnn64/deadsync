@@ -853,14 +853,15 @@ impl Vm {
                 if start > end {
                     return Ok(0);
                 }
-                let results = (i64::from(end) - i64::from(start) + 1) as usize;
-                if results > limits::MAX_CSTACK.saturating_sub(count) {
+                let results = i64::from(end) - i64::from(start) + 1;
+                if results > limits::MAX_CSTACK.saturating_sub(count) as i64 {
                     return Err(Error::new(
                         ErrorKind::Runtime,
                         0,
                         "too many results to unpack",
                     ));
                 }
+                let results = results as usize;
                 self.resize_registers(self.registers.len().max(base + results));
                 let table = &self.tables[slot_index(id.0)];
                 for i in 0..results {

@@ -10,7 +10,14 @@ enum Scalar {
 
 #[test]
 fn message_types_extra_arguments_and_level_coercions_follow_lua51() {
-    compare(br#"
+    // i686's nonfinite integer conversion requests billions of fake frames.
+    // Retain those resource cases in the bounded standalone traceback audit.
+    let extra = if cfg!(target_pointer_width = "64") {
+        ",1/0,-1/0,0/0,2^63,2^64"
+    } else {
+        ""
+    };
+    let source = r#"
         local tag={}
         local fn=function()end
         local co=coroutine.create(fn)
@@ -26,9 +33,34 @@ fn message_types_extra_arguments_and_level_coercions_follow_lua51() {
         save('message',nil,'extra');save('message',2,'extra');save('message',2,3,4)
         save(tag,2,99);save(false,nil,17);save(nil,2)
         save(co);save(co,nil);save(co,'thread',0);save(co,tag,2,3)
-        for _,level in ipairs({-3,-1,0,1,2,3,12,13,10000,1.9,-1.9,1/0,-1/0,0/0,2^63,2^64})do save('at level',level)end
+        for _,level in ipairs({-3,-1,0,1,2,3,12,13,10000,1.9,-1.9@EXTRA@})do save('at level',level)end
         return table.concat(out,'\n---\n')
-    "#);
+    "#;
+    compare(source.replace("@EXTRA@", extra).as_bytes());
+}
+
+#[test]
+fn huge_negative_levels_obey_the_instruction_quota_and_recover() {
+    let mut vm = Vm::new();
+    vm.set_instruction_limit(Some(1000));
+    let program = compile(b"return debug.traceback('large',-2147483648)").unwrap();
+    assert_eq!(
+        vm.execute(&program).unwrap_err().kind(),
+        deadlib_lua::ErrorKind::Limit
+    );
+    vm.set_instruction_limit(None);
+    vm.collect_garbage().unwrap();
+    let result = vm
+        .execute(&compile(b"return debug.traceback('recovered',1)").unwrap())
+        .unwrap()[0];
+    let Value::String(id) = result else {
+        panic!("traceback string")
+    };
+    assert!(
+        vm.string_bytes(id)
+            .unwrap()
+            .starts_with(b"recovered\nstack traceback:")
+    );
 }
 
 #[test]
@@ -286,7 +318,7 @@ fn nonfinite_and_large_debug_indices_use_the_reference_integer_conversion() {
         local x=1;local function f()return x end
         for _,index in ipairs({1/0,-1/0,0/0,2^63,-2^63,2^64,2^32,2^32+1.9,-2^32-1.9})do
             local d=debug.getinfo(index,'S');out[#out+1]=d and d.what or'nil'
-            local n,v=debug.getlocal(index,1);out[#out+1]=tostring(n)..':'..type(v)
+            local ok,n,v=pcall(debug.getlocal,index,1);out[#out+1]=tostring(ok)..':'..tostring(n)..':'..type(v)
             local n,v=debug.getupvalue(f,index);out[#out+1]=tostring(n)..':'..type(v)
             out[#out+1]=tostring((debug.setupvalue(f,index,1)))
         end

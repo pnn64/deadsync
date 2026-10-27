@@ -129,17 +129,17 @@ impl Spec {
         if self.literal_len != 0 {
             return self.literal(true);
         }
-        // Stock 5.1 uses C long here: 32 bits on Windows, 64 on LP64 systems.
+        // Stock 5.1 uses C long here, including 32-bit long on i686.
         let signed = matches!(self.conversion, b'd' | b'i');
         let (magnitude, negative) = if signed {
-            let number = if cfg!(windows) {
+            let number = if std::mem::size_of::<std::ffi::c_long>() == 4 {
                 i64::from(cast_i32(n))
             } else {
                 cast_i64(n)
             };
             (number.unsigned_abs(), number < 0)
         } else {
-            let value = if cfg!(windows) {
+            let value = if std::mem::size_of::<std::ffi::c_ulong>() == 4 {
                 cast_i64(n) as u32 as u64
             } else if n >= 9223372036854775808.0 {
                 (cast_i64(n - 9223372036854775808.0) as u64) | (1u64 << 63)

@@ -1,0 +1,1481 @@
+{
+  "parent_revision": "c4ea3ece15003d04738cbab9e5fca4eb30815e9c",
+  "default_x87_before": {
+    "log_path": "target/lua-i686-suite-broad-before.log",
+    "log_sha256": "c2c9cd9ec9ebedd98001ee39a06c3e4a2d5237baed0684cf21df9d388a795af1",
+    "targets": {
+      "cache_persistence": {
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "calendar": {
+        "status": "FAILED",
+        "passed": 11,
+        "failed": 3,
+        "failed_tests": [
+          "time_field_lookups_run_in_order_and_observe_mutations_and_nested_calls",
+          "time_fields_default_coerce_normalize_and_leave_the_input_table_unchanged",
+          "fixed_dates_preserve_utc_local_fields_and_native_format_bytes"
+        ],
+        "details": {
+          "time_field_lookups_run_in_order_and_observe_mutations_and_nested_calls": {
+            "detail_sha256": "96c9e7faacf3b1ef7795a20270ba03db6acb3c27a71f2d0d141d612bc2cc54b6",
+            "head": "\nthread 'time_field_lookups_run_in_order_and_observe_mutations_and_nested_calls' (307867) panicked at crates/deadlib-lua/tests/calendar.rs:78:9:\nassertion `left == right` failed: observation 0\n  left: Number(4741268398334279680)\n right: Number(4741268398342668288)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n",
+            "tail": "\nthread 'time_field_lookups_run_in_order_and_observe_mutations_and_nested_calls' (307867) panicked at crates/deadlib-lua/tests/calendar.rs:78:9:\nassertion `left == right` failed: observation 0\n  left: Number(4741268398334279680)\n right: Number(4741268398342668288)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n",
+            "secondary_mutex_poison": false
+          },
+          "time_fields_default_coerce_normalize_and_leave_the_input_table_unchanged": {
+            "detail_sha256": "917b16c5665243e290d7e6fcf8ff5c95dc1943a08c75c03ce4987dee3cdbb0fd",
+            "head": "\nthread 'time_fields_default_coerce_normalize_and_leave_the_input_table_unchanged' (307868) panicked at crates/deadlib-lua/tests/calendar.rs:72:13:\nassertion `left == right` failed: observation 0\n  left: \"true|946724400|true|true|true|true|true|true|true|true|946738992|true|true|true|true|true|true|true|true|951955200|true|true|true|true|true|true|true|true|946724400|true|true|true|true|true|true|true|true|-7200|true|true|true|true|true|true|true|true|nil|true|true|true|true|true|true|true|true|nil|true|true|true|true|true|true|true|true|912423600|true|true|true|true|true|true|true|true|946724400|true|true|true|true|true|true|true|true|946681200|true|true|true|true|true|true|true|true|946720800|true|true|true|true|true|true|true|true|946724400|true|true|true|true|true|true|true|true|946720800|true|true|true|true|true|true|true|true|946720800|true|true|true|true|true|true|true\"\n right: \"true|946724400|true|true|true|true|true|true|true|true|946738993|true|true|true|true|true|true|true|true|951955200|true|true|true|true|true|true|true|true|946724400|true|true|true|true|true|true|true|t",
+            "tail": "true|true|true|nil|true|true|true|true|true|true|true|true|nil|true|true|true|true|true|true|true|true|912423600|true|true|true|true|true|true|true|true|946724400|true|true|true|true|true|true|true|true|946681200|true|true|true|true|true|true|true|true|946720800|true|true|true|true|true|true|true|true|946724400|true|true|true|true|true|true|true|true|946720800|true|true|true|true|true|true|true|true|946720800|true|true|true|true|true|true|true\"\n\n",
+            "secondary_mutex_poison": false
+          },
+          "fixed_dates_preserve_utc_local_fields_and_native_format_bytes": {
+            "detail_sha256": "eea9be7107a8a487e7da84812389c2eb72b869c4934bff860529d71f39a69b4c",
+            "head": "\nthread 'fixed_dates_preserve_utc_local_fields_and_native_format_bytes' (307862) panicked at crates/deadlib-lua/tests/calendar.rs:72:13:\nassertion `left == right` failed: observation 0\n  left: \"table;59;59;12;31;12;1969;4;365;false;Wed|Wednesday|Dec|December|Wed Dec 31 12:59:59 1969|31|12|12|365|12|59|PM|59|52|3|52|12/31/69|12:59:59|69|1969|+0100|CET|%;table;59;59;11;31;12;1969;4;365;false;Wed|Wednesday|Dec|December|Wed Dec 31 11:59:59 1969|31|11|11|365|12|59|AM|59|52|3|52|12/31/69|11:59:59|69|1969|+0000|GMT|%;table;0;0;13;31;12;1969;4;365;false;Wed|Wednesday|Dec|December|Wed Dec 31 13:00:00 1969|31|13|01|365|12|00|PM|00|52|3|52|12/31/69|13:00:00|69|1969|+0100|CET|%;table;0;0;12;31;12;1969;4;365;false;Wed|Wednesday|Dec|December|Wed Dec 31 12:00:00 1969|31|12|12|365|12|00|PM|00|52|3|52|12/31/69|12:00:00|69|1969|+0000|GMT|%;table;59;59;23;31;12;1969;4;365;false;Wed|Wednesday|Dec|December|Wed Dec 31 23:59:59 1969|31|23|11|365|12|59|PM|59|52|3|52|12/31/69|23:59:59|69|1969|+0100|CET|%;table;59;59;22;31;12;1969;4;365;false;Wed|Wednesday|Dec|December|Wed Dec 31 22:59:59 1969|31|22|10|365|12",
+            "tail": ";0;2;1;1970;6;2;false;Fri|Friday|Jan|January|Fri Jan  2 00:00:00 1970|02|00|12|002|01|00|AM|00|00|5|00|01/02/70|00:00:00|70|1970|+0000|GMT|%;table;16;0;1;1;1;1970;5;1;false;Thu|Thursday|Jan|January|Thu Jan  1 01:00:16 1970|01|01|01|001|01|00|AM|16|00|4|00|01/01/70|01:00:16|70|1970|+0100|CET|%;table;16;0;0;1;1;1970;5;1;false;Thu|Thursday|Jan|January|Thu Jan  1 00:00:16 1970|01|00|12|001|01|00|AM|16|00|4|00|01/01/70|00:00:16|70|1970|+0000|GMT|%\"\n\n\n",
+            "secondary_mutex_poison": false
+          }
+        }
+      },
+      "call_limits": {
+        "status": "ok",
+        "passed": 16,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "capture_limits": {
+        "status": "ok",
+        "passed": 10,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "codegen": {
+        "status": "FAILED",
+        "passed": 31,
+        "failed": 1,
+        "failed_tests": [
+          "tests::generated_numeric_left_trees_preserve_bits_and_effect_order"
+        ],
+        "details": {
+          "tests::generated_numeric_left_trees_preserve_bits_and_effect_order": {
+            "detail_sha256": "a935b8d76849b6a6748ea8bd0af1917cf4519cd284a9aa512d863be8acdbdec9",
+            "head": "\nthread 'flat-codegen' (307954) panicked at crates/deadlib-lua/tests/codegen.rs:204:21:\nassertion `left == right` failed: local x=1.25;local log={};local function mark(n)log[#log+1]=x;x=x+n;return x end;local v=3.5^((1+2)%(1.25/(x+(mark(1)))));return v~=v and 'nan' or v,x,table.concat(log,',')\n  left: [Number(4608628090612538383), Number(4612248968380809216), Bytes([49, 46, 50, 53])]\n right: [Number(4608628090612538382), Number(4612248968380809216), Bytes([49, 46, 50, 53])]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'tests::generated_numeric_left_trees_preserve_bits_and_effect_order' (307917) panicked at crates/deadlib-lua/tests/codegen.rs:209:14:\ncalled `Result::unwrap()` on an `Err` value: Any { .. }\n\n\n",
+            "tail": "ber(4608628090612538383), Number(4612248968380809216), Bytes([49, 46, 50, 53])]\n right: [Number(4608628090612538382), Number(4612248968380809216), Bytes([49, 46, 50, 53])]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\nthread 'tests::generated_numeric_left_trees_preserve_bits_and_effect_order' (307917) panicked at crates/deadlib-lua/tests/codegen.rs:209:14:\ncalled `Result::unwrap()` on an `Err` value: Any { .. }\n\n\n",
+            "secondary_mutex_poison": false
+          }
+        }
+      },
+      "constant_pool": {
+        "status": "ok",
+        "passed": 3,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "coroutines": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "debug": {
+        "status": "FAILED",
+        "passed": 10,
+        "failed": 1,
+        "failed_tests": [
+          "debug_argument_checks_preserve_order_coercions_and_result_counts"
+        ],
+        "details": {
+          "debug_argument_checks_preserve_order_coercions_and_result_counts": {
+            "detail_sha256": "07a66ed511507b74c0c52c032406d18ef3dff447bd98206e1f5ab2467b9f7358",
+            "head": "\nthread 'debug_argument_checks_preserve_order_coercions_and_result_counts' (307984) panicked at crates/deadlib-lua/tests/debug.rs:395:17:\nbytes differ at 130: rust=\"|3|false:string|2|false:string|2|C|main|main|tail|tail|nil|false:string|2|false:string|2|false:string|3|false:string|2|2\", reference=\"|3|false:string|2|false:string|2|C|main|nil|tail|tail|nil|false:string|2|false:string|2|false:string|3|false:string|2|2|\": \n        local out={}\n        local co=coroutine.create(function()end)\n        local function check(f,...)\n            local ok,value=pcall(f,...)\n            out[#out+1]=tostring(ok)..':'..type(value)\n            if not ok then out[#out+1]=string.match(value,'#(%d+)') or '?' end\n        end\n        check(debug.getinfo);check(debug.getinfo,{},true);check(debug.getinfo,{},'S')\n        check(debug.getinfo,10000,'invalid');check(debug.getinfo,10000,true)\n        check(debug.getinfo,co,0,'invalid');check(debug.getinfo,co,0,true)\n        check(debug.getinfo,print,'invalid');check(debug.getinfo,0,17)\n        for _,level in ipairs({'0','1','1.9','-1','-1.9','10000'})do\n       ",
+            "tail": "{},false)\n        check(debug.setupvalue);check(debug.setupvalue,{},false,nil)\n        local x=2;local function f()return x end\n        for _,index in ipairs({'1','1.9','0','-1','10000'})do\n            out[#out+1]=select('#',debug.getupvalue(f,index))\n            out[#out+1]=select('#',debug.setupvalue(f,index,3))\n        end\n        return table.concat(out,'|')\n    \nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n",
+            "secondary_mutex_poison": false
+          }
+        }
+      },
+      "debug_console": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "debug_locals": {
+        "status": "ok",
+        "passed": 32,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "file_loading": {
+        "status": "ok",
+        "passed": 16,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "gc": {
+        "status": "ok",
+        "passed": 22,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "gnu_numbers": {
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "hooks": {
+        "status": "ok",
+        "passed": 42,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "host_calls": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "host_closures": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "host_functions": {
+        "status": "ok",
+        "passed": 15,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "host_reentry": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "interning": {
+        "status": "ok",
+        "passed": 4,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "io": {
+        "status": "FAILED",
+        "passed": 17,
+        "failed": 6,
+        "failed_tests": [
+          "zero_length_all_and_multiple_reads_keep_result_arity_and_stop_order",
+          "line_iterators_observe_appended_data_after_eof_and_preserve_seek_peeks",
+          "named_files_preserve_modes_append_and_automatic_iterator_close",
+          "pipe_writes_flush_and_signal_eof_before_waiting_for_the_child",
+          "regular_file_buffering_controls_visibility_to_other_handles",
+          "windows_text_translation_control_z_and_seek_positions_match_reference"
+        ],
+        "details": {
+          "zero_length_all_and_multiple_reads_keep_result_arity_and_stop_order": {
+            "detail_sha256": "889a90894d97209d1fb0e82d0483856205dacf8d186eb1b43e32a7f47170cf3e",
+            "head": "\nthread 'zero_length_all_and_multiple_reads_keep_result_arity_and_stop_order' (308316) panicked at crates/deadlib-lua/tests/io.rs:503:17:\nobservation 0, bytes differ at 49: rust=\"|12||nil|1|nil|1||3|||nil|1|abc\\n12\\n|1|ab\", reference=\"|12||nil|1|nil|1||3|||nil|1|abc\\n12\\n|1|abc\": \n        local out={}\n        local function save(...)out[#out+1]=select('#',...);for i=1,select('#',...)do out[#out+1]=tostring(select(i,...))end end\n        local f=assert(io.tmpfile());f:write('abc\\n12\\n');f:seek('set',0)\n        save(f:read(0));save(f:read(2,'*l','*n','*l',4,'invalid'))\n        save(f:read(0));save(f:read('*a'));save(f:read('*a','*a',0))\n        f:seek('set',0);save(f:read(-1));f:seek('set',0);save(f:read(2.9))\n        f:close();return table.concat(out,'|')\n    \nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n",
+            "tail": "1]=tostring(select(i,...))end end\n        local f=assert(io.tmpfile());f:write('abc\\n12\\n');f:seek('set',0)\n        save(f:read(0));save(f:read(2,'*l','*n','*l',4,'invalid'))\n        save(f:read(0));save(f:read('*a'));save(f:read('*a','*a',0))\n        f:seek('set',0);save(f:read(-1));f:seek('set',0);save(f:read(2.9))\n        f:close();return table.concat(out,'|')\n    \nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n",
+            "secondary_mutex_poison": false
+          },
+          "line_iterators_observe_appended_data_after_eof_and_preserve_seek_peeks": {
+            "detail_sha256": "eefc9e8aa074685d4b2af2ea6e07dd6abaf0fcf502eb63a01d6eae84fc3e4034",
+            "head": "\nthread 'line_iterators_observe_appended_data_after_eof_and_preserve_seek_peeks' (308304) panicked at crates/deadlib-lua/tests/io.rs:419:39:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\n",
+            "tail": "\nthread 'line_iterators_observe_appended_data_after_eof_and_preserve_seek_peeks' (308304) panicked at crates/deadlib-lua/tests/io.rs:419:39:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\n",
+            "secondary_mutex_poison": true
+          },
+          "named_files_preserve_modes_append_and_automatic_iterator_close": {
+            "detail_sha256": "0ed271d06ff0de387e0dfbe19a58be18837d5821209e94b21dec670ea5b4b0ea",
+            "head": "\nthread 'named_files_preserve_modes_append_and_automatic_iterator_close' (308307) panicked at crates/deadlib-lua/tests/io.rs:419:39:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\n",
+            "tail": "\nthread 'named_files_preserve_modes_append_and_automatic_iterator_close' (308307) panicked at crates/deadlib-lua/tests/io.rs:419:39:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\n",
+            "secondary_mutex_poison": true
+          },
+          "pipe_writes_flush_and_signal_eof_before_waiting_for_the_child": {
+            "detail_sha256": "dd6cb9a526c9628ae47676bbb66baf13623946e3d059029f2932d35bdcd8df90",
+            "head": "\nthread 'pipe_writes_flush_and_signal_eof_before_waiting_for_the_child' (308310) panicked at crates/deadlib-lua/tests/io.rs:419:39:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\n",
+            "tail": "\nthread 'pipe_writes_flush_and_signal_eof_before_waiting_for_the_child' (308310) panicked at crates/deadlib-lua/tests/io.rs:419:39:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\n",
+            "secondary_mutex_poison": true
+          },
+          "regular_file_buffering_controls_visibility_to_other_handles": {
+            "detail_sha256": "92e345c8ee11856c658af5e3100f2b762d5533fa4c5d003a84cff2a38c587f07",
+            "head": "\nthread 'regular_file_buffering_controls_visibility_to_other_handles' (308312) panicked at crates/deadlib-lua/tests/io.rs:419:39:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\n",
+            "tail": "\nthread 'regular_file_buffering_controls_visibility_to_other_handles' (308312) panicked at crates/deadlib-lua/tests/io.rs:419:39:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\n",
+            "secondary_mutex_poison": true
+          },
+          "windows_text_translation_control_z_and_seek_positions_match_reference": {
+            "detail_sha256": "ef33b18be04263f10e2d95c9a31474eae3bc27148c4309c59d320116a38e004f",
+            "head": "\nthread 'windows_text_translation_control_z_and_seek_positions_match_reference' (308315) panicked at crates/deadlib-lua/tests/io.rs:419:39:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\n\n",
+            "tail": "\nthread 'windows_text_translation_control_z_and_seek_positions_match_reference' (308315) panicked at crates/deadlib-lua/tests/io.rs:419:39:\ncalled `Result::unwrap()` on an `Err` value: PoisonError { .. }\n\n\n",
+            "secondary_mutex_poison": true
+          }
+        }
+      },
+      "loading": {
+        "status": "ok",
+        "passed": 19,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "lua51": {
+        "status": "FAILED",
+        "passed": 21,
+        "failed": 1,
+        "failed_tests": [
+          "deterministic_expression_differential_fuzz"
+        ],
+        "details": {
+          "deterministic_expression_differential_fuzz": {
+            "detail_sha256": "1cb93dd63ef29ea6c3493094c5a38b801a2e92dd8c37e33ab312c14f8ceb3bd3",
+            "head": "\nthread 'deterministic_expression_differential_fuzz' (308347) panicked at crates/deadlib-lua/tests/lua51.rs:573:9:\nassertion `left == right` failed: return (((4 - 6) - (9 / 16)) / ((27 + 21) % (17 / 20)))\n  left: [Number(13842270851560374298)]\n right: [Number(13842270851560374250)]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n",
+            "tail": "\nthread 'deterministic_expression_differential_fuzz' (308347) panicked at crates/deadlib-lua/tests/lua51.rs:573:9:\nassertion `left == right` failed: return (((4 - 6) - (9 / 16)) / ((27 + 21) % (17 / 20)))\n  left: [Number(13842270851560374298)]\n right: [Number(13842270851560374250)]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n",
+            "secondary_mutex_poison": false
+          }
+        }
+      },
+      "native_auxiliary": {
+        "status": "ok",
+        "passed": 4,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_errors": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_objects": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_protected": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_stack": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_tables": {
+        "status": "ok",
+        "passed": 10,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_values": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "os": {
+        "status": "FAILED",
+        "passed": 16,
+        "failed": 1,
+        "failed_tests": [
+          "time_differences_convert_inputs_before_subtracting_and_accept_default_start"
+        ],
+        "details": {
+          "time_differences_convert_inputs_before_subtracting_and_accept_default_start": {
+            "detail_sha256": "0ccf734960ba27f398bb7f036490be203d47f65469187c52a79881de705c3b83",
+            "head": "\nthread 'time_differences_convert_inputs_before_subtracting_and_accept_default_start' (308449) panicked at crates/deadlib-lua/tests/os.rs:59:9:\nassertion `left == right` failed: observation 10\n  left: Number(13970166044103278592)\n right: Number(4746794007248502784)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n",
+            "tail": "\nthread 'time_differences_convert_inputs_before_subtracting_and_accept_default_start' (308449) panicked at crates/deadlib-lua/tests/os.rs:59:9:\nassertion `left == right` failed: observation 10\n  left: Number(13970166044103278592)\n right: Number(4746794007248502784)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n",
+            "secondary_mutex_poison": false
+          }
+        }
+      },
+      "package": {
+        "status": "ok",
+        "passed": 25,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "posix_locale": {
+        "status": "ok",
+        "passed": 3,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "register_limits": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "runtime_errors": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "standalone": {
+        "status": "ok",
+        "passed": 6,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "stdlib": {
+        "status": "FAILED",
+        "passed": 23,
+        "failed": 8,
+        "failed_tests": [
+          "formatted_strings_and_platform_integer_width",
+          "radix_conversions_follow_platform_unsigned_long_width",
+          "unpack_overflow_is_a_catchable_error_and_preserves_later_calls",
+          "repeated_strings_narrow_counts_before_allocating",
+          "character_arguments_use_native_int_narrowing",
+          "generated_radix_conversions_include_overflow_and_invalid_digits",
+          "generated_native_narrowing_preserves_results_errors_and_numeric_strings",
+          "select_and_unpack_narrow_native_integer_arguments"
+        ],
+        "details": {
+          "formatted_strings_and_platform_integer_width": {
+            "detail_sha256": "2ddd3fd0ce57e9866d32140e64b35fd47d91c31af64f30e6dddf83c0c168e738",
+            "head": "\nthread 'formatted_strings_and_platform_integer_width' (308526) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return string.format('%%:%s:%d:%i:%o:%u:%x:%X','hi',-123,12,31,-1,255,255)\n  left: [Bytes([37, 58, 104, 105, 58, 45, 49, 50, 51, 58, 49, 50, 58, 51, 55, 58, 49, 56, 52, 52, 54, 55, 52, 52, 48, 55, 51, 55, 48, 57, 53, 53, 49, 54, 49, 53, 58, 102, 102, 58, 70, 70])]\n right: [Bytes([37, 58, 104, 105, 58, 45, 49, 50, 51, 58, 49, 50, 58, 51, 55, 58, 52, 50, 57, 52, 57, 54, 55, 50, 57, 53, 58, 102, 102, 58, 70, 70])]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n",
+            "tail": "X','hi',-123,12,31,-1,255,255)\n  left: [Bytes([37, 58, 104, 105, 58, 45, 49, 50, 51, 58, 49, 50, 58, 51, 55, 58, 49, 56, 52, 52, 54, 55, 52, 52, 48, 55, 51, 55, 48, 57, 53, 53, 49, 54, 49, 53, 58, 102, 102, 58, 70, 70])]\n right: [Bytes([37, 58, 104, 105, 58, 45, 49, 50, 51, 58, 49, 50, 58, 51, 55, 58, 52, 50, 57, 52, 57, 54, 55, 50, 57, 53, 58, 102, 102, 58, 70, 70])]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n",
+            "secondary_mutex_poison": false
+          },
+          "radix_conversions_follow_platform_unsigned_long_width": {
+            "detail_sha256": "7529bcd342e7e6a86cd0874aa460aec5ff0fba1d107d3a62a14087e9bd07409c",
+            "head": "\nthread 'radix_conversions_follow_platform_unsigned_long_width' (308538) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return tonumber(' 1010 ',2),tonumber('10',36),tonumber('ffffFFFF',16),tonumber(string.rep('1',42),2)\n  left: [Number(4621819117588971520), Number(4630263366890291200), Number(4751297606873776128), Number(4796333603149576192)]\n right: [Number(4621819117588971520), Number(4630263366890291200), Number(4751297606873776128), Number(4751297606873776128)]\n\n",
+            "tail": "' (308538) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return tonumber(' 1010 ',2),tonumber('10',36),tonumber('ffffFFFF',16),tonumber(string.rep('1',42),2)\n  left: [Number(4621819117588971520), Number(4630263366890291200), Number(4751297606873776128), Number(4796333603149576192)]\n right: [Number(4621819117588971520), Number(4630263366890291200), Number(4751297606873776128), Number(4751297606873776128)]\n\n",
+            "secondary_mutex_poison": false
+          },
+          "unpack_overflow_is_a_catchable_error_and_preserves_later_calls": {
+            "detail_sha256": "2f1e928b7eaa6aa6c6160345a2d78f83a47543784b6907fedbd1489ed8713870",
+            "head": "\nthread 'unpack_overflow_is_a_catchable_error_and_preserves_later_calls' (308550) panicked at crates/deadlib-lua/tests/stdlib.rs:230:30:\ncalled `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 5, message: \"assertion failed!\", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294967466))) }\n\n",
+            "tail": "\nthread 'unpack_overflow_is_a_catchable_error_and_preserves_later_calls' (308550) panicked at crates/deadlib-lua/tests/stdlib.rs:230:30:\ncalled `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 5, message: \"assertion failed!\", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294967466))) }\n\n",
+            "secondary_mutex_poison": false
+          },
+          "repeated_strings_narrow_counts_before_allocating": {
+            "detail_sha256": "dcf9d707697d2ade074d82bfcb622978b65410907e92b7691efd3fa74d3387d7",
+            "head": "\nthread 'repeated_strings_narrow_counts_before_allocating' (308539) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return pcall(string.rep,'xy',3.9)\n  left: [Bool(true), Bytes([120, 121, 120, 121, 120, 121])]\n right: [Bool(true), Bytes([120, 121, 120, 121, 120, 121, 120, 121])]\n\n",
+            "tail": "\nthread 'repeated_strings_narrow_counts_before_allocating' (308539) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return pcall(string.rep,'xy',3.9)\n  left: [Bool(true), Bytes([120, 121, 120, 121, 120, 121])]\n right: [Bool(true), Bytes([120, 121, 120, 121, 120, 121, 120, 121])]\n\n",
+            "secondary_mutex_poison": false
+          },
+          "character_arguments_use_native_int_narrowing": {
+            "detail_sha256": "7b7628e654d5f1272a15e4eaf2c4c32e057bbd27003abf98e147008803910984",
+            "head": "\nthread 'character_arguments_use_native_int_narrowing' (308522) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return pcall(string.char,65.9)\n  left: [Bool(true), Bytes([65])]\n right: [Bool(true), Bytes([66])]\n\n",
+            "tail": "\nthread 'character_arguments_use_native_int_narrowing' (308522) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return pcall(string.char,65.9)\n  left: [Bool(true), Bytes([65])]\n right: [Bool(true), Bytes([66])]\n\n",
+            "secondary_mutex_poison": false
+          },
+          "generated_radix_conversions_include_overflow_and_invalid_digits": {
+            "detail_sha256": "8bcc865eb18b3b9d12f29a6252508d131e21c4bc18c5ef588c42e65f37aa3dfa",
+            "head": "\nthread 'generated_radix_conversions_include_overflow_and_invalid_digits' (308532) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return tonumber('\\009\\043\\118\\112\\100\\113\\106\\053\\101\\118\\115\\106\\049\\050\\055\\105\\051\\055\\102\\118\\112\\100\\114\\108\\056\\013\\011',33)\n  left: [Number(4895412794951729152)]\n right: [Number(4751297606873776128)]\n\n",
+            "tail": "\nthread 'generated_radix_conversions_include_overflow_and_invalid_digits' (308532) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return tonumber('\\009\\043\\118\\112\\100\\113\\106\\053\\101\\118\\115\\106\\049\\050\\055\\105\\051\\055\\102\\118\\112\\100\\114\\108\\056\\013\\011',33)\n  left: [Number(4895412794951729152)]\n right: [Number(4751297606873776128)]\n\n",
+            "secondary_mutex_poison": false
+          },
+          "generated_native_narrowing_preserves_results_errors_and_numeric_strings": {
+            "detail_sha256": "b30aa1bcd43da215081f691e4abf64fa95d44f29802ad63c767e261cc9f1bef2",
+            "head": "\nthread 'generated_native_narrowing_preserves_results_errors_and_numeric_strings' (308531) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: local out={};local function save(...)out[#out+1]=tostring(select('#',...));for i=1,select('#',...)do out[#out+1]=tostring(select(i,...))end end;local t={[0]='zero','one','two','three'};for _,x in ipairs({-4503599627370503,'-4503599627370503',-4503599627370497,'-4503599627370497',-4503599627370496,'-4503599627370496',-4503599627370495,'-4503599627370495',-4503599627370494,'-4503599627370494',-4503599627370493,'-4503599627370493',-4503599627370464,'-4503599627370464',-4503599627370241,'-4503599627370241',-4503599627370240,'-4503599627370240',-281474976710663,'-281474976710663',-281474976710657,'-281474976710657',-281474976710656,'-281474976710656',-281474976710655,'-281474976710655',-281474976710654,'-281474976710654',-281474976710653,'-281474976710653',-281474976710624,'-281474976710624',-281474976710401,'-281474976710401',-281474976710400,'-281474976710400',-4294967303,'-4294967303',-4294967297,'-4294967297',",
+            "tail": ", 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121, 120, 121])]\n\n",
+            "secondary_mutex_poison": false
+          },
+          "select_and_unpack_narrow_native_integer_arguments": {
+            "detail_sha256": "8ba0a52e66c15414832045712b59d02719e8fe303d2032a51d4df8459c00cc59",
+            "head": "\nthread 'select_and_unpack_narrow_native_integer_arguments' (308542) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: local function pack(...)return select('#',...),... end;return pack(pcall(select,-0.9,'a',nil,false,'d'))\n  left: [Number(4611686018427387904), Bool(false), Bytes([98, 97, 100, 32, 97, 114, 103, 117, 109, 101, 110, 116, 32, 35, 49, 32, 116, 111, 32, 39, 63, 39, 32, 40, 105, 110, 100, 101, 120, 32, 111, 117, 116, 32, 111, 102, 32, 114, 97, 110, 103, 101, 41])]\n right: [Number(4611686018427387904), Bool(true), Bytes([100])]\n\n\n",
+            "tail": "left == right` failed: local function pack(...)return select('#',...),... end;return pack(pcall(select,-0.9,'a',nil,false,'d'))\n  left: [Number(4611686018427387904), Bool(false), Bytes([98, 97, 100, 32, 97, 114, 103, 117, 109, 101, 110, 116, 32, 35, 49, 32, 116, 111, 32, 39, 63, 39, 32, 40, 105, 110, 100, 101, 120, 32, 111, 117, 116, 32, 111, 102, 32, 114, 97, 110, 103, 101, 41])]\n right: [Number(4611686018427387904), Bool(true), Bytes([100])]\n\n\n",
+            "secondary_mutex_poison": false
+          }
+        }
+      },
+      "syntax": {
+        "status": "ok",
+        "passed": 16,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "thread_state": {
+        "status": "ok",
+        "passed": 5,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "tracebacks": {
+        "status": "FAILED",
+        "passed": 12,
+        "failed": 2,
+        "failed_tests": [
+          "nonfinite_and_large_debug_indices_use_the_reference_integer_conversion",
+          "message_types_extra_arguments_and_level_coercions_follow_lua51"
+        ],
+        "details": {
+          "nonfinite_and_large_debug_indices_use_the_reference_integer_conversion": {
+            "detail_sha256": "50b38d1822ef7bd4e9693ad6264815a4b9f84f344350eca006247a36542a932e",
+            "head": "\nthread 'nonfinite_and_large_debug_indices_use_the_reference_integer_conversion' (308583) panicked at crates/deadlib-lua/tests/tracebacks.rs:391:13:\nreference: (deadlib-lua):6: bad argument #1 to 'getlocal' (level out of range): \n        local out={}\n        local x=1;local function f()return x end\n        for _,index in ipairs({1/0,-1/0,0/0,2^63,-2^63,2^64,2^32,2^32+1.9,-2^32-1.9})do\n            local d=debug.getinfo(index,'S');out[#out+1]=d and d.what or'nil'\n            local n,v=debug.getlocal(index,1);out[#out+1]=tostring(n)..':'..type(v)\n            local n,v=debug.getupvalue(f,index);out[#out+1]=tostring(n)..':'..type(v)\n            out[#out+1]=tostring((debug.setupvalue(f,index,1)))\n        end\n        return table.concat(out,'|')\n    \nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n",
+            "tail": "})do\n            local d=debug.getinfo(index,'S');out[#out+1]=d and d.what or'nil'\n            local n,v=debug.getlocal(index,1);out[#out+1]=tostring(n)..':'..type(v)\n            local n,v=debug.getupvalue(f,index);out[#out+1]=tostring(n)..':'..type(v)\n            out[#out+1]=tostring((debug.setupvalue(f,index,1)))\n        end\n        return table.concat(out,'|')\n    \nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n",
+            "secondary_mutex_poison": false
+          },
+          "message_types_extra_arguments_and_level_coercions_follow_lua51": {
+            "detail_sha256": "2cb5d44c22940b37b426cdc65e08adb9918ac4486f99f3ba989857f672c8f930",
+            "head": "\nthread 'message_types_extra_arguments_and_level_coercions_follow_lua51' (308579) panicked at crates/deadlib-lua/tests/tracebacks.rs:418:17:\nbytes differ at 2333: rust=\"e\\n---\\nstring:at level\\nstack traceback:\\n\\t[C]: in function 'pcall'\\n\\t(deadlib-lua):7: in function 'save'\\n\\t(deadlib-lua):17:\", reference=\"e\\n---\\nstring:at level\\nstack traceback:\\n\\t(deadlib-lua):7: in function 'save'\\n\\t(deadlib-lua):17: in main chunk\\n---\\ntrue\\n--\": \n        local tag={}\n        local fn=function()end\n        local co=coroutine.create(fn)\n        local out={}\n        local function save(...)\n            local ok,value=pcall(debug.traceback,...)\n            out[#out+1]=tostring(ok)\n            if type(value)=='string'or type(value)=='number'then out[#out+1]=type(value)..':'..tostring(value)\n            else out[#out+1]=type(value)..':'..tostring(value==tag)..':'..tostring(value==fn)end\n        end\n        save();save(nil);save(false);save(tag);save(fn);save(17)\n        save('message');save('binary\\000message',0);save('message','2')\n        save('message',nil,'extra');save('message',2,'extra');",
+            "tail": "17)\n        save('message');save('binary\\000message',0);save('message','2')\n        save('message',nil,'extra');save('message',2,'extra');save('message',2,3,4)\n        save(tag,2,99);save(false,nil,17);save(nil,2)\n        save(co);save(co,nil);save(co,'thread',0);save(co,tag,2,3)\n        for _,level in ipairs({-3,-1,0,1,2,3,12,13,10000,1.9,-1.9,1/0,-1/0,0/0,2^63,2^64})do save('at level',level)end\n        return table.concat(out,'\\n---\\n')\n    \n\n\n",
+            "secondary_mutex_poison": false
+          }
+        }
+      },
+      "unprotected_calls": {
+        "status": "ok",
+        "passed": 7,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "userdata": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      }
+    },
+    "failed_targets": [
+      "calendar",
+      "codegen",
+      "debug",
+      "io",
+      "lua51",
+      "os",
+      "stdlib",
+      "tracebacks"
+    ],
+    "passing_test_total": 465
+  },
+  "sse2_before": {
+    "log_path": "target/lua-i686-suite-broad-sse2-before.log",
+    "log_sha256": "aec3e7e27e853b12b9724dea05d7fd8c4414f74b78ae1275b85fd6d75486bf69",
+    "targets": {
+      "cache_persistence": {
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "calendar": {
+        "status": "FAILED",
+        "passed": 12,
+        "failed": 2,
+        "failed_tests": [
+          "time_fields_default_coerce_normalize_and_leave_the_input_table_unchanged",
+          "fixed_dates_preserve_utc_local_fields_and_native_format_bytes"
+        ],
+        "details": {
+          "time_fields_default_coerce_normalize_and_leave_the_input_table_unchanged": {
+            "detail_sha256": "4b7bdca82ee13d3b99a2cc1c8b1570fc1a9d095f4ee9bf4a68eaff0d5cc18846",
+            "head": "\nthread 'time_fields_default_coerce_normalize_and_leave_the_input_table_unchanged' (314120) panicked at crates/deadlib-lua/tests/calendar.rs:72:13:\nassertion `left == right` failed: observation 0\n  left: \"true|946724400|true|true|true|true|true|true|true|true|946738992|true|true|true|true|true|true|true|true|951955200|true|true|true|true|true|true|true|true|946724400|true|true|true|true|true|true|true|true|-7200|true|true|true|true|true|true|true|true|nil|true|true|true|true|true|true|true|true|nil|true|true|true|true|true|true|true|true|912423600|true|true|true|true|true|true|true|true|946724400|true|true|true|true|true|true|true|true|946681200|true|true|true|true|true|true|true|true|946720800|true|true|true|true|true|true|true|true|946724400|true|true|true|true|true|true|true|true|946720800|true|true|true|true|true|true|true|true|946720800|true|true|true|true|true|true|true\"\n right: \"true|946724400|true|true|true|true|true|true|true|true|946738992|true|true|true|true|true|true|true|true|951955200|true|true|true|true|true|true|true|true|946724400|true|true|true|true|true|true|true|t",
+            "tail": "rue|true|true|true|true|true|912423600|true|true|true|true|true|true|true|true|-1200759248|true|true|true|true|true|true|true|true|nil|true|true|true|true|true|true|true|true|946720800|true|true|true|true|true|true|true|true|946724400|true|true|true|true|true|true|true|true|946720800|true|true|true|true|true|true|true|true|946720800|true|true|true|true|true|true|true\"\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n",
+            "secondary_mutex_poison": false
+          },
+          "fixed_dates_preserve_utc_local_fields_and_native_format_bytes": {
+            "detail_sha256": "77bb764f3e3b54cabf62ecb6168fd84c64ea24a7e3cfb9776d8a654e20a09a47",
+            "head": "\nthread 'fixed_dates_preserve_utc_local_fields_and_native_format_bytes' (314114) panicked at crates/deadlib-lua/tests/calendar.rs:72:13:\nassertion `left == right` failed: observation 0\n  left: \"table;59;59;12;31;12;1969;4;365;false;Wed|Wednesday|Dec|December|Wed Dec 31 12:59:59 1969|31|12|12|365|12|59|PM|59|52|3|52|12/31/69|12:59:59|69|1969|+0100|CET|%;table;59;59;11;31;12;1969;4;365;false;Wed|Wednesday|Dec|December|Wed Dec 31 11:59:59 1969|31|11|11|365|12|59|AM|59|52|3|52|12/31/69|11:59:59|69|1969|+0000|GMT|%;table;0;0;13;31;12;1969;4;365;false;Wed|Wednesday|Dec|December|Wed Dec 31 13:00:00 1969|31|13|01|365|12|00|PM|00|52|3|52|12/31/69|13:00:00|69|1969|+0100|CET|%;table;0;0;12;31;12;1969;4;365;false;Wed|Wednesday|Dec|December|Wed Dec 31 12:00:00 1969|31|12|12|365|12|00|PM|00|52|3|52|12/31/69|12:00:00|69|1969|+0000|GMT|%;table;59;59;23;31;12;1969;4;365;false;Wed|Wednesday|Dec|December|Wed Dec 31 23:59:59 1969|31|23|11|365|12|59|PM|59|52|3|52|12/31/69|23:59:59|69|1969|+0100|CET|%;table;59;59;22;31;12;1969;4;365;false;Wed|Wednesday|Dec|December|Wed Dec 31 22:59:59 1969|31|22|10|365|12",
+            "tail": ";0;2;1;1970;6;2;false;Fri|Friday|Jan|January|Fri Jan  2 00:00:00 1970|02|00|12|002|01|00|AM|00|00|5|00|01/02/70|00:00:00|70|1970|+0000|GMT|%;table;16;0;1;1;1;1970;5;1;false;Thu|Thursday|Jan|January|Thu Jan  1 01:00:16 1970|01|01|01|001|01|00|AM|16|00|4|00|01/01/70|01:00:16|70|1970|+0100|CET|%;table;16;0;0;1;1;1970;5;1;false;Thu|Thursday|Jan|January|Thu Jan  1 00:00:16 1970|01|00|12|001|01|00|AM|16|00|4|00|01/01/70|00:00:16|70|1970|+0000|GMT|%\"\n\n\n",
+            "secondary_mutex_poison": false
+          }
+        }
+      },
+      "call_limits": {
+        "status": "ok",
+        "passed": 16,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "capture_limits": {
+        "status": "ok",
+        "passed": 10,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "codegen": {
+        "status": "ok",
+        "passed": 32,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "constant_pool": {
+        "status": "ok",
+        "passed": 3,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "coroutines": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "debug": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "debug_console": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "debug_locals": {
+        "status": "ok",
+        "passed": 32,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "file_loading": {
+        "status": "ok",
+        "passed": 16,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "gc": {
+        "status": "ok",
+        "passed": 22,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "gnu_numbers": {
+        "status": "ok",
+        "passed": 2,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "hooks": {
+        "status": "FAILED",
+        "passed": 41,
+        "failed": 1,
+        "failed_tests": [
+          "controls_keep_function_identity_masks_counts_and_thread_independence"
+        ],
+        "details": {
+          "controls_keep_function_identity_masks_counts_and_thread_independence": {
+            "detail_sha256": "db7a170816110ff52f715a30a6600c8fa550bfa8e1fbb4e2178fabc8afc5e025",
+            "head": "\nthread 'controls_keep_function_identity_masks_counts_and_thread_independence' (314378) panicked at crates/deadlib-lua/tests/hooks.rs:1168:17:\nbytes differ at 100: rust=\"-1|true::1|true::4|true::16777215|true::1|true::0|true::0|true:crl:17|true:c:5|true:crl:17|true::0|true::0\", reference=\"-1|true::1|true::4|true::16777215|true::-2147483648|true::-2147483648|true::-2147483648|true:crl:17|true:c:5|true:crl:17\": \n        local out={}\n        local function observe(thread, expected)\n            local f,m,c\n            if thread then f,m,c=debug.gethook(thread) else f,m,c=debug.gethook() end\n            out[#out+1]=tostring(f==expected)..':'..m..':'..c\n        end\n        local function hook()end\n        observe(nil,nil)\n        for _,mask in ipairs({'','xyz','rrccll','l\\0cr','cr'})do\n            debug.sethook(hook,mask,0);observe(nil,hook)\n        end\n        for _,count in ipairs({-1,1,4,2^24-1,2^32+1,1/0,0/0})do\n            debug.sethook(hook,'',count);observe(nil,hook)\n        end\n        debug.sethook(hook,'crl',17)\n        local co=coroutine.create(function()return 1 end)\n        ob",
+            "tail": ",count);observe(nil,hook)\n        end\n        debug.sethook(hook,'crl',17)\n        local co=coroutine.create(function()return 1 end)\n        observe(co,nil)\n        debug.sethook(co,hook,'c',5);observe(co,hook);observe(nil,hook)\n        debug.sethook(co);observe(co,nil)\n        debug.sethook(nil,'ignored',20);observe(nil,nil)\n        return table.concat(out,'|')\n    \nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n",
+            "secondary_mutex_poison": false
+          }
+        }
+      },
+      "host_calls": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "host_closures": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "host_functions": {
+        "status": "ok",
+        "passed": 15,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "host_reentry": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "interning": {
+        "status": "ok",
+        "passed": 4,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "io": {
+        "status": "ok",
+        "passed": 23,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "loading": {
+        "status": "ok",
+        "passed": 19,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "lua51": {
+        "status": "ok",
+        "passed": 22,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_auxiliary": {
+        "status": "ok",
+        "passed": 4,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_errors": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_objects": {
+        "status": "ok",
+        "passed": 8,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_protected": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_stack": {
+        "status": "ok",
+        "passed": 11,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_tables": {
+        "status": "ok",
+        "passed": 10,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "native_values": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "os": {
+        "status": "FAILED",
+        "passed": 16,
+        "failed": 1,
+        "failed_tests": [
+          "time_differences_convert_inputs_before_subtracting_and_accept_default_start"
+        ],
+        "details": {
+          "time_differences_convert_inputs_before_subtracting_and_accept_default_start": {
+            "detail_sha256": "563ad04b363d043235166086aef6b80ce57ec28564c012ba0253a3f6f26193fc",
+            "head": "\nthread 'time_differences_convert_inputs_before_subtracting_and_accept_default_start' (314627) panicked at crates/deadlib-lua/tests/os.rs:59:9:\nassertion `left == right` failed: observation 10\n  left: Number(13970166044103278592)\n right: Number(4746794007248502784)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n",
+            "tail": "\nthread 'time_differences_convert_inputs_before_subtracting_and_accept_default_start' (314627) panicked at crates/deadlib-lua/tests/os.rs:59:9:\nassertion `left == right` failed: observation 10\n  left: Number(13970166044103278592)\n right: Number(4746794007248502784)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n\n",
+            "secondary_mutex_poison": false
+          }
+        }
+      },
+      "package": {
+        "status": "ok",
+        "passed": 25,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "posix_locale": {
+        "status": "ok",
+        "passed": 3,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "register_limits": {
+        "status": "ok",
+        "passed": 9,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "runtime_errors": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "standalone": {
+        "status": "ok",
+        "passed": 6,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "stdlib": {
+        "status": "FAILED",
+        "passed": 23,
+        "failed": 8,
+        "failed_tests": [
+          "character_arguments_use_native_int_narrowing",
+          "formatted_strings_and_platform_integer_width",
+          "select_and_unpack_narrow_native_integer_arguments",
+          "repeated_strings_narrow_counts_before_allocating",
+          "radix_conversions_follow_platform_unsigned_long_width",
+          "unpack_overflow_is_a_catchable_error_and_preserves_later_calls",
+          "generated_radix_conversions_include_overflow_and_invalid_digits",
+          "generated_native_narrowing_preserves_results_errors_and_numeric_strings"
+        ],
+        "details": {
+          "character_arguments_use_native_int_narrowing": {
+            "detail_sha256": "d3f6dc6b825d4ff7fe0e637871daf700702daac9e3b6220118b6d06b95f87b0a",
+            "head": "\nthread 'character_arguments_use_native_int_narrowing' (314700) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return pcall(string.char,4294967296)\n  left: [Bool(true), Bytes([0])]\n right: [Bool(false), Bytes([98, 97, 100, 32, 97, 114, 103, 117, 109, 101, 110, 116, 32, 35, 49, 32, 116, 111, 32, 39, 63, 39, 32, 40, 105, 110, 118, 97, 108, 105, 100, 32, 118, 97, 108, 117, 101, 41])]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n",
+            "tail": "' (314700) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return pcall(string.char,4294967296)\n  left: [Bool(true), Bytes([0])]\n right: [Bool(false), Bytes([98, 97, 100, 32, 97, 114, 103, 117, 109, 101, 110, 116, 32, 35, 49, 32, 116, 111, 32, 39, 63, 39, 32, 40, 105, 110, 118, 97, 108, 105, 100, 32, 118, 97, 108, 117, 101, 41])]\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n\n",
+            "secondary_mutex_poison": false
+          },
+          "formatted_strings_and_platform_integer_width": {
+            "detail_sha256": "debc960da1d8bbe238956beba916cf4d1e2b0345e692d309eafa593b3352f09c",
+            "head": "\nthread 'formatted_strings_and_platform_integer_width' (314704) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return string.format('%%:%s:%d:%i:%o:%u:%x:%X','hi',-123,12,31,-1,255,255)\n  left: [Bytes([37, 58, 104, 105, 58, 45, 49, 50, 51, 58, 49, 50, 58, 51, 55, 58, 49, 56, 52, 52, 54, 55, 52, 52, 48, 55, 51, 55, 48, 57, 53, 53, 49, 54, 49, 53, 58, 102, 102, 58, 70, 70])]\n right: [Bytes([37, 58, 104, 105, 58, 45, 49, 50, 51, 58, 49, 50, 58, 51, 55, 58, 52, 50, 57, 52, 57, 54, 55, 50, 57, 53, 58, 102, 102, 58, 70, 70])]\n\n",
+            "tail": "assertion `left == right` failed: return string.format('%%:%s:%d:%i:%o:%u:%x:%X','hi',-123,12,31,-1,255,255)\n  left: [Bytes([37, 58, 104, 105, 58, 45, 49, 50, 51, 58, 49, 50, 58, 51, 55, 58, 49, 56, 52, 52, 54, 55, 52, 52, 48, 55, 51, 55, 48, 57, 53, 53, 49, 54, 49, 53, 58, 102, 102, 58, 70, 70])]\n right: [Bytes([37, 58, 104, 105, 58, 45, 49, 50, 51, 58, 49, 50, 58, 51, 55, 58, 52, 50, 57, 52, 57, 54, 55, 50, 57, 53, 58, 102, 102, 58, 70, 70])]\n\n",
+            "secondary_mutex_poison": false
+          },
+          "select_and_unpack_narrow_native_integer_arguments": {
+            "detail_sha256": "b5e3fcebc76970e178774ad5bc37c69eee464e7d46653322bf7d91a62789cfd4",
+            "head": "\nthread 'select_and_unpack_narrow_native_integer_arguments' (314720) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: local function pack(...)return select('#',...),... end;return pack(pcall(select,4294967297,'a',nil,false,'d'))\n  left: [Number(4617315517961601024), Bool(true), Bytes([97]), Nil, Bool(false), Bytes([100])]\n right: [Number(4611686018427387904), Bool(false), Bytes([98, 97, 100, 32, 97, 114, 103, 117, 109, 101, 110, 116, 32, 35, 49, 32, 116, 111, 32, 39, 63, 39, 32, 40, 105, 110, 100, 101, 120, 32, 111, 117, 116, 32, 111, 102, 32, 114, 97, 110, 103, 101, 41])]\n\n",
+            "tail": "n pack(...)return select('#',...),... end;return pack(pcall(select,4294967297,'a',nil,false,'d'))\n  left: [Number(4617315517961601024), Bool(true), Bytes([97]), Nil, Bool(false), Bytes([100])]\n right: [Number(4611686018427387904), Bool(false), Bytes([98, 97, 100, 32, 97, 114, 103, 117, 109, 101, 110, 116, 32, 35, 49, 32, 116, 111, 32, 39, 63, 39, 32, 40, 105, 110, 100, 101, 120, 32, 111, 117, 116, 32, 111, 102, 32, 114, 97, 110, 103, 101, 41])]\n\n",
+            "secondary_mutex_poison": false
+          },
+          "repeated_strings_narrow_counts_before_allocating": {
+            "detail_sha256": "8c3013445090ec5fd54d370f36df30e08d42060ea62f88144b358de37434d015",
+            "head": "\nthread 'repeated_strings_narrow_counts_before_allocating' (314717) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return pcall(string.rep,'xy',4294967297)\n  left: [Bool(true), Bytes([120, 121])]\n right: [Bool(true), Bytes([])]\n\n",
+            "tail": "\nthread 'repeated_strings_narrow_counts_before_allocating' (314717) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return pcall(string.rep,'xy',4294967297)\n  left: [Bool(true), Bytes([120, 121])]\n right: [Bool(true), Bytes([])]\n\n",
+            "secondary_mutex_poison": false
+          },
+          "radix_conversions_follow_platform_unsigned_long_width": {
+            "detail_sha256": "3473fb41240dd76e6b7fa6f8d184cfe934de6c63c9bd6430998c9e7e8fae1957",
+            "head": "\nthread 'radix_conversions_follow_platform_unsigned_long_width' (314716) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return tonumber(' 1010 ',2),tonumber('10',36),tonumber('ffffFFFF',16),tonumber(string.rep('1',42),2)\n  left: [Number(4621819117588971520), Number(4630263366890291200), Number(4751297606873776128), Number(4796333603149576192)]\n right: [Number(4621819117588971520), Number(4630263366890291200), Number(4751297606873776128), Number(4751297606873776128)]\n\n",
+            "tail": "' (314716) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return tonumber(' 1010 ',2),tonumber('10',36),tonumber('ffffFFFF',16),tonumber(string.rep('1',42),2)\n  left: [Number(4621819117588971520), Number(4630263366890291200), Number(4751297606873776128), Number(4796333603149576192)]\n right: [Number(4621819117588971520), Number(4630263366890291200), Number(4751297606873776128), Number(4751297606873776128)]\n\n",
+            "secondary_mutex_poison": false
+          },
+          "unpack_overflow_is_a_catchable_error_and_preserves_later_calls": {
+            "detail_sha256": "e3b20bdb86427d2de34eafc33867204ca0db0de6139c4d8100cebd1a49d4254d",
+            "head": "\nthread 'unpack_overflow_is_a_catchable_error_and_preserves_later_calls' (314728) panicked at crates/deadlib-lua/tests/stdlib.rs:230:30:\ncalled `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 5, message: \"assertion failed!\", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294967466))) }\n\n",
+            "tail": "\nthread 'unpack_overflow_is_a_catchable_error_and_preserves_later_calls' (314728) panicked at crates/deadlib-lua/tests/stdlib.rs:230:30:\ncalled `Result::unwrap()` on an `Err` value: Error { kind: Runtime, line: 5, message: \"assertion failed!\", bytes: None, near: false, bypass_handler: false, value: Some(String(StringId(4294967466))) }\n\n",
+            "secondary_mutex_poison": false
+          },
+          "generated_radix_conversions_include_overflow_and_invalid_digits": {
+            "detail_sha256": "20f4f82c242010923454cefec1ba27132d30faf193664b5957d67f7e57c13f97",
+            "head": "\nthread 'generated_radix_conversions_include_overflow_and_invalid_digits' (314710) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return tonumber('\\009\\043\\118\\112\\100\\113\\106\\053\\101\\118\\115\\106\\049\\050\\055\\105\\051\\055\\102\\118\\112\\100\\114\\108\\056\\013\\011',33)\n  left: [Number(4895412794951729152)]\n right: [Number(4751297606873776128)]\n\n",
+            "tail": "\nthread 'generated_radix_conversions_include_overflow_and_invalid_digits' (314710) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: return tonumber('\\009\\043\\118\\112\\100\\113\\106\\053\\101\\118\\115\\106\\049\\050\\055\\105\\051\\055\\102\\118\\112\\100\\114\\108\\056\\013\\011',33)\n  left: [Number(4895412794951729152)]\n right: [Number(4751297606873776128)]\n\n",
+            "secondary_mutex_poison": false
+          },
+          "generated_native_narrowing_preserves_results_errors_and_numeric_strings": {
+            "detail_sha256": "4e30b6977a7c4393dcd760188d571311b9dbbc286a02b0de4c9266a547c5ca04",
+            "head": "\nthread 'generated_native_narrowing_preserves_results_errors_and_numeric_strings' (314709) panicked at crates/deadlib-lua/tests/stdlib.rs:90:5:\nassertion `left == right` failed: local out={};local function save(...)out[#out+1]=tostring(select('#',...));for i=1,select('#',...)do out[#out+1]=tostring(select(i,...))end end;local t={[0]='zero','one','two','three'};for _,x in ipairs({-4503599627370503,'-4503599627370503',-4503599627370497,'-4503599627370497',-4503599627370496,'-4503599627370496',-4503599627370495,'-4503599627370495',-4503599627370494,'-4503599627370494',-4503599627370493,'-4503599627370493',-4503599627370464,'-4503599627370464',-4503599627370241,'-4503599627370241',-4503599627370240,'-4503599627370240',-281474976710663,'-281474976710663',-281474976710657,'-281474976710657',-281474976710656,'-281474976710656',-281474976710655,'-281474976710655',-281474976710654,'-281474976710654',-281474976710653,'-281474976710653',-281474976710624,'-281474976710624',-281474976710401,'-281474976710401',-281474976710400,'-281474976710400',-4294967303,'-4294967303',-4294967297,'-4294967297',",
+            "tail": ", 35, 49, 32, 116, 111, 32, 39, 63, 39, 32, 40, 105, 110, 100, 101, 120, 32, 111, 117, 116, 32, 111, 102, 32, 114, 97, 110, 103, 101, 41, 124, 50, 124, 116, 114, 117, 101, 124, 110, 105, 108, 124, 50, 124, 102, 97, 108, 115, 101, 124, 98, 97, 100, 32, 97, 114, 103, 117, 109, 101, 110, 116, 32, 35, 49, 32, 116, 111, 32, 39, 63, 39, 32, 40, 105, 110, 118, 97, 108, 105, 100, 32, 118, 97, 108, 117, 101, 41, 124, 50, 124, 116, 114, 117, 101, 124])]\n\n\n",
+            "secondary_mutex_poison": false
+          }
+        }
+      },
+      "syntax": {
+        "status": "ok",
+        "passed": 16,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "thread_state": {
+        "status": "ok",
+        "passed": 5,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "tracebacks": {
+        "status": "terminated",
+        "passed": null,
+        "failed": null,
+        "failed_tests": [
+          "nonfinite_and_large_debug_indices_use_the_reference_integer_conversion"
+        ],
+        "details": {}
+      },
+      "unprotected_calls": {
+        "status": "ok",
+        "passed": 7,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      },
+      "userdata": {
+        "status": "ok",
+        "passed": 12,
+        "failed": 0,
+        "failed_tests": [],
+        "details": {}
+      }
+    },
+    "failed_targets": [
+      "calendar",
+      "hooks",
+      "os",
+      "stdlib",
+      "tracebacks"
+    ],
+    "passing_test_total": 511
+  },
+  "manual_probe_termination": [
+    {
+      "pid": 314752,
+      "command": "/home/perfecttaste/.cache/deadlua-i686-suite/1793077807846656500/probe-sse2/i686-unknown-linux-gnu/debug/deps/tracebacks-e676bc94ea1ba59b",
+      "status": "    PID     ELAPSED %CPU COMMAND\n 314752       09:40  100 /home/perfecttaste/.cache/deadlua-i686-suite/1793077807846656500/probe-sse2/i686-unknown-linux-gnu/debug/deps/tracebacks-e676bc94ea1ba59b\n",
+      "signal": "SIGTERM",
+      "reason": "Confirmed CPU-bound unbounded negative traceback test; over seven minutes elapsed."
+    }
+  ],
+  "current": {
+    "linux": {
+      "log_path": "target/lua-i686-suite-linux-tests.log",
+      "log_sha256": "732177710ccfa093fa78d4d6f4878a5d75ca8d8f161985aa094af6951fd5768d",
+      "targets": {
+        "cache_persistence": {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "calendar": {
+          "status": "ok",
+          "passed": 14,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "call_limits": {
+          "status": "ok",
+          "passed": 16,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "capture_limits": {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "codegen": {
+          "status": "ok",
+          "passed": 32,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "constant_pool": {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "coroutines": {
+          "status": "ok",
+          "passed": 11,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "debug": {
+          "status": "ok",
+          "passed": 11,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "debug_console": {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "debug_locals": {
+          "status": "ok",
+          "passed": 32,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "file_loading": {
+          "status": "ok",
+          "passed": 16,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "gc": {
+          "status": "ok",
+          "passed": 22,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "gnu_numbers": {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "hooks": {
+          "status": "ok",
+          "passed": 42,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "host_calls": {
+          "status": "ok",
+          "passed": 12,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "host_closures": {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "host_functions": {
+          "status": "ok",
+          "passed": 15,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "host_reentry": {
+          "status": "ok",
+          "passed": 11,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "interning": {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "io": {
+          "status": "ok",
+          "passed": 23,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "loading": {
+          "status": "ok",
+          "passed": 19,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "lua51": {
+          "status": "ok",
+          "passed": 22,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_auxiliary": {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_errors": {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_objects": {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_protected": {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_stack": {
+          "status": "ok",
+          "passed": 11,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_tables": {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_values": {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "os": {
+          "status": "ok",
+          "passed": 17,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "package": {
+          "status": "ok",
+          "passed": 25,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "posix_locale": {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "register_limits": {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "runtime_errors": {
+          "status": "ok",
+          "passed": 12,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "standalone": {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "stdlib": {
+          "status": "ok",
+          "passed": 31,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "syntax": {
+          "status": "ok",
+          "passed": 16,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "thread_state": {
+          "status": "ok",
+          "passed": 5,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "tracebacks": {
+          "status": "ok",
+          "passed": 15,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "unprotected_calls": {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "userdata": {
+          "status": "ok",
+          "passed": 12,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        }
+      },
+      "failed_targets": [],
+      "passing_test_total": 630
+    },
+    "i686": {
+      "log_path": "target/lua-i686-suite-i686-tests.log",
+      "log_sha256": "db036af709177fde89405b2d2597500954cccdc2690c4d32b7ee23a35742af5d",
+      "targets": {
+        "cache_persistence": {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "calendar": {
+          "status": "ok",
+          "passed": 14,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "call_limits": {
+          "status": "ok",
+          "passed": 16,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "capture_limits": {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "codegen": {
+          "status": "ok",
+          "passed": 32,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "constant_pool": {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "coroutines": {
+          "status": "ok",
+          "passed": 11,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "debug": {
+          "status": "ok",
+          "passed": 11,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "debug_console": {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "debug_locals": {
+          "status": "ok",
+          "passed": 32,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "file_loading": {
+          "status": "ok",
+          "passed": 16,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "gc": {
+          "status": "ok",
+          "passed": 22,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "gnu_numbers": {
+          "status": "ok",
+          "passed": 2,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "hooks": {
+          "status": "ok",
+          "passed": 42,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "host_calls": {
+          "status": "ok",
+          "passed": 12,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "host_closures": {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "host_functions": {
+          "status": "ok",
+          "passed": 15,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "host_reentry": {
+          "status": "ok",
+          "passed": 11,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "interning": {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "io": {
+          "status": "ok",
+          "passed": 23,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "loading": {
+          "status": "ok",
+          "passed": 19,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "lua51": {
+          "status": "ok",
+          "passed": 22,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_auxiliary": {
+          "status": "ok",
+          "passed": 4,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_errors": {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_objects": {
+          "status": "ok",
+          "passed": 8,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_protected": {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_stack": {
+          "status": "ok",
+          "passed": 11,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_tables": {
+          "status": "ok",
+          "passed": 10,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "native_values": {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "os": {
+          "status": "ok",
+          "passed": 17,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "package": {
+          "status": "ok",
+          "passed": 25,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "posix_locale": {
+          "status": "ok",
+          "passed": 3,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "register_limits": {
+          "status": "ok",
+          "passed": 9,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "runtime_errors": {
+          "status": "ok",
+          "passed": 12,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "standalone": {
+          "status": "ok",
+          "passed": 6,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "stdlib": {
+          "status": "ok",
+          "passed": 31,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "syntax": {
+          "status": "ok",
+          "passed": 16,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "thread_state": {
+          "status": "ok",
+          "passed": 5,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "tracebacks": {
+          "status": "ok",
+          "passed": 15,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "unprotected_calls": {
+          "status": "ok",
+          "passed": 7,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        },
+        "userdata": {
+          "status": "ok",
+          "passed": 12,
+          "failed": 0,
+          "failed_tests": [],
+          "details": {}
+        }
+      },
+      "failed_targets": [],
+      "passing_test_total": 630
+    }
+  },
+  "limitations": "The default x87 exploratory run retains its eight failed targets. The SSE2 baseline retains four failed targets plus the manually terminated, CPU-bound traceback process. Current regression guarantees use the explicit SSE2 i686 profile. Large traceback resource cases remain in the separate bounded audit; equal timeouts do not pass it."
+}

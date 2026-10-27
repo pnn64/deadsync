@@ -178,7 +178,7 @@ access, `select`, `unpack`, `next`, `pairs`, `ipairs`, metatable operations,
 `pcall`, `xpcall`, `tostring`, `print`, `getfenv`, `setfenv`, text `load`,
 `loadstring`, `loadfile`, `dofile` and `newproxy`.
 `select`, `unpack`, `string.char` and `string.rep` narrow integer arguments to
-the reference's native 32-bit `int` after 64-bit Lua integer conversion.
+the reference's native 32-bit `int` after pointer-width Lua integer conversion.
 `unpack` and `string.byte` check the 8,000-slot native stack limit, including
 unused arguments, before growing result storage. Overflow errors are catchable
 Lua errors; empty unpack ranges return no values.
@@ -336,8 +336,8 @@ checks every byte after selected prefixes, including the distinct lookahead
 behavior of special and generic NaN payloads.
 
 The partial `os` library supplies `difftime`, `getenv`, `remove` and `tmpname`.
-Time differences use the pinned MSVC 64-bit integer conversion and validation
-order. Windows temporary names use the system temporary directory and return
+Time differences convert inputs to the native `time_t` width before subtraction,
+preserving the pinned reference's validation order. Windows temporary names use the system temporary directory and return
 unused names without creating files. POSIX calls reserve extensionless private
 empty files under `/tmp`.
 Names and numeric components of temporary names are implementation-dependent.
@@ -565,8 +565,17 @@ Lua 5.1's template. These names can be required directly when `package.path`
 contains `?`. The
 [standalone suite checks](../../docs/testing/2026-10-27-rust-lua-full-suite.md)
 run unchanged `main.lua` and `all.lua` through each real CLI, including child
-processes. Linux `main.lua` passes in both engines; complete suite passage
-remains open.
+processes. The explicit Linux i686 SSE2 profile passes both stock entry points
+in C and Rust. Stock mode still skips T/testC and native suite libraries;
+full standalone parity remains open.
+
+The i686 profile uses pointer-width Lua integers, 32-bit C long/unsigned long
+and time values, and binary64 SSE2 arithmetic. Its reference build selects
+`-m32 -msse2 -mfpmath=sse`; native builds keep their default flags. The runner
+checks both executables' ELF32 headers and native Lua chunk format. The default
+i686 x87 compiler model remains a recorded diagnostic baseline with different
+rounding; it is not the declared Rust arithmetic profile. See the
+[i686 suite checks](../../docs/testing/2026-10-27-rust-lua-i686-suite.md).
 
 ```sh
 cargo test -p deadlib-lua
@@ -576,6 +585,13 @@ cargo run -p deadlib-lua --bin deadlua -- -e 'assert(6*7 == 42)'
 python scripts/check_rust_lua_suite.py --output docs/testing/rust-lua-suite.json
 python scripts/check_rust_lua_full_suite.py --output docs/testing/rust-lua-full-suite.json
 python scripts/check_rust_lua_unpack.py --run-root target/unpack-runs --output docs/testing/rust-lua-unpack.json
+```
+
+On Linux with the i686 Rust target and C multilib toolchain installed:
+
+```sh
+CARGO_TARGET_DIR=/tmp/deadsync-lua-target CFLAGS_i686_unknown_linux_gnu='-msse2 -mfpmath=sse' cargo test -p deadlib-lua --target i686-unknown-linux-gnu
+CARGO_TARGET_DIR=/tmp/deadsync-lua-target python3 scripts/check_rust_lua_full_suite.py --target i686-unknown-linux-gnu --reference-fp-model sse2 --run-root /tmp/deadsync-lua-suite --output docs/testing/rust-lua-i686.json
 ```
 
 Tests use the official vendored Lua 5.1 interpreter through the legacy binding
@@ -590,7 +606,8 @@ passes unchanged `constructs.lua`, `locals.lua`, `nextvar.lua`, `vararg.lua`,
 `files.lua` also fails in the C reference at a Windows open-file rename. The runner verifies the official
 archive checksum and keeps the test files unchanged. On Linux, all eighteen
 independent files pass in reference, Rust and both cache modes; unchanged
-`all.lua` still fails at `big.lua:11` in both 64-bit engines. See the
+`all.lua` still fails at `big.lua:11` in both 64-bit engines; i686 SSE2 passes
+both full stock entry points. See the
 [suite report](../../docs/testing/2026-10-26-rust-lua-boolean-hooks.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.
 The [portable regression checks](../../docs/testing/2026-10-27-rust-lua-portable-tests.md)

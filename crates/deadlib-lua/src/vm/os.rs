@@ -174,7 +174,7 @@ impl Vm {
             EXIT => {
                 let code = match self.argument(base, count, 0) {
                     Value::Nil => 0,
-                    value => io::integer(
+                    value => lua_integer(
                         self.number(value)
                             .ok_or_else(|| self.argument_type_error(base, count, 0, "number"))?,
                     ) as i32,
@@ -201,7 +201,7 @@ impl Vm {
                 let end = self
                     .number(self.argument(base, count, 0))
                     .ok_or_else(|| self.argument_type_error(base, count, 0, "number"))?;
-                let (end, start) = (io::integer(end), io::integer(start));
+                let (end, start) = (platform::timestamp(end), platform::timestamp(start));
                 // The pinned MSVC CRT rejects negative time_t values, but accepts
                 // zero. Subtract integers before rounding the difference to f64.
                 #[cfg(windows)]

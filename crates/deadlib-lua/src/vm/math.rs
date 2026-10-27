@@ -284,7 +284,7 @@ impl Vm {
         if text.is_empty() {
             return Ok(Value::Nil);
         }
-        let maximum = if cfg!(windows) {
+        let maximum = if std::mem::size_of::<std::ffi::c_ulong>() == 4 {
             u64::from(u32::MAX)
         } else {
             u64::MAX
