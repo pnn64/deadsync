@@ -113,3 +113,27 @@ leaves and maximum width seven; they do not enumerate all symbol permutations.
 All length values 3–258 and distances 1–32,768 are exercised in fixed/dynamic
 blocks at all eight bit offsets and both alignment-padding values. This is an
 equivalence-class audit, not enumeration of every possible compressed stream.
+
+## Literal chunk names and core ordering
+
+```powershell
+$env:DEADLIB_LIBPNG_ORACLE = (Resolve-Path target/deadlib-image-reference/oracle-build/Release/deadlib_png_oracle.exe).Path
+cargo test -p deadlib-image-png --release --test chunks libpng_unknown_chunk_and_core_order_comparison -- --ignored --nocapture
+```
+
+This compares 1,893 independently constructed files: all 16 unknown chunk
+property combinations at three positions, all noncanonical case variants of the
+25 standard chunk names at those positions, and all 720 permutations of a small
+indexed image's six chunks (IHDR, PLTE, tRNS, two distinct IDAT parts, IEND).
+The native buffered/fragmented readers and exact pixels have separate ordinary
+tests. No native encoding, CRC or compression code constructs these inputs.
+
+Pinned libpng 1.6.50 rejects all 312 reserved-bit ancillary fixtures here.
+The native decoder accepts these unknown ancillary names, following the
+[Third Edition's forward-compatible decoder guidance](https://www.w3.org/TR/2025/REC-png-3-20250624/#13Unknown-chunk-handling).
+Both native encoders still require current-version names with the reserved bit
+clear. Libpng accepts three malformed core orders (tRNS before PLTE or after
+IDAT/IEND); Rust png 0.18.1 accepts 11, including PLTE after IDAT/IEND.
+Both native parsers reject all 719 invalid permutations. Reference recovery
+does not override those assertions. Counts, commands and source/binary hashes
+are retained in `chunks-validation.log` and `chunks-validation.json`.

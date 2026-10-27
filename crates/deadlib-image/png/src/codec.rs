@@ -85,6 +85,11 @@ pub enum ChunkPosition {
 
 /// Retained ancillary data in its original wire representation. Compressed
 /// metadata uses independent zlib streams; typed accessors are added separately.
+/// Names are case-sensitive. Decoding retains unknown ancillary chunks even
+/// when their third letter sets the reserved bit (PNG Third Edition 13.5).
+/// Both encoders require alphabetic names with a lowercase first and uppercase
+/// third letter. Reencoding replaces IDAT, so unknown chunks with an uppercase
+/// fourth letter are omitted; safe-to-copy chunks retain their placement.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AncillaryChunk {
     pub kind: [u8; 4],

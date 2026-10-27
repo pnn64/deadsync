@@ -22,6 +22,10 @@ CC=clang CFLAGS="-fsanitize=address" cargo +nightly fuzz run huffman -- -runs=20
 Seed generation copies the checked-in independent PNGSuite and APNG fixtures and
 extracts their IDAT zlib streams. It also adds 649 independent Huffman wire
 fixtures to the raw zlib corpus, including all 68 extended-distance positives.
+Both PNG corpora additionally receive 1,893 independent chunk-grammar files:
+all property flags, case variants of the 25 standard names and every permutation
+of a six-chunk indexed image. Seed filenames encode the literal case-sensitive
+names as hexadecimal so they remain distinct on Windows filesystems.
 Working corpora, crash artifacts and builds are
 ignored. Committed fixtures and the seed generator reproduce the initial corpus;
 do not reuse a previously mutated corpus when reproducing an exact smoke run.

@@ -13,7 +13,7 @@ evidence, application responsibilities and explicitly open items.
 | CRC-32 / Adler-32 | Known-answer tests | Verified known answers |
 | Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, advertised/actual history and output limits; compression / zlib-header / Huffman suites | All 65,536 headers, 92 window fixtures and 19,645 Huffman fixtures pass; C default/strict/compatibility policies recorded; arbitrary tree permutations and coverage review remain open |
 | Native compression | Stored/fixed Huffman LZ77, bounded 16-candidate chains and per-block coding choice; `zlib::Deflater`, `tests/deflate_stream.rs` | Independent flate2 checks, arbitrary fragments, mixed coding and 32 KiB block/history boundaries pass |
-| PNG chunk framing and normative ordering | `codec.rs`, `tests/malformed.rs` | Critical chunks, PLTE, tRNS verified; full ancillary validation pending |
+| PNG chunk framing and normative ordering | Independent `tests/chunks.rs` fixtures, malformed/metadata/APNG suites | All 16 property bits, all name-byte values, 25 standard names' case variants, 720 core permutations and every small-stream IDAT split pass; broader ancillary/APNG ordering audit remains open |
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Indexed-color error recovery (13.1) | `tests/palette.rs`; all indexed depths, Adam7, APNG, one-byte reads/events, independent Rust png encoding | Native indices retained, opaque-black expansion/rendering; opt-in strict decode and always-strict encoding |
@@ -23,8 +23,8 @@ evidence, application responsibilities and explicitly open items.
 | APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
-| Independent fixtures / malformed streams / properties | Independent stored-stream known answer, malformed fixtures, mutation campaign | Partial; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eight targets; 270,000 recorded successful sanitizer executions across milestones, including 30,000 with the compatible positive oracle; longer campaigns and native fuzz coverage audit pending |
+| Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eight targets; 310,000 recorded successful sanitizer executions across milestones, including 30,000 with the compatible positive oracle and 40,000 with extended chunk-grammar seeds; longer campaigns and native fuzz coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -528,3 +528,60 @@ integration, preserving unrelated work and committing verified milestones:
    evidence; publish the final coverage/performance/limitations documentation.
    Keep the goal active until every gate is proved, rather than treating the
    present feature list or green tests as full conformance.
+
+
+## Literal chunk names, framing and editor-copy audit (2026-10-27)
+
+`tests/chunks.rs` and its shared independent wire constructors cover 6,005 file
+cases through buffered decoding and one-/seven-byte readers:
+
+- All 16 property-bit combinations at three legal positions with empty/binary
+  payloads, plus all 256 byte values in each of the four name positions (3,168).
+- All 15 noncanonical case variants of each of the 25 standard names at those
+  positions (1,125). Ancillary variants remain exact unknown data; critical
+  variants fail. The defined standard names' payload semantics remain covered
+  by their separate format/metadata/APNG tests.
+- All 720 permutations of IHDR, PLTE, tRNS, two distinct compressed IDAT pieces
+  and IEND; only the original file order is valid. All 768 combinations of every
+  small-stream compressed-byte split, property flags and unknown-chunk insertion
+  before/between/after the IDAT pair pass their expected acceptance/rejection.
+- Sixteen unknown-ancillary insertions before IHDR or after IEND are rejected;
+  78 payload-length/alignment positives, 52 CRC-corruption cases and 78 declared
+  length-boundary cases pass. Large declared bodies fail without requiring a
+  multi-gigabyte fixture or allocation.
+
+Direct push decoding additionally checks 144 property/position/fragment cases,
+including exact unknown metadata events, verified image-end order and fused
+unknown-critical errors. Both encoders check all 48 property/position choices,
+all 816 nonalphabetic name-byte substitutions before writing, and repeated
+safe-to-copy chunks with exact empty/binary payloads on both sides of IDAT.
+Unknown unsafe chunks are omitted after critical IDAT replacement; known gAMA
+and tIME chunks retain their defined behavior. Names with the reserved bit set
+are accepted as unknown when decoding and rejected by current-version encoders.
+
+Rust png 0.18.1 independently checks valid case variants, IDAT splits and writer
+output. It accepts 11 of the 719 malformed core permutations. The pinned C
+libpng 1.6.50/zlib 1.3.1 executable compares 1,893 fixtures and accepts three of
+those malformed permutations. It rejects all 312 reserved-bit ancillary files
+in that comparison; the native decoder follows Third Edition 13.5's unknown
+chunk handling instead. The exact permutations and reference policies are
+recorded in `chunks-validation.log`, `chunks-validation.json` and the oracle
+README. Runtime parser/encoder logic required no change in this milestone.
+
+Release and isolated offline tests pass 82 tests with six optional C tests
+ignored; the new optional C test and strict all-target Clippy check also pass.
+The isolated dependency tree remains only `deadlib-image`. Existing format,
+PNGSuite, APNG, metadata, streaming and compression checks remain green.
+
+The seed generator adds 1,893 grammar files to each PNG fuzz target, with
+case-sensitive wire names encoded into filesystem-safe seed names. Fresh
+corpora contain 2,069 files / 383,803 bytes each (maximum file 63,435 bytes).
+Linux nightly/Clang ASan completes 20,000 `decode` executions in four fuzzing
+seconds (249 MiB peak RSS) and 20,000 `png_stream` executions in 16 seconds
+(422 MiB). Both binaries define the ASan runtime entry. Exact commands, corpus,
+source and binary hashes are in `fuzz/reports/chunks-source.json`; full logs are
+retained alongside it. These 40,000 successful executions bring the historical
+successful total to 310,000. Counter totals include harness/reference code and
+are not native-only fuzz coverage or proof of completeness. Broader ancillary
+and APNG ordering, metadata field boundaries, external rendered APNG comparisons
+and competitive pipeline/encoder performance remain open.

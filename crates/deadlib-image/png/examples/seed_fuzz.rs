@@ -1,5 +1,7 @@
 //! Extract independent PNGSuite zlib streams and PNG files for fuzz campaigns.
 //! An optional first argument creates a fresh corpus root instead of merging seeds.
+#[path = "../tests/support/chunks.rs"]
+mod chunks;
 #[path = "../tests/support/huffman.rs"]
 mod huffman;
 use std::{
@@ -89,6 +91,16 @@ fn main() -> std::io::Result<()> {
     fs::create_dir_all(&zlib)?;
     fs::create_dir_all(&png_stream)?;
     fs::create_dir_all(&inflate_stream)?;
+    let chunk_cases = chunks::seeds();
+    for (name, bytes) in &chunk_cases {
+        // Case-sensitive names collide on Windows filesystems. Encode bytes in
+        // the seed filename while preserving the distinct literal wire names.
+        let label: String = name.bytes().map(|b| format!("{b:02x}")).collect();
+        for directory in [&png, &png_stream] {
+            fs::write(directory.join(format!("chunk-{label}")), bytes)?;
+        }
+    }
+    println!("PNG chunk grammar: {} independent seeds", chunk_cases.len());
     for entry in fs::read_dir(root.join("tests/fixtures/pngsuite"))? {
         let path = entry?.path();
         if path.extension().is_none_or(|v| v != "png") {

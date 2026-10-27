@@ -1,21 +1,21 @@
-﻿Isolated workspace: C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-e6c90aa5689a4a60858d7d2e20906391
+﻿Isolated workspace: C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-a2fa2b0fa7c7422c9b8f81c0bfcfa587
 Command: cargo test -p deadlib-image -p deadlib-image-png --offline
 rustc 1.99.1 (58cf8f9c3 2026-10-13)
 cargo 1.99.1 (5f94df478 2026-08-27)
      Locking 11 packages to highest Rust 1.97 compatible versions
    Compiling simd-adler32 v0.3.10
-   Compiling crc32fast v1.5.3
    Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.3
    Compiling cfg-if v1.0.5
-   Compiling deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-e6c90aa5689a4a60858d7d2e20906391)
+   Compiling deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-a2fa2b0fa7c7422c9b8f81c0bfcfa587)
    Compiling bitflags v2.13.2
+   Compiling deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-a2fa2b0fa7c7422c9b8f81c0bfcfa587\png)
    Compiling miniz_oxide v0.9.1
-   Compiling fdeflate v0.3.7
    Compiling miniz_oxide v0.8.9
-   Compiling deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-e6c90aa5689a4a60858d7d2e20906391\png)
+   Compiling fdeflate v0.3.7
    Compiling flate2 v1.1.10
    Compiling png v0.18.1
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.53s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.41s
      Running unittests src\lib.rs (target\debug\deps\deadlib_image-7341d42afe0051e4.exe)
 
 running 0 tests
@@ -32,7 +32,7 @@ test checksum::tests::adler_block_and_modulus_boundaries ... ok
 test zlib::matcher::tests::every_prefix_mismatch_and_tail ... ok
 test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
 
-test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
 
      Running tests\apng.rs (target\debug\deps\apng-38d3302bd0874a61.exe)
 
@@ -42,7 +42,20 @@ test decode_independent_reference_apng ... ok
 test independent_twenty_frame_fixture ... ok
 test all_formats_apng_default_roles_and_interlace ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.92s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.45s
+
+     Running tests\chunks.rs (target\debug\deps\chunks-5788c34ed0ba63e6.exe)
+
+running 7 tests
+test libpng_unknown_chunk_and_core_order_comparison ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test unknown_stream_events_and_fused_critical_errors ... ok
+test reencoding_obeys_copy_bits_and_preserves_placement ... ok
+test chunk_lengths_crc_alignment_and_encoder_name_validation ... ok
+test all_core_chunk_permutations_and_unknown_insertions ... ok
+test standard_names_are_literal_not_case_folded ... ok
+test every_property_bit_and_name_byte ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.71s
 
      Running tests\cicp.rs (target\debug\deps\cicp-14c7b610ee939f85.exe)
 
@@ -51,14 +64,14 @@ test all_png_matrix_and_full_range_flag_values ... ok
 test reserved_codes_preserve_wire_data_and_fall_back_in_precedence ... ok
 test all_primaries_transfer_pairs_and_range_flags ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.43s
 
      Running tests\compositing.rs (target\debug\deps\compositing-e7de915ed00ec819.exe)
 
 running 3 tests
-test separate_default_and_first_previous ... ok
-test explicit_precision_palette_and_transparency_expansion ... ok
 test source_over_and_disposal_known_answers ... ok
+test explicit_precision_palette_and_transparency_expansion ... ok
+test separate_default_and_first_previous ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
@@ -71,7 +84,7 @@ test mixed_block_alignment_and_prefetched_stored_bytes ... ok
 test bidirectional_differential ... ok
 test deterministic_mutation_campaign ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.34s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.69s
 
      Running tests\deflate_stream.rs (target\debug\deps\deflate_stream-32b21059cc86bc8e.exe)
 
@@ -81,7 +94,7 @@ test cross_block_history_and_separate_finish ... ok
 test mixed_compressibility_block_transitions_and_full_window_reuse ... ok
 test input_output_fragments_and_block_boundaries ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.47s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.81s
 
      Running tests\huffman.rs (target\debug\deps\huffman-00868d87b3dc2656.exe)
 
@@ -94,7 +107,7 @@ test every_complete_code_length_histogram ... ok
 test all_dynamic_count_fields ... ok
 test all_length_distance_values_and_fifteen_bit_codes ... ok
 
-test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 25.55s
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 24.84s
 
      Running tests\inflate_stream.rs (target\debug\deps\inflate_stream-eb4c90ad5a588dec.exe)
 
@@ -103,7 +116,7 @@ test zero_capacity_prefix_truncations_and_terminal_errors ... ok
 test every_input_output_fragment_combination ... ok
 test ring_wrap_history_and_long_matches ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.22s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.91s
 
      Running tests\language_registry.rs (target\debug\deps\language_registry-119602f934b7c2ce.exe)
 
@@ -157,7 +170,7 @@ running 2 tests
 test independent_palette_overflow_fixture ... ok
 test out_of_range_indices_preserve_samples_render_black_and_remain_invalid_for_encoders ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
 
      Running tests\png_stream.rs (target\debug\deps\png_stream-f660d07fc3cdfbcb.exe)
 
@@ -168,7 +181,7 @@ test every_truncation_limits_and_reader_errors ... ok
 test row_pipeline_memory_is_independent_of_height ... ok
 test pngsuite_and_apng_arbitrary_reads ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.28s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.86s
 
      Running tests\png_write.rs (target\debug\deps\png_write-7cd4ecec7e75e861.exe)
 
@@ -178,14 +191,14 @@ test sixteen_bit_gradient_compression_regression ... ok
 test bounded_encoder_scratch_and_maximum_chunk_size ... ok
 test all_formats_fragmented_writes_and_chunks ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.11s
 
      Running tests\pngsuite.rs (target\debug\deps\pngsuite-97e00989336d2ad3.exe)
 
 running 1 test
 test pngsuite_native_samples_and_reencoding ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.09s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.05s
 
      Running tests\profiles.rs (target\debug\deps\profiles-c1679cd0a8b01709.exe)
 
@@ -197,7 +210,7 @@ test icc_header_tag_bounds_duplicates_and_overlap_errors_recover_as_raw_metadata
 test exif_header_endianness_first_directory_bounds_and_future_magic ... ok
 test independent_icc_profiles_all_matching_formats_and_table_orders ... ok
 
-test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.22s
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.26s
 
      Running tests\static_png.rs (target\debug\deps\static_png-8ceb40fc0dd143b8.exe)
 
@@ -206,7 +219,7 @@ test decode_reference_encodings ... ok
 test one_byte_idat_and_truncations ... ok
 test complete_native_format_filter_and_adam7_matrix ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.83s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.15s
 
      Running tests\text.rs (target\debug\deps\text-d49ce81f1b5141db.exe)
 
@@ -216,7 +229,7 @@ test whatwg_utf8_replacement_bom_and_raw_retention ... ok
 test bcp47_grammar_grandfathered_private_extensions_and_duplicates ... ok
 test uncompressed_method_is_ignored_only_by_decoders ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
 
      Running tests\zlib_headers.rs (target\debug\deps\zlib_headers-9c977d26a2826339.exe)
 
@@ -227,7 +240,7 @@ test advertised_window_distances_and_ring_wrap ... ok
 test every_cmf_and_flg_value_buffered_and_fragmented ... ok
 test every_png_zlib_header_value ... ok
 
-test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 12.62s
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 12.89s
 
    Doc-tests deadlib_image
 
@@ -241,5 +254,5 @@ running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-e6c90aa5689a4a60858d7d2e20906391\png)
-└── deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-e6c90aa5689a4a60858d7d2e20906391)
+deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-a2fa2b0fa7c7422c9b8f81c0bfcfa587\png)
+└── deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-a2fa2b0fa7c7422c9b8f81c0bfcfa587)

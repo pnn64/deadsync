@@ -1,0 +1,235 @@
+{
+  "date": "2026-10-27",
+  "production_checkpoint": "cafedc93d",
+  "production_change": "Documentation only; runtime logic unchanged",
+  "commands": [
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--release"
+      ],
+      "exit_code": 0,
+      "seconds": 34.893
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 101,
+      "seconds": 2.663
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "seconds": 1.205
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "chunks",
+        "libpng_unknown_chunk_and_core_order_comparison",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "seconds": 56.913
+    },
+    {
+      "argv": [
+        "cargo",
+        "run",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--example",
+        "seed_fuzz",
+        "--",
+        "C:\\GitHub\\deadsync\\target\\png-chunks-fresh-20261027-a"
+      ],
+      "exit_code": 0,
+      "seconds": 15.092
+    },
+    {
+      "argv": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\verify_independent.ps1"
+      ],
+      "exit_code": 0,
+      "seconds": 99.472
+    }
+  ],
+  "oracle_sha256": "8264ad9ea017df348a713d21e6ebbc77f8f6c9c8c0b811afc4f51e1428f6b4ed",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "33d55ee2eca45b88852d6e2c1feb0390e3894cd5e576df7272a8e304e7dbdea9"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "4d2004134299397ba9fd691f41ce5d0a17ae90115aa7ed92dd8627cd9c4c916a"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "9269ee9cc1083986a2b507f2e3ead67c8780411c2aae286257b9b8f8c1dbb035"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "1a4431ffdc2d477ea928b8f97f439b0293b31cca599a47dec885d454e4690601"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "cda4227e750c1ccf5a77fd300d541e9d6ff45cbe48f0af2aa60633fbe264495d"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "9de8d5ae51577e8438f8fca56fc7698b16f9e4e68aee0548ea61aa569e304cf7"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "b9d9a6d9b2ca92d56db5b81f17bf6f71a590695d7dbad27276cbad509122ca9a"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "46ad510363bbe080b2401a327a6b9e017b259ec80d2bdb67fdfecb2a0a8b6117"
+    },
+    {
+      "path": "tests/chunks.rs",
+      "sha256": "fcc32b5dd03500c701772ed0aac0675a3965bd3a77e2387ee95b24cb242e6a74"
+    },
+    {
+      "path": "tests/support/chunks.rs",
+      "sha256": "414380bb3ffe06aa356d0d494252cd6a92f95e2830eb167b6b2c658777069077"
+    },
+    {
+      "path": "examples/seed_fuzz.rs",
+      "sha256": "94188bfec5975d49474fe29d796a26ce2db46cd62f3c3b71f5456dc9ef241860"
+    }
+  ],
+  "initial_clippy_failure": "Test-only cloned singleton expectation; replaced with slice::from_ref before the successful checks below.",
+  "normal_tests": {
+    "passed": 82,
+    "optional_ignored": 6
+  },
+  "independent_tests": {
+    "passed": 82,
+    "optional_ignored": 6,
+    "workspace": "Isolated workspace: C:\\Users\\PerfectTaste\\AppData\\Local\\Temp\\deadlib-image-independent-a2fa2b0fa7c7422c9b8f81c0bfcfa587"
+  },
+  "deterministic_chunks": {
+    "buffered_and_fragmented_file_cases": 6005,
+    "reader_fragments": [
+      1,
+      7
+    ],
+    "property_and_name_byte_cases": 3168,
+    "noncanonical_standard_name_cases": 1125,
+    "core_permutations": 720,
+    "invalid_core_permutations": 719,
+    "idat_split_insertion_cases": 768,
+    "unknown_outside_first_last_cases": 16,
+    "valid_length_and_alignment_cases": 78,
+    "crc_corruption_cases": 52,
+    "declared_31_bit_length_cases": 78,
+    "direct_stream_property_cases": 144,
+    "encoder_property_positions": 48,
+    "invalid_encoder_nonletter_names": 816
+  },
+  "reference_comparison": {
+    "rust_png": "0.18.1",
+    "libpng": "1.6.50",
+    "zlib": "1.3.1",
+    "libpng_files": 1893,
+    "libpng_reserved_bit_ancillary_rejections": 312,
+    "native_reserved_bit_ancillary_policy": "Accept as unknown; Third Edition 13.5",
+    "rust_png_invalid_core_acceptances": 11,
+    "libpng_invalid_core_acceptances": 3,
+    "native_invalid_core_rejections": 719,
+    "new_seed_files_per_png_target": 1893
+  },
+  "sanitizer_source_manifest": "fuzz/reports/chunks-source.json",
+  "sanitizer_executions": 40000,
+  "sanitizer_initial_corpora_verified_against_fresh_windows_seeds": true,
+  "corpus_verification_note": "Sort literal filenames rather than platform Path objects: Windows Path sorting folds PngSuite.png, changing the aggregate digest order."
+}
