@@ -19,6 +19,11 @@ both mode block orders, surplus residue classwords and stage-free submaps.
 It corrects packet discard/bit-consumption differences and widens transform
 internals to keep cancellation cases within the original PCM bounds.
 
+The [geometry matrix](RESIDUE_GEOMETRY.md) extends mixed-book, submap and channel
+coverage and exposes a specification/reference disagreement for unaligned
+type-two residue ranges. `Residue2Layout` offers the normative default and an
+explicit libvorbis layout through raw, Ogg and indexed APIs.
+
 ## Implemented and tested (2026-10-26)
 
 * Bitpacking/unpacking with widths 0..=32, unaligned 32-bit fields, zero-width

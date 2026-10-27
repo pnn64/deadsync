@@ -64,6 +64,14 @@ from other single-stream Vorbis files. Raw fixture selection depends on whether
 the optional floor-zero fixture is present: preserve the run's environment when
 replaying. The manifest records its exact external source hash.
 
+Header and streaming inputs also exercise both `Residue2Layout` policies. The
+header target's high control bit selects the libvorbis layout when `kind % 3`
+selects setup parsing (controls 2 / 194 select the two layouts). Streaming
+control bit three selects the libvorbis layout for pull, push, reset and indexed
+seeking. The raw target uses its normative fixture contexts. Procedural unaligned
+geometry streams seed both policies with strict framing and independent C sample
+counts; these are bounded-state oracles, separately from C PCM parity tests.
+
 The input cap is 128 KiB plus one control byte. Setup/decode element budgets are
 8 MiB each; container pending bytes are 256 KiB, logical streams 16, active Vorbis
 streams four, and aggregate codec elements 16 MiB. Indexing/streaming exercises

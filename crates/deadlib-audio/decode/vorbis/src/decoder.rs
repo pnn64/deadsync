@@ -1,5 +1,13 @@
-use crate::{AudioHeader, Error, Imdct, Limits, Setup, bitpack::BitReader, floor, residue};
+use crate::{
+    AudioHeader, Error, Imdct, Limits, Residue2Layout, Setup, bitpack::BitReader, floor, residue,
+};
 use core::f64::consts::FRAC_PI_2;
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct DecodeOptions {
+    pub limits: Limits,
+    pub residue2_layout: Residue2Layout,
+}
 
 /// Borrowed planar, unclipped f32 PCM in Vorbis mapping-zero channel order.
 /// Frame positions are raw overlap output positions, before container trimming.
@@ -38,6 +46,7 @@ impl<'a> PcmBlock<'a> {
 pub struct PacketDecoder {
     setup: Setup,
     limits: Limits,
+    residue2_layout: Residue2Layout,
     short: Imdct,
     long: Option<Imdct>,
     short_slope: Vec<f32>,
@@ -57,6 +66,19 @@ impl PacketDecoder {
         Self::with_limits(setup, Limits::default())
     }
     pub fn with_limits(setup: Setup, limits: Limits) -> Result<Self, Error> {
+        Self::with_options(
+            setup,
+            DecodeOptions {
+                limits,
+                ..DecodeOptions::default()
+            },
+        )
+    }
+    pub fn with_options(setup: Setup, options: DecodeOptions) -> Result<Self, Error> {
+        let DecodeOptions {
+            limits,
+            residue2_layout,
+        } = options;
         let channels = setup.channels() as usize;
         let [small, large] = setup.block_sizes();
         let half = large / 2;
@@ -79,6 +101,7 @@ impl PacketDecoder {
         Ok(Self {
             setup,
             limits,
+            residue2_layout,
             short,
             long,
             short_slope,
@@ -189,6 +212,7 @@ impl PacketDecoder {
                     self.setup.codebooks(),
                     &mut bits,
                     &mut residue::Output {
+                        layout: self.residue2_layout,
                         spectrum: &mut self.spectrum,
                         stride,
                         bins,

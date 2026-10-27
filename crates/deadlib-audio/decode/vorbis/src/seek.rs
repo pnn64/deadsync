@@ -1,7 +1,7 @@
 //! Indexed, sample-accurate seeking with one-packet overlap pre-roll.
 use crate::{
-    Error, Limits, Metadata, OggEvent, OggPcm, PacketDecoder, Setup, StreamEnd, StreamId,
-    StreamInfo,
+    DecodeOptions, Error, Limits, Metadata, OggEvent, OggPcm, PacketDecoder, Residue2Layout, Setup,
+    StreamEnd, StreamId, StreamInfo,
     ogg::{Timing, granule, read_identification, read_metadata},
 };
 use core::ops::ControlFlow;
@@ -16,6 +16,7 @@ pub struct SeekOptions {
     pub limits: Limits,
     pub container_limits: container::Limits,
     pub allow_zero_span_granules: bool,
+    pub residue2_layout: Residue2Layout,
     /// Explicit legacy endpoint policy. The index knows the final granule in
     /// advance and can trim across earlier packets/pages, including a decreasing
     /// EOS granule. Streaming APIs deliberately do not offer this exception.
@@ -38,6 +39,7 @@ impl Default for SeekOptions {
             limits: Limits::default(),
             container_limits: container::Limits::default(),
             allow_zero_span_granules: false,
+            residue2_layout: Residue2Layout::Interleaved,
             trim_to_final_granule: false,
             packet_preroll: true,
             max_index_pages: 1 << 20,
@@ -559,7 +561,13 @@ impl<R: Read + Seek> OggSeekReader<R> {
                 let setup =
                     Setup::parse(&stream.setup_packet, &stream.info.identification, &limits)?;
                 check_decoder_memory(&setup, self.index.options)?;
-                self.decoder = Some(PacketDecoder::with_limits(setup, limits)?);
+                self.decoder = Some(PacketDecoder::with_options(
+                    setup,
+                    DecodeOptions {
+                        limits,
+                        residue2_layout: self.index.options.residue2_layout,
+                    },
+                )?);
             }
             self.selected = Some(stream_id);
             let target = stream

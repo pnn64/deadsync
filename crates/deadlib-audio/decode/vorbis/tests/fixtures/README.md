@@ -68,3 +68,20 @@ cargo test -p deadlib-audio-decode-vorbis --release --test configuration_parity 
 
 Ordinary tests only read this golden. [Configuration validation](../../CONFIGURATION_PARITY.md)
 records capture and source provenance.
+
+`residue-layout-v1.libvorbis-pcm` contains four C responses for unaligned type-two
+residue begin/partition ranges, including mixed stage books, coupling and multiple
+submaps. The format is `DVRGEO01`, little-endian u32 set count, then u64-length-
+delimited `pcm-cases` responses. `regressions` / `sequence` in
+`tests/residue_geometry.rs` and the independent procedural builder
+`tests/support/residue_vectors.rs` define the inputs. Size: 45,904 bytes; SHA-256:
+`92b5e01f6a1df2496d8e67fb77ac6b9b9f0192750a3b85897db17ae728ce3fda`.
+The normal test explicitly selects `Residue2Layout::Libvorbis`. Regenerate with
+the pinned oracle configured:
+
+```powershell
+cargo test -p deadlib-audio-decode-vorbis --release --test residue_geometry regenerate_residue_geometry_golden -- --ignored
+```
+
+See [residue geometry](../../RESIDUE_GEOMETRY.md) for the normative/reference
+distinction and validation scope.

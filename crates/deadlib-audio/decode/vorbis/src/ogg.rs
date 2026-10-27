@@ -1,6 +1,7 @@
 //! Vorbis I Appendix A mapping on the independent Ogg container.
 use crate::{
-    Comments, Error, Identification, Limits, Metadata, PacketDecoder, PcmBlock, Setup, reserve,
+    Comments, DecodeOptions, Error, Identification, Limits, Metadata, PacketDecoder, PcmBlock,
+    Residue2Layout, Setup, reserve,
 };
 use deadlib_audio_decode_ogg::{
     self as container, Demuxer, Packet, Page, PageDecoder, PageHeader, PageReader,
@@ -14,6 +15,8 @@ pub struct OggOptions {
     pub container_limits: container::Limits,
     /// Explicit legacy exception for granule zero on unfinished pages.
     pub allow_zero_span_granules: bool,
+    /// Explicit reference behavior for unaligned type-two residue ranges.
+    pub residue2_layout: Residue2Layout,
     pub max_active_streams: usize,
     /// Combined retained setup, metadata and synthesis elements across active
     /// streams. Container assembly storage has its own independent limit.
@@ -25,6 +28,7 @@ impl Default for OggOptions {
             limits: Limits::default(),
             container_limits: container::Limits::default(),
             allow_zero_span_granules: false,
+            residue2_layout: Residue2Layout::Interleaved,
             max_active_streams: 16,
             max_stream_memory: 256 << 20,
         }
@@ -416,7 +420,13 @@ impl OggDecoder {
                     .and_then(|n| n.checked_sub(setup_memory))
                     .ok_or(Error::LimitExceeded("active stream memory"))?;
                 limits.max_decode_memory = limits.max_decode_memory.min(available);
-                let decoder = PacketDecoder::with_limits(setup, limits)?;
+                let decoder = PacketDecoder::with_options(
+                    setup,
+                    DecodeOptions {
+                        limits,
+                        residue2_layout: options.residue2_layout,
+                    },
+                )?;
                 charge(memory, setup_memory + decoder.storage_bytes(), options)?;
                 stream.memory += setup_memory + decoder.storage_bytes();
                 stream.decoder = Some(decoder);

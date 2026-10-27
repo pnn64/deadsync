@@ -1,0 +1,5 @@
+     Locking 2 packages to highest Rust 1.99.1 compatible versions
+    Checking deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+    Checking deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Checking deadlib-residue-instrumenter-check v0.0.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\residue-geometry-instrumenter-20261027)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.36s

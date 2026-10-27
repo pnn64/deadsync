@@ -33,6 +33,11 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
   [configuration parity](CONFIGURATION_PARITY.md) records the regression.
   The first block primes overlap and returns zero frames. `reset` keeps tables
   and allocations; decode/reset perform zero allocations after construction.
+  `with_options` accepts `DecodeOptions`; `Residue2Layout::Libvorbis` selects
+  the pinned reference's unaligned type-two endpoint/phase behavior. The default
+  uses the published interleave rule. The same field in `OggOptions` and
+  `SeekOptions` preserves the choice through streaming/reset/seeking. See
+  [residue geometry](RESIDUE_GEOMETRY.md) for the difference and evidence.
   `reset_at` also seeds the raw position for caller-managed packet seeks; supply
   the actual preceding packet to prime overlap before consuming output.
 * `Imdct` / `Mdct`: reusable native inverse/forward transforms for all legal 64..=8192 block sizes,
@@ -200,8 +205,9 @@ synthesis, streaming/reset and indexed seek error recovery under AddressSanitize
 
 Packet prefix truncation discards the packet without advancing overlap. A
 truncated floor produces a zero current window for every channel (spec 4.3.2)
-and still overlaps preceding data. Residue truncation retains complete vectors
-decoded so far. Other errors preserve previous overlap for caller recovery.
+and still overlaps preceding data. Residue truncation retains completed work;
+type zero commits only complete partitions. Other errors preserve previous
+overlap for caller recovery.
 `Limits::max_decode_memory` bounds owned buffer/table elements separately from
 setup storage. Nonfinite spectral/transform/overlap results are rejected.
 

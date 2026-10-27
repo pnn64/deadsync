@@ -1,6 +1,7 @@
-use crate::{Error, Residue, bitpack::BitReader, codebook::Codebook};
+use crate::{Error, Residue, Residue2Layout, bitpack::BitReader, codebook::Codebook};
 
 pub(crate) struct Output<'a> {
+    pub layout: Residue2Layout,
     pub spectrum: &'a mut [f32],
     pub stride: usize,
     pub bins: usize,
@@ -125,11 +126,20 @@ fn decode_partition(
         // can begin/end between channels, so keep the cursor across vectors;
         // divide only once per partition rather than once per coefficient.
         let channels = output.bundle.len();
+        let (start, size) = if output.layout == Residue2Layout::Libvorbis {
+            let end = (start + size) / channels * channels;
+            let start = start / channels * channels;
+            (start, end - start)
+        } else {
+            (start, size)
+        };
         let mut channel = start % channels;
         let mut bin = start / channels;
-        for _ in (0..size).step_by(dimensions) {
+        for offset in (0..size).step_by(dimensions) {
             let vector = book.decode_vector(bits)?;
-            for &value in vector {
+            // A rounded reference range may end inside the last VQ vector.
+            // Its codeword is consumed, but components past the range are not.
+            for &value in vector.iter().take(size - offset) {
                 output.spectrum[output.bundle[channel] * output.stride + bin] += value;
                 channel += 1;
                 if channel == channels {
@@ -226,6 +236,7 @@ mod tests {
                     &books,
                     &mut bits,
                     &mut Output {
+                        layout: Residue2Layout::Interleaved,
                         spectrum: &mut actual,
                         stride: 68,
                         bins: 64,
@@ -264,6 +275,7 @@ mod tests {
                         &books,
                         &mut bits,
                         &mut Output {
+                            layout: Residue2Layout::Interleaved,
                             spectrum: &mut spectrum,
                             stride: 32,
                             bins: 32,
@@ -308,6 +320,7 @@ mod tests {
                 &books,
                 &mut bits,
                 &mut Output {
+                    layout: Residue2Layout::Interleaved,
                     spectrum: &mut actual,
                     stride: 68,
                     bins: 64,
@@ -330,57 +343,66 @@ mod tests {
     }
     #[test]
     fn residue_two_scatter_covers_pairs_generic_interleaves_and_truncation() {
-        for dimensions in [1, 2, 3, 4, 8] {
-            let book = vector_book_dimensions(dimensions);
-            for channels in [1usize, 2, 3, 4, 5, 7, 8, 17, 255] {
-                let bundle: Vec<_> = (1..=channels).rev().collect();
-                for start in [0, 1, channels - 1] {
-                    for size in [1usize, 7, 20, 23] {
-                        let vectors = size.div_ceil(dimensions);
-                        let bins = (start + vectors * dimensions).div_ceil(channels) + 1;
-                        let stride = bins + 3;
-                        for bytes in [&[][..], &[0][..], &[0, 0][..]] {
-                            let mut actual = vec![0.125; (channels + 2) * stride];
-                            let mut expected = actual.clone();
-                            let decoded_vectors = vectors.min(bytes.len() * 8);
-                            let decoded = decoded_vectors * dimensions;
-                            for i in 0..decoded {
-                                let flat = start + i;
-                                expected[bundle[flat % channels] * stride + flat / channels] +=
-                                    (i % dimensions + 1) as f32;
-                            }
-                            let mut bits = BitReader::new(bytes);
-                            let result = decode_partition(
-                                2,
-                                &mut bits,
-                                &book,
-                                &mut Output {
-                                    spectrum: &mut actual,
-                                    stride,
-                                    bins,
-                                    bundle: &bundle,
-                                    nonzero: &[],
-                                    classes: &mut [],
-                                },
-                                0,
-                                start,
-                                size,
-                            );
-                            assert_eq!(
-                                result,
-                                if decoded_vectors == vectors {
-                                    Ok(())
-                                } else {
-                                    Err(Error::EndOfPacket)
+        for layout in [Residue2Layout::Interleaved, Residue2Layout::Libvorbis] {
+            for dimensions in [1, 2, 3, 4, 8] {
+                let book = vector_book_dimensions(dimensions);
+                for channels in [1usize, 2, 3, 4, 5, 7, 8, 17, 255] {
+                    let bundle: Vec<_> = (1..=channels).rev().collect();
+                    for start in [0, 1, channels - 1] {
+                        for size in [1usize, 7, 20, 23] {
+                            let (first, count) = if layout == Residue2Layout::Libvorbis {
+                                let first = start / channels * channels;
+                                (first, (start + size) / channels * channels - first)
+                            } else {
+                                (start, size)
+                            };
+                            let vectors = count.div_ceil(dimensions);
+                            let bins = (start + vectors * dimensions).div_ceil(channels) + 1;
+                            let stride = bins + 3;
+                            for bytes in [&[][..], &[0][..], &[0, 0][..]] {
+                                let mut actual = vec![0.125; (channels + 2) * stride];
+                                let mut expected = actual.clone();
+                                let decoded_vectors = vectors.min(bytes.len() * 8);
+                                let decoded = (decoded_vectors * dimensions).min(count);
+                                for i in 0..decoded {
+                                    let flat = first + i;
+                                    expected[bundle[flat % channels] * stride + flat / channels] +=
+                                        (i % dimensions + 1) as f32;
                                 }
-                            );
-                            assert_eq!(bits.position(), decoded_vectors);
-                            assert_eq!(
-                                actual,
-                                expected,
-                                "channels={channels}, start={start}, bytes={}",
-                                bytes.len()
-                            );
+                                let mut bits = BitReader::new(bytes);
+                                let result = decode_partition(
+                                    2,
+                                    &mut bits,
+                                    &book,
+                                    &mut Output {
+                                        layout,
+                                        spectrum: &mut actual,
+                                        stride,
+                                        bins,
+                                        bundle: &bundle,
+                                        nonzero: &[],
+                                        classes: &mut [],
+                                    },
+                                    0,
+                                    start,
+                                    size,
+                                );
+                                assert_eq!(
+                                    result,
+                                    if decoded_vectors == vectors {
+                                        Ok(())
+                                    } else {
+                                        Err(Error::EndOfPacket)
+                                    }
+                                );
+                                assert_eq!(bits.position(), decoded_vectors);
+                                assert_eq!(
+                                    actual,
+                                    expected,
+                                    "channels={channels}, start={start}, bytes={}",
+                                    bytes.len()
+                                );
+                            }
                         }
                     }
                 }
@@ -408,6 +430,7 @@ mod tests {
                 &books,
                 &mut BitReader::new(&[0]),
                 &mut Output {
+                    layout: Residue2Layout::Interleaved,
                     spectrum: &mut spectrum,
                     stride: 4,
                     bins: 4,
@@ -434,6 +457,7 @@ mod tests {
                     &books,
                     &mut BitReader::new(&[]),
                     &mut Output {
+                        layout: Residue2Layout::Interleaved,
                         spectrum: &mut spectrum,
                         stride: 4,
                         bins: 4,
@@ -450,6 +474,7 @@ mod tests {
                 &books,
                 &mut bits,
                 &mut Output {
+                    layout: Residue2Layout::Interleaved,
                     spectrum: &mut spectrum,
                     stride: 4,
                     bins: 4,
@@ -470,6 +495,7 @@ mod tests {
                 &books,
                 &mut bits,
                 &mut Output {
+                    layout: Residue2Layout::Interleaved,
                     spectrum: &mut spectrum,
                     stride: 4,
                     bins: 4,

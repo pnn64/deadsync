@@ -346,7 +346,17 @@ pub fn vorbis_headers(input: &[u8]) {
             }
             if let Ok(id) = vorbis::Identification::parse(&data[..30])
                 && let Ok(setup) = vorbis::Setup::parse(&data[30..], &id, &limits())
-                && let Ok(mut decoder) = vorbis::PacketDecoder::new(setup)
+                && let Ok(mut decoder) = vorbis::PacketDecoder::with_options(
+                    setup,
+                    vorbis::DecodeOptions {
+                        limits: limits(),
+                        residue2_layout: if kind & 0x80 != 0 {
+                            vorbis::Residue2Layout::Libvorbis
+                        } else {
+                            vorbis::Residue2Layout::Interleaved
+                        },
+                    },
+                )
             {
                 for packet in [&[][..], &[0][..], &[0xff; 16][..]] {
                     if let Ok(Some(pcm)) = decoder.decode(packet) {
@@ -476,6 +486,11 @@ pub fn vorbis_stream(input: &[u8]) {
         max_active_streams: 4,
         max_stream_memory: 16 << 20,
         allow_zero_span_granules: control & 1 != 0,
+        residue2_layout: if control & 8 != 0 {
+            vorbis::Residue2Layout::Libvorbis
+        } else {
+            vorbis::Residue2Layout::Interleaved
+        },
     };
     let mut reader = vorbis::OggReader::with_options(data, options);
     let mut expected = Digest::default();
@@ -527,6 +542,7 @@ pub fn vorbis_stream(input: &[u8]) {
             container_limits: container_limits(),
             allow_zero_span_granules: control & 1 != 0,
             trim_to_final_granule: control & 2 != 0,
+            residue2_layout: options.residue2_layout,
             packet_preroll: control & 4 == 0,
             max_index_pages: MAX_PAGES,
             max_index_memory: 8 << 20,

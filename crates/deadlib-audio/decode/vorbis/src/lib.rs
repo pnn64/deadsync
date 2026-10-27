@@ -15,7 +15,7 @@ mod seek;
 mod setup;
 mod transform;
 
-pub use decoder::{PacketDecoder, PcmBlock};
+pub use decoder::{DecodeOptions, PacketDecoder, PcmBlock};
 pub use encoder::{EncodeOptions, EncodedPacket, OggEncoder, PacketEncoder};
 pub use headers::{Channel, CommentField, Comments, Identification, Metadata, channel_order};
 pub use ogg::{
@@ -27,6 +27,18 @@ pub use setup::{
     AudioHeader, Floor, Floor0, Floor1, FloorClass, Mapping, Mode, Residue, Setup, Submap,
 };
 pub use transform::{Imdct, Mdct};
+
+/// Scalar placement for type-two partitions that are not channel aligned.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Residue2Layout {
+    /// Vorbis I section 8: deinterleave the exact flattened scalar range.
+    #[default]
+    Interleaved,
+    /// Match libvorbis 1.3.7's decodevv_add: round both partition endpoints
+    /// down to channel groups and start at the first channel of each group.
+    /// This differs from the published interleave rule for unaligned ranges.
+    Libvorbis,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {

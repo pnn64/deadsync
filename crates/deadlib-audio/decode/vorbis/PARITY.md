@@ -21,6 +21,11 @@ counts/block orders and additional residue setup combinations. It fixes unused
 mode discard, surplus classword termination and stage-free submap consumption,
 and retains the original PCM bounds through wider transform intermediates.
 
+The [geometry follow-up](RESIDUE_GEOMETRY.md) checks mixed stage books, sparse
+channel participation and multiple active submaps through 255 channels. It adds
+an explicit libvorbis layout for type-two ranges whose endpoints are not channel
+aligned, alongside the published interleave rule.
+
 ## Corrected discard and truncation behavior
 
 The 2026-10-27 work independently reproduced two differences against pinned
