@@ -51,8 +51,18 @@ pub fn crc8(data: &[u8]) -> u8 {
     data.iter().fold(0, |crc, &x| CRC8[(crc ^ x) as usize])
 }
 pub fn crc16(data: &[u8]) -> u16 {
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    if data.len() >= 256
+        && std::is_x86_feature_detected!("pclmulqdq")
+        && std::is_x86_feature_detected!("ssse3")
+    {
+        return x86::crc16(data);
+    }
+    crc16_update(0, data)
+}
+
+fn crc16_update(mut crc: u16, data: &[u8]) -> u16 {
     let (chunks, tail) = data.as_chunks::<8>();
-    let mut crc = 0u16;
     for b in chunks {
         crc = CRC16_SLICES[7][((crc >> 8) as u8 ^ b[0]) as usize]
             ^ CRC16_SLICES[6][(crc as u8 ^ b[1]) as usize]
@@ -67,6 +77,120 @@ pub fn crc16(data: &[u8]) -> u16 {
         crc = (crc << 8) ^ CRC16[((crc >> 8) as u8 ^ byte) as usize];
     }
     crc
+}
+
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+#[allow(unsafe_code)]
+mod x86 {
+    use super::*;
+    #[cfg(target_arch = "x86")]
+    use std::arch::x86::*;
+    #[cfg(target_arch = "x86_64")]
+    use std::arch::x86_64::*;
+
+    // x^n modulo x^16 + x^15 + x^2 + 1. The constants are derived here,
+    // rather than relying on reflected-CRC tables or external folding values.
+    const fn power(n: usize) -> i64 {
+        let mut value = 1u16;
+        let mut i = 0;
+        while i < n {
+            value = (value << 1) ^ if value & 0x8000 != 0 { 0x8005 } else { 0 };
+            i += 1;
+        }
+        value as i64
+    }
+
+    pub(super) fn crc16(data: &[u8]) -> u16 {
+        assert!(data.len() >= 64);
+        assert!(std::is_x86_feature_detected!("pclmulqdq"));
+        assert!(std::is_x86_feature_detected!("ssse3"));
+        // SAFETY: instruction sets are checked above. The kernel loads only
+        // checked 16-byte fields within complete 64-byte chunks.
+        unsafe { folded(data) }
+    }
+
+    #[target_feature(enable = "pclmulqdq,ssse3")]
+    unsafe fn folded(data: &[u8]) -> u16 {
+        // SAFETY: every load covers one initialized [u8;16]. The sole store
+        // targets a local [u8;16]. Unaligned intrinsics require no extra padding.
+        unsafe {
+            let reverse = _mm_setr_epi8(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
+            let k512 = _mm_set_epi64x(const { power(576) }, const { power(512) });
+            let k128 = _mm_set_epi64x(const { power(192) }, const { power(128) });
+            macro_rules! load {
+                ($b:expr) => {
+                    _mm_shuffle_epi8(_mm_loadu_si128($b.as_ptr().cast()), reverse)
+                };
+            }
+            macro_rules! fold {
+                ($v:expr, $k:expr) => {
+                    _mm_xor_si128(
+                        _mm_clmulepi64_si128($v, $k, 0x00),
+                        _mm_clmulepi64_si128($v, $k, 0x11),
+                    )
+                };
+            }
+            let (blocks, tail) = data.as_chunks::<64>();
+            let first = blocks[0].as_chunks::<16>().0;
+            let (mut a, mut b, mut c, mut d) = (
+                load!(first[0]),
+                load!(first[1]),
+                load!(first[2]),
+                load!(first[3]),
+            );
+            for block in &blocks[1..] {
+                let fields = block.as_chunks::<16>().0;
+                a = _mm_xor_si128(fold!(a, k512), load!(fields[0]));
+                b = _mm_xor_si128(fold!(b, k512), load!(fields[1]));
+                c = _mm_xor_si128(fold!(c, k512), load!(fields[2]));
+                d = _mm_xor_si128(fold!(d, k512), load!(fields[3]));
+            }
+            // Each lane advances by 512 bits. Recombine consecutive 128-bit
+            // fields; folds preserve congruence modulo the FLAC polynomial.
+            a = _mm_xor_si128(fold!(a, k128), b);
+            a = _mm_xor_si128(fold!(a, k128), c);
+            a = _mm_xor_si128(fold!(a, k128), d);
+            let mut final_bytes = [0u8; 16];
+            _mm_storeu_si128(
+                final_bytes.as_mut_ptr().cast(),
+                _mm_shuffle_epi8(a, reverse),
+            );
+            crc16_update(crc16_update(0, &final_bytes), tail)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn folded_crc_matches_bitwise_polynomial_at_all_alignments_and_tails() {
+        let mut data = vec![0u8; 65536 + 16];
+        let mut state = 9639u64;
+        for byte in &mut data {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            *byte = state as u8;
+        }
+        for offset in 0..16 {
+            let mut reference = 0u16;
+            for len in 0..=data.len() - offset {
+                if len > 0 {
+                    reference ^= u16::from(data[offset + len - 1]) << 8;
+                    for _ in 0..8 {
+                        reference =
+                            (reference << 1) ^ if reference & 0x8000 != 0 { 0x8005 } else { 0 };
+                    }
+                }
+                if len <= 1024 || len.is_multiple_of(127) || len >= 65472 {
+                    let input = &data[offset..offset + len];
+                    assert_eq!(crc16_update(0, input), reference);
+                    assert_eq!(crc16(input), reference, "offset={offset}, len={len}");
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone)]

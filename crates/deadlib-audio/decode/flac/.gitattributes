@@ -1,2 +1,6 @@
 tests/ffmpeg/*.sh text eol=lf
 benches/*.sh text eol=lf
+# Preserve measured report bytes so saved SHA-256 values survive checkout.
+benches/validation/2026-10-27-taps/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+benches/validation/2026-10-27-dense/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+benches/validation/2026-10-27-folded-crc/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

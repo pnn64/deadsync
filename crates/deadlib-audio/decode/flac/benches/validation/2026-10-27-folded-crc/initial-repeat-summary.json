@@ -1,0 +1,74 @@
+[
+  {
+    "case": "subset/06 - blocksize 512.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 10.736578123312817,
+    "min_ns_per_unit": 10.662411306674345,
+    "max_ns_per_unit": 10.91692419825073,
+    "median_ns_per_iteration": 6628763.333333333
+  },
+  {
+    "case": "subset/06 - blocksize 512.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 11.892538602742684,
+    "min_ns_per_unit": 11.803839623150848,
+    "max_ns_per_unit": 11.982857142857142,
+    "median_ns_per_iteration": 7342453.333333333
+  },
+  {
+    "case": "subset/06 - blocksize 512.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 8.636317860477524,
+    "min_ns_per_unit": 8.628369204824788,
+    "max_ns_per_unit": 9.244511090150345,
+    "median_ns_per_iteration": 5332062.647058823
+  },
+  {
+    "case": "subset/14 - wasted bits.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 10.413665343120847,
+    "min_ns_per_unit": 10.370231624339182,
+    "max_ns_per_unit": 10.634075554444959,
+    "median_ns_per_iteration": 4542461.65
+  },
+  {
+    "case": "subset/14 - wasted bits.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 11.923830505787947,
+    "min_ns_per_unit": 11.84195945914966,
+    "max_ns_per_unit": 12.009197508100769,
+    "median_ns_per_iteration": 5201198.714285715
+  },
+  {
+    "case": "subset/14 - wasted bits.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 9.957353557721802,
+    "min_ns_per_unit": 9.901891560421603,
+    "max_ns_per_unit": 10.043943055695499,
+    "median_ns_per_iteration": 4343417.536585365
+  },
+  {
+    "case": "subset/60 - mono audio.flac",
+    "mode": "baseline-frames",
+    "median_ns_per_unit": 2.535918414701006,
+    "min_ns_per_unit": 2.510786756800942,
+    "max_ns_per_unit": 2.5593152913862918,
+    "median_ns_per_iteration": 576279.8519855596
+  },
+  {
+    "case": "subset/60 - mono audio.flac",
+    "mode": "frames",
+    "median_ns_per_unit": 2.5340738242621694,
+    "min_ns_per_unit": 2.503564258737247,
+    "max_ns_per_unit": 2.5892044374159995,
+    "median_ns_per_iteration": 575860.6743421053
+  },
+  {
+    "case": "subset/60 - mono audio.flac",
+    "mode": "libflac-frames",
+    "median_ns_per_unit": 3.2559247182336595,
+    "min_ns_per_unit": 3.2264178331653808,
+    "max_ns_per_unit": 3.2816752207460995,
+    "median_ns_per_iteration": 739899.1244444444
+  }
+]

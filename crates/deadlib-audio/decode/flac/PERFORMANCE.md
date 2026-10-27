@@ -31,8 +31,9 @@ copies. The original full-stream modes include libFLAC reset and metadata parsin
 native full-stream modes construct a new reader each iteration. The added
 `libflac-new*` and `symphonia-new*` modes include allocation, initialization and
 destruction on every pass, matching that lifecycle. Metadata APIs still differ:
-native readers retain metadata while libFLAC's callback ignores it. No allocation
-or memory-parity conclusion is drawn yet.
+native readers retain metadata while libFLAC's callback ignores it. The dense
+storage milestone below reports requested-heap measurements separately from
+throughput; full memory parity remains under evaluation.
 
 The Linux/WSL reference build enables x86 assembly and runtime SIMD, including
 AVX2, and LTO. It does not use the assembly-disabled correctness oracle. Rust
@@ -405,3 +406,54 @@ them. All 10 unit tests, 43 integration/external gates, three doctests and
 Clippy pass. Four fresh 60-second ASan campaigns complete 117,483 executions
 without failure. Test, fuzz, benchmark and memory-probe codec source hashes
 agree in the [validation record](benches/validation/2026-10-27-dense/final-validation.json).
+
+## Polynomial CRC folding, 2026-10-27
+
+Frames of at least 256 bytes use four independent polynomial folds on CPUs
+with PCLMULQDQ and SSSE3. Constants are derived at compile time from FLAC's
+unreflected polynomial. Each fold preserves congruence modulo that polynomial;
+the existing tables reduce the final state and exact tail. Other CPUs and
+short frames retain the table implementation. The private unsafe module checks
+CPU features and loads only complete 16-byte fields within checked 64-byte
+chunks. Frame checksums remain mandatory.
+
+An independent bitwise oracle tests all 16 input alignments, every short length,
+block/tail boundaries and long inputs. The initial version left constant
+derivation at runtime. Eleven-trial repeats and instruction counts exposed the
+resulting short-frame regressions. Explicit `const` evaluation removes that
+work; initial evidence remains beside the corrected measurements.
+
+Five interleaved trials across 27 raw cases give a median 1.060x speedup over
+the dense-storage milestone. The median time is 0.919x the fastest CRC-checking
+reference, with the largest remaining ratio 1.165x on block-size 512. Selected
+complete-file milliseconds follow. Symphonia's CRC pass uses the candidate's
+public CRC helper and also benefits from folding; its known 32-bit stereo PCM
+mismatch remains an explicit failed comparison, excluded from timings.
+
+| Case | Previous raw | Current raw | libFLAC | FFmpeg | Symphonia + CRC |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 01: block 4096 | 6.554 | 6.172 | 5.671 | 8.755 | 7.086 |
+| 06: block 512 | 6.679 | 6.312 | 5.416 | 8.604 | 7.212 |
+| 12: QLP precision 15 | 4.889 | 4.434 | 3.998 | 6.031 | 4.944 |
+| 14: wasted bits | 4.550 | 4.386 | 4.414 | 6.001 | 4.715 |
+| 15: verbatim | 0.723 | 0.158 | 4.651 | 2.364 | 2.018 |
+| 28: high resolution | 20.339 | 17.999 | 16.937 | 22.894 | 19.871 |
+| 44: 8-channel LPC-32 | 372.530 | 344.393 | 574.463 | 600.872 | 469.471 |
+
+The initial whole-input CRC pilot improves approximately 10x. Full pipelines
+still have gaps: common stereo native plus MD5 takes 10.030 ms against libFLAC's
+8.068 ms; high-resolution takes 36.273 versus 28.780 ms. Large LPC-32 remains
+faster at 564.594 versus 766.326 ms. Short order LPC and incomplete-plane replay
+remain follow-up targets; complete performance parity is not claimed.
+
+Reports: [27-case trials](benches/validation/2026-10-27-folded-crc/broad-raw.tsv),
+[pipeline trials](benches/validation/2026-10-27-folded-crc/pipelines-raw.tsv),
+[short-frame repeat](benches/validation/2026-10-27-folded-crc/repeat-raw.tsv).
+The runner now handles zero-sample streams using time per iteration and honors
+explicit cases outside the default set; both are exercised in the retained
+empty-stream check. Build provenance includes the embedded README and toolchain
+configuration, and queries compiler versions from the repository directory.
+All 11 unit tests, 43 integration/external gates, three doctests and Clippy pass.
+Four fresh 60-second ASan campaigns complete 134,345 executions without failure.
+Test, fuzz and benchmark codec hashes agree in the
+[validation record](benches/validation/2026-10-27-folded-crc/final-validation.json).

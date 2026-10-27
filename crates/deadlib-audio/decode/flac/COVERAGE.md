@@ -98,8 +98,9 @@ Native file-backed seeking and validated SEEKTABLE acceleration are covered in
 [SEEKING.md](SEEKING.md), including another 1,533 exact official-corpus seeks.
 Recorded ASan/libFuzzer campaigns are described in [fuzz/README.md](fuzz/README.md).
 Decode benchmarks and measured optimizations are recorded in [PERFORMANCE.md](PERFORMANCE.md).
-Current decoded scratch uses i64 intermediates plus i32 output to keep
-reconstruction safe. The borrowed-input decoder's initial forward seek
+Subframes decode into reusable i32 PCM planes with checked i64 arithmetic;
+only declared 33-bit stereo side planes use separate i64 storage. The
+borrowed-input decoder's initial forward seek
 scans/decompresses frames up to its target, and the lazy index retains one entry
 per visited frame. Whole-stream MD5 is unavailable after a nonzero seek until a
 new sequential pass from sample zero completes.

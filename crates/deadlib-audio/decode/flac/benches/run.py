@@ -56,7 +56,7 @@ def main():
         for path in sorted((args.corpus / group).glob('*.flac')):
             if args.case and not any(f'{group}/{path.name}'.startswith(prefix) for prefix in args.case):
                 continue
-            if args.all or int(path.name[:2]) in selected:
+            if args.all or args.case or int(path.name[:2]) in selected:
                 if path.read_bytes()[:4] == b'fLaC':
                     paths.append(path.resolve())
     if args.quick:
@@ -129,9 +129,10 @@ def main():
                     expected = startup if 'startup' in mode else base
                     assert value['units'] == expected['units'] * iterations, (case, mode)
                     assert value['checksum'] == expected['checksum'] * iterations % (1 << 64), (case, mode)
-                value.update(case=case, trial=trial, ns_per_unit=value['ns']/value['units'],
+                value.update(case=case, trial=trial, ns_per_unit=value['ns']/(value['units'] or iterations),
                              ns_per_iteration=value['ns']/iterations,
-                             unit='encoded byte' if is_crc(mode) else 'channel sample')
+                             unit=('iteration' if not value['units'] else
+                                   'encoded byte' if is_crc(mode) else 'channel sample'))
                 rows.append(value)
         print(f'{case}: {len(cells)} modes x {args.rounds} rounds', flush=True)
         with (args.output / 'raw.tsv').open('w', newline='') as output:

@@ -1,0 +1,122 @@
+[
+  {
+    "target": "primitives",
+    "exit_code": 0,
+    "binary_sha256": "0a62f40534c28709a511ec74c4cb6c3a60e2c35cbb784dd6d8c3ce062ecea439",
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-folded-crc-constants-20261027\\build\\x86_64-pc-windows-msvc\\release\\primitives.exe",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-folded-crc-constants-20261027\\corpus\\primitives",
+      "-max_total_time=60",
+      "-max_len=131072",
+      "-timeout=20",
+      "-rss_limit_mb=2048",
+      "-seed=9639",
+      "-print_final_stats=1",
+      "-artifact_prefix=C:/GitHub/deadsync/target/deadlib-flac-reference/fuzz-perf-folded-crc-constants-20261027/artifacts/primitives/",
+      "-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\fuzz\\flac.dict"
+    ],
+    "stats": {
+      "number_of_executed_units": 70456,
+      "average_exec_per_sec": 1155,
+      "new_units_added": 732,
+      "slowest_unit_time_sec": 0,
+      "peak_rss_mb": 492
+    },
+    "coverage": [
+      70456,
+      519,
+      1428
+    ],
+    "elapsed_upper_bound_seconds": 65.36808489996474
+  },
+  {
+    "target": "frame",
+    "exit_code": 0,
+    "binary_sha256": "2b85fc2d811a6ec0492c2eb89932115d2e15c1cda612356e18906ca55bd5604e",
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-folded-crc-constants-20261027\\build\\x86_64-pc-windows-msvc\\release\\frame.exe",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-folded-crc-constants-20261027\\corpus\\frame",
+      "-max_total_time=60",
+      "-max_len=131072",
+      "-timeout=20",
+      "-rss_limit_mb=2048",
+      "-seed=9640",
+      "-print_final_stats=1",
+      "-artifact_prefix=C:/GitHub/deadsync/target/deadlib-flac-reference/fuzz-perf-folded-crc-constants-20261027/artifacts/frame/",
+      "-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\fuzz\\flac.dict"
+    ],
+    "stats": {
+      "number_of_executed_units": 45001,
+      "average_exec_per_sec": 737,
+      "new_units_added": 689,
+      "slowest_unit_time_sec": 0,
+      "peak_rss_mb": 504
+    },
+    "coverage": [
+      45001,
+      2385,
+      7370
+    ],
+    "elapsed_upper_bound_seconds": 65.27415159996599
+  },
+  {
+    "target": "native",
+    "exit_code": 0,
+    "binary_sha256": "28a18a5c816642a488aabff7b99a98a9e9b662bfd9587138b77c3ce758dc0db9",
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-folded-crc-constants-20261027\\build\\x86_64-pc-windows-msvc\\release\\native.exe",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-folded-crc-constants-20261027\\corpus\\native",
+      "-max_total_time=60",
+      "-max_len=131072",
+      "-timeout=20",
+      "-rss_limit_mb=2048",
+      "-seed=9641",
+      "-print_final_stats=1",
+      "-artifact_prefix=C:/GitHub/deadsync/target/deadlib-flac-reference/fuzz-perf-folded-crc-constants-20261027/artifacts/native/",
+      "-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\fuzz\\flac.dict"
+    ],
+    "stats": {
+      "number_of_executed_units": 16240,
+      "average_exec_per_sec": 266,
+      "new_units_added": 584,
+      "slowest_unit_time_sec": 0,
+      "peak_rss_mb": 509
+    },
+    "coverage": [
+      16240,
+      2428,
+      8390
+    ],
+    "elapsed_upper_bound_seconds": 65.17087780009024
+  },
+  {
+    "target": "ogg",
+    "exit_code": 0,
+    "binary_sha256": "4c59f2c589f07a176537f02a2fa312e2037a7fc671c13f0cb2bad7ff451d54a8",
+    "arguments": [
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-folded-crc-constants-20261027\\build\\x86_64-pc-windows-msvc\\release\\ogg.exe",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\fuzz-perf-folded-crc-constants-20261027\\corpus\\ogg",
+      "-max_total_time=60",
+      "-max_len=131072",
+      "-timeout=20",
+      "-rss_limit_mb=2048",
+      "-seed=9642",
+      "-print_final_stats=1",
+      "-artifact_prefix=C:/GitHub/deadsync/target/deadlib-flac-reference/fuzz-perf-folded-crc-constants-20261027/artifacts/ogg/",
+      "-dict=C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\fuzz\\flac.dict"
+    ],
+    "stats": {
+      "number_of_executed_units": 2648,
+      "average_exec_per_sec": 42,
+      "new_units_added": 198,
+      "slowest_unit_time_sec": 0,
+      "peak_rss_mb": 390
+    },
+    "coverage": [
+      2648,
+      2984,
+      7747
+    ],
+    "elapsed_upper_bound_seconds": 65.07073359994683
+  }
+]

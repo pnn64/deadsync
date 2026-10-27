@@ -1,0 +1,74 @@
+group	file	frames	samples	libFLAC	seeks	integrity
+subset	01 - blocksize 4096.flac	76	308700	exact	21	Verified
+subset	02 - blocksize 4608.flac	67	308700	exact	21	Verified
+subset	03 - blocksize 16.flac	19294	308700	exact	21	Verified
+subset	04 - blocksize 192.flac	1608	308700	exact	21	Verified
+subset	05 - blocksize 254.flac	1216	308700	exact	21	Verified
+subset	06 - blocksize 512.flac	603	308700	exact	21	Verified
+subset	07 - blocksize 725.flac	426	308700	exact	21	Verified
+subset	08 - blocksize 1000.flac	309	308700	exact	21	Verified
+subset	09 - blocksize 1937.flac	160	308700	exact	21	Verified
+subset	10 - blocksize 2304.flac	135	309133	exact	21	Verified
+subset	11 - partition order 8.flac	60	243074	exact	21	Verified
+subset	12 - qlp precision 15 bit.flac	48	218644	exact	21	Verified
+subset	13 - qlp precision 2 bit.flac	48	218498	exact	21	Verified
+subset	14 - wasted bits.flac	426	218101	exact	21	Verified
+subset	15 - only verbatim subframes.flac	54	220254	exact	21	Verified
+subset	16 - partition order 8 containing escaped partitions.flac	51	205886	exact	21	Verified
+subset	17 - all fixed orders.flac	204	234514	exact	21	Verified
+subset	18 - precision search.flac	54	219868	exact	21	Verified
+subset	19 - samplerate 35467Hz.flac	87	353378	exact	21	Verified
+subset	20 - samplerate 39kHz.flac	48	193198	exact	21	Verified
+subset	21 - samplerate 22050Hz.flac	27	109266	exact	21	Verified
+subset	22 - 12 bit per sample.flac	54	218666	exact	21	Verified
+subset	23 - 8 bit per sample.flac	84	339973	exact	21	Verified
+subset	24 - variable blocksize file created with flake revision 264.flac	404	1102556	exact	21	Verified
+subset	25 - variable blocksize file created with flake revision 264, modified to create smaller blocks.flac	5191	1102793	exact	21	Verified
+subset	26 - variable blocksize file created with CUETools.Flake 2.1.6.flac	337	1101528	exact	21	Verified
+subset	27 - old format variable blocksize file created with Flake 0.11.flac	390	1133090	exact	21	Verified
+subset	28 - high resolution audio, default settings.flac	205	838036	exact	21	Verified
+subset	29 - high resolution audio, blocksize 16384.flac	47	768601	exact	21	Verified
+subset	30 - high resolution audio, blocksize 13456.flac	58	768601	exact	21	Verified
+subset	31 - high resolution audio, using only 32nd order predictors.flac	94	767880	exact	21	Verified
+subset	32 - high resolution audio, partition order 8 containing escaped partitions.flac	188	767396	exact	21	Verified
+subset	33 - samplerate 192kHz.flac	376	1539131	exact	21	Verified
+subset	34 - samplerate 192kHz, using only 32nd order predictors.flac	94	1533344	exact	21	Verified
+subset	35 - samplerate 134560Hz.flac	264	1077322	exact	21	Verified
+subset	36 - samplerate 384kHz.flac	752	3078272	exact	21	Verified
+subset	37 - 20 bit per sample.flac	188	767637	exact	21	Verified
+subset	38 - 3 channels (3.0).flac	42	168210	exact	21	Verified
+subset	39 - 4 channels (4.0).flac	62	253762	exact	21	Verified
+subset	40 - 5 channels (5.0).flac	62	251076	exact	21	Verified
+subset	41 - 6 channels (5.1).flac	88	357223	exact	21	Verified
+subset	42 - 7 channels (6.1).flac	100	405749	exact	21	Verified
+subset	43 - 8 channels (7.1).flac	108	438530	exact	21	Verified
+subset	44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac	177	2896157	exact	21	Verified
+subset	45 - no total number of samples set.flac	83	336410	exact	21	Verified
+subset	46 - no min-max framesize set.flac	70	282866	exact	21	Verified
+subset	47 - only STREAMINFO.flac	57	232608	exact	21	Verified
+subset	48 - Extremely large SEEKTABLE.flac	64	259884	exact	21	Verified
+subset	49 - Extremely large PADDING.flac	64	258939	exact	21	Verified
+subset	50 - Extremely large PICTURE.flac	65	265617	exact	21	Verified
+subset	51 - Extremely large VORBISCOMMENT.flac	71	289972	exact	21	Verified
+subset	52 - Extremely large APPLICATION.flac	78	317876	exact	21	Verified
+subset	53 - CUESHEET with very many indexes.flac	711	2910025	exact	21	Verified
+subset	54 - 1000x repeating VORBISCOMMENT.flac	106	433151	exact	21	Verified
+subset	55 - file 48-53 combined.flac	646	2646000	exact	21	Verified
+subset	56 - JPG PICTURE.flac	54	220026	exact	21	Verified
+subset	57 - PNG PICTURE.flac	55	221623	exact	21	Verified
+subset	58 - GIF PICTURE.flac	54	219826	exact	21	Verified
+subset	59 - AVIF PICTURE.flac	55	221423	exact	21	Verified
+subset	60 - mono audio.flac	56	227247	exact	21	Verified
+subset	61 - predictor overflow check, 16-bit.flac	56	227247	exact	21	Verified
+subset	62 - predictor overflow check, 20-bit.flac	56	227247	exact	21	Verified
+subset	63 - predictor overflow check, 24-bit.flac	56	227247	exact	21	Verified
+subset	64 - rice partitions with escape code zero.flac	46	187998	exact	21	Verified
+uncommon	01 - changing samplerate.flac	136	555747	exact	21	Unavailable
+uncommon	02 - increasing number of channels.flac	156	638856	exact	21	Unavailable
+uncommon	03 - decreasing number of channels.flac	92	375226	exact	21	Unavailable
+uncommon	04 - changing bitdepth.flac	121	495232	exact	21	Unavailable
+uncommon	05 - 32bps audio.flac	126	515577	exact	21	Verified
+uncommon	06 - samplerate 768kHz.flac	1966	8049619	exact	21	Verified
+uncommon	07 - 15 bit per sample.flac	127	518462	exact	21	Verified
+uncommon	08 - blocksize 65535.flac	8	465905	exact	21	Verified
+uncommon	09 - Rice partition order 15.flac	4	105083	exact	21	Verified
