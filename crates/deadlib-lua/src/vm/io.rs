@@ -104,8 +104,13 @@ pub(super) fn path(bytes: &[u8]) -> std::borrow::Cow<'_, std::path::Path> {
         }
     }
 }
-pub(super) fn message(code: i32) -> &'static [u8] {
-    match code {
+pub(super) fn message(code: i32) -> std::borrow::Cow<'static, [u8]> {
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    {
+        std::borrow::Cow::Owned(crate::locale::posix::error_message(code))
+    }
+    #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+    std::borrow::Cow::Borrowed(match code {
         0 => b"No error",
         2 => b"No such file or directory",
         8 => b"Exec format error",
@@ -122,7 +127,7 @@ pub(super) fn message(code: i32) -> &'static [u8] {
         34 => b"Result too large",
         41 => b"Directory not empty",
         _ => b"Input/output error",
-    }
+    })
 }
 fn runtime(text: impl Into<Box<str>>) -> Error {
     Error::new(ErrorKind::Runtime, 0, text)
@@ -391,7 +396,7 @@ impl Vm {
             bytes.extend_from_slice(c_bytes(path));
             bytes.extend_from_slice(b": ");
         }
-        bytes.extend_from_slice(message(code));
+        bytes.extend_from_slice(&message(code));
         let text = self.finish_buffer(bytes);
         self.resize_registers(self.registers.len().max(base + 3));
         self.registers[base] = Value::Nil;
@@ -403,7 +408,7 @@ impl Vm {
     fn file_argument_error(&self, path: &[u8], code: i32) -> Error {
         let mut detail = c_bytes(path).to_vec();
         detail.extend_from_slice(b": ");
-        detail.extend_from_slice(message(code));
+        detail.extend_from_slice(&message(code));
         self.argument_error(0, &detail)
     }
     fn io_result(&mut self, base: usize, result: Result<(), i32>) -> usize {
@@ -475,7 +480,11 @@ impl Vm {
             Err(code) => {
                 self.buffers.push(bytes);
                 ERRNO.set(code);
-                Err(runtime(String::from_utf8_lossy(message(code)).into_owned()))
+                Err(Error::from_bytes(
+                    ErrorKind::Runtime,
+                    0,
+                    message(code).into_owned(),
+                ))
             }
         }
     }

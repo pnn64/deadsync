@@ -320,8 +320,9 @@ reference's buffered seek cookies. Captured stdout keeps logical byte order acro
 
 The partial `os` library supplies `difftime`, `getenv`, `remove` and `tmpname`.
 Time differences use the pinned MSVC 64-bit integer conversion and validation
-order. Temporary names use the system temporary directory; Windows calls return
-unused names without creating files. POSIX calls create private empty files.
+order. Windows temporary names use the system temporary directory and return
+unused names without creating files. POSIX calls reserve extensionless private
+empty files under `/tmp`.
 Names and numeric components of temporary names are implementation-dependent.
 Environment access reads the host process environment. Windows paths, environment
 names and values currently use UTF-8 conversion; reference checks cover ASCII.
@@ -331,7 +332,7 @@ open streams and shared stdout before terminating the process without Lua
 finalizers. Windows shell selection, raw command lines and exit-code widths match
 the pinned CRT probes. An explicitly empty Windows `COMSPEC` aborts as in that
 reference build. The interpreter and compiler use safe Rust. Native declarations
-are restricted to the Windows OS/locale bridges and narrow POSIX clock/calendar bridges. These
+are restricted to the Windows OS/locale bridges and narrow POSIX clock/calendar/locale bridges. These
 add no Cargo dependency or C Lua linkage.
 
 `clock` uses the native runtime's clock and preserves its epoch and units. The
@@ -351,10 +352,10 @@ the native formatter, retaining the reference's NUL and percent handling.
 Calendar result tables reserve their known field count and charge that storage
 to the collector before filling the fields.
 Calendar validity, DST rules and format extensions follow the pinned runtime.
-Windows has differential runtime coverage; selected Linux/Apple targets have
-compile coverage only. Android declarations need target validation. Other
+Windows and Linux/glibc have differential runtime coverage; selected Apple
+targets have compile coverage only. Android declarations need target validation. Other
 targets report unsupported calendar operations.
-`setlocale` supports all six Lua 5.1 categories on Windows/MSVC, including native
+`setlocale` supports all six Lua 5.1 categories on Windows/MSVC and Linux/glibc, including native
 names, aliases, default selection, queries and unavailable locales. Numeric
 conversion, formatting and stream scanning follow the numeric decimal point;
 source literals retain Lua's period syntax. Byte character classes, casing,
@@ -362,11 +363,16 @@ identifier scanning and cached patterns follow the ctype category. Pattern
 iterators and replacement callbacks observe subsequent locale changes. String
 ordering uses native collation, including Lua 5.1's embedded-NUL segmentation;
 equality remains byte identity. Calendar formatting follows the time category.
-Locale state is shared between Rust VMs. The native bridge holds the CRT locale
-lock while copying its returned storage. Cached Rust views are updated through
-this Lua API; external CRT locale changes and host per-thread locale modes are
-outside the current contract. Other targets report unsupported native locales.
-Broader locale/encoding coverage remains unfinished.
+Locale state is shared between Rust VMs. Windows copies native storage under
+the CRT locale lock. Linux/glibc owns native locale objects and borrows them
+under a mutex for collation, dates and error messages. Character classes and
+case maps publish together under a read/write lock. Linux locale changes affect
+engine VMs without mutating the host's process-global C locale. External native
+bindings and host locale synchronization remain outside this contract. Other
+libc ABIs report unsupported native locales. The
+[POSIX locale checks](../../docs/testing/2026-10-27-rust-lua-posix-locale.md)
+cover queries, category restoration, encodings, numeric streams and concurrent
+native use. Broader locale/encoding coverage remains unfinished.
 
 Physical stdout is shared across VMs and buffers logical bytes before Windows
 newline translation. `print`, stdout writes and `setvbuf` share that buffer;
@@ -524,7 +530,7 @@ value type for its observable sentinel.
 Other standard libraries, native C-library loading, complete diagnostic text and
 debug behavior, cache eviction/package integration, richer Rust host objects and
 later dialects remain unfinished. Numeric conversion edge cases and resource
-limits also need broader compatibility work. Native locales require Windows/MSVC,
+limits also need broader compatibility work. Native locales require Windows/MSVC or Linux/glibc,
 and broader native resource bounds need validation.
 Broader source/register diagnostics, hook coverage and native
 scratch-stack behavior remain open. The API and bytecode

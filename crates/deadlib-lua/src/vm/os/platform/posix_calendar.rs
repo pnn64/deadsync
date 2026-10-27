@@ -1,5 +1,7 @@
 //! POSIX time conversion; native tm timezone pointers never leave this module.
 use super::Calendar;
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+use std::ffi::c_void;
 use std::{
     ffi::{c_char, c_long},
     ptr,
@@ -51,11 +53,20 @@ unsafe extern "C" {
         link_name = "__localtime64_r"
     )]
     fn localtime_r(time: *const Time, out: *mut NativeDate) -> *mut NativeDate;
+    #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
     fn strftime(
         out: *mut c_char,
         size: usize,
         format: *const c_char,
         date: *const NativeDate,
+    ) -> usize;
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    fn strftime_l(
+        out: *mut c_char,
+        size: usize,
+        format: *const c_char,
+        date: *const NativeDate,
+        locale: *mut c_void,
     ) -> usize;
 }
 fn converted(value: i64, utc: bool) -> Option<NativeDate> {
@@ -94,11 +105,26 @@ pub(super) fn format_date(value: i64, utc: bool, format: &[u8], output: &mut Vec
     let Some(date) = converted(value, utc) else {
         return false;
     };
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    let locale = crate::locale::posix::current();
     super::super::calendar::format_with(format, output, |spec, bytes| {
         // SAFETY: the freshly converted native tm and its platform timezone
         // context remain inside this call. Both byte buffers have valid bounds
         // and the conversion string is NUL-terminated. No Lua callback occurs.
+        // On glibc, locale owns and locks the explicit native locale throughout
+        // formatting; global host locale changes cannot invalidate its data.
         unsafe {
+            #[cfg(all(target_os = "linux", target_env = "gnu"))]
+            {
+                strftime_l(
+                    bytes.as_mut_ptr().cast(),
+                    bytes.len(),
+                    spec.as_ptr().cast(),
+                    &date,
+                    locale.as_ptr(),
+                )
+            }
+            #[cfg(not(all(target_os = "linux", target_env = "gnu")))]
             strftime(
                 bytes.as_mut_ptr().cast(),
                 bytes.len(),

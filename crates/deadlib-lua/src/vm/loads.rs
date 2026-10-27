@@ -230,7 +230,7 @@ impl Vm {
         bytes.push(b' ');
         bytes.extend_from_slice(&name[1..]);
         bytes.extend_from_slice(b": ");
-        bytes.extend_from_slice(io::message(code));
+        bytes.extend_from_slice(&io::message(code));
         self.finish_buffer(bytes)
     }
     fn finish_file_load(&mut self) {

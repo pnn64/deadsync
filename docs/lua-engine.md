@@ -30,7 +30,7 @@ performance JSON keeps its recorded measurement provenance.
 | Object model and memory | Copyable tags and generation-bearing numeric IDs; flat reusable arenas; vector registers, frames, prototypes and upvalue cells; interned strings; contiguous table arrays and indexed hash entries. Deleted keys retain traversal positions until rebuild. Host roots check VM ownership; raw values must stay in their originating VM. Capacity-based heap estimates and object counts are exposed. |
 | Garbage collection | Iterative tracing, cyclic reclamation, Lua 5.1 weak tables, compiler register maps, host roots, pressure checks and collector controls exist. Collected threads close surviving cells; cached pattern/program bindings are reclaimed. Full userdata has environments, metatables, byte storage and Lua 5.1 proxies. Finalizers support creation order, resurrection, weak-reference rules, nested collection, error identity and shutdown. Marking advances a persistent frontier; mutator barriers and final stack/open-cell/metatable refreshes preserve new references. Table propagation advances in 64-slot physical slices, restarting after compaction, hash-to-array moves and metatable changes. Sweeping advances in bounded arena-slot batches. Other object scans, final root/metatable/weak processing, cache rebuilding and callback batches still contain atomic work; fully bounded pauses and broader resource tests remain open. Full collection, explicit steps and host collection now resume automatic collection; successful finalizers restore saved controls while errors retain changes. Pending finalization resumes before a new mark/sweep; the retained finalizer-error/large-pause regression now matches the reference. Exact PUC work units and fully incremental behavior remain unfinished. |
 | Coroutines | Shared-heap threads have separate register/frame vectors and environments, explicit resume/yield scheduling, wrappers/status, and cross-thread upvalue access. Lua 5.1 native/metamethod yield restrictions, inherited C-call depth, error identity, quota recovery and reclamation with escaping cells are tested. Debug inspection, local/upvalue mutation, tracebacks and per-thread hooks reach other thread stacks and shared cells. New threads inherit hook controls without inheriting the Lua callback. Hook/traceback callbacks support child resumes, collection and quota recovery. Full hook/diagnostic parity and broader resource tests remain open. |
-| Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments, `loadstring` and protected reader-based text `load`. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Initial I/O includes file userdata, temporary/named files, defaults, pipes, reads/writes/seeks, buffering, iterators and GC closure. A shared registry stores file tags and builtin `_LOADED` entries. Package loading provides preloaded/Lua-file/custom loaders, import caching and 5.1 module environments. Light userdata supplies unmanaged identities and the observable import sentinel. OS support includes calendar conversion/formatting, clocks, time differences, environment queries, file removal/rename, temporary names, shell execution and process exit. Windows/MSVC native locales connect numeric conversion/formatting, ctype, patterns, collation and calendar formatting. Native locales on other targets, remaining base functions, native C-library loading, broader debug and I/O/device/encoding behavior and numeric/diagnostic compatibility remain open. |
+| Standard libraries | Expanded base library includes radix conversion, iteration, metatables, protected calls, output, environments, `loadstring` and protected reader-based text `load`. String byte operations, patterns, replacement callbacks, formatting, raw table operations/traversal/sorting, coroutine functions and the 5.1 math function set exist. Initial I/O includes file userdata, temporary/named files, defaults, pipes, reads/writes/seeks, buffering, iterators and GC closure. A shared registry stores file tags and builtin `_LOADED` entries. Package loading provides preloaded/Lua-file/custom loaders, import caching and 5.1 module environments. Light userdata supplies unmanaged identities and the observable import sentinel. OS support includes calendar conversion/formatting, clocks, time differences, environment queries, file removal/rename, temporary names, shell execution and process exit. Windows/MSVC and Linux/glibc native locales connect numeric conversion/formatting, ctype, patterns, collation and calendar formatting. Other libc ABIs, remaining base functions, native C-library loading, broader debug and I/O/device/encoding behavior and numeric/diagnostic compatibility remain open. |
 | Persistent compiled cache | Opt-in ProgramCache persists the shared bytecode, constants, collector/debug metadata and native re-export words. Entries bind the format/dialect/target, Cargo compiler build and lexer character classes; full source/name equality guards filename collisions. Bounded decoding, integrity checks, Program verification and native tree/range checks reject incompatible entries. Temporary-file replacement and compile fallback preserve availability. Fresh-process source/native reloads and concurrent writers are tested. Directory eviction, a memory cache and package/CLI integration remain open; tiny/native inputs may reload more slowly than recompilation. |
 | Native host calls | Builtins and registered Rust function pointers use numeric native IDs and register argument ranges. HostCall borrows arguments, writes separate results and accesses up to 255 traced/mutable Lua captures. Private owned binding data stays separate from Lua upvalues. Protected nested Lua/native calls preserve outer frames, share the instruction quota and return arbitrary error values to Rust. Unprotected stack calls retain failing child frames for outer error handlers. Hooks, coroutine callers, resumed children, finalizers, preload modules and per-VM cached-program bindings are tested. Callback and nested-call measurements exist. Suspending Rust callback stacks, richer Rust host objects and broader error/overhead work remain open. |
 | Lua 5.2â€“5.5 | Unimplemented. Investigated differences below must extend shared infrastructure with per-version oracle gates. |
@@ -41,13 +41,15 @@ performance JSON keeps its recorded measurement provenance.
 | Performance | Deferred until full standalone Lua 5.1 parity. Preserve existing reference harnesses and historical measurements; later work covers throughput, startup, compile cost, allocations, live/peak memory and representative scaling. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
-Unchanged `all.lua` and `main.lua` now run against both standalone CLIs, with
-retained failures directing compatibility fixes. Linux `main.lua` passes in
-both engines after fixing POSIX temporary module names. Rust `all.lua` first
-fails at missing POSIX locale support; the 64-bit C reference later fails the
-`big.lua:11` overflow assertion. Windows stops in `main.lua:53` in both engines.
-Next work should implement native POSIX locale behavior and continue the full
-suite investigation. The C/auxiliary APIs, production native loading and
+Unchanged `all.lua` and `main.lua` run against both standalone CLIs, with retained
+failures directing compatibility fixes. Linux `main.lua` passes in both engines.
+Linux/glibc locale support now lets Rust `all.lua` reach the same `big.lua:11`
+overflow assertion as the 64-bit C reference. Windows stops in `main.lua:53` in
+both engines. The broad Linux Rust audit retains six failing targets, also
+present in the parent: debug locals, I/O, native errors, OS, package and stdlib.
+Next work should resolve Linux numeric-stream consumption and argument-error
+order, repair platform-dependent fixtures/reference-bridge failures, and find
+a valid target for the full suite's large-string overflow test. The C/auxiliary APIs, production native loading and
 remaining language, library, debug, GC and resource behavior must also be
 completed. Selected passing probes and declaration counts do not close these
 gates. Production migration also requires the subsequent performance gates.
@@ -185,6 +187,18 @@ failure to a pass; the reference passes throughout. Both `all.lua` failures and
 the common Windows entry-point failure remain visible. The internal T module
 and suite native libraries are not provided by this stock-mode runner, so
 their automatically skipped tests are not established by these results.
+
+The [POSIX locale checks](testing/2026-10-27-rust-lua-posix-locale.md) add
+Linux/glibc category selection, queries, aliases, composite restoration and
+environment defaults. Owned immutable native locale objects support ctype,
+collation, calendar text and raw errno messages. Engine VMs share the selection;
+the host's process-global C locale remains unchanged. External native bindings
+and other libc ABIs remain open. Character classes/case maps publish as one
+locked snapshot, fixing a threaded reader's exposure to cleared mappings.
+Thirty-six standalone locale programs match the official C reference, and both
+Linux full-suite runs now stop at `big.lua:11`. Three new Linux Rust groups pass.
+The broad Linux audit remains red in the same six targets as its parent; it is
+retained alongside the passing Windows corpus rather than counted as parity.
 
 GC coverage includes cyclic and weak graphs, collection inside native callbacks,
 collected suspended/failed threads with escaping cells, 20,000-link graphs,

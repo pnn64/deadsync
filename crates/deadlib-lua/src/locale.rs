@@ -1,35 +1,54 @@
 //! Lua's shared locale state, with Rust fast paths for the initial C locale.
 use crate::Error;
-#[cfg(not(all(windows, target_env = "msvc")))]
+#[cfg(not(any(
+    all(windows, target_env = "msvc"),
+    all(target_os = "linux", target_env = "gnu")
+)))]
 use crate::ErrorKind;
 use std::{
     borrow::Cow,
     cmp::Ordering,
     sync::{
-        LazyLock, Mutex,
-        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering as AtomicOrdering},
+        LazyLock, Mutex, RwLock,
+        atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering},
     },
 };
 
 static DECIMAL: LazyLock<Mutex<Vec<u8>>> = LazyLock::new(|| Mutex::new(b".".to_vec()));
 static DECIMAL_DOT: AtomicBool = AtomicBool::new(true);
-static CTYPE_C: AtomicBool = AtomicBool::new(true);
 static COLLATE_C: AtomicBool = AtomicBool::new(true);
 static REVISION: AtomicU64 = AtomicU64::new(0);
-// Low/upper mapped bytes and the platform character-class mask in one word.
-static CTYPE: [AtomicU32; 256] = [const { AtomicU32::new(0) }; 256];
+// Publish the class/case table and its C-locale flag as one snapshot.
+struct Ctype {
+    values: [u32; 256],
+    is_c: bool,
+}
+static CTYPE: RwLock<Ctype> = RwLock::new(Ctype {
+    values: [0; 256],
+    is_c: true,
+});
 
 #[cfg(all(windows, target_env = "msvc"))]
 #[allow(unsafe_code)]
 mod windows;
+#[cfg(all(windows, target_env = "msvc"))]
+use windows as native;
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+#[allow(unsafe_code)]
+pub(crate) mod posix;
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+use posix as native;
 
 pub(crate) fn set(name: Option<&[u8]>, category: usize) -> Result<Option<Vec<u8>>, Error> {
-    #[cfg(all(windows, target_env = "msvc"))]
+    #[cfg(any(
+        all(windows, target_env = "msvc"),
+        all(target_os = "linux", target_env = "gnu")
+    ))]
     {
         let mut decimal = DECIMAL
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let Some(change) = windows::set(name, category) else {
+        let Some(change) = native::set(name, category) else {
             return Ok(None);
         };
         if let Some(cache) = change.cache {
@@ -38,10 +57,12 @@ pub(crate) fn set(name: Option<&[u8]>, category: usize) -> Result<Option<Vec<u8>
                 DECIMAL_DOT.store(decimal.as_slice() == b".", AtomicOrdering::Release);
             }
             if let Some((ctype, ctype_c)) = cache.ctype {
-                for (slot, value) in CTYPE.iter().zip(ctype) {
-                    slot.store(value, AtomicOrdering::Relaxed);
-                }
-                CTYPE_C.store(ctype_c, AtomicOrdering::Release);
+                *CTYPE
+                    .write()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Ctype {
+                    values: ctype,
+                    is_c: ctype_c,
+                };
                 REVISION.fetch_add(1, AtomicOrdering::Release);
             }
             if let Some(collate_c) = cache.collate_c {
@@ -50,7 +71,10 @@ pub(crate) fn set(name: Option<&[u8]>, category: usize) -> Result<Option<Vec<u8>
         }
         Ok(Some(change.result))
     }
-    #[cfg(not(all(windows, target_env = "msvc")))]
+    #[cfg(not(any(
+        all(windows, target_env = "msvc"),
+        all(target_os = "linux", target_env = "gnu")
+    )))]
     {
         let _ = (name, category);
         Err(Error::new(
@@ -85,7 +109,11 @@ pub(crate) fn localize(bytes: &mut Vec<u8>) {
     }
 }
 fn mask(byte: u8) -> u32 {
-    CTYPE[usize::from(byte)].load(AtomicOrdering::Relaxed) >> 16
+    CTYPE
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .values[usize::from(byte)]
+        >> 16
 }
 pub(crate) fn is_alpha(byte: u8) -> bool {
     byte.is_ascii_alphabetic() || (byte >= 128 && mask(byte) & 0x103 != 0)
@@ -133,7 +161,10 @@ pub(crate) fn class(byte: u8, class: u8) -> bool {
     hit != class.is_ascii_uppercase()
 }
 pub(crate) fn map_case(source: &[u8], upper: bool, output: &mut Vec<u8>) {
-    if CTYPE_C.load(AtomicOrdering::Acquire) {
+    let ctype = CTYPE
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    if ctype.is_c {
         output.extend(source.iter().map(|b| {
             if upper {
                 b.to_ascii_uppercase()
@@ -146,7 +177,7 @@ pub(crate) fn map_case(source: &[u8], upper: bool, output: &mut Vec<u8>) {
         output.extend(
             source
                 .iter()
-                .map(|&b| (CTYPE[usize::from(b)].load(AtomicOrdering::Relaxed) >> shift) as u8),
+                .map(|&b| (ctype.values[usize::from(b)] >> shift) as u8),
         );
     }
 }
@@ -154,11 +185,17 @@ pub(crate) fn compare(left: &[u8], right: &[u8]) -> Ordering {
     if COLLATE_C.load(AtomicOrdering::Acquire) {
         return left.cmp(right);
     }
-    #[cfg(all(windows, target_env = "msvc"))]
+    #[cfg(any(
+        all(windows, target_env = "msvc"),
+        all(target_os = "linux", target_env = "gnu")
+    ))]
     {
-        windows::compare(left, right)
+        native::compare(left, right)
     }
-    #[cfg(not(all(windows, target_env = "msvc")))]
+    #[cfg(not(any(
+        all(windows, target_env = "msvc"),
+        all(target_os = "linux", target_env = "gnu")
+    )))]
     {
         left.cmp(right)
     }
