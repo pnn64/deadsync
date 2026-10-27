@@ -158,6 +158,17 @@ def baseline_worker(revision: str, run: Path) -> tuple[Path, dict]:
             destination = baseline / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(source.read(member))
+    adjustments = []
+    seek_source = baseline / "vorbis/src/seek.rs"
+    if seek_source.exists() and "pub fn read_packet(" not in seek_source.read_text(encoding="utf-8"):
+        # Older production revisions expose only page-sized reads. Keep their
+        # actual public API when compiling today's validated seek workload.
+        adapter = baseline / "vorbis/benches/support/seek.rs"
+        text = adapter.read_text(encoding="utf-8")
+        if text.count(".read_packet(") != 1:
+            raise ValueError("expected one native packet-read benchmark call")
+        adapter.write_text(text.replace(".read_packet(", ".read_next("), encoding="utf-8")
+        adjustments.append("native seek consumption: read_packet -> historical read_next API")
     profiles = tomllib.loads((REPO / "Cargo.toml").read_text(encoding="utf-8"))["profile"]
     workspace = '[workspace]\nmembers = ["ogg", "vorbis"]\nresolver = "3"\n'
     for profile in ("release", "bench"):
@@ -175,6 +186,9 @@ def baseline_worker(revision: str, run: Path) -> tuple[Path, dict]:
     return executable, {"revision": revision, "binary_sha256": sha(executable),
                         "source_archive_sha256": sha(archive), "cargo_artifact_profile": profile,
                         "registry_packages": registry_packages(build),
+                        "adapter_adjustments": adjustments,
+                        "adapter_source_sha256": {str(p.relative_to(baseline)).replace("\\", "/"): sha(p)
+                            for p in (baseline / "vorbis/benches").rglob("*") if p.is_file()},
                         "source_sha256": {str(p.relative_to(baseline)).replace("\\", "/"): sha(p)
                             for package in ("ogg", "vorbis") for p in (baseline / package / "src").rglob("*") if p.is_file()}}
 

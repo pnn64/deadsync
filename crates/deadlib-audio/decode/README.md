@@ -97,6 +97,12 @@ Five files pass 500 shared reference-PCM seek requests. Native's requested heap
 is smaller than Symphonia's here, while eager two-pass indexing and page-sized
 decoding leave clear seek performance gaps. Raw trials, counter rows and hashes
 are retained; this milestone changes no production decoder behavior.
+The following packet-read update adds generic resumable Ogg capture and
+`OggSeekReader::read_packet`, sharing the existing page API's exact timing and
+overlap logic. Paired trials improve seek batches 1.16-1.76x, with zero warmed
+native seek allocations on all five inputs. Eager indexing and pre-roll still
+leave performance work. Full differential, packet/mixed-read and sanitizer
+evidence is recorded in the resource report.
 
 ## Normative sources
 

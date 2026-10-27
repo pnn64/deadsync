@@ -47,19 +47,31 @@ fn suffix<R: std::io::Read + std::io::Seek>(
     target: u64,
     expected: &Audio,
 ) {
+    suffix_with_mode(reader, target, expected, 0);
+}
+fn suffix_with_mode<R: std::io::Read + std::io::Seek>(
+    reader: &mut OggSeekReader<R>,
+    target: u64,
+    expected: &Audio,
+    mode: usize,
+) {
     let id = expected.info.as_ref().unwrap().id;
     reader.seek(id, target).unwrap();
     assert_eq!(reader.position(), target);
     let mut position = target as usize;
     let mut starts = 0;
     let mut ends = 0;
-    while reader
-        .read_next(|event| match event {
+    let mut step = 0;
+    loop {
+        let packet = mode == 1 || (mode == 2 && step % 3 != 2);
+        let mut blocks = 0;
+        let emit = |event: OggEvent<'_>| match event {
             OggEvent::StreamStart(info) => {
                 assert_eq!(info, expected.info.as_ref().unwrap());
                 starts += 1;
             }
             OggEvent::Pcm(pcm) => {
+                blocks += 1;
                 assert_eq!(pcm.start_frame as usize, position);
                 assert_eq!(
                     pcm.start_granule,
@@ -81,13 +93,56 @@ fn suffix<R: std::io::Read + std::io::Seek>(
                 ends += 1;
             }
             _ => {}
-        })
-        .unwrap()
-    {}
+        };
+        let more = if packet {
+            reader.read_packet(emit)
+        } else {
+            reader.read_next(emit)
+        }
+        .unwrap();
+        if packet {
+            assert!(blocks <= 1);
+        }
+        if !more {
+            break;
+        }
+        step += 1;
+    }
     assert_eq!(position as u64, expected.end.unwrap().frames);
     assert_eq!(reader.position() as usize, position);
     assert_eq!((starts, ends), (1, 1));
     assert!(!reader.read_next(|_| panic!("events after EOF")).unwrap());
+    assert!(
+        !reader
+            .read_packet(|_| panic!("packet events after EOF"))
+            .unwrap()
+    );
+}
+
+#[test]
+fn packet_reads_and_mixed_page_reads_preserve_exact_suffixes_and_reset_pauses() {
+    for bytes in [
+        STEREO.to_vec(),
+        MONO.to_vec(),
+        SURROUND.to_vec(),
+        repack(STEREO, 96, -37, 29, 70, false, true),
+        repack(STEREO, 97, 900, 33, 70, true, false),
+    ] {
+        let expected = full(&bytes);
+        let audio = expected.values().next().unwrap();
+        let mut reader = OggSeekReader::new(Cursor::new(&bytes)).unwrap();
+        let id = reader.selected().info.id;
+        let frames = audio.end.unwrap().frames;
+        for mode in [1, 2] {
+            for target in [0, 1, 127, frames / 2, frames - 1, frames] {
+                suffix_with_mode(&mut reader, target, audio, mode);
+                // Interrupt a buffered page, then seek elsewhere without
+                // draining it. The next suffix must have no stale cursor/PCM.
+                reader.seek(id, 0).unwrap();
+                assert!(reader.read_packet(|_| {}).unwrap());
+            }
+        }
+    }
 }
 
 fn repack(
@@ -273,6 +328,8 @@ fn chained_multiplexed_streams_can_be_selected_in_arbitrary_order() {
         for audio in expected.values().rev() {
             for target in [audio.end.unwrap().frames, 0, audio.end.unwrap().frames / 2] {
                 suffix(&mut reader, target, audio);
+                suffix_with_mode(&mut reader, target, audio, 1);
+                suffix_with_mode(&mut reader, target, audio, 2);
             }
         }
     }
@@ -614,7 +671,7 @@ fn compare_libvorbis_seeks(bytes: &[u8]) -> (support::Difference, usize) {
             let mut progress = false;
             assert!(
                 native
-                    .read_next(|event| {
+                    .read_packet(|event| {
                         if let OggEvent::Pcm(pcm) = event {
                             if position == wanted {
                                 return;

@@ -131,6 +131,14 @@ valid target. Repeated seeks within one stream retain setup, transform tables
 and synthesis buffers. Changing streams rebuilds the selected codec. Start/end
 events repeat after each seek; `StreamEnd` describes the whole stream. A read
 processes at most one selected-stream page and may emit several PCM blocks.
+For short reads, `read_packet` uses the same overlap/trim logic while synthesizing
+at most one packet per call. It retains a cursor into the verified page without
+copying or rereading it. Calls may return progress with no PCM (pre-roll,
+discarded packet, or spanning fragment). Consume each complete returned overlap
+block before the next call; the method does not take a requested frame count.
+Calls can alternate with `read_next`, which drains the current page's remainder.
+Page granule/EOS checks complete when that page is consumed, so PCM remains
+provisional until those checks and StreamEnd. Seeking abandons a paused page.
 Invalid seek arguments preserve the cursor; read/seek IO failures are terminal
 until a successful seek resets state. As with streaming, output is provisional
 until end validation. Wrap unbuffered file sources in `BufReader`.
@@ -144,8 +152,9 @@ The initial [performance baseline](PERFORMANCE.md) compares resident full decode
 The measured N/4 transform update improves the two longer tracks by 1.35–1.67x
 in observed full-file runs, while a native throughput gap remains.
 [Allocation/memory/seek comparisons](RESOURCES.md) now measure five files:
-native uses less requested heap than Symphonia here, while eager indexing and
-page-sized synthesis leave substantial construction/seek performance work.
+native uses less requested heap than Symphonia here. The packet-read update
+addresses the measured page-sized synthesis work; eager indexing and broader
+construction/seek optimization remain open.
 
 Legacy handling is explicit and disabled by default.
 `OggOptions::allow_zero_span_granules` and the same `SeekOptions` flag ignore

@@ -5,6 +5,7 @@ use crate::{
     decoder::packet_header,
     ogg::{Timing, granule, read_identification, read_metadata},
 };
+use core::ops::ControlFlow;
 use deadlib_audio_decode_ogg::{
     self as container, IndexedPage, OggIndex, PacketCapture, Page, PageReader,
     UNKNOWN_GRANULE_POSITION,
@@ -370,6 +371,7 @@ pub struct OggSeekReader<R> {
     decoder: Option<PacketDecoder>,
     capture: PacketCapture,
     next_page: usize,
+    page_pending: bool,
     prime_packet: u64,
     primed: bool,
     last_span: u64,
@@ -404,6 +406,7 @@ impl<R: Read + Seek> OggSeekReader<R> {
             decoder: None,
             capture: PacketCapture::with_validation(id.serial, limits, validation),
             next_page: 0,
+            page_pending: false,
             prime_packet: 0,
             primed: false,
             last_span: 0,
@@ -474,6 +477,7 @@ impl<R: Read + Seek> OggSeekReader<R> {
             self.announce = true;
             self.finished = false;
             self.end_seek = frame == stream.end.frames;
+            self.page_pending = false;
             self.decoder.as_mut().unwrap().reset_at(base);
             if frame < stream.end.frames {
                 let start = self
@@ -494,20 +498,44 @@ impl<R: Read + Seek> OggSeekReader<R> {
     /// Process at most one selected-stream page. All output begins at the exact
     /// requested retained frame. Start/end events are repeated after each seek;
     /// StreamEnd describes the whole logical stream, not only the sought suffix.
-    pub fn read_next(&mut self, mut emit: impl FnMut(OggEvent<'_>)) -> Result<bool, Error> {
+    pub fn read_next(&mut self, emit: impl FnMut(OggEvent<'_>)) -> Result<bool, Error> {
+        self.read_step(false, emit)
+    }
+    /// Process at most one selected-stream page and synthesize at most one
+    /// packet at/after seek pre-roll. Returns true on progress, including a
+    /// priming/discarded packet or a page fragment that emits no PCM; false only
+    /// after StreamEnd. PCM is one complete overlap block, possibly trimmed at
+    /// the requested start/end. Consume that block before the next call.
+    ///
+    /// The verified page stays buffered without copying, rereading or repeated
+    /// CRC work. Calls may alternate with read_next, which drains the remaining
+    /// page. Page granule and EOS validation occur when its final fragment is
+    /// consumed; output remains provisional until those checks complete.
+    pub fn read_packet(&mut self, emit: impl FnMut(OggEvent<'_>)) -> Result<bool, Error> {
+        self.read_step(true, emit)
+    }
+    fn read_step(
+        &mut self,
+        one_packet: bool,
+        mut emit: impl FnMut(OggEvent<'_>),
+    ) -> Result<bool, Error> {
         if self.failed {
             return Err(Error::Failed);
         }
         if self.finished {
             return Ok(false);
         }
-        let result = self.read_inner(&mut emit);
+        let result = self.read_inner(one_packet, &mut emit);
         if result.is_err() {
             self.failed = true;
         }
         result
     }
-    fn read_inner(&mut self, emit: &mut impl FnMut(OggEvent<'_>)) -> Result<bool, Error> {
+    fn read_inner(
+        &mut self,
+        one_packet: bool,
+        emit: &mut impl FnMut(OggEvent<'_>),
+    ) -> Result<bool, Error> {
         let stream = &self.index.streams[self.selected.unwrap()];
         if self.announce {
             if let Some(error) = &stream.comment_error {
@@ -528,13 +556,19 @@ impl<R: Read + Seek> OggSeekReader<R> {
         let entry = entries
             .get(self.next_page)
             .ok_or(Error::Container(container::Error::Truncated))?;
-        let page = read_page(&mut self.pages, entry)?;
-        self.next_page += 1;
+        let page = if self.page_pending {
+            self.pages
+                .current_page()
+                .ok_or(Error::Invalid("missing paused seek page"))?
+                .page
+        } else {
+            read_page(&mut self.pages, entry)?
+        };
         let mut failure = None;
         let decoder = self.decoder.as_mut().unwrap();
-        self.capture.push_page(page, entry.offset, |packet| {
+        let complete = self.capture.push_page_until(page, entry.offset, |packet| {
             if failure.is_some() || packet.info.number.unwrap() < self.prime_packet {
-                return;
+                return ControlFlow::Continue(());
             }
             let result = (|| {
                 let Some(block) = decoder.decode(packet.data)? else {
@@ -576,10 +610,20 @@ impl<R: Read + Seek> OggSeekReader<R> {
             if let Err(error) = result {
                 failure = Some(error);
             }
+            if one_packet {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
         })?;
         if let Some(error) = failure {
             return Err(error);
         }
+        self.page_pending = !complete;
+        if !complete {
+            return Ok(true);
+        }
+        self.next_page += 1;
         if self.primed && (page.completed_packets() != 0 || page.header().is_eos()) {
             let expected = stream.origin + decoder.position() as i128;
             let actual = granule(page.header().granule_position)? as i128;

@@ -76,10 +76,18 @@ impl<'a> Page<'a> {
         self.lacing().iter().filter(|&&n| n < 255).count()
     }
     pub fn fragments(self) -> Fragments<'a> {
+        self.fragments_from(0, 0)
+    }
+    // Offsets are maintained only at validated fragment boundaries by capture.
+    pub(crate) fn fragments_from(self, segment: usize, body: usize) -> Fragments<'a> {
         Fragments {
-            lacing: self.lacing(),
-            body: self.body(),
-            continued: self.header.is_continued(),
+            lacing: &self.lacing()[segment..],
+            body: &self.body()[body..],
+            continued: if segment == 0 {
+                self.header.is_continued()
+            } else {
+                self.lacing()[segment - 1] == 255
+            },
         }
     }
 }

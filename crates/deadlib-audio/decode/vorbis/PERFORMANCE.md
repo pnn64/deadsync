@@ -291,7 +291,13 @@ five files. Native uses less requested heap than Symphonia in this sample, but
 the longer-file seek batches remain 1.5-2.5x slower than Symphonia and 2.3-4.6x
 slower than libvorbisfile. The eager index reads the entire source twice; native
 page callbacks expose 9.1-20.9x the requested samples on the two longer files.
-Three small native allocation requests also remain in one warmed seek batch.
+The subsequent packet-read update in that report adds resumable Ogg capture and
+`OggSeekReader::read_packet`. Interleaved trials against commit `58ca53b37` improve
+native seek batches 1.16-1.76x across the five files (1.45x/1.71x on the longer
+tracks); all five warmed native batches allocate nothing. Longer-file seeks
+still trail Symphonia by 1.06x/1.46x and libvorbisfile by 1.49x/2.58x. Eager
+two-pass construction remains largely unchanged. The report retains the initial
+page-API baseline and the paired update separately.
 Ogg-only container throughput and truly cold startup still need comparative
 measurements. Sanitizer RSS is not a production memory result.
 

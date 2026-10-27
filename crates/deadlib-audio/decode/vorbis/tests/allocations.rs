@@ -75,16 +75,24 @@ fn repeated_seeks_allocate_nothing() {
         TRACK.with(|track| track.set(true));
         for frame in [frames, 0, 1, frames / 2, frames - 1, 17, 0] {
             reader.seek(id, frame).unwrap();
-            while reader
-                .read_next(|event| {
+            loop {
+                let emit = |event: OggEvent<'_>| {
                     if let OggEvent::Pcm(data) = event {
                         for plane in data.pcm.planes() {
                             std::hint::black_box(plane);
                         }
                     }
-                })
-                .unwrap()
-            {}
+                };
+                let more = if frame % 2 == 0 {
+                    reader.read_packet(emit)
+                } else {
+                    reader.read_next(emit)
+                }
+                .unwrap();
+                if !more {
+                    break;
+                }
+            }
         }
         TRACK.with(|track| track.set(false));
         assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), 0);

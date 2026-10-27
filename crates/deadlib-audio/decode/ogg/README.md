@@ -56,6 +56,13 @@ streams.finish()?; // Require complete logical streams, including EOS.
   initial continuation, then validates packet assembly and sequencing strictly.
   Indexed capture knows absolute packet numbers; unindexed capture reports
   unknown numbers unless it began at BOS. `reset_at` supports repeated seeks.
+  `push_page_until` can pause after a complete packet via `ControlFlow::Break`;
+  a false return means the identical page/offset must be resumed. A later
+  `push_page` can drain its remainder. Structural/size checks cover the whole
+  page before its first packet; completion and compatibility counts commit once
+  at its end. `PageReader::current_page` reborrows the last verified page without
+  IO, CRC work or a payload copy. Reset discards a paused cursor. Completed
+  captures retain at most one page of assembly capacity for repeated seeks.
 
 ```rust
 use std::io::Cursor;

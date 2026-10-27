@@ -54,6 +54,15 @@ impl<R: Read> PageReader<R> {
     pub fn discarded_bytes(&self) -> u64 {
         self.discarded
     }
+    /// Borrow the last returned, CRC-verified page again without IO or copying.
+    /// None before a successful next_page, after EOF, or after a successful seek.
+    /// This permits a packet consumer to pause within a buffered page.
+    pub fn current_page(&self) -> Option<LocatedPage<'_>> {
+        (self.returned != 0).then(|| LocatedPage {
+            offset: self.offset,
+            page: Page::verified(&self.buffer[self.start..self.start + self.returned]),
+        })
+    }
     /// The underlying reader can be ahead of `position()` after recovery.
     pub fn into_inner(self) -> R {
         self.inner

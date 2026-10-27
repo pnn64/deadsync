@@ -96,7 +96,7 @@ fn xiph_upstream_coded_grid_pcm_streaming_and_seeks() {
                     seek.seek(id, target).unwrap();
                     let mut position = target as usize;
                     while seek
-                        .read_next(|event| {
+                        .read_packet(|event| {
                             if let OggEvent::Pcm(block) = event {
                                 assert_eq!(block.start_frame as usize, position);
                                 for (expected, plane) in native.iter().zip(block.pcm.planes()) {

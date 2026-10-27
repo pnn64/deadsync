@@ -6,10 +6,10 @@ with DeadSync. `Cargo.lock` pins the fuzz tooling dependencies.
 
 | Target | Input and invariants |
 | --- | --- |
-| `ogg_container` | One control byte, then Ogg bytes. Strict/explicit compatibility flags and chunk size vary. Pull and incremental parsing must return identical packet summaries, errors and exception counts. Recovery exposes only CRC-valid pages and terminates. Accepted indices exercise capture at first/last pages. |
+| `ogg_container` | One control byte, then Ogg bytes. Strict/explicit compatibility flags and chunk size vary. Pull and incremental parsing must return identical packet summaries, errors and exception counts. Recovery exposes only CRC-valid pages and terminates. Accepted indices compare full-page and packet-paused capture at first/last pages, including exception counts. |
 | `vorbis_headers` | Selector byte: identification, comments, or 30-byte identification followed by setup. Accepted identification/comments round-trip exactly; owned metadata preserves binary fields. Accepted setups construct a decoder under separate memory limits and consume probe packets. |
 | `vorbis_packets` | Fixture selector byte, then repeated little-endian u16 lengths and packet bytes (a final oversized length consumes the remainder). At most 32 packets. Two reset/replays must agree on PCM bits, errors and positions. A known-good replay after malformed input must match its original result. The high control bit tests positions near u64 overflow. |
-| `vorbis_stream` | Control byte then Ogg bytes, with arbitrary input chunks. Pull and two reset/push replays must match PCM/event summaries, errors and exception counts. Accepted indices exercise repeated end/middle/start/last-frame seeks, including deterministic payload errors and recovery by seeking. |
+| `vorbis_stream` | Control byte then Ogg bytes, with arbitrary input chunks. Pull and two reset/push replays must match PCM/event summaries, errors and exception counts. Accepted indices compare page, packet, and mixed reads after end/middle/start/last-frame seeks, including deterministic payload errors and recovery by seeking. |
 
 Every returned PCM sample must be finite. Summaries use an order-sensitive
 64-bit hash plus exact counts rather than retaining untrusted output; a matching

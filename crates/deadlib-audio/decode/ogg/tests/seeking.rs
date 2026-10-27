@@ -1,5 +1,6 @@
 use deadlib_audio_decode_ogg::*;
 use std::io::Cursor;
+use std::ops::ControlFlow;
 
 fn fixture(serial: u32, nil_eos: bool) -> Vec<u8> {
     let sizes = [4, 0, 255, 65024, 130050, 17, 0, 1, 65025, 510, 19];
@@ -58,6 +59,192 @@ fn packets(bytes: &[u8]) -> Vec<(Vec<u8>, PacketInfo)> {
     }
     demux.finish().unwrap();
     out
+}
+
+#[test]
+fn paused_capture_matches_demux_from_every_page_including_spans_and_mux() {
+    let bytes = multiplexed_and_chained();
+    let index = OggIndex::read(bytes.as_slice(), IndexOptions::default()).unwrap();
+    let expected = packets(&bytes);
+    for stream in index.streams() {
+        for entry in index.pages(stream.serial).unwrap() {
+            for mixed in [false, true] {
+                let mut reader = PageReader::new(Cursor::new(&bytes));
+                reader.seek(entry.offset).unwrap();
+                let mut capture = PacketCapture::at_page(entry, Limits::default());
+                let mut output = Vec::new();
+                let mut pauses = 0;
+                while let Some(page) = reader.next_page().unwrap() {
+                    loop {
+                        let mut emitted = 0;
+                        let complete = capture
+                            .push_page_until(page.page, page.offset, |packet| {
+                                output.push((packet.data.to_vec(), packet.info));
+                                emitted += 1;
+                                ControlFlow::Break(())
+                            })
+                            .unwrap();
+                        assert!(emitted <= 1);
+                        if complete {
+                            break;
+                        }
+                        assert_eq!(emitted, 1);
+                        pauses += 1;
+                        if mixed && pauses % 3 == 0 {
+                            capture
+                                .push_page(page.page, page.offset, |packet| {
+                                    output.push((packet.data.to_vec(), packet.info));
+                                })
+                                .unwrap();
+                            break;
+                        }
+                    }
+                    if capture.is_ended() {
+                        break;
+                    }
+                }
+                capture.finish().unwrap();
+                let suffix: Vec<_> = expected
+                    .iter()
+                    .filter(|(_, info)| {
+                        info.serial == stream.serial && info.start_page_offset >= entry.offset
+                    })
+                    .collect();
+                assert_eq!(output.len(), suffix.len());
+                for ((data, info), &(reference, expected)) in output.iter().zip(&suffix) {
+                    assert_eq!(data, reference);
+                    assert_eq!(info.number, Some(expected.number));
+                    assert_eq!(info.granule_position, expected.granule_position);
+                    assert_eq!(info.first_in_stream, expected.first_in_stream);
+                    assert_eq!(info.last_in_stream, expected.last_in_stream);
+                    assert_eq!(info.start_page_offset, expected.start_page_offset);
+                    assert_eq!(info.end_page_offset, expected.end_page_offset);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn paused_capture_rejects_changed_pages_and_validates_tail_before_output() {
+    let header = PageHeader {
+        flags: EOS,
+        granule_position: 7,
+        serial: 91,
+        sequence: 4,
+    };
+    let bytes = encode_page(header, &[1, 1], b"ab").unwrap();
+    let changed = encode_page(header, &[1, 1], b"ac").unwrap();
+    let page = Page::parse(&bytes).unwrap().0;
+    let mut capture = PacketCapture::new(91, Limits::default());
+    assert!(
+        !capture
+            .push_page_until(page, 17, |_| ControlFlow::Break(()))
+            .unwrap()
+    );
+    assert!(!capture.is_ended());
+    assert!(
+        capture
+            .push_page(Page::parse(&changed).unwrap().0, 17, |_| {})
+            .is_err()
+    );
+    assert_eq!(
+        capture.push_page(page, 17, |_| {}).unwrap_err(),
+        Error::Failed
+    );
+    capture.reset();
+    capture.push_page(page, 17, |_| {}).unwrap();
+    capture.finish().unwrap();
+
+    for (lacing, body, limits) in [
+        (
+            vec![1, 4],
+            vec![0; 5],
+            Limits {
+                max_packet_bytes: 3,
+                ..Limits::default()
+            },
+        ),
+        (vec![1, 255], vec![0; 256], Limits::default()),
+    ] {
+        let bytes = encode_page(header, &lacing, &body).unwrap();
+        let mut capture = PacketCapture::new(91, limits);
+        assert!(
+            capture
+                .push_page_until(Page::parse(&bytes).unwrap().0, 0, |_| {
+                    panic!("malformed/resource-invalid page emitted a prefix")
+                })
+                .is_err()
+        );
+    }
+}
+
+#[test]
+fn paused_capture_counts_compatibility_once_at_page_completion() {
+    let validation = ValidationOptions {
+        allow_decreasing_eos_granule: true,
+        ..ValidationOptions::default()
+    };
+    let mut capture = PacketCapture::with_validation(92, Limits::default(), validation);
+    let first = encode_page(
+        PageHeader {
+            flags: BOS,
+            granule_position: 10,
+            serial: 92,
+            sequence: 0,
+        },
+        &[1],
+        b"a",
+    )
+    .unwrap();
+    capture
+        .push_page(Page::parse(&first).unwrap().0, 0, |_| {})
+        .unwrap();
+    let last = encode_page(
+        PageHeader {
+            flags: EOS,
+            granule_position: 5,
+            serial: 92,
+            sequence: 1,
+        },
+        &[1, 1],
+        b"bc",
+    )
+    .unwrap();
+    let page = Page::parse(&last).unwrap().0;
+    assert!(
+        !capture
+            .push_page_until(page, first.len() as u64, |_| ControlFlow::Break(()))
+            .unwrap()
+    );
+    assert_eq!(capture.compatibility().decreasing_eos_granules, 0);
+    assert!(
+        capture
+            .push_page_until(page, first.len() as u64, |_| ControlFlow::Break(()))
+            .unwrap()
+    );
+    assert_eq!(capture.compatibility().decreasing_eos_granules, 1);
+    capture.finish().unwrap();
+}
+
+#[test]
+fn current_page_reborrows_verified_storage_and_is_cleared_on_seek_or_eof() {
+    let bytes = fixture(93, true);
+    let mut reader = PageReader::new(Cursor::new(&bytes));
+    assert!(reader.current_page().is_none());
+    let (offset, expected) = {
+        let page = reader.next_page().unwrap().unwrap();
+        (page.offset, page.page.bytes().to_vec())
+    };
+    for _ in 0..3 {
+        let page = reader.current_page().unwrap();
+        assert_eq!(page.offset, offset);
+        assert_eq!(page.page.bytes(), expected);
+    }
+    reader.seek(0).unwrap();
+    assert!(reader.current_page().is_none());
+    while reader.next_page().unwrap().is_some() {}
+    assert!(reader.current_page().is_none());
 }
 
 #[test]

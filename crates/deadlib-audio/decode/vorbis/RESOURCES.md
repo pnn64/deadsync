@@ -56,6 +56,9 @@ uses `ov_pcm_seek`, checks `ov_pcm_tell`, then requests exactly the wanted frame
 
 The native public `read_next` processes a whole page, so it may synthesize and
 expose far more PCM than requested. `api_exposed_samples` records this effect.
+The initial baseline below uses that method. The packet-read update uses
+`read_packet`, stopping after one complete overlap block and retaining the
+page cursor. Both consumers still discard any packet tail beyond their request.
 Symphonia can expose pre-roll and packet tails; libvorbisfile hides its internal
 pre-roll behind its read API. This diagnostic is not an equal count of internal
 synthesis across libraries. All consumers still require identical PCM windows.
@@ -113,7 +116,7 @@ reference pins, build logs, and completion verification in ignored scratch.
 
 ## Results
 
-Measured 2026-10-27 on the same shared Windows x64 Xeon E5-2696 v4 / 44 logical
+Initial page-API baseline, measured 2026-10-27 on the shared Windows x64 Xeon E5-2696 v4 / 44 logical
 CPU machine as the earlier pipeline reports. Rust uses opt-level 3, LTO, and the
 workspace static CRT flags; C uses MSVC 19.44 Release /O2 /Ob2 /DNDEBUG and the
 dynamic CRT. CPU frequency, affinity, and other work were not controlled. Five
@@ -204,6 +207,92 @@ the actual instrumented and uninstrumented workers. Production source is
 unchanged; release tests, both Clippy feature configurations, independent offline
 package tests/dependency checks, and both allocator self-tests pass.
 
-The broader performance goal remains open: sparse codec seeking, control over
-page-sized synthesis work, Ogg-only throughput, truly cold startup, more
-files/platforms, profiling, and native encoding still require work.
+## Packet-at-a-time seeking update, 2026-10-27
+
+`OggSeekReader::read_packet` synthesizes at most one packet per call, retaining a
+cursor into the CRC-verified page. It shares overlap, trim, timing, and error
+handling with the existing `read_next` page method. It adds no PCM copy or
+synthesis buffer; callers receive a complete borrowed overlap block. Calls may
+alternate between both methods. A packet call can return progress without PCM
+for priming, a discarded packet, or a spanning fragment. Page granule and EOS
+checks finish when the page is consumed; PCM remains provisional until then.
+
+The codec-independent Ogg additions are `PageReader::current_page` and
+`PacketCapture::push_page_until`. The latter validates the entire page's
+structural/size constraints before its first callback and can pause after a
+packet, resuming the identical page without IO, copying or another CRC pass.
+Final sequence/EOS/compatibility accounting commits once at page completion.
+Completed captures also keep their existing bounded assembly capacity at EOS
+(at most one maximum page), avoiding repeated small spanning-packet allocations.
+
+```powershell
+python crates/deadlib-audio/decode/scripts/benchmark_resources.py --baseline-revision 58ca53b37 --repeats 7
+```
+
+This paired run extracts the previous production source into an ignored isolated
+workspace. It uses the current workload/verification adapters, changing exactly
+one benchmark call to the previous revision's available `read_next` API. The
+manifest records this adjustment and every adapter hash. Cargo profiles and all
+17 registry artifacts match. Seven shuffled trials interleave both native builds
+and the two references; no branch or original source tree is switched.
+
+Median milliseconds per **100-request batch**, with the same reference PCM:
+
+| Input | Native page baseline | Native packet | Symphonia | libvorbisfile |
+| --- | ---: | ---: | ---: | ---: |
+| Mono fixture | 1.959 | 1.682 | 0.947 | 0.830 |
+| Stereo fixture | 19.863 | 11.270 | 6.987 | 4.977 |
+| Eight-channel silence | 21.810 | 17.060 | 10.283 | 9.667 |
+| `in_two` | 47.636 | 32.945 | 31.114 | 22.095 |
+| `Goin' Under` | 73.908 | 43.208 | 29.530 | 16.715 |
+
+Observed native speedups are **1.16-1.76x**, including **1.45x / 1.71x** on the
+longer files. Native `in_two` packet min/median/max is 26.405/32.945/35.600 ms,
+versus 38.536/47.636/48.667 for the page baseline. `Goin' Under` is
+39.094/43.208/45.862 versus 63.357/73.908/88.652 ms. This remains a shared,
+unlocked machine with reference drift; use the interleaved trials for the
+native comparison rather than comparing only against the earlier run above.
+
+On those longer files, exposed PCM falls from 462,262 / 1,059,258 to
+132,534 / 135,738 channel samples for the same 50,690 consumed samples. This is
+about 2.6-2.7x demand, including whole packet tails. Source IO remains exactly
+920,907 / 844,721 bytes and 100 seeks per batch. The diagnostic excludes discarded
+pre-roll and cannot be compared to libvorbisfile's hidden internal synthesis.
+All five warmed native batches now have **zero allocation/reallocation requests**,
+including the historical song's previous three requests. Full-decode and
+seek-open requested heap/count measurements remain equal to the initial run.
+
+Seek construction is substantially unchanged: current/baseline medians are
+30.609/30.564 ms for `in_two` and 16.939/16.399 for `Goin' Under`, with overlapping
+trial ranges. The eager index still reads every byte twice. Native batches still
+trail Symphonia by about 1.06x / 1.46x and libvorbisfile by 1.49x / 2.58x on these
+files. Packet-sized reads address unused page tails; pre-roll within the indexed
+page interval, eager construction, and the remaining synthesis gap need further
+measurement and optimization. This is not a competitive-performance claim.
+
+Evidence: [paired manifest](validation/2026-10-27-packet-seek-resources.json),
+[280 timing trials](validation/2026-10-27-packet-seek-trials.tsv),
+[summary](validation/2026-10-27-packet-seek-summary.tsv),
+[360 resource rows](validation/2026-10-27-packet-seek-resources.tsv),
+[completion](validation/2026-10-27-packet-seek-complete.json), and
+[validation/provenance checks](validation/2026-10-27-packet-seek-checks.json).
+All source/input/worker hashes were rechecked at completion. The 500 shared
+request windows pass in both native builds and both references.
+
+Validation includes **94 passing release tests** with external differential
+checks enabled (only fixture regeneration excluded), all **1,900 corpus seeks**,
+**528 upstream vectors / 2,640 packet-read seeks**, historical floor-zero and
+explicit legacy endpoint cases, exhaustive page-API short-fixture seek targets, and new
+packet/mixed suffix, interrupted-page, span/mux, limit, compatibility and reset
+tests. Independent offline tests pass (75 tests; 20 external cases opt-in), as
+do Clippy in both feature configurations and the expanded fuzz harness's tests.
+Two 300-second sanitizer campaigns complete **23,776 executions**, with no
+artifacts: [statistics](validation/2026-10-27-packet-seek-fuzz.tsv),
+[results](validation/2026-10-27-packet-seek-fuzz-results.json),
+[provenance](validation/2026-10-27-packet-seek-fuzz-provenance.json), and
+[initial seed hashes](validation/2026-10-27-packet-seek-fuzz-initial.sha256.json).
+All fuzz code hashes still match; its README was updated after the campaign,
+which is explicitly recorded rather than rewriting the original provenance.
+
+Sparse codec seeking, faster indexing/pre-roll, Ogg-only throughput, truly cold
+startup, broader files/platforms, profiling, and native encoding remain open.

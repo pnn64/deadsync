@@ -19,7 +19,7 @@ import subprocess
 import tomllib
 import uuid
 
-from benchmark import DECODE, REPO, PINS, invoke, label, sha, rust_worker, registry_packages
+from benchmark import DECODE, REPO, PINS, invoke, label, sha, rust_worker, registry_packages, baseline_worker
 
 ENGINES = ("native", "symphonia", "libvorbis")
 PHASES = ("full", "startup", "seek_open", "seek_batch")
@@ -135,6 +135,7 @@ def main() -> None:
     parser.add_argument("--window", type=int, default=256)
     parser.add_argument("--seed", type=int, default=1337)
     parser.add_argument("--min-seconds", type=float, default=0.15)
+    parser.add_argument("--baseline-revision", help="interleave historical native seek timing using its available public read API")
     args = parser.parse_args()
     if (args.repeats < 3 or args.resource_repeats < 1 or not 6 <= args.requests <= 10000
             or not 1 <= args.window <= 4096 or not math.isfinite(args.min_seconds) or args.min_seconds <= 0):
@@ -155,6 +156,15 @@ def main() -> None:
                         "--bench", target, "--no-run", "--message-format=json", *features], log=run / f"{name}-build.log")
         workers[name], profiles[name] = rust_worker(build, target)
         packages[name] = registry_packages(build)
+    baseline_metadata = None
+    timing_engines = ENGINES
+    if args.baseline_revision:
+        workers["rust_baseline"], baseline_metadata = baseline_worker(args.baseline_revision, run)
+        if baseline_metadata["cargo_artifact_profile"] != profiles["rust_timing"]:
+            raise RuntimeError("baseline/current Cargo profiles differ")
+        if baseline_metadata["registry_packages"] != packages["rust_timing"]:
+            raise RuntimeError("baseline/current registry dependency artifacts differ")
+        timing_engines += ("native-baseline",)
     csource = DECODE / "vorbis/benches/oracle"
     cbuild = reference / "vorbis-benchmark-build"
     workers["c_memory"] = build_c(reference, cbuild, csource, "deadlib_vorbis_resources", run, "c-memory", False)
@@ -190,6 +200,7 @@ def main() -> None:
         "rustc": invoke(["rustc", "-Vv"]), "cmake": invoke(["cmake", "--version"]).splitlines()[0],
         "workers": {name: {"path": label(path), "sha256": sha(path)} for name, path in workers.items()},
         "cargo_artifact_profiles": profiles, "registry_packages": packages,
+        "baseline": baseline_metadata,
         "cargo_profiles": tomllib.loads((REPO / "Cargo.toml").read_text(encoding="utf-8"))["profile"],
         "cargo_config": tomllib.loads((REPO / ".cargo/config.toml").read_text(encoding="utf-8")),
         "rustflags_environment": {name: os.environ.get(name) for name in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS")},
@@ -201,7 +212,7 @@ def main() -> None:
         "metric_scopes": {"heap": "requested bytes; Rust global allocator / only libogg+libvorbis+libvorbisfile C allocation calls; input and harness excluded",
                           "process_memory": "fresh uninstrumented process PeakWorkingSetSize; input, workload, loader and harness included; seek_batch includes warm/validation",
                           "seek_timing": "uninstrumented; resident input; seek_open constructs+destroys; seek_batch warmed context, exact requested consumption; PCM validation excluded",
-                          "api_exposed_samples": "API-visible samples, not hidden synthesized frames; native page callbacks may exceed demand"}}
+                          "api_exposed_samples": "API-visible samples, not hidden synthesized frames; native uses packet reads; historical baseline can use page reads"}}
     (run / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
     def resource(engine: str, phase: str, path: Path, counted: bool) -> dict:
@@ -238,9 +249,12 @@ def main() -> None:
         if engine == "libvorbis":
             command = [workers["c_memory"], "seek_timing" if phase == "seek_batch" else "seek_open_timing", path, inputs[path], str(iterations)]
         else:
-            command = [workers["rust_timing"], engine, phase, str(iterations), path, inputs[path]]
+            worker_engine = "native" if engine == "native-baseline" else engine
+            binary = workers["rust_baseline" if engine == "native-baseline" else "rust_timing"]
+            command = [binary, worker_engine, phase, str(iterations), path, inputs[path]]
         fields = invoke(command).strip().split("\t")
-        if len(fields) != 10 or fields[:2] != [engine, phase]:
+        identity = "native" if engine == "native-baseline" else engine
+        if len(fields) != 10 or fields[:2] != [identity, phase]:
             raise ValueError(f"invalid timing output: {fields}")
         n, elapsed, units, reads, consumed, seeks, tells, exposed = map(int, fields[2:])
         expected = metadata[label(path)]["expected_channel_samples"] if phase == "seek_batch" else 1
@@ -255,9 +269,9 @@ def main() -> None:
     for path in files:
         for phase in ("seek_open", "seek_batch"):
             iterations = {engine: min(10000, max(1, math.ceil(args.min_seconds * 1e9 /
-                          timing(engine, phase, path, 1)["elapsed_ns"]))) for engine in ENGINES}
+                          timing(engine, phase, path, 1)["elapsed_ns"]))) for engine in timing_engines}
             for trial in range(args.repeats):
-                engines = list(ENGINES)
+                engines = list(timing_engines)
                 randomizer.shuffle(engines)
                 for engine in engines:
                     row = timing(engine, phase, path, iterations[engine])
@@ -268,7 +282,7 @@ def main() -> None:
     summary = []
     for path in files:
         for phase in ("seek_open", "seek_batch"):
-            for engine in ENGINES:
+            for engine in timing_engines:
                 group = [r for r in trials if (r["path"], r["phase"], r["engine"]) == (label(path), phase, engine)]
                 times = [r["ns_per_run"] for r in group]
                 median = statistics.median(times)

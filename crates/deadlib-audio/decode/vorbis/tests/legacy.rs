@@ -362,7 +362,7 @@ fn historical_and_itg_song_pcm_counts_and_native_seeks() {
         let mut position = 0;
         let mut difference = support::Difference::default();
         while reader
-            .read_next(|event| match event {
+            .read_packet(|event| match event {
                 OggEvent::Pcm(block) => {
                     assert_eq!(block.start_frame as usize, position);
                     assert_eq!(block.start_granule as usize, position);
@@ -408,7 +408,7 @@ fn historical_and_itg_song_pcm_counts_and_native_seeks() {
             while position < wanted {
                 assert!(
                     reader
-                        .read_next(|event| {
+                        .read_packet(|event| {
                             if let OggEvent::Pcm(block) = event {
                                 if position == wanted {
                                     return;

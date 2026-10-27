@@ -1,6 +1,7 @@
 //! Test-only fuzz oracles, isolated from the application workspace.
 use deadlib_audio_decode_ogg as ogg;
 use deadlib_audio_decode_vorbis as vorbis;
+use std::ops::ControlFlow;
 use std::{cell::RefCell, io::Cursor};
 
 pub const MAX_INPUT: usize = 128 << 10;
@@ -199,23 +200,47 @@ pub fn ogg_container(input: &[u8]) {
             for stream in index.streams() {
                 let entries = index.pages(stream.serial).unwrap();
                 for entry in [entries.first().unwrap(), entries.last().unwrap()] {
-                    let mut capture = ogg::PacketCapture::at_page_with_validation(
-                        entry,
-                        container_limits(),
-                        options,
-                    );
-                    let mut reader = ogg::PageReader::new(&data[entry.offset as usize..]);
-                    while let Some(page) = reader.next_page().unwrap() {
-                        capture
-                            .push_page(page.page, page.offset + entry.offset, |p| {
-                                assert!(p.info.number.is_some());
-                            })
-                            .unwrap();
-                        if capture.is_ended() {
-                            break;
+                    let mut previous = None;
+                    for paused in [false, true] {
+                        let mut capture = ogg::PacketCapture::at_page_with_validation(
+                            entry,
+                            container_limits(),
+                            options,
+                        );
+                        let mut digest = Digest::default();
+                        let mut reader = ogg::PageReader::new(&data[entry.offset as usize..]);
+                        while let Some(page) = reader.next_page().unwrap() {
+                            loop {
+                                let complete = capture
+                                    .push_page_until(page.page, page.offset + entry.offset, |p| {
+                                        assert!(p.info.number.is_some());
+                                        digest.number(p.info.number.unwrap());
+                                        digest.number(p.info.start_page_offset);
+                                        digest.number(p.info.end_page_offset);
+                                        digest.number(p.info.granule_position.unwrap_or(u64::MAX));
+                                        digest.bytes(p.data);
+                                        if paused {
+                                            ControlFlow::Break(())
+                                        } else {
+                                            ControlFlow::Continue(())
+                                        }
+                                    })
+                                    .unwrap();
+                                if complete {
+                                    break;
+                                }
+                            }
+                            if capture.is_ended() {
+                                break;
+                            }
                         }
+                        capture.finish().unwrap();
+                        let outcome = (digest, capture.compatibility());
+                        if let Some(previous) = &previous {
+                            assert_eq!(previous, &outcome);
+                        }
+                        previous = Some(outcome);
                     }
-                    capture.finish().unwrap();
                 }
             }
         }
@@ -446,18 +471,36 @@ pub fn vorbis_stream(input: &[u8]) {
             let end = seek.selected().end.frames;
             for target in [end, end / 2, 0, end.saturating_sub(1)] {
                 let mut previous = None;
-                for _ in 0..2 {
+                for mode in 0..3 {
                     seek.seek(id, target).unwrap();
                     let mut position = target;
                     let mut digest = Digest::default();
                     let result = (|| {
-                        while seek.read_next(|event| {
-                            if let vorbis::OggEvent::Pcm(pcm) = event {
-                                assert_eq!(pcm.start_frame, position);
-                                position += pcm.pcm.frames as u64;
-                                digest.pcm(&pcm.pcm);
+                        let mut step = 0;
+                        loop {
+                            let packet = mode == 1 || (mode == 2 && step % 3 != 2);
+                            let mut blocks = 0;
+                            let emit = |event: vorbis::OggEvent<'_>| {
+                                if let vorbis::OggEvent::Pcm(pcm) = event {
+                                    blocks += 1;
+                                    assert_eq!(pcm.start_frame, position);
+                                    position += pcm.pcm.frames as u64;
+                                    digest.pcm(&pcm.pcm);
+                                }
+                            };
+                            let more = if packet {
+                                seek.read_packet(emit)
+                            } else {
+                                seek.read_next(emit)
+                            }?;
+                            if packet {
+                                assert!(blocks <= 1);
                             }
-                        })? {}
+                            if !more {
+                                break;
+                            }
+                            step += 1;
+                        }
                         Ok::<_, vorbis::Error>(())
                     })();
                     if result.is_ok() {

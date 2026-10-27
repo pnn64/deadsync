@@ -196,7 +196,7 @@ impl Session {
         );
     }
     /// Returns samples exposed by the API, which can exceed the requested
-    /// samples (notably the native page-at-a-time API). This is not a count of
+    /// samples (packet tails and Symphonia pre-roll). This is not a count of
     /// hidden internally synthesized frames in libvorbisfile.
     pub fn batch(&mut self, workload: &Workload, validate: bool) -> u64 {
         let mut exposed = 0;
@@ -212,7 +212,7 @@ impl Session {
                     assert_eq!(reader.position(), request.target);
                     while position < request.want {
                         let more = reader
-                            .read_next(|event| {
+                            .read_packet(|event| {
                                 if let OggEvent::Pcm(pcm) = event {
                                     exposed += (pcm.pcm.frames * pcm.pcm.channels) as u64;
                                     if position == request.want {

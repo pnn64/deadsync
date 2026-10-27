@@ -1,7 +1,19 @@
 use crate::{
-    CompatibilityStats, Error, IndexedPage, Limits, MAX_PAGE_SIZE, Page, ValidationOptions,
-    reserve, validation,
+    CompatibilityStats, Error, IndexedPage, Limits, MAX_PAGE_SIZE, Page, PageHeader,
+    ValidationOptions, reserve, validation,
 };
+use core::ops::ControlFlow;
+
+struct PendingPage {
+    offset: u64,
+    header: PageHeader,
+    checksum: u32,
+    length: usize,
+    segment: usize,
+    body: usize,
+    remaining: usize,
+    compatibility: CompatibilityStats,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CaptureInfo {
@@ -42,6 +54,7 @@ pub struct PacketCapture {
     failed: bool,
     validation: ValidationOptions,
     compatibility: CompatibilityStats,
+    page: Option<PendingPage>,
 }
 impl PacketCapture {
     pub fn new(serial: u32, limits: Limits) -> Self {
@@ -63,6 +76,7 @@ impl PacketCapture {
             failed: false,
             validation,
             compatibility: CompatibilityStats::default(),
+            page: None,
         }
     }
     pub fn at_page(page: &IndexedPage, limits: Limits) -> Self {
@@ -91,6 +105,7 @@ impl PacketCapture {
         self.granule = None;
         self.failed = false;
         self.compatibility = CompatibilityStats::default();
+        self.page = None;
     }
     /// Seed a repeated indexed seek, retaining scratch capacity. Supplying a
     /// different stream changes the selected serial. Index/source identity is
@@ -124,8 +139,27 @@ impl PacketCapture {
         &mut self,
         page: Page<'_>,
         offset: u64,
-        emit: impl FnMut(CapturedPacket<'_>),
+        mut emit: impl FnMut(CapturedPacket<'_>),
     ) -> Result<(), Error> {
+        self.push_page_until(page, offset, |packet| {
+            emit(packet);
+            ControlFlow::Continue(())
+        })?;
+        Ok(())
+    }
+    /// Capture until the callback breaks after a complete packet. Returns true
+    /// when the entire page is consumed. If false, resume with the identical
+    /// verified page and offset (push_page may also drain its remainder).
+    /// Header/continuation/granule and every fragment's size limits are checked
+    /// before emitting the first packet. Page completion/compatibility accounting
+    /// is committed once, after its last fragment. Other serials are ignored.
+    /// Errors are terminal until reset, which also discards any paused cursor.
+    pub fn push_page_until(
+        &mut self,
+        page: Page<'_>,
+        offset: u64,
+        emit: impl FnMut(CapturedPacket<'_>) -> ControlFlow<()>,
+    ) -> Result<bool, Error> {
         if self.failed {
             return Err(Error::Failed);
         }
@@ -135,16 +169,8 @@ impl PacketCapture {
         }
         result
     }
-    fn push_inner(
-        &mut self,
-        page: Page<'_>,
-        offset: u64,
-        mut emit: impl FnMut(CapturedPacket<'_>),
-    ) -> Result<(), Error> {
+    fn begin_page(&mut self, page: Page<'_>, offset: u64) -> Result<PendingPage, Error> {
         let header = page.header();
-        if header.serial != self.serial {
-            return Ok(());
-        }
         if self.ended {
             return Err(Error::Invalid("page after captured EOS"));
         }
@@ -216,8 +242,43 @@ impl PacketCapture {
         if header.is_eos() && continuing {
             return Err(Error::Invalid("unfinished captured packet at EOS"));
         }
-        let mut remaining = complete;
-        for fragment in page.fragments() {
+        Ok(PendingPage {
+            offset,
+            header,
+            checksum: page.checksum(),
+            length: page.bytes().len(),
+            segment: 0,
+            body: 0,
+            remaining: complete,
+            compatibility,
+        })
+    }
+    fn push_inner(
+        &mut self,
+        page: Page<'_>,
+        offset: u64,
+        mut emit: impl FnMut(CapturedPacket<'_>) -> ControlFlow<()>,
+    ) -> Result<bool, Error> {
+        if page.header().serial != self.serial {
+            return Ok(true);
+        }
+        let mut cursor = if let Some(cursor) = self.page.take() {
+            if cursor.offset != offset
+                || cursor.header != page.header()
+                || cursor.checksum != page.checksum()
+                || cursor.length != page.bytes().len()
+            {
+                return Err(Error::Invalid(
+                    "different page during paused packet capture",
+                ));
+            }
+            cursor
+        } else {
+            self.begin_page(page, offset)?
+        };
+        for fragment in page.fragments_from(cursor.segment, cursor.body) {
+            cursor.segment += fragment.data.len() / 255 + usize::from(fragment.ends_packet);
+            cursor.body += fragment.data.len();
             if fragment.starts_packet {
                 self.partial_offset = offset;
             }
@@ -229,25 +290,28 @@ impl PacketCapture {
             if !fragment.ends_packet {
                 continue;
             }
-            remaining -= 1;
+            cursor.remaining -= 1;
+            let mut stop = false;
             if !self.skipping {
                 let data = if fragment.starts_packet {
                     fragment.data
                 } else {
                     &self.partial
                 };
-                emit(CapturedPacket {
+                stop = emit(CapturedPacket {
                     data,
                     info: CaptureInfo {
                         serial: self.serial,
                         number: self.next_number,
                         first_in_stream: self.next_number == Some(0),
-                        last_in_stream: remaining == 0 && header.is_eos(),
-                        granule_position: (remaining == 0).then_some(header.granule_position),
+                        last_in_stream: cursor.remaining == 0 && cursor.header.is_eos(),
+                        granule_position: (cursor.remaining == 0)
+                            .then_some(cursor.header.granule_position),
                         start_page_offset: self.partial_offset,
                         end_page_offset: offset,
                     },
-                });
+                })
+                .is_break();
             }
             self.next_number = self
                 .next_number
@@ -258,14 +322,17 @@ impl PacketCapture {
             if self.partial.capacity() > MAX_PAGE_SIZE {
                 self.partial = Vec::new();
             }
+            if stop && cursor.segment != page.lacing().len() {
+                self.page = Some(cursor);
+                return Ok(false);
+            }
         }
         self.started = true;
-        self.next_sequence = Some(header.sequence.wrapping_add(1));
-        if header.is_eos() {
+        self.next_sequence = Some(cursor.header.sequence.wrapping_add(1));
+        if cursor.header.is_eos() {
             self.ended = true;
-            self.partial = Vec::new();
         }
-        self.compatibility.add(compatibility)?;
-        Ok(())
+        self.compatibility.add(cursor.compatibility)?;
+        Ok(true)
     }
 }
