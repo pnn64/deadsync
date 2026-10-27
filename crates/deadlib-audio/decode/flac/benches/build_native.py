@@ -1,4 +1,4 @@
-"""Build and preserve a Linux/WSL benchmark with build-time source provenance."""
+"""Build and preserve a benchmark with build-time source provenance."""
 import argparse
 import hashlib
 import json
@@ -41,7 +41,9 @@ def main():
     after = {p.relative_to(repo).as_posix(): sha(p) for p in paths}
     if before != after:
         raise RuntimeError('build inputs changed during compilation; preserve a fresh stable build')
-    artifact = Path(re.findall(r'Executable benches/decode.rs \(([^)]+)\)', result.stderr)[-1])
+    artifact = Path(re.findall(r'Executable benches[\\/]decode.rs \(([^)]+)\)', result.stderr)[-1])
+    if not artifact.is_absolute():
+        artifact = repo/artifact
     shutil.copyfile(artifact, output)
     shutil.copymode(artifact, output)
     report = {'built_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),

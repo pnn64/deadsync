@@ -1,0 +1,9 @@
+cmake_minimum_required(VERSION 3.16)
+project(deadlib_flac_windows_performance C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+add_subdirectory("${DEADLIB_ROOT}/crates/deadlib-audio/decode/flac/tests/oracle" references)
+add_executable(flac_decode_benchmark main.cpp opaque.c)
+target_link_libraries(flac_decode_benchmark PRIVATE FLAC)
+# Keep this address-escape boundary opaque to whole-program optimization.
+set_source_files_properties(opaque.c PROPERTIES COMPILE_OPTIONS "/GL-")

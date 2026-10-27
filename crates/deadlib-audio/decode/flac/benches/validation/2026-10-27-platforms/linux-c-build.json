@@ -1,0 +1,32 @@
+{
+  "timestamp_utc": "2026-10-27T19:50:45Z",
+  "commands": [
+    [
+      "cmake",
+      "-S",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-audio/decode/flac/benches/libflac",
+      "-B",
+      "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle",
+      "-DREFERENCE_ROOT=/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/flac",
+      "-DOGG_REFERENCE_ROOT=/mnt/c/GitHub/deadsync/target/deadlib-audio-reference/ogg",
+      "-DCMAKE_BUILD_TYPE=Release"
+    ],
+    [
+      "cmake",
+      "--build",
+      "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle",
+      "--config",
+      "Release",
+      "--target",
+      "flac_latency_benchmark",
+      "--parallel",
+      "4"
+    ]
+  ],
+  "sources": {
+    "/mnt/c/GitHub/deadsync/crates/deadlib-audio/decode/flac/benches/libflac/benchmark.cpp": "57a1483f1e220f2059833dd42cd6341577c50465ff159d011046b346c59a4dab",
+    "/mnt/c/GitHub/deadsync/crates/deadlib-audio/decode/flac/benches/libflac/CMakeLists.txt": "a79066abb6d6173cb6b9ce250abaa14fcf672e716cabd38640b405e8ef1887aa",
+    "/mnt/c/GitHub/deadsync/crates/deadlib-audio/decode/flac/benches/libflac/opaque.c": "28bfb8fb9c458c872596930c3da1c56e4158cad7ca5d15f4f3438501fac7deef"
+  },
+  "binary_sha256": "3c41450b36fccc4a0c2de1bec3349f073454e671983742869701390a77c9d1a0"
+}

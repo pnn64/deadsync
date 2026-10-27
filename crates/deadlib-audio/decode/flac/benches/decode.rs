@@ -108,7 +108,7 @@ fn main() {
     } else {
         None
     };
-    let mut seek = if mode == "seek" {
+    let mut seek = if matches!(mode.as_str(), "seek" | "seek-warm") {
         Some(
             SeekReader::with_options(
                 Cursor::new(&data),
@@ -122,6 +122,18 @@ fn main() {
     } else {
         None
     };
+    if mode == "seek-warm" {
+        // Explicitly prime the same request sequence in both implementations.
+        // Keep this separate from the metadata-only, lazy-index `seek` mode.
+        for iteration in 0..97 {
+            let target = info.total_samples.saturating_sub(1) * iteration / 97;
+            let decoder = seek.as_mut().unwrap();
+            decoder.seek(target).unwrap();
+            if let Some(frame) = decoder.read_next().unwrap() {
+                black_box(consume(frame.pcm));
+            }
+        }
+    }
     let mut elapsed = 0;
     let mut checksum = 0u64;
     let mut units = 0u64;
@@ -256,7 +268,7 @@ fn main() {
                     }
                 }
             }
-            "seek" => {
+            "seek" | "seek-warm" => {
                 let target = info.total_samples.saturating_sub(1) * (iteration as u64 % 97) / 97;
                 let decoder = seek.as_mut().unwrap();
                 decoder.seek(target).unwrap();
@@ -273,7 +285,7 @@ fn main() {
         }
         let ns = begin.elapsed().as_nanos();
         black_box(sum);
-        if !mode.contains("startup") && !matches!(mode.as_str(), "seek" | "crc") {
+        if !mode.contains("startup") && !matches!(mode.as_str(), "seek" | "seek-warm" | "crc") {
             assert_eq!(count, samples);
             assert_eq!(sum, expected, "PCM endpoint check");
         }

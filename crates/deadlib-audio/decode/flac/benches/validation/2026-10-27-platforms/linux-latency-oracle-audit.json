@@ -1,0 +1,288 @@
+{
+  "passed": true,
+  "records": [
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "frames",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2",
+        "/tmp/deadlib-flac-final-oracle-audit/frames.index",
+        "/tmp/deadlib-flac-final-oracle-audit/input.oga"
+      ],
+      "exit_code": 0,
+      "stdout": "frames\t2\t12064407\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "startup",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "startup\t2\t111943\t16384\t17179869042\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "stream",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "stream\t2\t12906380\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "stream-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "stream-md5\t2\t19017181\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "symphonia-new",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new\t2\t15359793\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "symphonia-new-crc",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new-crc\t2\t15674399\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "ogg-stream",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "ogg-stream\t2\t13185240\t1234800\t833224094312\t553296\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "ogg-stream-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "ogg-stream-md5\t2\t19376800\t1234800\t833224094312\t553296\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "symphonia-new-ogg",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new-ogg\t2\t15348501\t1234800\t833224094312\t553296\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "symphonia-new-ogg-crc",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new-ogg-crc\t2\t15286736\t1234800\t833224094312\t553296\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "symphonia-new-startup",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "symphonia-new-startup\t2\t135891\t16384\t17179869042\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle/flac_latency_benchmark",
+        "libflac",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-final-oracle-audit/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac\t2\t10464548\t1234800\t833224094312\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle/flac_latency_benchmark",
+        "libflac-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-final-oracle-audit/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-md5\t2\t16210611\t1234800\t833224094312\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle/flac_latency_benchmark",
+        "libflac-new",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-final-oracle-audit/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new\t2\t10630771\t1234800\t833224094312\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle/flac_latency_benchmark",
+        "libflac-new-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-final-oracle-audit/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new-md5\t2\t16234195\t1234800\t833224094312\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle/flac_latency_benchmark",
+        "libflac-new-ogg",
+        "/tmp/deadlib-flac-final-oracle-audit/input.oga",
+        "/tmp/deadlib-flac-final-oracle-audit/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new-ogg\t2\t11923702\t1234800\t833224094312\t553296\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle/flac_latency_benchmark",
+        "libflac-new-ogg-md5",
+        "/tmp/deadlib-flac-final-oracle-audit/input.oga",
+        "/tmp/deadlib-flac-final-oracle-audit/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new-ogg-md5\t2\t17162137\t1234800\t833224094312\t553296\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle/flac_latency_benchmark",
+        "libflac-new-startup",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-final-oracle-audit/frames.index",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "libflac-new-startup\t2\t146843\t16384\t17179869042\t549954\t76\t0\t0",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle/flac_latency_benchmark",
+        "libflac-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-final-oracle-audit/frames.index",
+        "2"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "libFLAC digest/finish"
+    },
+    {
+      "command": [
+        "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle/flac_latency_benchmark",
+        "libflac-new-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "/tmp/deadlib-flac-final-oracle-audit/frames.index",
+        "2"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "libFLAC digest/finish"
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "frames",
+        "/tmp/deadlib-flac-final-oracle-audit/corrupt-md5.flac",
+        "2"
+      ],
+      "exit_code": 0,
+      "stdout": "frames\t2\t11786761\t1234800\t833224094312\t549954\t76\t16\t2",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "stream-md5",
+        "/tmp/deadlib-flac-final-oracle-audit/corrupt-md5.flac",
+        "2"
+      ],
+      "exit_code": 101,
+      "stdout": "",
+      "stderr": "thread 'main' (648934) panicked at crates/deadlib-audio/decode/flac/benches/decode.rs:263:61:\ncalled `Result::unwrap()` on an `Err` value: Checksum(\"PCM MD5\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
+    },
+    {
+      "command": [
+        "/tmp/deadlib-flac-decode-latency",
+        "ogg-stream-md5",
+        "/mnt/c/GitHub/deadsync/target/deadlib-flac-reference/conformance/subset/01 - blocksize 4096.flac",
+        "2",
+        "/tmp/deadlib-flac-final-oracle-audit/frames.index",
+        "/tmp/deadlib-flac-final-oracle-audit/corrupt-md5.oga"
+      ],
+      "exit_code": 101,
+      "stdout": "",
+      "stderr": "thread 'main' (648935) panicked at crates/deadlib-audio/decode/flac/benches/decode.rs:249:22:\ncalled `Result::unwrap()` on an `Err` value: Checksum(\"PCM MD5\")\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace"
+    },
+    {
+      "command": [
+        "/home/perfecttaste/.cache/deadlib-flac-performance/latency-oracle/flac_latency_benchmark",
+        "libflac-new-ogg-md5",
+        "/tmp/deadlib-flac-final-oracle-audit/corrupt-md5.oga",
+        "/tmp/deadlib-flac-final-oracle-audit/frames.index",
+        "2"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "libFLAC digest/finish"
+    }
+  ],
+  "sha256": {
+    "native": "410e8ad471af4ea23c3a8a097595d92e524b0134b27291d7672a77ea487d1a70",
+    "oracle": "c54787f2edd6cf287fcf00ef02bcc850af7bd0194c11dd26592033753972c2a6",
+    "input": "02c7e60ae7788c2cb6898a0a46985d759f1e62482ddd965a374dfd09a2a8390f"
+  }
+}

@@ -1,0 +1,4 @@
+   Compiling deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\ogg)
+   Compiling deadlib-audio-decode-flac v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\flac)
+    Finished `bench` profile [optimized + debuginfo] target(s) in 28.98s
+  Executable benches\decode.rs (target\deadlib-flac\release\deps\decode-35349333967787b9.exe)

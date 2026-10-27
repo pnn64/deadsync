@@ -1,4 +1,4 @@
-"""Paired resident-input decode timings. Run natively on Linux/WSL."""
+"""Paired resident-input decode timings on Windows or Linux/WSL."""
 import argparse
 import csv
 import hashlib
@@ -9,6 +9,7 @@ import random
 import statistics
 import subprocess
 import time
+from bench_host import cpu_info, set_affinity
 
 DEFAULT_SUBSET = [1, 3, 6, 11, 12, 14, 15, 16, 17, 22, 23, 24, 28, 31, 38, 41, 43, 44, 60, 61, 62, 63, 64]
 DEFAULT_UNCOMMON = [5, 7, 8, 9]
@@ -48,9 +49,11 @@ def main():
     # Baseline binaries are identified separately by their preserved binary hash.
     native_sources = {str(p.relative_to(root)): sha(p) for p in sorted((root/'src').rglob('*.rs'))}
     driver_files = ['benches/decode.rs', 'benches/run.py', 'benches/build.sh',
-                    'benches/oracle/CMakeLists.txt', 'benches/oracle/benchmark.cpp', 'benches/build_native.py']
+                    'benches/oracle/CMakeLists.txt', 'benches/oracle/benchmark.cpp', 'benches/build_native.py',
+                    'benches/bench_host.py', 'benches/libflac/CMakeLists.txt',
+                    'benches/libflac/benchmark.cpp', 'benches/libflac/opaque.c']
     driver_sources = {name: sha(root/name) for name in driver_files}
-    os.sched_setaffinity(0, {args.cpu})
+    set_affinity(args.cpu)
     paths = []
     for group, selected in [('subset', DEFAULT_SUBSET), ('uncommon', DEFAULT_UNCOMMON)]:
         for path in sorted((args.corpus / group).glob('*.flac')):
@@ -155,7 +158,7 @@ def main():
                 'oracle': str(args.oracle), 'oracle_sha256': sha(args.oracle),
                 'baseline': str(args.baseline), 'baseline_sha256': sha(args.baseline) if args.baseline else None,
                 'cpu': args.cpu, 'rounds': args.rounds, 'target_milliseconds': args.milliseconds,
-                'cpuinfo': Path('/proc/cpuinfo').read_text().split('\n\n')[0],
+                'cpuinfo': cpu_info(),
                 'native_sources': native_sources, 'driver_sources': driver_sources,
                 'cases': case_info, 'unsupported': errors}
     for label, binary in [('native_build', args.native), ('baseline_build', args.baseline)]:

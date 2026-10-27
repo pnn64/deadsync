@@ -94,6 +94,8 @@ See [PARITY.md](PARITY.md) for the decode contract, reports and reproduction.
 
 See [PLAN.md](PLAN.md) for the full scope and unfinished milestones. Fuzz
 targets now have recorded ASan campaigns; see [fuzz/README.md](fuzz/README.md).
-Decode performance work is active. The initial benchmark is slower than the
-references in several classes; see [PERFORMANCE.md](PERFORMANCE.md) for measured
-baselines, methods and remaining work. Performance parity is not yet claimed.
+Decode performance is competitive on the measured Intel x86-64 host: Windows raw
+decoding leads 26 of 27 classes, and Linux/WSL raw decoding takes a median 0.912x
+the fastest CRC-checking reference's time. See [PERFORMANCE.md](PERFORMANCE.md)
+for streaming, startup, seek and memory measurements, remaining Linux gaps,
+first-seek index costs and the limits of these comparisons.

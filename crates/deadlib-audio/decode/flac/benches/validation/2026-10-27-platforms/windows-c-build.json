@@ -1,0 +1,34 @@
+{
+  "timestamp_utc": "2026-10-27T19:51:14Z",
+  "commands": [
+    [
+      "cmake",
+      "-S",
+      "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\benches\\libflac",
+      "-B",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build",
+      "-DREFERENCE_ROOT=C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\flac",
+      "-DOGG_REFERENCE_ROOT=C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\ogg",
+      "-A",
+      "x64",
+      "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded"
+    ],
+    [
+      "cmake",
+      "--build",
+      "C:\\GitHub\\deadsync\\target\\deadlib-flac-reference\\latency-windows-build",
+      "--config",
+      "Release",
+      "--target",
+      "flac_latency_benchmark",
+      "--parallel",
+      "4"
+    ]
+  ],
+  "sources": {
+    "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\benches\\libflac\\benchmark.cpp": "57a1483f1e220f2059833dd42cd6341577c50465ff159d011046b346c59a4dab",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\benches\\libflac\\CMakeLists.txt": "a79066abb6d6173cb6b9ce250abaa14fcf672e716cabd38640b405e8ef1887aa",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\flac\\benches\\libflac\\opaque.c": "28bfb8fb9c458c872596930c3da1c56e4158cad7ca5d15f4f3438501fac7deef"
+  },
+  "binary_sha256": "77778e451cb87ddd9c8034084c26e792a83fec9a26f55ae600f141c7b21e97eb"
+}

@@ -1,14 +1,17 @@
 # FLAC decoder performance work
 
-The current goal is decode performance competitive with established decoders,
-while preserving exact PCM, format coverage, resource limits and checksums.
-The initial measurements below establish a baseline; **performance parity has
-not been achieved**. Encoding performance remains a separate part of the earlier
-implementation plan.
+Decoding is now competitive with established decoders on the measured Intel
+Broadwell x86-64 host, while preserving exact PCM, format coverage, resource
+limits and checksums. Across 27 raw classes, median time relative to the fastest
+CRC-checking reference is 0.805x on native Windows and 0.912x on Linux/WSL.
+Windows leads 26 classes and is 1.7% behind Symphonia on block-size 16. Linux
+retains two roughly 12% raw gaps and a 16.5% common-stereo reader-plus-MD5 gap.
+The final platform evaluation below records these differences, startup, seeks
+and memory. Encoding performance remains a separate part of the earlier plan.
 
 ## Reproducible benchmark
 
-`cargo bench -p deadlib-audio-decode-flac --bench decode -- MODE INPUT ITERATIONS`
+`cargo bench --locked -p deadlib-audio-decode-flac --bench decode -- MODE INPUT ITERATIONS`
 runs the Rust benchmark CLI. The optional fourth argument writes a verified
 frame-boundary index for the C reference benchmark. Inputs are resident before
 timing, and no PCM is written to disk. Each invocation performs one warm-up pass.
@@ -46,7 +49,7 @@ FFmpeg archive from PARITY.md. Example Linux/WSL commands:
 
 ```sh
 bash crates/deadlib-audio/decode/flac/benches/build.sh /tmp/flac-perf "$PWD" /path/to/ffmpeg-9.0.2.tar.xz
-cargo bench -p deadlib-audio-decode-flac --bench decode --no-run --target-dir /tmp/flac-perf-rust
+cargo bench --locked -p deadlib-audio-decode-flac --bench decode --no-run --target-dir /tmp/flac-perf-rust
 # Use the executable path printed by Cargo. Preserve a baseline copy before edits.
 python3 crates/deadlib-audio/decode/flac/benches/run.py --native /path/to/decode-benchmark --oracle /tmp/flac-perf/oracle/flac_decode_benchmark --corpus target/deadlib-flac-reference/conformance --output /tmp/flac-baseline --quick --rounds 5 --milliseconds 80
 ```
@@ -495,8 +498,8 @@ MD5 enabled in both native and libFLAC columns.
 
 High-resolution and large-block readers improve 14.2% and 15.7% with MD5 off,
 and 8.2% and 11.0% with MD5 on. The table retains small changes in other classes.
-The remaining common-reader gap and the two short-LPC raw outliers keep the
-overall performance goal open. Ogg continues to receive complete packets and
+At this milestone, the common-reader gap and the two short-LPC raw outliers kept
+the performance evaluation open. Ogg continues to receive complete packets and
 uses the raw path; its paired measurements are retained in the same report.
 
 Reports: [27-case raw trials](benches/validation/2026-10-27-checkpoints/broad-raw.tsv),
@@ -507,3 +510,125 @@ All 12 unit tests, 43 integration/external gates, three doctests and Clippy pass
 Four fresh 60-second ASan campaigns complete 118,608 executions without failure.
 Codec source hashes agree between tests, fuzzing and the preserved benchmark in
 the [validation record](benches/validation/2026-10-27-checkpoints/final-validation.json).
+
+## Native Windows and final decode evaluation, 2026-10-27
+
+The same validated codec sources were built for native Windows, using Rust
+1.99.1/LLVM 23.1.1 and MSVC 19.44.35229.0 for libFLAC 1.5.0/libogg 1.3.6.
+The Rust bench profile uses LTO and the portable x86-64 target, with the workspace's
+static CRT configuration. libFLAC uses Release optimization, static CRT, LTO,
+and its default enabled assembly/AVX2 intrinsics. The C++ driver uses LTO and a
+separate non-LTO PCM-address escape helper; libogg uses normal Release
+optimization because its older CMake policy ignores the IPO setting. The saved
+project settings and logs establish the actual flags. FFmpeg's optimized
+comparison remains the Linux/WSL 27-class run above.
+
+Five interleaved trials per class, virtual CPU 2 and seed 9639 give native Windows
+a median 0.805x time relative to the fastest available CRC-checking reference.
+Native wins 26 of 27 classes; block-size 16 takes 1.017x Symphonia's time.
+Symphonia's known 32-bit stereo PCM mismatch is retained as an unsupported
+comparison, with libFLAC still providing that class's reference. Selected median
+milliseconds for complete raw-frame decoding:
+
+| Case | Native | libFLAC | Symphonia + CRC |
+| --- | ---: | ---: | ---: |
+| 01: block 4096 | 5.963 | 7.502 | 7.000 |
+| 03: block 16 | 9.195 | 15.313 | 9.044 |
+| 06: block 512 | 6.603 | 8.606 | 7.938 |
+| 12: QLP precision 15 | 4.442 | 5.986 | 5.054 |
+| 14: wasted bits | 4.273 | 6.063 | 4.846 |
+| 15: verbatim | 0.273 | 4.236 | 1.945 |
+| 28: high resolution | 18.020 | 28.207 | 19.939 |
+| 44: 8-channel LPC-32 | 325.981 | 474.812 | 447.780 |
+| uncommon 08: block 65535 | 9.206 | 11.727 | 10.981 |
+
+Fresh native and Ogg readers also lead libFLAC and Symphonia plus CRC in all six
+selected classes with MD5 off. With MD5 enabled, both readers lead libFLAC in all
+six classes. Complete-file milliseconds, including reader construction and
+destruction, follow. MD5 remains enabled on every timed pass in both codecs.
+
+| Case | Native + MD5 | libFLAC + MD5 | Native Ogg + MD5 | libFLAC Ogg + MD5 |
+| --- | ---: | ---: | ---: | ---: |
+| 01 | 9.096 | 10.849 | 9.159 | 11.091 |
+| 03 | 14.538 | 19.656 | 17.815 | 21.141 |
+| 15 | 2.537 | 6.961 | 3.271 | 7.717 |
+| 28 | 32.535 | 42.809 | 36.223 | 46.616 |
+| 44 | 566.671 | 729.997 | 635.556 | 764.337 |
+| uncommon 08 | 15.797 | 16.847 | 16.336 | 18.215 |
+
+First-frame startup includes fresh reader allocation, metadata parsing, decoding
+one complete frame and destruction. Input-file reads remain outside the clock.
+Both native and libFLAC verify frame CRCs. Symphonia's startup mode omits footer
+CRC and remains explicitly identified in the raw reports. Median microseconds:
+
+| Case | Windows native | Windows libFLAC | Linux native | Linux libFLAC |
+| --- | ---: | ---: | ---: | ---: |
+| 01 | 72 | 134 | 54 | 74 |
+| 03 | 9 | 15 | 7 | 14 |
+| 06 | 19 | 28 | 17 | 23 |
+| 12 | 165 | 194 | 109 | 99 |
+| 14 | 19 | 31 | 18 | 24 |
+| 15 | 18 | 184 | 13 | 98 |
+| 28 | 136 | 191 | 96 | 94 |
+| 44 | 2,068 | 3,506 | 2,478 | 3,421 |
+| uncommon 08 | 2,003 | 2,364 | 1,548 | 1,929 |
+
+Exact-seek measurements initialize metadata-only readers outside the clock and
+retain their seek state. Each trial makes two ascending cycles through 97 evenly
+spaced targets and consumes the returned trimmed frame. Aggregate PCM endpoint
+checksums agree between implementations and between warmup policies. Lazy mode
+includes native frame-index discovery; primed mode explicitly visits all 97
+targets before timing in both APIs. Both retain frame CRC checks, with
+whole-stream MD5 unavailable after arbitrary seeks. Primed median microseconds:
+
+| Case | Windows native | Windows libFLAC | Linux native | Linux libFLAC |
+| --- | ---: | ---: | ---: | ---: |
+| 01 | 78.4 | 203.3 | 85.8 | 160.4 |
+| 03 | 1.61 | 6.25 | 1.70 | 8.64 |
+| 28 | 79.8 | 273.5 | 95.1 | 238.7 |
+| 44 | 2,016.7 | 4,204.1 | 2,077.7 | 5,019.5 |
+| uncommon 08 | 1,420.0 | 2,842.1 | 1,396.0 | 2,501.3 |
+
+Native lazy mode leads four of five classes on both platforms. Block-size 16
+exposes its index-discovery cost: Windows averages 57.7 us against libFLAC's
+6.33 us; Linux averages 57.4 against 9.07 us. Native discovers frames by checked
+forward decoding and retains bounded landmarks; libFLAC uses byte search.
+An individual first distant seek can therefore cost a sequential decode to its
+target. Primed timings include the retained index's memory tradeoff; they do not
+establish cold random-seek parity or physical-disk latency.
+
+The final requested-heap probe confirms zero raw allocations after warmup and
+unchanged native streaming peaks: 57,456 bytes for case 01 and 139,350 for case
+43. Ogg peaks are 74,538 and 159,544 bytes, 1,376 bytes above the dense-storage
+milestone because the resumable decoder state is larger. Fresh readers return
+to their starting live allocation count. These two-file probes exclude stack,
+RSS, allocator metadata and seek-index memory.
+
+The measured Windows decode paths now meet or exceed the reference throughput
+across the tested families, within 1.7% on the remaining raw class. Linux raw
+median time is 0.912x the fastest CRC-checking reference; block-size 512 and QLP
+precision 15 remain 12.5% and 11.8% behind. Linux common-stereo native plus MD5
+remains 16.5% behind libFLAC, high resolution 10.9% behind. Large LPC-32 and
+verbatim workloads are substantially faster. These results establish competitive
+sequential decoding on this host. Other CPU architectures, encoding speed and
+cold byte-search seeking remain outside that conclusion. Windows and WSL
+absolute timings are separate populations on a shared host without a frequency
+lock; the reports retain individual trial ranges.
+
+The final codec source hashes exactly match the preceding milestone's 12 unit
+tests, 43 integration/external gates, three doctests and 118,608 ASan executions.
+Fresh Windows/Linux harness audits pass full native/Ogg endpoint checks,
+first-frame work checks and negative MD5-after-warmup probes. Clippy includes the
+new benchmark modes. Portable host adapters, the libFLAC-only C benchmark and
+the separate primed-seek mode are now maintained under `benches/`.
+
+Reports: [Windows 27-class trials](benches/validation/2026-10-27-platforms/windows-broad-raw.tsv),
+[Windows pipelines](benches/validation/2026-10-27-platforms/windows-pipelines-raw.tsv),
+[Windows startup](benches/validation/2026-10-27-platforms/windows-startup-raw.tsv),
+[Linux startup](benches/validation/2026-10-27-platforms/linux-startup-raw.tsv),
+[Windows lazy seeks](benches/validation/2026-10-27-platforms/windows-seek-raw.tsv),
+[Windows primed seeks](benches/validation/2026-10-27-platforms/windows-seek-warm-raw.tsv),
+[Linux lazy seeks](benches/validation/2026-10-27-platforms/linux-seek-raw.tsv),
+[Linux primed seeks](benches/validation/2026-10-27-platforms/linux-seek-warm-raw.tsv),
+[heap checks](benches/validation/2026-10-27-platforms/memory-checkpoints.json),
+[provenance and validation](benches/validation/2026-10-27-platforms/final-validation.json).

@@ -20,9 +20,12 @@ Milestones (commit each when verified):
 5. Validation (implemented bounded campaigns and differential gates; see PARITY.md and fuzz/README.md): libFLAC, FFmpeg and Symphonia differential tests, official conformance
    corpus, malformed/truncated inputs, streaming splits, metadata, checksums,
    seek positions, fuzz targets and reproducible runs.
-6. Performance (in progress; baseline in PERFORMANCE.md): reproducible whole-file/stream/startup/seek/encode benchmarks,
-   ratios, allocations and memory versus references; optimize measured hot paths
-   and document evidence and limitations without asserting unmeasured parity.
+6. Performance (decoding measured and optimized; encoding benchmarks remain):
+   whole-file, streaming, startup and exact-seek comparisons, ratios and
+   requested-heap probes are recorded in PERFORMANCE.md. Native Windows and
+   Linux/WSL show competitive sequential decoding, with remaining Linux gaps,
+   cold index-discovery costs and unmeasured architectures explicitly retained.
+   Encoder performance and wider memory/platform coverage remain unfinished.
 
 Completion requires current evidence for every item, not just passing roundtrips.
 Record commands, versions, corpus provenance, coverage gaps and measurements in
@@ -30,5 +33,6 @@ the crate documentation as each milestone is reached.
 
 Native file-backed Read+Seek and SEEKTABLE-assisted seeks are now implemented;
 evidence is in SEEKING.md. Borrowed-input Decoder retains its lazy sequential
-index. Measured buffer/allocation improvements remain outstanding. Default resource
+index. Dense PCM and residual checkpoints now have measured buffer/allocation
+improvements; see PERFORMANCE.md. Default resource
 budgets deliberately require configuration for extreme metadata/frame payloads.

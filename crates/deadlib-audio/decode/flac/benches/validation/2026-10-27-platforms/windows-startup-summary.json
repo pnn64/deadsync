@@ -1,0 +1,218 @@
+[
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "startup",
+    "median_ns_per_unit": 8.795482494212964,
+    "min_ns_per_unit": 8.761574074074074,
+    "max_ns_per_unit": 9.142423402134774,
+    "median_ns_per_iteration": 72052.5925925926
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "libflac-new-startup",
+    "median_ns_per_unit": 16.36951742651256,
+    "min_ns_per_unit": 16.096726508989725,
+    "max_ns_per_unit": 16.636827256944443,
+    "median_ns_per_iteration": 134099.08675799088
+  },
+  {
+    "case": "subset/01 - blocksize 4096.flac",
+    "mode": "symphonia-new-startup",
+    "median_ns_per_unit": 18.606766844107433,
+    "min_ns_per_unit": 18.498020546109068,
+    "max_ns_per_unit": 19.084516537734885,
+    "median_ns_per_iteration": 152426.6339869281
+  },
+  {
+    "case": "subset/03 - blocksize 16.flac",
+    "mode": "startup",
+    "median_ns_per_unit": 269.77871665371663,
+    "min_ns_per_unit": 244.4323038073038,
+    "max_ns_per_unit": 309.850912975913,
+    "median_ns_per_iteration": 8632.918932918932
+  },
+  {
+    "case": "subset/03 - blocksize 16.flac",
+    "mode": "libflac-new-startup",
+    "median_ns_per_unit": 472.18460224499756,
+    "min_ns_per_unit": 467.5634455832113,
+    "max_ns_per_unit": 525.0922706198146,
+    "median_ns_per_iteration": 15109.907271839922
+  },
+  {
+    "case": "subset/03 - blocksize 16.flac",
+    "mode": "symphonia-new-startup",
+    "median_ns_per_unit": 247.65003727634195,
+    "min_ns_per_unit": 242.75596421471172,
+    "max_ns_per_unit": 257.2471421471173,
+    "median_ns_per_iteration": 7924.801192842942
+  },
+  {
+    "case": "subset/06 - blocksize 512.flac",
+    "mode": "startup",
+    "median_ns_per_unit": 18.403444175567422,
+    "min_ns_per_unit": 17.99224486815754,
+    "max_ns_per_unit": 18.80176172396529,
+    "median_ns_per_iteration": 18845.12683578104
+  },
+  {
+    "case": "subset/06 - blocksize 512.flac",
+    "mode": "libflac-new-startup",
+    "median_ns_per_unit": 27.457273345896148,
+    "min_ns_per_unit": 27.12190509840871,
+    "max_ns_per_unit": 28.35917870603015,
+    "median_ns_per_iteration": 28116.247906197656
+  },
+  {
+    "case": "subset/06 - blocksize 512.flac",
+    "mode": "symphonia-new-startup",
+    "median_ns_per_unit": 76.03844169246646,
+    "min_ns_per_unit": 75.57394462719299,
+    "max_ns_per_unit": 78.29793924148606,
+    "median_ns_per_iteration": 77863.36429308566
+  },
+  {
+    "case": "subset/12 - qlp precision 15 bit.flac",
+    "mode": "startup",
+    "median_ns_per_unit": 17.894630351479915,
+    "min_ns_per_unit": 17.321424638830162,
+    "max_ns_per_unit": 18.31666042694386,
+    "median_ns_per_iteration": 164916.9133192389
+  },
+  {
+    "case": "subset/12 - qlp precision 15 bit.flac",
+    "mode": "libflac-new-startup",
+    "median_ns_per_unit": 21.035484912459786,
+    "min_ns_per_unit": 20.474293762373176,
+    "max_ns_per_unit": 21.35252335436773,
+    "median_ns_per_iteration": 193863.0289532294
+  },
+  {
+    "case": "subset/12 - qlp precision 15 bit.flac",
+    "mode": "symphonia-new-startup",
+    "median_ns_per_unit": 24.556107954545453,
+    "min_ns_per_unit": 23.684482473544975,
+    "max_ns_per_unit": 24.941518984487736,
+    "median_ns_per_iteration": 226309.0909090909
+  },
+  {
+    "case": "subset/14 - wasted bits.flac",
+    "mode": "startup",
+    "median_ns_per_unit": 18.64989101317226,
+    "min_ns_per_unit": 18.52698756995632,
+    "max_ns_per_unit": 19.032357997201746,
+    "median_ns_per_iteration": 19097.488397488396
+  },
+  {
+    "case": "subset/14 - wasted bits.flac",
+    "mode": "libflac-new-startup",
+    "median_ns_per_unit": 29.838796029233173,
+    "min_ns_per_unit": 28.43684263315406,
+    "max_ns_per_unit": 31.14743044109993,
+    "median_ns_per_iteration": 30554.92713393477
+  },
+  {
+    "case": "subset/14 - wasted bits.flac",
+    "mode": "symphonia-new-startup",
+    "median_ns_per_unit": 69.09412202380952,
+    "min_ns_per_unit": 67.60037348272643,
+    "max_ns_per_unit": 75.00528857376284,
+    "median_ns_per_iteration": 70752.38095238095
+  },
+  {
+    "case": "subset/15 - only verbatim subframes.flac",
+    "mode": "startup",
+    "median_ns_per_unit": 2.2492164048225005,
+    "min_ns_per_unit": 2.1775132400564474,
+    "max_ns_per_unit": 2.353490771216719,
+    "median_ns_per_iteration": 18425.580788305924
+  },
+  {
+    "case": "subset/15 - only verbatim subframes.flac",
+    "mode": "libflac-new-startup",
+    "median_ns_per_unit": 22.430968915343914,
+    "min_ns_per_unit": 21.55571185722553,
+    "max_ns_per_unit": 23.100805534887566,
+    "median_ns_per_iteration": 183754.49735449735
+  },
+  {
+    "case": "subset/15 - only verbatim subframes.flac",
+    "mode": "symphonia-new-startup",
+    "median_ns_per_unit": 20.940053440188816,
+    "min_ns_per_unit": 20.439471797323137,
+    "max_ns_per_unit": 22.885966255377628,
+    "median_ns_per_iteration": 171540.91778202678
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "startup",
+    "median_ns_per_unit": 16.596784412701073,
+    "min_ns_per_unit": 16.219642782339143,
+    "max_ns_per_unit": 16.815627356317023,
+    "median_ns_per_iteration": 135960.8579088472
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "libflac-new-startup",
+    "median_ns_per_unit": 23.335329120848293,
+    "min_ns_per_unit": 22.86216968693896,
+    "max_ns_per_unit": 25.068420738891383,
+    "median_ns_per_iteration": 191163.01615798922
+  },
+  {
+    "case": "subset/28 - high resolution audio, default settings.flac",
+    "mode": "symphonia-new-startup",
+    "median_ns_per_unit": 18.364977836608887,
+    "min_ns_per_unit": 18.052244186401367,
+    "max_ns_per_unit": 19.384026527404785,
+    "median_ns_per_iteration": 150445.8984375
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "startup",
+    "median_ns_per_unit": 15.774938409978693,
+    "min_ns_per_unit": 12.975311279296875,
+    "max_ns_per_unit": 20.3942177512429,
+    "median_ns_per_iteration": 2067652.7272727273
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "libflac-new-startup",
+    "median_ns_per_unit": 26.75029613353588,
+    "min_ns_per_unit": 23.232890941478587,
+    "max_ns_per_unit": 61.198114465784144,
+    "median_ns_per_iteration": 3506214.814814815
+  },
+  {
+    "case": "subset/44 - 8-channel surround, 192kHz, 24 bit, using only 32nd order predictors.flac",
+    "mode": "symphonia-new-startup",
+    "median_ns_per_unit": 25.453948974609375,
+    "min_ns_per_unit": 23.04669893704928,
+    "max_ns_per_unit": 40.03460223858173,
+    "median_ns_per_iteration": 3336300.0
+  },
+  {
+    "case": "uncommon/08 - blocksize 65535.flac",
+    "mode": "startup",
+    "median_ns_per_unit": 15.278858625162128,
+    "min_ns_per_unit": 15.029037918669413,
+    "max_ns_per_unit": 15.637567711909666,
+    "median_ns_per_iteration": 2002600.0
+  },
+  {
+    "case": "uncommon/08 - blocksize 65535.flac",
+    "mode": "libflac-new-startup",
+    "median_ns_per_unit": 18.033729704592602,
+    "min_ns_per_unit": 17.61483322252377,
+    "max_ns_per_unit": 18.48937499772931,
+    "median_ns_per_iteration": 2363680.9523809524
+  },
+  {
+    "case": "uncommon/08 - blocksize 65535.flac",
+    "mode": "symphonia-new-startup",
+    "median_ns_per_unit": 16.215622435744727,
+    "min_ns_per_unit": 15.863855269734353,
+    "max_ns_per_unit": 17.16288071648893,
+    "median_ns_per_iteration": 2125381.6326530613
+  }
+]
