@@ -28,3 +28,7 @@ harness = false
 [[bench]]
 name = "resources"
 harness = false
+
+[[bench]]
+name = "encoding"
+harness = false

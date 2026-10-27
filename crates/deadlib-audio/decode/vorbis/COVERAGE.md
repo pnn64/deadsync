@@ -285,14 +285,19 @@ error, coding subset, resource policies and outstanding encoder work.
   and wider real ITGmania/StepMania song-pack coverage beyond the pinned shipped
   songs. The two documented compatibility policies do not conceal packet holes
   or repair arbitrary malformed containers.
-* Competitive native encoding quality/bitrate control, real-music lossy
-  evaluation, comparative encoding performance, measured decoding pipeline
+* Competitive native encoding quality/bitrate control, broader real-music lossy
+  evaluation and encoding performance, measured decoding pipeline
   optimization and broader throughput/startup plus memory/allocation/seek
   comparisons with libvorbis and Symphonia. The five-file
   [resource/seek baseline](RESOURCES.md) now covers requested heap, process memory
   and 500 shared PCM-window requests, exposing substantial seek performance
   gaps. This remains an initial sample rather than a complete benchmark suite.
   No SIMD or competitive performance claims yet.
+  The initial [encoding baseline](ENCODING_PERFORMANCE.md) now measures six
+  shared PCM inputs, 42 independently decoded streams and 294 timing trials.
+  It exposes a compression gap on two song excerpts and profiles actual packet
+  symbols for a candidate entropy improvement; that projection is not yet an
+  implemented optimization or a matched-quality performance claim.
 
 Raw packet and full-container comparisons are separate: raw PCM tests assign
 unknown granules and omit EOS trimming; `ogg_mapping` tests independently use

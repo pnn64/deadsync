@@ -225,5 +225,13 @@ Remaining encoder work includes adaptive floor fitting, transient block
 selection, channel coupling, entropy/VQ optimization, perceptual masking,
 quality and bitrate control, wider real-music rate-distortion evaluation and
 comparative throughput/startup/memory measurements against libvorbis encoding.
+The first [resident-PCM encoding baseline](ENCODING_PERFORMANCE.md) now checks
+42 streams through native, libvorbisfile and Symphonia, including two real song
+excerpts. It measures source error, output size, full encoding and warm
+initialization/first-packet time. Xiph q0.9 has lower bitrate and higher source
+SNR than native stage 2 on those excerpts. Packet symbol profiling identifies
+a concrete entropy-coding opportunity; its projected saving is not yet a
+production optimization. Perceptual/rate control and broader resource/quality
+comparisons remain open.
 The broader decoder conformance, sparse seeking and performance work in
 [COVERAGE.md](COVERAGE.md) also remains part of the requested goal.

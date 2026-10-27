@@ -117,6 +117,11 @@ decoding validate the output, including large packets and 255-channel streams.
 Source SNR and size measurements document its lossy precision tradeoffs. The
 encoder still needs perceptual analysis, rate control, compression optimization
 and comparative performance/real-music quality work.
+The first [encoding comparison](vorbis/ENCODING_PERFORMANCE.md) adds 42
+independently decoded native/Xiph outputs, 294 timing trials and exact shared
+PCM excerpts from real songs. Source SNR, bitrate and CPU time are separate
+measurements. The reference encoder exposes a compression gap; symbol profiling
+identifies a candidate lossless change to the native packet representation.
 
 ## Normative sources
 
