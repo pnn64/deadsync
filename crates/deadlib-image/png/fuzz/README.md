@@ -17,6 +17,7 @@ cargo +nightly fuzz run encode_stream -- -runs=20000 -seed=782347 -max_len=256 -
 cargo +nightly fuzz run profiles -- -runs=20000 -seed=782347 -max_len=4096 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 cargo +nightly fuzz run deflate_stream -- -runs=20000 -seed=782347 -max_len=131072 -timeout=5 -rss_limit_mb=1024 -print_final_stats=1
 CC=clang CFLAGS="-fsanitize=address" cargo +nightly fuzz run huffman -- -runs=20000 -seed=782347 -max_len=64 -timeout=10 -rss_limit_mb=1024 -print_final_stats=1
+cargo +nightly fuzz run text_body -- -runs=20000 -seed=782347 -max_len=4097 -timeout=10 -rss_limit_mb=1024 -print_final_stats=1
 ```
 
 Seed generation copies the checked-in independent PNGSuite and APNG fixtures and
@@ -27,9 +28,13 @@ all property flags, case variants of the 25 standard names and every permutation
 of a six-chunk indexed image. Seed filenames encode the literal case-sensitive
 names as hexadecimal so they remain distinct on Windows filesystems.
 Another 3,710 independent files cover text/profile/palette name bytes, spacing
-and length boundaries across seven named-metadata wire forms. Current fresh PNG
+and length boundaries across seven named-metadata wire forms. That milestone's PNG
 corpora contain 5,779 files each; `reports/named-source.json` records their exact
 hashes and the corresponding 40,000-execution ASan campaigns.
+Text-body seeds add all 256 byte values in both tEXt/zTXt to the PNG corpora,
+bringing current fresh counts to 6,291 files each. The dedicated `text_body`
+target has 4,304 initial inputs: flags/single-byte values plus 79-/80-/4096-byte
+plain, graphic, late-control and embedded-NUL bodies.
 Working corpora, crash artifacts and builds are
 ignored. Committed fixtures and the seed generator reproduce the initial corpus;
 do not reuse a previously mutated corpus when reproducing an exact smoke run.
@@ -217,3 +222,18 @@ capacity must remain constant. This reaches arbitrary byte patterns and multiple
 libFuzzer mutates and reduces it. The matcher follow-up also reruns
 `encode_stream` with a fresh `fuzz/corpus/encode_lz_20261026` copy of its 1,080
 deterministic 12-byte seeds. Exact commands are in the retained campaign logs.
+
+
+## Structured Latin-1 text-body target
+
+`text_body` consumes a flag byte plus at most 4,096 body bytes. Flags select
+plain/compressed text, placement and Stored/Fast construction. Independent
+stored-zlib/CRC fixtures verify non-null decoder recovery separately from strict
+encoder repertoire. It checks typed construction, raw-metadata prewrite
+validation, both writer outputs, exact metadata/pixels and Rust png values.
+Invalid encoder inputs must leave the destination empty. The initial 4,304
+files cover all byte/flag choices, empty text, 79-/80-/4096-byte graphic bodies,
+late controls and embedded NUL. `reports/text-body-source.json` records the
+20,000-run target campaign plus 20,000 fresh decode and streaming runs with the
+512 added PNG-body seeds. These 60,000 successful ASan executions are included
+in the historical total; the expected failing pre-fix regression is not.

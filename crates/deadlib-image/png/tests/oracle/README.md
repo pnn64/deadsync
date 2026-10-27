@@ -167,3 +167,20 @@ also checks independent big-endian values across the full normal test matrix.
 `keywords-validation.log` and `keywords-validation.json` retain the commands,
 counts and hashes, including compatibility checks of the original pixel and
 ICC/Exif oracle modes.
+
+
+## Latin-1 text-body boundary
+
+```powershell
+cargo test -p deadlib-image-png --release --test text_body libpng_all_body_bytes_and_native_writer_values -- --ignored --nocapture
+```
+
+Using the same version-1 named-metadata mode, this checks all 256 single-byte
+bodies in both tEXt and zTXt, plus both native writers for every conforming byte.
+All 384 conforming raw values and 768 native-writer values match exactly,
+including LF, spaces and NBSP. Libpng retains the 126 non-null malformed control
+bodies and changes the two NUL bodies. Native raw decode retains non-null bodies;
+native encoders reject the control/NUL inputs before output. Recovery behavior
+is recorded separately from encoder conformance. `text-body-validation.log`
+and `.json` retain results and hashes; `text-body-before.log` and `.json` show
+the final regression test failing against the isolated pre-fix source.

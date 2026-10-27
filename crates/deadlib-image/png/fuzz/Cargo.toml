@@ -73,3 +73,10 @@ path = "fuzz_targets/huffman.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "text_body"
+path = "fuzz_targets/text_body.rs"
+test = false
+doc = false
+bench = false

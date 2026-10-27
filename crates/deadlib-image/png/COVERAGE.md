@@ -18,13 +18,14 @@ evidence, application responsibilities and explicitly open items.
 | Five filters and Adam7 decode / encode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Indexed-color error recovery (13.1) | `tests/palette.rs`; all indexed depths, Adam7, APNG, one-byte reads/events, independent Rust png encoding | Native indices retained, opaque-black expansion/rendering; opt-in strict decode and always-strict encoding |
 | Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / field / IANA / profile tests, PNGSuite | Typed wire roundtrips, UTF-8, BCP47 registration, method distinctions, sample masks, histogram usage and profile containers checked; extension-specific and payload semantics still require audit |
+| Latin-1 text-body encoder/recovery boundary | `tests/text_body.rs`, shared encoder validator, independent stored-zlib fixtures and C named-metadata oracle | All 256 byte values across 6,144 files; strict graphic Latin-1/LF encoding, non-null decoder recovery, NBSP/long text and iTXt Unicode distinctions verified |
 | sRGB fallback metadata consistency | `tests/metadata_fields.rs` | Both encoders enforce Table 17 gAMA/cHRM values with sRGB; all 15 formats / four intents and incompatible fallback orders pass |
 | cICP code-point validity | `tests/cicp.rs`, H.273 (07/2024) | All 131,072 primaries/transfer/range combinations, all matrix/flag bytes and reserved-code fallback behavior pass |
 | APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing tests | 60 format/default-role/interlace combinations, independent encodings and 20-frame fixture pass; broader external APNG corpus pending |
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eight targets; 350,000 recorded successful sanitizer executions across milestones, including 30,000 with the compatible positive oracle, 40,000 with chunk-grammar seeds and 40,000 with named-metadata seeds; longer campaigns and native fuzz coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Nine targets; 410,000 recorded successful sanitizer executions across milestones, including 60,000 with the text-body fix and dedicated target; longer campaigns and native fuzz coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -639,9 +640,72 @@ Source/corpus/binary hashes and runtime instrumentation checks are retained in
 the historical successful total to 350,000; native-only fuzz coverage and longer
 campaigns remain open.
 
-Runtime library logic did not change in this milestone. This audit exposed a
-separate open encoder boundary: tEXt/zTXt construction currently accepts all
-255 non-null byte values, including 63 control bytes outside the printable
-Latin-1/LF repertoire specified in 11.3.3.1. Strict encoder handling and permissive
-raw decoding need separate verification/correction. This is the next metadata
-item; the broader APNG/fallback/rendering and performance work remains open.
+Runtime library logic did not change in that milestone. Its audit exposed a
+separate encoder boundary: tEXt/zTXt construction then accepted all 255 non-null
+byte values, including 63 controls outside the printable Latin-1/LF repertoire
+specified in 11.3.3.1. The following milestone corrects that boundary. The broader
+APNG/fallback/rendering and performance work remains open.
+
+
+## Strict Latin-1 text encoding with decoder recovery (2026-10-27)
+
+Both PNG writers and typed `Metadata::Text::to_chunk` now enforce the text-body
+repertoire from Third Edition 11.3.3.1/11.3.3.2: LF, bytes 0x20?0x7E and
+0xA0?0xFF. This differs from the keyword rules: body spaces may lead, trail or
+repeat, and NBSP is valid. Invalid C0/C1 controls and NUL are rejected before
+writer output. Validation is a single allocation-free pass; no text bytes are
+normalized or converted. Reencoding a recovered legacy control body therefore
+returns an error until the caller supplies conforming metadata.
+
+Decode still retains every non-null byte, including the 63 non-LF controls,
+as raw and typed text. NUL remains invalid. iTXt keeps its distinct Unicode
+rules: non-null control characters are discouraged but permitted; the Latin-1
+encoder check is confined to tEXt/zTXt. Display filtering remains application
+policy. The normative source is the pinned Third Edition used by the clause
+audit, especially 11.3.3.1?11.3.3.4 and 13.7.
+
+`tests/text_body.rs` checks all 256 byte values in four contexts, both chunk
+types and all three placements (6,144 independent files). Buffered and one-/
+seven-byte readers verify exact native samples, raw chunks and typed bodies;
+both writers and Stored/Fast typed construction check the separate expected
+encoder domain. All 4,608 conforming file cases have exact writer roundtrips
+and Rust png text/pixel comparisons. The 6,120 non-null files decode, while
+1,536 cases reject encoding. One-byte push events, fused NUL errors, all 256
+Unicode code points through iTXt, empty text and body lengths through 65,537
+bytes are checked separately. The latter includes NBSP-only bodies and lengths
+around 79 and 64 KiB, with both compression modes and both writers.
+
+The final ESC regression test fails against the retained isolated `4adad99dd`
+source and passes after the fix. Its before-source and final-test hashes,
+command and expected exit 101 are in `text-body-before.json`/`.log`.
+Libpng compares 384 conforming raw byte bodies and 768 native writer outputs
+exactly. Its recovery retains 126 malformed non-null control bodies and changes
+two NUL bodies; those choices are recorded separately from native encoder
+conformance. The existing 1,061-case C native-pixel matrix also passes.
+
+Release and independent offline runs pass 90 tests, with nine optional C tests
+ignored. Both relevant optional C tests pass, as do main and fuzz all-target
+Clippy with warnings denied. The isolated production dependency tree remains
+only `deadlib-image`. Exact commands, source/oracle hashes and suite results
+are retained in `text-body-validation.log`/`.json`.
+
+The new ninth fuzz target, `text_body`, uses bounded independent PNG/zlib/CRC
+fixtures to check raw recovery, typed construction, encoder validation before
+output, both writers and independent Rust png values. Its 4,304 structured
+seeds total 280,720 bytes, including all single bytes/flags, body lengths
+79/80/4096, graphic text, late controls and embedded NUL. Both PNG fuzz corpora
+also gain 512 independent byte-body files, for 6,291 files / 1,309,712 bytes
+(maximum 63,435 bytes) each.
+
+Fresh ASan `text_body`: 20,000 executions, 46 fuzzing seconds, 437 MiB peak RSS; instrumented runtime entry verified.
+
+Fresh ASan `decode`: 20,000 executions, 5 fuzzing seconds, 414 MiB peak RSS; instrumented runtime entry verified.
+
+Fresh ASan `png_stream`: 20,000 executions, 13 fuzzing seconds, 440 MiB peak RSS; instrumented runtime entry verified.
+
+The 60,000 successful executions bring the historical successful count to
+410,000. Full logs and source/corpus/binary hashes are in
+`fuzz/reports/text-body-source.json` and the corresponding target logs. Smoke
+coverage counters include harness/reference code; longer campaigns, native-only
+fuzz coverage, remaining field/APNG audits, broader external rendered-frame
+comparisons and competitive pipeline/encoder performance remain open.

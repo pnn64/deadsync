@@ -65,6 +65,8 @@ pub enum Metadata {
     Exif(Vec<u8>),
     /// Year, month, day, hour, minute, second (60 permits a leap second).
     Time([u16; 6]),
+    /// tEXt/zTXt. Encoding permits graphic Latin-1 (including non-breaking
+    /// space) and LF. Decoding retains other non-null bytes for recovery.
     Text {
         keyword: Vec<u8>,
         text: Vec<u8>,
@@ -115,6 +117,19 @@ fn text_valid(bytes: &[u8]) -> Result<(), Error> {
     } else {
         Ok(())
     }
+}
+fn latin1_text(bytes: &[u8]) -> Result<(), Error> {
+    // PNG Third Edition 11.3.3.1 / 11.3.3.2. Unlike keywords, text permits
+    // non-breaking space. Other controls can be recovered by decoders (13.7)
+    // but shall not be newly emitted as conforming tEXt/zTXt text.
+    for &byte in bytes {
+        match byte {
+            0 => return Err(Error::Invalid("null in metadata text")),
+            b'\n' | 0x20..=0x7e | 0xa0..=0xff => (),
+            _ => return Err(Error::Invalid("Latin-1 text repertoire")),
+        }
+    }
+    Ok(())
 }
 fn inflate(bytes: &[u8], remaining: &mut usize) -> Result<Vec<u8>, Error> {
     let out = zlib::decompress(bytes, *remaining)?;
@@ -344,7 +359,11 @@ fn parse(
             } else {
                 d.to_vec()
             };
-            text_valid(&text)?;
+            if encoding {
+                latin1_text(&text)?;
+            } else {
+                text_valid(&text)?;
+            }
             Metadata::Text {
                 keyword: key.to_vec(),
                 text,
@@ -713,7 +732,7 @@ impl Metadata {
                 compressed,
             } => {
                 keyword(key)?;
-                text_valid(text)?;
+                latin1_text(text)?;
                 data.extend_from_slice(key);
                 data.push(0);
                 if *compressed {

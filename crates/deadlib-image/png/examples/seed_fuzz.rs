@@ -7,6 +7,8 @@ mod huffman;
 #[allow(dead_code)]
 #[path = "../tests/support/named.rs"]
 mod named;
+#[path = "../tests/support/text_body.rs"]
+mod text_body;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -118,6 +120,57 @@ fn main() -> std::io::Result<()> {
         }
     }
     println!("Named PNG metadata: {named_count} independent seeds");
+    let text_body_dir = corpus.join("text_body");
+    fs::create_dir_all(&text_body_dir)?;
+    for flags in 0u8..16 {
+        fs::write(text_body_dir.join(format!("empty-{flags}")), [flags])?;
+        for byte in 0u8..=255 {
+            fs::write(
+                text_body_dir.join(format!("byte-{flags}-{byte}")),
+                [flags, byte],
+            )?;
+            if flags < 2 {
+                let bytes = text_body::fixture(
+                    &[byte],
+                    flags != 0,
+                    deadlib_image_png::ChunkPosition::BeforePalette,
+                );
+                for directory in [&png, &png_stream] {
+                    fs::write(directory.join(format!("body-{flags}-{byte}")), &bytes)?;
+                }
+            }
+        }
+        for size in [79, 80, 4096] {
+            for style in 0..4 {
+                let mut text: Vec<_> = (0..size)
+                    .map(|n| {
+                        if style == 0 {
+                            b'A'
+                        } else {
+                            match n % 192 {
+                                0 => b'\n',
+                                1..=95 => (31 + n % 192) as u8,
+                                _ => (64 + n % 192) as u8,
+                            }
+                        }
+                    })
+                    .collect();
+                if style == 2 {
+                    text[size - 1] = 0x1b;
+                }
+                if style == 3 {
+                    text[size / 2] = 0;
+                }
+                let mut input = vec![flags];
+                input.extend(text);
+                fs::write(
+                    text_body_dir.join(format!("body-{flags}-{size}-{style}")),
+                    input,
+                )?;
+            }
+        }
+    }
+    println!("Latin-1 text bodies: 512 PNG seeds and 4304 structured seeds");
     for entry in fs::read_dir(root.join("tests/fixtures/pngsuite"))? {
         let path = entry?.path();
         if path.extension().is_none_or(|v| v != "png") {

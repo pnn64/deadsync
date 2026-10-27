@@ -1,21 +1,21 @@
-﻿Isolated workspace: C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-a949a16ad0774bbbbe2e1092fe00a1b7
+﻿Isolated workspace: C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-fe08cb5f13a649d1ba0488659adda99f
 Command: cargo test -p deadlib-image -p deadlib-image-png --offline
 rustc 1.99.1 (58cf8f9c3 2026-10-13)
 cargo 1.99.1 (5f94df478 2026-08-27)
      Locking 11 packages to highest Rust 1.97 compatible versions
    Compiling simd-adler32 v0.3.10
-   Compiling crc32fast v1.5.3
    Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.3
    Compiling cfg-if v1.0.5
-   Compiling deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-a949a16ad0774bbbbe2e1092fe00a1b7)
+   Compiling deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-fe08cb5f13a649d1ba0488659adda99f)
    Compiling bitflags v2.13.2
+   Compiling deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-fe08cb5f13a649d1ba0488659adda99f\png)
    Compiling miniz_oxide v0.9.1
-   Compiling fdeflate v0.3.7
    Compiling miniz_oxide v0.8.9
-   Compiling deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-a949a16ad0774bbbbe2e1092fe00a1b7\png)
+   Compiling fdeflate v0.3.7
    Compiling flate2 v1.1.10
    Compiling png v0.18.1
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.28s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.74s
      Running unittests src\lib.rs (target\debug\deps\deadlib_image-7341d42afe0051e4.exe)
 
 running 0 tests
@@ -32,7 +32,7 @@ test checksum::tests::adler_block_and_modulus_boundaries ... ok
 test zlib::matcher::tests::every_prefix_mismatch_and_tail ... ok
 test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
 
-test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
 
      Running tests\apng.rs (target\debug\deps\apng-38d3302bd0874a61.exe)
 
@@ -42,7 +42,7 @@ test decode_independent_reference_apng ... ok
 test independent_twenty_frame_fixture ... ok
 test all_formats_apng_default_roles_and_interlace ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.60s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.46s
 
      Running tests\chunks.rs (target\debug\deps\chunks-5788c34ed0ba63e6.exe)
 
@@ -55,7 +55,7 @@ test all_core_chunk_permutations_and_unknown_insertions ... ok
 test standard_names_are_literal_not_case_folded ... ok
 test every_property_bit_and_name_byte ... ok
 
-test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.65s
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.72s
 
      Running tests\cicp.rs (target\debug\deps\cicp-14c7b610ee939f85.exe)
 
@@ -64,14 +64,14 @@ test all_png_matrix_and_full_range_flag_values ... ok
 test reserved_codes_preserve_wire_data_and_fall_back_in_precedence ... ok
 test all_primaries_transfer_pairs_and_range_flags ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.30s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.49s
 
      Running tests\compositing.rs (target\debug\deps\compositing-e7de915ed00ec819.exe)
 
 running 3 tests
 test explicit_precision_palette_and_transparency_expansion ... ok
-test source_over_and_disposal_known_answers ... ok
 test separate_default_and_first_previous ... ok
+test source_over_and_disposal_known_answers ... ok
 
 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
@@ -84,7 +84,7 @@ test mixed_block_alignment_and_prefetched_stored_bytes ... ok
 test bidirectional_differential ... ok
 test deterministic_mutation_campaign ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.68s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 8.33s
 
      Running tests\deflate_stream.rs (target\debug\deps\deflate_stream-32b21059cc86bc8e.exe)
 
@@ -94,7 +94,7 @@ test cross_block_history_and_separate_finish ... ok
 test mixed_compressibility_block_transitions_and_full_window_reuse ... ok
 test input_output_fragments_and_block_boundaries ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.53s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.78s
 
      Running tests\huffman.rs (target\debug\deps\huffman-00868d87b3dc2656.exe)
 
@@ -107,7 +107,7 @@ test every_complete_code_length_histogram ... ok
 test all_dynamic_count_fields ... ok
 test all_length_distance_values_and_fifteen_bit_codes ... ok
 
-test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 24.62s
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 24.32s
 
      Running tests\inflate_stream.rs (target\debug\deps\inflate_stream-eb4c90ad5a588dec.exe)
 
@@ -116,7 +116,7 @@ test zero_capacity_prefix_truncations_and_terminal_errors ... ok
 test every_input_output_fragment_combination ... ok
 test ring_wrap_history_and_long_matches ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.06s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.40s
 
      Running tests\keywords.rs (target\debug\deps\keywords-bee9e10564deae42.exe)
 
@@ -128,7 +128,7 @@ test suggested_palette_depth_entry_shape_sample_and_frequency_boundaries ... ok
 test named_stream_events_and_legal_text_positions ... ok
 test all_keyword_bytes_lengths_and_spacing_in_every_named_wire_form ... ok
 
-test result: ok. 4 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 42.91s
+test result: ok. 4 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 42.79s
 
      Running tests\language_registry.rs (target\debug\deps\language_registry-119602f934b7c2ce.exe)
 
@@ -136,7 +136,7 @@ running 2 tests
 test private_ranges_deprecated_codes_and_registered_extensions ... ok
 test every_pinned_iana_subtag_range_and_extlang_prefix_is_encodable ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
 
      Running tests\libpng.rs (target\debug\deps\libpng-62f7916e9ecec2bd.exe)
 
@@ -174,7 +174,7 @@ test histograms_cannot_claim_used_indices_are_unused ... ok
 test unused_transparency_background_bits_are_masked_and_reencoded_as_zero ... ok
 test srgb_requires_compatible_fallback_gamma_and_chromaticities_when_encoding ... ok
 
-test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
 
      Running tests\palette.rs (target\debug\deps\palette-8325ee86f273abb5.exe)
 
@@ -182,7 +182,7 @@ running 2 tests
 test independent_palette_overflow_fixture ... ok
 test out_of_range_indices_preserve_samples_render_black_and_remain_invalid_for_encoders ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
 
      Running tests\png_stream.rs (target\debug\deps\png_stream-f660d07fc3cdfbcb.exe)
 
@@ -203,14 +203,14 @@ test sixteen_bit_gradient_compression_regression ... ok
 test bounded_encoder_scratch_and_maximum_chunk_size ... ok
 test all_formats_fragmented_writes_and_chunks ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.12s
 
      Running tests\pngsuite.rs (target\debug\deps\pngsuite-97e00989336d2ad3.exe)
 
 running 1 test
 test pngsuite_native_samples_and_reencoding ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.07s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.96s
 
      Running tests\profiles.rs (target\debug\deps\profiles-c1679cd0a8b01709.exe)
 
@@ -222,7 +222,7 @@ test icc_header_tag_bounds_duplicates_and_overlap_errors_recover_as_raw_metadata
 test exif_header_endianness_first_directory_bounds_and_future_magic ... ok
 test independent_icc_profiles_all_matching_formats_and_table_orders ... ok
 
-test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.26s
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.04s
 
      Running tests\static_png.rs (target\debug\deps\static_png-8ceb40fc0dd143b8.exe)
 
@@ -231,7 +231,7 @@ test decode_reference_encodings ... ok
 test one_byte_idat_and_truncations ... ok
 test complete_native_format_filter_and_adam7_matrix ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.91s
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.47s
 
      Running tests\text.rs (target\debug\deps\text-d49ce81f1b5141db.exe)
 
@@ -241,7 +241,18 @@ test whatwg_utf8_replacement_bom_and_raw_retention ... ok
 test bcp47_grammar_grandfathered_private_extensions_and_duplicates ... ok
 test uncompressed_method_is_ignored_only_by_decoders ... ok
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
+     Running tests\text_body.rs (target\debug\deps\text_body-93bbb970290327af.exe)
+
+running 5 tests
+test libpng_all_body_bytes_and_native_writer_values ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test encoders_reject_text_controls_before_output ... ok
+test empty_and_long_latin1_text_has_no_keyword_length_limit ... ok
+test recovery_events_preserve_non_null_controls_and_itxt_unicode_rules ... ok
+test every_body_byte_context_and_placement_preserves_decode_recovery_but_enforces_encoding ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 13.33s
 
      Running tests\zlib_headers.rs (target\debug\deps\zlib_headers-9c977d26a2826339.exe)
 
@@ -252,7 +263,7 @@ test advertised_window_distances_and_ring_wrap ... ok
 test every_cmf_and_flg_value_buffered_and_fragmented ... ok
 test every_png_zlib_header_value ... ok
 
-test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 12.68s
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 13.25s
 
    Doc-tests deadlib_image
 
@@ -266,5 +277,5 @@ running 0 tests
 
 test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
 
-deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-a949a16ad0774bbbbe2e1092fe00a1b7\png)
-└── deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-a949a16ad0774bbbbe2e1092fe00a1b7)
+deadlib-image-png v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-fe08cb5f13a649d1ba0488659adda99f\png)
+└── deadlib-image v0.1.0 (C:\Users\PerfectTaste\AppData\Local\Temp\deadlib-image-independent-fe08cb5f13a649d1ba0488659adda99f)

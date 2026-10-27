@@ -1,0 +1,316 @@
+{
+  "date": "2026-10-27",
+  "baseline_commit": "4adad99dd",
+  "production_change": "Strict tEXt/zTXt encoder body repertoire, separate from non-null decoder recovery. iTXt Unicode rules preserved.",
+  "commands": [
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--release"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 43.504
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.396
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "--manifest-path",
+        "crates/deadlib-image/png/fuzz/Cargo.toml",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.668
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "text_body",
+        "libpng_all_body_bytes_and_native_writer_values",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 20.937
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "libpng",
+        "libpng_native_sample_conformance",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 22.309
+    },
+    {
+      "argv": [
+        "cargo",
+        "run",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--example",
+        "seed_fuzz",
+        "--",
+        "C:\\GitHub\\deadsync\\target\\png-text-body-fresh-20261027-a"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 32.662
+    },
+    {
+      "argv": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\verify_independent.ps1"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 155.757
+    }
+  ],
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "oracle_sha256": "7ed72b51b6e183b9f11220ee0dc22d12876e1f898a8827158c9851cc2a60a512",
+  "source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "33d55ee2eca45b88852d6e2c1feb0390e3894cd5e576df7272a8e304e7dbdea9"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "4d2004134299397ba9fd691f41ce5d0a17ae90115aa7ed92dd8627cd9c4c916a"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "9269ee9cc1083986a2b507f2e3ead67c8780411c2aae286257b9b8f8c1dbb035"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "02f09191af54b0703c09a5d1a849d1f920201ab54ff9a660c1e4a916bbc9bc61"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "cda4227e750c1ccf5a77fd300d541e9d6ff45cbe48f0af2aa60633fbe264495d"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "9de8d5ae51577e8438f8fca56fc7698b16f9e4e68aee0548ea61aa569e304cf7"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "b9d9a6d9b2ca92d56db5b81f17bf6f71a590695d7dbad27276cbad509122ca9a"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "46ad510363bbe080b2401a327a6b9e017b259ec80d2bdb67fdfecb2a0a8b6117"
+    },
+    {
+      "path": "tests/text_body.rs",
+      "sha256": "835470b8333598aad7a31435f5ee425b74692cd1c832841f68f43d8c969f4266"
+    },
+    {
+      "path": "tests/support/text_body.rs",
+      "sha256": "9f0d0a028ba2cb3c942e98352a87f5db8a4eb8f7f35fcc5234aeb348f82b35c4"
+    },
+    {
+      "path": "tests/support/chunks.rs",
+      "sha256": "414380bb3ffe06aa356d0d494252cd6a92f95e2830eb167b6b2c658777069077"
+    },
+    {
+      "path": "examples/seed_fuzz.rs",
+      "sha256": "c0beb3c0c8b678e26ccdd6ae5e789e970ee2987ade32e705373a339050884f8d"
+    },
+    {
+      "path": "fuzz/Cargo.toml",
+      "sha256": "8086f7cfbec9a7327d219372396122b5078d70e5ac0f684eb71ee1a252852454"
+    },
+    {
+      "path": "fuzz/fuzz_targets/text_body.rs",
+      "sha256": "65fb88fb2ba33e8151c27ff4696693209c5d5be8033ad0e0a4639604882be497"
+    }
+  ],
+  "suite_results": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--release"
+      ],
+      "passed": 90,
+      "ignored": 9
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "text_body",
+        "libpng_all_body_bytes_and_native_writer_values",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "passed": 1,
+      "ignored": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "libpng",
+        "libpng_native_sample_conformance",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "passed": 1,
+      "ignored": 0
+    },
+    {
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\verify_independent.ps1"
+      ],
+      "passed": 90,
+      "ignored": 9
+    }
+  ],
+  "body_domain": {
+    "encoder_allowed_bytes": "LF, 0x20..0x7e, 0xa0..0xff",
+    "encoder_allowed_single_byte_values": 192,
+    "decoder_non_null_byte_values": 255,
+    "recovered_non_lf_controls_rejected_by_encoder": 63,
+    "independent_file_cases": 6144,
+    "decoded_file_cases": 6120,
+    "conforming_encoded_cases": 4608,
+    "encoding_rejections": 1536,
+    "body_contexts": 4,
+    "placements": 3,
+    "wire_forms": 2,
+    "reader_fragments": [
+      1,
+      7
+    ],
+    "native_long_body_lengths": [
+      0,
+      1,
+      79,
+      80,
+      81,
+      65535,
+      65536,
+      65537
+    ]
+  },
+  "libpng": {
+    "raw_conforming_exact": 384,
+    "native_writer_exact": 768,
+    "malformed_controls_retained": 126,
+    "nul_bodies_changed": 2,
+    "body_comparisons_total": 1280,
+    "existing_pixel_comparisons": 1061,
+    "scope": "Recovery policies recorded separately; native encoders validate against the standard rather than permissive reference acceptance."
+  },
+  "regression_before": "text-body-before.json",
+  "sanitizer_manifest": "fuzz/reports/text-body-source.json",
+  "sanitizer_executions": 60000,
+  "fresh_windows_corpus_hashes_verified": true
+}
