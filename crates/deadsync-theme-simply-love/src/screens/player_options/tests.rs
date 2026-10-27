@@ -6310,7 +6310,7 @@ pub(super) mod tests {
     }
 
     #[test]
-    fn golf_extras_are_opt_in_and_keep_independent_player_choices() {
+    fn golf_extras_default_on_and_keep_independent_player_choices() {
         ensure_i18n();
         let (state, _assets) = setup_state();
         for scorebox_available in [false, true] {
@@ -6321,7 +6321,11 @@ pub(super) mod tests {
                 state.persisted_player_idx, scorebox_available,
                 true,
             );
-            let defaults = PlayerOptionsData::default();
+            let defaults = PlayerOptionsData {
+                show_golf_score: false,
+                show_golf_results: false,
+                ..PlayerOptionsData::default()
+            };
             let mut masks = [PlayerOptionMasks::default(); 2];
             panes::apply_profile_defaults(&mut rows, &defaults, P1, &mut masks[P1]);
             panes::apply_profile_defaults(&mut rows, &defaults, P2, &mut masks[P2]);
