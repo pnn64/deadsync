@@ -1,9 +1,15 @@
 //! Independent integer-PCM FLAC codec. See the package coverage ledger.
+#![doc = include_str!("../README.md")]
 #![forbid(unsafe_code)]
 
 pub mod bitstream;
 pub mod checksum;
+pub mod frame;
 pub mod metadata;
+pub mod native;
+
+pub use frame::{Frame, FrameDecoder, FrameHeader, Pcm};
+pub use native::{DecodeOptions, Decoder, Integrity, Reader, StreamFrame};
 
 pub use metadata::{Metadata, MetadataBlock, StreamInfo};
 

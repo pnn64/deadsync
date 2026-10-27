@@ -1240,6 +1240,9 @@ dependencies = [
 [[package]]
 name = "deadlib-audio-decode-flac"
 version = "0.1.0"
+dependencies = [
+ "symphonia",
+]
 
 [[package]]
 name = "deadlib-audio-decode-ogg"

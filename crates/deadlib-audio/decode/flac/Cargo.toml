@@ -7,5 +7,8 @@ license = "GPL-3.0"
 description = "Independent pure-Rust FLAC codec with integer PCM and raw frame support"
 repository = "https://github.com/pnn64/deadsync"
 
+[dev-dependencies]
+symphonia = { version = "=0.6.1", default-features = false, features = ["flac"] }
+
 [lints.clippy]
 perf = { level = "warn", priority = -1 }

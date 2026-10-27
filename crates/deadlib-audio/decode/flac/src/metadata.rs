@@ -235,7 +235,7 @@ impl<'a> SeekTable<'a> {
         Ok(result)
     }
     pub fn points(&self) -> impl DoubleEndedIterator<Item = SeekPoint> + 'a {
-        self.data.chunks_exact(18).map(|p| SeekPoint {
+        self.data.as_chunks::<18>().0.iter().map(|p| SeekPoint {
             sample: u64::from_be_bytes(p[..8].try_into().unwrap()),
             offset: u64::from_be_bytes(p[8..16].try_into().unwrap()),
             samples: u16::from_be_bytes(p[16..18].try_into().unwrap()),

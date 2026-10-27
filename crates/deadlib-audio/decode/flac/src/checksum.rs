@@ -84,7 +84,7 @@ impl Md5 {
         self.update(&[0; 64][..zeros as usize]);
         self.update(&bit_len.to_le_bytes());
         let mut result = [0; 16];
-        for (chunk, word) in result.chunks_exact_mut(4).zip(self.state) {
+        for (chunk, word) in result.as_chunks_mut::<4>().0.iter_mut().zip(self.state) {
             chunk.copy_from_slice(&word.to_le_bytes());
         }
         result
@@ -110,8 +110,8 @@ fn compress(state: &mut [u32; 4], block: &[u8; 64]) {
         [6, 10, 15, 21],
     ];
     let mut words = [0u32; 16];
-    for (word, bytes) in words.iter_mut().zip(block.chunks_exact(4)) {
-        *word = u32::from_le_bytes(bytes.try_into().unwrap());
+    for (word, bytes) in words.iter_mut().zip(block.as_chunks::<4>().0) {
+        *word = u32::from_le_bytes(*bytes);
     }
     let [mut a, mut b, mut c, mut d] = *state;
     for i in 0..64 {

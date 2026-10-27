@@ -9,7 +9,7 @@ Milestones (commit each when verified):
 
 1. Foundation (implemented; 5 integration tests pass): checked MSB bit I/O, CRC-8/16, native MD5, complete metadata
    representations and bounded parsing, package registration.
-2. Native decoding: independent frame API, all subframes/predictors/Rice modes,
+2. Native decoding (implemented; evidence in COVERAGE.md): independent frame API, all subframes/predictors/Rice modes,
    4–32 bits, 1–8 channels, all block sizes/rates, exact 33-bit side channels,
    fixed/variable numbering, streaming, integrity and sample-accurate seeking.
 3. Native encoding: constant/verbatim/fixed/LPC, partitioned Rice and escape,
@@ -27,3 +27,8 @@ Milestones (commit each when verified):
 Completion requires current evidence for every item, not just passing roundtrips.
 Record commands, versions, corpus provenance, coverage gaps and measurements in
 the crate documentation as each milestone is reached.
+
+Outstanding decoder improvements: file-backed Read+Seek adapter, SEEKTABLE-assisted
+startup/seek acceleration, measured buffer/allocation improvements. Current exact
+seeking uses borrowed input and a lazy validated frame index. Default resource
+budgets deliberately require configuration for extreme metadata/frame payloads.
