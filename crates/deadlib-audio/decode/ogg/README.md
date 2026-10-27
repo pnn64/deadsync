@@ -4,6 +4,10 @@ Independent, codec-neutral Ogg container implemented in safe Rust from RFC 3533
 and Xiph's framing/mapping requirements. No production dependencies. This crate
 is a workspace member and is not integrated into DeadSync's decoding pipeline.
 
+The [container performance report](PERFORMANCE.md) compares page parsing, packet
+assembly, fragmented reads, first-packet latency and isolated CRC with pinned
+libogg. Exact page fields and complete packet bytes are checked before timing.
+
 ```rust
 use deadlib_audio_decode_ogg::{Demuxer, PageReader};
 # fn example(bytes: &[u8]) -> Result<(), deadlib_audio_decode_ogg::Error> {

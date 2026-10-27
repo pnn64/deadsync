@@ -84,8 +84,10 @@ Evidence on Windows x86-64, rustc 1.99.1:
   differential corpora, official conformance material, longer fuzz campaigns and
   wider ITGmania/StepMania song-pack validation beyond two pinned shipped songs
   covered by the Vorbis tests (theme assets are not song packs).
-* Reproducible comparative throughput/startup/allocation/memory/seek benchmarks,
-  and subsequent measured optimization. No competitive performance claim yet.
+* The [initial container benchmark](PERFORMANCE.md) now measures throughput,
+  first-packet startup and CRC against libogg with exact wire verification.
+  Ogg-only allocation/memory/index-seek measurements and subsequent optimization
+  remain; no competitive performance claim yet.
 * Broader platforms and benchmark targets.
 
 Transport validation does not validate codec headers or mapping-specific packet

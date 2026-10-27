@@ -391,8 +391,9 @@ The subsequent one-pass construction update halves native indexed-open source
 bytes and improves the two song medians 1.86x / 1.66x, with unchanged retained
 heap. Its mixed seek-batch timings, including a 15-trial recheck, remain explicit
 in [RESOURCES.md](RESOURCES.md#one-pass-container-and-vorbis-indexing-2026-10-27).
-Ogg-only container throughput and truly cold startup still need comparative
-measurements. Sanitizer RSS is not a production memory result.
+The [Ogg-only baseline](../ogg/PERFORMANCE.md) now adds comparative CRC, page,
+packet and first-container-packet measurements. Truly cold startup and Ogg-only
+heap/index-seek comparisons remain. Sanitizer RSS is not a production memory result.
 
 The [real-packet component diagnostic](SYNTHESIS_PROFILE.md) now measures floor,
 residue, transform and overlap work with a bit-checked instrumented copy.

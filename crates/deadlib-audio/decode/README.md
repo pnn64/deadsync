@@ -78,6 +78,9 @@ decode, 4 KiB fragmented reads and warm-process startup against libvorbisfile an
 Symphonia with exact decoded counts. It exposes a substantial native throughput
 gap. Component profiling, memory/allocation/seek measurements, optimization and
 competitive native encoding remain required.
+The independent [Ogg-only baseline](ogg/PERFORMANCE.md) now isolates CRC, page
+scanning, packet demux, fragmented reads and first-container-packet startup
+against pinned libogg, with byte-exact page/packet verification.
 The first measured transform optimization replaces a length-N complex FFT with
 a paired-spectrum N/4 FFT. Its isolated kernel is 3.2–3.8x faster, transform
 elements shrink 65%, and observed full-file times improve 1.35–1.67x on the two
