@@ -1,5 +1,5 @@
 use crate::{
-    Budget, Error, Identification, Limits, ParseOptions,
+    Budget, Error, Identification, Limits, ParseOptions, ResidueBehavior,
     bitpack::{BitReader, ilog},
     codebook::{Codebook, power_at_most},
     headers::header,
@@ -14,6 +14,7 @@ pub struct Setup {
     residues: Vec<Residue>,
     mappings: Vec<Mapping>,
     modes: Vec<Mode>,
+    residue_behavior: ResidueBehavior,
 }
 pub enum Floor {
     Type0(Floor0),
@@ -131,7 +132,12 @@ impl Setup {
         let count = bits.read(6)? as usize + 1;
         let mut residues = storage(count, &mut budget)?;
         for _ in 0..count {
-            residues.push(read_residue(&mut bits, &codebooks, &mut budget)?);
+            residues.push(read_residue(
+                &mut bits,
+                &codebooks,
+                &mut budget,
+                options.residue_behavior,
+            )?);
         }
         let count = bits.read(6)? as usize + 1;
         let mut mappings = storage(count, &mut budget)?;
@@ -179,7 +185,12 @@ impl Setup {
             residues,
             mappings,
             modes,
+            residue_behavior: options.residue_behavior,
         })
+    }
+    /// Residue policy retained from setup parsing, including after raw reset.
+    pub fn residue_behavior(&self) -> ResidueBehavior {
+        self.residue_behavior
     }
     pub fn channels(&self) -> u8 {
         self.channels
@@ -418,6 +429,7 @@ fn read_residue(
     bits: &mut BitReader<'_>,
     books: &[Codebook],
     budget: &mut Budget,
+    behavior: ResidueBehavior,
 ) -> Result<Residue, Error> {
     let kind = bits.read(16)?;
     if kind > 2 {
@@ -426,7 +438,7 @@ fn read_residue(
     let begin = bits.read(24)?;
     let end = bits.read(24)?;
     let partition_size = bits.read(24)? + 1;
-    if begin > end {
+    if begin > end && behavior == ResidueBehavior::Vorbis {
         return Err(Error::Invalid("residue range"));
     }
     let classifications = bits.read(6)? as usize + 1;
@@ -458,8 +470,13 @@ fn read_residue(
                 continue;
             }
             let book = book_index(bits, books, true)?;
-            if !books[book as usize].is_empty()
-                && !(partition_size as usize).is_multiple_of(books[book as usize].dimensions())
+            let selected = &books[book as usize];
+            if !selected.is_empty() && selected.dimensions() == 0 {
+                return Err(Error::Invalid("zero residue vector dimensions"));
+            }
+            if behavior == ResidueBehavior::Vorbis
+                && !selected.is_empty()
+                && !(partition_size as usize).is_multiple_of(selected.dimensions())
             {
                 return Err(Error::Invalid(
                     "residue partition is not a codebook dimension multiple",

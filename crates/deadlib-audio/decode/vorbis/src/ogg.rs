@@ -1,7 +1,8 @@
 //! Vorbis I Appendix A mapping on the independent Ogg container.
 use crate::{
     CodebookBehavior, Comments, DecodeOptions, Error, Floor0Behavior, Identification, Limits,
-    Metadata, PacketDecoder, ParseOptions, PcmBlock, Residue2Layout, Setup, reserve,
+    Metadata, PacketDecoder, ParseOptions, PcmBlock, Residue2Layout, ResidueBehavior, Setup,
+    reserve,
 };
 use deadlib_audio_decode_ogg::{
     self as container, Demuxer, Packet, Page, PageDecoder, PageHeader, PageReader,
@@ -20,6 +21,7 @@ pub struct OggOptions {
     pub floor0_behavior: Floor0Behavior,
     /// Retain custom-float interpretation through setup parsing and resets.
     pub codebook_behavior: CodebookBehavior,
+    pub residue_behavior: ResidueBehavior,
     /// Use `ParseOptions::allow_empty_codebooks` for every logical stream.
     pub allow_empty_codebooks: bool,
     /// Use `DecodeOptions::allow_nonfinite` for every logical stream.
@@ -38,6 +40,7 @@ impl Default for OggOptions {
             residue2_layout: Residue2Layout::Interleaved,
             floor0_behavior: Floor0Behavior::Vorbis,
             codebook_behavior: CodebookBehavior::Vorbis,
+            residue_behavior: ResidueBehavior::Vorbis,
             allow_empty_codebooks: false,
             allow_nonfinite: false,
             max_active_streams: 16,
@@ -430,6 +433,7 @@ impl OggDecoder {
                         limits,
                         allow_empty_codebooks: options.allow_empty_codebooks,
                         codebook_behavior: options.codebook_behavior,
+                        residue_behavior: options.residue_behavior,
                     },
                 )?;
                 let setup_memory = setup.storage_bytes();

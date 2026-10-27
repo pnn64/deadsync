@@ -65,6 +65,17 @@ pub enum CodebookBehavior {
     Libvorbis,
 }
 
+/// Residue setup acceptance and Huffman end-of-packet handling.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ResidueBehavior {
+    /// Require ordered ranges and whole VQ vectors per partition.
+    #[default]
+    Vorbis,
+    /// Accept libvorbis's partial vectors and empty inverted ranges. Incomplete
+    /// Huffman words consume available bits without introducing sticky EOF.
+    Libvorbis,
+}
+
 /// Header parsing policy, shared by complete setup and standalone codebooks.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ParseOptions {
@@ -74,6 +85,8 @@ pub struct ParseOptions {
     pub allow_empty_codebooks: bool,
     /// Wire-value and array-availability interpretation for every codebook.
     pub codebook_behavior: CodebookBehavior,
+    /// Retained by Setup for subsequent residue reconstruction.
+    pub residue_behavior: ResidueBehavior,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

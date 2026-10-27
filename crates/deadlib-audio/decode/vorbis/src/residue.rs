@@ -1,6 +1,13 @@
-use crate::{Error, Residue, Residue2Layout, bitpack::BitReader, codebook::Codebook};
+use crate::{
+    Error, Residue, Residue2Layout, ResidueBehavior, bitpack::BitReader, codebook::Codebook,
+};
+
+#[cfg(test)]
+#[path = "residue_reference.rs"]
+mod reference_tests;
 
 pub(crate) struct Output<'a> {
+    pub behavior: ResidueBehavior,
     pub layout: Residue2Layout,
     pub spectrum: &'a mut [f32],
     pub stride: usize,
@@ -19,6 +26,31 @@ pub(crate) fn decode(
     bits: &mut BitReader<'_>,
     output: &mut Output<'_>,
 ) -> Result<(), Error> {
+    let exhausted = bits.is_exhausted();
+    let behavior = output.behavior;
+    let result = decode_inner(config, books, bits, output);
+    finish_reader(bits, behavior, exhausted, result)
+}
+fn finish_reader(
+    bits: &mut BitReader<'_>,
+    behavior: ResidueBehavior,
+    exhausted: bool,
+    result: Result<(), Error>,
+) -> Result<(), Error> {
+    if behavior == ResidueBehavior::Libvorbis
+        && !exhausted
+        && matches!(result, Err(Error::EndOfPacket))
+    {
+        bits.clear_exhausted();
+    }
+    result
+}
+fn decode_inner(
+    config: &Residue,
+    books: &[Codebook],
+    bits: &mut BitReader<'_>,
+    output: &mut Output<'_>,
+) -> Result<(), Error> {
     let channels = output.bundle.len();
     if channels == 0 || !output.bundle.iter().any(|&ch| output.nonzero[ch]) {
         return Ok(());
@@ -28,7 +60,7 @@ pub(crate) fn decode(
     let begin = (config.begin as usize).min(actual);
     let end = (config.end as usize).min(actual);
     let partition_size = config.partition_size as usize;
-    let partitions = (end - begin) / partition_size;
+    let partitions = end.saturating_sub(begin) / partition_size;
     if partitions == 0 {
         return Ok(());
     }
@@ -111,6 +143,23 @@ fn decode_partition(
     start: usize,
     size: usize,
 ) -> Result<(), Error> {
+    let exhausted = bits.is_exhausted();
+    let behavior = output.behavior;
+    let result = decode_partition_inner(kind, bits, book, output, ch, start, size);
+    finish_reader(bits, behavior, exhausted, result)
+}
+fn decode_partition_inner(
+    kind: u8,
+    bits: &mut BitReader<'_>,
+    book: &Codebook,
+    output: &mut Output<'_>,
+    ch: usize,
+    start: usize,
+    size: usize,
+) -> Result<(), Error> {
+    if book.is_empty() {
+        return Ok(());
+    }
     let dimensions = book.dimensions();
     if kind == 0 {
         let step = size / dimensions;
@@ -162,7 +211,7 @@ fn decode_partition(
         let plane = output.bundle[ch] * output.stride;
         for i in (0..size).step_by(dimensions) {
             let vector = book.decode_vector(bits)?;
-            for (j, &value) in vector.iter().enumerate() {
+            for (j, &value) in vector.iter().take(size - i).enumerate() {
                 output.spectrum[plane + start + i + j] += value;
             }
         }
@@ -209,6 +258,7 @@ mod tests {
                     &books,
                     &mut bits,
                     &mut Output {
+                        behavior: ResidueBehavior::Vorbis,
                         layout: Residue2Layout::Interleaved,
                         spectrum: &mut actual,
                         stride: 68,
@@ -298,6 +348,7 @@ mod tests {
                     &books,
                     &mut bits,
                     &mut Output {
+                        behavior: ResidueBehavior::Vorbis,
                         layout: Residue2Layout::Interleaved,
                         spectrum: &mut actual,
                         stride: 68,
@@ -337,6 +388,7 @@ mod tests {
                         &books,
                         &mut bits,
                         &mut Output {
+                            behavior: ResidueBehavior::Vorbis,
                             layout: Residue2Layout::Interleaved,
                             spectrum: &mut spectrum,
                             stride: 32,
@@ -382,6 +434,7 @@ mod tests {
                 &books,
                 &mut bits,
                 &mut Output {
+                    behavior: ResidueBehavior::Vorbis,
                     layout: Residue2Layout::Interleaved,
                     spectrum: &mut actual,
                     stride: 68,
@@ -437,6 +490,7 @@ mod tests {
                                     &mut bits,
                                     &book,
                                     &mut Output {
+                                        behavior: ResidueBehavior::Vorbis,
                                         layout,
                                         spectrum: &mut actual,
                                         stride,
@@ -492,6 +546,7 @@ mod tests {
                 &books,
                 &mut BitReader::new(&[0]),
                 &mut Output {
+                    behavior: ResidueBehavior::Vorbis,
                     layout: Residue2Layout::Interleaved,
                     spectrum: &mut spectrum,
                     stride: 4,
@@ -519,6 +574,7 @@ mod tests {
                     &books,
                     &mut BitReader::new(&[]),
                     &mut Output {
+                        behavior: ResidueBehavior::Vorbis,
                         layout: Residue2Layout::Interleaved,
                         spectrum: &mut spectrum,
                         stride: 4,
@@ -536,6 +592,7 @@ mod tests {
                 &books,
                 &mut bits,
                 &mut Output {
+                    behavior: ResidueBehavior::Vorbis,
                     layout: Residue2Layout::Interleaved,
                     spectrum: &mut spectrum,
                     stride: 4,
@@ -557,6 +614,7 @@ mod tests {
                 &books,
                 &mut bits,
                 &mut Output {
+                    behavior: ResidueBehavior::Vorbis,
                     layout: Residue2Layout::Interleaved,
                     spectrum: &mut spectrum,
                     stride: 4,

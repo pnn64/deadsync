@@ -232,3 +232,10 @@ The parent `scripts/verify_independent.ps1` copies only the two crates into a
 separate workspace, runs their tests offline and checks production dependency
 trees. Optional [external tests](tests/oracle/README.md) require pinned C oracle
 builds. Resource limits are configurable application policies, not format limits.
+
+The explicit `ParseOptions::residue_behavior = ResidueBehavior::Libvorbis`
+policy accepts reference partial-vector partitions and inverted empty ranges,
+with reference Huffman EOF behavior. The same field in `OggOptions` and
+`SeekOptions` survives resets and setup reparsing. Whole vectors and ordered
+ranges remain the default. Type-two placement is selected separately by
+`Residue2Layout`; see [residue ranges and tails](RESIDUE_TAILS.md).

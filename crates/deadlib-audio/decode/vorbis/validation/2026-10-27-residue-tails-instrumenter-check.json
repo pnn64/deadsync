@@ -1,0 +1,33 @@
+{
+  "scope": "Generate and lint the diagnostic decoder copy only; no timing run. Copied modules share a complete isolated crate privacy boundary.",
+  "command": [
+    "cargo",
+    "clippy",
+    "--manifest-path",
+    "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\residue-tails-instrumenter-verified-20261027\\Cargo.toml",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit_code": 0,
+  "source_sha256": "b2c16fdd2e06a418597b012e6b34e0a9a13d1fb3304bb4ff0bc5ef3112fc10de",
+  "script_sha256": "ea9d517a18bea505799b393060f13f8f85276cf4d30fcea69ef698d55c9fb91a",
+  "generated_sha256": {
+    "profiled-vorbis/src/bitpack.rs": "a07db230b94472dacfd43ba1cd28e84c188fcb54cd0627d057e88462dc0656fd",
+    "profiled-vorbis/src/codebook.rs": "897b378913883fac388ced320d948e390f2624f4e7ad0c50ad6628e9c28944f1",
+    "profiled-vorbis/src/decoder.rs": "a6d7199b070c6a40d1726c19b5244466307f0cefaf2fd434af98bb2f47c4de14",
+    "profiled-vorbis/src/encoder.rs": "8fac02bb876bde74196ef8d5149ec9c0f56fb84c39566a3438278d38fc258222",
+    "profiled-vorbis/src/floor.rs": "8712e4dfdd78ea4c6ab68a67b06a81825cd278c65dd0e106e308e2b7fbdc9133",
+    "profiled-vorbis/src/floor_reference.rs": "a95a5343398f350102e847db69136408da5268b2d191c4843df2f96a43b1583d",
+    "profiled-vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "profiled-vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "profiled-vorbis/src/lib.rs": "ea972975b253ed8d38a74546b447572cbe98b2d426d2cef0892c68077e40a471",
+    "profiled-vorbis/src/ogg.rs": "43b6a0d6fb2f41408d813261d5bbec83071d0771b1c2e0be131a608f7c6ce913",
+    "profiled-vorbis/src/residue.rs": "43859647999781c57fdf32b70ed5ae9872da3e108dc7f968a346aeb04c2facbc",
+    "profiled-vorbis/src/residue_reference.rs": "c21ad3cf23bc3c601151c1679d76b86e591681f366cb3439f9694890bae1f0c7",
+    "profiled-vorbis/src/seek.rs": "f25fe504b4ced63dc67d249cc0d87c5e6b26866a0528e7296c52c79ff7191397",
+    "profiled-vorbis/src/setup.rs": "57aeb2d522b9428b3db230da5cbca766bd4fa554d17ab7bc193b3c0a3274c52b",
+    "profiled-vorbis/src/transform.rs": "257918b47b792cc44acb02e4bfaaf863d4078f6063af3b9b5c201b8a2d06edda",
+    "src/main.rs": "4bf9d26d98820187b564f9ab40295044df23328444be9e2073719073cd6903b6"
+  }
+}

@@ -60,7 +60,25 @@ impl Geometry {
             vec![]
         }
     }
+    fn residue_config(
+        self,
+        submap: usize,
+        ranges: &[(u32, u32, u32)],
+    ) -> (u8, usize, usize, usize) {
+        let (kind, begin, end, partition) = self.residue(submap);
+        if ranges.is_empty() {
+            (kind, begin, end, partition)
+        } else {
+            assert_eq!(ranges.len(), self.submaps as usize);
+            let (begin, end, partition) = ranges[submap];
+            assert!(partition > 0 && partition <= 1 << 24);
+            (kind, begin as usize, end as usize, partition as usize)
+        }
+    }
     pub fn headers(self) -> Vec<Vec<u8>> {
+        self.headers_with_residues(&[])
+    }
+    pub fn headers_with_residues(self, ranges: &[(u32, u32, u32)]) -> Vec<Vec<u8>> {
         let id = Identification {
             channels: self.channels,
             sample_rate: 48000,
@@ -134,7 +152,7 @@ impl Geometry {
             ],
         );
         for submap in 0..self.submaps as usize {
-            let (kind, begin, end, partition) = self.residue(submap);
+            let (kind, begin, end, partition) = self.residue_config(submap, ranges);
             put(
                 &mut bits,
                 &[
@@ -196,6 +214,15 @@ impl Geometry {
         vec![id, comments, setup]
     }
     pub fn audio(self, long: bool, windows: u32, seed: usize) -> Vec<u8> {
+        self.audio_with_residues(&[], long, windows, seed)
+    }
+    pub fn audio_with_residues(
+        self,
+        ranges: &[(u32, u32, u32)],
+        long: bool,
+        windows: u32,
+        seed: usize,
+    ) -> Vec<u8> {
         let bins = if long { 128 } else { 32 };
         let mut bits = BitWriter::new();
         put(&mut bits, &[(0, 1), (long as u32, 1)]);
@@ -219,13 +246,13 @@ impl Geometry {
         }
         for submap in 0..self.submaps as usize {
             let bundle = self.bundle(submap);
-            let (kind, begin, end, partition) = self.residue(submap);
+            let (kind, begin, end, partition) = self.residue_config(submap, ranges);
             if !bundle.iter().any(|&ch| nonzero[ch]) {
                 continue;
             }
             let actual = bins * if kind == 2 { bundle.len() } else { 1 };
             let begin = begin.min(actual);
-            let partitions = (end.min(actual) - begin) / partition;
+            let partitions = end.min(actual).saturating_sub(begin) / partition;
             let vectors: Vec<_> = if kind == 2 {
                 vec![0]
             } else {
@@ -252,7 +279,19 @@ impl Geometry {
                                 continue;
                             }
                             let dim = (stage + class) % 4 + 1;
-                            for word in 0..partition / dim {
+                            let size = if kind == 2 && !ranges.is_empty() {
+                                let offset = begin + part * partition;
+                                let ch = bundle.len();
+                                (offset + partition) / ch * ch - offset / ch * ch
+                            } else {
+                                partition
+                            };
+                            let words = if kind == 0 || ranges.is_empty() {
+                                size / dim
+                            } else {
+                                size.div_ceil(dim)
+                            };
+                            for word in 0..words {
                                 bits.write(
                                     ((seed + submap + stage + part + vector + word) & 1) as u32,
                                     1,

@@ -50,8 +50,10 @@ let decoder = PacketDecoder::with_options(setup, DecodeOptions {
 The reference path rounds the endpoints before scattering. It consumes the last
 codeword but clips components outside the rounded range, matching the C guard.
 The normative path clips to its exact range. For conforming whole-vector
-partitions, the latter preserves previous behavior. Setup validation still
-requires the partition size to be a multiple of each selected VQ dimension.
+partitions, the latter preserves previous behavior. Default setup validation
+requires the partition size to be a multiple of each selected VQ dimension. The
+subsequent [residue range/tail policy](RESIDUE_TAILS.md) explicitly accepts the
+reference's partial-vector partitions and inverted empty ranges.
 
 Sources: [Vorbis I sections 8.3–8.6](https://xiph.org/vorbis/doc/Vorbis_I_spec.html),
 [pinned vector decode](https://github.com/xiph/vorbis/blob/0657aee69dec8508a0011f47f3b69d7538e9d262/lib/codebook.c),

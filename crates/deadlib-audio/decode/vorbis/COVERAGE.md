@@ -366,3 +366,9 @@ The separate `seeking` suite checks pre-roll, exact requested positions, retaine
 suffixes and repeated seeks. These fixtures/corpus checks do not establish full
 Vorbis conformance or competitive performance. External reference APIs remain in
 separate test helpers.
+
+The [residue tail matrix](RESIDUE_TAILS.md) adds direct libvorbis vector-add
+callbacks for partial partitions, empty books, unaligned type-two intervals,
+truncated codewords and preexisting sticky EOF. The explicit residue policy
+retains published/default setup validation and preserves the reference choice
+through raw resets, pull/push streaming and indexed setup reparsing.

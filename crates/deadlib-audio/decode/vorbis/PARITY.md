@@ -36,6 +36,11 @@ The [codebook extent follow-up](CODEBOOK_LIMITS.md) applies the default referenc
 declaration guard before lengths/allocation for populated and empty books, with
 475 exact decision/reader-position checks and a configurable full-field override.
 
+The [residue range/tail follow-up](RESIDUE_TAILS.md) adds an explicit reference
+policy for partial VQ partitions and inverted empty ranges. It preserves reference
+codeword counts, clipped additions and reader EOF state across active submaps.
+The published whole-vector and ordered-range guards remain default.
+
 ## Corrected discard and truncation behavior
 
 The 2026-10-27 work independently reproduced two differences against pinned

@@ -119,6 +119,46 @@ static void floor0cases(FILE *file) {
     if (fgetc(file) != EOF) fail("trailing floor0 cases");
     floor->free_look(look); vorbis_dsp_clear(&dsp); vorbis_comment_clear(&comments); vorbis_info_clear(&info);
 }
+/* Direct unmodified vector-add callbacks, including nonmultiple n and tails. */
+static void vqaddcases(FILE *file) {
+    long booksize; unsigned char *bookdata = packet(file, &booksize);
+    oggpack_buffer packed; static_codebook *book; codebook decoded;
+    uint64_t count, c;
+    oggpack_readinit(&packed, bookdata, booksize); book = vorbis_staticbook_unpack(&packed);
+    if (!book || book->maptype == 0 || vorbis_book_init_decode(&decoded, book)) fail("VQ add book");
+    if (decoded.used_entries && decoded.dim == 0) fail("active zero-dimensional VQ add");
+    count = get64(file); if (count > (1u << 20)) fail("VQ add count"); put64(count);
+    for (c = 0; c < count; ++c) {
+        uint64_t kind = get64(file), prefix = get64(file), exhausted = get64(file);
+        uint64_t start = get64(file), size = get64(file), channels = get64(file), bins = get64(file);
+        long bytes, result; unsigned char *data = packet(file, &bytes); oggpack_buffer bits;
+        float *storage, **planes; size_t stride, ch, i; uint32_t raw;
+        if (kind > 2 || prefix > 7 || exhausted > 1 || channels < 1 || channels > 16 || bins < 1 || bins > 256) fail("VQ add shape");
+        if (start + size > bins * (kind == 2 ? channels : 1)) fail("VQ add range");
+        stride = (size_t)bins + 16;
+        storage = (float *)malloc((size_t)channels * stride * sizeof(float));
+        planes = (float **)malloc((size_t)channels * sizeof(float *));
+        if (!storage || !planes) fail("VQ add allocation");
+        for (ch = 0; ch < channels; ++ch) {
+            planes[ch] = storage + ch * stride + 8;
+            for (i = 0; i < stride; ++i) storage[ch * stride + i] = -1234.25f;
+            for (i = 0; i < bins; ++i) planes[ch][i] = .125f + (float)ch * .0625f + (float)i * .00390625f;
+        }
+        oggpack_readinit(&bits, data, bytes); oggpack_adv(&bits, (int)prefix);
+        if (exhausted) oggpack_read(&bits, 33);
+        if (kind == 0) result = vorbis_book_decodevs_add(&decoded, planes[0] + start, &bits, (int)size);
+        else if (kind == 1) result = vorbis_book_decodev_add(&decoded, planes[0] + start, &bits, (int)size);
+        else result = vorbis_book_decodevv_add(&decoded, planes, (long)start, (int)channels, &bits, (int)size);
+        put8(result == 0); put64((uint64_t)oggpack_bits(&bits)); put8(bits.ptr == NULL);
+        for (ch = 0; ch < channels; ++ch) {
+            for (i = 0; i < 8; ++i) if (storage[ch * stride + i] != -1234.25f || planes[ch][bins + i] != -1234.25f) fail("VQ add guard changed");
+            for (i = 0; i < bins; ++i) { memcpy(&raw, planes[ch] + i, 4); put32(raw); }
+        }
+        free(storage); free(planes); free(data);
+    }
+    if (fgetc(file) != EOF) fail("trailing VQ add cases");
+    vorbis_book_clear(&decoded); vorbis_staticbook_destroy(book); free(bookdata);
+}
 static void floatcases(FILE *file) {
     uint64_t count = get64(file), i;
     if (count > (1u << 20)) fail("float count");
@@ -279,13 +319,14 @@ static void ogg_seek(FILE *file, const char *requests_path) {
     fclose(requests); ov_clear(&reader);
 }
 int main(int argc, char **argv) {
-    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|bookcases|floor0cases|floatcases|books|pcm|pcm-cases|mdct-cases|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
+    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|bookcases|floor0cases|floatcases|vqaddcases|books|pcm|pcm-cases|mdct-cases|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
 #endif
     if (!strcmp(argv[1], "headers")) headers(file);
     else if (!strcmp(argv[1], "floatcases")) floatcases(file);
+    else if (!strcmp(argv[1], "vqaddcases")) vqaddcases(file);
     else if (!strcmp(argv[1], "books")) books(file);
     else if (!strcmp(argv[1], "bookheaders")) bookheaders(file, 0);
     else if (!strcmp(argv[1], "bookcases")) bookheaders(file, 1);

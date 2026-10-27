@@ -234,6 +234,7 @@ impl PacketDecoder {
                     self.setup.codebooks(),
                     &mut bits,
                     &mut residue::Output {
+                        behavior: self.setup.residue_behavior(),
                         layout: self.residue2_layout,
                         spectrum: &mut self.spectrum,
                         stride,
