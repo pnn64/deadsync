@@ -1,0 +1,23 @@
+diff --git a/crates/deadlib-audio/decode/vorbis/src/bitpack.rs b/crates/deadlib-audio/decode/vorbis/src/bitpack.rs
+index 1dd0e6052..dc2157d65 100644
+--- a/crates/deadlib-audio/decode/vorbis/src/bitpack.rs
++++ b/crates/deadlib-audio/decode/vorbis/src/bitpack.rs
+@@ -47,10 +47,14 @@ impl<'a> BitReader<'a> {
+     #[inline]
+     fn refill(&mut self) {
+         let count = (((64 - self.available) / 8) as usize).min(self.input.len() - self.offset);
+-        if count == 8 {
+-            self.cache =
+-                u64::from_le_bytes(self.input[self.offset..self.offset + 8].try_into().unwrap());
+-            self.available = 64;
++        if let Some(word) = self.input[self.offset..].first_chunk::<8>() {
++            // Refill is entered only with fewer than 32 available bits. Load
++            // once, retain complete bytes that fit, and leave the lookahead
++            // bytes unread. Unused high cache bits must stay zero for ORs.
++            debug_assert!(self.available < 32);
++            let mask = u64::MAX >> (64 - count * 8);
++            self.cache |= (u64::from_le_bytes(*word) & mask) << self.available;
++            self.available += count as u32 * 8;
+         } else {
+             for &byte in &self.input[self.offset..self.offset + count] {
+                 self.cache |= (byte as u64) << self.available;

@@ -1,0 +1,34 @@
+diff --git a/crates/deadlib-audio/decode/vorbis/src/bitpack.rs b/crates/deadlib-audio/decode/vorbis/src/bitpack.rs
+index 1dd0e6052..cc86cef7b 100644
+--- a/crates/deadlib-audio/decode/vorbis/src/bitpack.rs
++++ b/crates/deadlib-audio/decode/vorbis/src/bitpack.rs
+@@ -46,18 +46,23 @@ impl<'a> BitReader<'a> {
+     }
+     #[inline]
+     fn refill(&mut self) {
+-        let count = (((64 - self.available) / 8) as usize).min(self.input.len() - self.offset);
+-        if count == 8 {
+-            self.cache =
+-                u64::from_le_bytes(self.input[self.offset..self.offset + 8].try_into().unwrap());
+-            self.available = 64;
++        // Reload from the byte containing the current bit position. At most
++        // seven low bits have already been consumed; shifting them away also
++        // leaves the high cache bits zero, without a mask-and-merge loop.
++        let offset = self.offset - self.available.div_ceil(8) as usize;
++        if let Some(word) = self.input[offset..].first_chunk::<8>() {
++            let skip = self.available.wrapping_neg() & 7;
++            self.cache = u64::from_le_bytes(*word) >> skip;
++            self.available = 64 - skip;
++            self.offset = offset + 8;
+         } else {
++            let count = (((64 - self.available) / 8) as usize).min(self.input.len() - self.offset);
+             for &byte in &self.input[self.offset..self.offset + count] {
+                 self.cache |= (byte as u64) << self.available;
+                 self.available += 8;
+             }
++            self.offset += count;
+         }
+-        self.offset += count;
+     }
+     #[inline]
+     pub fn read(&mut self, bits: u32) -> Result<u32, Error> {

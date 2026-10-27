@@ -9,6 +9,13 @@ requested end state remains in the parent work plan.
 * Bitpacking/unpacking with widths 0..=32, unaligned 32-bit fields, zero-width
   reads including after end-of-packet, speculative lookahead and byte padding.
   Independent bit-index tests cover every width and starting bit alignment.
+  Another 2,592 mixed-width streams cover cache carries, lookahead history and
+  every short packet tail. The header fuzz target now checks direct wire-bit
+  values, exact reader state, invalid widths and sticky exhaustion even for
+  bytes that cannot parse as headers. A fresh 300-second ASAN campaign completes
+  142,674 executions without failure. Two paired refill alternatives were
+  rejected; production bitpacking is unchanged. See
+  [REFILL_EVALUATION.md](REFILL_EVALUATION.md) for the measurements and scope.
 * Identification parameters, block-size ranges/order, signed bitrate hints,
   framing, speaker order for 1..=8 channels and unassigned larger layouts.
 * Comments, duplicate/unknown fields, raw binary vectors, case-insensitive field

@@ -155,6 +155,52 @@ fn bitpacking_matches_independent_bit_indexer_for_all_widths_and_alignments() {
 }
 
 #[test]
+fn mixed_lookahead_and_reads_preserve_cache_carries_and_every_packet_tail() {
+    let data: Vec<u8> = (0..80).map(|n| (n * 73 + 39) as u8).collect();
+    for length in 0..=data.len() {
+        for seed in 0..32usize {
+            let input = &data[..length];
+            let mut bits = BitReader::new(input);
+            let mut position = 0;
+            let mut step = seed;
+            loop {
+                // Compare with direct wire-bit indexing, independently of the
+                // cache's prefetch size, byte alignment and lookahead history.
+                let width = (step * 13 + seed) % 33;
+                let expected = (position + width <= input.len() * 8).then(|| {
+                    (0..width).fold(0, |value, bit| {
+                        let index = position + bit;
+                        value | (((input[index / 8] >> (index % 8)) & 1) as u32) << bit
+                    })
+                });
+                assert_eq!(bits.peek(width as u32), expected);
+                assert_eq!(bits.peek(33), None);
+                assert_eq!(bits.position(), position);
+                assert_eq!(bits.remaining(), input.len() * 8 - position);
+                assert!(!bits.is_exhausted());
+                let width = 1 + (step * 7 + seed) % 32;
+                if position + width > input.len() * 8 {
+                    assert_eq!(bits.read(width as u32), Err(Error::EndOfPacket));
+                    assert_eq!(bits.position(), position);
+                    assert_eq!(bits.remaining(), input.len() * 8 - position);
+                    assert!(bits.is_exhausted());
+                    assert_eq!(bits.peek(0), None);
+                    assert_eq!(bits.read(0), Err(Error::EndOfPacket));
+                    break;
+                }
+                let expected = (0..width).fold(0, |value, bit| {
+                    let index = position + bit;
+                    value | (((input[index / 8] >> (index % 8)) & 1) as u32) << bit
+                });
+                assert_eq!(bits.read(width as u32), Ok(expected));
+                position += width;
+                step += 1;
+            }
+        }
+    }
+}
+
+#[test]
 fn identification_ranges_hints_and_channel_order() {
     let value = identification();
     let packet = value.encode().unwrap();

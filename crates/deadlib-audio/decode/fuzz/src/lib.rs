@@ -255,7 +255,64 @@ pub fn ogg_container(input: &[u8]) {
     }
 }
 
+fn bitpacking(input: &[u8]) {
+    fn wire(input: &[u8], position: usize, width: u32) -> Option<u32> {
+        if width > 32 || position + width as usize > input.len() * 8 {
+            return None;
+        }
+        Some((0..width).fold(0, |value, bit| {
+            let index = position + bit as usize;
+            value | (((input[index / 8] >> (index % 8)) & 1) as u32) << bit
+        }))
+    }
+    let mut bits = vorbis::bitpack::BitReader::new(input);
+    let mut position = 0;
+    let mut exhausted = false;
+    for step in 0..128 {
+        let control = input.get(step % input.len().max(1)).copied().unwrap_or(0) as u32;
+        let width = control * 13 % 34;
+        let expected = if exhausted {
+            None
+        } else {
+            wire(input, position, width)
+        };
+        assert_eq!(bits.peek(width), expected);
+        assert_eq!(bits.peek(33), None);
+        assert_eq!(
+            bits.read(0),
+            if exhausted {
+                Err(vorbis::Error::EndOfPacket)
+            } else {
+                Ok(0)
+            }
+        );
+        let width = 1 + control % 33;
+        let expected = if width > 32 {
+            Err(vorbis::Error::Invalid("integer width exceeds 32"))
+        } else if exhausted {
+            Err(vorbis::Error::EndOfPacket)
+        } else {
+            wire(input, position, width).ok_or(vorbis::Error::EndOfPacket)
+        };
+        assert_eq!(bits.read(width), expected);
+        match expected {
+            Ok(_) => position += width as usize,
+            Err(vorbis::Error::EndOfPacket) => exhausted = true,
+            Err(_) => {}
+        }
+        assert_eq!(bits.position(), position);
+        assert_eq!(bits.remaining(), input.len() * 8 - position);
+        assert_eq!(bits.is_exhausted(), exhausted);
+    }
+}
+
 pub fn vorbis_headers(input: &[u8]) {
+    if input.len() > MAX_INPUT + 1 {
+        return;
+    }
+    // Exercise the wire-bit contract even when arbitrary bytes cannot parse
+    // as headers. This oracle does not use BitWriter or the decoder cache.
+    bitpacking(input);
     let Some((&kind, data)) = input.split_first() else {
         return;
     };
@@ -665,6 +722,13 @@ pub fn vorbis_encode(input: &[u8]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn bitpacking_oracle_covers_mixed_widths_and_packet_tails() {
+        let input: Vec<_> = (0..128).map(|v| (v * 79) as u8).collect();
+        for length in 0..=input.len() {
+            bitpacking(&input[..length]);
+        }
+    }
     #[test]
     fn valid_and_truncated_seeds_reach_every_oracle() {
         for control in 0..80 {
