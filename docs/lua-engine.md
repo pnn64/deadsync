@@ -55,7 +55,7 @@ passed 629 Rust tests on each platform after fixing the remaining fixture
 assumptions. Crashing GNU C `unpack` inputs run in a separate strict audit;
 five native crashes remain recorded, with signed-overflow diagnostics and an
 independent wrapping control. The default reference flags remain unchanged.
-The current runs pass 632 Rust tests on Windows x64, Linux x64 and Linux i686
+The current runs pass 640 Rust tests on Windows x64, Linux x64 and Linux i686
 SSE2. The default x87 arithmetic baseline and five bounded traceback requests
 retain failed/incomplete observations. The C/auxiliary APIs, production native loading and
 remaining language, library, debug, GC and resource behavior must also be
@@ -63,7 +63,7 @@ completed. Selected passing probes and declaration counts do not close these
 gates. Production migration also requires the subsequent performance gates.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 553 differential/adversarial integration tests, seventy-five unit tests and
+crate, 559 differential/adversarial integration tests, seventy-seven unit tests and
 four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -202,6 +202,19 @@ fallback. Eighteen native chunks match official Lua on Windows x64, Linux x64
 and Linux i686 SSE2 in direct, cache-store and fresh-process cache-hit modes,
 including open/closed/suspended cells and redumped functions. These regressions
 do not establish complete C API coverage or full standalone Lua 5.1 parity.
+
+The [native upvalue checks](testing/2026-10-27-rust-lua-native-upvalues.md)
+add `lua_getupvalue` and `lua_setupvalue` to the development boundary. Lua
+capture cells and native captures share the existing VM stack and collector
+barriers. Builtin iterators, wrappers, `pairs`, `ipairs` and `newproxy` now use
+ordinary traced Lua capture values; native writes change execution immediately.
+Program-owned interned names keep returned C pointers stable while their
+functions remain reachable. Shared-source C cases cover all builtin capture
+families and nine native-chunk name variants. Six Rust groups and two forced
+collector groups cover mutation, lifetime, collection, stack bounds and error
+recovery. The unchanged stock i686 SSE2 suite still passes in both engines.
+Full C API coverage, production native loading and standalone Lua 5.1 parity
+remain open. Performance work stays deferred.
 
 The [standalone suite checks](testing/2026-10-27-rust-lua-full-suite.md) invoke
 the real CLIs with the official README's `LUA_PATH="?;./?.lua"` setup. Each run

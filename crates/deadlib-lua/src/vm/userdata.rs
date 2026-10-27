@@ -268,20 +268,40 @@ impl Vm {
         self.userdata.get_mut(id.0).map(|u| u.bytes.as_mut())
     }
 
-    pub(super) fn proxy_native(&mut self, base: usize, count: usize) -> Result<usize, Error> {
+    pub(super) fn proxy_native(
+        &mut self,
+        closure: u64,
+        base: usize,
+        count: usize,
+    ) -> Result<usize, Error> {
         let arg = self.argument(base, count, 0);
-        let env = self.native_environment(NEW_PROXY);
+        let env = self.native_environment(closure);
         let id = self.allocate_userdata(0, env);
         let metatable = if !arg.is_truthy() {
             None
         } else if arg == Value::Boolean(true) {
             let table = self.new_table();
-            self.proxy_metatables.insert(table);
+            let valid = self.native_closures[slot_index(closure)].captures[0];
+            let Value::Table(valid) = valid else {
+                return Err(Error::new(
+                    ErrorKind::Runtime,
+                    0,
+                    "invalid newproxy capture",
+                ));
+            };
+            self.raw_set(valid, Value::Table(table), Value::Boolean(true))?;
             Some(table)
         } else {
             Some(
                 self.metatable(arg)
-                    .filter(|m| self.proxy_metatables.contains(m))
+                    .filter(
+                        |m| match self.native_closures[slot_index(closure)].captures[0] {
+                            Value::Table(valid) => self.tables[slot_index(valid.0)]
+                                .get(Value::Table(*m))
+                                .is_truthy(),
+                            _ => false,
+                        },
+                    )
                     .ok_or_else(|| self.argument_error(0, b"boolean or proxy expected"))?,
             )
         };

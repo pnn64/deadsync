@@ -891,3 +891,127 @@ do
   end
   print('aux-buffer-complete',checks,callbacks)
 end
+
+do
+  local function read(f,n,callback,index)
+    local name,value,delta=boundary_upget(f,n,callback,index)
+    assert(delta==(name==nil and 0 or 1))
+    return name,value
+  end
+  local function write(f,n,value,index)
+    local name,delta=boundary_upset(f,n,value,index)
+    assert(delta==(name==nil and 0 or -1))
+    return name
+  end
+  local a,b={mark=17},29
+  local function get()return a,b end
+  local original=a
+  for _,n in ipairs({-2147483648,-1,0,1,2,3,256,2147483647})do
+    local name,value=read(get,n)
+    assert(name==(n==1 and 'a' or n==2 and 'b' or nil))
+    if n==1 then assert(value==a)elseif n==2 then assert(value==b)else assert(value==nil)end
+    print('upvalue-index',n,name,type(value))
+  end
+  local collected=0
+  local name,value=read(get,1,function()
+    collected=collected+1
+    collectgarbage()
+    assert(read(get,2)=='b')
+    boundary_format('%s','nested')
+  end)
+  assert(name=='a' and value==original and collected==1)
+  local replacement={mark=42}
+  assert(write(get,1,replacement)=='a' and a==replacement)
+  assert(write(get,2,51,-5)=='b' and b==51)
+  assert(read(get,1,nil,-4)=='a')
+  assert(write(get,3,false)==nil and b==51)
+  assert(write(false,1,17)==nil and read(false,1)==nil)
+  assert(read(get,1,nil,5)==nil)
+  local bound_read,bound_write=boundary_upbind(get)
+  assert(read(bound_read,1)=='')
+  assert(bound_read(false,1,nil,-10003)=='a')
+  assert(bound_write(false,2,61,-10003)=='b' and b==61)
+  assert(select('#',debug.getupvalue(bound_read,1))==0)
+  local counter=boundary_make_counter(10)
+  local cname,cvalue=read(counter,1);assert(cname=='' and cvalue==10)
+  assert(write(counter,1,40)=='' and counter()==41)
+  local many=boundary_make_many(255)
+  assert(read(many,255)=='' and write(many,255,99)=='')
+  assert(select(2,read(many,255))==99 and read(many,256)==nil)
+
+  local captured
+  local co=coroutine.create(function()
+    local cell=17
+    captured=function()return cell end
+    coroutine.yield()
+    assert(cell==71)
+    return cell
+  end)
+  assert(coroutine.resume(co))
+  assert(write(captured,1,71)=='cell')
+  local ok,result=coroutine.resume(co);assert(ok and result==71)
+  assert(write(captured,1,81)=='cell' and captured()==81)
+
+  local pname,iterator=read(pairs,1);assert(pname=='' and type(iterator)=='function')
+  assert(iterator==select(1,pairs({})) and iterator~=next)
+  local function custom(t,k)return next(t,k)end
+  assert(write(pairs,1,custom)=='')
+  local count=0;for k,v in pairs({x=17,y=29})do count=count+v end
+  assert(count==46 and select(1,pairs({}))==custom)
+  assert(write(pairs,1,iterator)=='')
+  local _,istep=read(ipairs,1)
+  assert(write(ipairs,1,custom)=='' and select(1,ipairs({}))==custom)
+  assert(write(ipairs,1,istep)=='')
+
+  local _,valid=read(newproxy,1)
+  assert(type(valid)=='table' and getmetatable(valid)==valid and valid.__mode=='kv')
+  local proxy=newproxy(true);local mt=getmetatable(proxy)
+  assert(valid[mt]==true)
+  valid[mt]=false;assert(not pcall(newproxy,proxy))
+  valid[mt]=17;assert(getmetatable(newproxy(proxy))==mt)
+  local alternate={}
+  assert(write(newproxy,1,alternate)=='')
+  assert(not pcall(newproxy,proxy))
+  alternate[mt]=true;assert(getmetatable(newproxy(proxy))==mt)
+  local other=newproxy(true);assert(alternate[getmetatable(other)]==true)
+  assert(write(newproxy,1,valid)=='')
+
+  local matches=string.gmatch('ab12cd34','%d+')
+  assert(select(2,read(matches,1))=='ab12cd34')
+  assert(select(2,read(matches,2))=='%d+')
+  assert(select(2,read(matches,3))==0 and matches()=='12')
+  assert(select(2,read(matches,3))==4)
+  assert(write(matches,3,'6')=='' and matches()=='34' and matches()==nil)
+  assert(write(matches,1,12345)=='' and write(matches,2,2)=='' and write(matches,3,0)=='')
+  assert(matches()=='2' and select(2,read(matches,1))=='12345' and select(2,read(matches,2))=='2')
+
+  local file=assert(io.tmpfile());file:write('first\nsecond\n');file:seek('set',0)
+  local lines=file:lines()
+  assert(select(2,read(lines,1))==file and select(2,read(lines,2))==false)
+  assert(lines()=='first')
+  local otherfile=assert(io.tmpfile());otherfile:write('replacement\n');otherfile:seek('set',0)
+  assert(write(lines,1,otherfile)=='' and write(lines,2,17)=='')
+  assert(lines()=='replacement' and lines()==nil and io.type(otherfile)=='closed file')
+  file:close()
+  local wrapper=coroutine.wrap(function()return 17 end)
+  local _,thread=read(wrapper,1);assert(type(thread)=='thread')
+  local otherthread=coroutine.create(function()return 91 end)
+  assert(write(wrapper,1,otherthread)=='' and wrapper()==91)
+
+  for count=0,2 do
+    for _,style in ipairs({'original','empty','nul'})do
+      local first,second,third=assert(loadfile('upvalues-'..count..'-'..style..'.luac'))()
+      for n=1,2 do
+        local name,value=read(first,n,function()collectgarbage()end)
+        local expected=n<=count and (style=='original' and (n==1 and 'a' or 'b')or style=='empty' and ''or 'name')or nil
+        assert(name==expected)
+        assert(value==(n<=count and (n==1 and 17 or 29)or nil))
+        assert(write(first,n,100+n)==expected)
+      end
+      local x,y=second();local p,q=third()
+      assert(x==(count>=1 and 101 or 17) and y==(count>=2 and 102 or 29)and x==p and y==q)
+      print('upvalue-native',count,style,x,y)
+    end
+  end
+  print('native-upvalues-complete')
+end

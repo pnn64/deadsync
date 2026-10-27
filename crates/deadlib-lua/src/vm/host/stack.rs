@@ -4,6 +4,7 @@ mod objects;
 mod protected;
 mod scalars;
 mod tables;
+mod upvalues;
 pub use protected::NativeCallStatus;
 
 /// A rooted mutable stack for one synchronous native callback.

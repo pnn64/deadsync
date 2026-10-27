@@ -284,6 +284,15 @@ mod windows {
                         .map_err(|_| self.stack.error(b"invalid format-part count"))?;
                     self.stack.concatenate_primitives(count)?;
                 }
+                45 | 46 => {
+                    let number = usize::try_from(b).unwrap_or(0);
+                    let name = if op == 45 {
+                        self.stack.get_upvalue(a as isize, number)?
+                    } else {
+                        self.stack.set_upvalue(a as isize, number)?
+                    };
+                    value.bytes = name.map_or(std::ptr::null(), |bytes| bytes.as_ptr().cast());
+                }
                 25 => {
                     value.integer = match self.stack.value(a as isize) {
                         None => -1,
@@ -463,6 +472,9 @@ mod windows {
             "boundary_auxbuffer_info",
             "boundary_auxbuffer",
             "boundary_auxgsub",
+            "boundary_upget",
+            "boundary_upset",
+            "boundary_upbind",
             "boundary_cpcall",
         ] {
             let function = vm

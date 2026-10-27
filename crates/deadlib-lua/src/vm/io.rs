@@ -447,12 +447,10 @@ impl Vm {
         }
     }
     pub(super) fn io_iterator(&mut self, id: u64, base: usize) -> Result<usize, Error> {
-        let threads::NativeKind::Lines { file, close } = self.native_closures[slot_index(id)].kind
-        else {
-            unreachable!()
-        };
+        let file = self.native_closures[slot_index(id)].captures[0];
+        let close = self.native_closures[slot_index(id)].captures[1].is_truthy();
         let key = self
-            .file_key(Value::Userdata(file), false)
+            .file_key(file, false)
             .ok_or_else(|| runtime("file is already closed"))?;
         if self.io.files[slot_index(key)].resource.is_none() {
             return Err(runtime("file is already closed"));
@@ -473,7 +471,7 @@ impl Vm {
             Ok(false) => {
                 self.buffers.push(bytes);
                 if close {
-                    self.close_file(Value::Userdata(file), base)?;
+                    self.close_file(file, base)?;
                 }
                 Ok(0)
             }
@@ -572,8 +570,10 @@ impl Vm {
             let Value::Userdata(file) = self.file_value(file, self.native_environment(id)) else {
                 unreachable!()
             };
-            self.registers[base] =
-                self.new_native(threads::NativeKind::Lines { file, close: true })?;
+            self.registers[base] = self.new_native(
+                threads::NativeKind::Lines,
+                &[Value::Userdata(file), Value::Boolean(true)],
+            )?;
             return Ok(1);
         }
         let default = matches!(id, READ | WRITE | FLUSH | LINES) || (id == CLOSE && count == 0);
@@ -615,8 +615,10 @@ impl Vm {
                 let Value::Userdata(file) = value else {
                     unreachable!()
                 };
-                self.registers[base] =
-                    self.new_native(threads::NativeKind::Lines { file, close: false })?;
+                self.registers[base] = self.new_native(
+                    threads::NativeKind::Lines,
+                    &[Value::Userdata(file), Value::Boolean(false)],
+                )?;
                 Ok(1)
             }
             SEEK => {

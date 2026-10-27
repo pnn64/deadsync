@@ -30,12 +30,6 @@ enum SubAction {
 }
 
 #[derive(Debug)]
-pub(super) struct MatchIterator {
-    source: StringId,
-    pattern: StringId,
-    position: usize,
-}
-#[derive(Debug)]
 pub(super) struct Substitution {
     pub owner: usize,
     source: StringId,
@@ -65,11 +59,6 @@ impl Substitution {
     }
     pub(super) fn heap_bytes(&self) -> usize {
         self.output.capacity() + self.actions.capacity() * std::mem::size_of::<SubAction>()
-    }
-}
-impl MatchIterator {
-    pub(super) fn roots(&self) -> [Value; 2] {
-        [Value::String(self.source), Value::String(self.pattern)]
     }
 }
 
@@ -384,11 +373,14 @@ impl Vm {
             STR_GMATCH => {
                 let pattern = self.string_argument(base, count, 1)?;
                 self.prepare_pattern(pattern, false);
-                self.new_native(threads::NativeKind::Match(MatchIterator {
-                    source,
-                    pattern,
-                    position: 0,
-                }))?
+                self.new_native(
+                    threads::NativeKind::Match,
+                    &[
+                        Value::String(source),
+                        Value::String(pattern),
+                        Value::Number(0.),
+                    ],
+                )?
             }
             _ => unreachable!("string native ID"),
         };
@@ -397,14 +389,34 @@ impl Vm {
     }
     pub(super) fn match_iterator(&mut self, id: u64, base: usize) -> Result<usize, Error> {
         let index = slot_index(id);
-        let Some(threads::NativeClosure {
-            kind: threads::NativeKind::Match(iter),
-            ..
-        }) = self.native_closures.get(id)
-        else {
+        if !matches!(
+            self.native_closures.get(id).map(|c| &c.kind),
+            Some(threads::NativeKind::Match)
+        ) {
             return Err(Error::new(ErrorKind::Runtime, 0, "unknown native closure"));
-        };
-        let (source, pattern, position) = (iter.source, iter.pattern, iter.position);
+        }
+        let mut ids = [StringId(0); 2];
+        for (slot, target) in ids.iter_mut().enumerate() {
+            let value = self.native_closures[index].captures[slot];
+            let value = match value {
+                Value::Number(number) => self.intern(&native::format_number(number)),
+                _ => value,
+            };
+            let Value::String(string) = value else {
+                return Err(Error::new(
+                    ErrorKind::Runtime,
+                    0,
+                    "invalid pattern iterator capture",
+                ));
+            };
+            self.set_native_capture(id, slot, value)?;
+            *target = string;
+        }
+        let [source, pattern] = ids;
+        let position = self
+            .number(self.native_closures[index].captures[2])
+            .map(lua_integer)
+            .unwrap_or(0) as usize;
         self.prepare_pattern(pattern, false);
         let found = self.patterns[&(pattern, false)].find(
             &self.strings.bytes[slot_index(source.0)],
@@ -412,10 +424,8 @@ impl Vm {
             &mut self.pattern_work,
         )?;
         if let Some(found) = found {
-            let threads::NativeKind::Match(iter) = &mut self.native_closures[index].kind else {
-                unreachable!("pattern iterator kind")
-            };
-            iter.position = found.end + usize::from(found.end == found.start);
+            self.native_closures[index].captures[2] =
+                Value::Number((found.end + usize::from(found.end == found.start)) as f64);
             self.capture_results(base, source, found, true)
         } else {
             Ok(0)

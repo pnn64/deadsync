@@ -98,6 +98,7 @@ fn failed_calls_collect_before_return_and_keep_the_error_value_rooted() {
 #[test]
 fn successive_entries_reclaim_unretained_message_handler_closures() {
     let mut vm = Vm::new();
+    let builtins = vm.heap_stats().native_closures;
     vm.begin_standalone().unwrap();
     let program = compile(b"return 7").unwrap();
     for _ in 0..4_000 {
@@ -107,8 +108,8 @@ fn successive_entries_reclaim_unretained_message_handler_closures() {
     assert!(stats.collections > 0);
     assert!(stats.native_closures < 2_000, "{stats:?}");
     vm.collect_garbage().unwrap();
-    assert_eq!(vm.heap_stats().native_closures, 1);
+    assert_eq!(vm.heap_stats().native_closures, builtins + 1);
     vm.end_standalone().unwrap();
     vm.collect_garbage().unwrap();
-    assert_eq!(vm.heap_stats().native_closures, 0);
+    assert_eq!(vm.heap_stats().native_closures, builtins);
 }

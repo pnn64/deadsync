@@ -65,6 +65,12 @@ API int lua_lessthan(lua_State *L, int left, int right) {
 API void lua_concat(lua_State *L, int count) {
   BoundaryValue value = {0}; operation(L, 40, count, 0, &value);
 }
+API const char *lua_getupvalue(lua_State *L, int index, int number) {
+  BoundaryValue value = {0}; operation(L, 45, index, number, &value); return value.bytes;
+}
+API const char *lua_setupvalue(lua_State *L, int index, int number) {
+  BoundaryValue value = {0}; operation(L, 46, index, number, &value); return value.bytes;
+}
 
 API void *lua_newuserdata(lua_State *L, size_t size) {
   BoundaryValue value = {0}; value.length = size;

@@ -192,6 +192,7 @@ struct LoadedProgram {
     data: Arc<ProgramData>,
     owner: std::sync::Weak<()>,
     constants: Box<[Box<[Value]>]>,
+    upvalue_names: Box<[Box<[StringId]>]>,
     entry: FunctionId,
 }
 
@@ -386,7 +387,6 @@ pub struct Vm {
     hooks: hooks::Hooks,
     userdata: Arena<userdata::Userdata>,
     io: io::Io,
-    proxy_metatables: std::collections::HashSet<TableId>,
     userdata_order: u64,
     standalone: u64,
 }
@@ -446,7 +446,6 @@ impl Vm {
             hooks: hooks::Hooks::default(),
             userdata: Arena::default(),
             io: io::Io::default(),
-            proxy_metatables: std::collections::HashSet::new(),
             userdata_order: 0,
             standalone: 0,
         };
@@ -488,7 +487,29 @@ impl Vm {
             (LOAD_FILE, b"loadfile"),
             (DO_FILE, b"dofile"),
         ] {
-            vm.set_global(name, Value::Native(id))
+            let function = match id {
+                PAIRS | IPAIRS => vm
+                    .new_native(
+                        threads::NativeKind::Builtin(id),
+                        &[Value::Native(if id == PAIRS {
+                            PAIRS_NEXT
+                        } else {
+                            IPAIRS_STEP
+                        })],
+                    )
+                    .expect("base capture"),
+                NEW_PROXY => {
+                    let valid = vm.new_table();
+                    vm.set_metatable(Value::Table(valid), Some(valid));
+                    let mode = vm.intern(b"__mode");
+                    let weak = vm.intern(b"kv");
+                    vm.raw_set(valid, mode, weak).expect("proxy weak table");
+                    vm.new_native(threads::NativeKind::Builtin(id), &[Value::Table(valid)])
+                        .expect("proxy capture")
+                }
+                _ => Value::Native(id),
+            };
+            vm.set_global(name, function)
                 .expect("base library names are valid");
         }
         let debug = vm.new_table();
@@ -764,6 +785,7 @@ impl Vm {
             return entry;
         }
         let mut constants = Vec::with_capacity(program.data.prototypes.len());
+        let mut upvalue_names = Vec::with_capacity(program.data.prototypes.len());
         for prototype in &program.data.prototypes {
             let mut values = Vec::with_capacity(prototype.constants.len());
             for k in &prototype.constants {
@@ -775,11 +797,28 @@ impl Vm {
                 });
             }
             constants.push(values.into_boxed_slice());
+            let count = prototype
+                .debug
+                .native
+                .as_ref()
+                .map_or(prototype.debug.upvalues.len(), |native| native.wire.names);
+            upvalue_names.push(
+                prototype.debug.upvalues[..count]
+                    .iter()
+                    .map(|name| {
+                        let Value::String(id) = self.intern(name) else {
+                            unreachable!()
+                        };
+                        id
+                    })
+                    .collect::<Box<[_]>>(),
+            );
         }
         let index = slot_index(self.programs.insert(LoadedProgram {
             data: Arc::clone(&program.data),
             owner: Arc::downgrade(&program.lifetime),
             constants: constants.into_boxed_slice(),
+            upvalue_names: upvalue_names.into_boxed_slice(),
             entry: FunctionId(0),
         }));
         let bytes = gc::program_bytes(&self.programs[index]);

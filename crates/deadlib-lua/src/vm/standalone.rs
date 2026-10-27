@@ -35,7 +35,7 @@ impl Vm {
                 "standalone context requires an idle main thread",
             ));
         }
-        let Value::Native(id) = self.new_native(NativeKind::StandaloneMain)? else {
+        let Value::Native(id) = self.new_native(NativeKind::StandaloneMain, &[])? else {
             unreachable!()
         };
         self.standalone = id;
@@ -104,7 +104,7 @@ impl Vm {
         self.frames.clear();
         self.standalone_main(self.standalone, 0);
         let handler = if mode == EntryMode::Message {
-            self.new_native(NativeKind::StandaloneTraceback)?
+            self.new_native(NativeKind::StandaloneTraceback, &[])?
         } else {
             Value::Nil
         };

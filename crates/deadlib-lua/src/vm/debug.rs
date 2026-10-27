@@ -92,15 +92,8 @@ impl Vm {
     }
     fn debug_nups(&self, id: u64) -> usize {
         match id {
-            PAIRS | IPAIRS | NEW_PROXY => 1,
             _ if id >= strings::ITERATOR_FIRST => {
-                match self.native_closures.get(id).map(|c| &c.kind) {
-                    Some(threads::NativeKind::Match(_)) => 3,
-                    Some(threads::NativeKind::Wrap(_)) => 1,
-                    Some(threads::NativeKind::Lines { .. }) => 2,
-                    Some(threads::NativeKind::Host(f)) => f.upvalues.len(),
-                    _ => 0,
-                }
+                self.native_closures.get(id).map_or(0, |c| c.captures.len())
             }
             _ => 0,
         }

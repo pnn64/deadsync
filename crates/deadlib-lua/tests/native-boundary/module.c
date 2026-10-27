@@ -595,3 +595,34 @@ EXPORT int boundary_auxgsub(lua_State *L) {
   lua_pushboolean(L, result == lua_tolstring(L, -1, NULL));
   return 2;
 }
+EXPORT int boundary_upget(lua_State *L) {
+  int number=(int)luaL_checkinteger(L,2);
+  int index=(int)luaL_optinteger(L,4,1);
+  int before=lua_gettop(L),delta;
+  const char *name=lua_getupvalue(L,index,number);
+  delta=lua_gettop(L)-before;
+  if (lua_type(L,3)==6) { lua_pushvalue(L,3);lua_call(L,0,0); }
+  /* The borrowed name must survive collection and other debug API calls. */
+  lua_pushstring(L,name);
+  if (name) lua_insert(L,-2); else lua_pushnil(L);
+  lua_pushinteger(L,delta);
+  return 3;
+}
+EXPORT int boundary_upset(lua_State *L) {
+  int number=(int)luaL_checkinteger(L,2);
+  int index=(int)luaL_optinteger(L,4,1);
+  int before,delta;
+  const char *name;
+  lua_pushvalue(L,3);
+  before=lua_gettop(L);
+  /* A negative index refers to the stack including this value. */
+  name=lua_setupvalue(L,index,number);
+  delta=lua_gettop(L)-before;
+  lua_pushstring(L,name);lua_pushinteger(L,delta);
+  return 2;
+}
+EXPORT int boundary_upbind(lua_State *L) {
+  lua_pushvalue(L,1);lua_pushcclosure(L,boundary_upget,1);
+  lua_pushvalue(L,1);lua_pushcclosure(L,boundary_upset,1);
+  return 2;
+}

@@ -194,6 +194,11 @@ pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
             .iter()
             .map(|k| k.len() * std::mem::size_of::<Value>())
             .sum::<usize>();
+    bytes += std::mem::size_of_val(p.upvalue_names.as_ref())
+        + p.upvalue_names
+            .iter()
+            .map(|names| std::mem::size_of_val(names.as_ref()))
+            .sum::<usize>();
     bytes += p.data.name.len()
         + std::mem::size_of_val(p.data.sources.as_ref())
         + p.data.sources.iter().map(|s| s.len()).sum::<usize>()
@@ -387,8 +392,9 @@ impl Vm {
             Value::Userdata(id) => self.userdata.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
-                (matches!(id,0..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|DO_FILE|debug::CONSOLE|io::FIRST..=io::LAST|os::FIRST..=os::LAST)
-                    || package::contains(id))
+                !matches!(id, PAIRS | IPAIRS | NEW_PROXY)
+                    && (matches!(id,0..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|DO_FILE|debug::CONSOLE|io::FIRST..=io::LAST|os::FIRST..=os::LAST)
+                        || package::contains(id))
                     && (self.gc.collections == 0
                         || self.marked_value(value)
                         || (self.gc.phase == Phase::Propagate
@@ -461,9 +467,12 @@ impl Vm {
         payload += self
             .native_closures
             .iter()
-            .map(|f| match &f.kind {
-                threads::NativeKind::Host(f) => f.heap_bytes(),
-                _ => 0,
+            .map(|f| {
+                std::mem::size_of_val(f.captures.as_ref())
+                    + match &f.kind {
+                        threads::NativeKind::Host(f) => f.heap_bytes(),
+                        _ => 0,
+                    }
             })
             .sum::<usize>();
         payload += self.io.heap_bytes();
@@ -501,7 +510,6 @@ impl Vm {
             // capacity-based estimates include payloads and one control byte.
             + self.patterns.capacity() * (std::mem::size_of::<((StringId, bool), crate::pattern::Pattern)>() + 1)
             + self.native_envs.capacity() * (std::mem::size_of::<(u64, TableId)>() + 1);
-        control += self.proxy_metatables.capacity() * (std::mem::size_of::<TableId>() + 1);
         control += self.gc.finalizers.capacity() * std::mem::size_of::<UserdataId>()
             + self.gc.candidates.capacity() * std::mem::size_of::<(u64, UserdataId)>();
         let objects = self.strings.bytes.live_len() * std::mem::size_of::<ByteString>()
@@ -880,22 +888,7 @@ impl Vm {
                         if self.native_closures.mark(id) || forced {
                             let f = &self.native_closures[slot_index(id)];
                             work.push(Trace::Value(Value::Table(f.env)));
-                            match &f.kind {
-                                threads::NativeKind::Match(m) => {
-                                    work.extend(m.roots().into_iter().filter_map(edge))
-                                }
-                                threads::NativeKind::Wrap(t) => {
-                                    work.push(Trace::Value(Value::Thread(*t)))
-                                }
-                                threads::NativeKind::Lines { file, .. } => {
-                                    work.push(Trace::Value(Value::Userdata(*file)))
-                                }
-                                threads::NativeKind::Host(f) => {
-                                    work.extend(f.upvalues.iter().copied().filter_map(edge));
-                                }
-                                threads::NativeKind::StandaloneMain
-                                | threads::NativeKind::StandaloneTraceback => {}
-                            }
+                            work.extend(f.captures.iter().copied().filter_map(edge));
                         }
                     } else if id < 256 {
                         let word = id as usize / 64;
@@ -916,6 +909,11 @@ impl Vm {
                     {
                         for k in &self.programs[i].constants {
                             work.extend(k.iter().copied().filter_map(edge));
+                        }
+                        for names in &self.programs[i].upvalue_names {
+                            work.extend(
+                                names.iter().map(|&name| Trace::Value(Value::String(name))),
+                            );
                         }
                     }
                 }
@@ -1168,8 +1166,6 @@ impl Vm {
         if self.gc.sweep_arena != 9 {
             return;
         }
-        self.proxy_metatables
-            .retain(|id| self.tables.contains(id.0));
         self.strings.rebuild();
         self.patterns
             .retain(|(id, _), _| self.strings.bytes.contains(id.0));
@@ -1314,6 +1310,76 @@ impl Vm {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_capture_writes_barrier_already_propagated_builtin_and_host_closures() {
+        fn empty(_: &mut HostCall<'_>) -> Result<(), Error> {
+            Ok(())
+        }
+        for source in [
+            b"return pairs".as_slice(),
+            b"return ipairs",
+            b"return newproxy",
+            b"return string.gmatch('abc','.')",
+            b"return coroutine.wrap(function()end)",
+            b"return io.tmpfile():lines()",
+            b"return host",
+        ] {
+            let mut vm = Vm::new();
+            let host = vm.new_host_function(empty, &[Value::Nil]).unwrap();
+            vm.set_global(b"host", host).unwrap();
+            let function = vm.execute(&crate::compile(source).unwrap()).unwrap()[0];
+            let root = vm.pin(function).unwrap();
+            let replacement = Value::Table(vm.new_table());
+            vm.begin_gc_cycle();
+            let mut work = vec![Trace::Value(function)];
+            assert_eq!(vm.trace_some(&mut work, 1), 1);
+            assert!(vm.marked_value(function) && !vm.marked_value(replacement));
+            vm.gc.work.extend(work);
+            let Value::Native(id) = function else {
+                panic!("native closure")
+            };
+            vm.set_native_capture(id, 0, replacement).unwrap();
+            assert!(
+                vm.marked_value(replacement),
+                "new capture must mark an old white graph"
+            );
+            finish_marked_cycle(&mut vm);
+            assert!(vm.validate_value(replacement).is_ok());
+            vm.unpin(root).unwrap();
+        }
+    }
+
+    #[test]
+    fn retained_programs_trace_interned_upvalue_names_after_the_compiler_is_dropped() {
+        let mut vm = Vm::new();
+        let function = vm.execute(&crate::compile(b"local unique_upvalue_name_123456789=17;return function()return unique_upvalue_name_123456789 end").unwrap()).unwrap()[0];
+        let root = vm.pin(function).unwrap();
+        let Value::Function(id) = function else {
+            panic!("Lua closure")
+        };
+        let program = vm.functions[slot_index(id.0)].program;
+        let names: Vec<_> = vm.programs[program]
+            .upvalue_names
+            .iter()
+            .flatten()
+            .copied()
+            .collect();
+        assert_eq!(names.len(), 1);
+        vm.begin_gc_cycle();
+        let mut work = vec![Trace::Value(function)];
+        while !work.is_empty() {
+            vm.trace_some(&mut work, 1);
+        }
+        assert!(names.iter().all(|name| vm.strings.bytes.marked(name.0)));
+        finish_marked_cycle(&mut vm);
+        assert!(
+            names
+                .iter()
+                .all(|name| vm.validate_value(Value::String(*name)).is_ok())
+        );
+        vm.unpin(root).unwrap();
+    }
 
     #[test]
     fn newly_initialized_host_thread_roots_barrier_an_already_marked_thread() {

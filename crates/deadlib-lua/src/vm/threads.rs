@@ -28,9 +28,10 @@ impl Status {
 
 #[derive(Debug)]
 pub(super) enum NativeKind {
-    Match(strings::MatchIterator),
-    Wrap(ThreadId),
-    Lines { file: UserdataId, close: bool },
+    Builtin(u64),
+    Match,
+    Wrap,
+    Lines,
     Host(host::Function),
     StandaloneMain,
     StandaloneTraceback,
@@ -39,6 +40,7 @@ pub(super) enum NativeKind {
 pub(super) struct NativeClosure {
     pub env: TableId,
     pub kind: NativeKind,
+    pub captures: Box<[Value]>,
 }
 
 #[derive(Debug)]
@@ -123,7 +125,11 @@ impl Vm {
         self.set_global(b"coroutine", Value::Table(table))
             .expect("coroutine name is valid");
     }
-    pub(super) fn new_native(&mut self, kind: NativeKind) -> Result<Value, Error> {
+    pub(super) fn new_native(
+        &mut self,
+        kind: NativeKind,
+        captures: &[Value],
+    ) -> Result<Value, Error> {
         let env = self
             .frames
             .last()
@@ -131,7 +137,13 @@ impl Vm {
                 FrameKind::Lua(id) => self.functions[slot_index(id.0)].env,
                 FrameKind::Native(id) => self.native_environment(id),
             });
-        let id = self.native_closures.insert(NativeClosure { env, kind });
+        self.native_closures
+            .note_alloc(std::mem::size_of_val(captures));
+        let id = self.native_closures.insert(NativeClosure {
+            env,
+            kind,
+            captures: captures.into(),
+        });
         self.gc_new_value(Value::Native(id));
         Ok(Value::Native(id))
     }
@@ -140,7 +152,7 @@ impl Vm {
             return 0;
         }
         match self.native_closures.get(id).map(|c| &c.kind) {
-            Some(NativeKind::Wrap(_)) => 1,
+            Some(NativeKind::Wrap) => 1,
             Some(NativeKind::StandaloneMain) => 2,
             Some(NativeKind::StandaloneTraceback) => 3,
             _ => 0,
@@ -338,7 +350,7 @@ impl Vm {
                 self.threads[slot_index(thread.0)].hooks = self.hooks.inherited();
                 self.gc_new_value(Value::Thread(thread));
                 if id == CO_WRAP {
-                    self.new_native(NativeKind::Wrap(thread))?
+                    self.new_native(NativeKind::Wrap, &[Value::Thread(thread)])?
                 } else {
                     Value::Thread(thread)
                 }
@@ -458,8 +470,12 @@ impl Vm {
             return Ok(self.return_frame(frame, base, self.top - base));
         }
         let thread = if wrapped {
-            let NativeKind::Wrap(thread) = self.native_closures[slot_index(id)].kind else {
-                unreachable!("native wrapper kind")
+            let Value::Thread(thread) = self.native_closures[slot_index(id)].captures[0] else {
+                return Err(Error::new(
+                    ErrorKind::Runtime,
+                    0,
+                    "invalid coroutine wrapper capture",
+                ));
             };
             thread
         } else {

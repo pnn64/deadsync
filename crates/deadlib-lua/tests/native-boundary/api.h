@@ -82,6 +82,8 @@ API const char *lua_typename(lua_State *, int);
 API int lua_equal(lua_State *, int, int);
 API int lua_lessthan(lua_State *, int, int);
 API void lua_concat(lua_State *, int);
+API const char *lua_getupvalue(lua_State *, int, int);
+API const char *lua_setupvalue(lua_State *, int, int);
 API const char *lua_pushvfstring(lua_State *, const char *, va_list);
 API const char *lua_pushfstring(lua_State *, const char *, ...);
 API int luaL_argerror(lua_State *, int, const char *);

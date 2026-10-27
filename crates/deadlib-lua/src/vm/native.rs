@@ -696,6 +696,15 @@ impl Vm {
 }
 impl Vm {
     pub(super) fn native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
+        let closure = id;
+        let id = if id >= strings::ITERATOR_FIRST {
+            match self.native_closures.get(id).map(|c| &c.kind) {
+                Some(threads::NativeKind::Builtin(code)) => *code,
+                _ => id,
+            }
+        } else {
+            id
+        };
         if id == debug::GET_REGISTRY {
             self.registers[base] = Value::Table(self.registry);
             return Ok(1);
@@ -713,7 +722,7 @@ impl Vm {
             return self.debug_native(id, base, count);
         }
         if id == NEW_PROXY {
-            return self.proxy_native(base, count);
+            return self.proxy_native(closure, base, count);
         }
         if matches!(id, COLLECT_GARBAGE | GC_INFO) {
             return self.gc_native(id, base, count).map(|_| 1);
@@ -733,7 +742,7 @@ impl Vm {
         if id >= strings::ITERATOR_FIRST {
             if matches!(
                 self.native_closures.get(id).map(|c| &c.kind),
-                Some(threads::NativeKind::Lines { .. })
+                Some(threads::NativeKind::Lines)
             ) {
                 return self.io_iterator(id, base);
             }
@@ -887,8 +896,7 @@ impl Vm {
                 let table = arg(self, 0);
                 self.table_argument(base, count)?;
                 self.resize_registers(self.registers.len().max(base + 3));
-                self.registers[base] =
-                    Value::Native(if id == PAIRS { PAIRS_NEXT } else { IPAIRS_STEP });
+                self.registers[base] = self.native_closures[slot_index(closure)].captures[0];
                 self.registers[base + 1] = table;
                 self.registers[base + 2] = if id == PAIRS {
                     Value::Nil

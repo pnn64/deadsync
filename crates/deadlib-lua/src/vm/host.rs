@@ -37,21 +37,18 @@ pub type HostFunction = fn(&mut HostCall<'_>) -> Result<(), Error>;
 
 pub(super) struct Function {
     callback: HostFunction,
-    pub upvalues: Box<[Value]>,
     data: Option<Box<dyn Any + Send + Sync>>,
 }
 impl std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("HostFunction")
-            .field("upvalues", &self.upvalues)
             .field("has_data", &self.data.is_some())
             .finish_non_exhaustive()
     }
 }
 impl Function {
     pub(super) fn heap_bytes(&self) -> usize {
-        std::mem::size_of_val(self.upvalues.as_ref())
-            + self.data.as_deref().map_or(0, std::mem::size_of_val)
+        self.data.as_deref().map_or(0, std::mem::size_of_val)
     }
 }
 
@@ -72,6 +69,22 @@ pub struct HostCall<'vm> {
 }
 
 impl Vm {
+    pub(super) fn set_native_capture(
+        &mut self,
+        function: u64,
+        index: usize,
+        value: Value,
+    ) -> Result<(), Error> {
+        self.validate_value(value)?;
+        let slot = self
+            .native_closures
+            .get_mut(function)
+            .and_then(|closure| closure.captures.get_mut(index))
+            .ok_or_else(|| Error::new(ErrorKind::Runtime, 0, "invalid host capture index"))?;
+        *slot = value;
+        self.gc_barrier(Value::Native(function), value);
+        Ok(())
+    }
     /// Create a native Lua function backed by a Rust function pointer.
     ///
     /// Captures must originate in this VM. They are copied once and traced with
@@ -138,13 +151,9 @@ impl Vm {
         for &value in captures {
             self.validate_value(value)?;
         }
-        let function = Function {
-            callback,
-            upvalues: captures.into(),
-            data,
-        };
+        let function = Function { callback, data };
         self.native_closures.note_alloc(function.heap_bytes());
-        self.new_native(threads::NativeKind::Host(function))
+        self.new_native(threads::NativeKind::Host(function), captures)
     }
 
     #[inline]
@@ -553,11 +562,7 @@ impl HostCall<'_> {
 
     /// Borrow the closure's captured values.
     pub fn captures(&self) -> &[Value] {
-        let threads::NativeKind::Host(f) = &self.vm.native_closures[slot_index(self.id)].kind
-        else {
-            unreachable!("active host function")
-        };
-        &f.upvalues
+        &self.vm.native_closures[slot_index(self.id)].captures
     }
 
     /// Replace a captured value without changing its slot or closure identity.
@@ -565,18 +570,7 @@ impl HostCall<'_> {
     /// # Errors
     /// Returns an error for a missing slot or invalid/collected value.
     pub fn set_capture(&mut self, index: usize, value: Value) -> Result<(), Error> {
-        self.vm.validate_value(value)?;
-        let threads::NativeKind::Host(f) = &mut self.vm.native_closures[slot_index(self.id)].kind
-        else {
-            unreachable!("active host function")
-        };
-        let slot = f
-            .upvalues
-            .get_mut(index)
-            .ok_or_else(|| Error::new(ErrorKind::Runtime, 0, "invalid host capture index"))?;
-        *slot = value;
-        self.vm.gc_barrier(Value::Native(self.id), value);
-        Ok(())
+        self.vm.set_native_capture(self.id, index, value)
     }
 
     /// Read a number, accepting Lua numeric strings.
