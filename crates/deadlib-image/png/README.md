@@ -4,6 +4,11 @@ Independent pure-Rust PNG implementation. The only production dependency is
 `deadlib-image` for native sample storage. PNG framing, CRC-32, Adler-32,
 zlib/DEFLATE, filters and Adam7 are implemented locally in safe Rust.
 
+The current deliverable focuses on decoding, native sample precision, PNG
+conformance, APNG rendering and decoder performance. Existing encoding utilities
+remain available, but encoder feature completeness and speed are outside the
+completion requirements clarified by the user on 2026-10-27.
+
 ```rust
 use deadlib_image_png::{decode, encode, EncodeOptions};
 # fn example(bytes: &[u8]) -> Result<(), deadlib_image_png::Error> {

@@ -1040,3 +1040,59 @@ These 110,000 successful inputs bring the historical count to 860,000 across
 ten targets. No comparative performance measurements were taken for this API
 addition; existing encoder throughput/ratio gaps, remaining field/order audits,
 broader high-precision APNG composition and native-only fuzz coverage remain open.
+
+## Decoder ancillary ordering audit and scope clarification (2026-10-27)
+
+The user clarified that decoding is the deliverable. Completion now concerns
+native PNG/APNG decoding and rendering, conformance, comprehensive independent
+validation, standalone reuse and competitive measured decoder performance.
+Existing encoder utilities and historical results remain available; encoder
+feature completeness, compression ratio and speed are outside the completion
+requirements. The pending encoder-specific change was removed. All 21 production
+source files retain their `1b70081ae` bytes.
+
+`tests/support/ancillary_order.rs` builds literal chunks, stored-zlib data and
+checksums independently of native encoding. A separate Table 7 model describes
+18 standard non-animation ancillary types across all 15 native formats and
+19 contexts including optional truecolor palettes. `tests/ancillary_order.rs`
+checks 2,052 single placements and all 55,404 ordered pairs, including duplicate
+singletons and repeated text keywords. The 21,637 valid cases in this matrix
+retain exact native images, transparency, raw metadata, order and placement;
+independent Rust png checks their exact stored samples. Other cases must fail
+through buffered and one-/seven-byte readers. The model applies palette ordering
+constraints only when PLTE exists, and allows either cICP/mDCV order.
+
+Another 16,470 cases exercise every small-stream IDAT split, including empty
+chunks, with known ancillary chunks before, between and after the two IDATs.
+Distinct/case-sensitive sPLT names and all 720 permutations of six ancillary
+types in each context add 14,022 cases. Together these are 87,948 wire cases,
+each checked through three native parser paths. Direct event tests add 4,104
+fragmented/whole-buffer runs, verify exact metadata order, and verify that
+ordering errors remain terminal. Whole-file APIs reject chunks outside IHDR/IEND;
+direct-event cases respect the documented prefix API boundary. The optional C
+libpng test independently verifies 678 exact native-sample files, covering every
+valid single placement and both cICP/mDCV orders. Reference pixels support valid
+inputs; negative assertions come from the explicit ordering model rather than
+assuming reference libraries reject every invalid ancillary chunk.
+
+The normal release suite passes 116 tests, with fourteen optional checks ignored.
+The focused ordering suite passes all five tests including its C oracle. Strict
+main/fuzz all-target Clippy and scoped rustfmt pass. A retained standalone source
+copy passes 116 normal tests offline, with fourteen optional checks ignored.
+Its 21 production source hashes and copied test/example hashes match the working
+source; its only production dependency is `deadlib-image`. Exact commands,
+counts and source/oracle hashes are retained in `ancillary-order-validation.json`,
+`ancillary-order-validation.log` and `ancillary-order-independent.log`.
+No comparative timings were taken and no production codec dependency was added.
+
+Fresh decoder corpora each gain 7,884 ordering fixtures, bringing them to 27,627
+files / 5,758,804 bytes (maximum 63,435). Fresh Linux ASan campaigns pass 30,000
+`png_stream` inputs in 30 fuzzing seconds / 523 MiB peak RSS and 30,000 `decode`
+inputs in 6 seconds / 470 MiB. Both binaries define the ASan runtime entry and
+their final source hashes match the initial snapshot. Exact commands and
+initial-corpus/source/binary hashes are in
+`fuzz/reports/ancillary-order-source.json`, with full per-target logs alongside it.
+These 60,000 successful decoder inputs bring historical campaigns across all ten
+targets to 920,000 executions, including earlier encoder campaigns. Remaining
+decoder field audits, broader high-precision APNG composition, native-only fuzz
+coverage and competitive decoder performance remain open.

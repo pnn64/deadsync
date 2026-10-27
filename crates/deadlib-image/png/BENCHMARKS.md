@@ -1,5 +1,10 @@
 # Reproducible pipeline benchmarks
 
+The user clarified on 2026-10-27 that decoding is the deliverable. Decoder
+throughput, memory use and native sample parity are completion requirements.
+Historical encoder timings and sizes below remain recorded as experimental
+context; encoder speed and compression ratio are outside the completion gates.
+
 Run from the workspace root:
 
 ```powershell

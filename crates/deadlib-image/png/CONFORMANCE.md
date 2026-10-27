@@ -8,6 +8,13 @@ possible input was enumerated. `Open` identifies missing implementation or
 insufficient evidence. `Application` identifies an explicit caller responsibility
 of this native-sample codec, rather than an implicit image transformation.
 
+The user clarified on 2026-10-27 that decoding is the deliverable. Completion
+therefore covers native PNG/APNG decoding and rendering, standards behavior,
+differential/fuzz validation, independent reuse and measured decoder performance.
+Existing encoding utilities and their historical evidence remain documented;
+encoder feature completeness, compression ratio and encoder speed are outside
+the current completion requirements.
+
 All test paths below are relative to the PNG package. `COVERAGE.md` records exact
 campaign counts, external tool versions, isolated builds and remaining milestones.
 
@@ -22,7 +29,7 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | 4.8, 5.1–5.3: signature and chunks | Literal signature, checked lengths, CRCs and core grammar in both parsers; `tests/chunks.rs` independently checks all 256 byte values in each name position, empty/unaligned payloads and 31-bit length boundaries | Covered for these framing equivalence classes; broader field/length mutations remain Open |
 | 5.4: chunk property bits | `tests/chunks.rs`: all 16 property-bit combinations at three positions, both empty/binary data, and every noncanonical case variant of all 25 standard names | Covered for literal dispatch, all property bits and future reserved-bit handling; C reference differences are recorded in `chunks-validation.log` |
 | 5.5: CRC | Native CRC-32 for chunks and fdAT sequence/data; known answers, bulk tails/splits, corrupt-stream tests | Covered |
-| 5.6: ordering | All 720 core permutations, 120 APNG control/data permutations, unknown-name flags at every small-stream IDAT split, shared ancillary validator | Covered for these equivalence classes and named metadata/APNG cases; broader ancillary ordering mutations remain Open |
+| 5.6: ordering | All 720 core and 120 APNG permutations; `tests/ancillary_order.rs` checks all 18 non-animation ancillary types across all native formats, optional palettes, critical-boundary placements, ordered pairs, duplicates and 720 six-type permutations per context | Covered for the Table 7 representative matrix, every small-stream IDAT split and direct event error termination; arbitrary payload mutations remain separate field/fuzz evidence |
 | 5.7–5.8: extensions and private fields | Public raw ancillary API enforces alphabetic names, ancillary/reserved bits; unknown critical chunks fail; encoder emits only supported IHDR methods | Covered for current extension API; no new public chunk definitions |
 | 7.1: integers and byte order | Big-endian native u16 samples; 31-bit PNG u32 fields and checked dimensions/lengths; format and malformed suites | Covered; full field-boundary matrix remains Open |
 | 7.2: scanlines | Native sub-byte packing/unpacking, per-row padding, 8/16-bit samples; 3,240 format/geometry/filter/interlace/compression cases | Covered; nonzero unused input bits are not image samples |
@@ -88,20 +95,19 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | 13.15–13.17: backgrounds/alpha/palettes | bKGD/hIST/sPLT retained; explicit APNG SOURCE/OVER and disposal renderer | Covered by known answers and 201 WPT/libpng/fraction RGBA16 canvases, reset and both writers; additional color management remains Application |
 | 14.1–14.3: editor copy/order rules | Both encoders tested for all 16 property combinations at three positions; unknown unsafe chunks omitted, repeated safe chunks retain binary payload/order/placement, known unsafe metadata follows its own rules | Covered for reencoding, including prewrite rejection of all nonalphabetic name bytes and reserved-bit names; arbitrary edit operations are not provided |
 | 15.3.1: datastream conditions | Signature, core grammar, per-chunk fields/relationships, known order constraints and encoder validation | Partial until all open field/order audit items are resolved |
-| 15.3.2: encoder conditions | Both native writers agree with independent readers; reference-depth frontend preserves original high bits and legal-depth native input remains strict | Reference-image input boundary covered by explicit frontend; Partial until remaining field/order audits are resolved |
+| 15.3.2: encoder conditions | Both native writers agree with independent readers; reference-depth frontend preserves original high bits and legal-depth native input remains strict | Historical utility evidence; encoder conformance is outside the current decoder completion scope |
 | 15.3.3: decoder conditions | All standardized critical methods/formats, unknown property/case matrices, both transparency bytes and arbitrary data splitting | Partial: broader malformed equivalence classes and completion audit remain |
 | 15.3.4: editor conditions | Native reference-image samples preserved; safe-to-copy handling implemented | Partial for reencoding API; no general editing UI or color-managed viewer is claimed |
 
 ## Completion evidence still required
 
-The user also requested competitive performance, comprehensive differential and
-fuzz evidence, independent reuse and no DeadSync integration. Package isolation
-and the production dependency boundary are verified by the retained offline
-build. Performance is explicitly incomplete in `BENCHMARKS.md`; the current
-fixed-Huffman encoder's ratio and pipeline speed require substantial work.
-The later Huffman and byte-stride filter optimizations improve measured photo
+The clarified decoder deliverable still requires competitive performance,
+comprehensive differential and fuzz evidence, independent reuse and no DeadSync
+integration. Package isolation and the production dependency boundary are
+verified by retained offline builds. Decoder performance remains incomplete in
+`BENCHMARKS.md`: the Huffman and filter optimizations improve measured photo
 decoding, but native 109.49 MiB/s still trails Rust png's 226.46 in the selected
-filter comparison, with a recorded synthetic encoding slowdown. Resolve the open
-rows above, extend the WPT rendered-frame evidence with broader high-precision
-APNG/compositor and native-only coverage campaigns, and repeat the requirement audit
-against the resulting implementation and measurements before claiming completion.
+comparison. Resolve remaining decoder field audits, extend the WPT rendered-frame
+evidence with broader high-precision APNG/compositor and native-only coverage
+campaigns, and repeat the decoder requirement audit against the resulting
+implementation and measurements before claiming completion.

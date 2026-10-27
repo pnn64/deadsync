@@ -1,6 +1,9 @@
 //! Extract independent PNGSuite zlib streams and PNG files for fuzz campaigns.
 //! An optional first argument creates a fresh corpus root instead of merging seeds.
 #[allow(dead_code)]
+#[path = "../tests/support/ancillary_order.rs"]
+mod ancillary_order;
+#[allow(dead_code)]
 #[path = "../tests/support/apng_recovery.rs"]
 mod apng_recovery;
 #[path = "../tests/support/chunks.rs"]
@@ -143,6 +146,43 @@ fn main() -> std::io::Result<()> {
     fs::create_dir_all(&zlib)?;
     fs::create_dir_all(&png_stream)?;
     fs::create_dir_all(&inflate_stream)?;
+    // Independent Table 7 placements, with both valid and malformed ordering.
+    // Keep a bounded pair subset in addition to all format/single placements.
+    let mut order_cases = 0;
+    for context in ancillary_order::contexts() {
+        for kind in ancillary_order::NAMES {
+            for slot in 0..6 {
+                let mut entries = vec![ancillary_order::entry(context, kind, slot)];
+                ancillary_order::companion(context, &mut entries);
+                let data = ancillary_order::fixture(context, &entries, 3);
+                let name = format!("ancillary-order-{order_cases}.png");
+                fs::write(png.join(&name), &data)?;
+                fs::write(png_stream.join(&name), &data)?;
+                order_cases += 1;
+            }
+        }
+        if context.color == 2 && context.depth == 8 {
+            for first in ancillary_order::NAMES {
+                for second in ancillary_order::NAMES {
+                    for a in ancillary_order::PAIR_SLOTS {
+                        for b in ancillary_order::PAIR_SLOTS {
+                            let mut entries = vec![
+                                ancillary_order::entry(context, first, a),
+                                ancillary_order::entry(context, second, b),
+                            ];
+                            ancillary_order::companion(context, &mut entries);
+                            let data = ancillary_order::fixture(context, &entries, 3);
+                            let name = format!("ancillary-order-{order_cases}.png");
+                            fs::write(png.join(&name), &data)?;
+                            fs::write(png_stream.join(&name), &data)?;
+                            order_cases += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(order_cases, 7884);
     for (format, color, channels) in [
         (0, deadlib_image_png::ColorType::Grayscale, 1),
         (1, deadlib_image_png::ColorType::Rgb, 3),

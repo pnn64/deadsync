@@ -292,3 +292,21 @@ retained alongside it. The PNG corpora each begin with 19,743 files, including
 256 new reference-converted images. These 110,000 successful executions bring
 the historical count to 860,000 across ten targets. This remains smoke evidence;
 native-only coverage and longer campaigns remain open.
+
+## Decoder ancillary ordering follow-up
+
+The decoder-focused continuation adds 7,884 independent Table 7 PNG fixtures to
+each decoder corpus: all 2,052 single placements across native formats/optional
+palettes and 5,832 ordered-pair placements for RGB8 with and without PLTE. Valid
+and malformed orderings are both retained. Each fresh corpus has 27,627 files /
+5,758,804 bytes. Fresh ASan runs pass 30,000 `png_stream` inputs in 30 fuzzing
+seconds / 523 MiB peak RSS and 30,000 `decode` inputs in 6 seconds / 470 MiB.
+Both binaries define the ASan runtime entry and final source hashes match the
+initial snapshot. `reports/ancillary-order-source.json` and per-target logs
+retain exact commands, source/corpus/binary hashes and diagnostics.
+
+The 60,000 successful decoder executions bring historical campaigns across all
+ten targets to 920,000, including prior encoder runs. Decoder conformance,
+precision, APNG rendering and decoder performance are the clarified deliverable;
+encoder features and speed are outside its completion requirements. Native-only
+feedback coverage and longer campaigns remain open.

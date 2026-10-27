@@ -11,6 +11,7 @@ filter-*.log text eol=lf
 profiling/*.txt text eol=lf -whitespace
 reference-conformance.log text eol=lf
 reference-samples-*.log text eol=lf
+ancillary-order-*.log text eol=lf
 coverage-reports/*.txt text eol=lf
 coverage-reports/*.log text eol=lf
 tests/fixtures/language/* text eol=lf
