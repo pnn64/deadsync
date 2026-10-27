@@ -21,11 +21,12 @@ evidence, application responsibilities and explicitly open items.
 | Latin-1 text-body encoder/recovery boundary | `tests/text_body.rs`, shared encoder validator, independent stored-zlib fixtures and C named-metadata oracle | All 256 byte values across 6,144 files; strict graphic Latin-1/LF encoding, non-null decoder recovery, NBSP/long text and iTXt Unicode distinctions verified |
 | sRGB fallback metadata consistency | `tests/metadata_fields.rs` | Both encoders enforce Table 17 gAMA/cHRM values with sRGB; all 15 formats / four intents and incompatible fallback orders pass |
 | cICP code-point validity | `tests/cicp.rs`, H.273 (07/2024) | All 131,072 primaries/transfer/range combinations, all matrix/flag bytes and reserved-code fallback behavior pass |
+| mDCV/cLLI exact fixed-point metadata | `tests/hdr.rs`, independent stored-zlib/CRC fixtures, C fixed-point getters and Rust png metadata | All 8,192 field-byte mutations, 60 integer boundaries, 132 length cases and 120 ordering permutations pass; exact units/order and both writers checked across all 15 formats |
 | APNG frame decoding, compositing, encoding | `apng.rs`, `composite.rs`, APNG/compositing/recovery tests | Exact native frames, explicit static recovery and 3,000 independent faults across all formats/layouts/roles pass; broader external rendered-frame corpus pending |
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Nine targets; 470,000 recorded successful sanitizer executions across milestones, including 60,000 with APNG recovery; longer campaigns and native fuzz coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Nine targets; 530,000 recorded successful sanitizer executions across milestones, including 60,000 with new HDR field/order seeds; longer campaigns and native fuzz coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -793,3 +794,59 @@ The 60,000 new successful input executions bring the historical count to
 470,000. This is smoke evidence; longer campaigns, native-only coverage, broader
 external rendered APNG comparisons, remaining metadata field/order audits and
 competitive pipeline/encoder performance remain open.
+
+## Exact HDR field and ordering audit (2026-10-27)
+
+`tests/hdr.rs` adds independent stored-DEFLATE/CRC fixtures for mDCV/cLLI, with
+all 256 values at each of their 32 payload-byte positions and 60 explicit
+four-byte integer boundaries. Native buffered, fragmented-reader, APNG-recovery
+and one-byte push paths accept 7,728 fixtures within PNG's integer range and
+reject 524 over-range fixtures. Invalid writer inputs fail before output.
+For accepted data, every native sample, raw chunk and typed metadata value is
+checked; Rust png independently checks fixed-point metadata and image samples.
+
+Four distinct field profiles across all 15 formats and plain/Adam7 layout are
+checked from independent bytes and both native writers (360 files). Literal
+BT.2020/D65 bytes catch coordinate order, 50,000 versus 100,000 scaling and
+big-endian precision mistakes. White x is 15635 / `3D 13`, using the
+[published white-point correction](https://www.w3.org/2025/06/REC-PNG-20250624-errata).
+The API now documents the integer units and array order; codec behavior is
+unchanged by this audit.
+
+The [Third Edition](https://www.w3.org/TR/2025/REC-png-3-20250624/#mDCV-chunk)
+specifies two-byte coordinates, 31-bit luminances, an accompanying cICP for
+mDCV, and placement before PLTE/IDAT. cLLI permits unknown values as zero.
+[SMPTE ST 2086:2018](https://pub.smpte.org/pub/st2086/st2086-2018.pdf), 5.2 and
+Annex A, allow values outside its nominal display ranges for other purposes.
+The suite deliberately preserves such raw integers; it does not claim every
+tested tuple describes a physical display or invent additional clipping rules.
+
+Grammar checks cover 132 length cases (0–65 bytes for each chunk), all 120
+permutations of cICP/mDCV/cLLI/PLTE/IDAT (six conforming orders), singleton
+duplication, the mDCV dependency, independent cLLI, and the exact cumulative
+36-byte metadata budget. Both encoders validate malformed lengths and duplicates
+before output.
+
+The pinned C oracle's new `--hdr-metadata` protocol reads libpng fixed-point
+getters without floats. It returns exact values for all 7,728 in-range raw
+fixtures plus 60 native writer files. For 524 over-range fixtures it ignores
+the affected HDR chunk; the presence flags verify that deliberate C recovery
+policy separately from native rejection. Results are retained in
+`hdr-oracle-validation.log`. The prior 1,061 native-pixel and 1,280 text-body
+C comparisons also pass with the extended oracle.
+
+Full release and independent offline runs each pass 99 normal tests, with 11
+optional C tests ignored. Main and fuzz all-target Clippy pass with warnings
+denied. The isolated production dependency remains only `deadlib-image`.
+`hdr-validation.log` / `.json` retain commands, results and source/oracle hashes;
+the complete C HDR run is recorded separately in `hdr-oracle-validation.log`.
+
+The generator adds 8,534 HDR files per PNG corpus, giving 17,885 files /
+3,551,398 bytes in each fresh corpus (maximum 63,435 bytes). Fresh Linux ASan
+campaigns complete 30,000 inputs each: `png_stream` in 29 fuzzing seconds /
+476 MiB peak RSS and `decode` in 6 seconds / 461 MiB. Both instrumented binaries
+define the ASan runtime entry; source/corpus/binary hashes and exact commands
+are in `fuzz/reports/hdr-source.json`, with full per-target logs. The 60,000
+successful inputs bring the historical count to 530,000. Native-only fuzz
+coverage, longer campaigns, remaining conformance audits, broader external
+rendered APNG evidence and competitive pipeline/encoder performance remain open.

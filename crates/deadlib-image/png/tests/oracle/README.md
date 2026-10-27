@@ -201,3 +201,22 @@ APNG-CRC cases under the oracle's strict CRC setting. The opt-in native recovery
 policy reports those animation faults and completes static/core PNG checks.
 No C reference rejection is silently treated as a sample mismatch.
 `apng-recovery-validation.log` and `.json` retain the results and hashes.
+
+## Exact HDR metadata
+
+```powershell
+cargo test -p deadlib-image-png --release --test hdr libpng_exact_hdr_fixed_values_and_invalid_integer_policy -- --ignored --nocapture
+```
+
+`--hdr-metadata` emits big-endian u32 words: protocol version 1, presence bits
+(cICP=1, mDCV=2, cLLI=4), followed by present chunks' fields. cICP has four words;
+mDCV has eight chromaticities in red/green/blue/white x/y order, then maximum/
+minimum luminance; cLLI has MaxCLL/MaxFALL. Chromaticities are the exact libpng
+fixed-point getter values scaled by 100,000; luminances use the getter's 10,000
+scale. The native test compares its original u16 coordinates multiplied by two,
+without floats, and catches white-point relocation or scaling errors.
+
+All 7,728 raw fixtures within PNG's integer range and 60 native writer files
+match exactly. For 524 over-range fixtures, libpng ignores the affected HDR
+chunk while native decoding rejects the input; presence flags verify this
+policy difference. `hdr-oracle-validation.log` retains the results.

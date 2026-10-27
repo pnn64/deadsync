@@ -44,9 +44,13 @@ pub enum Metadata {
     },
     Cicp([u8; 4]),
     MasteringDisplay {
+        /// mDCV wire order: red x/y, green x/y, blue x/y, white x/y.
+        /// Each integer is scaled by 50,000 (one unit is 0.00002).
         chromaticities: [u16; 8],
+        /// Maximum then minimum display luminance, in units of 0.0001 cd/m².
         luminance: [u32; 2],
     },
+    /// MaxCLL then MaxFALL in units of 0.0001 cd/m²; zero means unknown.
     ContentLight([u32; 2]),
     BackgroundGray(u16),
     BackgroundRgb([u16; 3]),

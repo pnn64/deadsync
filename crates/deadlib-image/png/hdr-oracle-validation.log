@@ -1,0 +1,9 @@
+    Finished `release` profile [optimized] target(s) in 0.57s
+     Running tests\hdr.rs (target\release\deps\hdr-8a249dbf233477f4.exe)
+
+running 1 test
+test libpng_exact_hdr_fixed_values_and_invalid_integer_policy has been running for over 60 seconds
+libpng HDR: exact valid fixed values=7728, invalid integer chunks ignored=524, native writer exact=60
+test libpng_exact_hdr_fixed_values_and_invalid_integer_policy ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 137.41s

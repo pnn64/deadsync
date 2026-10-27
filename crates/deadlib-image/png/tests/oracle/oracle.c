@@ -21,6 +21,27 @@ static void named_header(const char *kind,const char *name,size_t size) {
     size_t length=strlen(name);
     blob(kind,4);word((unsigned int)length);blob(name,length);word((unsigned int)size);
 }
+/* Version 1, presence bits cICP/mDCV/cLLI, then present fixed-point fields.
+ * Chromaticities are libpng's integers scaled by 100,000, in R,G,B,white order.
+ * Luminance values use the getter's exact 10,000 scale; no floating point. */
+static void hdr_metadata(png_structp png,png_infop info) {
+    png_byte primaries=0,transfer=0,matrix=0,range=0;
+    png_fixed_point wx=0,wy=0,rx=0,ry=0,gx=0,gy=0,bx=0,by=0;
+    png_uint_32 maxDL=0,minDL=0,maxCLL=0,maxFALL=0;
+    unsigned int flags=0;
+    if (png_get_cICP(png,info,&primaries,&transfer,&matrix,&range)) flags|=1;
+    if (png_get_mDCV_fixed(png,info,&wx,&wy,&rx,&ry,&gx,&gy,&bx,&by,&maxDL,&minDL)) flags|=2;
+    if (png_get_cLLI_fixed(png,info,&maxCLL,&maxFALL)) flags|=4;
+    word(1);word(flags);
+    if (flags&1) { word(primaries);word(transfer);word(matrix);word(range); }
+    if (flags&2) {
+        word((unsigned int)rx);word((unsigned int)ry);
+        word((unsigned int)gx);word((unsigned int)gy);
+        word((unsigned int)bx);word((unsigned int)by);
+        word((unsigned int)wx);word((unsigned int)wy);word(maxDL);word(minDL);
+    }
+    if (flags&4) { word(maxCLL);word(maxFALL); }
+}
 /* Version 1: record count, then kind/name-length/name/value-length/value.
  * Text and ICC values are decompressed; sPLT is depth then five u16 BE fields
  * per entry, independent of its original eight-/sixteen-bit sample encoding. */
@@ -104,8 +125,9 @@ int main(int argc,char **argv) {
     size_t stride;
     int metadata=argc==3 && strcmp(argv[1],"--metadata")==0;
     int names=argc==3 && strcmp(argv[1],"--named-metadata")==0;
+    int hdr=argc==3 && strcmp(argv[1],"--hdr-metadata")==0;
     int batch=argc==3 && strcmp(argv[1],"--zlib-batch")==0;
-    const char *path=argc==2 ? argv[1] : ((metadata || names || batch) ? argv[2] : NULL);
+    const char *path=argc==2 ? argv[1] : ((metadata || names || hdr || batch) ? argv[2] : NULL);
     if (path==NULL || !(file=fopen(path,"rb"))) return 2;
 #ifdef _WIN32
     _setmode(_fileno(stdout),_O_BINARY);
@@ -129,7 +151,9 @@ int main(int argc,char **argv) {
     if (!data || !rows) return 3;
     for (y=0;y<height;y++) rows[y]=data+y*stride;
     png_read_image(png,rows); png_read_end(png,info);
-    if (names) {
+    if (hdr) {
+        hdr_metadata(png,info);
+    } else if (names) {
         named_metadata(png,info);
     } else if (metadata) {
         png_charp name=NULL;

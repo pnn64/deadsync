@@ -68,12 +68,21 @@ decoder; recovered static images must match independent buffered decoding after
 removing only APNG chunks. Previously emitted animation rows are discarded on
 recovery. Indexed policy uses input-length parity, allowing both policies with
 an intact PNG signature. The APNG fixtures add 3,060 valid/fault files per PNG
-corpus; current fresh PNG corpora contain 9,351 files each.
+corpus; that milestone's fresh PNG corpora contain 9,351 files each.
 The fresh APNG recovery campaigns complete 20,000 inputs each on `png_stream`,
 `decode` and `encode_stream` under Linux ASan. The three configurations within
 `png_stream` count as one input execution. Exact source/corpus/binary hashes,
 commands and statistics are in `reports/apng-recovery-source.json` and its three
 target logs. These smoke runs do not establish native-only coverage.
+
+HDR seeds add another 8,534 independent files per PNG corpus: every byte value
+at all 32 mDCV/cLLI payload-byte positions, 60 integer boundaries, 30 format/
+interlace cases, 132 length cases and 120 chunk-order permutations. Current
+fresh PNG corpora contain 17,885 files / 3,551,398 bytes each. Native metadata
+fixtures use independent stored-DEFLATE and CRC construction; the HDR integration
+suite independently compares exact C and Rust fixed-point metadata. The fresh
+30,000-input campaigns on each PNG target are retained in
+`reports/hdr-source.json` and its two target logs.
 
 `inflate_stream` compares fragmented decoding, prefix byte counts and fused
 errors against buffered native zlib decoding. Independent reference parity is

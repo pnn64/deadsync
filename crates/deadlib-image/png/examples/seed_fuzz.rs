@@ -5,6 +5,9 @@
 mod apng_recovery;
 #[path = "../tests/support/chunks.rs"]
 mod chunks;
+#[allow(dead_code)]
+#[path = "../tests/support/hdr.rs"]
+mod hdr;
 #[path = "../tests/support/huffman.rs"]
 mod huffman;
 #[allow(dead_code)]
@@ -198,6 +201,47 @@ fn main() -> std::io::Result<()> {
         }
     }
     println!("Independent APNG validity/recovery: {animation_count} seeds");
+    let mut hdr_seeds = Vec::new();
+    for (label, value) in hdr::byte_cases().chain(hdr::boundary_cases()) {
+        hdr_seeds.push((label, value.fixture(2, 8, false)));
+    }
+    let value = hdr::Hdr::default();
+    for (color, depth) in hdr::FORMATS {
+        for interlaced in [false, true] {
+            hdr_seeds.push((
+                format!("format-{color}-{depth}-{}", u8::from(interlaced)),
+                value.fixture(color, depth, interlaced),
+            ));
+        }
+    }
+    let payloads = value.payloads();
+    for target in [1, 2] {
+        for len in 0..=65 {
+            let mut data = payloads.clone();
+            data[target].1.resize(len, 0);
+            let extra: Vec<_> = data.iter().map(|(k, d)| chunks::chunk(*k, d)).collect();
+            hdr_seeds.push((
+                format!("length-{target}-{len}"),
+                hdr::fixture(3, 2, false, &extra),
+            ));
+        }
+    }
+    let core = hdr::core(3, 2, false);
+    let extra: Vec<_> = payloads.iter().map(|(k, d)| chunks::chunk(*k, d)).collect();
+    let unordered = [&extra[0], &extra[1], &extra[2], &core[1], &core[2]];
+    chunks::permutations(&mut [0, 1, 2, 3, 4], 0, &mut |order| {
+        let mut c = vec![core[0].clone()];
+        c.extend(order.iter().map(|&i| unordered[i].clone()));
+        c.push(core[3].clone());
+        let label: String = order.iter().map(|i| char::from(b'0' + *i as u8)).collect();
+        hdr_seeds.push((format!("order-{label}"), chunks::file(&c)));
+    });
+    for (label, bytes) in &hdr_seeds {
+        for directory in [&png, &png_stream] {
+            fs::write(directory.join(format!("hdr-{label}")), bytes)?;
+        }
+    }
+    println!("Independent HDR fields/grammar: {} seeds", hdr_seeds.len());
     for entry in fs::read_dir(root.join("tests/fixtures/pngsuite"))? {
         let path = entry?.path();
         if path.extension().is_none_or(|v| v != "png") {
