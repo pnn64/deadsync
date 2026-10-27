@@ -36,6 +36,13 @@ and clears EOS, then emits unclipped, untrimmed planar PCM. It verifies raw
 overlap frame counts independently, including the zero-frame priming packet.
 It does not verify the Ogg Vorbis initial/final sample mapping. `mdct` tests the
 reference inverse transform directly, independently of headers or packet decode.
+
+`pcm-cases` reads the same three length-prefixed headers, then a u64 case count.
+Each case starts with a u64 packet count followed by length-prefixed raw packets.
+It restarts synthesis between cases and resets packet numbering to three.
+Output starts with channels (u32) and case count (u64), then the existing `P`/`S`
+records for each packet, grouped by case. The prefix/recovery suite checks this
+mode against fresh-process `pcm` runs byte for byte; see [PARITY.md](../../PARITY.md).
 `mdctforward` receives N time samples instead of N/2 coefficients and emits the
 N/2 coefficients from `mdct_forward`, with the same length-prefixed protocol.
 

@@ -1,0 +1,36 @@
+{
+  "command": [
+    "cargo",
+    "clippy",
+    "--offline",
+    "--release",
+    "--manifest-path",
+    "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\concealment-instrumenter-check-20261027\\Cargo.toml",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings"
+  ],
+  "exit_code": 0,
+  "performance_measurements_run": false,
+  "stages": [
+    "header",
+    "clear_floor",
+    "residue",
+    "coupling",
+    "floor_gain",
+    "imdct_finite",
+    "left_window",
+    "overlap_right_window_copy"
+  ],
+  "source_sha256": {
+    "crates/deadlib-audio/decode/scripts/profile_synthesis.py": "c27ab5b9f3ce5060df55c450fa9cb89b592c76b924f3efd1d9da8699f3650935",
+    "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "3adb84c0573330ac0718c1be344c94c58cf84b3fa3a446a81feb984ddc40f13c",
+    "crates/deadlib-audio/decode/vorbis/benches/support/synthesis_profile.rs": "c90282a589eff1f4598035ef11fbfc46f086a3cd2f2f968682c140ea62a7645d"
+  },
+  "generated_sha256": {
+    "src/main.rs": "19bf3ea0142f33e6d67d1b278f1a440e00b664031a29bcebe99b2d4952b8d8f3",
+    "src/profiled_decoder.rs": "5f89faa89b8ad2856f55951ea6da477450c9b05365ba52a33251e3d2f8fd9ffd",
+    "src/profile_setup.rs": "c6d5b2a9c4d0dcd6058632c15331046b282439aedc31ad7cfe30652f8c0dff96"
+  }
+}

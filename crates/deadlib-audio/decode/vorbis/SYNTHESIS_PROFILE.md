@@ -1,5 +1,12 @@
 # Synthesis component diagnostic
 
+The [concealment parity fix](PARITY.md) defers right-window weighting until
+overlap. Current diagnostic stages use `left_window` and
+`overlap_right_window_copy` in place of historical `window`/`overlap_copy`
+groups. Generated source passes a compile/lint check. No new performance
+measurement was used for that parity milestone; historical stage shares below
+cannot be compared directly with the new grouping.
+
 Real-packet profiling identifies residue as the next song-throughput target:
 **55.2% / 42.2%** of recorded component time, versus **23.1% / 30.7%** for inverse
 MDCT plus finite checks. These are diagnostic shares, not uninstrumented CPU

@@ -1,5 +1,10 @@
 # Real-packet codebook activity
 
+After the [concealment parity fix](PARITY.md), type-zero residue preflights
+codewords before committing a partition. This diagnostic counts actual decoder
+calls, so those codewords can appear twice in current call counts. Historical
+tables below describe the earlier implementation's call pattern.
+
 VQ decoding accounts for **92.49% / 87.44%** of codebook calls in `in_two` and
 `Goin' Under`. Existing prefix tables resolve **83.51% / 85.98%** of calls
 directly; **16.34% / 13.88%** continue through the tree. These are actual symbol

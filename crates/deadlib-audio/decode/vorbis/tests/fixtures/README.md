@@ -20,6 +20,14 @@ the `pcm` mode of `tests/oracle/oracle.c`. SHA-256:
 This golden makes the dependent eight-channel coupling case testable without C
 tools; Symphonia 0.6.1 has an explicitly tested forward-coupling discrepancy.
 
+`discarded-window-v1.libvorbis-pcm` captures the pinned oracle's `pcm` mode for
+`stereo.ogg` with its second audio packet (raw packet index four) replaced by
+an empty packet. All other packets stay in order. It checks empty/non-audio
+recovery without C tools. SHA-256:
+`4dcfe5c6f93fa8a05bef655ccf779b2fb16558166cd8800ffe692185b0a7c965`.
+The [capture provenance](../../validation/2026-10-27-concealment-golden-capture.json)
+retains input/oracle hashes; see [the parity ledger](../../PARITY.md).
+
 Regenerate only through the external oracle (from the repository root):
 
 ```powershell

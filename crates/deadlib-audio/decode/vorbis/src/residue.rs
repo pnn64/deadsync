@@ -9,8 +9,9 @@ pub(crate) struct Output<'a> {
     pub classes: &'a mut [u8],
 }
 
-/// EndOfPacket leaves already decoded vectors intact. The packet decoder
-/// treats this as nominal truncation and proceeds to coupling/floor synthesis.
+/// EndOfPacket leaves completed residue work intact. Type zero commits only
+/// complete partitions, matching libvorbis's decodevs_add behavior. The packet
+/// decoder treats truncation as nominal and proceeds to coupling/floor synthesis.
 pub(crate) fn decode(
     config: &Residue,
     books: &[Codebook],
@@ -89,6 +90,16 @@ fn decode_partition(
     let dimensions = book.dimensions();
     if kind == 0 {
         let step = size / dimensions;
+        // The reference gathers all codewords before adding this partition.
+        // Preflight a reader clone so an incomplete partition leaves earlier
+        // passes/partitions intact without allocating packet scratch.
+        let mut probe = bits.clone();
+        for _ in 0..step {
+            if let Err(error) = book.decode_vector(&mut probe) {
+                *bits = probe;
+                return Err(error);
+            }
+        }
         let plane = output.bundle[ch] * output.stride;
         for i in 0..step {
             let vector = book.decode_vector(bits)?;
@@ -155,6 +166,53 @@ mod tests {
         }
         let bytes = bits.finish().unwrap();
         Codebook::read(&mut BitReader::new(&bytes), &Limits::default()).unwrap()
+    }
+    #[test]
+    fn residue_zero_truncation_keeps_only_completed_partitions() {
+        let books = [vector_book()];
+        let config = Residue {
+            kind: 0,
+            begin: 1,
+            end: 41,
+            partition_size: 20,
+            classbook: 0,
+            books: vec![[Some(0), None, None, None, None, None, None, None]],
+        };
+        for bytes in [&[][..], &[0][..], &[0, 0][..], &[0, 0, 0][..]] {
+            let mut actual = [0.125; 3 * 68];
+            let mut expected = actual;
+            // One classword bit precedes two ten-codeword partitions.
+            let completed = (bytes.len() * 8).saturating_sub(1) / 10;
+            for partition in 0..completed.min(2) {
+                for i in 0..20 {
+                    expected[2 * 68 + 1 + partition * 20 + i] += if i < 10 { 1.0 } else { 2.0 };
+                }
+            }
+            let mut bits = BitReader::new(bytes);
+            let result = decode(
+                &config,
+                &books,
+                &mut bits,
+                &mut Output {
+                    spectrum: &mut actual,
+                    stride: 68,
+                    bins: 64,
+                    bundle: &[2],
+                    nonzero: &[false, false, true],
+                    classes: &mut [0; 2],
+                },
+            );
+            assert_eq!(
+                result,
+                if completed >= 2 {
+                    Ok(())
+                } else {
+                    Err(Error::EndOfPacket)
+                }
+            );
+            assert_eq!(bits.position(), (bytes.len() * 8).min(21));
+            assert_eq!(actual, expected, "bytes={}", bytes.len());
+        }
     }
     #[test]
     fn residue_two_scatter_covers_pairs_generic_interleaves_and_truncation() {

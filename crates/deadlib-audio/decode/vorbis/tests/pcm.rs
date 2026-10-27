@@ -128,6 +128,19 @@ fn compare_reference_packets(packets: &[Vec<u8>], reference: &[u8]) -> Differenc
 }
 
 #[test]
+fn discarded_long_packet_uses_actual_neighbor_windows_and_matches_libvorbis_golden() {
+    for replacement in [&[][..], &[1][..], b"\x01not audio".as_slice()] {
+        let mut packets = packets(include_bytes!("fixtures/stereo.ogg"));
+        packets[4] = replacement.to_vec();
+        compare_reference_packets(
+            &packets,
+            include_bytes!("fixtures/discarded-window-v1.libvorbis-pcm"),
+        )
+        .check("discarded long packet/libvorbis golden");
+    }
+}
+
+#[test]
 fn generated_pcm_matches_symphonia_including_priming_and_reset() {
     for (label, bytes) in fixtures() {
         if label == "8ch tones" {

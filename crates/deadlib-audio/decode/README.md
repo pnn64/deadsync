@@ -5,6 +5,11 @@ Only Cargo workspace membership is permitted until integration is separately
 requested. The existing `deadlib-audio-decode`, Symphonia path, playback and
 backends must remain unchanged.
 
+The current priority is **complete behavioral parity**, not performance.
+Counts, positions and behavior require exact agreement; the original justified
+PCM tolerances remain in force. See [the parity ledger](vorbis/PARITY.md) for
+corrected differences, independent evidence and remaining gaps.
+
 ## Architecture and complete work plan
 
 * `ogg/`: `deadlib-audio-decode-ogg`, codec-independent container, no production
@@ -30,9 +35,8 @@ primitive or passing unit test does not establish completion of its parent item.
    Document any legacy policy separately from the normative decoder.
 5. Native Vorbis encoding validated through independent decoders, with lossy
    reconstruction criteria. Container writing alone is not codec encoding.
-6. Reproducible full-file, streaming, startup, allocation/memory and arbitrary
-   seek benchmarks against libvorbis and Symphonia. Optimize measured bottlenecks
-   in bit IO, codebooks, MDCT, setup and seeking; use SIMD only with evidence.
+6. Retain existing reproducible measurements as diagnostics. Further performance
+   work is deferred while parity gaps remain; speed is not a completion criterion.
 7. Independently build/test/benchmark both packages by package name and extracted
    manifests, with no production codec dependencies. Maintain coverage, numeric
    tolerance, benchmark and remaining-limitations documents.

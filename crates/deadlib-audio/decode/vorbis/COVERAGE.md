@@ -4,6 +4,11 @@ Status: **raw synthesis, streaming mapping, indexed sample-accurate seeking and 
 Vorbis I conformance or competitive-performance claim is made. The complete
 requested end state remains in the parent work plan.
 
+The active priority is complete behavioral parity with exact behavior/counts
+and the original PCM tolerances. The [parity ledger](PARITY.md) records two
+corrected discard/truncation differences, 7,014 independent cases and remaining
+work. Performance measurements do not establish completion.
+
 ## Implemented and tested (2026-10-26)
 
 * Bitpacking/unpacking with widths 0..=32, unaligned 32-bit fields, zero-width

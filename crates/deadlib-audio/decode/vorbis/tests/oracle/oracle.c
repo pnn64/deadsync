@@ -76,7 +76,7 @@ static void books(FILE *file) {
     }
     free(data);
 }
-static void pcm(FILE *file) {
+static void pcm(FILE *file, int reset_cases) {
     vorbis_info info; vorbis_comment comments; vorbis_dsp_state dsp; vorbis_block block;
     ogg_int64_t number = 0; int i;
     vorbis_info_init(&info); vorbis_comment_init(&comments);
@@ -87,9 +87,20 @@ static void pcm(FILE *file) {
     }
     if (vorbis_synthesis_init(&dsp, &info) || vorbis_block_init(&dsp, &block)) fail("PCM init");
     put32((uint32_t)info.channels);
-    for (;;) {
+    {
+    uint64_t cases = reset_cases ? get64(file) : 1, c;
+    if (cases > (1u << 20)) fail("PCM case count");
+    if (reset_cases) put64(cases);
+    for (c = 0; c < cases; ++c) {
+      uint64_t remaining = reset_cases ? get64(file) : UINT64_MAX;
+      if (reset_cases) {
+        if (remaining > (1u << 20) || vorbis_synthesis_restart(&dsp)) fail("PCM case restart/count");
+        number = 3;
+      }
+      for (; remaining; --remaining) {
         ogg_packet op; int marker = fgetc(file), result, frames, ch, sample; float **samples;
-        if (marker == EOF) break; if (ungetc(marker, file) == EOF) fail("ungetc");
+        if (marker == EOF) { if (reset_cases) fail("truncated PCM case"); break; }
+        if (ungetc(marker, file) == EOF) fail("ungetc");
         memset(&op, 0, sizeof(op)); op.packet = packet(file, &op.bytes); op.packetno = number++;
         /* No container timing or EOS trim: test pure packet synthesis/overlap. */
         op.granulepos = -1; result = vorbis_synthesis(&block, &op);
@@ -102,6 +113,9 @@ static void pcm(FILE *file) {
             uint32_t raw; memcpy(&raw, &samples[ch][sample], sizeof(raw)); put32(raw);
         }
         if (vorbis_synthesis_read(&dsp, frames)) fail("synthesis read");
+      }
+    }
+    if (reset_cases && fgetc(file) != EOF) fail("trailing PCM cases");
     }
     vorbis_block_clear(&block); vorbis_dsp_clear(&dsp); vorbis_comment_clear(&comments); vorbis_info_clear(&info);
 }
@@ -180,14 +194,15 @@ static void ogg_seek(FILE *file, const char *requests_path) {
     fclose(requests); ov_clear(&reader);
 }
 int main(int argc, char **argv) {
-    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|books|pcm|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
+    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|books|pcm|pcm-cases|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
 #endif
     if (!strcmp(argv[1], "headers")) headers(file);
     else if (!strcmp(argv[1], "books")) books(file);
-    else if (!strcmp(argv[1], "pcm")) pcm(file);
+    else if (!strcmp(argv[1], "pcm")) pcm(file, 0);
+    else if (!strcmp(argv[1], "pcm-cases")) pcm(file, 1);
     else if (!strcmp(argv[1], "mdct")) transform(file, 0);
     else if (!strcmp(argv[1], "mdctforward")) transform(file, 1);
     else if (!strcmp(argv[1], "oggpcm")) ogg_pcm(file, 0);

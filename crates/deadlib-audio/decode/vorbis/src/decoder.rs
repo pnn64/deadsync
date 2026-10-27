@@ -233,7 +233,12 @@ impl PacketDecoder {
                 if output.iter().any(|value| !value.is_finite()) {
                     return Err(Error::Invalid("nonfinite MDCT output"));
                 }
-                apply_window(output, header, small, &self.short_slope, &self.long_slope);
+                let left = if n == small || self.previous_size != large {
+                    &self.short_slope
+                } else {
+                    &self.long_slope
+                };
+                apply_left_window(output, left);
             }
         }
         let frames = if self.previous_size == 0 {
@@ -247,13 +252,21 @@ impl PacketDecoder {
             .checked_add(frames as u64)
             .ok_or(Error::LimitExceeded("PCM frame position"))?;
         let current_start = frames as isize - bins as isize;
+        let right = if self.previous_size == small || n == small {
+            &self.short_slope
+        } else {
+            &self.long_slope
+        };
         for ch in 0..channels {
             let current = &self.current[ch * large..ch * large + n];
             let previous = &mut self.previous[ch * stride..ch * stride + stride];
             let output = &mut self.pcm[ch * stride..ch * stride + frames];
             for (i, value) in output.iter_mut().enumerate() {
                 let prior = if i < self.previous_size / 2 {
-                    previous[i]
+                    // Delay the previous block's right window until the next
+                    // accepted mode is known. Discarded packets can make the
+                    // encoded neighbor hints disagree with the actual overlap.
+                    right_window(previous[i], i, self.previous_size, right)
                 } else {
                     0.0
                 };
@@ -329,26 +342,9 @@ fn slope(length: usize) -> Result<Vec<f32>, Error> {
     }
     Ok(out)
 }
-fn apply_window(
-    output: &mut [f32],
-    header: AudioHeader,
-    small: usize,
-    short: &[f32],
-    long: &[f32],
-) {
+fn apply_left_window(output: &mut [f32], left: &[f32]) {
     let n = output.len();
-    let left = if n == small || !header.previous_long {
-        short
-    } else {
-        long
-    };
-    let right = if n == small || !header.next_long {
-        short
-    } else {
-        long
-    };
     let left_start = n / 4 - left.len() / 2;
-    let right_start = 3 * n / 4 - right.len() / 2;
     output[..left_start].fill(0.0);
     for (value, &gain) in output[left_start..left_start + left.len()]
         .iter_mut()
@@ -356,13 +352,16 @@ fn apply_window(
     {
         *value *= gain;
     }
-    for (value, &gain) in output[right_start..right_start + right.len()]
-        .iter_mut()
-        .zip(right.iter().rev())
-    {
-        *value *= gain;
+}
+fn right_window(value: f32, index: usize, size: usize, slope: &[f32]) -> f32 {
+    let start = size / 4 - slope.len() / 2;
+    if index < start {
+        value
+    } else if index < start + slope.len() {
+        value * slope[slope.len() - 1 - (index - start)]
+    } else {
+        0.0
     }
-    output[right_start + right.len()..].fill(0.0);
 }
 fn inverse_coupling(
     spectrum: &mut [f32],
@@ -446,18 +445,10 @@ mod tests {
         for previous_long in [false, true] {
             for next_long in [false, true] {
                 let mut data = vec![1.0; 512];
-                apply_window(
-                    &mut data,
-                    AudioHeader {
-                        mode: 1,
-                        block_size: 512,
-                        previous_long,
-                        next_long,
-                    },
-                    64,
-                    &short,
-                    &long,
-                );
+                apply_left_window(&mut data, if previous_long { &long } else { &short });
+                for (i, value) in data[256..].iter_mut().enumerate() {
+                    *value = right_window(*value, i, 512, if next_long { &long } else { &short });
+                }
                 let left = if previous_long { 256 } else { 32 };
                 let right = if next_long { 256 } else { 32 };
                 let start = 128 - left / 2;
