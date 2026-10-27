@@ -131,10 +131,13 @@ mod tests {
     use super::*;
     use crate::{Limits, bitpack::BitWriter};
     fn vector_book() -> Codebook {
+        vector_book_dimensions(2)
+    }
+    fn vector_book_dimensions(dimensions: usize) -> Codebook {
         let mut bits = BitWriter::new();
         for (value, width) in [
             (0x564342, 24),
-            (2, 16),
+            (dimensions as u32, 16),
             (1, 24),
             (0, 1),
             (0, 1),
@@ -142,66 +145,72 @@ mod tests {
             (2, 4),
             (0, 32),
             ((788 << 21) | 1, 32),
-            (1, 4),
+            (3, 4),
             (0, 1),
-            (1, 2),
-            (2, 2),
         ] {
             bits.write(value, width).unwrap();
+        }
+        for value in 1..=dimensions {
+            bits.write(value as u32, 4).unwrap();
         }
         let bytes = bits.finish().unwrap();
         Codebook::read(&mut BitReader::new(&bytes), &Limits::default()).unwrap()
     }
     #[test]
-    fn residue_two_cursor_crosses_vector_channel_and_partition_edges_before_truncation() {
-        let book = vector_book();
-        for channels in [1usize, 2, 3, 4, 5, 7, 8, 17, 255] {
-            let bundle: Vec<_> = (1..=channels).rev().collect();
-            for start in [0, 1, channels - 1] {
-                let size = 20;
-                let bins = (start + size).div_ceil(channels) + 1;
-                let stride = bins + 3;
-                for bytes in [&[][..], &[0][..], &[0, 0][..]] {
-                    let mut actual = vec![0.125; (channels + 2) * stride];
-                    let mut expected = actual.clone();
-                    let decoded = size.min(bytes.len() * 8 * 2);
-                    for i in 0..decoded {
-                        let flat = start + i;
-                        expected[bundle[flat % channels] * stride + flat / channels] +=
-                            if i % 2 == 0 { 1.0 } else { 2.0 };
-                    }
-                    let mut bits = BitReader::new(bytes);
-                    let result = decode_partition(
-                        2,
-                        &mut bits,
-                        &book,
-                        &mut Output {
-                            spectrum: &mut actual,
-                            stride,
-                            bins,
-                            bundle: &bundle,
-                            nonzero: &[],
-                            classes: &mut [],
-                        },
-                        0,
-                        start,
-                        size,
-                    );
-                    assert_eq!(
-                        result,
-                        if decoded == size {
-                            Ok(())
-                        } else {
-                            Err(Error::EndOfPacket)
+    fn residue_two_scatter_covers_pairs_generic_interleaves_and_truncation() {
+        for dimensions in [1, 2, 3, 4, 8] {
+            let book = vector_book_dimensions(dimensions);
+            for channels in [1usize, 2, 3, 4, 5, 7, 8, 17, 255] {
+                let bundle: Vec<_> = (1..=channels).rev().collect();
+                for start in [0, 1, channels - 1] {
+                    for size in [1usize, 7, 20, 23] {
+                        let vectors = size.div_ceil(dimensions);
+                        let bins = (start + vectors * dimensions).div_ceil(channels) + 1;
+                        let stride = bins + 3;
+                        for bytes in [&[][..], &[0][..], &[0, 0][..]] {
+                            let mut actual = vec![0.125; (channels + 2) * stride];
+                            let mut expected = actual.clone();
+                            let decoded_vectors = vectors.min(bytes.len() * 8);
+                            let decoded = decoded_vectors * dimensions;
+                            for i in 0..decoded {
+                                let flat = start + i;
+                                expected[bundle[flat % channels] * stride + flat / channels] +=
+                                    (i % dimensions + 1) as f32;
+                            }
+                            let mut bits = BitReader::new(bytes);
+                            let result = decode_partition(
+                                2,
+                                &mut bits,
+                                &book,
+                                &mut Output {
+                                    spectrum: &mut actual,
+                                    stride,
+                                    bins,
+                                    bundle: &bundle,
+                                    nonzero: &[],
+                                    classes: &mut [],
+                                },
+                                0,
+                                start,
+                                size,
+                            );
+                            assert_eq!(
+                                result,
+                                if decoded_vectors == vectors {
+                                    Ok(())
+                                } else {
+                                    Err(Error::EndOfPacket)
+                                }
+                            );
+                            assert_eq!(bits.position(), decoded_vectors);
+                            assert_eq!(
+                                actual,
+                                expected,
+                                "channels={channels}, start={start}, bytes={}",
+                                bytes.len()
+                            );
                         }
-                    );
-                    assert_eq!(bits.position(), decoded / 2);
-                    assert_eq!(
-                        actual,
-                        expected,
-                        "channels={channels}, start={start}, bytes={}",
-                        bytes.len()
-                    );
+                    }
                 }
             }
         }

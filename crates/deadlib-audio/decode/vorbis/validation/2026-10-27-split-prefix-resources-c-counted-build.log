@@ -1,0 +1,6 @@
+MSBuild version 17.14.60+43b635718 for .NET Framework
+
+  ogg.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-resource-alloc-build\ogg\Release\ogg.lib
+  vorbis.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-resource-alloc-build\vorbis\lib\Release\vorbis.lib
+  vorbisfile.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-resource-alloc-build\vorbis\lib\Release\vorbisfile.lib
+  deadlib_vorbis_resources.vcxproj -> C:\GitHub\deadsync\target\deadlib-audio-reference\vorbis-resource-alloc-build\Release\deadlib_vorbis_resources.exe

@@ -156,6 +156,12 @@ decoder timing rows and rejects a candidate that saves less than 1% at default
 precision while slowing native song decoding 12–15%. The validated pair book
 remains in production; the candidate and measurements are preserved.
 
+The [bounded Huffman prefix update](vorbis/PREFIX_PATHS.md) improves paired
+song full-decode medians 1.047x/1.052x while preserving allocation/IO counters
+and 42.7 million raw PCM sample bit patterns. Small-file/startup results are
+mixed, and native song throughput still trails Symphonia. Rejected experiments,
+full validation and the original sanitizer timeout plus replays are documented.
+
 ## Normative sources
 
 * [RFC 3533](https://www.rfc-editor.org/rfc/rfc3533.txt).

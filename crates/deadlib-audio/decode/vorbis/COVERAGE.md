@@ -24,6 +24,12 @@ requested end state remains in the parent work plan.
   order; over/underpopulation rejection, singleton 2015 erratum. Flat decode
   trees. Exhaustive-prefix and specification-vector tests independently check
   assignment; 32-bit-deep trees and singleton bit consumption are exercised.
+  The [bounded-prefix call policy](PREFIX_PATHS.md) preserves those operations
+  while inlining prefix/VQ wrappers and outlining tree/refill helpers. Eight
+  repeated raw traces preserve 42,738,816 PCM sample bit patterns and every
+  symbol/counter table; resource counters match the paired baseline. The
+  initial streaming sanitizer timeout and successful baseline/current replays
+  are retained with the validation evidence.
 * All three VQ lookup types, sequence vectors, custom float unpacking, exact
   integer roots and setup-memory/entry/value/node policy limits.
 * Full setup-header grammar: both floor configurations, three residues,

@@ -1,0 +1,12 @@
+diff --git a/crates/deadlib-audio/decode/vorbis/src/codebook.rs b/crates/deadlib-audio/decode/vorbis/src/codebook.rs
+index e0bed9db5..41cc68a06 100644
+--- a/crates/deadlib-audio/decode/vorbis/src/codebook.rs
++++ b/crates/deadlib-audio/decode/vorbis/src/codebook.rs
+@@ -382,6 +382,7 @@ impl Codebook {
+         let start = entry as usize * self.dimensions();
+         Ok(&self.vectors[start..start + self.dimensions()])
+     }
++    #[inline(always)]
+     pub fn decode_vector(&self, bits: &mut BitReader<'_>) -> Result<&[f32], Error> {
+         if self.lookup_type == 0 {
+             return Err(Error::Invalid("VQ decode requires a lookup"));

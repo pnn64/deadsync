@@ -67,6 +67,12 @@ per-book/per-entry counts and prefix/fallback activity, with every PCM sample's
 bits checked against production. Its symbol distribution guides future
 experiments; instrumented counters are not a timing benchmark.
 
+The subsequent [bounded-prefix update](PREFIX_PATHS.md) inlines the prefix/VQ
+wrappers and outlines the unchanged tree continuation and cache refill. Paired
+song full-decode medians improve 1.047x/1.052x with unchanged allocation/IO
+counters; startup and short-file movements are mixed. Rejected VQ/scatter
+variants, exact PCM checks and sanitizer timeout/replay evidence are retained.
+
 The runner can build native production sources from a baseline commit in a
 fresh ignored workspace, retaining the current benchmark adapters and exact
 dependency lock/profile settings. It interleaves the baseline, current native,

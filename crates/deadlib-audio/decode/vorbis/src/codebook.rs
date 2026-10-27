@@ -135,7 +135,7 @@ impl Huffman {
         self.prefix_bits = width;
         Ok(())
     }
-    #[inline]
+    #[inline(always)]
     pub fn decode(&self, bits: &mut BitReader<'_>) -> Result<u32, Error> {
         if self.singleton != MISSING {
             bits.read(1)?;
@@ -158,6 +158,10 @@ impl Huffman {
                 node = (entry >> 4) as usize;
             }
         }
+        self.decode_from(bits, node)
+    }
+    #[inline(never)]
+    fn decode_from(&self, bits: &mut BitReader<'_>, mut node: usize) -> Result<u32, Error> {
         loop {
             let next = self.nodes[node][bits.read(1)? as usize];
             if next == MISSING {
@@ -382,6 +386,7 @@ impl Codebook {
         let start = entry as usize * self.dimensions();
         Ok(&self.vectors[start..start + self.dimensions()])
     }
+    #[inline(always)]
     pub fn decode_vector(&self, bits: &mut BitReader<'_>) -> Result<&[f32], Error> {
         if self.lookup_type == 0 {
             return Err(Error::Invalid("VQ decode requires a lookup"));

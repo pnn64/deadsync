@@ -100,6 +100,11 @@ needs a correctness argument and measured pipeline improvement before changing
 the implementation. The rejected [refill experiments](REFILL_EVALUATION.md)
 show why a plausible inner-loop change is insufficient evidence.
 
+The [follow-up prefix-path experiment](PREFIX_PATHS.md) rejects that direct VQ
+shortcut and a stereo scatter specialization, then retains a combined bounded
+prefix inlining policy with the original vector checks. Repeated traces match
+all eight cases' PCM bits, packet geometry and symbol/counter tables exactly.
+
 Instrumentation allocates per-entry frequency arrays, enlarges codec structs
 and adds counter operations. Setup headroom and the expected actual prefix
 widths are checked, but instrumented time/memory are deliberately not compared

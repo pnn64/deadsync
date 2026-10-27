@@ -44,7 +44,7 @@ impl<'a> BitReader<'a> {
         }
         Some((self.cache & ((1u64 << bits) - 1)) as u32)
     }
-    #[inline]
+    #[inline(never)]
     fn refill(&mut self) {
         let count = (((64 - self.available) / 8) as usize).min(self.input.len() - self.offset);
         if count == 8 {

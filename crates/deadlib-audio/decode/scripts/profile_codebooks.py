@@ -50,13 +50,13 @@ def instrument(source: str) -> str:
     replace('pub struct Huffman {', 'pub struct Huffman {\n    profile: Cell<[u64; 8]>,')
     replace('                nodes: Vec::new(),', '                profile: Cell::new([0; 8]),\n                nodes: Vec::new(),')
     replace('            nodes,\n            singleton:', '            profile: Cell::new([0; 8]),\n            nodes,\n            singleton:')
-    replace('    #[inline]\n    pub fn decode(&self,', '''    fn count(&self, counter: usize) {
+    attribute = '    #[inline(always)]' if '    #[inline(always)]\n    pub fn decode(&self,' in source else '    #[inline]'
+    replace(attribute + '\n    pub fn decode(&self,', '''    fn count(&self, counter: usize) {
         let mut counts = self.profile.get(); counts[counter] += 1; self.profile.set(counts);
     }
     pub fn profile_counts(&self) -> [u64; 8] { self.profile.get() }
     pub fn profile_width(&self) -> u8 { self.prefix_bits }
-    #[inline]
-    pub fn decode(&self,''')
+''' + attribute + '\n    pub fn decode(&self,')
     replace('        if self.singleton != MISSING {\n            bits.read(1)?;',
             '        self.count(0);\n        if self.singleton != MISSING {\n            self.count(1);\n            bits.read(1)?;')
     replace('        let width = self.prefix_bits as u32;\n        if width != 0', '''        let width = self.prefix_bits as u32;
