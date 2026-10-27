@@ -746,3 +746,48 @@ initial 250 Hz. Direct inflater-loop instructions account for 28.15% of samples,
 Huffman decoding 16.43%, refill 6.01% and incremental Adler updates 3.83%.
 The profile links exact sources, corpus, binary and raw data hashes; its shares
 are diagnostic and do not establish an isolated kernel timing improvement.
+
+## Streaming match-header dispatch fusion (2026-10-27)
+
+The streaming symbol loop now reads length extra bits, a distance code and its
+extra bits directly. It saves LengthExtra, DistanceCode and DistanceExtra before
+each potentially incomplete read, preserving the existing resumption paths.
+Complete match headers bypass three outer state dispatches. Both paths call the
+same inlined copy validation, preserving history/window checks before output
+limits. Copying, literal runs, checksums, bit refill and tables are unchanged.
+Only `src/zlib/inflate.rs` changes in production, with no struct, allocation,
+unsafe-code, dependency or encoding changes.
+
+The baseline is the selected literal-loop source in `79ccce5be`, using its
+verified saved executable. `experiments/stream-matches.{patch,json}` retain the
+candidate; `stream-matches-selection.json` reconstructs all selected source hashes
+and links eight timing groups / two final summaries. Measurements use
+baseline/candidate/candidate/baseline order, three processes per position/corpus,
+twelve iterations, three warmups and CPU 0. The 24-photo / 60-format corpora,
+harness, toolchain, exact sources/binaries and reported size fields are verified.
+The zero-valued pipeline-memory column does not measure peak allocation.
+
+| Streaming operation | Original MiB/s | Selected MiB/s | Change relative to reference |
+| --- | ---: | ---: | ---: |
+| Photo PNG reader decode | 74.71 | 86.43 | +6.88% |
+| Photo IDAT streaming inflate | 82.44 | 94.58 | +8.31% |
+| All-format PNG reader decode | 239.78 | 243.62 | +3.08% |
+| All-format IDAT streaming inflate | 537.86 | 549.32 | +4.80% |
+
+Reader comparisons use Rust png; inflation uses flate2. The unchanged buffered
+photo controls are -0.35% for PNG decode and +0.86% for inflation, supporting
+the photo-path improvement. Format controls improve more than the changed
+streaming paths: +4.72% / +5.34% versus +3.08% / +4.80%. The format comparison
+is therefore inconclusive; no independent format speedup is claimed.
+External load, frequency, cache and code-generation variation remain uncontrolled.
+These results support the local photo improvement rather than broad parity.
+No tests, sanitizer jobs or profiling from this task run during timed processes.
+Final rates are in `benchmark-stream-matches-{photos,formats}-summary.json`;
+initial comparisons remain exploratory.
+
+Validation reuses existing independently assembled fixtures covering every
+legal length/distance value, all eight bit offsets, fixed/dynamic trees and
+fragmented input/output. `stream-matches-validation.*` retains full release,
+strict lint, explicit C zlib and fresh focused offline checks. Fresh native-
+feedback campaigns reuse the exact immutable seed ZIP from the literal-loop
+milestone with new mutable corpus copies. Decoder performance remains open.

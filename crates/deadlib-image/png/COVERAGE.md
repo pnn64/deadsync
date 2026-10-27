@@ -1627,3 +1627,54 @@ host; the warning is retained. Direct inflater-loop instructions account for
 costs. These are diagnostic shares rather than isolated timings or a speedup
 measurement. Comparative benchmarks finish before final validation and profiling.
 Remaining corpus gaps and competitive decoder performance stay open.
+
+## Streaming match-header dispatch fusion (2026-10-27)
+
+`src/zlib/inflate.rs` decodes complete match headers inside the symbol loop.
+Each incomplete field retains its previous resumable state; completed length/
+distance fields avoid three outer dispatches. Shared copy validation preserves
+window/history checks before output limits. The copy routine, literal loop,
+checksums, refill, tables, struct layout and fixed history allocation retain
+their existing behavior. The other twenty PNG production files, all test/helper/
+tool inputs and shared image primitives match `79ccce5be`.
+
+Four-position measurements favor photo reader decoding by 6.88% relative to
+Rust png and photo streaming inflation by 8.31% relative to flate2. Buffered
+photo controls are -0.35% / +0.86%. Format measurements are inconclusive because
+unchanged controls improve more than changed paths. `BENCHMARKS.md` records
+all rates, controls and shared-host limits. The reconstructed source and eight
+verified timing groups are in `experiments/stream-matches-selection.json`.
+
+Existing Huffman fixtures cover every legal match length/distance at all eight
+bit offsets, fixed/dynamic trees and both final-padding values, through multiple
+fragment shapes. Literal/history, prefix, header/window, PNG/APNG reader and
+resource suites remain in the full regression run. The explicit C zlib batch
+checks 19,645 fixtures: 3,091 successful outputs and 16,554 error records, including
+68 documented published-HDIST-range definitions rejected by default zlib policy.
+No new fixtures mirror the changed state dispatch.
+
+Strict main/fuzz Clippy and scoped rustfmt pass. The complete release suite
+passes 134 tests, with nineteen optional checks ignored. A fresh complete
+offline copy passes the six Huffman tests, with its C check ignored there;
+the C batch is run explicitly from the verified working tree. All 885 copied
+sources, fixtures, examples and benchmark files match. The production dependency
+tree contains only the shared image package.
+
+Fresh sanitizer campaigns use the prior immutable ZIP with fresh mutable
+corpus copies: 48,167 PNG inputs / 11,230,779 bytes and 6,927 raw inputs /
+4,009,252 bytes. `fuzz/reports/stream-matches-seeds.json` links exact producer
+provenance and unchanged test inputs. `stream-matches-validation.*` and
+`stream-matches-audit.json` retain the current source and validation evidence.
+
+Fresh ASan passes 50,000 PNG-stream executions in 43 fuzzing seconds / 511 MiB
+peak RSS and 20,000 raw-stream executions in 20 seconds / 426 MiB. Native PNG/
+shared archives retain 16,793 / 45 feedback-counter bytes; fourteen dependency
+archives and four harness objects have no counters or PC tables. Both decoder
+binaries define ASan's runtime entry. Historical successful campaigns reach
+1,620,000, including earlier encoder campaigns; both current targets are decoders.
+
+The [published PNG errata](https://www.w3.org/2025/06/REC-PNG-20250624-errata)
+still contains the mDCV example correction already
+covered by `tests/hdr.rs`; this review identifies no additional format change.
+Remaining corpus gaps, the final requirements audit and competitive decoder
+performance remain open.

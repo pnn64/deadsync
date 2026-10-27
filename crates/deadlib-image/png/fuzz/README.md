@@ -571,3 +571,16 @@ remain the immutable corpus inputs. The failed partial output remains retained.
 native-only feedback, while preserving ASan on dependencies and harnesses. It
 retains current sources, commands, binaries, initial corpus hashes and object
 section audits. These are decoder campaigns; no encoder target runs.
+
+## Streaming match-header follow-up
+
+`reports/stream-matches-seeds.json` reuses the exact immutable ZIP from the
+literal-loop milestone: 48,167 PNG-stream files and 6,927 raw-stream files.
+Fixture, seed-generator and harness source hashes match the baseline; the
+production change is the streaming match-header dispatch. Each fresh ASan
+campaign extracts new mutable corpus copies. No seed regeneration is needed.
+
+`reports/stream-matches-source.json` and per-target logs retain current sources,
+binaries, exact initial corpus digests, compiler arguments and native/dependency/
+harness feedback audits. The historical source snapshots remain distinct from
+the current selected code. Only PNG/raw decoder targets run.

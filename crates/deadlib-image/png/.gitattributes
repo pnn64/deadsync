@@ -21,6 +21,7 @@ scalar-fields-*.log text eol=lf
 primary-pairs-*.log text eol=lf
 animation-fields-*.log text eol=lf
 stream-literals-*.log text eol=lf
+stream-matches-*.log text eol=lf
 experiments/consumed-before.log text eol=lf
 experiments/predicate-trial-check.log text eol=lf
 tests/fixtures/compositor-precision/*.png -text

@@ -1,0 +1,65 @@
+diff --git a/crates/deadlib-image/png/src/zlib/inflate.rs b/crates/deadlib-image/png/src/zlib/inflate.rs
+index 1d14ef707..dc623f53e 100644
+--- a/crates/deadlib-image/png/src/zlib/inflate.rs
++++ b/crates/deadlib-image/png/src/zlib/inflate.rs
+@@ -162,6 +162,20 @@ impl Inflater {
+             bytes = &bytes[n..];
+         }
+     }
++    #[inline]
++    fn begin_copy(&mut self, length: usize, distance: usize) -> Result<(), Error> {
++        if distance > self.total_out || distance > self.window {
++            return Err(Error::Invalid("distance outside history window"));
++        }
++        if length > self.limit - self.total_out {
++            return Err(Error::LimitExceeded);
++        }
++        self.state = State::Copy {
++            distance,
++            left: length,
++        };
++        Ok(())
++    }
+     fn end_block(&mut self) {
+         self.state = if self.final_block {
+             State::Adler
+@@ -367,7 +381,20 @@ impl Inflater {
+                             break;
+                         }
+                         value @ 257..=285 => {
+-                            self.state = State::LengthExtra(value - 257);
++                            let index = value - 257;
++                            // Save each suspension point before reading its
++                            // field. Complete tokens avoid the outer dispatch;
++                            // fragmented tokens resume in the existing states.
++                            self.state = State::LengthExtra(index);
++                            let length = LENGTH_BASE[index] + read!(LENGTH_EXTRA[index]) as usize;
++                            self.state = State::DistanceCode(length);
++                            let symbol = symbol!(&self.distances);
++                            if symbol >= 30 {
++                                return Err(Error::Invalid("reserved distance symbol"));
++                            }
++                            self.state = State::DistanceExtra { length, symbol };
++                            let distance = DIST_BASE[symbol] + read!(DIST_EXTRA[symbol]) as usize;
++                            self.begin_copy(length, distance)?;
+                             break;
+                         }
+                         _ => return Err(Error::Invalid("reserved literal symbol")),
+@@ -399,16 +426,7 @@ impl Inflater {
+                 }
+                 State::DistanceExtra { length, symbol } => {
+                     let distance = DIST_BASE[symbol] + read!(DIST_EXTRA[symbol]) as usize;
+-                    if distance > self.total_out || distance > self.window {
+-                        return Err(Error::Invalid("distance outside history window"));
+-                    }
+-                    if length > self.limit - self.total_out {
+-                        return Err(Error::LimitExceeded);
+-                    }
+-                    self.state = State::Copy {
+-                        distance,
+-                        left: length,
+-                    };
++                    self.begin_copy(length, distance)?;
+                 }
+                 State::Copy { distance, left } => {
+                     if written == output.len() {
