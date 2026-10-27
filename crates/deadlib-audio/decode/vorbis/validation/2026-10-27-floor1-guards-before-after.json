@@ -1,0 +1,191 @@
+{
+  "scope": "Before/after finite PCM witness for floor-one guarded reconstruction. Before is committed 1f8f73b5 with the published range guard; after selects reference floor-one masks and render guards. Default semantics remain separately tested. Counts and positions agree; only the reference selection satisfies the original PCM bounds. No timing run.",
+  "before_source_commit": "1f8f73b5d6f0124e5b5060c67be34d24a0d10b2b",
+  "input_sha256": "e482612c63e042ccc2b46706dbdd3f14675d752ae34e41b2081f212f6481196a",
+  "reference_response_sha256": "b929fb0d882096ec69fb21f100a9821554f0386da2e2467d026511ab1ae59645",
+  "reference_binary_sha256": "eb9af20a42fc5d7cdf83cf2dc5bd6962e795dec20e4597a9b886efc29a8337bf",
+  "old_reference_binary_sha256": "0508d936741fb2fe5ab84ca261cdfffbdec359abad3091d86cd28f9109c09bb2",
+  "reference_helpers_byte_identical": true,
+  "before_sources_sha256": {
+    "src/main.rs": "dbebc44d2b1d2b43964885d7f5ea788730e6c94c8dbbe7451af7197d1de5df42",
+    "vorbis/src/bitpack.rs": "bbc8ce498143d87f40f04cbe3bf2e8af69caf11d9b697617feb5894fc5a94497",
+    "vorbis/src/codebook.rs": "897b378913883fac388ced320d948e390f2624f4e7ad0c50ad6628e9c28944f1",
+    "vorbis/src/decoder.rs": "b2c16fdd2e06a418597b012e6b34e0a9a13d1fb3304bb4ff0bc5ef3112fc10de",
+    "vorbis/src/encoder.rs": "8fac02bb876bde74196ef8d5149ec9c0f56fb84c39566a3438278d38fc258222",
+    "vorbis/src/floor.rs": "8712e4dfdd78ea4c6ab68a67b06a81825cd278c65dd0e106e308e2b7fbdc9133",
+    "vorbis/src/floor_reference.rs": "a95a5343398f350102e847db69136408da5268b2d191c4843df2f96a43b1583d",
+    "vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "vorbis/src/lib.rs": "ea972975b253ed8d38a74546b447572cbe98b2d426d2cef0892c68077e40a471",
+    "vorbis/src/ogg.rs": "43b6a0d6fb2f41408d813261d5bbec83071d0771b1c2e0be131a608f7c6ce913",
+    "vorbis/src/residue.rs": "43859647999781c57fdf32b70ed5ae9872da3e108dc7f968a346aeb04c2facbc",
+    "vorbis/src/residue_reference.rs": "c21ad3cf23bc3c601151c1679d76b86e591681f366cb3439f9694890bae1f0c7",
+    "vorbis/src/seek.rs": "f25fe504b4ced63dc67d249cc0d87c5e6b26866a0528e7296c52c79ff7191397",
+    "vorbis/src/setup.rs": "57aeb2d522b9428b3db230da5cbca766bd4fa554d17ab7bc193b3c0a3274c52b",
+    "vorbis/src/transform.rs": "257918b47b792cc44acb02e4bfaaf863d4078f6063af3b9b5c201b8a2d06edda",
+    "ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+    "ogg/src/crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+    "ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+    "ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+    "ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+    "ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+    "ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+    "ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2"
+  },
+  "after_codec_source_sha256": {
+    "crates/deadlib-audio/decode/ogg/src/capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+    "crates/deadlib-audio/decode/ogg/src/crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+    "crates/deadlib-audio/decode/ogg/src/demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "crates/deadlib-audio/decode/ogg/src/index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+    "crates/deadlib-audio/decode/ogg/src/lib.rs": "485595e14173f41c72f7a4afe72f31941a950d47df2d8fe4e042b3f86ae8042c",
+    "crates/deadlib-audio/decode/ogg/src/page.rs": "3043566c8b5cff07ce84e0d08dd30bd15d42ee64b3958624bf783dfae3c2ada1",
+    "crates/deadlib-audio/decode/ogg/src/reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+    "crates/deadlib-audio/decode/ogg/src/validation.rs": "80582fb370d20bdd1db04774d0f6193f720fb493dfc326659d9867ce594c1953",
+    "crates/deadlib-audio/decode/ogg/src/writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2",
+    "crates/deadlib-audio/decode/vorbis/src/bitpack.rs": "bbc8ce498143d87f40f04cbe3bf2e8af69caf11d9b697617feb5894fc5a94497",
+    "crates/deadlib-audio/decode/vorbis/src/codebook.rs": "897b378913883fac388ced320d948e390f2624f4e7ad0c50ad6628e9c28944f1",
+    "crates/deadlib-audio/decode/vorbis/src/decoder.rs": "12bd7cb12012b3a7d6c2868a6c7ba8efdb9f4521f6f82872ea2e2ed8fd6852bb",
+    "crates/deadlib-audio/decode/vorbis/src/encoder.rs": "8fac02bb876bde74196ef8d5149ec9c0f56fb84c39566a3438278d38fc258222",
+    "crates/deadlib-audio/decode/vorbis/src/floor.rs": "4fbd31895e9b1123f4ace8050b223cf5bc3ee542243e412a4ef60ad45872becc",
+    "crates/deadlib-audio/decode/vorbis/src/floor1_reference.rs": "246e8b36feb636415a7a16fb5b4e795db5ed816820570a32984c76938aad040f",
+    "crates/deadlib-audio/decode/vorbis/src/floor_reference.rs": "a95a5343398f350102e847db69136408da5268b2d191c4843df2f96a43b1583d",
+    "crates/deadlib-audio/decode/vorbis/src/floor_table.rs": "69059df7f756ed41faf9a9a962ef417d8f862f27f2d7b9cb1148368267d56b8c",
+    "crates/deadlib-audio/decode/vorbis/src/headers.rs": "8eec75a33db73ca46afb5326f2a479697783cf80e40d0e5e76b7f6c1a9f8b97a",
+    "crates/deadlib-audio/decode/vorbis/src/lib.rs": "91c9432bd090955533c0e643e489d72c82eac9bbefec4fed261e49ef75fb33db",
+    "crates/deadlib-audio/decode/vorbis/src/ogg.rs": "135539c4cddd0db37ecc383aafbfb626297217051f06c33f0104c17a98ab1576",
+    "crates/deadlib-audio/decode/vorbis/src/residue.rs": "43859647999781c57fdf32b70ed5ae9872da3e108dc7f968a346aeb04c2facbc",
+    "crates/deadlib-audio/decode/vorbis/src/residue_reference.rs": "c21ad3cf23bc3c601151c1679d76b86e591681f366cb3439f9694890bae1f0c7",
+    "crates/deadlib-audio/decode/vorbis/src/seek.rs": "f386996224a160647954f7f16e0d481542a1fc541a5140f980642c0163016a7f",
+    "crates/deadlib-audio/decode/vorbis/src/setup.rs": "57aeb2d522b9428b3db230da5cbca766bd4fa554d17ab7bc193b3c0a3274c52b",
+    "crates/deadlib-audio/decode/vorbis/src/transform.rs": "257918b47b792cc44acb02e4bfaaf863d4078f6063af3b9b5c201b8a2d06edda"
+  },
+  "results": [
+    {
+      "variant": "before",
+      "command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--release",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\floor1-guards-before-after-final-verified-20261027\\before\\Cargo.toml"
+      ],
+      "source_sha256": "dbebc44d2b1d2b43964885d7f5ea788730e6c94c8dbbe7451af7197d1de5df42",
+      "manifest_sha256": "dcafb5c935a8db45fdd3f1ea86548c8cf38f65f19fa00245a3f21cd60b257819",
+      "binary_sha256": "1ac636bd23726ef70c69b9622ebe825880239b0a6264b97e4861324330d2d8c8",
+      "pcm_sha256": "f035efa956eae6a48f21a21133034ca74999ec8b3c5452c2d30450f44608cee2",
+      "frames": 368,
+      "finite_values": 1104,
+      "peak_error": 2.5559024810791016,
+      "rms_error": 0.14639128654372707,
+      "reference_peak": 25.824010848999023,
+      "matches_original_pcm_bounds": false,
+      "blocks": [
+        {
+          "block_size": 64,
+          "start_frame": 0,
+          "frames": 0,
+          "finite_values": 0,
+          "peak_error": 0.0,
+          "reference_peak": 0.0
+        },
+        {
+          "block_size": 256,
+          "start_frame": 0,
+          "frames": 80,
+          "finite_values": 240,
+          "peak_error": 2.5559024810791016,
+          "reference_peak": 25.824010848999023
+        },
+        {
+          "block_size": 256,
+          "start_frame": 80,
+          "frames": 128,
+          "finite_values": 384,
+          "peak_error": 0.7288932800292969,
+          "reference_peak": 8.25899600982666
+        },
+        {
+          "block_size": 64,
+          "start_frame": 208,
+          "frames": 80,
+          "finite_values": 240,
+          "peak_error": 0.011395170877221972,
+          "reference_peak": 0.011958153918385506
+        },
+        {
+          "block_size": 256,
+          "start_frame": 288,
+          "frames": 80,
+          "finite_values": 240,
+          "peak_error": 0.0020256787538528442,
+          "reference_peak": 14.92088794708252
+        }
+      ]
+    },
+    {
+      "variant": "after",
+      "command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--release",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\floor1-guards-before-after-final-verified-20261027\\after\\Cargo.toml"
+      ],
+      "source_sha256": "1788e70f5dc535dd9be6d971c4bd783943cced30285effadabf0101999cac3bc",
+      "manifest_sha256": "8b625337c65bc8d6d9f7e69f54801f14c18894dff46d8fa60227cbcff1c86f6c",
+      "binary_sha256": "cebfaddb32f452c8a053493b1b19c5607da6e7a8a01e62f23d1d70562d02f238",
+      "pcm_sha256": "c8f314ad84d5c20f0eb57ab895b2a8cf0a54300bcd44ee13a6d38410e3a917d4",
+      "frames": 368,
+      "finite_values": 1104,
+      "peak_error": 2.5779008865356445e-06,
+      "rms_error": 2.242209992566766e-07,
+      "reference_peak": 25.824010848999023,
+      "matches_original_pcm_bounds": true,
+      "blocks": [
+        {
+          "block_size": 64,
+          "start_frame": 0,
+          "frames": 0,
+          "finite_values": 0,
+          "peak_error": 0.0,
+          "reference_peak": 0.0
+        },
+        {
+          "block_size": 256,
+          "start_frame": 0,
+          "frames": 80,
+          "finite_values": 240,
+          "peak_error": 2.384185791015625e-06,
+          "reference_peak": 25.824010848999023
+        },
+        {
+          "block_size": 256,
+          "start_frame": 80,
+          "frames": 128,
+          "finite_values": 384,
+          "peak_error": 2.5779008865356445e-06,
+          "reference_peak": 8.25899600982666
+        },
+        {
+          "block_size": 64,
+          "start_frame": 208,
+          "frames": 80,
+          "finite_values": 240,
+          "peak_error": 9.313225746154785e-10,
+          "reference_peak": 0.011958153918385506
+        },
+        {
+          "block_size": 256,
+          "start_frame": 288,
+          "frames": 80,
+          "finite_values": 240,
+          "peak_error": 9.5367431640625e-07,
+          "reference_peak": 14.92088794708252
+        }
+      ]
+    }
+  ]
+}

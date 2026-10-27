@@ -53,6 +53,17 @@ pub enum Floor0Behavior {
     Libvorbis,
 }
 
+/// Floor-one guards and nominal end-of-packet reconstruction.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum Floor1Behavior {
+    /// Clamp reconstructed values to the published range after prediction.
+    #[default]
+    Vorbis,
+    /// Match libvorbis 1.3.7: mask reconstructed values to 15 bits, guard
+    /// multiplied rendering ordinates at 0..=255, and retain its EOF behavior.
+    Libvorbis,
+}
+
 /// Codebook wire-value interpretation and packet-availability checks.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CodebookBehavior {

@@ -72,10 +72,11 @@ range/tail policy when `kind % 3`
 selects setup parsing. Bits six and five enable empty books and IEEE propagation
 respectively (controls 2 / 224 exercise strict / those three compatibility options).
 Header bit two selects `CodebookBehavior::Libvorbis` (clamped custom floats and
-whole-byte array guards). Header bit three selects `Floor0Behavior::Libvorbis`;
+whole-byte array guards). Header bit three selects both `Floor0Behavior::Libvorbis` and
+`Floor1Behavior::Libvorbis`;
 control 254 selects all reference options and the full extent override. Control
 233 combines floor zero with the earlier layout/empty/IEEE options. Streaming bit
-seven selects reference codebook, floor-zero and residue policies, including selected
+seven selects reference codebook, both floor and residue policies, including selected
 setup reparsing and overlap pre-roll. Procedural seeds cover
 unsigned/signed amplitude boundaries, unsupported widths, partial LSP words and
 Bark-grid rounding. Further seeds exercise every custom-float exponent boundary,
@@ -83,6 +84,10 @@ sequence VQ cancellation and padded/unpadded book tails; published defaults rema
 exercised independently by the header control. Partial-partition and inverted-range
 seeds exercise type-zero tail gaps, type-one clipping, type-two rounded ranges,
 nonsticky Huffman EOF and later-submap consumption under the residue policy.
+Floor-one seeds cover all multipliers, 15-bit wrapped prediction, clipped rendering
+ordinates, missing initial Y values, deep neighbor dependencies and scalar EOF.
+The harness permits 131,072 declared codebook entries so sparse scalar books can
+return values above 65,535; its separate tree and memory caps still apply.
 Header control bit four raises the codebook extent cap from 24 to the full
 40 wire-field bits. Streaming bit six makes the same choice, preserved during
 indexing and selected setup reparsing. Entry/value/memory caps remain independent;

@@ -239,3 +239,9 @@ with reference Huffman EOF behavior. The same field in `OggOptions` and
 `SeekOptions` survives resets and setup reparsing. Whole vectors and ordered
 ranges remain the default. Type-two placement is selected separately by
 `Residue2Layout`; see [residue ranges and tails](RESIDUE_TAILS.md).
+
+The [floor-one guard follow-up](FLOOR1_GUARDS.md) adds
+`Floor1Behavior::Libvorbis` for reference 15-bit reconstruction masks, rendering
+clips and EOF decisions. The original range guard remains default. The policy
+is retained through raw reset, streaming and indexed decoder reconstruction;
+finite PCM still uses the original numerical bounds.

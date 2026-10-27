@@ -1,5 +1,5 @@
 use crate::{
-    Error, Floor, Floor0, Floor0Behavior, Floor1,
+    Error, Floor, Floor0, Floor0Behavior, Floor1, Floor1Behavior,
     bitpack::{BitReader, ilog},
     codebook::Codebook,
     floor_table::INVERSE_DB,
@@ -9,9 +9,13 @@ use core::f64::consts::PI;
 #[path = "floor_reference.rs"]
 mod reference_tests;
 
-/// EndOfPacket is deliberately preserved so the packet decoder can implement
-/// section 4.3.2's all-channel zeroing rule before overlap/add, or the reference's
-/// channel-local concealment when IEEE propagation is explicitly enabled.
+#[cfg(test)]
+#[path = "floor1_reference.rs"]
+mod floor_one_tests;
+
+/// Published floor EOF is returned for the packet's all-channel concealment
+/// rule. Explicit reference policies preserve their backend's channel-local
+/// concealment and nominal reconstruction, including reader EOF state.
 pub(crate) fn decode(
     config: &Floor,
     books: &[Codebook],
@@ -19,10 +23,11 @@ pub(crate) fn decode(
     output: &mut [f32],
     allow_nonfinite: bool,
     behavior: Floor0Behavior,
+    floor1_behavior: Floor1Behavior,
 ) -> Result<bool, Error> {
     match config {
         Floor::Type0(config) => decode0(config, books, bits, output, allow_nonfinite, behavior),
-        Floor::Type1(config) => decode1(config, books, bits, output),
+        Floor::Type1(config) => decode1(config, books, bits, output, floor1_behavior),
     }
 }
 fn decode1(
@@ -30,6 +35,36 @@ fn decode1(
     books: &[Codebook],
     bits: &mut BitReader<'_>,
     output: &mut [f32],
+    behavior: Floor1Behavior,
+) -> Result<bool, Error> {
+    let result = decode1_inner(config, books, bits, output, behavior);
+    if behavior == Floor1Behavior::Libvorbis && matches!(result, Err(Error::EndOfPacket)) {
+        Ok(false)
+    } else {
+        result
+    }
+}
+fn scalar1(
+    book: &Codebook,
+    bits: &mut BitReader<'_>,
+    behavior: Floor1Behavior,
+) -> Result<u32, Error> {
+    let exhausted = bits.is_exhausted();
+    let result = book.decode_scalar(bits);
+    if behavior == Floor1Behavior::Libvorbis
+        && !exhausted
+        && matches!(result, Err(Error::EndOfPacket))
+    {
+        bits.clear_exhausted();
+    }
+    result
+}
+fn decode1_inner(
+    config: &Floor1,
+    books: &[Codebook],
+    bits: &mut BitReader<'_>,
+    output: &mut [f32],
+    behavior: Floor1Behavior,
 ) -> Result<bool, Error> {
     if !bits.flag()? {
         return Ok(false);
@@ -38,8 +73,13 @@ fn decode1(
     let mut y = [0i64; 65];
     let mut active = [false; 65];
     let width = ilog(range as u32 - 1);
-    y[0] = bits.read(width)? as i64;
-    y[1] = bits.read(width)? as i64;
+    for value in &mut y[..2] {
+        *value = match bits.read(width) {
+            Ok(value) => value as i64,
+            Err(Error::EndOfPacket) if behavior == Floor1Behavior::Libvorbis => -1,
+            Err(error) => return Err(error),
+        };
+    }
     let mut offset = 2;
     for &class in &config.partition_classes {
         let class = &config.classes[class as usize];
@@ -49,7 +89,7 @@ fn decode1(
                 if book.is_empty() {
                     return Ok(false);
                 }
-                book.decode_scalar(bits)?
+                scalar1(book, bits, behavior)?
             }
             None => 0,
         };
@@ -61,7 +101,7 @@ fn decode1(
                     if book.is_empty() {
                         return Ok(false);
                     }
-                    book.decode_scalar(bits)? as i64
+                    scalar1(book, bits, behavior)? as i64
                 }
                 None => 0,
             };
@@ -70,14 +110,22 @@ fn decode1(
         offset += class.dimensions as usize;
     }
     active[0] = true;
-    active[1] = true;
+    active[1] = behavior == Floor1Behavior::Vorbis || y[1] >= 0;
     for i in 2..config.x.len() {
         let [low, high] = config.neighbors[i].map(|n| n as usize);
         let predicted = render_point(
             config.x[low] as i64,
-            y[low],
+            if behavior == Floor1Behavior::Libvorbis {
+                y[low] & 0x7fff
+            } else {
+                y[low]
+            },
             config.x[high] as i64,
-            y[high],
+            if behavior == Floor1Behavior::Libvorbis {
+                y[high] & 0x7fff
+            } else {
+                y[high]
+            },
             config.x[i] as i64,
         );
         let value = y[i];
@@ -102,20 +150,35 @@ fn decode1(
                 predicted + value / 2
             }
         };
+        if behavior == Floor1Behavior::Libvorbis && value != 0 {
+            y[i] &= 0x7fff;
+            y[low] &= 0x7fff;
+            y[high] &= 0x7fff;
+        }
     }
     // The spec explicitly recommends guarding abused setup/codebook values.
-    for value in &mut y[..config.x.len()] {
-        *value = (*value).clamp(0, range - 1);
+    if behavior == Floor1Behavior::Vorbis {
+        for value in &mut y[..config.x.len()] {
+            *value = (*value).clamp(0, range - 1);
+        }
     }
+    let ordinate = |value: i64| {
+        let value = value * config.multiplier as i64;
+        if behavior == Floor1Behavior::Libvorbis {
+            value.clamp(0, 255)
+        } else {
+            value
+        }
+    };
     let mut lx = 0;
-    let mut ly = y[0] * config.multiplier as i64;
+    let mut ly = ordinate(y[0]);
     for &index in &config.sorted_order[1..] {
         let index = index as usize;
         if !active[index] {
             continue;
         }
         let hx = config.x[index] as usize;
-        let hy = y[index] * config.multiplier as i64;
+        let hy = ordinate(y[index]);
         render_line(lx, ly, hx, hy, output);
         lx = hx;
         ly = hy;
@@ -478,7 +541,16 @@ mod tests {
             let bytes = packet.finish().unwrap();
             let mut bits = BitReader::new(&bytes);
             let mut output = [0.125; 32];
-            assert!(!decode1(&config, &books, &mut bits, &mut output).unwrap());
+            assert!(
+                !decode1(
+                    &config,
+                    &books,
+                    &mut bits,
+                    &mut output,
+                    Floor1Behavior::Vorbis
+                )
+                .unwrap()
+            );
             assert_eq!(output, [0.125; 32]);
             assert_eq!(bits.position(), 17);
             assert!(!bits.is_exhausted());

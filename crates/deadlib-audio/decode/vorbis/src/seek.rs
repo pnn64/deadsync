@@ -1,8 +1,8 @@
 //! Indexed, sample-accurate seeking with one-packet overlap pre-roll.
 use crate::{
-    CodebookBehavior, DecodeOptions, Error, Floor0Behavior, Limits, Metadata, OggEvent, OggPcm,
-    PacketDecoder, ParseOptions, Residue2Layout, ResidueBehavior, Setup, StreamEnd, StreamId,
-    StreamInfo,
+    CodebookBehavior, DecodeOptions, Error, Floor0Behavior, Floor1Behavior, Limits, Metadata,
+    OggEvent, OggPcm, PacketDecoder, ParseOptions, Residue2Layout, ResidueBehavior, Setup,
+    StreamEnd, StreamId, StreamInfo,
     ogg::{Timing, granule, read_identification, read_metadata},
 };
 use core::ops::ControlFlow;
@@ -19,6 +19,7 @@ pub struct SeekOptions {
     pub allow_zero_span_granules: bool,
     pub residue2_layout: Residue2Layout,
     pub floor0_behavior: Floor0Behavior,
+    pub floor1_behavior: Floor1Behavior,
     /// Retain custom-float interpretation through setup parsing and resets.
     pub codebook_behavior: CodebookBehavior,
     pub residue_behavior: ResidueBehavior,
@@ -50,6 +51,7 @@ impl Default for SeekOptions {
             allow_zero_span_granules: false,
             residue2_layout: Residue2Layout::Interleaved,
             floor0_behavior: Floor0Behavior::Vorbis,
+            floor1_behavior: Floor1Behavior::Vorbis,
             codebook_behavior: CodebookBehavior::Vorbis,
             residue_behavior: ResidueBehavior::Vorbis,
             allow_empty_codebooks: false,
@@ -598,6 +600,7 @@ impl<R: Read + Seek> OggSeekReader<R> {
                         limits,
                         residue2_layout: self.index.options.residue2_layout,
                         floor0_behavior: self.index.options.floor0_behavior,
+                        floor1_behavior: self.index.options.floor1_behavior,
                         allow_nonfinite: self.index.options.allow_nonfinite,
                     },
                 )?);

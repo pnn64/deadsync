@@ -119,6 +119,42 @@ static void floor0cases(FILE *file) {
     if (fgetc(file) != EOF) fail("trailing floor0 cases");
     floor->free_look(look); vorbis_dsp_clear(&dsp); vorbis_comment_clear(&comments); vorbis_info_clear(&info);
 }
+static void floor1cases(FILE *file) {
+    vorbis_info info; vorbis_comment comments; vorbis_dsp_state dsp;
+    codec_setup_info *ci; vorbis_look_floor *look; const vorbis_func_floor *floor;
+    uint64_t count, c; int i;
+    vorbis_info_init(&info); vorbis_comment_init(&comments);
+    for (i = 0; i < 3; ++i) {
+        ogg_packet op; memset(&op, 0, sizeof(op));
+        op.packet = packet(file, &op.bytes); op.b_o_s = i == 0; op.packetno = i;
+        if (vorbis_synthesis_headerin(&info, &comments, &op)) fail("floor1 header");
+        free(op.packet);
+    }
+    ci = (codec_setup_info *)info.codec_setup;
+    if (ci->floor_type[0] != 1 || vorbis_synthesis_init(&dsp, &info)) fail("floor1 init");
+    floor = _floor_P[1]; look = floor->look(&dsp, ci->floor_param[0]);
+    count = get64(file); if (count > (1u << 20)) fail("floor1 count"); put64(count);
+    for (c = 0; c < count; ++c) {
+        uint64_t w = get64(file), prefix = get64(file), exhausted = get64(file);
+        long size; unsigned char *data = packet(file, &size); vorbis_block block;
+        void *memo; float *curve; int n; uint32_t raw;
+        if (w > 1 || prefix > 7 || exhausted > 1 || vorbis_block_init(&dsp, &block)) fail("floor1 case");
+        block.W = (long)w; block.pcmend = ci->blocksizes[w]; n = block.pcmend / 2;
+        oggpack_readinit(&block.opb, data, size); oggpack_adv(&block.opb, (int)prefix);
+        if (exhausted) oggpack_read(&block.opb, 33);
+        memo = floor->inverse1(&block, look);
+        put8(memo != NULL); put64((uint64_t)oggpack_bits(&block.opb)); put8(block.opb.ptr == NULL); put32((uint32_t)n);
+        curve = (float *)malloc((size_t)(n + 16) * sizeof(float)); if (!curve) fail("floor1 curve");
+        for (i = 0; i < n + 16; ++i) curve[i] = -1234.25f;
+        for (i = 0; i < n; ++i) curve[8+i] = 1.f;
+        floor->inverse2(&block, look, memo, curve+8);
+        for (i = 0; i < 8; ++i) if (curve[i] != -1234.25f || curve[n+8+i] != -1234.25f) fail("floor1 guard");
+        for (i = 0; i < n; ++i) {memcpy(&raw, curve+8+i, 4); put32(raw);}
+        free(curve); free(data); vorbis_block_clear(&block);
+    }
+    if (fgetc(file) != EOF) fail("trailing floor1 cases");
+    floor->free_look(look); vorbis_dsp_clear(&dsp); vorbis_comment_clear(&comments); vorbis_info_clear(&info);
+}
 /* Direct unmodified vector-add callbacks, including nonmultiple n and tails. */
 static void vqaddcases(FILE *file) {
     long booksize; unsigned char *bookdata = packet(file, &booksize);
@@ -319,12 +355,13 @@ static void ogg_seek(FILE *file, const char *requests_path) {
     fclose(requests); ov_clear(&reader);
 }
 int main(int argc, char **argv) {
-    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|bookcases|floor0cases|floatcases|vqaddcases|books|pcm|pcm-cases|mdct-cases|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
+    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|bookcases|floor0cases|floor1cases|floatcases|vqaddcases|books|pcm|pcm-cases|mdct-cases|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
 #endif
     if (!strcmp(argv[1], "headers")) headers(file);
+    else if (!strcmp(argv[1], "floor1cases")) floor1cases(file);
     else if (!strcmp(argv[1], "floatcases")) floatcases(file);
     else if (!strcmp(argv[1], "vqaddcases")) vqaddcases(file);
     else if (!strcmp(argv[1], "books")) books(file);

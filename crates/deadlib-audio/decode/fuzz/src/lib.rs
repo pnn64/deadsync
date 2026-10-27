@@ -13,7 +13,7 @@ pub fn limits() -> vorbis::Limits {
         max_comment_bytes: MAX_INPUT,
         max_comments: 1024,
         max_codebook_extent_bits: 24,
-        max_codebook_entries: 65536,
+        max_codebook_entries: 131072,
         max_codebook_values: 262144,
         max_huffman_nodes: 131072,
         max_setup_memory: 8 << 20,
@@ -385,6 +385,11 @@ pub fn vorbis_headers(input: &[u8]) {
                     vorbis::DecodeOptions {
                         limits: setup_limits,
                         allow_nonfinite: kind & 32 != 0,
+                        floor1_behavior: if kind & 8 != 0 {
+                            vorbis::Floor1Behavior::Libvorbis
+                        } else {
+                            vorbis::Floor1Behavior::Vorbis
+                        },
                         floor0_behavior: if kind & 8 != 0 {
                             vorbis::Floor0Behavior::Libvorbis
                         } else {
@@ -546,6 +551,11 @@ pub fn vorbis_stream(input: &[u8]) {
             vorbis::CodebookBehavior::Vorbis
         },
         allow_nonfinite: control & 32 != 0,
+        floor1_behavior: if control & 128 != 0 {
+            vorbis::Floor1Behavior::Libvorbis
+        } else {
+            vorbis::Floor1Behavior::Vorbis
+        },
         floor0_behavior: if control & 128 != 0 {
             vorbis::Floor0Behavior::Libvorbis
         } else {
@@ -608,6 +618,7 @@ pub fn vorbis_stream(input: &[u8]) {
             residue_behavior: options.residue_behavior,
             allow_nonfinite: options.allow_nonfinite,
             floor0_behavior: options.floor0_behavior,
+            floor1_behavior: options.floor1_behavior,
             packet_preroll: control & 4 == 0,
             max_index_pages: MAX_PAGES,
             max_index_memory: 8 << 20,

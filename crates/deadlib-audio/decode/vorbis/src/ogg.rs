@@ -1,8 +1,8 @@
 //! Vorbis I Appendix A mapping on the independent Ogg container.
 use crate::{
-    CodebookBehavior, Comments, DecodeOptions, Error, Floor0Behavior, Identification, Limits,
-    Metadata, PacketDecoder, ParseOptions, PcmBlock, Residue2Layout, ResidueBehavior, Setup,
-    reserve,
+    CodebookBehavior, Comments, DecodeOptions, Error, Floor0Behavior, Floor1Behavior,
+    Identification, Limits, Metadata, PacketDecoder, ParseOptions, PcmBlock, Residue2Layout,
+    ResidueBehavior, Setup, reserve,
 };
 use deadlib_audio_decode_ogg::{
     self as container, Demuxer, Packet, Page, PageDecoder, PageHeader, PageReader,
@@ -19,6 +19,7 @@ pub struct OggOptions {
     /// Explicit reference behavior for unaligned type-two residue ranges.
     pub residue2_layout: Residue2Layout,
     pub floor0_behavior: Floor0Behavior,
+    pub floor1_behavior: Floor1Behavior,
     /// Retain custom-float interpretation through setup parsing and resets.
     pub codebook_behavior: CodebookBehavior,
     pub residue_behavior: ResidueBehavior,
@@ -39,6 +40,7 @@ impl Default for OggOptions {
             allow_zero_span_granules: false,
             residue2_layout: Residue2Layout::Interleaved,
             floor0_behavior: Floor0Behavior::Vorbis,
+            floor1_behavior: Floor1Behavior::Vorbis,
             codebook_behavior: CodebookBehavior::Vorbis,
             residue_behavior: ResidueBehavior::Vorbis,
             allow_empty_codebooks: false,
@@ -449,6 +451,7 @@ impl OggDecoder {
                         limits,
                         residue2_layout: options.residue2_layout,
                         floor0_behavior: options.floor0_behavior,
+                        floor1_behavior: options.floor1_behavior,
                         allow_nonfinite: options.allow_nonfinite,
                     },
                 )?;

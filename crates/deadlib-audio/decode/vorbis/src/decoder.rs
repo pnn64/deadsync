@@ -1,6 +1,6 @@
 use crate::{
-    AudioHeader, Error, Floor0Behavior, Imdct, Limits, Residue2Layout, Setup, bitpack::BitReader,
-    floor, residue,
+    AudioHeader, Error, Floor0Behavior, Floor1Behavior, Imdct, Limits, Residue2Layout, Setup,
+    bitpack::BitReader, floor, residue,
 };
 use core::f64::consts::FRAC_PI_2;
 
@@ -9,10 +9,12 @@ pub struct DecodeOptions {
     pub limits: Limits,
     pub residue2_layout: Residue2Layout,
     pub floor0_behavior: Floor0Behavior,
+    pub floor1_behavior: Floor1Behavior,
     /// Match libvorbis's IEEE propagation, including floor0's f32 products and
     /// channel-local floor concealment at EOF. May return NaN/infinity PCM.
-    /// Disabled by default: require finite PCM and use all-channel floor EOF
-    /// concealment from section 4.3.2.
+    /// Disabled by default: require finite PCM. Published floor policies use
+    /// all-channel EOF concealment from section 4.3.2; explicit reference floor
+    /// policies retain their backend's nominal EOF reconstruction.
     pub allow_nonfinite: bool,
 }
 
@@ -56,6 +58,7 @@ pub struct PacketDecoder {
     limits: Limits,
     residue2_layout: Residue2Layout,
     floor0_behavior: Floor0Behavior,
+    floor1_behavior: Floor1Behavior,
     allow_nonfinite: bool,
     short: Imdct,
     long: Option<Imdct>,
@@ -89,6 +92,7 @@ impl PacketDecoder {
             limits,
             residue2_layout,
             floor0_behavior,
+            floor1_behavior,
             allow_nonfinite,
         } = options;
         let channels = setup.channels() as usize;
@@ -115,6 +119,7 @@ impl PacketDecoder {
             limits,
             residue2_layout,
             floor0_behavior,
+            floor1_behavior,
             allow_nonfinite,
             short,
             long,
@@ -191,6 +196,7 @@ impl PacketDecoder {
                 output,
                 self.allow_nonfinite,
                 self.floor0_behavior,
+                self.floor1_behavior,
             ) {
                 Ok(true) => *nonzero = true,
                 Ok(false) => output.fill(0.0),

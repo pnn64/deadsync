@@ -138,3 +138,9 @@ The [codebook values and bounds follow-up](CODEBOOK_VALUES.md) separates the
 published custom-float range and exact bit availability from libvorbis's exponent
 clamp and whole-byte checks. Reference values, guard decisions/positions and
 initialization are independently checked before packet and Ogg comparisons.
+
+The [floor-one guard follow-up](FLOOR1_GUARDS.md) adds
+`Floor1Behavior::Libvorbis` for reference 15-bit reconstruction masks, rendering
+clips and EOF decisions. The original range guard remains default. The policy
+is retained through raw reset, streaming and indexed decoder reconstruction;
+finite PCM still uses the original numerical bounds.

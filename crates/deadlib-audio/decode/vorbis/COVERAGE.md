@@ -372,3 +372,9 @@ callbacks for partial partitions, empty books, unaligned type-two intervals,
 truncated codewords and preexisting sticky EOF. The explicit residue policy
 retains published/default setup validation and preserves the reference choice
 through raw resets, pull/push streaming and indexed setup reparsing.
+
+The [floor-one guard follow-up](FLOOR1_GUARDS.md) adds
+`Floor1Behavior::Libvorbis` for reference 15-bit reconstruction masks, rendering
+clips and EOF decisions. The original range guard remains default. The policy
+is retained through raw reset, streaming and indexed decoder reconstruction;
+finite PCM still uses the original numerical bounds.
