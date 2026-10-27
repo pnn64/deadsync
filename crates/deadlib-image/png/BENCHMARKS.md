@@ -537,3 +537,72 @@ mixed. The shared host does not establish a consistent benefit, so the original
 predicate is retained. All 21 production files match `fae2e5bd2` exactly.
 No new speedup is claimed. Timing finished before native-feedback fuzzing and
 coverage builds began.
+
+## Buffered Adler-32 lanes (2026-10-27)
+
+Buffered inflation now accumulates Adler-32 in sixteen independent u32 lanes
+for blocks of at least 64 bytes. Each lane tracks its byte sum and the sum of
+its running prefixes. For M groups, byte (g, i) contributes
+`16 * (M - g) - i` to the second accumulator. Reducing those nonnegative lane
+contributions before adding them preserves the 5,552-byte u32 bound, including
+initial accumulators of 65,520. The maximum second accumulator before modulus
+is 4,294,690,200. Short inputs and tails retain scalar updates. The arrays add
+no heap allocation, unsafe code, explicit intrinsics or production dependencies.
+
+The first trial applied the lanes to incremental updates too. Its six-process
+interleaved comparisons favored buffered inflation but lowered photo reader
+throughput by 3.64% relative to Rust png. It is not selected. The retained
+candidate calls a separate bulk method from buffered `adler32`; the incremental
+`Adler32::update` body exactly matches `ded016feb`. The exact patches and source
+hashes for both versions are in `experiments/adler-{lanes,buffered}.*`.
+
+The selected comparison uses saved original / buffered candidate / buffered
+candidate / saved original order, three process repetitions per position and
+per corpus, twelve iterations and three warmups per operation, pinned to CPU 0.
+It reuses the decoder-only harness and identical 24-photo / 60-format corpora.
+No profiling, builds from this task or sanitizer campaigns ran during timed
+processes. Builds precede their benchmark processes. Source, binary, corpus,
+sample-size, encoded-size and pipeline-capacity invariants are retained and
+checked. Rates divide total sample bytes by the sum of per-case median
+run-average nanoseconds.
+
+| Buffered operation | Original MiB/s | Selected MiB/s | Change relative to reference |
+| --- | ---: | ---: | ---: |
+| Photo PNG decode | 91.41 | 96.47 | +1.91% |
+| Photo IDAT inflate | 115.54 | 123.65 | +3.26% |
+| All-format PNG decode | 228.29 | 245.90 | +5.04% |
+| All-format IDAT inflate | 678.41 | 889.91 | +26.53% |
+
+Decode changes are normalized against Rust png, inflation against flate2.
+The unchanged reader path is 1.15% / 1.22% lower relative to Rust png on photos /
+formats; unchanged streaming inflation is 1.71% / 2.19% lower relative to flate2.
+Their absolute rates rise, along with references. These controls show remaining
+shared-host and code-generation variation; no streaming speedup is claimed.
+CPU frequency and external workloads are uncontrolled. These local results
+support the buffered optimization, not broad parity with established decoders.
+
+`benchmark-adler-split-{photos,formats}-summary.json` reproduces the selected
+comparison from the `control`, `split`, `split_repeat` and `control2` groups.
+The earlier `before`, `trial` and `repeat` groups describe the rejected shared
+update; `benchmark-adler-{photos,formats}-summary.json` summarizes that trial.
+Initial summaries are exploratory and excluded from the selected rates.
+
+The Linux cycle sample in `profiling/decode-adler-buffered.*` attributes 2.09%
+to buffered Adler-32 and 61.58% to buffered inflation, with no lost samples.
+Huffman lookup remains 26.62% of samples. These shares are diagnostic, not
+isolated kernel timings. `profiling/adler-buffered-assembly.*` records the
+selected binary, disassembly command and packed widening/addition instructions,
+confirming compiler SIMD for the lane accumulation. Comparative timing finished
+before sampling and validation started.
+
+`adler-validation.json` / `.log` and `adler-independent.log` retain strict
+main/fuzz Clippy, scoped formatting, 128 passing tests in each normal release and
+standalone offline suite, and three explicit C oracle audits. Each default suite
+still ignores fifteen optional checks. Independent u64 modular arithmetic checks
+both checksum paths across tail lengths, arbitrary fragmentation, varied bytes
+and maximum valid accumulators. Fresh native-feedback ASan campaigns pass
+100,000 decoder inputs. `experiments/adler-selection.json` links the exact final
+source, reconstruction proofs, timings, profile and validation artifacts. Only
+`src/checksum.rs` changes from `ded016feb`; public APIs, heap allocations and decoder
+sample/metadata behavior are unchanged. Competitive decoder performance and
+remaining conformance audits stay open.

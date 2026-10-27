@@ -216,6 +216,24 @@ pair. Selected run counts are 50,000 PNG-stream, 20,000 raw-stream and 30,000
 resource executions. Fixed replay counts are documented separately under
 `../coverage-reports/`.
 
+## Buffered checksum follow-up (2026-10-27)
+
+The selected buffered Adler-32 lanes pass fresh native-feedback ASan runs of
+50,000 `png_stream`, 20,000 `inflate_stream` and 30,000 `decoder_limits` inputs.
+Initial corpus counts are 27,867 / 5,379 / 6,376, with exact literal-filename
+digests in `reports/adler-seeds.json`. Fuzzing seconds / peak RSS are
+68 / 542 MiB, 16 / 434 MiB and 13 / 484 MiB.
+
+`reports/adler-source.json` retains source, binary and corpus hashes, compiler
+invocations and object-section audits. PNG/shared feedback counters occupy
+16,634 / 45 bytes; fourteen dependency archives and six selected harness objects
+have no counters or PC tables. All three binaries define ASan's runtime entry.
+The source check covers the selected buffered-only method; incremental checksum
+updates retain their original scalar implementation. No encoder target runs.
+These 100,000 successful executions bring the historical total to 1,360,000
+across twelve targets. Compiler SIMD and comparative decoder timings are
+documented in `../BENCHMARKS.md`; ASan runs are correctness evidence, not timings.
+
 `decode` checks for native parser failures and compares every native sample when
 the independent Rust png decoder also accepts the image. Reference ancillary
 policies differ, so a reference rejection does not automatically mean a native

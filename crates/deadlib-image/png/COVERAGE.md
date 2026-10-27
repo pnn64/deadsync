@@ -27,8 +27,8 @@ evidence, application responsibilities and explicitly open items.
 | Bounded streaming with arbitrary input boundaries | `zlib::Inflater`, `StreamDecoder`, `decode_reader` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Twelve targets; 1,260,000 recorded successful sanitizer executions across milestones, including historical encoder runs; newest 80,000 use native-crate feedback with artifact-verified isolation; targeted decoder gaps and longer campaigns remain open |
-| Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Twelve targets; 1,360,000 recorded successful sanitizer executions across milestones, including historical encoder runs; newest 100,000 use native-crate feedback with artifact-verified isolation; targeted decoder gaps and longer campaigns remain open |
+| Benchmarks and profile-guided optimization | Decoder-only harnesses, `BENCHMARKS.md`, checked-in TSV and profiles | Bulk copying, filter reconstruction and buffered Adler-32 improvements measured; competitive decoder performance still pending |
 
 Historical milestones: (1) shared primitives and native compression; (2) static PNG codec and
 sample matrix; (3) metadata and APNG; (4) streaming and external conformance;
@@ -1336,3 +1336,49 @@ from 35 to twelve zero-count annotations. `stream/decode.rs` reaches 99.82% line
 The source/profile/corpus hashes and reviewed remainder are in
 `coverage-reports/boundaries-*`. Full decoder field auditing and competitive
 performance remain open.
+
+## Buffered checksum accumulation (2026-10-27)
+
+`src/checksum.rs` adds sixteen independent Adler-32 lanes for buffered inflation.
+Short blocks and tails remain scalar. Lane reductions preserve the existing
+5,552-byte accumulator bound, including maximum valid starting state; independent
+u64 modular arithmetic checks varied bytes, all short tail lengths, fragmentation
+and block/modulus edges. CRC logic is unchanged. There are no new heap allocations,
+unsafe blocks, CPU intrinsics or production dependencies.
+
+The shared-update trial is rejected because it slows photo reader decoding by
+3.64% relative to Rust png. The selected buffered-only method leaves incremental
+`Adler32::update` exactly as in `ded016feb`. Four-position interleaved runs favor
+buffered PNG decode by 1.91% on 24 photos and 5.04% on 60 independent format files
+relative to Rust png; buffered inflation improves 3.26% / 26.53% relative to
+flate2. Streaming reference-relative controls are 1–2% lower. The shared host and
+code-generation effects remain uncontrolled, and no streaming improvement is
+claimed. Source, binary, corpus, size and capacity invariants are verified for all
+fourteen development/selected benchmark groups. `BENCHMARKS.md` retains the exact
+selection, rates, limits and reproduction commands.
+
+Linux machine-code inspection confirms packed widening and eight packed u32
+addition instructions in buffered Adler-32. The post-timing cycle profile assigns
+2.09% to that checksum and 61.58% to buffered inflation; Huffman decoding remains
+the largest identified inner operation. Sampling shares are diagnostic, not
+isolated timings. Raw profiles remain in the recorded temporary location.
+
+Both release and independently copied offline suites pass 128 tests, with fifteen
+optional checks ignored in each default run. Three explicit default/strict-window/
+compatibility C oracle audits, strict main/fuzz Clippy and scoped rustfmt pass.
+All 875 copied source/fixture/example/benchmark files match the verified worktree.
+`adler-validation.*` and `adler-independent.log` retain commands and source hashes.
+
+Fresh ASan campaigns pass 50,000 PNG-stream, 20,000 raw-stream and 30,000 resource
+inputs, in 68 / 16 / 13 fuzzing seconds and 542 / 434 / 484 MiB peak RSS. Native
+PNG/shared archives contain feedback counters; fourteen dependency archives and
+six harness objects contain none. All three binaries define ASan's runtime entry.
+These 100,000 successful executions bring historical campaigns to 1,360,000.
+No encoder target runs. `fuzz/reports/adler-*` retains exact sources, binaries,
+initial corpus digests, compiler arguments and object audits.
+
+Both experiment patches reconstruct their recorded sources from `ded016feb`.
+`experiments/adler-selection.json` links the selected source and complete evidence.
+Only the checksum source changes in production; the other twenty PNG files and
+shared primitives are unchanged. Decoder field audits, remaining corpus gaps and
+competitive decoder performance remain open.
