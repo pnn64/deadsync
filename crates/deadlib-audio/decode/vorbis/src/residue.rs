@@ -35,7 +35,16 @@ pub(crate) fn decode(
     let dimensions = classbook.dimensions();
     let vectors = if interleaved { 1 } else { channels };
     let classifications = config.books.len() as u32;
-    for pass in 0..8 {
+    // libvorbis runs only through the highest active cascade bit. In
+    // particular an all-zero cascade consumes no phrasebook words, which
+    // matters when a later submap reads from this same packet bit reader.
+    let stages = config
+        .books
+        .iter()
+        .filter_map(|books| books.iter().rposition(Option::is_some))
+        .max()
+        .map_or(0, |last| last + 1);
+    for pass in 0..stages {
         let mut partition = 0;
         while partition < partitions {
             if pass == 0 {
@@ -52,7 +61,11 @@ pub(crate) fn decode(
                         value /= classifications;
                     }
                     if value != 0 {
-                        return Err(Error::Invalid("residue classword exceeds classifications"));
+                        // Historical encoders can declare a phrasebook larger
+                        // than the classification cardinality. Like libvorbis,
+                        // stop this residue at a surplus word, keeping completed
+                        // additions and leaving following submap bits available.
+                        return Ok(());
                     }
                 }
             }
@@ -166,6 +179,107 @@ mod tests {
         }
         let bytes = bits.finish().unwrap();
         Codebook::read(&mut BitReader::new(&bytes), &Limits::default()).unwrap()
+    }
+    #[test]
+    fn surplus_classwords_keep_completed_residue_and_following_bits() {
+        let mut packed = BitWriter::new();
+        for (value, width) in [(0x564342, 24), (1, 16), (8, 24), (0, 1), (0, 1)] {
+            packed.write(value, width).unwrap();
+        }
+        for _ in 0..8 {
+            packed.write(2, 5).unwrap();
+        }
+        packed.write(0, 4).unwrap();
+        let packed = packed.finish().unwrap();
+        let books = [
+            Codebook::read(&mut BitReader::new(&packed), &Limits::default()).unwrap(),
+            vector_book(),
+        ];
+        let mut packet = BitWriter::new();
+        packet.write(0, 3).unwrap(); // Valid classword, then ten VQ entries.
+        packet.write(0, 10).unwrap();
+        packet.write(7, 3).unwrap(); // Surplus classword, not an EOF.
+        packet.write(21, 5).unwrap();
+        let packet = packet.finish().unwrap();
+        for kind in 0..=2 {
+            let config = Residue {
+                kind,
+                begin: 1,
+                end: 41,
+                partition_size: 20,
+                classbook: 0,
+                books: vec![[Some(1), None, None, None, None, None, None, None]],
+            };
+            let mut actual = [0.125; 3 * 68];
+            let mut expected = actual;
+            for i in 0..20 {
+                expected[2 * 68 + 1 + i] += if kind == 0 {
+                    if i < 10 { 1.0 } else { 2.0 }
+                } else {
+                    (i % 2 + 1) as f32
+                };
+            }
+            let mut bits = BitReader::new(&packet);
+            assert_eq!(
+                decode(
+                    &config,
+                    &books,
+                    &mut bits,
+                    &mut Output {
+                        spectrum: &mut actual,
+                        stride: 68,
+                        bins: 64,
+                        bundle: &[2],
+                        nonzero: &[false, false, true],
+                        classes: &mut [255; 2],
+                    }
+                ),
+                Ok(())
+            );
+            assert_eq!(actual, expected, "residue={kind}");
+            assert_eq!(bits.position(), 16);
+            assert!(!bits.is_exhausted());
+            assert_eq!(bits.read(5), Ok(21));
+        }
+    }
+    #[test]
+    fn stageless_residue_leaves_packet_and_output_untouched() {
+        let books = [vector_book()];
+        for kind in 0..=2 {
+            let config = Residue {
+                kind,
+                begin: 0,
+                end: 32,
+                partition_size: 8,
+                classbook: 0,
+                books: vec![[None; 8]],
+            };
+            for packet in [&[][..], &[0xff][..]] {
+                let mut bits = BitReader::new(packet);
+                let mut spectrum = [0.125; 64];
+                let mut classes = [255; 8];
+                assert_eq!(
+                    decode(
+                        &config,
+                        &books,
+                        &mut bits,
+                        &mut Output {
+                            spectrum: &mut spectrum,
+                            stride: 32,
+                            bins: 32,
+                            bundle: &[0, 1],
+                            nonzero: &[true, true],
+                            classes: &mut classes,
+                        }
+                    ),
+                    Ok(())
+                );
+                assert_eq!(bits.position(), 0);
+                assert!(!bits.is_exhausted());
+                assert_eq!(spectrum, [0.125; 64]);
+                assert_eq!(classes, [255; 8]);
+            }
+        }
     }
     #[test]
     fn residue_zero_truncation_keeps_only_completed_partitions() {

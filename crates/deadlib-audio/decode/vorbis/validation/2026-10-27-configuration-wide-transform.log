@@ -1,0 +1,513 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `release` profile [optimized] target(s) in 19.39s
+     Running tests\configuration_parity.rs (target\release\deps\configuration_parity-35d80e974c59ef95.exe)
+
+running 4 tests
+golden/Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }: 1 cases, 5 packets, 1 discarded
+golden/Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }: 192 samples, peak error 2.324581146e-6, RMS 4.912000817e-7, signal peak 17.799383
+golden/Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: false }: 1 cases, 5 packets, 0 discarded
+golden/Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: false }: 448 samples, peak error 2.861022949e-6, RMS 5.271179111e-7, signal peak 32.587280
+golden/Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: true }: 1 cases, 5 packets, 0 discarded
+golden/Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: true }: 448 samples, peak error 2.861022949e-6, RMS 4.858408641e-7, signal peak 21.831312
+golden/Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: false }: 1 cases, 5 packets, 0 discarded
+golden/Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: false }: 448 samples, peak error 2.861022949e-6, RMS 5.271179111e-7, signal peak 32.587280
+golden/Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: true }: 1 cases, 5 packets, 0 discarded
+golden/Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: true }: 448 samples, peak error 2.861022949e-6, RMS 4.858408641e-7, signal peak 21.831312
+golden/Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: false }: 1 cases, 5 packets, 0 discarded
+golden/Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: false }: 448 samples, peak error 1.907348633e-6, RMS 4.041704450e-7, signal peak 23.042686
+golden/Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: true }: 1 cases, 5 packets, 0 discarded
+golden/Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 3, empty_first_submap: true }: 448 samples, peak error 2.861022949e-6, RMS 4.858408641e-7, signal peak 21.831312
+test synthetic_setup_regressions_match_retained_libvorbis_pcm ... ok
+test unused_modes_preserve_ogg_streaming_counts_and_seek_positions ... ok
+modes-1: 3 cases, 15 packets, 2 discarded
+modes-1: 640 samples, peak error 2.324581146e-6, RMS 4.976569598e-7, signal peak 17.799383
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: false }: 28672 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-2: 11 cases, 55 packets, 6 discarded
+modes-2: 6368 samples, peak error 5.722045898e-6, RMS 7.291569225e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: true }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-3: 13 cases, 65 packets, 7 discarded
+modes-3: 3648 samples, peak error 4.589557648e-6, RMS 5.541071337e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: false }: 28672 samples, peak error 3.337860107e-6, RMS 4.288881534e-7, signal peak 26.209942
+modes-4: 20 cases, 100 packets, 10 discarded
+modes-4: 11776 samples, peak error 5.722045898e-6, RMS 7.289258676e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: true }: 14336 samples, peak error 1.251697540e-6, RMS 1.645482858e-7, signal peak 11.561051
+modes-5: 24 cases, 120 packets, 13 discarded
+modes-5: 6848 samples, peak error 4.589557648e-6, RMS 5.574404595e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: false }: 28672 samples, peak error 4.589557648e-6, RMS 3.884552456e-7, signal peak 23.770929
+modes-6: 31 cases, 155 packets, 16 discarded
+modes-6: 18144 samples, peak error 5.722045898e-6, RMS 7.290069693e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+modes-7: 31 cases, 155 packets, 15 discarded
+modes-7: 9280 samples, peak error 4.589557648e-6, RMS 5.638661021e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: false }: 28672 samples, peak error 4.589557648e-6, RMS 3.884552456e-7, signal peak 23.770929
+modes-8: 38 cases, 190 packets, 18 discarded
+modes-8: 22592 samples, peak error 5.722045898e-6, RMS 7.287955806e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+modes-9: 46 cases, 230 packets, 25 discarded
+modes-9: 13248 samples, peak error 4.589557648e-6, RMS 5.592677206e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: false }: 28672 samples, peak error 2.098083496e-5, RMS 2.328366193e-6, signal peak 197.974182
+modes-10: 53 cases, 265 packets, 28 discarded
+modes-10: 30880 samples, peak error 5.722045898e-6, RMS 7.290688190e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: true }: 14336 samples, peak error 1.144409180e-5, RMS 1.417090078e-6, signal peak 87.325249
+modes-11: 53 cases, 265 packets, 27 discarded
+modes-11: 15680 samples, peak error 4.589557648e-6, RMS 5.627860578e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 0, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 0, empty_first_submap: false }: 28672 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-12: 60 cases, 300 packets, 30 discarded
+modes-12: 35328 samples, peak error 5.722045898e-6, RMS 7.289258676e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 0, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 0, empty_first_submap: true }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-13: 60 cases, 300 packets, 29 discarded
+modes-13: 18112 samples, peak error 4.589557648e-6, RMS 5.653456761e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }: 28672 samples, peak error 3.337860107e-6, RMS 4.463457022e-7, signal peak 26.209942
+modes-14: 67 cases, 335 packets, 32 discarded
+modes-14: 39776 samples, peak error 5.722045898e-6, RMS 7.288148684e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: true }: 14336 samples, peak error 1.251697540e-6, RMS 1.696895432e-7, signal peak 11.561051
+modes-15: 67 cases, 335 packets, 31 discarded
+modes-15: 20544 samples, peak error 4.589557648e-6, RMS 5.672915078e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 2, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 2, empty_first_submap: false }: 28672 samples, peak error 4.589557648e-6, RMS 4.370853054e-7, signal peak 23.770929
+modes-16: 74 cases, 370 packets, 34 discarded
+modes-16: 44224 samples, peak error 5.722045898e-6, RMS 7.287261853e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 2, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 2, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.322967181e-7, signal peak 10.485217
+modes-17: 90 cases, 450 packets, 49 discarded
+modes-17: 26048 samples, peak error 4.589557648e-6, RMS 5.602261012e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 128, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 128, empty_first_submap: false }: 28672 samples, peak error 4.589557648e-6, RMS 4.370853054e-7, signal peak 23.770929
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 128, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 128, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.322967181e-7, signal peak 10.485217
+modes-18: 97 cases, 485 packets, 52 discarded
+modes-18: 56352 samples, peak error 5.722045898e-6, RMS 7.291086445e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 255, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 255, empty_first_submap: false }: 28672 samples, peak error 2.098083496e-5, RMS 2.594866398e-6, signal peak 197.974182
+modes-19: 97 cases, 485 packets, 51 discarded
+modes-19: 28480 samples, peak error 4.589557648e-6, RMS 5.620810917e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 255, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 1, classifications: 2, stages: 255, empty_first_submap: true }: 14336 samples, peak error 1.144409180e-5, RMS 1.503592235e-6, signal peak 87.325249
+modes-20: 104 cases, 520 packets, 54 discarded
+modes-20: 60800 samples, peak error 5.722045898e-6, RMS 7.290226764e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 0, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 0, empty_first_submap: false }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 0, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 0, empty_first_submap: true }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-21: 104 cases, 520 packets, 53 discarded
+modes-21: 30912 samples, peak error 4.589557648e-6, RMS 5.636394601e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 1, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 1, empty_first_submap: false }: 14336 samples, peak error 3.337860107e-6, RMS 4.024051789e-7, signal peak 26.209942
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 1, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 1, empty_first_submap: true }: 7168 samples, peak error 1.251697540e-6, RMS 1.569065602e-7, signal peak 11.561051
+modes-22: 111 cases, 555 packets, 56 discarded
+modes-22: 65248 samples, peak error 5.722045898e-6, RMS 7.289484211e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 2, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 2, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 3.884552456e-7, signal peak 23.770929
+modes-23: 111 cases, 555 packets, 55 discarded
+modes-23: 33344 samples, peak error 4.589557648e-6, RMS 5.649671004e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 2, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 2, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 128, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 128, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 3.884552456e-7, signal peak 23.770929
+modes-24: 118 cases, 590 packets, 58 discarded
+modes-24: 69696 samples, peak error 5.722045898e-6, RMS 7.288836376e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 128, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 128, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+modes-25: 118 cases, 590 packets, 57 discarded
+modes-25: 35776 samples, peak error 4.589557648e-6, RMS 5.661117313e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 255, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 255, empty_first_submap: false }: 14336 samples, peak error 2.098083496e-5, RMS 2.326606426e-6, signal peak 197.974182
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 255, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 1, stages: 255, empty_first_submap: true }: 7168 samples, peak error 1.144409180e-5, RMS 1.415703130e-6, signal peak 87.325249
+modes-26: 125 cases, 625 packets, 60 discarded
+modes-26: 74144 samples, peak error 5.722045898e-6, RMS 7.288266222e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 0, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 0, empty_first_submap: false }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-27: 125 cases, 625 packets, 59 discarded
+modes-27: 38208 samples, peak error 4.589557648e-6, RMS 5.671087592e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 0, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 0, empty_first_submap: true }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 1, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 1, empty_first_submap: false }: 14336 samples, peak error 3.337860107e-6, RMS 4.660507405e-7, signal peak 26.209942
+modes-28: 132 cases, 660 packets, 62 discarded
+modes-28: 78592 samples, peak error 5.722045898e-6, RMS 7.287760568e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 1, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 1, empty_first_submap: true }: 7168 samples, peak error 1.251697540e-6, RMS 1.755780441e-7, signal peak 11.561051
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 2, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 2, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 5.208989701e-7, signal peak 23.770929
+modes-29: 132 cases, 660 packets, 61 discarded
+modes-29: 40640 samples, peak error 4.589557648e-6, RMS 5.679850093e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 2, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 2, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.607151020e-7, signal peak 10.485217
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 128, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 128, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 5.208989701e-7, signal peak 23.770929
+modes-30: 139 cases, 695 packets, 64 discarded
+modes-30: 83040 samples, peak error 5.722045898e-6, RMS 7.287309055e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 128, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 128, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.607151020e-7, signal peak 10.485217
+modes-31: 139 cases, 695 packets, 63 discarded
+modes-31: 43072 samples, peak error 4.589557648e-6, RMS 5.687611770e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 255, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 255, empty_first_submap: false }: 14336 samples, peak error 2.098083496e-5, RMS 3.058224265e-6, signal peak 197.974182
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 255, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 2, classifications: 2, stages: 255, empty_first_submap: true }: 7168 samples, peak error 1.144409180e-5, RMS 1.662478613e-6, signal peak 87.325249
+modes-32: 146 cases, 730 packets, 66 discarded
+modes-32: 87488 samples, peak error 5.722045898e-6, RMS 7.286903428e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 0, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 0, empty_first_submap: false }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 0, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 0, empty_first_submap: true }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-33: 242 cases, 1210 packets, 161 discarded
+modes-33: 63936 samples, peak error 4.589557648e-6, RMS 5.480414354e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 1, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 1, empty_first_submap: false }: 14336 samples, peak error 3.337860107e-6, RMS 4.367834032e-7, signal peak 26.209942
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 1, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 1, empty_first_submap: true }: 7168 samples, peak error 1.251697540e-6, RMS 1.674879257e-7, signal peak 11.561051
+modes-34: 253 cases, 1265 packets, 168 discarded
+modes-34: 139936 samples, peak error 5.722045898e-6, RMS 7.297981876e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 2, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 2, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 3.884552456e-7, signal peak 23.770929
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 2, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 2, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 128, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 128, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 3.884552456e-7, signal peak 23.770929
+modes-35: 253 cases, 1265 packets, 167 discarded
+modes-35: 67136 samples, peak error 4.589557648e-6, RMS 5.486765882e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 128, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 128, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 255, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 255, empty_first_submap: false }: 14336 samples, peak error 2.098083496e-5, RMS 2.327833145e-6, signal peak 197.974182
+modes-36: 264 cases, 1320 packets, 174 discarded
+modes-36: 146304 samples, peak error 5.722045898e-6, RMS 7.297702877e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 255, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 1, stages: 255, empty_first_submap: true }: 7168 samples, peak error 1.144409180e-5, RMS 1.417699782e-6, signal peak 87.325249
+modes-37: 264 cases, 1320 packets, 173 discarded
+modes-37: 70336 samples, peak error 4.589557648e-6, RMS 5.492533100e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 0, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 0, empty_first_submap: false }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 0, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 0, empty_first_submap: true }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-38: 275 cases, 1375 packets, 180 discarded
+modes-38: 152672 samples, peak error 5.722045898e-6, RMS 7.297447144e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 1, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 1, empty_first_submap: false }: 14336 samples, peak error 3.337860107e-6, RMS 5.393524935e-7, signal peak 26.209942
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 1, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 1, empty_first_submap: true }: 7168 samples, peak error 1.251697540e-6, RMS 1.977497345e-7, signal peak 11.561051
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 2, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 2, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 6.572062709e-7, signal peak 23.770929
+modes-39: 275 cases, 1375 packets, 179 discarded
+modes-39: 73536 samples, peak error 4.589557648e-6, RMS 5.497793102e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 2, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 2, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 2.061145042e-7, signal peak 10.485217
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 128, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 128, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 6.572062709e-7, signal peak 23.770929
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 128, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 128, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 2.061145042e-7, signal peak 10.485217
+modes-40: 286 cases, 1430 packets, 186 discarded
+modes-40: 159040 samples, peak error 5.722045898e-6, RMS 7.297211881e-7, signal peak 26.217289
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 255, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 255, empty_first_submap: false }: 14336 samples, peak error 2.098083496e-5, RMS 3.821725603e-6, signal peak 197.974182
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 255, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 0, dimensions: 3, classifications: 2, stages: 255, empty_first_submap: true }: 7168 samples, peak error 1.144409180e-5, RMS 1.943363456e-6, signal peak 87.325249
+modes-41: 286 cases, 1430 packets, 185 discarded
+modes-41: 76736 samples, peak error 4.589557648e-6, RMS 5.502609987e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: false }: 28672 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: true }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-42: 297 cases, 1485 packets, 192 discarded
+modes-42: 165408 samples, peak error 5.722045898e-6, RMS 7.296994727e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: false }: 28672 samples, peak error 3.337860107e-6, RMS 4.288881534e-7, signal peak 26.209942
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: true }: 14336 samples, peak error 1.251697540e-6, RMS 1.645482858e-7, signal peak 11.561051
+modes-43: 297 cases, 1485 packets, 191 discarded
+modes-43: 79936 samples, peak error 4.589557648e-6, RMS 5.507037493e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: false }: 28672 samples, peak error 4.589557648e-6, RMS 3.884552456e-7, signal peak 23.770929
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: false }: 28672 samples, peak error 4.589557648e-6, RMS 3.884552456e-7, signal peak 23.770929
+modes-44: 308 cases, 1540 packets, 198 discarded
+modes-44: 171776 samples, peak error 5.722045898e-6, RMS 7.296793667e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+modes-45: 308 cases, 1540 packets, 197 discarded
+modes-45: 83136 samples, peak error 4.589557648e-6, RMS 5.511121003e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: false }: 28672 samples, peak error 2.098083496e-5, RMS 2.328366193e-6, signal peak 197.974182
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: true }: 14336 samples, peak error 1.144409180e-5, RMS 1.417090078e-6, signal peak 87.325249
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 0, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 0, empty_first_submap: false }: 28672 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-46: 319 cases, 1595 packets, 204 discarded
+modes-46: 178144 samples, peak error 5.722045898e-6, RMS 7.296606977e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 0, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 0, empty_first_submap: true }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }: 28672 samples, peak error 3.337860107e-6, RMS 4.463457022e-7, signal peak 26.209942
+modes-47: 319 cases, 1595 packets, 203 discarded
+modes-47: 86336 samples, peak error 4.589557648e-6, RMS 5.514899110e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: true }: 14336 samples, peak error 1.251697540e-6, RMS 1.696895432e-7, signal peak 11.561051
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 2, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 2, empty_first_submap: false }: 28672 samples, peak error 4.589557648e-6, RMS 4.370853054e-7, signal peak 23.770929
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 2, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 2, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.322967181e-7, signal peak 10.485217
+modes-48: 330 cases, 1650 packets, 210 discarded
+modes-48: 184512 samples, peak error 5.722045898e-6, RMS 7.296433169e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 128, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 128, empty_first_submap: false }: 28672 samples, peak error 4.589557648e-6, RMS 4.370853054e-7, signal peak 23.770929
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 128, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 128, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.322967181e-7, signal peak 10.485217
+modes-49: 330 cases, 1650 packets, 209 discarded
+modes-49: 89536 samples, peak error 4.589557648e-6, RMS 5.518404844e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 255, empty_first_submap: false }: 64 cases, 320 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 255, empty_first_submap: false }: 28672 samples, peak error 2.098083496e-5, RMS 2.594866398e-6, signal peak 197.974182
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 255, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 1, classifications: 2, stages: 255, empty_first_submap: true }: 14336 samples, peak error 1.144409180e-5, RMS 1.503592235e-6, signal peak 87.325249
+modes-50: 341 cases, 1705 packets, 216 discarded
+modes-50: 190880 samples, peak error 5.722045898e-6, RMS 7.296270953e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 0, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 0, empty_first_submap: false }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 0, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 0, empty_first_submap: true }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 1, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 1, empty_first_submap: false }: 14336 samples, peak error 3.337860107e-6, RMS 4.024051789e-7, signal peak 26.209942
+modes-51: 341 cases, 1705 packets, 215 discarded
+modes-51: 92736 samples, peak error 4.589557648e-6, RMS 5.521666635e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 1, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 1, empty_first_submap: true }: 7168 samples, peak error 1.251697540e-6, RMS 1.569065602e-7, signal peak 11.561051
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 2, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 2, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 3.884552456e-7, signal peak 23.770929
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 2, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 2, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 128, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 128, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 3.884552456e-7, signal peak 23.770929
+modes-52: 352 cases, 1760 packets, 222 discarded
+modes-52: 197248 samples, peak error 5.722045898e-6, RMS 7.296119209e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 128, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 128, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 255, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 255, empty_first_submap: false }: 14336 samples, peak error 2.098083496e-5, RMS 2.326606426e-6, signal peak 197.974182
+modes-53: 352 cases, 1760 packets, 221 discarded
+modes-53: 95936 samples, peak error 4.589557648e-6, RMS 5.524709091e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 255, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 1, stages: 255, empty_first_submap: true }: 7168 samples, peak error 1.144409180e-5, RMS 1.415703130e-6, signal peak 87.325249
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 0, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 0, empty_first_submap: false }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 0, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 0, empty_first_submap: true }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-54: 363 cases, 1815 packets, 228 discarded
+modes-54: 203616 samples, peak error 5.722045898e-6, RMS 7.295976953e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 1, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 1, empty_first_submap: false }: 14336 samples, peak error 3.337860107e-6, RMS 4.660507405e-7, signal peak 26.209942
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 1, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 1, empty_first_submap: true }: 7168 samples, peak error 1.251697540e-6, RMS 1.755780441e-7, signal peak 11.561051
+modes-55: 363 cases, 1815 packets, 227 discarded
+modes-55: 99136 samples, peak error 4.589557648e-6, RMS 5.527553617e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 2, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 2, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 5.208989701e-7, signal peak 23.770929
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 2, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 2, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.607151020e-7, signal peak 10.485217
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 128, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 128, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 5.208989701e-7, signal peak 23.770929
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 128, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 128, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.607151020e-7, signal peak 10.485217
+modes-56: 374 cases, 1870 packets, 234 discarded
+modes-56: 209984 samples, peak error 5.722045898e-6, RMS 7.295843323e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 255, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 255, empty_first_submap: false }: 14336 samples, peak error 2.098083496e-5, RMS 3.058224265e-6, signal peak 197.974182
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 255, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 2, classifications: 2, stages: 255, empty_first_submap: true }: 7168 samples, peak error 1.144409180e-5, RMS 1.662478613e-6, signal peak 87.325249
+modes-57: 374 cases, 1870 packets, 233 discarded
+modes-57: 102336 samples, peak error 4.589557648e-6, RMS 5.530218921e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 0, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 0, empty_first_submap: false }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 0, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 0, empty_first_submap: true }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 1, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 1, empty_first_submap: false }: 14336 samples, peak error 3.337860107e-6, RMS 4.367834032e-7, signal peak 26.209942
+modes-58: 385 cases, 1925 packets, 240 discarded
+modes-58: 216352 samples, peak error 5.722045898e-6, RMS 7.295717557e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 1, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 1, empty_first_submap: true }: 7168 samples, peak error 1.251697540e-6, RMS 1.674879257e-7, signal peak 11.561051
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 2, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 2, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 3.884552456e-7, signal peak 23.770929
+modes-59: 385 cases, 1925 packets, 239 discarded
+modes-59: 105536 samples, peak error 4.589557648e-6, RMS 5.532721423e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 2, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 2, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 128, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 128, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 3.884552456e-7, signal peak 23.770929
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 128, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 128, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 255, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 255, empty_first_submap: false }: 14336 samples, peak error 2.098083496e-5, RMS 2.327833145e-6, signal peak 197.974182
+modes-60: 396 cases, 1980 packets, 246 discarded
+modes-60: 222720 samples, peak error 5.722045898e-6, RMS 7.295598981e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 255, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 1, stages: 255, empty_first_submap: true }: 7168 samples, peak error 1.144409180e-5, RMS 1.417699782e-6, signal peak 87.325249
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 0, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 0, empty_first_submap: false }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 0, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 0, empty_first_submap: true }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-61: 396 cases, 1980 packets, 245 discarded
+modes-61: 108736 samples, peak error 4.589557648e-6, RMS 5.535075599e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 1, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 1, empty_first_submap: false }: 14336 samples, peak error 3.337860107e-6, RMS 5.393524935e-7, signal peak 26.209942
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 1, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 1, empty_first_submap: true }: 7168 samples, peak error 1.251697540e-6, RMS 1.977497345e-7, signal peak 11.561051
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 2, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 2, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 6.572062709e-7, signal peak 23.770929
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 2, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 2, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 2.061145042e-7, signal peak 10.485217
+modes-62: 407 cases, 2035 packets, 252 discarded
+modes-62: 229088 samples, peak error 5.722045898e-6, RMS 7.295486995e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 128, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 128, empty_first_submap: false }: 14336 samples, peak error 4.589557648e-6, RMS 6.572062709e-7, signal peak 23.770929
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 128, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 128, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 2.061145042e-7, signal peak 10.485217
+modes-63: 407 cases, 2035 packets, 251 discarded
+modes-63: 111936 samples, peak error 4.589557648e-6, RMS 5.537294257e-7, signal peak 26.217289
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 255, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 255, empty_first_submap: false }: 14336 samples, peak error 2.098083496e-5, RMS 3.821725603e-6, signal peak 197.974182
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 255, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 1, dimensions: 3, classifications: 2, stages: 255, empty_first_submap: true }: 7168 samples, peak error 1.144409180e-5, RMS 1.943363456e-6, signal peak 87.325249
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: false }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 0, empty_first_submap: true }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+modes-64: 418 cases, 2090 packets, 258 discarded
+modes-64: 235456 samples, peak error 5.722045898e-6, RMS 7.295381065e-7, signal peak 26.217289
+test all_mode_counts_and_unused_slots_match_libvorbis_with_recovery ... ok
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: false }: 14336 samples, peak error 1.907348633e-6, RMS 3.187580249e-7, signal peak 13.064979
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 1, empty_first_submap: true }: 14336 samples, peak error 1.251697540e-6, RMS 1.645482858e-7, signal peak 11.561051
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: false }: 14336 samples, peak error 1.907348633e-6, RMS 2.398521661e-7, signal peak 12.666983
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 2, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: false }: 14336 samples, peak error 1.907348633e-6, RMS 2.398521661e-7, signal peak 12.666983
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 128, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: false }: 14336 samples, peak error 2.288818359e-5, RMS 1.682480705e-6, signal peak 102.704407
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 1, stages: 255, empty_first_submap: true }: 14336 samples, peak error 1.144409180e-5, RMS 1.417090078e-6, signal peak 87.325249
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 0, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 0, empty_first_submap: false }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 0, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 0, empty_first_submap: true }: 14336 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: false }: 14336 samples, peak error 1.907348633e-6, RMS 3.317276960e-7, signal peak 13.064979
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 1, empty_first_submap: true }: 14336 samples, peak error 1.251697540e-6, RMS 1.696895432e-7, signal peak 11.561051
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 2, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 2, empty_first_submap: false }: 14336 samples, peak error 1.907348633e-6, RMS 2.651073261e-7, signal peak 12.666983
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 2, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 2, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.322967181e-7, signal peak 10.485217
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 128, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 128, empty_first_submap: false }: 14336 samples, peak error 1.907348633e-6, RMS 2.651073261e-7, signal peak 12.666983
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 128, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 128, empty_first_submap: true }: 14336 samples, peak error 1.221895218e-6, RMS 1.322967181e-7, signal peak 10.485217
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 255, empty_first_submap: false }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 255, empty_first_submap: false }: 14336 samples, peak error 2.288818359e-5, RMS 1.926121557e-6, signal peak 102.704407
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 255, empty_first_submap: true }: 32 cases, 160 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 1, classifications: 2, stages: 255, empty_first_submap: true }: 14336 samples, peak error 1.144409180e-5, RMS 1.503592235e-6, signal peak 87.325249
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 0, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 0, empty_first_submap: false }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 0, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 0, empty_first_submap: true }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 1, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 1, empty_first_submap: false }: 7168 samples, peak error 1.907348633e-6, RMS 2.918520997e-7, signal peak 13.064979
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 1, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 1, empty_first_submap: true }: 7168 samples, peak error 1.251697540e-6, RMS 1.569065602e-7, signal peak 11.561051
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 2, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 2, empty_first_submap: false }: 7168 samples, peak error 1.907348633e-6, RMS 2.398521661e-7, signal peak 12.666983
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 2, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 2, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 128, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 128, empty_first_submap: false }: 7168 samples, peak error 1.907348633e-6, RMS 2.398521661e-7, signal peak 12.666983
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 128, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 128, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 255, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 255, empty_first_submap: false }: 7168 samples, peak error 2.288818359e-5, RMS 1.676542922e-6, signal peak 102.704407
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 255, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 1, stages: 255, empty_first_submap: true }: 7168 samples, peak error 1.144409180e-5, RMS 1.415703130e-6, signal peak 87.325249
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 0, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 0, empty_first_submap: false }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 0, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 0, empty_first_submap: true }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 1, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 1, empty_first_submap: false }: 7168 samples, peak error 1.907348633e-6, RMS 3.428241806e-7, signal peak 13.064979
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 1, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 1, empty_first_submap: true }: 7168 samples, peak error 1.251697540e-6, RMS 1.755780441e-7, signal peak 11.561051
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 2, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 2, empty_first_submap: false }: 7168 samples, peak error 1.907348633e-6, RMS 3.094956540e-7, signal peak 12.666983
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 2, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 2, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.607151020e-7, signal peak 10.485217
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 128, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 128, empty_first_submap: false }: 7168 samples, peak error 1.907348633e-6, RMS 3.094956540e-7, signal peak 12.666983
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 128, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 128, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.607151020e-7, signal peak 10.485217
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 255, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 255, empty_first_submap: false }: 7168 samples, peak error 2.288818359e-5, RMS 2.336012174e-6, signal peak 102.704407
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 255, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 2, classifications: 2, stages: 255, empty_first_submap: true }: 7168 samples, peak error 1.144409180e-5, RMS 1.662478613e-6, signal peak 87.325249
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 0, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 0, empty_first_submap: false }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 0, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 0, empty_first_submap: true }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 1, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 1, empty_first_submap: false }: 7168 samples, peak error 1.907348633e-6, RMS 3.148404645e-7, signal peak 13.064979
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 1, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 1, empty_first_submap: true }: 7168 samples, peak error 1.251697540e-6, RMS 1.674879257e-7, signal peak 11.561051
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 2, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 2, empty_first_submap: false }: 7168 samples, peak error 1.907348633e-6, RMS 2.398521661e-7, signal peak 12.666983
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 2, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 2, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 128, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 128, empty_first_submap: false }: 7168 samples, peak error 1.907348633e-6, RMS 2.398521661e-7, signal peak 12.666983
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 128, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 128, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 1.154944172e-7, signal peak 10.485217
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 255, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 255, empty_first_submap: false }: 7168 samples, peak error 2.288818359e-5, RMS 1.682236912e-6, signal peak 102.704407
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 255, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 1, stages: 255, empty_first_submap: true }: 7168 samples, peak error 1.144409180e-5, RMS 1.417699782e-6, signal peak 87.325249
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 0, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 0, empty_first_submap: false }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 0, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 0, empty_first_submap: true }: 7168 samples, peak error 0.000000000e0, RMS 0.000000000e0, signal peak 0.000000
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 1, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 1, empty_first_submap: false }: 7168 samples, peak error 1.907348633e-6, RMS 4.008276184e-7, signal peak 13.064979
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 1, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 1, empty_first_submap: true }: 7168 samples, peak error 1.251697540e-6, RMS 1.977497345e-7, signal peak 11.561051
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 2, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 2, empty_first_submap: false }: 7168 samples, peak error 1.907348633e-6, RMS 3.831434339e-7, signal peak 12.666983
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 2, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 2, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 2.061145042e-7, signal peak 10.485217
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 128, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 128, empty_first_submap: false }: 7168 samples, peak error 1.907348633e-6, RMS 3.831434339e-7, signal peak 12.666983
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 128, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 128, empty_first_submap: true }: 7168 samples, peak error 1.221895218e-6, RMS 2.061145042e-7, signal peak 10.485217
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 255, empty_first_submap: false }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 255, empty_first_submap: false }: 7168 samples, peak error 2.288818359e-5, RMS 2.997525950e-6, signal peak 102.704407
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 255, empty_first_submap: true }: 16 cases, 80 packets, 0 discarded
+Config { modes: 3, kind: 2, dimensions: 3, classifications: 2, stages: 255, empty_first_submap: true }: 7168 samples, peak error 1.144409180e-5, RMS 1.943363456e-6, signal peak 87.325249
+test residue_classwords_and_stageless_submaps_match_libvorbis_with_recovery ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 4.19s

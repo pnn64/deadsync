@@ -16,6 +16,11 @@ rounding and VQ sequence-offset differences. It adds 55,845 finite-reference
 cases and explicitly separates eleven cases where libvorbis emits nonfinite
 PCM. Its final validation passes 128 release / 97 offline tests.
 
+The subsequent [configuration matrix](CONFIGURATION_PARITY.md) covers all mode
+counts/block orders and additional residue setup combinations. It fixes unused
+mode discard, surplus classword termination and stage-free submap consumption,
+and retains the original PCM bounds through wider transform intermediates.
+
 ## Corrected discard and truncation behavior
 
 The 2026-10-27 work independently reproduced two differences against pinned

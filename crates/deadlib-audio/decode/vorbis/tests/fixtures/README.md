@@ -50,3 +50,21 @@ The fixture is kept independent of current encoder output so entropy improvement
 cannot accidentally remove the libvorbisfile 1.3.7 PCM-seek-zero regression's
 trigger. Native and Symphonia decode all declared frames; the named C regression
 checks both raw-start full PCM and the PCM-seek path's lost first block.
+
+`synthetic-setup-v1.libvorbis-pcm` retains eight procedural, non-silent setup
+regressions through the pinned libvorbis oracle. It covers an unused mode,
+surplus classwords and stage-free submaps for all residue types, and an
+eight-stage cancellation case. The format is `DVSSET01`, a little-endian u32
+set count, then u64-length-delimited `pcm-cases` responses. The deterministic
+inputs are constructed by `tests/support/synthetic.rs` and `golden_cases` in
+`tests/configuration_parity.rs`; no native encoder generates them. Size:
+13,836 bytes; SHA-256:
+`516245b6fb4f166abb48bf30df2bd3da5ea5fcee96115c0893f5891e7e9fd553`.
+Regenerate explicitly with the oracle configured:
+
+```powershell
+cargo test -p deadlib-audio-decode-vorbis --release --test configuration_parity regenerate_synthetic_setup_golden -- --ignored
+```
+
+Ordinary tests only read this golden. [Configuration validation](../../CONFIGURATION_PARITY.md)
+records capture and source provenance.

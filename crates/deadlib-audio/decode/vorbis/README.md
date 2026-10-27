@@ -29,6 +29,8 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
 * `PacketDecoder`: floor-zero/one curves, residue-zero/one/two, inverse channel
   coupling in reverse order, native FFT-based inverse MDCT, Vorbis windows and
   overlap-add. Output is borrowed planar, unclipped f32 in Vorbis channel order.
+  Transform tables/scratch use f64 to retain PCM accuracy through cancellation;
+  [configuration parity](CONFIGURATION_PARITY.md) records the regression.
   The first block primes overlap and returns zero frames. `reset` keeps tables
   and allocations; decode/reset perform zero allocations after construction.
   `reset_at` also seeds the raw position for caller-managed packet seeks; supply

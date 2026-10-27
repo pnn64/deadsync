@@ -36,12 +36,17 @@ The existing signed permutation places `-D[r]` at output index
 `3M/2-1-r`; first/last quarters follow by exact MDCT symmetry. The implementation
 writes the paired real/imaginary results directly into that middle region.
 It fills every FFT input slot, eliminating the old zero fill. Phase tables are
-computed in f64 once and stored as f32; synthesis arithmetic remains f32.
+computed and retained in f64. FFT scratch and arithmetic also use f64, with
+rounding to f32 at the transform output. An eight-stage synthetic residue
+followed by a nearly silent overlap exceeded the unchanged per-block PCM bound
+with the former f32 FFT. See [configuration parity](CONFIGURATION_PARITY.md).
 
-Owned transform elements shrink from 20N to 7N bytes: L four-float rotation
-entries, L/2 two-float twiddles, and L two-float scratch entries. Decoder memory
-accounting includes the same window slopes and updates accordingly. No new
-allocation, unsafe code, SIMD, dependency or approximation is introduced.
+Owned transform elements occupy 14N bytes: L four-double rotation entries,
+L/2 two-double twiddles, and L two-double scratch entries. The former f32
+implementation used 7N bytes. Decoder and encoder memory preflight/reporting
+include the wider elements; window slopes remain f32. Repeated transforms
+still allocate nothing. Historical performance/resource reports describe their
+recorded source revisions and have not been rerun for this precision change.
 
 The independent direct cosine tests cover every legal block size, selected
 output positions and repeated zero input. libvorbis transform/raw PCM/full Ogg,
@@ -64,9 +69,9 @@ X = (4/N) DCT-IV(f).
 ```
 
 `Mdct` uses this fold directly while filling the bit-reversed FFT scratch; no
-extra folded vector or allocation is needed. Its table/scratch storage remains
-7N bytes. Both transforms share a private FFT butterfly helper; inverse
-arithmetic and operation order are preserved.
+extra folded vector or allocation is needed. Its table/scratch storage is
+14N bytes. Both transforms share a private FFT butterfly helper; analysis folds,
+normalization and rotations use f64 before the final f32 coefficient store.
 
 Independent tests compare analysis to the f64 direct cosine equation at every
 legal size, then verify multiblock analysis/window/synthesis overlap before

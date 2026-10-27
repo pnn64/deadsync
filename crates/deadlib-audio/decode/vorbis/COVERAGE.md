@@ -14,6 +14,11 @@ cases and corrects floor-zero selector/rounding plus VQ sequence offsets.
 Eleven nonfinite-reference cases remain an explicit, separately tested
 divergence rather than being counted as PCM parity.
 
+The [configuration matrix](CONFIGURATION_PARITY.md) adds every mode-table size,
+both mode block orders, surplus residue classwords and stage-free submaps.
+It corrects packet discard/bit-consumption differences and widens transform
+internals to keep cancellation cases within the original PCM bounds.
+
 ## Implemented and tested (2026-10-26)
 
 * Bitpacking/unpacking with widths 0..=32, unaligned 32-bit fields, zero-width
@@ -221,17 +226,17 @@ floating arithmetic rounding; the actual tested vectors above were exact. This
 is a codebook check, **not a PCM parity criterion**.
 
 For raw and container-trimmed floor-one PCM, the gate is peak error <= `3e-6 * max(1, reference_peak)`
-and RMS error <= `5e-7 * max(1, reference_peak)`. This accommodates different f32
-FFT butterfly/rotation/window arithmetic while staying below one tenth of a
+and RMS error <= `5e-7 * max(1, reference_peak)`. This accommodates different
+transform/window arithmetic while staying below one tenth of a
 16-bit full-scale sample step at unit peak. Observed corpus errors are smaller.
 Counts, positions and channel identity have zero tolerance. No frame shifting,
 cross-correlation, resampling or gain fitting is applied to comparisons.
 
 Floor-zero nonlinear LSP reconstruction gets a separate gate: peak <=
 `5e-5 * max(1, reference_peak)`, RMS <= `3e-6 * max(1, reference_peak)`. Native
-curves evaluate the specification's cosine/polynomial equations in f64 before
-f32 storage; libvorbis stores intermediate cosines and polynomial products in
-f32. Near LSP resonances these rounding differences are amplified. The separate
+curves retain libvorbis's f32 cosine/polynomial rounding boundaries, with a
+wider fallback when those intermediate products overflow. Near LSP resonances,
+rounding differences can be amplified. The separate
 unit-peak bounds correspond to about 1.64 / 0.10 of a 16-bit sample step and do
 not relax counts or channel layout. Odd/even products have independent closed
 form DC checks. The historical file's observed maximum is below one 16-bit step.

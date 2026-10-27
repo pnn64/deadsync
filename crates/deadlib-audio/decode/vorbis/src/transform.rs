@@ -10,9 +10,9 @@ use core::f64::consts::PI;
 /// legal sizes independently of this factorization.
 pub struct Imdct {
     n: usize,
-    rotation: Vec<[f32; 4]>,
-    twiddle: Vec<[f32; 2]>,
-    scratch: Vec<[f32; 2]>,
+    rotation: Vec<[f64; 4]>,
+    twiddle: Vec<[f64; 2]>,
+    scratch: Vec<[f64; 2]>,
 }
 impl Imdct {
     pub fn new(block_size: usize) -> Result<Self, Error> {
@@ -32,15 +32,10 @@ impl Imdct {
         for k in 0..fft {
             let phase = -PI * k as f64 / m as f64;
             let post = -PI * (k as f64 + 0.25) / m as f64;
-            rotation.push([
-                phase.cos() as f32,
-                phase.sin() as f32,
-                post.cos() as f32,
-                post.sin() as f32,
-            ]);
+            rotation.push([phase.cos(), phase.sin(), post.cos(), post.sin()]);
             if k < fft / 2 {
                 let phase = -2.0 * PI * k as f64 / fft as f64;
-                twiddle.push([phase.cos() as f32, phase.sin() as f32]);
+                twiddle.push([phase.cos(), phase.sin()]);
             }
         }
         Ok(Self {
@@ -55,7 +50,7 @@ impl Imdct {
     }
     /// Owned table and scratch elements, excluding allocator/Vec metadata.
     pub fn storage_bytes(&self) -> usize {
-        self.n * 7
+        self.n * 14
     }
     pub fn inverse(&mut self, spectrum: &[f32], output: &mut [f32]) -> Result<(), Error> {
         let n = self.n;
@@ -66,8 +61,8 @@ impl Imdct {
         let fft = n / 4;
         let shift = usize::BITS - fft.trailing_zeros();
         for (k, rotation) in self.rotation.iter().enumerate() {
-            let a = spectrum[2 * k];
-            let b = spectrum[m - 1 - 2 * k];
+            let a = spectrum[2 * k] as f64;
+            let b = spectrum[m - 1 - 2 * k] as f64;
             self.scratch[k.reverse_bits() >> shift] = [
                 a * rotation[0] - b * rotation[1],
                 a * rotation[1] + b * rotation[0],
@@ -79,8 +74,8 @@ impl Imdct {
         for k in 0..fft {
             let rotation = self.rotation[k];
             let [real, imag] = self.scratch[k];
-            output[3 * m / 2 - 1 - 2 * k] = -(real * rotation[2] - imag * rotation[3]);
-            output[m / 2 + 2 * k] = real * rotation[3] + imag * rotation[2];
+            output[3 * m / 2 - 1 - 2 * k] = -(real * rotation[2] - imag * rotation[3]) as f32;
+            output[m / 2 + 2 * k] = (real * rotation[3] + imag * rotation[2]) as f32;
         }
         for k in 0..m / 2 {
             output[k] = -output[m - 1 - k];
@@ -153,10 +148,10 @@ impl Mdct {
         // symmetric, so the same complex factorization computes analysis.
         let fold = |r: usize| {
             if r < m / 2 {
-                -input[3 * m / 2 - 1 - r] - input[3 * m / 2 + r]
+                -input[3 * m / 2 - 1 - r] as f64 - input[3 * m / 2 + r] as f64
             } else {
                 let q = r - m / 2;
-                input[q] - input[m - 1 - q]
+                input[q] as f64 - input[m - 1 - q] as f64
             }
         };
         let fft = n / 4;
@@ -170,12 +165,12 @@ impl Mdct {
             ];
         }
         self.core.fft();
-        let scale = 4.0 / n as f32;
+        let scale = 4.0 / n as f64;
         for k in 0..fft {
             let rotation = self.core.rotation[k];
             let [real, imag] = self.core.scratch[k];
-            spectrum[2 * k] = (real * rotation[2] - imag * rotation[3]) * scale;
-            spectrum[m - 1 - 2 * k] = -(real * rotation[3] + imag * rotation[2]) * scale;
+            spectrum[2 * k] = ((real * rotation[2] - imag * rotation[3]) * scale) as f32;
+            spectrum[m - 1 - 2 * k] = (-(real * rotation[3] + imag * rotation[2]) * scale) as f32;
         }
         Ok(())
     }

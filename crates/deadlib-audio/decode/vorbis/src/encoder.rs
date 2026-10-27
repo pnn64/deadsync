@@ -161,7 +161,7 @@ impl PacketEncoder {
         if packet_bytes.max(setup.len()).max(30) > options.max_packet_bytes {
             return Err(Error::LimitExceeded("encoder packet bytes"));
         }
-        let required = n * 7
+        let required = n * 14
             + n * channels * 4
             + n * 8
             + half * 4

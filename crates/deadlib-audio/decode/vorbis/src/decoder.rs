@@ -101,7 +101,7 @@ impl PacketDecoder {
         let channels = setup.channels() as usize;
         let [small, large] = setup.block_sizes();
         let transforms = small + if large != small { large } else { 0 };
-        channels * large * 12 + channels * (large / 2) + transforms * 9
+        channels * large * 12 + channels * (large / 2) + transforms * 16
     }
     pub fn position(&self) -> u64 {
         self.position
@@ -124,8 +124,9 @@ impl PacketDecoder {
         self.position = position;
     }
 
-    /// None means a non-audio packet or a truncated mode/window prefix was
-    /// discarded without advancing overlap. Errors also preserve prior overlap.
+    /// None means a non-audio packet, an unused mode number or a truncated
+    /// mode/window prefix was discarded without advancing overlap. Errors also
+    /// preserve prior overlap.
     /// A valid first audio packet returns Some with zero frames (priming).
     /// End-of-packet after the prefix is nominal and produces a truncated block.
     /// Do not invent/flush a final block: a container supplies final sample count.
@@ -322,7 +323,10 @@ pub(crate) fn packet_header_from_modes<'a>(
     let mut bits = BitReader::new(packet);
     match crate::setup::read_audio_header(modes, block_sizes, &mut bits) {
         Ok(header) => Ok(Some((header, bits))),
-        Err(Error::EndOfPacket) => Ok(None),
+        // A malformed or incomplete packet prefix cannot contribute a block.
+        // Keep the lower-level Setup parser diagnostic, but discard the packet
+        // here just as vorbis_synthesis does before block insertion.
+        Err(Error::EndOfPacket | Error::Invalid(_)) => Ok(None),
         Err(error) => Err(error),
     }
 }
