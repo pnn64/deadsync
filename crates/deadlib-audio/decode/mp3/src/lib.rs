@@ -10,6 +10,7 @@ pub mod huffman;
 pub mod reservoir;
 pub mod scalefactors;
 pub mod side;
+pub mod synthesis;
 pub mod tags;
 
 pub use frame::{ChannelMode, Frame, FrameHeader, FreeFormat, MpegVersion};

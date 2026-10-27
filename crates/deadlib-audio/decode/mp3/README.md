@@ -11,7 +11,7 @@ ID3 unsynchronization, Xing/Info/LAME delay metadata and VBRI table framing.
 Unknown ID3 frame payloads remain available. Compressed/encrypted tag payload
 interpretation is not provided; these payloads are retained verbatim.
 
-PCM decoding and encoding are not yet implemented. No standards-conformance,
+Complete framed PCM decoding and encoding are not yet implemented. No standards-conformance,
 PCM-parity or performance-completion claim is made by the framing milestone.
 See [PLAN.md](PLAN.md) for the full requested scope and verification gates.
 The foundation's eight tests and 84-file/732-frame libmad comparison are recorded
@@ -20,6 +20,8 @@ MPEG-1 SCFSI/scalefactors and all MPEG-2 LSF scalefactor partitions are now
 implemented and tested separately, including intensity parameter widths.
 All Layer III Huffman pairs, escapes, signs and count1 quadruples are implemented;
 see [HUFFMAN.md](HUFFMAN.md) for numeric-table provenance and independent evidence.
+Native hybrid/IMDCT and polyphase synthesis kernels now pass independent
+all-frequency checks; [SYNTHESIS.md](SYNTHESIS.md) records their scope.
 
 ```sh
 cargo test --locked -p deadlib-audio-decode-mp3 --target-dir target/deadlib-mp3

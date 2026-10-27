@@ -1,0 +1,91 @@
+{
+  "passed": true,
+  "timestamp_utc": "2026-10-27T22:06:25Z",
+  "integration_tests": 16,
+  "independent_frames": 2880,
+  "granules": 5760,
+  "samples_per_stage": 3317760,
+  "scope": "Native hybrid and polyphase kernels only. Input spectra are explicitly reordered; complete native MP3 spectral/file decoding is unfinished.",
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "fmt",
+        "--check",
+        "-p",
+        "deadlib-audio-decode-mp3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--target-dir",
+        "target/deadlib-mp3"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-mp3",
+        "--all-targets",
+        "--target-dir",
+        "target/deadlib-mp3",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "source_sha256": {
+    "Cargo.toml": "dbe8fce81c33370989bf6747ef274afed81c60c13b9252e0cb09b9d59b38cc71",
+    "examples/dsp.rs": "24b88108731fea036fa1b923d248439e9afd3c6dff99c347e4295e71045acada",
+    "examples/inspect.rs": "2c4042ca498e6e99bbbbccfee9db2023182df2ef09525206df76d42dedd332a3",
+    "scripts/generate_dsp.py": "006b729d20db3228bc88a59d25f7a1d97ebd1c6c98a036dac488f1c13232688a",
+    "scripts/generate_huffman.py": "caea54b7d6d439219c91685cdbc4fdf24ff71743d29adee821cc0479602a3ea3",
+    "src/bits.rs": "26719a5f037dd4cecf3b224506bfda76b5e2939504f686354a94dfd70dda478c",
+    "src/checksum.rs": "d28c90579e55f8b887c96c3c4f438451e7df7cfd942e270eb1269d38db0a977c",
+    "src/dsp_tables.rs": "09d9a0d3b735b1cff73dda46bc5260fe75b12951f4b20fe5ee45e1ff49a3c5da",
+    "src/frame.rs": "7428ee4e2c3294ad234366cd81a5d18234dfedeba898f8cb35284ec62ad90e30",
+    "src/huffman.rs": "430e97da63d767e70441c636f455b67c9ead9fdd0f8f0cc58f085117a1b4058b",
+    "src/huffman_tables.rs": "ca8404c1e4bdf92550f04fc9afdc202739a43647d6599632930fe0f5911e5c48",
+    "src/lib.rs": "1105af8039b627f64f909845b7d9efe9a8e52053ef0386a4283abd265260fa11",
+    "src/reservoir.rs": "4a63bd5c8bb970dee297c3e4ff6e64fda219fcc49a96fe1fdd6283dff7726540",
+    "src/scalefactors.rs": "c7158a2fb7e4397597cb2c3e5ccdf34f4afa5487b23640cfa7f3937872c34d62",
+    "src/side.rs": "6f1ad3b2d2ee65b3093d233accd8128b2766789c3a0fed1c99e63d0401dcc4f4",
+    "src/synthesis.rs": "45244ad76242801604dec4645e65a276937675313bbc2e0e083fe7031ff4f135",
+    "src/tags.rs": "4cf2b0d700d373766a09a8a76a0974a9271ffc409177ed6675cc9b4a8e423da3",
+    "tests/foundation.rs": "c09f1976dcfb57b05cd17efa20363a06875cd1ff26941429bb50f2ccad72385a",
+    "tests/huffman.rs": "cd7858fbb1dcb69967fd11a5b5f843ed5047609af1dccdcb5a350fd6a5fe2bff",
+    "tests/reference_dsp.py": "745608057fb221c61cf1a15a2acdc65acdc54723439de1c6472d652563668d78",
+    "tests/reference_framing.py": "3c09a01192a34920ee65cee8dde6f3d4e1c8ff332f5b8f23bd45197f1dd72f42",
+    "tests/reference_huffman.py": "c917efba39e0e1f7fbb5db5def4aecfdaf954917309dc159be8ae9756731a83b",
+    "tests/scalefactors.rs": "e4f2452030ced15a2bbf41ae61d2c1dc7c523d7e68a52d2f823f59e3769de98d",
+    "tests/synthesis.rs": "5e5d2cecb1a54e87d4f55fb3176a54976832ee5843d7904ad524e5c6f50cff16",
+    "tests/data/dsp.json": "2f95c1442665900d71443e113ccaa6bef6611ede6c6bee08f3d9cae39048db96",
+    "tests/data/huffman.csv": "18554b47454c0c06e72c39f53e37f0eabca4410bd6fe330f0d009f90a73f3d3c",
+    "tests/data/huffman.json": "9bfd7a46a027eb55a4fcb78eb375e178e876219190cd563de1ba66514ae76c3e",
+    "tests/oracle/dsp.c": "ecc76bafa92e7cfa46fa116a5436971c2f540d87d6b11c4be0c9085c0ac8c113",
+    "tests/oracle/hybrid.c": "b60511e08ea78682bd81a9e088ca3f61ca4bc94ddbf4e027fdf01f3c379a7902",
+    "tests/oracle/inspect.c": "8792a155a47f752fbfa8bbf3ae6f8190b9161c24df8e1ac17015083f4034ba82"
+  },
+  "regenerated_sha256": {
+    "src/dsp_tables.rs": "09d9a0d3b735b1cff73dda46bc5260fe75b12951f4b20fe5ee45e1ff49a3c5da",
+    "tests/data/dsp.json": "2f95c1442665900d71443e113ccaa6bef6611ede6c6bee08f3d9cae39048db96"
+  },
+  "report_sha256": {
+    "gate-0.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "gate-1.log": "64d2038d1c93bb56983591596644ae2318e61bc6fc4ed7b4dcf5ba65b3c15ed8",
+    "gate-2.log": "5c33dfcc802e463e9ebaf7e8bf5e35f1cf0ed780b6766b4b9e682d59aebe1d2f",
+    "reference-dsp.json": "f0d1a102b4d13354f57a2c6cb6ae02ac232b77b2c34b4698514d20f904213b6f"
+  }
+}

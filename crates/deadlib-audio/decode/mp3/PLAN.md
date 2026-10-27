@@ -51,8 +51,9 @@ Clippy and 84 LAME/libmad structural comparisons (732 frames) pass. Evidence and
 explicit limitations are in COVERAGE.md. Scalefactor parsing now passes all
 compression/shape cases and the generated-file part2 bounds gate. Huffman pairs,
 escapes and quadruples now pass exact native tests and 22,476 independent
-libmad/analytical hybrid vectors; see HUFFMAN.md. Remaining spectral processing
-and PCM synthesis are next.
+libmad/analytical hybrid vectors; see HUFFMAN.md. Hybrid and polyphase kernels
+now pass a 2,880-frame all-frequency libmad comparison; see SYNTHESIS.md.
+Remaining spectral processing and complete framed PCM composition are next.
 
 ## Source material
 
