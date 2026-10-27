@@ -297,7 +297,7 @@ fn push_downloads_overlay_unreserved(
     ));
     actors.push(act!(text:
         font(machine_font_key(machine_font, FontRole::Header)):
-        settext("View Downloads"):
+        settext(crate::i18n::tr("SelectMusic", "ViewDownloads")):
         align(0.5, 0.5):
         xy(center_x, center_y + DOWNLOADS_TITLE_Y):
         zoom(0.54):
@@ -361,8 +361,8 @@ fn push_downloads_overlay_unreserved(
             horizalign(left)
         ));
         let bar_text = match snapshot.error_message.as_deref() {
-            Some(message) if snapshot.complete => format!("Error: {message}"),
-            None if snapshot.complete => "Done!".to_string(),
+            Some(message) if snapshot.complete => crate::i18n::tr_fmt("UiMessages", "ErrorMessage", &[("message", &(message).to_string())]).to_string(),
+            None if snapshot.complete => crate::i18n::tr("Init", "DoneText").to_string(),
             _ => format!("{percent}%"),
         };
         actors.push(loading_bar::build(loading_bar::LoadingBarParams {

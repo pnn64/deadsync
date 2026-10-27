@@ -147,7 +147,7 @@ pub(super) fn push_window(actors: &mut Vec<Actor>, state: &State, w: f32) {
     ));
 
     actors.push(act!(text:
-        font("wendy"): settext("CHART PREVIEW".to_owned()):
+        font("wendy"): settext(crate::i18n::tr("ContentBrowser", "ChartPreview")):
         align(0.5, 0.5): xy(cx, PANEL_Y + 14.0): zoom(0.38): horizalign(center):
         diffuse(accent[0], accent[1], accent[2], alpha): z(Z_WINDOW_TEXT)
     ));
@@ -379,7 +379,7 @@ pub(super) fn push_window(actors: &mut Vec<Actor>, state: &State, w: f32) {
         }
         if chart.notes.is_empty() {
             actors.push(act!(text:
-                font("miso"): settext("nothing in this part of the song".to_owned()):
+                font("miso"): settext(crate::i18n::tr("ContentBrowser", "NoNotesHere")):
                 align(0.5, 0.5): xy(cx, PANEL_Y + 230.0): zoom(0.5): horizalign(center):
                 diffuse(0.75, 0.75, 0.75, alpha): z(Z_WINDOW_TEXT)
             ));
@@ -399,8 +399,8 @@ pub(super) fn push_window(actors: &mut Vec<Actor>, state: &State, w: f32) {
             accent,
         ));
         let label = match progress {
-            Some(fraction) => format!("loading sample  {:.0}%", fraction * 100.0),
-            None => format!("loading sample{}", spinner::ellipsis()),
+            Some(fraction) => crate::i18n::tr_fmt("ContentBrowser", "MessageLoadingSample0", &[("arg0", &format!("{:.0}", fraction * 100.0))]).to_string(),
+            None => crate::i18n::tr_fmt("ContentBrowser", "MessageLoadingSample", &[("arg0", &(spinner::ellipsis()).to_string())]).to_string(),
         };
         actors.push(act!(text:
             font("miso"): settext(label):
@@ -459,11 +459,7 @@ fn glow_white(actors: &mut [Actor], amount: f32) {
 /// a line that carries it is built in one buffer.
 fn write_chart_label(out: &mut String, chart: &PreviewChart) {
     if chart.difficulty.is_empty() {
-        out.push_str(if chart.lanes == 8 {
-            "DOUBLES"
-        } else {
-            "SINGLES"
-        });
+        out.push_str(&super::localization::text(if chart.lanes == 8 { "DOUBLES" } else { "SINGLES" }));
     } else {
         out.extend(chart.difficulty.chars().flat_map(char::to_uppercase));
     }
@@ -582,7 +578,7 @@ fn push_chips(
             diffuse(0.75, 0.75, 0.75, alpha): z(Z_WINDOW_TEXT)
         ));
         actors.push(act!(text:
-            font("miso"): settext("difficulty".to_owned()):
+            font("miso"): settext(crate::i18n::tr("ContentBrowser", "Difficulty")):
             align(0.0, 0.5): xy(cx + row_w * 0.5 + 5.0, y): zoom(0.34): horizalign(left):
             diffuse(0.6, 0.6, 0.6, alpha): z(Z_WINDOW_TEXT)
         ));
@@ -685,7 +681,7 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
         diffuse(0.05, 0.05, 0.07, 1.0): z(Z_MENU_PANEL + 1)
     ));
     actors.push(act!(text:
-        font("wendy"): settext("LISTEN OR DOWNLOAD?".to_owned()):
+        font("wendy"): settext(crate::i18n::tr("ContentBrowser", "ListenOrDownload")):
         align(0.5, 0.5): xy(cx, top + 22.0): zoom(0.45): horizalign(center):
         diffuse(accent[0], accent[1], accent[2], 1.0): z(Z_MENU_TEXT)
     ));
@@ -697,21 +693,13 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(format!(
-            "from {}   -   a single song lands in \"{}\"",
-            pack.name,
-            deadsync_online::smo_songs::SINGLES_GROUP
-        )):
+        settext(crate::i18n::tr_fmt("ContentBrowser", "MessageFromASingleSongLandsIn", &[("arg0", &(pack.name).to_string()), ("arg1", &(deadsync_online::smo_songs::SINGLES_GROUP).to_string())]).to_string()):
         align(0.5, 0.5): xy(cx, top + 66.0): zoom(0.45): horizalign(center):
         maxwidth(panel_w - 40.0):
         diffuse(0.7, 0.7, 0.7, 1.0): z(Z_MENU_TEXT)
     ));
     let mut line_y = top + 66.0 + LINE_H;
-    let size = format!(
-        "{}  -  {} songs",
-        format_bytes(pack.size_bytes),
-        pack.song_count
-    );
+    let size = crate::i18n::tr_fmt("ContentBrowser", "MessageSongs32b9e2", &[("arg0", &(format_bytes(pack.size_bytes)).to_string()), ("arg1", &(pack.song_count).to_string())]).to_string();
     for (show, line) in [
         (true, size.as_str()),
         (
@@ -728,7 +716,7 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
             continue;
         }
         actors.push(act!(text:
-            font("miso"): settext(line.to_owned()):
+            font("miso"): settext(super::localization::text(line)):
             align(0.5, 0.5): xy(cx, line_y): zoom(0.45): horizalign(center):
             maxwidth(panel_w - 40.0):
             diffuse(0.7, 0.7, 0.7, 1.0): z(Z_MENU_TEXT)
@@ -737,7 +725,7 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
     }
 
     let known = deadsync_online::smo_songs::runtime_known_charts(pack.id, &song.title, artist);
-    let mut preview_label = String::from("Preview");
+    let mut preview_label = super::localization::text("Preview").to_string();
     if let Some(chart) = known
         .as_deref()
         .and_then(|charts| menu.chart.and_then(|index| charts.get(index)))
@@ -749,7 +737,7 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
     const CHOICE_W: f32 = 170.0;
     const CHOICE_H: f32 = 34.0;
     let choice_y = top + 112.0 + body_h;
-    for (index, label) in [preview_label, "Get this song".to_owned(), pack_label]
+    for (index, label) in [preview_label, crate::i18n::tr("ContentBrowser", "MessageGetThisSong").to_string(), pack_label]
         .into_iter()
         .enumerate()
     {
@@ -778,7 +766,7 @@ pub(super) fn push_song_menu(actors: &mut Vec<Actor>, state: &State, w: f32, h: 
         "LEFT/RIGHT choose    START go    BACK cancel"
     };
     actors.push(act!(text:
-        font("miso"): settext(hint.to_owned()):
+        font("miso"): settext(super::localization::text(hint)):
         align(0.5, 0.5): xy(cx, top + 164.0 + body_h): zoom(0.5): horizalign(center):
         diffuse(0.6, 0.6, 0.6, 1.0): z(Z_MENU_TEXT)
     ));

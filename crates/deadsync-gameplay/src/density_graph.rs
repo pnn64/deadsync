@@ -55,7 +55,7 @@ pub fn step_stats_density_graph_width(
     num_players: usize,
     screen_w: f32,
     screen_h: f32,
-    wide: bool,
+    _wide: bool,
     center_1player_notefield: bool,
 ) -> f32 {
     let is_ultrawide = screen_w / screen_h.max(1.0_f32) > (21.0_f32 / 9.0_f32);
@@ -66,7 +66,7 @@ pub fn step_stats_density_graph_width(
     };
 
     let mut sidepane_width = screen_w * 0.5_f32;
-    if !is_ultrawide && note_field_is_centered && wide {
+    if !is_ultrawide && note_field_is_centered && screen_w >= screen_h {
         let nf_width = step_stats_notefield_width(cols_per_player)
             .unwrap_or(256.0_f32)
             .max(1.0_f32);

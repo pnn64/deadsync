@@ -674,7 +674,7 @@ fn push_overlay_unreserved<const STAGE_NESTED: bool>(
     ));
     actors.push(act!(text:
         font(machine_font_key(machine_font, FontRole::Header)):
-        settext("Online Lobbies"):
+        settext(crate::i18n::tr("Lobby", "OnlineLobbies")):
         align(0.5, 0.5):
         xy(center_x, center_y + TITLE_Y):
         zoom(0.6):
@@ -683,7 +683,7 @@ fn push_overlay_unreserved<const STAGE_NESTED: bool>(
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(status_text(overlay, snapshot, reconnect_status_text)):
+        settext(crate::i18n::tr_ui(&status_text(overlay, snapshot, reconnect_status_text))):
         align(0.5, 0.5):
         xy(center_x, center_y + STATUS_Y):
         zoom(0.8):
@@ -693,7 +693,7 @@ fn push_overlay_unreserved<const STAGE_NESTED: bool>(
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(close_hint(overlay, snapshot)):
+        settext(crate::i18n::tr_ui(close_hint(overlay, snapshot))):
         align(0.5, 0.5):
         xy(center_x, center_y + FOOTER_Y):
         zoom(0.9):
@@ -719,7 +719,7 @@ fn push_overlay_unreserved<const STAGE_NESTED: bool>(
         lobby_data::ConnectionState::Disconnected | lobby_data::ConnectionState::Error(_) => {
             actors.push(act!(text:
                 font("miso"):
-                settext("Press &START; to connect."):
+                settext(crate::i18n::tr("Lobby", "PressStartToConnect")):
                 align(0.5, 0.5):
                 xy(center_x, center_y):
                 zoom(1.2):
@@ -732,7 +732,7 @@ fn push_overlay_unreserved<const STAGE_NESTED: bool>(
         lobby_data::ConnectionState::Connecting => {
             actors.push(act!(text:
                 font("miso"):
-                settext("Connecting..."):
+                settext(crate::i18n::tr("Lobby", "Connecting")):
                 align(0.5, 0.5):
                 xy(center_x, center_y):
                 zoom(1.2):
@@ -811,7 +811,7 @@ fn push_browse_overlay<const STAGE_NESTED: bool>(
 ) {
     actors.push(act!(text:
         font("miso"):
-        settext("Available Lobbies"):
+        settext(crate::i18n::tr("Lobby", "AvailableLobbies")):
         align(0.0, 0.5):
         xy(center_x + LOBBY_LIST_X - 180.0, center_y - 146.0):
         zoom(0.95):
@@ -851,12 +851,7 @@ fn push_browse_overlay<const STAGE_NESTED: bool>(
         ));
         actors.push(act!(text:
             font("miso"):
-            settext(format!(
-                "{} player{}{}",
-                lobby.player_count,
-                if lobby.player_count == 1 { "" } else { "s" },
-                if lobby.is_password_protected { "  LOCKED" } else { "" },
-            )):
+            settext(crate::i18n::tr_fmt("UiMessages", "Player", &[("arg0", &(lobby.player_count).to_string()), ("arg1", &(if lobby.player_count == 1 { "" } else { "s" }).to_string()), ("arg2", &(if lobby.is_password_protected { format!("  {}", crate::i18n::tr_ui("  LOCKED")) } else { String::new() }))]).to_string()):
             align(0.0, 0.5):
             xy(center_x + LOBBY_LIST_X - 164.0, row_y + 12.0):
             zoom(0.82):
@@ -869,7 +864,7 @@ fn push_browse_overlay<const STAGE_NESTED: bool>(
     if snapshot.available_lobbies.is_empty() {
         actors.push(act!(text:
             font("miso"):
-            settext("No lobbies found."):
+            settext(crate::i18n::tr("Lobby", "NoLobbiesFound")):
             align(0.5, 0.5):
             xy(center_x + LOBBY_LIST_X, center_y - 10.0):
             zoom(1.05):
@@ -910,7 +905,7 @@ fn push_browse_overlay<const STAGE_NESTED: bool>(
         );
         actors.push(act!(text:
             font(machine_font_key(machine_font, FontRole::Header)):
-            settext(*label):
+            settext(crate::i18n::tr_ui(label)):
             align(0.5, 0.5):
             xy(center_x + ACTION_PANEL_X, row_y):
             zoom(0.46):
@@ -966,7 +961,7 @@ fn push_joined_overlay<const STAGE_NESTED: bool>(
 ) {
     actors.push(act!(text:
         font("miso"):
-        settext("Joined Lobby"):
+        settext(crate::i18n::tr("Lobby", "JoinedLobby")):
         align(0.0, 0.5):
         xy(center_x - 300.0, center_y - 146.0):
         zoom(0.95):
@@ -976,7 +971,7 @@ fn push_joined_overlay<const STAGE_NESTED: bool>(
     ));
     actors.push(act!(text:
         font(machine_font_key(machine_font, FontRole::Header)):
-        settext(format!("Lobby Code: {}", joined.code)):
+        settext(crate::i18n::tr_fmt("UiMessages", "LobbyCode", &[("arg0", &(joined.code).to_string())]).to_string()):
         align(0.0, 0.5):
         xy(center_x - 300.0, center_y - 102.0):
         zoom(0.5):
@@ -1023,7 +1018,7 @@ fn push_joined_overlay<const STAGE_NESTED: bool>(
     if joined.players.is_empty() {
         actors.push(act!(text:
             font("miso"):
-            settext("Waiting for players..."):
+            settext(crate::i18n::tr("Lobby", "WaitingForPlayers")):
             align(0.0, 0.5):
             xy(center_x - 300.0, players_y):
             zoom(0.92):
@@ -1048,7 +1043,7 @@ fn push_joined_overlay<const STAGE_NESTED: bool>(
         );
         actors.push(act!(text:
             font(machine_font_key(machine_font, FontRole::Header)):
-            settext(*label):
+            settext(crate::i18n::tr_ui(label)):
             align(0.5, 0.5):
             xy(center_x + ACTION_PANEL_X, row_y):
             zoom(0.46):
@@ -1073,7 +1068,7 @@ fn joined_song_info_text(joined: &lobby_data::JoinedLobby) -> Option<String> {
             + usize::from(!chart_label.is_empty())
             + if rate.is_some() { 8 } else { 0 },
     );
-    text.push_str("Selected Song\n");
+    text.push_str(&crate::i18n::tr_ui("Selected Song\n"));
     push_truncated_text(&mut text, title, 38);
     if !chart_label.is_empty() {
         text.push('\n');
@@ -1178,7 +1173,7 @@ fn push_password_prompt<const STAGE_NESTED: bool>(
     );
     actors.push(act!(text:
         font("miso"):
-        settext(title):
+        settext(crate::i18n::tr_ui(&title)):
         align(0.5, 0.5):
         xy(center_x, center_y + PASSWORD_PROMPT_TITLE_Y):
         zoom(0.85):
@@ -1188,7 +1183,7 @@ fn push_password_prompt<const STAGE_NESTED: bool>(
     ));
     actors.push(act!(text:
         font("miso"):
-        settext(hint):
+        settext(crate::i18n::tr_ui(&hint)):
         align(0.5, 0.5):
         xy(center_x, center_y + PASSWORD_PROMPT_HINT_Y):
         zoom(0.55):
@@ -1350,14 +1345,10 @@ fn status_text(
     if let Some(prompt) = overlay.password_prompt.as_ref() {
         return match &prompt.mode {
             PasswordPromptMode::CreateLobby => {
-                format!(
-                    "Choose up to {PASSWORD_PROMPT_MAX_LEN} uppercase letters, or leave it blank for a public lobby."
-                )
+                crate::i18n::tr_fmt("UiMessages", "ChooseUpToPASSWORDPROMPTMAXLENUppercaseLettersOr", &[("PASSWORD_PROMPT_MAX_LEN", &(PASSWORD_PROMPT_MAX_LEN).to_string())]).to_string()
             }
             PasswordPromptMode::JoinLobby { code } => {
-                format!(
-                    "Enter the {PASSWORD_PROMPT_MAX_LEN}-letter uppercase password for lobby {code}."
-                )
+                crate::i18n::tr_fmt("UiMessages", "EnterThePASSWORDPROMPTMAXLENLetterUppercasePasswordFor", &[("PASSWORD_PROMPT_MAX_LEN", &(PASSWORD_PROMPT_MAX_LEN).to_string()), ("code", &(code).to_string())]).to_string()
             }
         };
     }
@@ -1372,17 +1363,17 @@ fn status_text(
     }
     match &snapshot.connection {
         lobby_data::ConnectionState::Disconnected => {
-            "Disconnected from online service.".to_string()
+            crate::i18n::tr("UiMessages", "DisconnectedFromOnlineService").to_string()
         }
-        lobby_data::ConnectionState::Connecting => "Connecting to online service...".to_string(),
+        lobby_data::ConnectionState::Connecting => crate::i18n::tr("UiMessages", "ConnectingToOnlineService").to_string(),
         lobby_data::ConnectionState::Connected => {
             if snapshot.joined_lobby.is_some() {
-                "Connected to online service.".to_string()
+                crate::i18n::tr("UiMessages", "ConnectedToOnlineService").to_string()
             } else {
-                "Select a lobby or create one.".to_string()
+                crate::i18n::tr("UiMessages", "SelectALobbyOrCreateOne").to_string()
             }
         }
-        lobby_data::ConnectionState::Error(error) => format!("Connection error: {error}"),
+        lobby_data::ConnectionState::Error(error) => crate::i18n::tr_fmt("UiMessages", "ConnectionErrorError", &[("error", &(error).to_string())]).to_string(),
     }
 }
 
@@ -1681,8 +1672,8 @@ fn password_prompt_backspace(prompt: &mut PasswordPromptState) -> bool {
 
 fn password_prompt_title(prompt: &PasswordPromptState) -> String {
     match &prompt.mode {
-        PasswordPromptMode::CreateLobby => "Create Lobby Password (Optional)".to_string(),
-        PasswordPromptMode::JoinLobby { code } => format!("Join {code}"),
+        PasswordPromptMode::CreateLobby => crate::i18n::tr("UiMessages", "CreateLobbyPasswordOptional").to_string(),
+        PasswordPromptMode::JoinLobby { code } => crate::i18n::tr_fmt("UiMessages", "JoinCode", &[("code", &(code).to_string())]).to_string(),
     }
 }
 
