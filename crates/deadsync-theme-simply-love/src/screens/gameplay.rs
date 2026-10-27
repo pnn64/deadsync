@@ -1443,6 +1443,30 @@ impl State {
             .unwrap_or(DEFAULT_NOTEFIELD_WIDTH)
     }
 
+    pub fn twitch_chat_layout(&self) -> super::components::shared::twitch_chat::GameplayLayout {
+        let style = self.hud_snapshot.play_style;
+        let p2 = self.hud_snapshot.player_side == profile_data::PlayerSide::P2;
+        let centered = style.is_double() || self.runtime_view.policy.center_single_notefield;
+        let sign = if p2 { 1.0 } else { -1.0 };
+        let w = screen_width();
+        let center = w * 0.5
+            + if centered {
+                0.0
+            } else {
+                sign * w.clamp(640.0, 854.0) * 0.25
+            }
+            + sign * self.profiles()[0].note_field_offset_x.clamp(0, 50) as f32;
+        let half_width = self.notefield_width(0) * self.field_zoom_for_player(0) * 0.5;
+        super::components::shared::twitch_chat::GameplayLayout {
+            two_players: self.num_players() > 1,
+            p2,
+            centered,
+            field_left: center - half_width,
+            field_right: center + half_width,
+            statistics: self.step_stats_mode != GameplayStepStatsMode::Hidden,
+        }
+    }
+
     #[inline(always)]
     const fn display_mods_text(&self, player: usize) -> &Arc<str> {
         &self.display_mods_text[player]

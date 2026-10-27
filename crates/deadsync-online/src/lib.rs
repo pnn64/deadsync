@@ -21,6 +21,7 @@ pub mod smo_songs;
 pub mod song_preview;
 pub mod srpg_shop;
 pub mod stepmaniaonline;
+pub mod twitch;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OnlineRequestError {

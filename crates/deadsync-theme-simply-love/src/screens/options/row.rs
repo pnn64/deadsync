@@ -2,6 +2,11 @@ use super::*;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SubRowId {
+    TwitchEnabled,
+    TwitchChannel,
+    TwitchBadges,
+    TwitchEmotes,
+    TwitchGameplay,
     CheckForUpdates,
     DownloadVideoSupport,
     DownloadWorkshop,

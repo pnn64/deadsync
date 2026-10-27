@@ -36,6 +36,7 @@ pub enum DisplayMode {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
+    pub twitch: crate::streaming::TwitchOptions,
     pub coin: CoinOptions,
     pub vsync: bool,
     /// Stored `MaxFPS` cap value. `0` means "off".
@@ -401,6 +402,7 @@ impl Default for Config {
         let runtime = RuntimeOptions::default();
 
         Self {
+            twitch: crate::streaming::TwitchOptions::default(),
             coin: system.coin,
             vsync: DEFAULT_VSYNC,
             max_fps: DEFAULT_MAX_FPS,
