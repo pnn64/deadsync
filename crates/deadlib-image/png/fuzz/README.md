@@ -94,6 +94,49 @@ final sources. These 110,000 decoder executions bring historical successful
 campaigns to 1,110,000 across eleven targets, including earlier encoder runs.
 No encoder target is used in this continuation. Feedback still includes
 reference code; this is not a whole-decoder native-only coverage claim.
+
+## Feedback restricted to native crates
+
+`scripts/fuzz_native.py` now supports a separate Linux ASan campaign whose
+feedback is restricted to `deadlib_image_png` and `deadlib_image`. Its
+[Cargo compiler wrapper](https://doc.rust-lang.org/cargo/reference/environment-variables.html)
+removes only SanitizerCoverage flags from harnesses and other crates. ASan and
+other compiler options remain. The runner records each invocation and inspects
+compiled archive and harness sections rather than relying on the flags alone.
+Native-crate std/alloc monomorphizations remain in feedback; this is not
+source-only instrumentation. Existing differential targets remain available.
+
+The first run passes 50,000 PNG-stream and 20,000 raw-stream inputs. Native PNG
+and shared primitives have 16,550 / 45 counter bytes; all fourteen dependency
+archives and four harness objects have no feedback counter or PC table sections.
+Fuzzing seconds / peak RSS are 71 / 524 MiB and 12 / 398. Initial corpus counts
+are 27,867 / 939, including bounded zlib fixtures in the raw-stream corpus.
+`reports/native-feedback-source.json` retains source/binary/corpus hashes,
+compiler arguments, object audits and the correction for Cargo's artifact layout.
+The historical successful total is now 1,180,000 across eleven targets,
+including previous encoder campaigns. No encoder target runs here.
+
+The companion `scripts/coverage_fuzz_native.py` replays these final corpora and
+maps explicit native source files only. Its fixed replay is excluded from fuzz
+totals. Reports and reviewed gaps are in `../coverage-reports/README.md`.
+Create fresh seeds and transfer them as one ZIP to avoid repeated cross-filesystem
+small-file reads:
+
+```powershell
+cargo run -p deadlib-image-png --example seed_fuzz -- target/png-native-seeds-fresh
+python crates/deadlib-image/png/fuzz/scripts/archive_native_seeds.py --corpus-root target/png-native-seeds-fresh --output target/png-native-seeds-fresh.zip
+```
+
+Run on Linux with fresh output and target directories:
+
+```sh
+python3 crates/deadlib-image/png/scripts/fuzz_native.py --cargo-fuzz /path/to/cargo-fuzz --seed-archive target/png-native-seeds-fresh.zip --target-dir /tmp/png-native-fuzz-fresh --output-dir /tmp/png-native-campaign-fresh
+python3 crates/deadlib-image/png/scripts/coverage_fuzz_native.py --campaign-output /tmp/png-native-campaign-fresh --cargo-fuzz /path/to/cargo-fuzz --target-dir /tmp/png-native-coverage-build-fresh --output-dir /tmp/png-native-coverage-fresh
+```
+
+Cargo-fuzz's per-target `fuzz/coverage/png_stream` and `inflate_stream`
+directories must also be absent for a fresh coverage run. Retain or rename old
+evidence before replaying. The runner never deletes it.
 Working corpora, crash artifacts and builds are
 ignored. Committed fixtures and the seed generator reproduce the initial corpus;
 do not reuse a previously mutated corpus when reproducing an exact smoke run.

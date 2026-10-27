@@ -1,0 +1,1126 @@
+{
+  "baseline_png_commit": "fae2e5bd2",
+  "source_sha256": [
+    {
+      "path": "png/src/apng.rs",
+      "sha256": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412"
+    },
+    {
+      "path": "png/src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "png/src/codec.rs",
+      "sha256": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e"
+    },
+    {
+      "path": "png/src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "png/src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "png/src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "png/src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "png/src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "png/src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "png/src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "png/src/scanline.rs",
+      "sha256": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e"
+    },
+    {
+      "path": "png/src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "png/src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "png/src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "png/src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "png/src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "png/src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "png/src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "png/src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "png/src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "png/src/zlib.rs",
+      "sha256": "57984db9d36f37210db69ac28689e18f9ba9ac5f743d90e2a4a5afa7ddd3f570"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3"
+    }
+  ],
+  "campaign_manifest_sha256": "6fe47b03e026a35864a3d657aa1337a9b481e68ac57a7dd2e03b8412fa7f6133",
+  "environment": {
+    "RUSTFLAGS": "-Z coverage-options=branch",
+    "CARGO_BUILD_JOBS": "4",
+    "CC": "/usr/bin/clang",
+    "CXX": "/usr/bin/clang++"
+  },
+  "rustc": "rustc 1.101.0-nightly (76456a688 2026-10-25)\nbinary: rustc\ncommit-hash: 76456a688bc0ed897fa23a677d4ddb5b3fdb575a\ncommit-date: 2026-10-25\nhost: x86_64-unknown-linux-gnu\nrelease: 1.101.0-nightly\nLLVM version: 23.1.4\n",
+  "commands": [
+    [
+      "rustup",
+      "run",
+      "nightly",
+      "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+      "coverage",
+      "png_stream",
+      "/tmp/deadlib-image-native-feedback-20261027-a/corpus/png_stream",
+      "--target-dir",
+      "/tmp/deadlib-image-native-feedback-coverage-target-20261027-a",
+      "--sanitizer",
+      "none",
+      "--jobs",
+      "4"
+    ],
+    [
+      "rustup",
+      "run",
+      "nightly",
+      "/tmp/deadlib-image-linux-tools/bin/cargo-fuzz",
+      "coverage",
+      "inflate_stream",
+      "/tmp/deadlib-image-native-feedback-20261027-a/corpus/inflate_stream",
+      "--target-dir",
+      "/tmp/deadlib-image-native-feedback-coverage-target-20261027-a",
+      "--sanitizer",
+      "none",
+      "--jobs",
+      "4"
+    ],
+    [
+      "/home/perfecttaste/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-profdata",
+      "merge",
+      "-sparse",
+      "-o",
+      "/tmp/deadlib-image-native-feedback-coverage-20261027-a/native.profdata",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/coverage/png_stream/coverage.profdata",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/coverage/inflate_stream/coverage.profdata"
+    ],
+    [
+      "/home/perfecttaste/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-cov",
+      "report",
+      "/tmp/deadlib-image-native-feedback-coverage-target-20261027-a/x86_64-unknown-linux-gnu/release/png_stream",
+      "-object",
+      "/tmp/deadlib-image-native-feedback-coverage-target-20261027-a/x86_64-unknown-linux-gnu/release/inflate_stream",
+      "-instr-profile",
+      "/tmp/deadlib-image-native-feedback-coverage-20261027-a/native.profdata",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/apng.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/codec.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/composite.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/lib.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata/language/registry.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata/language.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata/profile.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/reference.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/encode_rows.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/mod.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/rows.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/write.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/deflate.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/matcher.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/src/lib.rs"
+    ],
+    [
+      "/home/perfecttaste/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-cov",
+      "export",
+      "-summary-only",
+      "/tmp/deadlib-image-native-feedback-coverage-target-20261027-a/x86_64-unknown-linux-gnu/release/png_stream",
+      "-object",
+      "/tmp/deadlib-image-native-feedback-coverage-target-20261027-a/x86_64-unknown-linux-gnu/release/inflate_stream",
+      "-instr-profile",
+      "/tmp/deadlib-image-native-feedback-coverage-20261027-a/native.profdata",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/apng.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/codec.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/composite.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/lib.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata/language/registry.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata/language.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata/profile.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/reference.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/encode_rows.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/mod.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/rows.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/write.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/deflate.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/matcher.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/src/lib.rs"
+    ],
+    [
+      "/home/perfecttaste/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin/llvm-cov",
+      "show",
+      "-show-line-counts-or-regions",
+      "-show-branches=count",
+      "/tmp/deadlib-image-native-feedback-coverage-target-20261027-a/x86_64-unknown-linux-gnu/release/png_stream",
+      "-object",
+      "/tmp/deadlib-image-native-feedback-coverage-target-20261027-a/x86_64-unknown-linux-gnu/release/inflate_stream",
+      "-instr-profile",
+      "/tmp/deadlib-image-native-feedback-coverage-20261027-a/native.profdata",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/apng.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/codec.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/composite.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/lib.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata/language/registry.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata/language.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata/profile.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/reference.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/encode_rows.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/mod.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/rows.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/write.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/deflate.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/matcher.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib.rs",
+      "/mnt/c/GitHub/deadsync/crates/deadlib-image/src/lib.rs"
+    ]
+  ],
+  "replayed_corpora": [
+    {
+      "target": "png_stream",
+      "files": 28770,
+      "bytes": 8098547,
+      "sha256": "354e66d891a977a907aa720bfa7e0730d29f322ed398f25a3bba3ac6b265e6f7",
+      "hash_method": "Ascending literal UTF-8 filename bytes, NUL, file contents"
+    },
+    {
+      "target": "inflate_stream",
+      "files": 1096,
+      "bytes": 1000939,
+      "sha256": "a46f4fc55004dab8b1ec985c3fbdca00194a05a60c43e87fb61e1c8a4f733af6",
+      "hash_method": "Ascending literal UTF-8 filename bytes, NUL, file contents"
+    }
+  ],
+  "binaries": [
+    {
+      "path": "/tmp/deadlib-image-native-feedback-coverage-target-20261027-a/x86_64-unknown-linux-gnu/release/png_stream",
+      "sha256": "103851e35096d297c04b66d4fcd059a43f9128ee627bc0e16b5d3f036d553974"
+    },
+    {
+      "path": "/tmp/deadlib-image-native-feedback-coverage-target-20261027-a/x86_64-unknown-linux-gnu/release/inflate_stream",
+      "sha256": "4c7898c8e2c5b8eb91be8c8f43016e0d822136ebb8e9fd56d4c5f709346d0a39"
+    }
+  ],
+  "profiles": [
+    {
+      "path": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/coverage/png_stream/coverage.profdata",
+      "sha256": "330f974fc24bb0fe96128660f68fc97898a767bb0b635e238c173a30cd4a9d6c"
+    },
+    {
+      "path": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/coverage/inflate_stream/coverage.profdata",
+      "sha256": "632460e111f0ede09267d66e4818f79e60261182defce2206d8970e45b5a4645"
+    },
+    {
+      "path": "/tmp/deadlib-image-native-feedback-coverage-20261027-a/native.profdata",
+      "sha256": "8d87f9530c1e232297e23aab154f08fdbbb6661688310ba2e09f698099347c5f"
+    }
+  ],
+  "runner_sha256": "00e84e0402501f28c3b7b59c39efcfdc4259a48be0ea978b62ed3ae423d7c9e6",
+  "files": [
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/apng.rs",
+      "summary": {
+        "lines": {
+          "count": 309,
+          "covered": 205,
+          "percent": 66.34304207119742
+        },
+        "functions": {
+          "count": 19,
+          "covered": 13,
+          "percent": 68.42105263157895
+        },
+        "instantiations": {
+          "count": 19,
+          "covered": 13,
+          "percent": 68.42105263157895
+        },
+        "regions": {
+          "count": 349,
+          "covered": 213,
+          "notcovered": 136,
+          "percent": 61.03151862464183
+        },
+        "branches": {
+          "count": 116,
+          "covered": 77,
+          "notcovered": 39,
+          "percent": 66.37931034482759
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/checksum.rs",
+      "summary": {
+        "lines": {
+          "count": 74,
+          "covered": 48,
+          "percent": 64.86486486486487
+        },
+        "functions": {
+          "count": 10,
+          "covered": 8,
+          "percent": 80
+        },
+        "instantiations": {
+          "count": 10,
+          "covered": 8,
+          "percent": 80
+        },
+        "regions": {
+          "count": 96,
+          "covered": 62,
+          "notcovered": 34,
+          "percent": 64.58333333333334
+        },
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/codec.rs",
+      "summary": {
+        "lines": {
+          "count": 376,
+          "covered": 214,
+          "percent": 56.91489361702128
+        },
+        "functions": {
+          "count": 28,
+          "covered": 12,
+          "percent": 42.857142857142854
+        },
+        "instantiations": {
+          "count": 28,
+          "covered": 12,
+          "percent": 42.857142857142854
+        },
+        "regions": {
+          "count": 481,
+          "covered": 264,
+          "notcovered": 217,
+          "percent": 54.88565488565489
+        },
+        "branches": {
+          "count": 156,
+          "covered": 97,
+          "notcovered": 59,
+          "percent": 62.17948717948718
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/composite.rs",
+      "summary": {
+        "lines": {
+          "count": 182,
+          "covered": 0,
+          "percent": 0
+        },
+        "functions": {
+          "count": 12,
+          "covered": 0,
+          "percent": 0
+        },
+        "instantiations": {
+          "count": 12,
+          "covered": 0,
+          "percent": 0
+        },
+        "regions": {
+          "count": 245,
+          "covered": 0,
+          "notcovered": 245,
+          "percent": 0
+        },
+        "branches": {
+          "count": 46,
+          "covered": 0,
+          "notcovered": 46,
+          "percent": 0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/lib.rs",
+      "summary": {
+        "lines": {
+          "count": 16,
+          "covered": 3,
+          "percent": 18.75
+        },
+        "functions": {
+          "count": 3,
+          "covered": 1,
+          "percent": 33.33333333333333
+        },
+        "instantiations": {
+          "count": 8,
+          "covered": 4,
+          "percent": 50
+        },
+        "regions": {
+          "count": 22,
+          "covered": 3,
+          "notcovered": 19,
+          "percent": 13.636363636363635
+        },
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata.rs",
+      "summary": {
+        "lines": {
+          "count": 524,
+          "covered": 324,
+          "percent": 61.832061068702295
+        },
+        "functions": {
+          "count": 40,
+          "covered": 28,
+          "percent": 70
+        },
+        "instantiations": {
+          "count": 40,
+          "covered": 28,
+          "percent": 70
+        },
+        "regions": {
+          "count": 597,
+          "covered": 373,
+          "notcovered": 224,
+          "percent": 62.47906197654941
+        },
+        "branches": {
+          "count": 190,
+          "covered": 133,
+          "notcovered": 57,
+          "percent": 70
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata/language.rs",
+      "summary": {
+        "lines": {
+          "count": 114,
+          "covered": 49,
+          "percent": 42.98245614035088
+        },
+        "functions": {
+          "count": 12,
+          "covered": 6,
+          "percent": 50
+        },
+        "instantiations": {
+          "count": 12,
+          "covered": 6,
+          "percent": 50
+        },
+        "regions": {
+          "count": 139,
+          "covered": 53,
+          "notcovered": 86,
+          "percent": 38.1294964028777
+        },
+        "branches": {
+          "count": 90,
+          "covered": 19,
+          "notcovered": 71,
+          "percent": 21.11111111111111
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/metadata/profile.rs",
+      "summary": {
+        "lines": {
+          "count": 106,
+          "covered": 67,
+          "percent": 63.20754716981132
+        },
+        "functions": {
+          "count": 11,
+          "covered": 6,
+          "percent": 54.54545454545454
+        },
+        "instantiations": {
+          "count": 11,
+          "covered": 6,
+          "percent": 54.54545454545454
+        },
+        "regions": {
+          "count": 143,
+          "covered": 93,
+          "notcovered": 50,
+          "percent": 65.03496503496503
+        },
+        "branches": {
+          "count": 56,
+          "covered": 25,
+          "notcovered": 31,
+          "percent": 44.642857142857146
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/reference.rs",
+      "summary": {
+        "lines": {
+          "count": 106,
+          "covered": 0,
+          "percent": 0
+        },
+        "functions": {
+          "count": 9,
+          "covered": 0,
+          "percent": 0
+        },
+        "instantiations": {
+          "count": 9,
+          "covered": 0,
+          "percent": 0
+        },
+        "regions": {
+          "count": 128,
+          "covered": 0,
+          "notcovered": 128,
+          "percent": 0
+        },
+        "branches": {
+          "count": 36,
+          "covered": 0,
+          "notcovered": 36,
+          "percent": 0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/scanline.rs",
+      "summary": {
+        "lines": {
+          "count": 272,
+          "covered": 168,
+          "percent": 61.76470588235294
+        },
+        "functions": {
+          "count": 18,
+          "covered": 15,
+          "percent": 83.33333333333334
+        },
+        "instantiations": {
+          "count": 28,
+          "covered": 25,
+          "percent": 89.28571428571429
+        },
+        "regions": {
+          "count": 423,
+          "covered": 240,
+          "notcovered": 183,
+          "percent": 56.73758865248227
+        },
+        "branches": {
+          "count": 56,
+          "covered": 31,
+          "notcovered": 25,
+          "percent": 55.35714285714286
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "summary": {
+        "lines": {
+          "count": 555,
+          "covered": 541,
+          "percent": 97.47747747747748
+        },
+        "functions": {
+          "count": 26,
+          "covered": 24,
+          "percent": 92.3076923076923
+        },
+        "instantiations": {
+          "count": 32,
+          "covered": 30,
+          "percent": 93.75
+        },
+        "regions": {
+          "count": 642,
+          "covered": 598,
+          "notcovered": 44,
+          "percent": 93.14641744548287
+        },
+        "branches": {
+          "count": 228,
+          "covered": 209,
+          "notcovered": 19,
+          "percent": 91.66666666666666
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/encode_rows.rs",
+      "summary": {
+        "lines": {
+          "count": 113,
+          "covered": 0,
+          "percent": 0
+        },
+        "functions": {
+          "count": 5,
+          "covered": 0,
+          "percent": 0
+        },
+        "instantiations": {
+          "count": 5,
+          "covered": 0,
+          "percent": 0
+        },
+        "regions": {
+          "count": 127,
+          "covered": 0,
+          "notcovered": 127,
+          "percent": 0
+        },
+        "branches": {
+          "count": 18,
+          "covered": 0,
+          "notcovered": 18,
+          "percent": 0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/mod.rs",
+      "summary": {
+        "lines": {
+          "count": 9,
+          "covered": 9,
+          "percent": 100
+        },
+        "functions": {
+          "count": 1,
+          "covered": 1,
+          "percent": 100
+        },
+        "instantiations": {
+          "count": 1,
+          "covered": 1,
+          "percent": 100
+        },
+        "regions": {
+          "count": 6,
+          "covered": 6,
+          "notcovered": 0,
+          "percent": 100
+        },
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "summary": {
+        "lines": {
+          "count": 120,
+          "covered": 112,
+          "percent": 93.33333333333333
+        },
+        "functions": {
+          "count": 8,
+          "covered": 8,
+          "percent": 100
+        },
+        "instantiations": {
+          "count": 8,
+          "covered": 8,
+          "percent": 100
+        },
+        "regions": {
+          "count": 144,
+          "covered": 120,
+          "notcovered": 24,
+          "percent": 83.33333333333334
+        },
+        "branches": {
+          "count": 20,
+          "covered": 14,
+          "notcovered": 6,
+          "percent": 70
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/rows.rs",
+      "summary": {
+        "lines": {
+          "count": 171,
+          "covered": 169,
+          "percent": 98.83040935672514
+        },
+        "functions": {
+          "count": 10,
+          "covered": 10,
+          "percent": 100
+        },
+        "instantiations": {
+          "count": 10,
+          "covered": 10,
+          "percent": 100
+        },
+        "regions": {
+          "count": 201,
+          "covered": 186,
+          "notcovered": 15,
+          "percent": 92.53731343283582
+        },
+        "branches": {
+          "count": 50,
+          "covered": 47,
+          "notcovered": 3,
+          "percent": 94
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/write.rs",
+      "summary": {
+        "lines": {
+          "count": 163,
+          "covered": 0,
+          "percent": 0
+        },
+        "functions": {
+          "count": 13,
+          "covered": 0,
+          "percent": 0
+        },
+        "instantiations": {
+          "count": 13,
+          "covered": 0,
+          "percent": 0
+        },
+        "regions": {
+          "count": 229,
+          "covered": 0,
+          "notcovered": 229,
+          "percent": 0
+        },
+        "branches": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib.rs",
+      "summary": {
+        "lines": {
+          "count": 415,
+          "covered": 250,
+          "percent": 60.24096385542169
+        },
+        "functions": {
+          "count": 23,
+          "covered": 13,
+          "percent": 56.52173913043478
+        },
+        "instantiations": {
+          "count": 23,
+          "covered": 13,
+          "percent": 56.52173913043478
+        },
+        "regions": {
+          "count": 599,
+          "covered": 368,
+          "notcovered": 231,
+          "percent": 61.43572621035058
+        },
+        "branches": {
+          "count": 138,
+          "covered": 93,
+          "notcovered": 45,
+          "percent": 67.3913043478261
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/deflate.rs",
+      "summary": {
+        "lines": {
+          "count": 232,
+          "covered": 0,
+          "percent": 0
+        },
+        "functions": {
+          "count": 10,
+          "covered": 0,
+          "percent": 0
+        },
+        "instantiations": {
+          "count": 10,
+          "covered": 0,
+          "percent": 0
+        },
+        "regions": {
+          "count": 274,
+          "covered": 0,
+          "notcovered": 274,
+          "percent": 0
+        },
+        "branches": {
+          "count": 60,
+          "covered": 0,
+          "notcovered": 60,
+          "percent": 0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "summary": {
+        "lines": {
+          "count": 265,
+          "covered": 254,
+          "percent": 95.84905660377359
+        },
+        "functions": {
+          "count": 10,
+          "covered": 8,
+          "percent": 80
+        },
+        "instantiations": {
+          "count": 10,
+          "covered": 8,
+          "percent": 80
+        },
+        "regions": {
+          "count": 350,
+          "covered": 335,
+          "notcovered": 15,
+          "percent": 95.71428571428572
+        },
+        "branches": {
+          "count": 62,
+          "covered": 59,
+          "notcovered": 3,
+          "percent": 95.16129032258065
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/matcher.rs",
+      "summary": {
+        "lines": {
+          "count": 61,
+          "covered": 0,
+          "percent": 0
+        },
+        "functions": {
+          "count": 8,
+          "covered": 0,
+          "percent": 0
+        },
+        "instantiations": {
+          "count": 8,
+          "covered": 0,
+          "percent": 0
+        },
+        "regions": {
+          "count": 84,
+          "covered": 0,
+          "notcovered": 84,
+          "percent": 0
+        },
+        "branches": {
+          "count": 16,
+          "covered": 0,
+          "notcovered": 16,
+          "percent": 0
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/src/lib.rs",
+      "summary": {
+        "lines": {
+          "count": 53,
+          "covered": 44,
+          "percent": 83.01886792452831
+        },
+        "functions": {
+          "count": 9,
+          "covered": 7,
+          "percent": 77.77777777777779
+        },
+        "instantiations": {
+          "count": 9,
+          "covered": 7,
+          "percent": 77.77777777777779
+        },
+        "regions": {
+          "count": 60,
+          "covered": 50,
+          "notcovered": 10,
+          "percent": 83.33333333333334
+        },
+        "branches": {
+          "count": 16,
+          "covered": 9,
+          "notcovered": 7,
+          "percent": 56.25
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    }
+  ],
+  "totals": {
+    "lines": {
+      "count": 4236,
+      "covered": 2457,
+      "percent": 58.0028328611898
+    },
+    "functions": {
+      "count": 285,
+      "covered": 160,
+      "percent": 56.14035087719298
+    },
+    "instantiations": {
+      "count": 306,
+      "covered": 179,
+      "percent": 58.496732026143796
+    },
+    "regions": {
+      "count": 5339,
+      "covered": 2964,
+      "notcovered": 2375,
+      "percent": 55.51601423487544
+    },
+    "branches": {
+      "count": 1354,
+      "covered": 813,
+      "notcovered": 541,
+      "percent": 60.044313146233385
+    },
+    "mcdc": {
+      "count": 0,
+      "covered": 0,
+      "notcovered": 0,
+      "percent": 0
+    }
+  },
+  "final_source_hashes_verified": true,
+  "scope": "Fixed replay of corpora grown using native-crate feedback. Reports include only explicit native source filenames; harnesses, references and stdlib source are excluded. Package totals include encoding utilities never called by these targets, so they are not decoder-only percentages. Replay is not additional fuzzing or proof of conformance.",
+  "campaign_manifest_as_run_sha256": "2d887bc03e565e0289592ebcab1fbaedb34a5c581259f9afee9a125e3af65bf0",
+  "campaign_manifest_repository_path": "fuzz/reports/native-feedback-source.json",
+  "repository_command_log": {
+    "path": "coverage-reports/native-feedback-commands.log.gz",
+    "sha256": "cd2f5515e6ad5ba0479c989b5f6926b9dad1abd49b9dea8c2fe6e28790bf7a5f",
+    "uncompressed_sha256": "317b211568666ec916f2a92f04765a8325fecf526054a1110f2de3a2f52b2591",
+    "uncompressed_bytes": 5996301,
+    "compressed_bytes": 232245,
+    "raw_output_path": "/tmp/deadlib-image-native-feedback-coverage-20261027-a/commands.log"
+  }
+}

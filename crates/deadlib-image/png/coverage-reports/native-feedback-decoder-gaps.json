@@ -1,0 +1,340 @@
+{
+  "scope": "Explicit zero-count source annotations in four decoder-only files. These are not all missed regions/branches. Historical encoders and generic formatting helpers are outside this focused list.",
+  "files": [
+    "src/stream/decode.rs",
+    "src/stream/read.rs",
+    "src/stream/rows.rs",
+    "src/zlib/inflate.rs"
+  ],
+  "annotations": [
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 109,
+      "source": "return Err(Error::LimitExceeded);"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 161,
+      "source": "pub fn peak_image_buffer_bytes(&self) -> usize {"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 162,
+      "source": "self.peak_image_buffers"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 163,
+      "source": "}"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 168,
+      "source": "pub fn animation_error(&self) -> Option<&Error> {"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 169,
+      "source": "self.animation_error.as_ref()"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 170,
+      "source": "}"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 173,
+      "source": "Err(error.clone())"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 293,
+      "source": "}"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 301,
+      "source": "return Err(Error::LimitExceeded);"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 440,
+      "source": "return Err(Error::Invalid(\"PLTE contents\"));"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 483,
+      "source": "return Err(Error::LimitExceeded);"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 609,
+      "source": "return Err(Error::LimitExceeded);"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "line": 715,
+      "source": "return Err(Error::LimitExceeded);"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "line": 48,
+      "source": "_ => return Err(Error::Invalid(\"row sample representation\")),"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "line": 62,
+      "source": "DecodeEvent::Header(_) => unreachable!(),"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "line": 102,
+      "source": "return Err(Error::Invalid(\"frame index\"));"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "line": 128,
+      "source": "Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "line": 130,
+      "source": "return Err(Error::Io(\"reader returned invalid byte count\".into()));"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "line": 155,
+      "source": ")?,"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "line": 158,
+      "source": "return Err(Error::Invalid(\"decoder input progress\"));"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "line": 164,
+      "source": "return png.ok_or(Error::Invalid(\"missing IHDR\"));"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/rows.rs",
+      "line": 39,
+      "source": "return Err(Error::LimitExceeded);"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/rows.rs",
+      "line": 172,
+      "source": "return Err(Error::Invalid(\"extra image data\"));"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "line": 101,
+      "source": "pub fn total_in(&self) -> usize {"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "line": 102,
+      "source": "self.total_in"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "line": 103,
+      "source": "}"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "line": 104,
+      "source": "pub fn total_out(&self) -> usize {"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "line": 105,
+      "source": "self.total_out"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "line": 106,
+      "source": "}"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "line": 117,
+      "source": "Err(error.clone())"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "line": 140,
+      "source": "self.failure = Some(Error::LimitExceeded);"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "line": 141,
+      "source": "return Err(Error::LimitExceeded);"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "line": 255,
+      "source": "output[written] = read!(8) as u8;"
+    },
+    {
+      "file": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "line": 256,
+      "source": "1"
+    }
+  ],
+  "per_file_summary": [
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/decode.rs",
+      "summary": {
+        "lines": {
+          "count": 555,
+          "covered": 541,
+          "percent": 97.47747747747748
+        },
+        "functions": {
+          "count": 26,
+          "covered": 24,
+          "percent": 92.3076923076923
+        },
+        "instantiations": {
+          "count": 32,
+          "covered": 30,
+          "percent": 93.75
+        },
+        "regions": {
+          "count": 642,
+          "covered": 598,
+          "notcovered": 44,
+          "percent": 93.14641744548287
+        },
+        "branches": {
+          "count": 228,
+          "covered": 209,
+          "notcovered": 19,
+          "percent": 91.66666666666666
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/read.rs",
+      "summary": {
+        "lines": {
+          "count": 120,
+          "covered": 112,
+          "percent": 93.33333333333333
+        },
+        "functions": {
+          "count": 8,
+          "covered": 8,
+          "percent": 100
+        },
+        "instantiations": {
+          "count": 8,
+          "covered": 8,
+          "percent": 100
+        },
+        "regions": {
+          "count": 144,
+          "covered": 120,
+          "notcovered": 24,
+          "percent": 83.33333333333334
+        },
+        "branches": {
+          "count": 20,
+          "covered": 14,
+          "notcovered": 6,
+          "percent": 70
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/stream/rows.rs",
+      "summary": {
+        "lines": {
+          "count": 171,
+          "covered": 169,
+          "percent": 98.83040935672514
+        },
+        "functions": {
+          "count": 10,
+          "covered": 10,
+          "percent": 100
+        },
+        "instantiations": {
+          "count": 10,
+          "covered": 10,
+          "percent": 100
+        },
+        "regions": {
+          "count": 201,
+          "covered": 186,
+          "notcovered": 15,
+          "percent": 92.53731343283582
+        },
+        "branches": {
+          "count": 50,
+          "covered": 47,
+          "notcovered": 3,
+          "percent": 94
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    },
+    {
+      "filename": "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/src/zlib/inflate.rs",
+      "summary": {
+        "lines": {
+          "count": 265,
+          "covered": 254,
+          "percent": 95.84905660377359
+        },
+        "functions": {
+          "count": 10,
+          "covered": 8,
+          "percent": 80
+        },
+        "instantiations": {
+          "count": 10,
+          "covered": 8,
+          "percent": 80
+        },
+        "regions": {
+          "count": 350,
+          "covered": 335,
+          "notcovered": 15,
+          "percent": 95.71428571428572
+        },
+        "branches": {
+          "count": 62,
+          "covered": 59,
+          "notcovered": 3,
+          "percent": 95.16129032258065
+        },
+        "mcdc": {
+          "count": 0,
+          "covered": 0,
+          "notcovered": 0,
+          "percent": 0
+        }
+      }
+    }
+  ]
+}

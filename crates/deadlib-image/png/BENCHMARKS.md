@@ -517,3 +517,23 @@ python crates/deadlib-image/png/scripts/generate_decode_corpus.py --output targe
 ./crates/deadlib-image/png/scripts/benchmark_pipeline.ps1 -Target decode -CorpusDirectory target/decode-corpus-fresh -LogPrefix target/decode-current -Iterations 7 -Runs 2 -Cpu 0
 python crates/deadlib-image/png/scripts/summarize_decoder.py --before crates/deadlib-image/png/benchmark-token-control-photos-b crates/deadlib-image/png/benchmark-token-control-photos-c --after crates/deadlib-image/png/benchmark-token-forced-photos-b crates/deadlib-image/png/benchmark-token-forced-photos-c --output target/decode-comparison-fresh.json
 ```
+
+## Combined Huffman validity predicate (2026-10-27)
+
+A smaller trial replaced `n != 0 && n <= buffered_bits` with the equivalent
+unsigned comparison `n.wrapping_sub(1) < buffered_bits`. It passes all 25 focused
+library/Huffman/prefix/inflate/header tests; the two C checks remain optional.
+The trial changes no tables, refill rules, memory capacities or encoder code.
+Its patch and exact source hashes are in `experiments/huffman-predicate.json`.
+
+The `benchmark-predicate-*` groups use baseline/candidate/saved-baseline order,
+three process repetitions per corpus at each position, twelve iterations, three
+warmups and CPU 0 affinity. The final summaries combine six original processes
+against three candidate processes on each corpus, with exact size, capacity,
+source and binary invariants. Photo decode moves from 93.22 to 108.11 MiB/s in
+absolute terms, but is **-0.77% relative to Rust png**, which also speeds up.
+The all-format decode change is -0.19% relative; reader/raw-inflate results are
+mixed. The shared host does not establish a consistent benefit, so the original
+predicate is retained. All 21 production files match `fae2e5bd2` exactly.
+No new speedup is claimed. Timing finished before native-feedback fuzzing and
+coverage builds began.

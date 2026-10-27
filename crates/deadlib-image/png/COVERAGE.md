@@ -27,7 +27,7 @@ evidence, application responsibilities and explicitly open items.
 | Bounded streaming with arbitrary input boundaries | `zlib::Inflater`, `StreamDecoder`, `decode_reader` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eleven targets; 1,110,000 recorded successful sanitizer executions across milestones, including historical encoder runs; newest 110,000 executions use five decoder targets; longer campaigns and whole-decoder native-only feedback review remain open |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eleven targets; 1,180,000 recorded successful sanitizer executions across milestones, including historical encoder runs; newest 70,000 executions use native-crate feedback with artifact-verified isolation; targeted decoder gaps and longer campaigns remain open |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Historical milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -1214,3 +1214,55 @@ decoder executions bring historical campaigns to 1,110,000 across eleven targets
 including earlier encoder runs. No new encoder campaign or encoder change was
 added. Whole-decoder native-only feedback review, remaining field audits and
 competitive decoder performance remain open.
+
+## Native-crate fuzz feedback isolation (2026-10-27)
+
+`scripts/fuzz_native.py` uses a compiler wrapper to retain SanitizerCoverage only
+in `deadlib_image_png` and `deadlib_image`. Harnesses and dependencies retain ASan
+and other compiler options. This separates reference/helper code from mutation
+feedback without removing memory checks. The compiled-artifact audit finds
+16,550 counter bytes in PNG and 45 in shared primitives, with no counter or PC
+table sections in fourteen dependency archives and four harness objects. Compiler
+invocation records independently confirm removed feedback flags. Native-crate
+std/alloc monomorphizations can still contribute feedback; this is a crate
+boundary, not source-only feedback.
+
+Fresh campaigns pass 50,000 `png_stream` and 20,000 `inflate_stream` executions,
+in 71 / 12 fuzzing seconds and 524 / 398 MiB peak RSS. The first corpus starts
+with 27,867 files / 6,368,086 bytes; the raw corpus has 939 files / 716,066 bytes,
+including existing zlib fixtures no larger than 64 KiB. Both binaries define
+the ASan runtime entry. These 70,000 successful decoder executions bring
+historical campaigns to 1,180,000. No encoder target or production source changes
+are added. `fuzz/reports/native-feedback-source.json` retains commands, source,
+corpus, binary and archive hashes, compiler arguments and section audits.
+
+The initial audit expected Cargo's older `release/deps` layout and failed after
+both campaigns passed. The corrected audit locates artifacts under this
+toolchain's per-package build directories and verifies the same retained build.
+Fuzzing was not restarted or counted again. The exact original runner is retained
+as `fuzz/reports/native-feedback-runner-as-run.py`; the manifest distinguishes
+its source from the corrected auditor. The reproducible archive helper creates
+the same initial corpus digests with stable ZIP metadata.
+
+A separate fixed replay maps twenty native PNG source files plus shared
+primitives. The generated constant registry has no runtime coverage mapping.
+Reference libraries, harnesses and stdlib source are excluded by explicit file
+operands. Whole-package totals include unused encoding utilities and are not
+decoder-only percentages. Focused decoder-only file coverage is:
+
+| File | Lines | Instrumented branch outcomes |
+| --- | ---: | ---: |
+| `src/stream/decode.rs` | 541/555 (97.48%) | 209/228 (91.67%) |
+| `src/stream/read.rs` | 112/120 (93.33%) | 14/20 (70.00%) |
+| `src/stream/rows.rs` | 169/171 (98.83%) | 47/50 (94.00%) |
+| `src/zlib/inflate.rs` | 254/265 (95.85%) | 59/62 (95.16%) |
+
+The 35 explicit zero-count annotations in these files identify resource-limit
+branches, API accessors/error repetition, reader interruptions/invalid byte
+counts, internal invariants and draining prefetched bytes before stored blocks.
+They guide targeted corpus/API work and reachability review; they are not a
+reason to alter normative behavior or a proof that every missed line is reachable.
+`coverage-reports/native-feedback-*` retains source/corpus/profile/binary hashes,
+commands, per-file summaries and the focused gap list. Replay is excluded from
+fuzz totals. Remaining field audits, corpus gaps and competitive decoder
+performance remain open.

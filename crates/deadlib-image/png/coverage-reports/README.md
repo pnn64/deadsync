@@ -87,3 +87,48 @@ run `cargo fuzz coverage compositor CORPUS --sanitizer none --jobs 4` on the
 selected nightly with `RUSTFLAGS='-Z coverage-options=branch'`, then use that
 toolchain's `llvm-cov` with the resulting binary/profile and the single explicit
 `src/composite.rs` source operand, as recorded in the manifest.
+
+## Native-crate feedback and decoder corpus replay (2026-10-27)
+
+`native-feedback-*` maps the final corpora from 50,000 PNG-stream and 20,000
+raw-stream ASan executions. A compiler wrapper restricted mutation feedback to
+the two native image crates. Object-section audits independently found no
+feedback counters or PC tables in fourteen dependency archives or four harness
+objects. These checks separate mutation feedback from the source-coverage report:
+the former can include std/alloc monomorphizations compiled inside native crates;
+the latter selects only native source filenames and excludes stdlib source.
+
+The fixed replay uses 28,770 PNG files and 1,096 raw-stream files. It maps twenty
+native PNG source files plus shared primitives. The generated language registry
+is constant data and has no runtime mapping. Package totals include uncalled
+encoding utilities, which are outside decoder completion requirements. They
+must not be presented as decoder-only coverage. The ordinary compiled library
+is mapped; embedded cfg(test) functions are absent.
+
+| Decoder-only file | Line coverage | Instrumented branch outcomes |
+| --- | ---: | ---: |
+| `stream/decode.rs` | 541/555 (97.48%) | 209/228 (91.67%) |
+| `stream/read.rs` | 112/120 (93.33%) | 14/20 (70.00%) |
+| `stream/rows.rs` | 169/171 (98.83%) | 47/50 (94.00%) |
+| `zlib/inflate.rs` | 254/265 (95.85%) | 59/62 (95.16%) |
+
+`native-feedback-decoder-gaps.json` lists 35 explicit zero-count annotations in
+these four files, with per-file summaries. They identify resource-limit paths,
+accessors/error repetition, interrupted or invalid reader results, internal
+invariants and byte draining after Huffman lookahead before a stored block.
+The next corpus/API work should vary resource budgets, exercise reader failures
+and include independent mixed-block prefix fixtures. Internal guards also need
+reachability review. Percentages alone are not a reason to change behavior.
+The four-file list does not replace the complete mapping or the other decoder
+field/metadata/APNG audits.
+
+The manifest retains source, corpus, binary and merged-profile hashes plus
+commands and the exact toolchain. Full annotated source and raw profiles remain
+under `/tmp/deadlib-image-native-feedback-coverage-20261027-a` and the per-target
+`fuzz/coverage` folders. Fixed replay is excluded from sanitizer campaign totals.
+The complete replay command/output trace is retained as
+`native-feedback-commands.log.gz`, with compressed and original byte hashes in
+the manifest; the uncompressed trace remains in the temporary output directory.
+The campaign manifest records an initial artifact-directory audit failure and
+its recovery against the same retained binaries; no fuzzing was restarted.
+Production sources remain identical to `fae2e5bd2`.

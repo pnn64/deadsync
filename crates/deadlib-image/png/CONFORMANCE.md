@@ -36,7 +36,7 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | 7.3, 9.1–9.4: filters | Native None/Sub/Up/Average/Paeth plus adaptive encoder selection; byte-wise wrapping arithmetic and pass resets | Covered by reference sample matrix and PNGSuite |
 | 8.1: Adam7 | All seven pass origins/steps, empty passes, plain/stream writer and row-reader paths | Covered by geometry matrix, PNGSuite and APNG subframes |
 | 10.1, RFC 1950: zlib | All 65,536 CMF/FLG pairs, advertised-window boundaries, Adler-32, limits and prefix consumption; `tests/zlib_headers.rs`, `tests/deflate_prefix.rs` | Covered by buffered/fragmented raw and PNG tests, all level hints, 92 independent window fixtures, C zlib default/strict builds and 88,414 prefix/suffix cases; consumed-byte arithmetic is checked at virtual usize boundaries without a large input allocation |
-| 10.1, RFC 1951: DEFLATE decode | Stored/fixed/dynamic trees; 19,645 independently assembled Huffman fixtures, 1,525 complete code-length histograms, all repeat counts, reserved symbols, code widths 1–15 and legal length/distance values; `tests/huffman.rs` | Covered for these equivalence classes through buffered/fragmented raw and PNG paths, default/compatibility C zlib, 3,091 libdeflate positive checks and structured ASan fuzzing; arbitrary symbol permutations and native-only fuzz coverage review remain Open |
+| 10.1, RFC 1951: DEFLATE decode | Stored/fixed/dynamic trees; 19,645 independently assembled Huffman fixtures, 1,525 complete code-length histograms, all repeat counts, reserved symbols, code widths 1–15 and legal length/distance values; `tests/huffman.rs` | Covered for these equivalence classes through buffered/fragmented raw and PNG paths, default/compatibility C zlib, 3,091 libdeflate positive checks and structured ASan fuzzing; arbitrary symbol permutations and targeted native fuzz coverage gaps remain Open |
 | 10.2: image datastream | One zlib stream across arbitrary IDAT/fdAT splits; exact filtered/native output lengths; prefix tolerance for unused final data | Covered by one-byte payloads, truncations and streaming properties |
 | 10.3: compressed metadata | Independent native zlib streams and cumulative raw/inflated metadata limits; metadata/text/profile tests and structured profile fuzzer | Covered; no preset dictionaries or concatenated metadata streams |
 
@@ -83,7 +83,7 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | 12.9: text | UTF-8 serialization, keyword byte/length classes, strict Latin-1 body encoding, native metadata compression and raw/typed APIs | Covered for these wire/encoder rules, including body NBSP and LF, empty/long text and unchanged non-null iTXt controls; line wrapping/display conventions are Application |
 | 12.10: chunking/extensions | Chunk size control, bounded writer chunks, recognized ancillary placement, private-name/property validation | Covered; full ordering mutation matrix remains Open |
 | 13.1: errors/recovery | Strict default plus `AnimationPolicy::RecoverDefault`, first-error event/diagnostic, discarded animation frames and verified native static image; palette/profile recovery | Covered for the APNG fault/CRC/sequence/data classes, all fragments/truncations tested, fatal core/resource/IO cases and diagnostic-free static reencoding; presentation remains Application |
-| 13.2–13.3: checking/security | Mandatory CRCs/checksums, grammar/format checks, checked arithmetic, input/output/chunk/frame/metadata limits; eleven sanitizer targets | Covered for tested cases; native compositor corpus coverage is reported separately, while longer campaigns and whole-decoder native-only feedback review remain Open |
+| 13.2–13.3: checking/security | Mandatory CRCs/checksums, grammar/format checks, checked arithmetic, input/output/chunk/frame/metadata limits; eleven sanitizer targets | Covered for tested cases; native-crate feedback isolation is verified from compiler arguments and object sections, and fixed corpus replays map native source only. Targeted decoder gaps and longer campaigns remain Open |
 | 13.4: privacy | Exact hidden color samples, Exif and text are retained; encoder does not claim redaction or metadata scrubbing | Application; native preservation is intentional |
 | 13.5: unknown chunks | Independent property-bit/name-byte/case matrices through buffered, one-/seven-byte reader and direct event paths; literal raw names/data/positions and fused critical errors | Covered for these equivalence classes; reserved-bit ancillary acceptance follows 13.5 despite libpng 1.6.50 rejecting these names |
 | 13.6: pixel dimensions | pHYs values available without changing pixel storage | Application for presentation scaling |
@@ -108,7 +108,9 @@ verified by retained offline builds. Decoder performance remains incomplete in
 `BENCHMARKS.md`: the Huffman and filter optimizations improve measured photo
 decoding, but native 109.49 MiB/s still trails Rust png's 226.46 in the selected
 comparison. Native-precision APNG render answers and scoped native compositor
-corpus coverage are now retained. Resolve remaining decoder field audits and
-whole-decoder native-only feedback coverage, review the scoped corpus gaps,
+corpus coverage are now retained. Native-crate feedback isolation and a
+whole-package source replay are verified; package totals also contain untouched
+encoding utilities and are not decoder-only percentages. Resolve remaining
+decoder field audits, review the recorded native decoder gaps,
 improve measured decoder performance, and repeat the requirement audit against
 the resulting implementation and measurements before claiming completion.
