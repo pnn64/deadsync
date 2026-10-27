@@ -315,7 +315,11 @@ fn pane_percentage_actor(
             ));
         }
         EvalPane::Standard => {
-            let (bg_y, bg_h) = if text.routine { (14.0, 88.0) } else { (0.0, 60.0) };
+            let (bg_y, bg_h) = if text.routine {
+                (14.0, 88.0)
+            } else {
+                (0.0, 60.0)
+            };
             children.push(act!(quad:
                 align(bg_align_x, 0.5):
                 xy(bg_x, bg_y):
