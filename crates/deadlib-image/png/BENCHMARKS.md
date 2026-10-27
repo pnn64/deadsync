@@ -606,3 +606,49 @@ source, reconstruction proofs, timings, profile and validation artifacts. Only
 `src/checksum.rs` changes from `ded016feb`; public APIs, heap allocations and decoder
 sample/metadata behavior are unchanged. Competitive decoder performance and
 remaining conformance audits stay open.
+
+## Paired literal lookup trials (2026-10-27)
+
+Two buffered-only experiments replace a single literal lookup with a lookup
+that can return two literal bytes. The first adds a 512-entry u32 table
+(2 KiB of stack) for pairs totaling at most nine bits. The second adds a
+4,096-entry table (16 KiB) with twelve-bit single/pair entries. Both preserve
+the canonical fallback, output limits and exact logical prefix consumption.
+Incremental decoding retains its original tables. Neither trial changes public
+APIs, heap allocations, production dependencies or encoding behavior.
+
+Both candidates are rejected. Exact patches/source hashes are retained in
+`experiments/primary-pairs{,-wide}.{patch,json}`; both patches reconstruct all
+21 recorded production source hashes from `23a46c8ed`. The retained runtime
+matches that commit byte for byte. `experiments/primary-pairs-selection.json`
+links the reconstruction proofs, fourteen timing groups and four final summaries.
+
+Each comparison uses baseline/candidate/candidate/baseline order, three
+processes per position/corpus, twelve iterations, three warmups and CPU 0.
+The first trial uses `before`, `trial`, `repeat`, `control`; the wider trial
+uses `control`, `wide`, `wide_repeat`, `control2`. Builds finish before their
+timed processes, and no tests, sanitizer jobs or profiling from this task run
+during timing. The corpus, harness, toolchain, binary, sample-size, encoded-size
+and pipeline-capacity invariants are verified. The host remains shared.
+
+| Trial / PNG decode corpus | Original MiB/s | Trial MiB/s | Change relative to Rust png |
+| --- | ---: | ---: | ---: |
+| Nine-bit / 24 photos | 97.70 | 94.62 | -4.71% |
+| Nine-bit / 60 formats | 233.25 | 245.74 | -1.54% |
+| Twelve-bit / 24 photos | 96.39 | 94.63 | -1.99% |
+| Twelve-bit / 60 formats | 237.46 | 242.75 | -7.67% |
+
+Raw-inflate changes relative to flate2 are -1.44% / -5.78% for the nine-bit
+trial and +1.86% / -17.97% for twelve bits (photos / formats). Unchanged
+reader controls also move, by -2.65% / -4.17% and -4.82% / -5.96% relative to
+Rust png. Reference normalization does not eliminate host or code-generation
+variation. The measurements support rejecting the added complexity; they do
+not establish portable regression percentages or a new decoder speedup.
+Final summaries are `benchmark-primary-pairs{,-wide}-{photos,formats}-summary.json`.
+Initial summaries are exploratory and excluded from those rates.
+
+The independent fixtures remain as regression coverage: 65,536 ordered byte
+pairs plus 132 code-width/padding cases, with flate2/C zlib exact answers,
+fragmented native output, EOF/suffix consumption, limits and truncated trailers.
+`primary-pairs-validation.*` and `primary-pairs-independent.log` retain the
+final normal/standalone checks. Competitive decoder performance remains open.

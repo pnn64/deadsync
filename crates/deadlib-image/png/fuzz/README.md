@@ -507,3 +507,26 @@ ten targets to 920,000, including prior encoder runs. Decoder conformance,
 precision, APNG rendering and decoder performance are the clarified deliverable;
 encoder features and speed are outside its completion requirements. Native-only
 feedback coverage and longer campaigns remain open.
+
+## Independent literal-value decoder follow-up
+
+`seed_fuzz --primary-pairs-only FRESH_ROOT` exports 644 independently assembled
+streams to each of `zlib` and `inflate_stream`. The normal full generator also
+includes them. Representative diagonal/complement byte pairs, complete trees,
+unequal widths, zero/one padding and canonical chains through fifteen bits
+supplement the exhaustive 65,668-case regular/C regression suite.
+
+`reports/primary-pairs-seed-build.json` records focused and full generation.
+The focused archive merged with the earlier immutable raw seeds exactly equals
+the full-generator archive: 6,667 files / 1,254,614 bytes, with literal UTF-8
+filename ordering. The fresh `inflate_stream` ASan campaign passes 20,000
+executions in thirteen fuzzing seconds / 465 MiB peak RSS. Both native image
+archives retain feedback; fourteen dependencies and two harness objects have
+no feedback counters or PC tables. The binary matches the checksum milestone.
+`reports/primary-pairs-source.json` and `primary-pairs-inflate_stream.log` retain
+commands, exact sources/binary/corpus hashes and object audits.
+
+These are decoder checks. The two paired-literal runtime trials are rejected
+and all production files remain unchanged. Historical successful sanitizer
+executions reach 1,430,000 across twelve targets, including older encoder runs;
+this milestone runs only the raw-stream decoder target.

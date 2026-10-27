@@ -1445,3 +1445,50 @@ runs. `scalar-fields-audit.json` links exact counts, per-field totals and eviden
 
 Remaining animation/control-field audits, corpus gaps and competitive decoder
 performance remain open.
+
+## Literal values and Huffman lookup trials (2026-10-27)
+
+`tests/primary_pairs.rs` adds 65,668 independently assembled dynamic streams:
+all 65,536 ordered byte pairs and 132 fixtures covering short complete trees,
+unequal code widths, zero/one final padding and canonical chains through the
+15-bit maximum. Construction uses the test-only bit writer, canonical sorting
+and scalar checksum, without the production encoder or table builder.
+
+Flate2 and C zlib return exact two-byte samples for every stream. Native
+buffered decoding checks valid EOF and seven-byte suffix consumption, output
+limits zero/one and four trailer truncations. A separate native inflater uses
+one-byte input and output fragments. This is an exhaustive two-byte value
+matrix, not all symbol permutations or all DEFLATE block sequences.
+
+Both buffered paired-literal optimizations are rejected after repeated
+reference-relative timings. The smaller table lowers photo PNG throughput by
+4.71% relative to Rust png; the wider table by 1.99%. All-format results also
+fail to establish a benefit. `BENCHMARKS.md` records rates and control drift;
+`experiments/primary-pairs-selection.json` links exact source reconstructions
+and timing invariants. All twenty-one production files remain unchanged from
+`23a46c8ed`, including the existing buffered Adler optimization.
+
+Strict main/fuzz Clippy and scoped rustfmt pass. Normal release and independently
+copied offline suites each pass 130 tests, with seventeen optional checks ignored
+by default. The explicit C audit matches all 65,668 streams. All compiled sources,
+test inputs and 878 copied files match; the only copy difference removes a final
+empty line from the oracle README. `primary-pairs-validation.json` records that
+documentation normalization separately. `primary-pairs-audit.json` links the
+exact counts and finalized evidence.
+
+The seed generator adds 644 representative streams to each raw decoder target.
+Focused export merged with the earlier immutable seed ZIP is byte-for-byte
+identical to fresh full generation: 6,667 files / 1,254,614 bytes. The archive,
+generator binary, source and reproduction command hashes are retained in
+`fuzz/reports/primary-pairs-seed-build.json` and `primary-pairs-seeds.json`.
+
+A fresh ASan campaign passes 20,000 raw-stream decoder executions in thirteen
+fuzzing seconds / 465 MiB peak RSS. Native image archives retain feedback;
+fourteen dependency archives and two harness objects have no feedback counters
+or PC tables. The decoder binary matches the prior checksum milestone and
+defines ASan's runtime entry. `fuzz/reports/primary-pairs-source.json` and the
+raw log retain the audit. Historical successful campaigns total 1,430,000,
+including earlier encoder campaigns; no encoder target runs in this milestone.
+
+Decoder field/control audits, remaining corpus gaps and competitive decoder
+performance remain open.

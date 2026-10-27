@@ -1,0 +1,94 @@
+{
+  "before": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 237.99118731462568,
+      "deadlib-image-png/decode-reader": 230.83263412175575,
+      "deadlib-image-png/inflate": 877.2963795892463,
+      "deadlib-image-png/inflate-stream": 473.6202042496441,
+      "flate2-1.1.10/inflate": 550.4629007674229,
+      "png-0.18.1/decode": 302.6680105737116
+    },
+    "process_runs": 3,
+    "artifacts": [
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-primary-pairs-before-formats-a-manifest.json",
+        "sha256": "39edaaf4cf3f55f60034a168b7d00166231bd4747b45a552e091bf9bff4564e5"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-primary-pairs-before-formats-a-run1.tsv",
+        "sha256": "72de9aae17c746c72cb1d4ef1db05b666ff4ef9238596ae80a736ec26a4bbd72"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-primary-pairs-before-formats-a-run2.tsv",
+        "sha256": "2d0e036c04375e8f559a16df974c13e57cb8dfd07231e7011c211e19f7304a29"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-primary-pairs-before-formats-a-run3.tsv",
+        "sha256": "29c31f9f9fbfa4842500170b72b619aeb5ab31073e1e97a48b24203c487dcbd2"
+      }
+    ]
+  },
+  "after": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 265.29701736045826,
+      "deadlib-image-png/decode-reader": 247.83298884540463,
+      "deadlib-image-png/inflate": 931.9863590931259,
+      "deadlib-image-png/inflate-stream": 494.55375623688974,
+      "flate2-1.1.10/inflate": 649.0697262176373,
+      "png-0.18.1/decode": 341.69728775681773
+    },
+    "process_runs": 3,
+    "artifacts": [
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-primary-pairs-trial-formats-a-manifest.json",
+        "sha256": "b505ff7c28b5bfe44e1bf1168792ea6fc698b6f367981bdefad4caa3e9732044"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-primary-pairs-trial-formats-a-run1.tsv",
+        "sha256": "ca8a9bdac85faeccaedfea46fe48c0fbfb79e3bfcb4095dacb0eef625ce57061"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-primary-pairs-trial-formats-a-run2.tsv",
+        "sha256": "384eeb369e5061b62df711c9e3333e09076937c5576a00c4b187335a898a3646"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-primary-pairs-trial-formats-a-run3.tsv",
+        "sha256": "1a4c597400223fa7d48c96b83b8eb05c2b67815c32352b57b5a668ef4b07a0a6"
+      }
+    ]
+  },
+  "native_changes": {
+    "decode": {
+      "before_mib_s": 237.99118731462568,
+      "after_mib_s": 265.29701736045826,
+      "absolute_change_percent": 11.473462674789769,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": -1.2592362057215922
+    },
+    "decode-reader": {
+      "before_mib_s": 230.83263412175575,
+      "after_mib_s": 247.83298884540463,
+      "absolute_change_percent": 7.364796918048344,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": -4.898602789135298
+    },
+    "inflate": {
+      "before_mib_s": 877.2963795892463,
+      "after_mib_s": 931.9863590931259,
+      "absolute_change_percent": 6.233922853926033,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": -9.90515968932012
+    },
+    "inflate-stream": {
+      "before_mib_s": 473.6202042496441,
+      "after_mib_s": 494.55375623688974,
+      "absolute_change_percent": 4.419902656055541,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": -11.443593512122796
+    }
+  },
+  "case_count": 60,
+  "size_and_pipeline_capacity_invariants_verified": true,
+  "scope": "Single-CPU shared-host measurements, including allocations. Reference normalization cannot eliminate scheduling/frequency/cache effects. No broad performance claim follows from one pair.",
+  "runner_sha256": "6e14c9081ea08715bd2a8289ca03812a7ff6601812ca1ae5104916956460703f"
+}

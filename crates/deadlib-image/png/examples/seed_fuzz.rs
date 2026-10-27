@@ -26,6 +26,9 @@ mod named;
 #[path = "../tests/support/prefix.rs"]
 mod prefix;
 #[allow(dead_code)]
+#[path = "../tests/support/primary_pairs.rs"]
+mod primary_pairs;
+#[allow(dead_code)]
 #[path = "../tests/support/scalar_fields.rs"]
 mod scalar_fields;
 #[path = "../tests/support/text_body.rs"]
@@ -34,7 +37,37 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+fn write_primary_pairs(root: &Path) -> std::io::Result<()> {
+    let cases = primary_pairs::seeds();
+    for target in ["zlib", "inflate_stream"] {
+        let directory = root.join(target);
+        fs::create_dir_all(&directory)?;
+        for case in &cases {
+            fs::write(directory.join(&case.name), &case.bytes)?;
+        }
+    }
+    println!(
+        "Primary literals: {} independent seeds per raw target",
+        cases.len()
+    );
+    Ok(())
+}
 fn main() -> std::io::Result<()> {
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|s| s == "--primary-pairs-only")
+    {
+        let destination = std::env::args_os().nth(2).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "--primary-pairs-only requires a fresh output root",
+            )
+        })?;
+        let path = PathBuf::from(destination);
+        fs::create_dir(&path)?;
+        write_primary_pairs(&path)?;
+        return Ok(());
+    }
     if std::env::args_os()
         .nth(1)
         .is_some_and(|s| s == "--scalar-fields-only")
@@ -184,6 +217,7 @@ fn main() -> std::io::Result<()> {
     fs::create_dir_all(&zlib)?;
     fs::create_dir_all(&png_stream)?;
     fs::create_dir_all(&inflate_stream)?;
+    write_primary_pairs(&corpus)?;
     let decoder_limits = corpus.join("decoder_limits");
     fs::create_dir_all(&decoder_limits)?;
     for (name, bytes) in budgets::seeds() {

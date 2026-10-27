@@ -254,3 +254,19 @@ All 7,728 raw fixtures within PNG's integer range and 60 native writer files
 match exactly. For 524 over-range fixtures, libpng ignores the affected HDR
 chunk while native decoding rejects the input; presence flags verify this
 policy difference. `hdr-oracle-validation.log` retains the results.
+
+## Literal values and code widths
+
+```powershell
+cargo test -p deadlib-image-png --release --test primary_pairs c_zlib_literal_pair_values_and_widths -- --ignored --nocapture
+```
+
+The existing `--zlib-batch` protocol checks 65,668 independent dynamic streams:
+every ordered two-byte value and 132 complete/unequal-width, long-code and
+padding fixtures. It supplies output capacity three and requires successful
+termination with exactly the two known bytes, without a native encoder.
+The default regular test checks flate2 plus buffered and one-byte-fragmented
+native decoding, exact EOF/suffix consumption, limits zero/one and four
+truncated-trailer lengths. `primary-pairs-validation.json` / `.log` retain the
+C binary/source identities and results. These literal-only fixtures complement
+the existing Huffman, length/distance, block, PNG and checksum matrices.
