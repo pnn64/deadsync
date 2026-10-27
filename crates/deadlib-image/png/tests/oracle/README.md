@@ -295,3 +295,31 @@ and supplies no APNG-control getter; no C animation comparison is claimed.
 `animation-fields-validation.json` / `.log` retain the commands and results.
 The optional `-Test` selector copies the complete package and runs only that
 target offline; omitting it retains the full standalone suite.
+
+## Streaming literal runs and language extensions
+
+```powershell
+cargo test -p deadlib-image-png --release --test stream_literals --test language_extensions -- --nocapture
+cargo test -p deadlib-image-png --release --test stream_literals c_zlib_literal_runs_and_history_wraps -- --ignored --nocapture
+./crates/deadlib-image/png/scripts/verify_independent.ps1 -Test stream_literals -LogPath target/stream-literals-independent-fresh.log
+```
+
+The raw suite independently builds 172 fixed/dynamic streams with long literal
+runs followed by overlapping and 32 KiB-distance references. Alternating empty
+output calls, one-byte fragments, two history wraps, exact suffix consumption,
+limits and trailer truncations exercise suspension and the pending-literal state.
+The existing C batch protocol checks exact native-size outputs for all streams.
+
+The language suite checks 2,758 tag cases in both compression forms and three
+chunk positions: 16,548 PNG files and 165,480 native API/policy checks. All 14,892
+non-malformed files retain exact Rust png language/text values and native pixels.
+Unknown singleton registration produces native raw metadata rather than claiming
+the extension is understood. Malformed generic syntax and duplicate singletons
+use independent known errors.
+
+PNG requires well-formed language tags and registered subtags. RFC 5646
+2.2.6(4) and 2.2.9 distinguish core tag validation from validation for a particular
+extension; extension-specific validation is not required of validating processors.
+The codec preserves those payloads without interpreting Unicode locale or
+transformation settings. This is no certificate that a payload is valid for an
+individual extension. `stream-literals-validation.*` retains the exact checks.

@@ -23,6 +23,9 @@ mod hdr;
 #[path = "../tests/support/huffman.rs"]
 mod huffman;
 #[allow(dead_code)]
+#[path = "../tests/support/language_extensions.rs"]
+mod language_extensions;
+#[allow(dead_code)]
 #[path = "../tests/support/named.rs"]
 mod named;
 #[allow(dead_code)]
@@ -34,6 +37,9 @@ mod primary_pairs;
 #[allow(dead_code)]
 #[path = "../tests/support/scalar_fields.rs"]
 mod scalar_fields;
+#[allow(dead_code)]
+#[path = "../tests/support/stream_literals.rs"]
+mod stream_literals;
 #[path = "../tests/support/text_body.rs"]
 mod text_body;
 use std::{
@@ -70,7 +76,46 @@ fn write_animation_fields(root: &Path) -> std::io::Result<()> {
     );
     Ok(())
 }
+fn write_stream_followup(root: &Path) -> std::io::Result<()> {
+    let png = language_extensions::seeds();
+    for target in ["decode", "png_stream"] {
+        let directory = root.join(target);
+        fs::create_dir_all(&directory)?;
+        for (name, bytes) in &png {
+            fs::write(directory.join(name), bytes)?;
+        }
+    }
+    let raw = stream_literals::seeds();
+    for target in ["zlib", "inflate_stream"] {
+        let directory = root.join(target);
+        fs::create_dir_all(&directory)?;
+        for case in &raw {
+            fs::write(directory.join(format!("stream-{}", case.name)), &case.bytes)?;
+        }
+    }
+    println!(
+        "Streaming follow-up: {} language PNG seeds, {} literal-run raw seeds per target",
+        png.len(),
+        raw.len()
+    );
+    Ok(())
+}
 fn main() -> std::io::Result<()> {
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|s| s == "--stream-followup-only")
+    {
+        let destination = std::env::args_os().nth(2).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "--stream-followup-only requires a fresh output root",
+            )
+        })?;
+        let path = PathBuf::from(destination);
+        fs::create_dir(&path)?;
+        write_stream_followup(&path)?;
+        return Ok(());
+    }
     if std::env::args_os()
         .nth(1)
         .is_some_and(|s| s == "--animation-fields-only")
@@ -250,6 +295,7 @@ fn main() -> std::io::Result<()> {
     fs::create_dir_all(&zlib)?;
     fs::create_dir_all(&png_stream)?;
     fs::create_dir_all(&inflate_stream)?;
+    write_stream_followup(&corpus)?;
     write_animation_fields(&corpus)?;
     write_primary_pairs(&corpus)?;
     let decoder_limits = corpus.join("decoder_limits");

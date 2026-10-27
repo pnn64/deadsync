@@ -1,0 +1,44 @@
+diff --git a/crates/deadlib-image/png/src/zlib/inflate.rs b/crates/deadlib-image/png/src/zlib/inflate.rs
+index fd71d891f..1d14ef707 100644
+--- a/crates/deadlib-image/png/src/zlib/inflate.rs
++++ b/crates/deadlib-image/png/src/zlib/inflate.rs
+@@ -344,11 +344,34 @@ impl Inflater {
+                     self.index += n;
+                     self.state = State::DynamicLengths;
+                 }
+-                State::Codes => match symbol!(&self.literals) {
+-                    value @ 0..=255 => self.state = State::Literal(value as u8),
+-                    256 => self.end_block(),
+-                    value @ 257..=285 => self.state = State::LengthExtra(value - 257),
+-                    _ => return Err(Error::Invalid("reserved literal symbol")),
++                State::Codes => loop {
++                    match symbol!(&self.literals) {
++                        value @ 0..=255 => {
++                            if self.total_out == self.limit {
++                                return Err(Error::LimitExceeded);
++                            }
++                            if written == output.len() {
++                                self.state = State::Literal(value as u8);
++                                stop!(StreamStatus::NeedOutput);
++                            }
++                            // Keep literal runs in this state, without another
++                            // dispatch or a one-byte ring-copy operation.
++                            output[written] = value as u8;
++                            self.history[self.history_pos] = value as u8;
++                            self.history_pos = (self.history_pos + 1) & 32767;
++                            self.total_out += 1;
++                            written += 1;
++                        }
++                        256 => {
++                            self.end_block();
++                            break;
++                        }
++                        value @ 257..=285 => {
++                            self.state = State::LengthExtra(value - 257);
++                            break;
++                        }
++                        _ => return Err(Error::Invalid("reserved literal symbol")),
++                    }
+                 },
+                 State::Literal(value) => {
+                     if self.total_out == self.limit {

@@ -1552,3 +1552,78 @@ reference-relative comparisons. `BENCHMARKS.md` records the trial and control
 drift; its source checkpoint and reconstruction are retained. All twenty-one
 production PNG files remain unchanged from `861a15e00`. Remaining corpus gaps,
 extension scope checks and competitive decoder performance stay open.
+
+## Streaming literals and language extension scope (2026-10-27)
+
+`src/zlib/inflate.rs` keeps literal runs inside the symbol state and directly
+updates the existing history ring. The pending Literal state remains for a
+value decoded with no output room. Counters, limits, checksum batching, bit
+refill, table construction and the fixed allocation retain their existing rules.
+No unsafe code or production dependencies are introduced. The other twenty
+production PNG files and shared primitives retain their baseline bytes.
+
+Four-position comparisons favor PNG reader decode by 5.81% on photos and 4.74%
+on the independent format corpus relative to Rust png. Streaming inflation
+improves 8.29% / 11.53% relative to flate2. Buffered controls and shared-host
+limits are documented in `BENCHMARKS.md`. The exact selected source, reconstructed
+patch and timing invariants are in `experiments/stream-literals-selection.json`.
+
+`tests/stream_literals.rs` independently builds 172 fixed/dynamic streams with
+literal prefixes around byte/output/history boundaries through 65,537 bytes,
+then overlapping and 32 KiB-distance references. Expected samples are expanded
+one byte at a time, independently of native history/copy code. Alternating empty
+output calls and 1/1, 7/31, whole/257 input/output shapes check suspension,
+working memory, untouched output tails, counters, fused errors, suffix consumption,
+limits and four trailer truncations. Flate2 and the explicit C zlib batch agree
+on all 172 exact raw outputs.
+
+The iTXt extension scope audit follows PNG 11.3.3.4 and RFC 5646 2.2.6(4)/2.2.9.
+The RFC distinguishes generic well-formedness/registration from validity for a
+specific extension, and does not require processors to validate extension
+contents. The codec preserves those contents without interpreting locale or
+transformation settings; it does not certify extension-specific validity.
+Normative references are [PNG Third Edition](https://www.w3.org/TR/2025/REC-png-3-20250624/#11iTXt)
+and [RFC 5646](https://www.rfc-editor.org/rfc/rfc5646#section-2.2.6).
+
+`tests/language_extensions.rs` checks every singleton byte, both-case ordered
+pairs of all 35 nonprivate singleton characters, extension/private payload
+lengths and literal examples. Its 2,758 tags comprise 48 typed, 2,434 unknown-
+registration and 276 malformed cases. Both compression flags and three positions
+produce 16,548 PNG files and 165,480 API/policy checks through buffered decoding,
+one-/seven-byte readers and one-/31-byte push input under both animation policies.
+All 14,892 non-malformed files match Rust png's raw language/text fields and native
+pixels; unknown registration retains the complete original chunk as raw metadata.
+Malformed generic syntax and duplicate singletons use independent known errors.
+No encoder feature work is part of this audit.
+
+Strict main/fuzz Clippy and scoped rustfmt pass. The full release suite passes
+134 tests, with nineteen optional checks ignored. The new streaming target also
+passes in a fresh complete offline package copy, with its optional C check
+ignored there. All 885 copied sources, fixtures, examples and benchmark files
+match. The normal dependency tree contains only the shared image package.
+Commands, exact sources and C batch identities are in `stream-literals-validation.*`;
+`stream-literals-audit.json` links the finalized evidence.
+
+The generator adds 3,066 representative PNGs and 130 raw literal streams per
+target. `fuzz/reports/stream-literals-*` retain full/focused generation, immutable
+input archives, exact source and binary identities, corpus digests and fresh
+native-feedback sanitizer campaigns. This milestone's temporary-storage
+relocation is documented in `fuzz/reports/generated-seeds-storage-20261027.json`.
+
+Full fresh generation matches the focused/merged ZIP byte for byte after inode
+recovery. Initial PNG/raw corpora contain 48,167 / 6,927 files and 11,230,779 /
+4,009,252 bytes. Fresh ASan passes 50,000 PNG-stream executions in 47 fuzzing
+seconds / 527 MiB peak RSS and 20,000 raw-stream executions in 18 seconds /
+492 MiB. Both binaries define ASan's runtime entry. Feedback remains in the two
+native archives (16,710 PNG / 45 shared counter bytes); fourteen dependency
+archives and four harness objects have no feedback counters or PC tables.
+These 70,000 successful executions bring historical campaigns to 1,550,000,
+including older encoder campaigns. No encoder target runs here.
+
+The post-validation reader profile in `profiling/reader-stream-literals.*` has
+no lost samples. Requested 499 Hz sampling is capped initially at 250 Hz by the
+host; the warning is retained. Direct inflater-loop instructions account for
+28.15% of samples and Huffman decoding 16.43%, with further refill/checksum
+costs. These are diagnostic shares rather than isolated timings or a speedup
+measurement. Comparative benchmarks finish before final validation and profiling.
+Remaining corpus gaps and competitive decoder performance stay open.

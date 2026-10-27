@@ -547,3 +547,27 @@ literal UTF-8 filename bytes. `reports/animation-fields-source.json` and the raw
 PNG-stream log retain the fresh ASan campaign, exact sources/binary/corpus hashes
 and native/dependency/harness feedback audits. Production decoder files are
 unchanged; no encoder target is part of this milestone.
+
+## Streaming literal and language-extension follow-up
+
+`seed_fuzz --stream-followup-only FRESH_ROOT` exports 3,066 independently framed
+language-tag PNG files and 130 fixed/dynamic literal-run streams per target.
+Full generation includes the same files. The PNG subset covers singleton bytes,
+private-use and extension lengths, generic duplicate rules and opaque payloads.
+The raw subset covers long literal runs and history references within the
+64 KiB fuzz-input cap; regular tests also cover literal prefixes beyond two
+32 KiB history wraps.
+
+Focused export merges the immutable APNG-field PNG ZIP and literal-pair raw ZIP.
+Full fresh generation must produce identical ZIP bytes for both selected targets.
+`reports/stream-literals-seed-build.json` records that reproduction, including an
+initial full-generation failure caused by /tmp inode exhaustion and its recovery.
+Three earlier complete generated seed directories are packed into verified
+workspace ZIPs before removal; exact paths, tree/archive hashes and counts are
+in `reports/generated-seeds-storage-20261027.json`. Earlier selected-target ZIPs
+remain the immutable corpus inputs. The failed partial output remains retained.
+
+`reports/stream-literals-source.json` records fresh PNG/raw ASan campaigns with
+native-only feedback, while preserving ASan on dependencies and harnesses. It
+retains current sources, commands, binaries, initial corpus hashes and object
+section audits. These are decoder campaigns; no encoder target runs.

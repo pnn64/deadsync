@@ -692,3 +692,57 @@ estimates. The results do not establish a benefit for the added output loop,
 so it is not retained and no speedup is claimed. Final summaries are
 `benchmark-output-spare-{photos,formats}-summary.json`; the initial photo
 comparison is exploratory. Competitive decoder performance remains open.
+
+## Streaming literal-run state fusion (2026-10-27)
+
+The streaming inflater now writes consecutive literals directly from its symbol
+state, updating the existing history ring and output counter. This avoids a
+second state dispatch and a one-byte ring-copy operation for every literal.
+A decoded literal still enters the pending Literal state when output is full;
+input suspension, logical limits, checksum batching, advertised windows and
+prefix consumption retain their existing rules. The struct, 32 KiB allocation,
+Huffman tables and refill rules are unchanged. Only `src/zlib/inflate.rs` changes
+in production; buffered inflation and encoding logic remain unchanged.
+
+The exact patch/source hashes are in `experiments/stream-literals.{patch,json}`.
+`experiments/stream-literals-selection.json` reconstructs all 21 selected source
+hashes from `eb9d4ef9d` and links eight timing groups / two final summaries.
+The comparison uses baseline/candidate/candidate/baseline order, three process
+repetitions per position/corpus, twelve iterations, three warmups and CPU 0.
+Identical 24-photo and 60-format corpora, source/binary identities, harness,
+toolchain and reported size fields are verified. The pipeline memory column
+is zero and is not a peak-allocation measurement. Source inspection and fixed
+working-memory assertions establish the unchanged inflater allocation model.
+
+| Streaming operation | Original MiB/s | Selected MiB/s | Change relative to reference |
+| --- | ---: | ---: | ---: |
+| Photo PNG reader decode | 76.20 | 79.16 | +5.81% |
+| Photo IDAT streaming inflate | 82.09 | 86.97 | +8.29% |
+| All-format PNG reader decode | 232.66 | 246.08 | +4.74% |
+| All-format IDAT streaming inflate | 474.81 | 557.47 | +11.53% |
+
+Reader changes are normalized against Rust png, streaming inflation against
+flate2. Unchanged buffered PNG controls are -0.16% / -0.51% relative on photos /
+formats; unchanged buffered inflation is +0.46% / -2.02%. Absolute rates drift
+along with references. No builds, tests, sanitizer jobs or profiling from this
+task run during timed processes. External workloads and CPU frequency remain
+uncontrolled, so these measurements support this local change without proving
+broad decoder parity. Final comparisons are
+`benchmark-stream-literals-{photos,formats}-summary.json`; initial comparisons
+are exploratory and excluded from those rates.
+
+Independent fixed/dynamic fixtures check long literal runs, back-references,
+two history wraps, empty output calls, one-byte fragments, limits, checksums
+and exact prefix consumption against flate2 and C zlib. The language-extension
+suite also verifies compressed/uncompressed metadata and native PNG readers.
+`stream-literals-validation.*` retains full release, scoped independent offline,
+strict main/fuzz lint and C-reference checks. Competitive decoder performance
+remains open.
+
+The selected Linux reader-path cycle sample is retained in
+`profiling/reader-stream-literals.*`. It runs after all comparative timing and
+sanitizer jobs, with no lost samples. The host caps the requested 499 Hz at an
+initial 250 Hz. Direct inflater-loop instructions account for 28.15% of samples,
+Huffman decoding 16.43%, refill 6.01% and incremental Adler updates 3.83%.
+The profile links exact sources, corpus, binary and raw data hashes; its shares
+are diagnostic and do not establish an isolated kernel timing improvement.

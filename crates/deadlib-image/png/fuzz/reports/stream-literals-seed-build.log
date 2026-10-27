@@ -1,0 +1,22 @@
+COMMAND: ["cargo", "build", "--release", "-p", "deadlib-image-png", "--example", "seed_fuzz"]
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.3
+   Compiling cfg-if v1.0.5
+   Compiling deadlib-image v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image)
+   Compiling miniz_oxide v0.9.1
+   Compiling fdeflate v0.3.7
+   Compiling miniz_oxide v0.8.9
+   Compiling bitflags v2.13.2
+   Compiling flate2 v1.1.10
+   Compiling deadlib-image-png v0.1.0 (/mnt/c/GitHub/deadsync/crates/deadlib-image/png)
+   Compiling png v0.18.1
+    Finished `release` profile [optimized] target(s) in 21.59s
+COMMAND: ["/tmp/deadlib-image-stream-literals-seed-target-20261027-a/release/examples/seed_fuzz", "--stream-followup-only", "/tmp/deadlib-image-stream-literals-seeds-20261027-a"]
+Streaming follow-up: 3066 language PNG seeds, 130 literal-run raw seeds per target
+COMMAND: ["python3", "/mnt/c/GitHub/deadsync/crates/deadlib-image/png/fuzz/scripts/archive_native_seeds.py", "--corpus-root", "/tmp/deadlib-image-stream-literals-seeds-20261027-a", "--targets", "png_stream", "inflate_stream", "--include-archive", "/tmp/deadlib-image-animation-fields-seeds-20261027-a.zip", "--include-archive", "/tmp/deadlib-image-primary-pairs-seeds-20261027-a.zip", "--output", "/tmp/deadlib-image-stream-literals-seeds-20261027-a.zip"]
+{"archive_sha256": "aa9f00512df5de65ec0e3d62463e8072a83d69396ca21307010128153ae2cd6b", "initial_corpora": [{"target": "png_stream", "files": 48167, "bytes": 11230779, "maximum_file_bytes": 63435, "sha256": "1fd95359a58563158f7e93745f9f95078fa74009eb24936c111dc0c50a08db26"}, {"target": "inflate_stream", "files": 6927, "bytes": 4009252, "maximum_file_bytes": 34575, "sha256": "ee7d4ebe3ccdfa5727b2fee81df6f4b9c4c32ca62158777e2b526fcd8e8469e8"}], "runner_sha256": "4f25e780a6dcc610e7bc2572e13d6ca4f75b0b68ec8e7d20bef5d073aa163610", "hash_method": "Ascending literal UTF-8 filename bytes, NUL, file contents", "included_archives": [{"path": "/tmp/deadlib-image-animation-fields-seeds-20261027-a.zip", "sha256": "fb49995980c59e997362ba8018b0fe053ab260c225b0942f76c4080ace77d185"}, {"path": "/tmp/deadlib-image-primary-pairs-seeds-20261027-a.zip", "sha256": "23eb4e821e5159fc2cf1673771f2da620c19c571d74fc2910a9b9ecb3049c33d"}]}
+COMMAND: ["/tmp/deadlib-image-stream-literals-seed-target-20261027-a/release/examples/seed_fuzz", "/tmp/deadlib-image-stream-literals-full-20261027-a"]
+Huffman: 19645 fixtures, 649 seeds
+Streaming follow-up: 3066 language PNG seeds, 130 literal-run raw seeds per target
+Error: Os { code: 28, kind: StorageFull, message: "No space left on device" }
