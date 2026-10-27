@@ -8,7 +8,8 @@ pub struct ValidationOptions {
     /// historical encoders incorrectly marked unfinished secondary headers zero.
     pub allow_zero_span_granules: bool,
     /// Permit a final EOS granule below an earlier page's granule. Only a codec
-    /// with advance knowledge of the final length can safely trim earlier PCM.
+    /// chooses how to report or repair the inconsistent endpoint; this option
+    /// alone neither retracts PCM nor determines its count.
     /// This never permits decreases on non-EOS pages.
     pub allow_decreasing_eos_granule: bool,
 }

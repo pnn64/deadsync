@@ -1,0 +1,19 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `release` profile [optimized] target(s) in 17.25s
+     Running tests\eos_clamping.rs (target\release\deps\eos_clamping-cb6ab2295cef7901.exe)
+
+running 1 test
+
+thread 'reference_eos_clamping_witness' (13736) panicked at crates\deadlib-audio\decode\vorbis\tests\eos_clamping.rs:66:5:
+reference emits 3648 frames with declared 1; native emitted 3648 then Err(Container(Invalid("decreasing granule position")))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test reference_eos_clamping_witness ... FAILED
+
+failures:
+
+failures:
+    reference_eos_clamping_witness
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p deadlib-audio-decode-vorbis --test eos_clamping`

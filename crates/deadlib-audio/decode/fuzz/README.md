@@ -76,7 +76,7 @@ whole-byte array guards). Header bit three selects both `Floor0Behavior::Libvorb
 `Floor1Behavior::Libvorbis`;
 control 254 selects all reference options and the full extent override. Control
 233 combines floor zero with the earlier layout/empty/IEEE options. Streaming bit
-seven selects reference codebook, both floor and residue policies, including selected
+seven selects reference codebook, both floor, residue and bounded EOS policies, including selected
 setup reparsing and overlap pre-roll. Procedural seeds cover
 unsigned/signed amplitude boundaries, unsupported widths, partial LSP words and
 Bark-grid rounding. Further seeds exercise every custom-float exponent boundary,
@@ -86,6 +86,10 @@ seeds exercise type-zero tail gaps, type-one clipping, type-two rounded ranges,
 nonsticky Huffman EOF and later-submap consumption under the residue policy.
 Floor-one seeds cover all multipliers, 15-bit wrapped prediction, clipped rendering
 ordinates, missing initial Y values, deep neighbor dependencies and scalar EOF.
+EOS seeds cover decreasing/excessive final granules, declared durations different
+from emitted PCM, empty EOS pages and discarded final/intermediate packets.
+Indexed replay checks emitted suffixes independently of declared seek bounds; the
+endpoint-repair policy is disabled when bounded reference EOS is selected.
 The harness permits 131,072 declared codebook entries so sparse scalar books can
 return values above 65,535; its separate tree and memory caps still apply.
 Header control bit four raises the codebook extent cap from 24 to the full

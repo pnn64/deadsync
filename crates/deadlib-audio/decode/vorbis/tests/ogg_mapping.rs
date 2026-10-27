@@ -577,6 +577,8 @@ fn oracle(bytes: &[u8]) -> Output {
                         chain: link,
                     },
                     frames,
+                    emitted_frames: frames,
+                    emitted_start_granule: 0,
                     start_granule: 0,
                     end_granule: frames,
                 }),

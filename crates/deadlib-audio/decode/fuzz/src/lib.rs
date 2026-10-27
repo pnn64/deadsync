@@ -139,6 +139,8 @@ impl Digest {
                 self.number(2);
                 self.number(end.stream.serial as u64);
                 self.number(end.frames);
+                self.number(end.emitted_frames);
+                self.number(end.emitted_start_granule);
                 self.number(end.start_granule);
                 self.number(end.end_granule);
             }
@@ -534,6 +536,11 @@ pub fn vorbis_stream(input: &[u8]) {
         max_active_streams: 4,
         max_stream_memory: 16 << 20,
         allow_zero_span_granules: control & 1 != 0,
+        eos_behavior: if control & 128 != 0 {
+            vorbis::EosBehavior::Libvorbis
+        } else {
+            vorbis::EosBehavior::Vorbis
+        },
         residue2_layout: if control & 8 != 0 {
             vorbis::Residue2Layout::Libvorbis
         } else {
@@ -611,7 +618,9 @@ pub fn vorbis_stream(input: &[u8]) {
             limits: options.limits,
             container_limits: container_limits(),
             allow_zero_span_granules: control & 1 != 0,
-            trim_to_final_granule: control & 2 != 0,
+            trim_to_final_granule: control & 2 != 0
+                && options.eos_behavior == vorbis::EosBehavior::Vorbis,
+            eos_behavior: options.eos_behavior,
             residue2_layout: options.residue2_layout,
             allow_empty_codebooks: options.allow_empty_codebooks,
             codebook_behavior: options.codebook_behavior,
@@ -627,11 +636,13 @@ pub fn vorbis_stream(input: &[u8]) {
         if let Ok(mut seek) = vorbis::OggSeekReader::with_options(Cursor::new(data), seek_options) {
             let id = seek.selected().info.id;
             let end = seek.selected().end.frames;
+            let emitted = seek.selected().end.emitted_frames;
             for target in [end, end / 2, 0, end.saturating_sub(1)] {
                 let mut previous = None;
                 for mode in 0..3 {
                     seek.seek(id, target).unwrap();
-                    let mut position = target;
+                    let initial_position = seek.position();
+                    let mut position = initial_position;
                     let mut digest = Digest::with_nonfinite(options.allow_nonfinite);
                     let result = (|| {
                         let mut step = 0;
@@ -662,7 +673,7 @@ pub fn vorbis_stream(input: &[u8]) {
                         Ok::<_, vorbis::Error>(())
                     })();
                     if result.is_ok() {
-                        assert_eq!(position, end);
+                        assert_eq!(position, emitted.max(initial_position));
                     }
                     let outcome = (result, position, digest);
                     if let Some(previous) = &previous {
@@ -803,6 +814,7 @@ pub fn vorbis_encode(input: &[u8]) {
         vorbis::OggEvent::StreamEnd(info) => {
             ends += 1;
             assert_eq!(info.frames, frames as u64);
+            assert_eq!(info.emitted_frames, frames as u64);
         }
         _ => panic!("unexpected event from native encoding"),
     })

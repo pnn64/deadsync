@@ -245,3 +245,8 @@ The [floor-one guard follow-up](FLOOR1_GUARDS.md) adds
 clips and EOF decisions. The original range guard remains default. The policy
 is retained through raw reset, streaming and indexed decoder reconstruction;
 finite PCM still uses the original numerical bounds.
+
+The [EOS count follow-up](EOS_CLAMPING.md) adds explicit bounded reference EOS
+clipping and separates declared duration from emitted PCM. It retains the
+remaining libvorbisfile seek-position/count differences as an exact inventory;
+the overall parity goal remains open.

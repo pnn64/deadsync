@@ -1,6 +1,6 @@
 //! Vorbis I Appendix A mapping on the independent Ogg container.
 use crate::{
-    CodebookBehavior, Comments, DecodeOptions, Error, Floor0Behavior, Floor1Behavior,
+    CodebookBehavior, Comments, DecodeOptions, EosBehavior, Error, Floor0Behavior, Floor1Behavior,
     Identification, Limits, Metadata, PacketDecoder, ParseOptions, PcmBlock, Residue2Layout,
     ResidueBehavior, Setup, reserve,
 };
@@ -10,12 +10,17 @@ use deadlib_audio_decode_ogg::{
 };
 use std::io::Read;
 
+#[cfg(test)]
+#[path = "eos_reference.rs"]
+mod eos_reference;
+
 #[derive(Clone, Copy, Debug)]
 pub struct OggOptions {
     pub limits: Limits,
     pub container_limits: container::Limits,
     /// Explicit legacy exception for granule zero on unfinished pages.
     pub allow_zero_span_granules: bool,
+    pub eos_behavior: EosBehavior,
     /// Explicit reference behavior for unaligned type-two residue ranges.
     pub residue2_layout: Residue2Layout,
     pub floor0_behavior: Floor0Behavior,
@@ -38,6 +43,7 @@ impl Default for OggOptions {
             limits: Limits::default(),
             container_limits: container::Limits::default(),
             allow_zero_span_granules: false,
+            eos_behavior: EosBehavior::Vorbis,
             residue2_layout: Residue2Layout::Interleaved,
             floor0_behavior: Floor0Behavior::Vorbis,
             floor1_behavior: Floor1Behavior::Vorbis,
@@ -74,7 +80,16 @@ pub struct OggPcm<'a> {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StreamEnd {
     pub stream: StreamId,
+    /// Declared retained duration, derived from the original final granule.
     pub frames: u64,
+    /// PCM emitted by a complete sequential decode. Equals `frames` under the
+    /// strict and indexed endpoint policies; bounded reference EOS may differ.
+    pub emitted_frames: u64,
+    /// First retained PCM timestamp actually used by this decoder. This may
+    /// differ from declared timing in an explicitly accepted malformed stream.
+    pub emitted_start_granule: u64,
+    /// Declared start offset, derived from the first marked audio page's
+    /// header-only block counts under the reference EOS policy.
     pub start_granule: u64,
     pub end_granule: u64,
 }
@@ -99,6 +114,13 @@ pub(crate) struct Timing {
     pub(crate) frames: u64,
     last_span: u64,
     extended_end_trim: bool,
+    eos_behavior: EosBehavior,
+    declared_previous_size: usize,
+    declared_raw_end: u64,
+    declared_origin: Option<u64>,
+    reference_gp: Option<i128>,
+    reference_samples: Option<u64>,
+    reference_gap: bool,
 }
 pub(crate) struct Crop {
     pub(crate) skip: usize,
@@ -107,11 +129,70 @@ pub(crate) struct Crop {
     pub(crate) start_granule: u64,
 }
 impl Timing {
-    pub(crate) fn with_extended_end_trim(allow: bool) -> Self {
+    pub(crate) fn with_options(allow: bool, eos_behavior: EosBehavior) -> Self {
         Self {
             extended_end_trim: allow,
+            eos_behavior,
             ..Self::default()
         }
+    }
+    pub(crate) fn observe_packet(&mut self, block_size: Option<usize>) -> Result<(), Error> {
+        if self.eos_behavior == EosBehavior::Libvorbis
+            && self.declared_origin.is_none()
+            && let Some(size) = block_size
+        {
+            if self.declared_previous_size != 0 {
+                self.declared_raw_end = self
+                    .declared_raw_end
+                    .checked_add(((self.declared_previous_size + size) / 4) as u64)
+                    .ok_or(Error::LimitExceeded("declared PCM frame position"))?;
+            }
+            self.declared_previous_size = size;
+        }
+        Ok(())
+    }
+    pub(crate) fn discard_packet(&mut self) {
+        if self.eos_behavior == EosBehavior::Libvorbis {
+            self.reference_gap = true;
+        }
+    }
+    fn reference_padding(
+        &mut self,
+        frames: usize,
+        gp: Option<u64>,
+        eos: bool,
+    ) -> Result<usize, Error> {
+        if self.reference_gap {
+            self.reference_gp = None;
+            self.reference_samples = None;
+            self.reference_gap = false;
+        }
+        // Preserve the pinned reference's signed 64-bit counter wrap, including
+        // its -1 sentinel on the following packet. Native public positions keep
+        // their separate checked arithmetic.
+        self.reference_samples = Some(match self.reference_samples {
+            None | Some(u64::MAX) => 0,
+            Some(n) => n.wrapping_add(frames as u64),
+        });
+        if self.reference_gp == Some(-1) {
+            self.reference_gp = None;
+        }
+        if let Some(ref mut known) = self.reference_gp {
+            *known = (*known as i64).wrapping_add(frames as i64) as i128;
+        }
+        if let Some(gp) = gp {
+            let expected = self
+                .reference_gp
+                .unwrap_or(self.reference_samples.unwrap() as i64 as i128);
+            self.reference_gp = Some(gp as i128);
+            if eos {
+                // The pinned C guard stores a positive excess in signed long
+                // before clamping it to this overlap. Match the host C ABI.
+                let excess = (expected - gp as i128).max(0) as core::ffi::c_long;
+                return Ok((excess.max(0) as u64).min(frames as u64) as usize);
+            }
+        }
+        Ok(0)
     }
     pub(crate) fn advance(
         &mut self,
@@ -125,6 +206,17 @@ impl Timing {
             .checked_add(frames as u64)
             .ok_or(Error::LimitExceeded("PCM frame position"))?;
         self.last_span = frames as u64;
+        let padding = if self.eos_behavior == EosBehavior::Libvorbis {
+            self.reference_padding(
+                frames,
+                has_granule
+                    .then(|| granule(page.granule_position))
+                    .transpose()?,
+                page.is_eos() && has_granule,
+            )?
+        } else {
+            0
+        };
         if frames == 0 {
             return Ok(None);
         }
@@ -153,7 +245,9 @@ impl Timing {
         }
         let start = self.origin.unwrap() + raw_start as i128;
         let skip = (-start).clamp(0, frames as i128) as usize;
-        let keep = if page.is_eos() {
+        let keep = if self.eos_behavior == EosBehavior::Libvorbis {
+            frames - padding
+        } else if page.is_eos() {
             (granule(page.granule_position)? as i128 - start).clamp(0, frames as i128) as usize
         } else {
             frames
@@ -176,7 +270,15 @@ impl Timing {
             .ok_or(Error::LimitExceeded("stream frame count"))?;
         Ok(Some(crop))
     }
-    pub(crate) fn check_page(&self, page: PageHeader) -> Result<(), Error> {
+    pub(crate) fn check_page(&mut self, page: PageHeader) -> Result<(), Error> {
+        if self.eos_behavior == EosBehavior::Libvorbis && self.declared_origin.is_none() {
+            let end = granule(page.granule_position)?;
+            self.declared_origin = Some(end.saturating_sub(self.declared_raw_end));
+        }
+        if self.eos_behavior == EosBehavior::Libvorbis && page.is_eos() {
+            granule(page.granule_position)?;
+            return Ok(());
+        }
         if self.origin.is_none() && self.raw_end == 0 {
             if page.granule_position != 0 {
                 return Err(Error::Invalid("granule before any complete overlap output"));
@@ -186,24 +288,44 @@ impl Timing {
         check_granule(self, page, self.last_span)
     }
     pub(crate) fn end(&self, id: StreamId, page: PageHeader) -> Result<StreamEnd, Error> {
-        let origin = self.origin.unwrap_or(0).max(0) as u64;
         let end = granule(page.granule_position)?;
+        let emitted_origin = self.origin.unwrap_or(0).max(0) as u64;
+        let origin = if self.eos_behavior == EosBehavior::Libvorbis {
+            self.declared_origin.unwrap_or(emitted_origin)
+        } else {
+            emitted_origin
+        };
         let frames = end
             .checked_sub(origin)
             .ok_or(Error::Invalid("final Vorbis sample count"))?;
-        if (!self.extended_end_trim && frames != self.frames)
-            || end as i128 > self.origin.unwrap_or(0) + self.raw_end as i128
+        if self.eos_behavior == EosBehavior::Vorbis
+            && ((!self.extended_end_trim && frames != self.frames)
+                || end as i128 > self.origin.unwrap_or(0) + self.raw_end as i128)
         {
             return Err(Error::Invalid("final Vorbis sample count"));
         }
         Ok(StreamEnd {
             stream: id,
             frames,
+            emitted_frames: if self.extended_end_trim {
+                frames
+            } else {
+                self.frames
+            },
+            emitted_start_granule: emitted_origin,
             start_granule: origin,
             end_granule: end,
         })
     }
     pub(crate) fn end_padding(&self, page: PageHeader) -> Result<(u64, bool), Error> {
+        if self.eos_behavior == EosBehavior::Libvorbis {
+            let front = (-self.origin.unwrap_or(0)).max(0) as u64;
+            let retained = self.raw_end.saturating_sub(front);
+            let padding = retained
+                .checked_sub(self.frames)
+                .ok_or(Error::Invalid("negative Vorbis end padding"))?;
+            return Ok((padding, false));
+        }
         let padding = self.origin.unwrap_or(0) + self.raw_end as i128
             - granule(page.granule_position)? as i128;
         let padding =
@@ -246,7 +368,7 @@ impl OggDecoder {
                 options.container_limits,
                 container::ValidationOptions {
                     allow_zero_span_granules: options.allow_zero_span_granules,
-                    ..container::ValidationOptions::default()
+                    allow_decreasing_eos_granule: options.eos_behavior == EosBehavior::Libvorbis,
                 },
             ),
             streams: Vec::new(),
@@ -326,7 +448,7 @@ impl OggDecoder {
             .iter()
             .position(|s| s.id.serial == header.serial)
             .ok_or(Error::Invalid("missing logical stream context"))?;
-        let stream = &streams[index];
+        let stream = &mut streams[index];
         if stream.info.is_some() {
             if stream.phase != 3 {
                 if header.granule_position != 0
@@ -391,7 +513,7 @@ impl OggDecoder {
                 phase: 1,
                 decoder: None,
                 setup_page: 0,
-                timing: Timing::default(),
+                timing: Timing::with_options(false, options.eos_behavior),
                 memory: 0,
             });
             return Ok(());
@@ -467,7 +589,15 @@ impl OggDecoder {
                     return Err(Error::Invalid("audio must begin on a fresh page"));
                 }
                 let decoder = stream.decoder.as_mut().unwrap();
+                stream
+                    .timing
+                    .observe_packet(crate::decoder::declared_block_size(
+                        decoder.setup().modes(),
+                        decoder.setup().block_sizes(),
+                        packet.data,
+                    ))?;
                 let Some(block) = decoder.decode(packet.data)? else {
+                    stream.timing.discard_packet();
                     return Ok(());
                 };
                 let Some(crop) = stream.timing.advance(
@@ -576,6 +706,9 @@ fn check_granule(timing: &Timing, page: PageHeader, span: u64) -> Result<(), Err
     let end = granule(page.granule_position)? as i128;
     let expected = timing.origin.unwrap_or(0) + timing.raw_end as i128;
     if page.is_eos() {
+        if timing.eos_behavior == EosBehavior::Libvorbis {
+            return Ok(());
+        }
         if end > expected || (!timing.extended_end_trim && end < expected - span as i128) {
             return Err(Error::Invalid("EOS granule outside final packet overlap"));
         }

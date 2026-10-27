@@ -178,3 +178,12 @@ external-corpus and oracle variables. It checks strict floor-zero and six-channe
 aoTuV files against both independent decoders, streaming/reset/seek PCM bits,
 and five named rejection cases. Set `DEADLIB_VORBIS_HISTORICAL_REPORT` to retain
 its PCM table. See [HISTORICAL.md](../../HISTORICAL.md) for commands and results.
+
+The `eos_clamping` suite uses the same oracle/corpus variables. `oggstream`
+decodes through unseekable callbacks without the older helper's zero-total
+shortcut. `oggseekstates` reports real status/tell/read results, including zero
+declared durations. `pcm-timed-cases` assigns granules/EOS to each raw packet;
+`eos-state-cases` injects only clock counters after real overlap priming and
+calls unmodified synthesis/blockin. These test-only protocols add no production
+dependencies. See [EOS_CLAMPING.md](../../EOS_CLAMPING.md) for the bounded policy,
+goldens, counter-wrap witnesses and remaining seek differences.

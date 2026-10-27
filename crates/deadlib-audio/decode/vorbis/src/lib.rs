@@ -28,6 +28,20 @@ pub use setup::{
 };
 pub use transform::{Imdct, Mdct};
 
+/// Final-granule padding policy; initial timeline and framing rules are separate.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum EosBehavior {
+    /// Require the declared endpoint to lie in the final overlap span.
+    #[default]
+    Vorbis,
+    /// Match libvorbis's bounded last-packet padding: discard at most that
+    /// packet's overlap, and retain declared and emitted frame counts separately.
+    /// This selects EOS synthesis/count handling. Indexed seeking addresses the
+    /// retained PCM; it does not reproduce every malformed-file positioning
+    /// quirk of libvorbisfile.
+    Libvorbis,
+}
+
 /// Scalar placement for type-two partitions that are not channel aligned.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Residue2Layout {

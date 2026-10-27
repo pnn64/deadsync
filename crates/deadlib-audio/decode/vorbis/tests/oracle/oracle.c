@@ -280,6 +280,67 @@ static void pcm(FILE *file, int reset_cases) {
     }
     vorbis_block_clear(&block); vorbis_dsp_clear(&dsp); vorbis_comment_clear(&comments); vorbis_info_clear(&info);
 }
+static void pcm_timed_cases(FILE *file) {
+    vorbis_info info; vorbis_comment comments; vorbis_dsp_state dsp; vorbis_block block;
+    uint64_t cases, c; int i;
+    vorbis_info_init(&info); vorbis_comment_init(&comments);
+    for (i = 0; i < 3; ++i) {
+        ogg_packet op; memset(&op, 0, sizeof(op)); op.packet = packet(file, &op.bytes); op.b_o_s = i == 0; op.packetno = i;
+        if (vorbis_synthesis_headerin(&info, &comments, &op)) fail("timed PCM header"); free(op.packet);
+    }
+    if (vorbis_synthesis_init(&dsp, &info) || vorbis_block_init(&dsp, &block)) fail("timed PCM init");
+    cases = get64(file); if (cases > (1u << 20)) fail("timed PCM cases"); put32((uint32_t)info.channels); put64(cases);
+    for (c = 0; c < cases; ++c) {
+        uint64_t count = get64(file), j;
+        if (count > (1u << 20) || vorbis_synthesis_restart(&dsp)) fail("timed PCM restart");
+        for (j = 0; j < count; ++j) {
+            ogg_packet op; uint64_t gp = get64(file), eos = get64(file); int frames, ch, sample; float **pcm;
+            if (eos > 1) fail("timed PCM EOS");
+            memset(&op, 0, sizeof(op)); op.granulepos = (ogg_int64_t)gp; op.e_o_s = (long)eos; op.packetno = (ogg_int64_t)j + 3; op.packet = packet(file, &op.bytes);
+            i = vorbis_synthesis(&block, &op); free(op.packet);
+            if (i) {put8('S'); continue;}
+            if (vorbis_synthesis_blockin(&dsp, &block)) fail("timed PCM blockin");
+            frames = vorbis_synthesis_pcmout(&dsp, &pcm); if (frames < 0) fail("timed PCM out");
+            put8('P'); put32((uint32_t)block.pcmend); put32((uint32_t)frames); put64((uint64_t)dsp.granulepos);
+            for (ch = 0; ch < info.channels; ++ch) for (sample = 0; sample < frames; ++sample) {uint32_t raw; memcpy(&raw, pcm[ch]+sample, 4); put32(raw);}
+            if (vorbis_synthesis_read(&dsp, frames)) fail("timed PCM read");
+        }
+    }
+    if (fgetc(file) != EOF) fail("trailing timed PCM cases");
+    vorbis_block_clear(&block); vorbis_dsp_clear(&dsp); vorbis_comment_clear(&comments); vorbis_info_clear(&info);
+}
+/* Inject only counters after real overlap priming; blockin remains unmodified.
+   This covers multi-hour and host-long narrowing boundaries without huge PCM. */
+static void eos_state_cases(FILE *file) {
+    vorbis_info info; vorbis_comment comments; vorbis_dsp_state dsp; vorbis_block block;
+    unsigned char *audio[3]; long sizes[3]; uint64_t count, c; int i;
+    vorbis_info_init(&info); vorbis_comment_init(&comments);
+    for (i=0;i<3;++i) {
+        ogg_packet op; memset(&op,0,sizeof(op)); op.packet=packet(file,&op.bytes); op.packetno=i; op.b_o_s=i==0;
+        if(vorbis_synthesis_headerin(&info,&comments,&op)) fail("EOS state header"); free(op.packet);
+    }
+    for(i=0;i<3;++i) audio[i]=packet(file,&sizes[i]);
+    if(vorbis_synthesis_init(&dsp,&info)||vorbis_block_init(&dsp,&block)) fail("EOS state init");
+    count=get64(file); if(count>(1u<<20)) fail("EOS state count"); put32(sizeof(long)); put32(info.channels); put64(count);
+    for(c=0;c<count;++c) {
+        uint64_t known=get64(file), state=get64(file), gp=get64(file); float **pcm; int n,ch,j;
+        if(known>1||vorbis_synthesis_restart(&dsp)) fail("EOS state restart");
+        for(i=0;i<3;++i) {
+            ogg_packet op; memset(&op,0,sizeof(op)); op.packet=audio[i]; op.bytes=sizes[i]; op.packetno=i+3; op.granulepos=-1;
+            if(i==2) {dsp.granulepos=known?(ogg_int64_t)state:-1; ((private_state*)dsp.backend_state)->sample_count=(ogg_int64_t)state; op.granulepos=(ogg_int64_t)gp; op.e_o_s=1;}
+            if(vorbis_synthesis(&block,&op)||vorbis_synthesis_blockin(&dsp,&block)) fail("EOS state synthesis");
+            n=vorbis_synthesis_pcmout(&dsp,&pcm); if(n<0) fail("EOS state pcmout");
+            if(i==2) {
+                put32(block.pcmend); put32(n); put64((uint64_t)dsp.granulepos); put64((uint64_t)((private_state*)dsp.backend_state)->sample_count);
+                for(ch=0;ch<info.channels;++ch) for(j=0;j<n;++j) {uint32_t raw; memcpy(&raw,pcm[ch]+j,4);put32(raw);}
+            }
+            if(vorbis_synthesis_read(&dsp,n)) fail("EOS state read");
+        }
+    }
+    if(fgetc(file)!=EOF) fail("trailing EOS states");
+    for(i=0;i<3;++i) free(audio[i]);
+    vorbis_block_clear(&block); vorbis_dsp_clear(&dsp); vorbis_comment_clear(&comments); vorbis_info_clear(&info);
+}
 static void transform(FILE *file, int forward) {
     long size; unsigned char *data = packet(file, &size); int n, k, in_count, out_count; float *input, *output; mdct_lookup lookup;
     if (size < 4) fail("MDCT protocol");
@@ -321,6 +382,44 @@ static void ogg_pcm(FILE *file, int raw_start) {
     }
     ov_clear(&reader);
 }
+/* Unseekable public vorbisfile API: no metadata scan, initial seek or zero-total shortcut. */
+static void ogg_stream(FILE *file) {
+    OggVorbis_File reader; vorbis_info *info; int link;
+    if (ov_open_callbacks(file, &reader, NULL, 0, OV_CALLBACKS_STREAMONLY_NOCLOSE)) fail("stream open");
+    info = ov_info(&reader, -1); if (!info) fail("stream info"); put32((uint32_t)info->channels); put32((uint32_t)info->rate);
+    for (;;) {
+        float **pcm; long n = ov_read_float(&reader, &pcm, 4096, &link); long i; int ch;
+        if (n < 0) fail("stream decode/hole"); if (!n) break;
+        info = ov_info(&reader, -1); if (!info) fail("stream current info");
+        put32((uint32_t)n); put32((uint32_t)link); put32((uint32_t)info->channels); put32((uint32_t)info->rate);
+        for (ch = 0; ch < info->channels; ++ch) for (i = 0; i < n; ++i) {uint32_t raw; memcpy(&raw, pcm[ch]+i, 4); put32(raw);}
+    }
+    put32(0); ov_clear(&reader);
+}
+/* Report real seek status/tell, including zero declared totals; retain errors as data. */
+static void ogg_seek_states(FILE *file, const char *path) {
+    OggVorbis_File reader; FILE *requests; uint64_t count, j; int links, i;
+    if (ov_open_callbacks(file, &reader, NULL, 0, OV_CALLBACKS_NOCLOSE)) fail("seek states open");
+    links = (int)ov_streams(&reader); put32((uint32_t)links);
+    for (i = 0; i < links; ++i) {
+        vorbis_info *info = ov_info(&reader, i); ogg_int64_t n = ov_pcm_total(&reader, i);
+        if (!info || n < 0) fail("seek states info"); put32((uint32_t)ov_serialnumber(&reader,i)); put32((uint32_t)info->channels); put32((uint32_t)info->rate); put64((uint64_t)n);
+    }
+    requests = fopen(path,"rb"); if (!requests) fail("seek states requests"); count = get64(requests); if (count > 1000000) fail("seek states count");
+    for (j = 0; j < count; ++j) {
+        uint64_t target = get64(requests), remaining = get64(requests); int status;
+        if (target > INT64_MAX || remaining > 100000000) fail("seek states size"); status = ov_pcm_seek(&reader,(ogg_int64_t)target); put32((uint32_t)status); put64((uint64_t)ov_pcm_tell(&reader));
+        if (!status) while (remaining) {
+            float **pcm; int link, ch; long sample; long n = ov_read_float(&reader,&pcm,remaining < 4096 ? (int)remaining : 4096,&link);
+            if (n < 0) {put32(UINT32_MAX); put32((uint32_t)n); break;} if (!n) break;
+            put32((uint32_t)n); put32((uint32_t)link);
+            for (ch = 0; ch < ov_info(&reader,link)->channels; ++ch) for (sample = 0; sample < n; ++sample) {uint32_t raw; memcpy(&raw,pcm[ch]+sample,4); put32(raw);}
+            remaining -= (uint64_t)n;
+        }
+        put32(0);
+    }
+    if (fgetc(requests) != EOF) fail("trailing seek states requests"); fclose(requests); ov_clear(&reader);
+}
 static void ogg_seek(FILE *file, const char *requests_path) {
     OggVorbis_File reader; FILE *requests; uint64_t count, request; int links, i;
     if (ov_open_callbacks(file, &reader, NULL, 0, OV_CALLBACKS_NOCLOSE)) fail("vorbisfile seek open");
@@ -355,7 +454,7 @@ static void ogg_seek(FILE *file, const char *requests_path) {
     fclose(requests); ov_clear(&reader);
 }
 int main(int argc, char **argv) {
-    FILE *file; if (argc < 3 || (!strcmp(argv[1], "oggseek") ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|bookcases|floor0cases|floor1cases|floatcases|vqaddcases|books|pcm|pcm-cases|mdct-cases|mdct|mdctforward|oggpcm|oggpcmraw input; oggseek input requests");
+    FILE *file; if (argc < 3 || ((!strcmp(argv[1], "oggseek") || !strcmp(argv[1], "oggseekstates")) ? argc != 4 : argc != 3)) fail("usage: oracle headers|bookheaders|bookcases|floor0cases|floor1cases|floatcases|vqaddcases|books|pcm|pcm-cases|pcm-timed-cases|eos-state-cases|mdct-cases|mdct|mdctforward|oggpcm|oggpcmraw|oggstream input; oggseek|oggseekstates input requests");
     file = fopen(argv[2], "rb"); if (!file) fail("open");
 #ifdef _WIN32
     _setmode(_fileno(stdout), _O_BINARY);
@@ -370,6 +469,8 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[1], "floor0cases")) floor0cases(file);
     else if (!strcmp(argv[1], "pcm")) pcm(file, 0);
     else if (!strcmp(argv[1], "pcm-cases")) pcm(file, 1);
+    else if (!strcmp(argv[1], "pcm-timed-cases")) pcm_timed_cases(file);
+    else if (!strcmp(argv[1], "eos-state-cases")) eos_state_cases(file);
     else if (!strcmp(argv[1], "mdct-cases")) {
         uint64_t count = get64(file), i;
         if (count > (1u << 20)) fail("MDCT case count");
@@ -380,6 +481,8 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[1], "mdctforward")) transform(file, 1);
     else if (!strcmp(argv[1], "oggpcm")) ogg_pcm(file, 0);
     else if (!strcmp(argv[1], "oggpcmraw")) ogg_pcm(file, 1);
+    else if (!strcmp(argv[1], "oggstream")) ogg_stream(file);
+    else if (!strcmp(argv[1], "oggseekstates")) ogg_seek_states(file, argv[3]);
     else if (!strcmp(argv[1], "oggseek")) ogg_seek(file, argv[3]);
     else fail("unknown mode");
     fclose(file); if (fflush(stdout)) fail("flush"); return 0;

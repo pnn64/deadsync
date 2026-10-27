@@ -368,6 +368,22 @@ pub(crate) fn packet_header<'a>(
     packet_header_from_modes(setup.modes(), setup.block_sizes(), limits, packet)
 }
 
+// The public reference block-size query reads type/mode but no window bits.
+// Keep this separate from accepted synthesis headers when counting declarations.
+pub(crate) fn declared_block_size(
+    modes: &[crate::Mode],
+    block_sizes: [usize; 2],
+    packet: &[u8],
+) -> Option<usize> {
+    let &first = packet.first()?;
+    if first & 1 != 0 || modes.is_empty() {
+        return None;
+    }
+    let width = crate::bitpack::ilog(modes.len() as u32 - 1);
+    let mode = ((first >> 1) & ((1u8 << width) - 1)) as usize;
+    modes.get(mode).map(|m| block_sizes[m.long_block as usize])
+}
+
 pub(crate) fn packet_header_from_modes<'a>(
     modes: &[crate::Mode],
     block_sizes: [usize; 2],

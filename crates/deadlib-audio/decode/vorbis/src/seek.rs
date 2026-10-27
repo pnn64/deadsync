@@ -1,8 +1,8 @@
 //! Indexed, sample-accurate seeking with one-packet overlap pre-roll.
 use crate::{
-    CodebookBehavior, DecodeOptions, Error, Floor0Behavior, Floor1Behavior, Limits, Metadata,
-    OggEvent, OggPcm, PacketDecoder, ParseOptions, Residue2Layout, ResidueBehavior, Setup,
-    StreamEnd, StreamId, StreamInfo,
+    CodebookBehavior, DecodeOptions, EosBehavior, Error, Floor0Behavior, Floor1Behavior, Limits,
+    Metadata, OggEvent, OggPcm, PacketDecoder, ParseOptions, Residue2Layout, ResidueBehavior,
+    Setup, StreamEnd, StreamId, StreamInfo,
     ogg::{Timing, granule, read_identification, read_metadata},
 };
 use core::ops::ControlFlow;
@@ -17,6 +17,7 @@ pub struct SeekOptions {
     pub limits: Limits,
     pub container_limits: container::Limits,
     pub allow_zero_span_granules: bool,
+    pub eos_behavior: EosBehavior,
     pub residue2_layout: Residue2Layout,
     pub floor0_behavior: Floor0Behavior,
     pub floor1_behavior: Floor1Behavior,
@@ -49,6 +50,7 @@ impl Default for SeekOptions {
             limits: Limits::default(),
             container_limits: container::Limits::default(),
             allow_zero_span_granules: false,
+            eos_behavior: EosBehavior::Vorbis,
             residue2_layout: Residue2Layout::Interleaved,
             floor0_behavior: Floor0Behavior::Vorbis,
             floor1_behavior: Floor1Behavior::Vorbis,
@@ -68,7 +70,8 @@ impl SeekOptions {
     fn validation(self) -> container::ValidationOptions {
         container::ValidationOptions {
             allow_zero_span_granules: self.allow_zero_span_granules,
-            allow_decreasing_eos_granule: self.trim_to_final_granule,
+            allow_decreasing_eos_granule: self.trim_to_final_granule
+                || self.eos_behavior == EosBehavior::Libvorbis,
         }
     }
 }
@@ -146,6 +149,9 @@ pub struct VorbisIndex {
 }
 impl VorbisIndex {
     pub fn read<R: Read + Seek>(reader: &mut R, options: SeekOptions) -> Result<Self, Error> {
+        if options.trim_to_final_granule && options.eos_behavior == EosBehavior::Libvorbis {
+            return Err(Error::Invalid("conflicting Vorbis end-trim policies"));
+        }
         reader
             .seek(SeekFrom::Start(0))
             .map_err(container::Error::from)?;
@@ -234,7 +240,7 @@ impl IndexBuilder {
                 setup_page: None,
                 previous_size: 0,
                 last_audio: None,
-                timing: Timing::with_extended_end_trim(options.trim_to_final_granule),
+                timing: Timing::with_options(options.trim_to_final_granule, options.eos_behavior),
             });
             self.streams.push(SeekStream {
                 info: StreamInfo {
@@ -245,6 +251,8 @@ impl IndexBuilder {
                 end: StreamEnd {
                     stream: id,
                     frames: 0,
+                    emitted_frames: 0,
+                    emitted_start_granule: 0,
                     start_granule: 0,
                     end_granule: 0,
                 },
@@ -321,6 +329,13 @@ impl IndexBuilder {
                 if Some(packet.info.start_page_offset) == state.setup_page {
                     return Err(Error::Invalid("audio must begin on a fresh page"));
                 }
+                state
+                    .timing
+                    .observe_packet(crate::decoder::declared_block_size(
+                        &state.modes,
+                        stream.info.identification.block_sizes,
+                        packet.data,
+                    ))?;
                 let Some((audio, _)) = crate::decoder::packet_header_from_modes(
                     &state.modes,
                     stream.info.identification.block_sizes,
@@ -328,6 +343,7 @@ impl IndexBuilder {
                     packet.data,
                 )?
                 else {
+                    state.timing.discard_packet();
                     return Ok(());
                 };
                 let frames = if state.previous_size == 0 {
@@ -389,6 +405,7 @@ impl IndexBuilder {
         } else if page.completed_packets() != 0 || header.is_eos() {
             state.timing.check_page(header)?;
             if let Some(packet) = state.last_audio
+                && !(header.is_eos() && self.options.eos_behavior == EosBehavior::Libvorbis)
                 && stream
                     .marks
                     .last()
@@ -608,7 +625,7 @@ impl<R: Read + Seek> OggSeekReader<R> {
             self.selected = Some(stream_id);
             let target = stream
                 .end
-                .start_granule
+                .emitted_start_granule
                 .checked_add(frame)
                 .ok_or(Error::LimitExceeded("seek granule"))?;
             let before = stream.marks.partition_point(|mark| mark.granule <= target);
@@ -617,20 +634,30 @@ impl<R: Read + Seek> OggSeekReader<R> {
                 .map_or((stream.first_audio.unwrap_or(3), 0), |mark| {
                     (mark.packet, mark.raw_end)
                 });
-            if self.index.options.packet_preroll && frame < stream.end.frames {
+            if self.index.options.packet_preroll && frame < stream.end.emitted_frames {
                 (packet, base) =
                     stream.refine_preroll(packet, base, target as i128 - stream.origin)?;
             }
             self.prime_packet = packet;
             self.primed = false;
             self.last_span = 0;
-            self.position = frame;
+            self.position = if self.index.options.eos_behavior == EosBehavior::Libvorbis
+                && frame > stream.end.emitted_frames
+            {
+                stream.end.frames
+            } else {
+                frame
+            };
             self.announce = true;
             self.finished = false;
-            self.end_seek = frame == stream.end.frames;
+            self.end_seek = if self.index.options.eos_behavior == EosBehavior::Libvorbis {
+                frame >= stream.end.emitted_frames
+            } else {
+                frame == stream.end.frames
+            };
             self.page_pending = false;
             self.decoder.as_mut().unwrap().reset_at(base);
-            if frame < stream.end.frames {
+            if !self.end_seek {
                 let start = self
                     .index
                     .container
@@ -734,10 +761,11 @@ impl<R: Read + Seek> OggSeekReader<R> {
                 }
                 self.last_span = block.frames as u64;
                 let start = stream.origin + block.start_frame as i128;
-                let target = stream.end.start_granule as i128 + self.position as i128;
+                let target = stream.end.emitted_start_granule as i128 + self.position as i128;
                 let skip = (target - start).clamp(0, block.frames as i128) as usize;
-                let keep = (stream.end.end_granule as i128 - start).clamp(0, block.frames as i128)
-                    as usize;
+                let effective_end =
+                    stream.end.emitted_start_granule as i128 + stream.end.emitted_frames as i128;
+                let keep = (effective_end - start).clamp(0, block.frames as i128) as usize;
                 if skip > keep {
                     return Err(Error::Invalid("seek trim interval"));
                 }
@@ -776,11 +804,19 @@ impl<R: Read + Seek> OggSeekReader<R> {
         }
         self.next_page += 1;
         if self.primed && (page.completed_packets() != 0 || page.header().is_eos()) {
-            let expected = stream.origin + decoder.position() as i128;
+            // The first packet establishes overlap without emitting samples.
+            // Its zero granule precedes any offset inferred from later output.
+            let expected = if decoder.position() == 0 {
+                0
+            } else {
+                stream.origin + decoder.position() as i128
+            };
             let actual = granule(page.header().granule_position)? as i128;
             if page.header().is_eos() {
-                if actual > expected
-                    || (!stream.extended_end_trim && actual < expected - self.last_span as i128)
+                if self.index.options.eos_behavior == EosBehavior::Vorbis
+                    && (actual > expected
+                        || (!stream.extended_end_trim
+                            && actual < expected - self.last_span as i128))
                 {
                     return Err(Error::Invalid("seek EOS granule"));
                 }
@@ -790,7 +826,7 @@ impl<R: Read + Seek> OggSeekReader<R> {
         }
         if page.header().is_eos() {
             self.capture.finish()?;
-            if self.position != stream.end.frames {
+            if self.position != stream.end.emitted_frames {
                 return Err(Error::Invalid("seek final sample count"));
             }
             emit(OggEvent::StreamEnd(stream.end));
