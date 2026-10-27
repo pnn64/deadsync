@@ -4,10 +4,14 @@
 
 pub mod bitstream;
 pub mod checksum;
+pub mod encode;
+mod encoder;
 pub mod frame;
 pub mod metadata;
 pub mod native;
 
+pub use encode::{EncodeOptions, FrameEncoder};
+pub use encoder::{EncodedStream, Encoder};
 pub use frame::{Frame, FrameDecoder, FrameHeader, Pcm};
 pub use native::{DecodeOptions, Decoder, Integrity, Reader, StreamFrame};
 

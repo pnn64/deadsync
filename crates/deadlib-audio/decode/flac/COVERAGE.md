@@ -88,7 +88,7 @@ when explicitly run, missing artifacts are failures, never silent skips.
 
 ## Remaining scope
 
-Native encoding, Ogg FLAC, a file-backed seek reader and direct SEEKTABLE
+Native encoding is now covered in [ENCODING.md](ENCODING.md). Ogg FLAC, a file-backed seek reader and direct SEEKTABLE
 acceleration remain outstanding. No fuzz campaign or performance benchmark has
 run. Current decoded scratch uses i64 intermediates plus i32 output to keep
 reconstruction safe; optimization needs measurements. The initial forward seek

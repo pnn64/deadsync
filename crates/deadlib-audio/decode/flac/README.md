@@ -21,6 +21,11 @@ Current APIs:
   can change mid-stream; consume each returned header's rate/channels/depth.
 - `Decoder<'a>`: borrowed native input and exact seeking using a lazy frame index.
 - `FrameDecoder::find_frame`: CRC-validated synchronization in headerless input.
+- `FrameEncoder`: reusable constant/verbatim/fixed/LPC encoding with exact Rice
+  bit-cost selection, stereo decorrelation and compression levels 0..8.
+- `Encoder<W: Write>`: planar or interleaved streaming input, metadata preservation,
+  MD5 and seek-point generation. `finish_seekable` patches the native header;
+  `finish` supports forward-only outputs with unknown totals/MD5 in their header.
 
 ```rust
 use deadlib_audio_decode_flac::{Reader, Error};
@@ -49,12 +54,28 @@ combined-metadata vector needs a 128 MiB metadata budget. Compatibility with
 pre-2007 variable-block streams is enabled by default and can be disabled through
 `allow_legacy_variable_blocks`. Raw frame headers always expose the actual flag.
 
-Validation: 13 local integration tests plus a documentation example; external
+```rust
+use deadlib_audio_decode_flac::{Encoder, EncodeOptions, Decoder};
+use std::io::Cursor;
+let mut encoder = Encoder::new(Cursor::new(Vec::new()), EncodeOptions::default())?;
+encoder.write_interleaved(&[1, -1, 2, -2, 3, -3])?;
+let encoded = encoder.finish_seekable()?.output.into_inner();
+let mut decoder = Decoder::new(&encoded)?;
+assert_eq!(decoder.read_next()?.unwrap().pcm.plane(0), &[1, 2, 3]);
+# Ok::<(), deadlib_audio_decode_flac::Error>(())
+```
+
+See [ENCODING.md](ENCODING.md) for encoder options, streaming finalization and
+independent roundtrip evidence.
+
+Validation: 19 local integration tests plus two documentation examples; external
 gates compare all 75 valid official corpus files exactly with libFLAC, check
 1,533 seek positions and exercise all 11 faulty files. Symphonia 0.6.1 matches 72
-files; three explicitly recorded reference differences remain. See
+files; three explicitly recorded reference differences remain. Another 696
+generated encoder cases pass exact bidirectional libFLAC validation; Symphonia
+matches 694, with two named 32-bit stereo reference differences. See
 [COVERAGE.md](COVERAGE.md) for exact scope, commands, provenance and limitations.
 
-See [PLAN.md](PLAN.md) for the full scope and unfinished milestones. Encoding,
-Ogg mapping, fuzz campaigns and performance measurements remain to be implemented.
+See [PLAN.md](PLAN.md) for the full scope and unfinished milestones. Ogg mapping,
+fuzz campaigns and pipeline performance measurements remain to be implemented.
 No performance comparison is claimed yet.

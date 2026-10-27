@@ -12,7 +12,7 @@ Milestones (commit each when verified):
 2. Native decoding (implemented; evidence in COVERAGE.md): independent frame API, all subframes/predictors/Rice modes,
    4–32 bits, 1–8 channels, all block sizes/rates, exact 33-bit side channels,
    fixed/variable numbering, streaming, integrity and sample-accurate seeking.
-3. Native encoding: constant/verbatim/fixed/LPC, partitioned Rice and escape,
+3. Native encoding (implemented; evidence in ENCODING.md): constant/verbatim/fixed/LPC, partitioned Rice and escape,
    stereo choices, compression levels, metadata/MD5/seek table output, reusable
    streaming encoder and exact PCM roundtrips.
 4. Ogg FLAC: mapping lifecycle, native Ogg crate, streaming and seeking,
