@@ -27,10 +27,14 @@ impl Vm {
             Value::Thread(_) => 6,
             Value::Userdata(_) => 7,
             Value::LightUserdata(_) => 8,
+            Value::ParserPrototype(_) => {
+                unreachable!("private parser prototype has no type metatable")
+            }
         }
     }
     pub(super) fn metatable(&self, value: Value) -> Option<TableId> {
         match value {
+            Value::ParserPrototype(_) => None,
             Value::Table(id) => self.tables.get(id.0).and_then(|t| t.metatable()),
             Value::Userdata(id) => self.userdata.get(id.0).and_then(|u| u.metatable),
             _ => self.type_metatables[Self::type_slot(value)],
@@ -38,6 +42,7 @@ impl Vm {
     }
     pub(super) fn set_metatable(&mut self, value: Value, table: Option<TableId>) {
         match value {
+            Value::ParserPrototype(_) => return,
             Value::Table(id) => self.tables[slot_index(id.0)].set_metatable(table),
             Value::Userdata(id) => self.userdata[slot_index(id.0)].metatable = table,
             _ => self.type_metatables[Self::type_slot(value)] = table,

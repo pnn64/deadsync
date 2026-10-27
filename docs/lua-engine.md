@@ -301,6 +301,24 @@ handles, resurrection, native formatting and token reclamation. Complete C API,
 allocator/OOM, parser scratch and standalone Lua 5.1 gates remain open;
 optimization stays deferred.
 
+The [native parser-root checks](testing/2026-10-27-rust-lua-native-roots.md)
+close the recorded `lua_gettop` loader mismatch: both engines now expose 1,3
+slots in the original probe. Native text readers see constants-table/prototype
+pairs for active functions; binary readers see unfinished prototypes after the
+header. Incremental grammar/decoder events populate real collector objects and
+constant tables, including reserved words, implicit locals and constant indices.
+Field constants are installed after the following token is read, and function
+roots remain until the closing token's lookahead completes. Compiled closures
+retain their own prototype subtrees; parent/sibling prototypes and temporary
+constant tables can be collected independently. Table iteration also preserves
+the first inserted zero key's sign while both zero signs compare equal. The C
+fixture compares 1,745 loading scenarios and 7,772 reader observations against
+official Lua, including weak lifetimes. Portable Rust groups cover nested loads,
+binary fragmentation/collection, function ordering and stack-error recovery.
+Arbitrary mutation of private parser state, remaining C APIs, allocator/OOM
+behavior and full standalone Lua 5.1 parity remain unfinished. Optimization and
+benchmarks stay deferred.
+
 The [standalone suite checks](testing/2026-10-27-rust-lua-full-suite.md) invoke
 the real CLIs with the official README's `LUA_PATH="?;./?.lua"` setup. Each run
 gets unchanged suite files and a private `lua` executable on PATH, so child

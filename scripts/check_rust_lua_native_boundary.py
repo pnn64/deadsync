@@ -89,26 +89,32 @@ def main():
     binary_text=b'a\0\xff'
     extra=b'\0\1\1\1\0\4'+(len(binary_text)+1).to_bytes(width,order)+binary_text+b'\0'+b'\3'+struct.pack('=d',-0.0)+b'\3'+int(0x7ff8000000000042).to_bytes(8,order)
     extra_chunks={'dump-constants.luac':original[:constant_count_position]+(count+6).to_bytes(4,order)+original[constant_count_position+4:position]+extra+original[position:],'dump-stripped.luac':rewrite(original,0,'original',True)[0]}
+    root_wire_source='return function(a)local x="blob";return function(b,...)return function()return a,b,x end end end'
+    root_wire_path=directory/'reader-roots-nested.luac'
+    root_wire_command=[str(reference),'-e',f'local f=assert(loadstring({json.dumps(root_wire_source)}));local o=assert(io.open({json.dumps(str(root_wire_path))},"wb"));o:write(string.dump(f));o:close()']
+    subprocess.run(root_wire_command,check=True,capture_output=True)
+    root_chunks={'reader-roots-nested.luac':root_wire_path.read_bytes(),'reader-roots-stripped.luac':extra_chunks['dump-stripped.luac']}
     names=['boundary_sum','boundary_identity','boundary_raise','boundary_binary','boundary_call','boundary_stack','boundary_mutate','boundary_state','boundary_state_reenter','boundary_cached_top','boundary_make_counter','boundary_snapshot','boundary_set_environment','boundary_set_globals','boundary_registry_roundtrip','boundary_make_many','boundary_table','boundary_get','boundary_set','boundary_field','boundary_raw','boundary_metatable','boundary_count','boundary_shuffle','boundary_userdata','boundary_userdata_read','boundary_userdata_finalize','boundary_bytes','boundary_environment','boundary_capture_bytes','boundary_length','boundary_userdata_empty','boundary_protected','boundary_protected_negative','boundary_protected_argument','boundary_replace_handler','boundary_cpcall','boundary_scalar','boundary_scalar_null','boundary_scalar_capture','boundary_integers','boundary_compare','boundary_concat','boundary_concat_prefix','boundary_format','boundary_format_gc','boundary_auxcheck','boundary_auxwhere','boundary_auxerror','boundary_auxuserdata','boundary_auxget','boundary_auxnewmetatable','boundary_auxmetafield','boundary_auxopen','boundary_auxfind','boundary_auxrefs']
     names+=['boundary_auxbuffer_info','boundary_auxbuffer','boundary_auxgsub']
     names+=['boundary_upget','boundary_upset','boundary_upbind']
     names+=['boundary_gc','boundary_gc_counts']
-    names+=['boundary_load','boundary_loadbuffer','boundary_loadtop']
+    names+=['boundary_load','boundary_loadbuffer','boundary_loadtop','boundary_loadroots']
     names+=['boundary_loadfile']
     names+=['boundary_dump','boundary_dump_null']
     names+=['boundary_thread','boundary_thread_status','boundary_thread_pointer','boundary_thread_capture']
     names+=['boundary_pointer']
     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
     runs={}
-    # This independent probe deliberately retains a known compatibility gap.
-    # lua_gettop can observe PUC's private parser table/prototype roots.
+    # Keep the original regression independently from the broader root traces.
     scratch_source="do local co=coroutine.create(function()boundary_state()end);assert(coroutine.resume(co))end;collectgarbage();local trace={};assert(type(boundary_loadtop(function(i,n)trace[i]=n end))=='function');print('parser-scratch-slots',unpack(trace))"
     scratch_runs={}
+    root_runs={}
     for engine in ['reference','rust']:
         with tempfile.TemporaryDirectory(prefix='deadlua-native-boundary-')as temporary:
             work=Path(temporary);(work/'boundary.lua').write_bytes((fixture/'cases.lua').read_bytes())
             for name,chunk in chunks.items():(work/name).write_bytes(chunk)
             for name,chunk in extra_chunks.items():(work/name).write_bytes(chunk)
+            for name,chunk in root_chunks.items():(work/name).write_bytes(chunk)
             env=os.environ.copy()
             for key in ['LUA_INIT','LUA_PATH','LUA_CPATH']:env.pop(key,None)
             env['PATH']=str(directory/engine)+os.pathsep+env.get('PATH','')
@@ -121,6 +127,10 @@ def main():
             command=command[:-1]+[str(work/'scratch.lua')]
             run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=30)
             scratch_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
+            (work/'reader-roots.lua').write_bytes((fixture/'reader-roots.lua').read_bytes())
+            command=command[:-1]+[str(work/'reader-roots.lua')]
+            run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=60)
+            root_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
     assert hashes()==before,'sources changed during boundary proof'
     reference_run=runs['reference'];rust=runs['rust']
     buffers={engine:bool(re.search(rb'(?m)^aux-buffer-complete\t99\t40\r*$',bytes.fromhex(run.get('stdout_hex',''))))for engine,run in runs.items()}
@@ -140,16 +150,19 @@ def main():
     result.update(native_load_complete=loaders,native_gc_complete=collectors,native_upvalues_complete=upvalues,native_upvalue_fixture=dict(source=wire_source,command=wire_command,original_chunk_hex=original.hex(),chunks={name:dict(sha256=hashlib.sha256(chunk).hexdigest(),hex=chunk.hex())for name,chunk in chunks.items()}))
     scratch_complete=all(run['returncode']==0 and b'parser-scratch-slots'in bytes.fromhex(run['stdout_hex'])for run in scratch_runs.values())
     result['parser_scratch_probe']=dict(source=scratch_source,runs=scratch_runs,completed=scratch_complete,observations_equal=scratch_complete and scratch_runs['reference']['stdout_hex']==scratch_runs['rust']['stdout_hex'],full_native_loader_parity_proven=False)
+    roots_complete=all(run['returncode']==0 and b'native-reader-roots-complete'in bytes.fromhex(run['stdout_hex'])for run in root_runs.values())
+    roots_equal=roots_complete and root_runs['reference']['stdout_hex']==root_runs['rust']['stdout_hex'] and not root_runs['reference']['stderr_hex']
+    result['native_reader_roots_probe']=dict(runs=root_runs,completed=roots_complete,observations_equal=roots_equal,fixture='crates/deadlib-lua/tests/native-boundary/reader-roots.lua',binary_source=root_wire_source,binary_command=root_wire_command,chunks={name:dict(sha256=hashlib.sha256(chunk).hexdigest(),hex=chunk.hex())for name,chunk in root_chunks.items()})
     result['native_file_complete']=file_loaders
     result['native_dump_complete']=dumpers
     result['native_thread_complete']=threads
     result['native_pointer_complete']=pointers
     result['native_dump_fixtures']={name:dict(sha256=hashlib.sha256(chunk).hexdigest(),hex=chunk.hex())for name,chunk in extra_chunks.items()}
     result['stdin_hex']=b'17 return 42\n'.hex()
-    result['limitations']+=' Native reader/buffer/string/file loading is a development subset: the independent parser_scratch_probe retains the observable lua_gettop mismatch from PUC parser roots. Allocator/OOM statuses, full native loader/C API parity and production loading remain unfinished.'
+    result['limitations']+=' Native reader/buffer/string/file loading is a development subset. Parser root observations are compared independently for fragmented text and binary input; arbitrary mutation of private parser state, allocator/OOM statuses, full native loader/C API parity and production loading remain unfinished.'
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
     print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,'state lifetimes balanced:',states,flush=True)
-    if not matched or not returned or not states or not scratch_complete:raise SystemExit(1)
+    if not matched or not returned or not states or not scratch_complete or not result['parser_scratch_probe']['observations_equal'] or not roots_equal:raise SystemExit(1)
 
 if __name__=='__main__':main()

@@ -9,6 +9,33 @@ pub(crate) type ExprId = usize;
 pub(crate) type StmtId = usize;
 pub(crate) type Block = Box<[StmtId]>;
 
+/// Observable collector roots created by the incremental reference grammar.
+/// Events are enabled only for native readers; ordinary compilation owns its AST.
+#[derive(Debug)]
+pub(crate) enum NativeRootEvent {
+    Open,
+    Close,
+    Anchor(Box<[u8]>),
+    Constant(crate::bytecode::Constant),
+    Source(Box<[u8]>),
+    DebugString(Box<[u8]>),
+}
+pub(crate) fn native_root_bytes(events: &Option<Vec<NativeRootEvent>>) -> usize {
+    events.as_ref().map_or(0, |events| {
+        events.capacity() * size_of::<NativeRootEvent>()
+            + events
+                .iter()
+                .map(|event| match event {
+                    NativeRootEvent::Anchor(s)
+                    | NativeRootEvent::Source(s)
+                    | NativeRootEvent::DebugString(s)
+                    | NativeRootEvent::Constant(crate::bytecode::Constant::String(s)) => s.len(),
+                    _ => 0,
+                })
+                .sum::<usize>()
+    })
+}
+
 #[derive(Debug)]
 pub(crate) enum Expr {
     Nil,

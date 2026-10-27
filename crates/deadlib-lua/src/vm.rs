@@ -1,7 +1,8 @@
 //! Register dispatch, interned byte strings, and native Lua tables.
 
 use crate::{
-    Error, ErrorKind, FunctionId, Program, StringId, TableId, ThreadId, UserdataId, Value,
+    Error, ErrorKind, FunctionId, ParserPrototypeId, Program, StringId, TableId, ThreadId,
+    UserdataId, Value,
     bytecode::{COMPARE_BRANCH, Constant, OPEN, OPEN_ARGS, Op, ProgramData, Upvalue},
     locale::parse_number,
     table::Table,
@@ -197,6 +198,8 @@ struct LoadedProgram {
     owner: std::sync::Weak<()>,
     constants: Box<[Box<[Value]>]>,
     upvalue_names: Box<[Box<[StringId]>]>,
+    // Non-owning prototype map. Each live closure traces only its own subtree.
+    parser_prototypes: Box<[ParserPrototypeId]>,
     entry: FunctionId,
 }
 
@@ -388,6 +391,7 @@ pub struct Vm {
     roots: Arena<Value>,
     identity: u64,
     object_pointers: HashMap<(u8, u64), Box<usize>>,
+    parser_prototypes: Arena<loads::ParserPrototype>,
     loads: Vec<loads::Loading>,
     tracebacks: Vec<traces::Traceback>,
     hooks: hooks::Hooks,
@@ -448,6 +452,7 @@ impl Vm {
             roots: Arena::default(),
             identity: gc::new_vm_identity(),
             object_pointers: HashMap::new(),
+            parser_prototypes: Arena::default(),
             loads: Vec::new(),
             tracebacks: Vec::new(),
             hooks: hooks::Hooks::default(),
@@ -826,6 +831,7 @@ impl Vm {
             owner: Arc::downgrade(&program.lifetime),
             constants: constants.into_boxed_slice(),
             upvalue_names: upvalue_names.into_boxed_slice(),
+            parser_prototypes: Box::default(),
             entry: FunctionId(0),
         }));
         let bytes = gc::program_bytes(&self.programs[index]);

@@ -4,6 +4,7 @@ mod dump;
 mod file;
 mod loader;
 mod objects;
+mod parser_roots;
 mod protected;
 mod scalars;
 mod tables;

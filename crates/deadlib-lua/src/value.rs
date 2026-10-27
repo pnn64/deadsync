@@ -20,6 +20,10 @@ pub struct ThreadId(pub(crate) u64);
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct UserdataId(pub(crate) u64);
 
+/// An internal prototype exposed only by Lua 5.1's native parser stack.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct ParserPrototypeId(pub(crate) u64);
+
 /// A Lua register value. Object handles belong to the VM that produced them.
 ///
 /// Numbers use IEEE 754 binary64, including signed zero, infinities, and NaNs.
@@ -50,6 +54,9 @@ pub enum Value {
     LightUserdata(u64),
     /// A native function's numeric dispatch ID.
     Native(u64),
+    /// A private parser prototype (native type tag 9), not a callable closure.
+    /// Reader callbacks may observe or retain this internal collector object.
+    ParserPrototype(ParserPrototypeId),
 }
 
 impl Value {
@@ -69,6 +76,7 @@ impl Value {
             Self::Function(_) | Self::Native(_) => "function",
             Self::Thread(_) => "thread",
             Self::Userdata(_) | Self::LightUserdata(_) => "userdata",
+            Self::ParserPrototype(_) => "proto",
         }
     }
 }

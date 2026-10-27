@@ -65,6 +65,8 @@ pub struct HeapStats {
     pub upvalues: usize,
     /// Live full userdata objects.
     pub userdata: usize,
+    /// Live private native-parser prototypes.
+    pub parser_prototypes: usize,
     /// Live file records, including closed userdata and active source readers.
     pub files: usize,
     /// Completed tracing cycles.
@@ -210,6 +212,7 @@ fn jobs_bytes(substitutions: &[strings::Substitution]) -> usize {
         .sum()
 }
 pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
+    let native_roots = std::mem::size_of_val(p.parser_prototypes.as_ref());
     let mut bytes = p.constants.len() * std::mem::size_of::<Box<[Value]>>()
         + p.constants
             .iter()
@@ -248,7 +251,7 @@ pub(super) fn program_bytes(p: &LoadedProgram) -> usize {
                 })
                 .sum::<usize>();
     }
-    bytes
+    bytes + native_roots
 }
 fn register_roots(
     registers: &[Value],
@@ -411,6 +414,7 @@ impl Vm {
             Value::Function(id) => self.functions.contains(id.0),
             Value::Thread(id) => self.threads.contains(id.0),
             Value::Userdata(id) => self.userdata.contains(id.0),
+            Value::ParserPrototype(id) => self.parser_prototypes.contains(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
                 !matches!(id, PAIRS | IPAIRS | NEW_PROXY)
@@ -481,6 +485,11 @@ impl Vm {
             .sum::<usize>();
         payload += self.programs.iter().map(program_bytes).sum::<usize>();
         payload += self
+            .parser_prototypes
+            .iter()
+            .map(loads::ParserPrototype::heap_bytes)
+            .sum::<usize>();
+        payload += self
             .userdata
             .iter()
             .map(|u| u.bytes.storage_bytes())
@@ -545,6 +554,8 @@ impl Vm {
             + self.programs.live_len() * std::mem::size_of::<LoadedProgram>()
             + self.roots.live_len() * std::mem::size_of::<Value>();
         let objects = objects
+            + self.parser_prototypes.live_len() * std::mem::size_of::<loads::ParserPrototype>();
+        let objects = objects
             + self.userdata.live_len() * std::mem::size_of::<userdata::Userdata>()
             + self.io.files.live_len() * std::mem::size_of::<io::Stream>();
         let storage = self.strings.bytes.storage_bytes()
@@ -555,6 +566,7 @@ impl Vm {
             + self.native_closures.storage_bytes()
             + self.programs.storage_bytes()
             + self.roots.storage_bytes();
+        let storage = storage + self.parser_prototypes.storage_bytes();
         let storage = storage + self.userdata.storage_bytes() + self.io.files.storage_bytes();
         let reserved = payload + control + storage;
         self.gc.peak = self.gc.peak.max(reserved);
@@ -570,6 +582,7 @@ impl Vm {
             programs: self.programs.live_len(),
             upvalues: self.upvalues.live_len(),
             userdata: self.userdata.live_len(),
+            parser_prototypes: self.parser_prototypes.live_len(),
             files: self.io.files.live_len(),
             collections: self.gc.collections,
             reclaimed_objects: self.gc.reclaimed,
@@ -585,6 +598,7 @@ impl Vm {
         self.programs.allocated = 0;
         self.roots.allocated = 0;
         self.userdata.allocated = 0;
+        self.parser_prototypes.allocated = 0;
         self.io.files.allocated = 0;
         self.gc.control_allocated = 0;
         self.gc.pending = false;
@@ -637,6 +651,7 @@ impl Vm {
             .saturating_add(self.native_closures.allocated)
             .saturating_add(self.programs.allocated)
             .saturating_add(self.userdata.allocated)
+            .saturating_add(self.parser_prototypes.allocated)
             .saturating_add(self.io.files.allocated)
             .saturating_add(self.gc.control_allocated)
     }
@@ -656,6 +671,7 @@ impl Vm {
             Value::Function(id) => self.functions.mark(id.0),
             Value::Thread(id) => self.threads.mark(id.0),
             Value::Userdata(id) => self.userdata.mark(id.0),
+            Value::ParserPrototype(id) => self.parser_prototypes.mark(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.mark(id),
             Value::Native(id) if id < 256 => {
                 let word = id as usize / 64;
@@ -771,6 +787,7 @@ impl Vm {
             Value::Function(id) => self.functions.marked(id.0),
             Value::Thread(id) => self.threads.marked(id.0),
             Value::Userdata(id) => self.userdata.marked(id.0),
+            Value::ParserPrototype(id) => self.parser_prototypes.marked(id.0),
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.marked(id),
             Value::Native(id) => {
                 id < 256 && self.gc.natives[id as usize / 64] & (1u64 << (id % 64)) != 0
@@ -846,6 +863,12 @@ impl Vm {
                 .iter()
                 .filter_map(|j| j.file.map(|f| Trace::File(f.key))),
         );
+        work.extend(
+            loads
+                .iter()
+                .flat_map(loads::Loading::roots)
+                .filter_map(edge),
+        );
         // Lua 5.1 clears unused stack slots while traversing a thread. Clear
         // scalar values too: debug.getlocal can observe them after collection.
         // Native scratch windows and aliased argument/upvalue slots stay live.
@@ -885,6 +908,11 @@ impl Vm {
                 Trace::Value(Value::Function(id)) => {
                     if self.functions.mark(id.0) || forced {
                         let f = &self.functions[slot_index(id.0)];
+                        if let Some(&prototype) =
+                            self.programs[f.program].parser_prototypes.get(f.prototype)
+                        {
+                            work.push(Trace::Value(Value::ParserPrototype(prototype)));
+                        }
                         work.push(Trace::Value(Value::Table(f.env)));
                         work.push(Trace::Program(f.program));
                         work.extend(f.upvalues.iter().map(|&i| Trace::Cell(i as usize)));
@@ -900,6 +928,12 @@ impl Vm {
                         if let Some(mt) = u.metatable {
                             work.push(Trace::Value(Value::Table(mt)));
                         }
+                    }
+                }
+                Trace::Value(Value::ParserPrototype(id)) => {
+                    if self.parser_prototypes.mark(id.0) || forced {
+                        let p = &self.parser_prototypes[slot_index(id.0)];
+                        work.extend(p.roots().filter_map(edge));
                     }
                 }
                 Trace::Value(Value::Thread(id)) => {
@@ -1011,6 +1045,7 @@ impl Vm {
         self.threads.clear_marks();
         self.native_closures.clear_marks();
         self.programs.clear_marks();
+        self.parser_prototypes.clear_marks();
         self.userdata.clear_marks();
         self.io.files.clear_marks();
         if let Some(key) = self.io.stdin {
@@ -1147,6 +1182,7 @@ impl Vm {
         self.programs.protect_new(enabled);
         self.strings.bytes.protect_new(enabled);
         self.userdata.protect_new(enabled);
+        self.parser_prototypes.protect_new(enabled);
         self.io.files.protect_new(enabled);
     }
     fn sweep_arena_len(&self, arena: u8) -> usize {
@@ -1160,11 +1196,12 @@ impl Vm {
             6 => self.strings.bytes.len(),
             7 => self.userdata.len(),
             8 => self.io.files.len(),
+            9 => self.parser_prototypes.len(),
             _ => 0,
         }
     }
     fn sweep_gc_some(&mut self, mut budget: usize) {
-        while budget != 0 && self.gc.sweep_arena < 9 {
+        while budget != 0 && self.gc.sweep_arena < 10 {
             let mut cursor = self.gc.sweep_cursor;
             let before = cursor;
             let count = match self.gc.sweep_arena {
@@ -1177,6 +1214,7 @@ impl Vm {
                 6 => self.strings.sweep_some(&mut cursor, budget),
                 7 => self.userdata.sweep_some(&mut cursor, budget),
                 8 => self.io.files.sweep_some(&mut cursor, budget),
+                9 => self.parser_prototypes.sweep_some(&mut cursor, budget),
                 _ => unreachable!(),
             };
             self.gc.reclaimed += count;
@@ -1187,7 +1225,7 @@ impl Vm {
             }
             self.gc.sweep_cursor = cursor;
         }
-        if self.gc.sweep_arena != 9 {
+        if self.gc.sweep_arena != 10 {
             return;
         }
         self.strings.rebuild();

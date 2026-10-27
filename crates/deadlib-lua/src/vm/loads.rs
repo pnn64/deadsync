@@ -1,6 +1,39 @@
 //! Resumable source/binary validation through protected loading frames.
 use super::*;
 
+/// A genuine, non-callable collector object for an unfinished/retained prototype.
+#[derive(Debug)]
+pub(super) struct ParserPrototype {
+    pub(super) source: Value,
+    pub(super) constants: Vec<Value>,
+    pub(super) children: Vec<Value>,
+    pub(super) debug_strings: Vec<Value>,
+}
+impl ParserPrototype {
+    pub(super) fn heap_bytes(&self) -> usize {
+        (self.constants.capacity() + self.children.capacity() + self.debug_strings.capacity())
+            * size_of::<Value>()
+    }
+    pub(super) fn roots(&self) -> impl Iterator<Item = Value> + '_ {
+        std::iter::once(self.source)
+            .chain(self.constants.iter().copied())
+            .chain(self.children.iter().copied())
+            .chain(self.debug_strings.iter().copied())
+    }
+}
+#[derive(Debug, Default)]
+pub(super) struct NativeRoots {
+    pub active: Vec<(Option<TableId>, ParserPrototypeId)>,
+    pub started: bool,
+    pub prototypes: Vec<ParserPrototypeId>,
+}
+impl NativeRoots {
+    pub(super) fn storage_bytes(&self) -> usize {
+        self.active.capacity() * size_of::<(Option<TableId>, ParserPrototypeId)>()
+            + self.prototypes.capacity() * size_of::<ParserPrototypeId>()
+    }
+}
+
 pub(super) fn compile(source: &[u8], name: &[u8], depth: usize) -> Result<Program, Error> {
     if source.first() == Some(&27) {
         crate::chunk51::compile(source, name, depth)
@@ -92,15 +125,16 @@ impl FileReader {
 #[derive(Debug)]
 pub(super) struct Loading {
     pub owner: usize,
-    parser: crate::parser::Parser,
-    decoder: Option<Box<crate::chunk51::Decoder>>,
+    pub(super) parser: crate::parser::Parser,
+    pub(super) decoder: Option<Box<crate::chunk51::Decoder>>,
     native_depth: usize,
-    binary_mode: bool,
+    pub(super) binary_mode: bool,
     source: Vec<u8>,
-    name: Box<[u8]>,
+    pub(super) name: Box<[u8]>,
     awaiting: bool,
     closed: bool,
     probed: bool,
+    pub native: Option<NativeRoots>,
     pub file: Option<FileReader>,
 }
 pub(super) fn storage_bytes(jobs: &Vec<Loading>) -> usize {
@@ -111,6 +145,10 @@ pub(super) fn storage_bytes(jobs: &Vec<Loading>) -> usize {
                 j.source.capacity()
                     + j.name.len()
                     + j.parser.heap_bytes()
+                    + j.native.as_ref().map_or(0, |r| {
+                        r.active.capacity() * size_of::<(Option<TableId>, ParserPrototypeId)>()
+                            + r.prototypes.capacity() * size_of::<ParserPrototypeId>()
+                    })
                     + j.decoder
                         .as_ref()
                         .map_or(0, |d| std::mem::size_of_val(d.as_ref()) + d.heap_bytes())
@@ -128,6 +166,17 @@ pub(super) fn message(name: &[u8], error: &Error, binary: bool) -> Vec<u8> {
     message
 }
 impl Loading {
+    pub(super) fn roots(&self) -> impl Iterator<Item = Value> + '_ {
+        self.native
+            .iter()
+            .flat_map(|r| &r.active)
+            .flat_map(|&(table, prototype)| {
+                table
+                    .map(Value::Table)
+                    .into_iter()
+                    .chain(std::iter::once(Value::ParserPrototype(prototype)))
+            })
+    }
     fn arena_bytes(&self) -> usize {
         self.parser.arena_bytes()
             + self
@@ -137,14 +186,27 @@ impl Loading {
     }
     fn resume(&mut self) -> Result<Option<Program>, Error> {
         if self.binary_mode {
-            let decoder = self
-                .decoder
-                .get_or_insert_with(|| Box::new(crate::chunk51::Decoder::new(self.native_depth)));
+            let native = self.native.is_some();
+            let decoder = self.decoder.get_or_insert_with(|| {
+                let mut decoder = crate::chunk51::Decoder::new(self.native_depth);
+                if native {
+                    decoder.enable_native_roots();
+                }
+                Box::new(decoder)
+            });
             return match decoder.resume(&self.source, self.closed) {
                 Ok(false) => Ok(None),
                 Ok(true) => decoder.program(&self.name).map(Some),
                 Err(why) => Err(crate::chunk51::diagnostic(&self.name, why)),
             };
+        }
+        // An empty initial lookahead makes luaX_setinput request another block
+        // before open_func has installed the first text prototype's roots.
+        if self.source.is_empty() && !self.closed {
+            return Ok(None);
+        }
+        if let Some(roots) = &mut self.native {
+            roots.started = true;
         }
         self.parser
             .resume(&self.source, self.closed)?
@@ -176,9 +238,11 @@ impl Vm {
         let index = self.loads.len();
         let capacity = self.loads.capacity();
         let source = self.take_buffer(0);
+        let mut parser = crate::parser::Parser::with_native_depth(depth);
+        parser.enable_native_roots();
         self.loads.push(Loading {
             owner,
-            parser: crate::parser::Parser::with_native_depth(depth),
+            parser,
             decoder: None,
             native_depth: depth,
             binary_mode: false,
@@ -187,6 +251,7 @@ impl Vm {
             awaiting: false,
             closed: false,
             probed: false,
+            native: Some(NativeRoots::default()),
             file,
         });
         self.gc_note_control(
@@ -431,6 +496,7 @@ impl Vm {
                 awaiting: false,
                 closed: false,
                 probed: false,
+                native: None,
                 file: Some(file),
             });
             self.gc_note_control((self.loads.capacity() - before) * std::mem::size_of::<Loading>());
@@ -554,6 +620,7 @@ impl Vm {
                 awaiting: false,
                 closed: false,
                 probed: false,
+                native: None,
                 file: None,
             });
             self.gc_note_control((self.loads.capacity() - before) * std::mem::size_of::<Loading>());

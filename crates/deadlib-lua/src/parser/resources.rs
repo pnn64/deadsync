@@ -87,6 +87,16 @@ fn hash(bytes: &[u8]) -> u64 {
     })
 }
 impl Key {
+    fn constant(self, cx: &Context<'_>) -> crate::bytecode::Constant {
+        use crate::bytecode::Constant;
+        match self.kind {
+            0 => Constant::Number(f64::from_bits(self.data)),
+            1 => Constant::Nil,
+            2 | 3 => Constant::Boolean(self.kind == 3),
+            4 | 5 => Constant::String(self.bytes(cx).into()),
+            _ => unreachable!(),
+        }
+    }
     fn scalar(kind: u8, data: u64) -> Self {
         Self {
             hash: hash(&data.to_le_bytes()) ^ u64::from(kind),
@@ -175,6 +185,29 @@ pub(super) struct Resources {
     constants: Vec<(ExprId, ConstantOperand)>,
 }
 impl Resources {
+    pub(super) fn constant_count(&self) -> usize {
+        self.function.pool.entries.len()
+    }
+    pub(super) fn native_constants(
+        &self,
+        start: usize,
+        cx: &Context<'_>,
+    ) -> impl Iterator<Item = crate::bytecode::Constant> {
+        self.function.pool.entries[start..]
+            .iter()
+            .map(|k| {
+                let mut constant = k.constant(cx);
+                if let crate::bytecode::Constant::Number(n) = &mut constant
+                    && *n == 0.0
+                    && self.function.zero_sign == Some(true)
+                {
+                    *n = -0.0;
+                }
+                constant
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
     pub(super) fn heap_bytes(&self) -> usize {
         self.parents.capacity() * size_of::<Function>()
             + self.values.capacity() * size_of::<Value>()

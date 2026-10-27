@@ -37,7 +37,7 @@ pub use cache::{CacheStatus, CachedProgram, ProgramCache};
 #[doc(inline)]
 pub use error::{Error, ErrorKind};
 #[doc(inline)]
-pub use value::{FunctionId, StringId, TableId, ThreadId, UserdataId, Value};
+pub use value::{FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value};
 #[doc(inline)]
 pub use vm::{
     GcOperation, HeapStats, HostCall, HostFunction, HostThreadState, NativeCallStatus,

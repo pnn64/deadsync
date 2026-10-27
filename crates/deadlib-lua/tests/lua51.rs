@@ -633,3 +633,25 @@ fn arbitrary_bytes_and_generated_constructor_boundaries() {
         check(source.as_bytes());
     }
 }
+
+#[test]
+fn hash_table_keys_preserve_the_first_zero_sign_while_zeros_compare_equal() {
+    check(
+        br#"
+local observations={}
+for _,sign in ipairs({-1,1}) do
+ local first=sign/math.huge
+ local opposite=-first
+ local t={[first]='original'}
+ t[opposite]='updated'
+ observations[#observations+1]=1/next(t)
+ assert(t[first]=='updated' and t[opposite]=='updated')
+ local k=next(t)
+ assert(next(t,k)==nil and next(t,-k)==nil)
+ collectgarbage()
+ observations[#observations+1]=1/next(t)
+end
+return unpack(observations)
+"#,
+    );
+}

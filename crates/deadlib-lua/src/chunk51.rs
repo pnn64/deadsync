@@ -105,6 +105,7 @@ pub(crate) struct Decoder {
     position: usize,
     depth: usize,
     base_depth: usize,
+    native_events: Option<Vec<crate::parser::NativeRootEvent>>,
 }
 impl Decoder {
     pub(crate) fn new(base_depth: usize) -> Self {
@@ -114,14 +115,25 @@ impl Decoder {
             position: 0,
             depth: 0,
             base_depth,
+            native_events: None,
         }
     }
     pub(crate) fn nesting(&self) -> usize {
         self.depth
     }
+    pub(crate) fn enable_native_roots(&mut self) {
+        self.native_events = Some(Vec::new());
+    }
+    pub(crate) fn take_native_events(&mut self) -> Vec<crate::parser::NativeRootEvent> {
+        self.native_events
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
+    }
     pub(crate) fn heap_bytes(&self) -> usize {
         let mut bytes = self.tasks.capacity() * std::mem::size_of::<Task>()
-            + self.chunk.prototypes.capacity() * std::mem::size_of::<Prototype>();
+            + self.chunk.prototypes.capacity() * std::mem::size_of::<Prototype>()
+            + crate::parser::native_root_bytes(&self.native_events);
         for p in &self.chunk.prototypes {
             bytes += p.source.as_ref().map_or(0, |s| s.len())
                 + p.code.capacity() * 4
@@ -201,6 +213,9 @@ impl Decoder {
                         return Err("code too deep");
                     }
                     self.depth += 1;
+                    if let Some(events) = &mut self.native_events {
+                        events.push(crate::parser::NativeRootEvent::Open);
+                    }
                     self.tasks.pop();
                     let id = self.chunk.prototypes.len();
                     self.chunk.prototypes.push(Prototype::default());
@@ -268,7 +283,13 @@ impl Decoder {
                     let kind = read!(1)[0];
                     *self.tasks.last_mut().unwrap() = Task::Constants(id, n - 1);
                     match kind {
-                        0 => self.chunk.prototypes[id].constants.push(Constant::Nil),
+                        0 => {
+                            self.chunk.prototypes[id].constants.push(Constant::Nil);
+                            if let Some(events) = &mut self.native_events {
+                                events
+                                    .push(crate::parser::NativeRootEvent::Constant(Constant::Nil));
+                            }
+                        }
                         1 | 3 => self.tasks.push(Task::Constant(id, kind)),
                         4 => self
                             .tasks
@@ -282,6 +303,9 @@ impl Decoder {
                     } else {
                         Constant::Number(f64::from_ne_bytes(read!(8).try_into().unwrap()))
                     };
+                    if let Some(events) = &mut self.native_events {
+                        events.push(crate::parser::NativeRootEvent::Constant(value.clone()));
+                    }
                     self.chunk.prototypes[id].constants.push(value);
                     self.tasks.pop();
                 }
@@ -326,11 +350,23 @@ impl Decoder {
                     *self.tasks.last_mut().unwrap() = Task::String(target, Some(size));
                 }
                 Task::String(target, Some(size)) => {
-                    let value = if size == 0 {
+                    let value: Option<Box<[u8]>> = if size == 0 {
                         None
                     } else {
                         Some(read!(size)[..size - 1].into())
                     };
+                    if let Some(bytes) = &value
+                        && let Some(events) = &mut self.native_events
+                    {
+                        use crate::parser::NativeRootEvent;
+                        events.push(match target {
+                            StringTarget::Source(_) => NativeRootEvent::Source(bytes.clone()),
+                            StringTarget::Constant(_) => {
+                                NativeRootEvent::Constant(Constant::String(bytes.clone()))
+                            }
+                            _ => NativeRootEvent::DebugString(bytes.clone()),
+                        });
+                    }
                     match target {
                         StringTarget::Source(id) => self.chunk.prototypes[id].source = value,
                         StringTarget::Constant(id) => self.chunk.prototypes[id]
@@ -347,6 +383,9 @@ impl Decoder {
                     verify(&self.chunk, id)?;
                     self.tasks.pop();
                     self.depth -= 1;
+                    if let Some(events) = &mut self.native_events {
+                        events.push(crate::parser::NativeRootEvent::Close);
+                    }
                 }
             }
         }

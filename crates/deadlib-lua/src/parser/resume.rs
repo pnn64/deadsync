@@ -59,6 +59,7 @@ enum Task {
     ParamAfter(u32, Vec<Box<[u8]>>),
     ParamsEnd(u32, Vec<Box<[u8]>>, bool),
     FunctionEnd(u32, Vec<Box<[u8]>>, bool, u16, bool, u16, u32),
+    FunctionAfterEnd(u32, Vec<Box<[u8]>>, bool, u16, bool, u16, u32, u32),
     Expr(u8),
     ExprLoop(u8, u32),
     Unary(Kind, u32),
@@ -69,6 +70,7 @@ enum Task {
     ParenEnd(u32),
     Suffix(u32, ExprId),
     Field(u32, ExprId),
+    FieldName(u32, ExprId, Box<[u8]>, Option<bool>),
     Index(u32, ExprId),
     IndexEnd(u32, ExprId, ExprId),
     FunctionFieldEnd(u32, ExprId, ExprId, bool),
@@ -115,6 +117,7 @@ pub(crate) struct Parser {
     list: Vec<ExprId>,
     body: Block,
     finished: bool,
+    native_events: Option<Vec<NativeRootEvent>>,
 }
 
 impl Default for Parser {
@@ -139,6 +142,7 @@ impl Default for Parser {
             list: Vec::new(),
             body: Box::default(),
             finished: false,
+            native_events: None,
         }
     }
 }
@@ -157,6 +161,15 @@ fn precedence(kind: Kind) -> Option<(u8, u8)> {
 }
 
 impl Parser {
+    pub(crate) fn enable_native_roots(&mut self) {
+        self.native_events = Some(vec![NativeRootEvent::Open]);
+    }
+    pub(crate) fn take_native_events(&mut self) -> Vec<NativeRootEvent> {
+        self.native_events
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
+    }
     pub(crate) fn with_native_depth(depth: usize) -> Self {
         Self {
             limit: 200usize.saturating_sub(depth) as u16,
@@ -171,6 +184,7 @@ impl Parser {
             + self.ast.exprs.capacity() * std::mem::size_of::<(Expr, SourceSpan)>()
             + self.ast.stmts.capacity() * std::mem::size_of::<(Stmt, u32)>()
             + self.scanner.heap_bytes()
+            + native_root_bytes(&self.native_events)
             + self.bindings.heap_bytes()
             + self.resources.heap_bytes()
             + self.ast.zero_signs.capacity() * size_of::<(ExprId, bool)>()
@@ -237,7 +251,8 @@ impl Parser {
                 | Task::Params(_, v, _)
                 | Task::ParamAfter(_, v)
                 | Task::ParamsEnd(_, v, _)
-                | Task::FunctionEnd(_, v, ..) => {
+                | Task::FunctionEnd(_, v, ..)
+                | Task::FunctionAfterEnd(_, v, ..) => {
                     names(v) + (v.capacity() - v.len()) * std::mem::size_of::<Box<[u8]>>()
                 }
                 Task::LocalFunctionEnd(_, n)
@@ -248,7 +263,7 @@ impl Parser {
                 | Task::ForStep(_, n, ..)
                 | Task::ForEnd(_, n, ..)
                 | Task::MethodEnd(_, _, n, _) => n.len(),
-                Task::MethodArgs(_, _, n) => n.len(),
+                Task::MethodArgs(_, _, n) | Task::FieldName(_, _, n, _) => n.len(),
                 Task::RepeatEnd(_, b) => block(b),
                 Task::IfCond(_, v) | Task::IfArm(_, v, _) | Task::IfElse(_, v) => {
                     v.capacity() * std::mem::size_of::<(ExprId, Block)>()
@@ -298,7 +313,16 @@ impl Parser {
             input,
             bindings: &self.bindings,
         };
-        action(&mut self.resources, &cx).map_err(|()| {
+        let before = self.resources.constant_count();
+        let result = action(&mut self.resources, &cx);
+        if let Some(events) = &mut self.native_events {
+            events.extend(
+                self.resources
+                    .native_constants(before, &cx)
+                    .map(NativeRootEvent::Constant),
+            );
+        }
+        result.map_err(|()| {
             let mut error = Error::new(
                 ErrorKind::Limit,
                 self.scanner.line(),
@@ -491,6 +515,38 @@ impl Parser {
     }
     fn scan(&mut self, input: &[u8], closed: bool) -> Result<Option<Token>, Error> {
         let token = self.scanner.next(input, closed)?;
+        if let Some(token) = &token
+            && let Some(events) = &mut self.native_events
+        {
+            let text = match token.kind {
+                Kind::Name | Kind::String => Some(token.text.clone()),
+                Kind::And
+                | Kind::Break
+                | Kind::Do
+                | Kind::Else
+                | Kind::ElseIf
+                | Kind::End
+                | Kind::False
+                | Kind::For
+                | Kind::Function
+                | Kind::If
+                | Kind::In
+                | Kind::Local
+                | Kind::Nil
+                | Kind::Not
+                | Kind::Or
+                | Kind::Repeat
+                | Kind::Return
+                | Kind::Then
+                | Kind::True
+                | Kind::Until
+                | Kind::While => Some(token.kind.label().into_boxed_slice()),
+                _ => None,
+            };
+            if let Some(text) = text {
+                events.push(NativeRootEvent::Anchor(text));
+            }
+        }
         if token.as_ref().is_some_and(|t| t.kind == Kind::Name) {
             let (start, end) = self.scanner.name_span();
             self.bindings.intern(input, start, end);
@@ -533,6 +589,9 @@ impl Parser {
                     self.ast.end_line = self.previous_line;
                     self.expect(Kind::Eof)?;
                     self.ast.body = std::mem::take(&mut self.body);
+                    if let Some(events) = &mut self.native_events {
+                        events.push(NativeRootEvent::Close);
+                    }
                 }
                 Task::Expect(kind) => {
                     self.expect(kind)?;
@@ -704,9 +763,8 @@ impl Parser {
                 }
                 Task::FunctionField(line, id, method) => {
                     let name = self.expect(Kind::Name)?.text;
-                    let key = self.expression(input, Expr::String(name), line)?;
                     self.tasks
-                        .push(Task::FunctionFieldEnd(line, id, key, method));
+                        .push(Task::FieldName(line, id, name, Some(method)));
                 }
                 Task::FunctionFieldEnd(line, id, key, method) => {
                     let target = self.expression(input, Expr::Index(id, key), line)?;
@@ -811,11 +869,25 @@ impl Parser {
                 }
                 Task::ForChoice(line, name) => {
                     if self.kind() == Kind::Assign {
+                        if let Some(events) = &mut self.native_events {
+                            for name in [b"(for index)".as_slice(), b"(for limit)", b"(for step)"] {
+                                events.push(NativeRootEvent::Anchor(name.into()));
+                            }
+                        }
                         self.check_local_count(usize::from(self.locals) + 4)?;
                         self.take();
                         self.tasks.push(Task::ForStart(line, name));
                         self.tasks.push(Task::Expr(0));
                     } else if matches!(self.kind(), Kind::Comma | Kind::In) {
+                        if let Some(events) = &mut self.native_events {
+                            for name in [
+                                b"(for generator)".as_slice(),
+                                b"(for state)",
+                                b"(for control)",
+                            ] {
+                                events.push(NativeRootEvent::Anchor(name.into()));
+                            }
+                        }
                         self.tasks.push(Task::ForNames(line, vec![name]));
                     } else {
                         return Err(self.error("'=' or 'in' expected"));
@@ -984,6 +1056,9 @@ impl Parser {
                     }
                 }
                 Task::Function(line, method) => {
+                    if let Some(events) = &mut self.native_events {
+                        events.push(NativeRootEvent::Open);
+                    }
                     self.expect(Kind::LParen)?;
                     let params = if method {
                         vec![Box::from(&b"self"[..])]
@@ -993,6 +1068,12 @@ impl Parser {
                     self.tasks.push(Task::Params(line, params, true));
                 }
                 Task::Params(line, mut params, allow_end) => {
+                    if allow_end
+                        && !params.is_empty()
+                        && let Some(events) = &mut self.native_events
+                    {
+                        events.push(NativeRootEvent::Anchor(Box::from(&b"self"[..])));
+                    }
                     if self.kind() == Kind::Dots {
                         self.take();
                         self.tasks.push(Task::ParamsEnd(line, params, true));
@@ -1016,6 +1097,9 @@ impl Parser {
                     }
                 }
                 Task::ParamsEnd(line, params, vararg) => {
+                    if vararg && let Some(events) = &mut self.native_events {
+                        events.push(NativeRootEvent::Anchor(Box::from(&b"arg"[..])));
+                    }
                     self.start_function_body(input, line, params, vararg)?
                 }
                 Task::FunctionEnd(
@@ -1028,6 +1112,35 @@ impl Parser {
                     parent_line,
                 ) => {
                     let end_line = self.close(Kind::End, Kind::Function, line)?.end_line;
+                    self.tasks.push(Task::FunctionAfterEnd(
+                        line,
+                        params,
+                        vararg,
+                        loops,
+                        parent_vararg,
+                        locals,
+                        parent_line,
+                        end_line,
+                    ));
+                }
+                Task::FunctionAfterEnd(
+                    line,
+                    params,
+                    vararg,
+                    loops,
+                    parent_vararg,
+                    locals,
+                    parent_line,
+                    end_line,
+                ) => {
+                    if let Some(events) = &mut self.native_events {
+                        events.push(NativeRootEvent::Close);
+                        if let Some(token) = &self.token
+                            && matches!(token.kind, Kind::Name | Kind::String)
+                        {
+                            events.push(NativeRootEvent::Anchor(token.text.clone()));
+                        }
+                    }
                     self.loops = loops;
                     self.vararg = parent_vararg;
                     self.locals = locals;
@@ -1180,8 +1293,14 @@ impl Parser {
                 },
                 Task::Field(line, id) => {
                     let name = self.expect(Kind::Name)?.text;
+                    self.tasks.push(Task::FieldName(line, id, name, None));
+                }
+                Task::FieldName(line, id, name, method) => {
                     let key = self.expression(input, Expr::String(name), line)?;
-                    self.tasks.push(Task::IndexEnd(line, id, key));
+                    self.tasks.push(match method {
+                        Some(method) => Task::FunctionFieldEnd(line, id, key, method),
+                        None => Task::IndexEnd(line, id, key),
+                    });
                 }
                 Task::Index(line, id) => {
                     let key = self.expr;

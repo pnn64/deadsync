@@ -541,6 +541,9 @@ impl Vm {
             Value::Number(n) => self.intern(format_number(n).as_slice()),
             Value::Nil => self.intern(b"nil"),
             Value::Boolean(b) => self.intern(if b { b"true" } else { b"false" }),
+            Value::ParserPrototype(_) => {
+                self.intern(format!("proto: {}", identity::pointer_text(0)).as_bytes())
+            }
             _ => {
                 let pointer = self
                     .object_pointer(value)

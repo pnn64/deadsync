@@ -1,8 +1,10 @@
 //! Array storage and indexed hash entries with deletion-safe linear iteration.
 
-use crate::{Error, ErrorKind, FunctionId, StringId, TableId, ThreadId, UserdataId, Value};
+use crate::{
+    Error, ErrorKind, FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value,
+};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 enum Key {
     Boolean(bool),
     Number(u64),
@@ -13,7 +15,14 @@ enum Key {
     Thread(ThreadId),
     Userdata(UserdataId),
     LightUserdata(u64),
+    ParserPrototype(ParserPrototypeId),
 }
+impl PartialEq for Key {
+    fn eq(&self, other: &Self) -> bool {
+        self.identity() == other.identity()
+    }
+}
+impl Eq for Key {}
 
 impl Key {
     fn from_value(value: Value) -> Option<Self> {
@@ -21,7 +30,7 @@ impl Key {
             Value::Nil => return None,
             Value::Boolean(v) => Self::Boolean(v),
             Value::Number(v) if v.is_nan() => return None,
-            Value::Number(v) => Self::Number(if v == 0.0 { 0 } else { v.to_bits() }),
+            Value::Number(v) => Self::Number(v.to_bits()),
             Value::String(v) => Self::String(v),
             Value::Table(v) => Self::Table(v),
             Value::Function(v) => Self::Function(v),
@@ -29,6 +38,7 @@ impl Key {
             Value::Thread(v) => Self::Thread(v),
             Value::Userdata(v) => Self::Userdata(v),
             Value::LightUserdata(v) => Self::LightUserdata(v),
+            Value::ParserPrototype(v) => Self::ParserPrototype(v),
         })
     }
     fn value(self) -> Value {
@@ -42,12 +52,13 @@ impl Key {
             Self::Thread(v) => Value::Thread(v),
             Self::Userdata(v) => Value::Userdata(v),
             Self::LightUserdata(v) => Value::LightUserdata(v),
+            Self::ParserPrototype(v) => Value::ParserPrototype(v),
         }
     }
-    fn hash(self) -> usize {
-        let (bits, tag) = match self {
+    fn identity(self) -> (u64, u64) {
+        match self {
             Self::Boolean(v) => (u64::from(v), 1),
-            Self::Number(v) => (v, 2),
+            Self::Number(v) => (if v << 1 == 0 { 0 } else { v }, 2),
             Self::String(v) => (v.0, 3),
             Self::Table(v) => (v.0, 4),
             Self::Function(v) => (v.0, 5),
@@ -55,9 +66,13 @@ impl Key {
             Self::Thread(v) => (v.0, 7),
             Self::Userdata(v) => (v.0, 8),
             Self::LightUserdata(v) => (v, 9),
-        };
+            Self::ParserPrototype(v) => (v.0, 10),
+        }
+    }
+    fn hash(self) -> usize {
+        let (bits, tag) = self.identity();
         let mut h = bits
-            ^ (tag as u64)
+            ^ tag
                 .wrapping_mul(0x9e3779b97f4a7c15)
                 .wrapping_add(bits.rotate_left(17));
         h = (h ^ (h >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);

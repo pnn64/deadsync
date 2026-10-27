@@ -540,6 +540,7 @@ mod windows {
                         Some(Value::Function(_) | Value::Native(_)) => 6,
                         Some(Value::Userdata(_)) => 7,
                         Some(Value::Thread(_)) => 8,
+                        Some(Value::ParserPrototype(_)) => 9,
                     };
                 }
                 26 => {
@@ -708,6 +709,7 @@ mod windows {
             "boundary_load",
             "boundary_loadbuffer",
             "boundary_loadtop",
+            "boundary_loadroots",
             "boundary_loadfile",
             "boundary_dump",
             "boundary_dump_null",

@@ -670,7 +670,7 @@ EXPORT int boundary_loadbuffer(lua_State *L) {
   lua_pushinteger(L,lua_gettop(L)-before-1);
   return 3;
 }
-/* Separate observation of implementation scratch slots, not a parity assertion. */
+/* The original reader stack-count regression, separate from detailed roots. */
 static const char *reader_top(lua_State *L, void *data, size_t *size) {
   int *calls=(int *)data;
   lua_pushvalue(L,1);lua_pushinteger(L,++*calls);lua_pushinteger(L,lua_gettop(L)-2);
@@ -682,6 +682,44 @@ EXPORT int boundary_loadtop(lua_State *L) {
   int calls=0;
   lua_load(L,reader_top,&calls,"=scratch");
   return 1;
+}
+typedef struct RootReader {
+  const char *source;
+  size_t length,at,width;
+  int calls,mode;
+} RootReader;
+static const char *reader_roots(lua_State *L, void *data, size_t *size) {
+  RootReader *reader=(RootReader *)data;
+  int top=lua_gettop(L),i;
+  ++reader->calls;
+  if(lua_type(L,3)==6) {
+    lua_pushvalue(L,3);lua_pushinteger(L,reader->calls);lua_pushinteger(L,top);
+    lua_newtable(L);
+    for(i=5;i<=top;++i) {
+      int type=lua_type(L,i);
+      lua_newtable(L);lua_pushinteger(L,type);lua_rawseti(L,-2,1);
+      if(type==5)lua_pushvalue(L,i);else lua_pushboolean(L,lua_topointer(L,i)==NULL);
+      lua_rawseti(L,-2,2);
+      lua_pushboolean(L,lua_rawequal(L,i,i));lua_rawseti(L,-2,3);
+      lua_pushvalue(L,i);lua_rawseti(L,-2,4);
+      lua_rawseti(L,-2,i-4);
+    }
+    lua_call(L,3,0);
+  }
+  if(reader->mode==2 && reader->calls==1){*size=0;return NULL;}
+  *size=reader->length-reader->at;
+  if((reader->mode!=1 || reader->calls==1) && *size>reader->width)*size=reader->width;
+  reader->at+=*size;
+  return reader->source+reader->at-*size;
+}
+EXPORT int boundary_loadroots(lua_State *L) {
+  RootReader reader;
+  int status;
+  reader.source=luaL_checklstring(L,1,&reader.length);
+  reader.width=(size_t)luaL_checkinteger(L,2);reader.mode=(int)luaL_optinteger(L,4,0);
+  reader.at=0;reader.calls=0;lua_settop(L,4);
+  status=lua_load(L,reader_roots,&reader,"=native roots");
+  lua_pushinteger(L,status);lua_insert(L,-2);lua_pushinteger(L,reader.calls);return 3;
 }
 EXPORT int boundary_loadfile(lua_State *L) {
   const char *path=lua_tolstring(L,1,NULL);

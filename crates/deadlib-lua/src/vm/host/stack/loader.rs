@@ -33,7 +33,8 @@ impl NativeStack<'_, '_> {
     /// a function. Parser/runtime failure restores the entry top and pushes its
     /// error. Changes to caller slots remain visible. Names use the prefix
     /// before the first NUL; None selects `?`.
-    /// This safe window exposes caller values, not PUC's private parser roots.
+    /// Text readers also see the active constants-table/prototype pairs; native
+    /// bytecode readers see each unfinished prototype, matching Lua 5.1's roots.
     ///
     /// # Errors
     /// Rejects pending unprotected errors and stack overflow. Instruction limits
@@ -88,9 +89,35 @@ impl NativeStack<'_, '_> {
         let mut first = true;
         loop {
             if !first {
-                match self.call.vm.resume_native_load(index) {
+                let result = self.call.vm.resume_native_load(index);
+                if let Err(error) = self.apply_load_roots(index) {
+                    return self.catch_load_error(scope, error);
+                }
+                match result {
                     Ok(Some(program)) => {
                         let function = self.call.vm.load(&program);
+                        let prototypes = std::mem::take(
+                            &mut self.call.vm.loads[index]
+                                .native
+                                .as_mut()
+                                .unwrap()
+                                .prototypes,
+                        )
+                        .into_boxed_slice();
+                        let closure = &self.call.vm.functions[slot_index(function.0)];
+                        let entry = closure.prototype;
+                        let loaded = closure.program;
+                        assert_eq!(
+                            prototypes.len(),
+                            self.call.vm.programs[loaded].data.prototypes.len()
+                        );
+                        let root = prototypes[entry];
+                        self.call
+                            .vm
+                            .programs
+                            .note_alloc(std::mem::size_of_val(prototypes.as_ref()));
+                        self.call.vm.programs[loaded].parser_prototypes = prototypes;
+                        self.call.vm.gc_new_value(Value::ParserPrototype(root));
                         self.finish_load_scope(scope);
                         self.push(Value::Function(function))?;
                         return Ok(NativeLoadStatus::Ok);
@@ -152,6 +179,9 @@ impl NativeStack<'_, '_> {
         self.call.vm.trim_hooks();
         self.call.vm.top = scope.top;
         self.call.vm.active_native = scope.active;
+        self.call.results = scope.count;
+        self.call.vm.registers.truncate(self.base + scope.count);
+        self.sync();
     }
     fn catch_load_error(&mut self, scope: Scope, error: Error) -> Result<NativeLoadStatus, Error> {
         if error.kind() == ErrorKind::Limit {
