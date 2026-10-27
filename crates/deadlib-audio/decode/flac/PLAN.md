@@ -28,7 +28,7 @@ Completion requires current evidence for every item, not just passing roundtrips
 Record commands, versions, corpus provenance, coverage gaps and measurements in
 the crate documentation as each milestone is reached.
 
-Outstanding native decoder improvements: file-backed Read+Seek adapter, SEEKTABLE-assisted
-startup/seek acceleration, measured buffer/allocation improvements. Current exact
-seeking uses borrowed input and a lazy validated frame index. Default resource
+Native file-backed Read+Seek and SEEKTABLE-assisted seeks are now implemented;
+evidence is in SEEKING.md. Borrowed-input Decoder retains its lazy sequential
+index. Measured buffer/allocation improvements remain outstanding. Default resource
 budgets deliberately require configuration for extreme metadata/frame payloads.

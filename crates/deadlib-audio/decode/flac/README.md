@@ -21,6 +21,8 @@ Current APIs:
   whole-stream MD5 verification and borrowed planar `i32` PCM. Frame properties
   can change mid-stream; consume each returned header's rate/channels/depth.
 - `Decoder<'a>`: borrowed native input and exact seeking using a lazy frame index.
+- `SeekReader<R: Read + Seek>`: native file-backed exact seeking, with validated
+  SEEKTABLE hints, a lazy frame index and reusable streaming buffers.
 - `FrameDecoder::find_frame`: CRC-validated synchronization in headerless input.
 - `FrameEncoder`: reusable constant/verbatim/fixed/LPC encoding with exact Rice
   bit-cost selection, stereo decorrelation and compression levels 0..8.
@@ -50,8 +52,9 @@ fn decode(input: impl std::io::Read) -> Result<(), Error> {
 `Decoder::seek(sample)` makes the next PCM block begin at that exact sample,
 including within-frame targets. The first forward seek decodes through its
 target to discover frame boundaries; later seeks reuse the index. Input must
-already be in memory. A file-backed seek adapter and direct SEEKTABLE acceleration
-remain future work. Seeking to zero restarts MD5 verification; other seeks report
+already be in memory. `SeekReader` instead reads metadata at construction and uses
+file seeks plus validated SEEKTABLE hints; see [SEEKING.md](SEEKING.md).
+Seeking to zero restarts MD5 verification; other seeks report
 `Integrity::Partial` while retaining frame CRC and sequence checks.
 
 Default resource limits: 64 MiB total metadata, 4,096 metadata blocks, 32 MiB per
@@ -74,7 +77,7 @@ assert_eq!(decoder.read_next()?.unwrap().pcm.plane(0), &[1, 2, 3]);
 See [ENCODING.md](ENCODING.md) for encoder options, streaming finalization and
 independent roundtrip evidence.
 
-Validation: 27 local integration tests plus three documentation examples; external
+Validation: 31 local integration tests plus three documentation examples; external
 gates compare all 75 valid official corpus files exactly with libFLAC, check
 1,533 seek positions and exercise all 11 faulty files. Symphonia 0.6.1 matches 72
 files; three explicitly recorded reference differences remain. Another 696
@@ -85,6 +88,6 @@ Ogg adds another 696 bidirectional libFLAC cases, all exact with Symphonia's Ogg
 demuxer and FLAC decoder, plus 73 official-file remuxes and 1,533 exact seeks.
 See [OGG.md](OGG.md) for mapping behavior and reproducible evidence.
 
-See [PLAN.md](PLAN.md) for the full scope and unfinished milestones. Native
-file-backed seeking, fuzz campaigns and pipeline performance work remain.
+See [PLAN.md](PLAN.md) for the full scope and unfinished milestones. Fuzz
+campaigns and pipeline performance work remain.
 No performance comparison is claimed yet.

@@ -130,6 +130,7 @@ fn official_corpus_against_libflac_and_symphonia() {
     let mut symphonia_passes = 0;
     let mut mismatches = Vec::new();
     let mut rejections = Vec::new();
+    let mut seek_report = String::from("group\tfile\tseeks\ttable_hits\trejected_hints\n");
     for group in ["subset", "uncommon"] {
         let mut paths: Vec<_> = fs::read_dir(root.join(group))
             .unwrap()
@@ -185,6 +186,37 @@ fn official_corpus_against_libflac_and_symphonia() {
                     );
                 }
                 seeks = positions.len();
+                let mut reader = SeekReader::with_options(
+                    fs::File::open(&path).unwrap(),
+                    SeekOptions {
+                        decode: options(),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                for &sample in &positions {
+                    reader.seek(sample).unwrap();
+                    assert_eq!(reader.position(), sample);
+                    if sample == total {
+                        assert!(reader.read_next().unwrap().is_none());
+                        continue;
+                    }
+                    let i = expected.partition_point(|f| f.start <= sample) - 1;
+                    let actual = reader.read_next().unwrap().unwrap();
+                    assert_eq!(actual.start_sample, sample);
+                    compare(
+                        actual.header,
+                        actual.pcm,
+                        &expected[i],
+                        (sample - expected[i].start) as usize,
+                    );
+                }
+                seek_report.push_str(&format!(
+                    "{group}\t{}\t{seeks}\t{}\t{}\n",
+                    path.file_name().unwrap().to_string_lossy(),
+                    reader.seek_stats().table_hits,
+                    reader.seek_stats().table_rejections
+                ));
             } else {
                 let mut decoder = FrameDecoder::new(None).unwrap();
                 let (skip, first) = decoder.find_frame(&data).unwrap();
@@ -239,6 +271,8 @@ fn official_corpus_against_libflac_and_symphonia() {
     }
     let dest = std::env::var_os("DEADLIB_FLAC_REPORT").expect("set DEADLIB_FLAC_REPORT");
     fs::write(dest, report).unwrap();
+    let dest = std::env::var_os("DEADLIB_FLAC_SEEK_REPORT").expect("set DEADLIB_FLAC_SEEK_REPORT");
+    fs::write(dest, seek_report).unwrap();
     eprintln!("Symphonia differences: {mismatches:#?}");
     // A pinned reference regression, not a native PCM tolerance: every native
     // sample above must equal libFLAC, and this stream's MD5 must verify. Keep

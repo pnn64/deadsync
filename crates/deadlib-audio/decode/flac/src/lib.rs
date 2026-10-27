@@ -16,7 +16,9 @@ mod ogg_seek;
 pub use encode::{EncodeOptions, FrameEncoder};
 pub use encoder::{EncodedStream, Encoder};
 pub use frame::{Frame, FrameDecoder, FrameHeader, Pcm};
-pub use native::{DecodeOptions, Decoder, Integrity, Reader, StreamFrame};
+pub use native::{
+    DecodeOptions, Decoder, Integrity, Reader, SeekOptions, SeekReader, SeekStats, StreamFrame,
+};
 pub use ogg::{OggDecoder, OggEvent, OggOptions, OggPcm, OggReader, OggStreamDecoder, StreamId};
 pub use ogg_encode::{OggEncodedStream, OggEncoder, OggMuxer, OggWriteOptions};
 pub use ogg_seek::{OggSeekOptions, OggSeekReader, OggSeekStream};

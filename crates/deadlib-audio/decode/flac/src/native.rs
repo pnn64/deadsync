@@ -2,7 +2,7 @@
 use crate::{
     Error, FrameDecoder, FrameHeader, Limits, Metadata, Pcm, StreamInfo, checksum::Md5, reserve,
 };
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 
 #[derive(Clone, Copy, Debug)]
 pub struct DecodeOptions {
@@ -283,6 +283,7 @@ pub struct Reader<R> {
     sequence: Sequence,
     buffer: Vec<u8>,
     consumed: usize,
+    offset: u64,
     eof: bool,
     done: bool,
     failed: bool,
@@ -320,6 +321,7 @@ impl<R: Read> Reader<R> {
             }
         }
         let info = Metadata::parse(&metadata, options.limits)?.stream_info;
+        let offset = metadata.len() as u64;
         Ok(Self {
             source,
             metadata,
@@ -328,6 +330,7 @@ impl<R: Read> Reader<R> {
             sequence: Sequence::new(info, options),
             buffer: Vec::new(),
             consumed: 0,
+            offset,
             eof: false,
             done: false,
             failed: false,
@@ -384,6 +387,7 @@ impl<R: Read> Reader<R> {
                 Ok(frame) => {
                     let start = self.sequence.accept(frame.header, frame.pcm)?;
                     self.consumed = frame.bytes;
+                    self.offset += frame.bytes as u64;
                     return Ok(Some((frame.header, start)));
                 }
                 Err(Error::Truncated) if !self.eof => (),
@@ -416,6 +420,311 @@ impl<R: Read> Reader<R> {
                 }
             }
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SeekOptions {
+    pub decode: DecodeOptions,
+    pub max_index_frames: usize,
+    /// Treat SEEKTABLE entries as untrusted hints, checking their target frames.
+    pub use_seektable: bool,
+}
+impl Default for SeekOptions {
+    fn default() -> Self {
+        Self {
+            decode: DecodeOptions::default(),
+            max_index_frames: 4 << 20,
+            use_seektable: true,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SeekStats {
+    pub table_hits: u64,
+    pub table_rejections: u64,
+}
+#[derive(Clone, Copy)]
+struct FileLandmark {
+    offset: u64,
+    sample: u64,
+    number: u64,
+}
+struct Hint {
+    point: crate::metadata::SeekPoint,
+    rejected: bool,
+}
+
+/// Native file-backed exact seeking with a lazy frame index and validated
+/// SEEKTABLE hints. Construction reads metadata only, at the source's current
+/// position. Buffers survive repeated seeks. The byte source must not change.
+pub struct SeekReader<R> {
+    reader: Reader<R>,
+    origin: u64,
+    options: SeekOptions,
+    hints: Vec<Hint>,
+    index: Vec<FileLandmark>,
+    basis: Option<FrameHeader>,
+    pending: Option<(FrameHeader, u64, usize)>,
+    stats: SeekStats,
+    failed: bool,
+}
+impl<R: Read + Seek> SeekReader<R> {
+    pub fn new(source: R) -> Result<Self, Error> {
+        Self::with_options(source, SeekOptions::default())
+    }
+    pub fn with_options(mut source: R, options: SeekOptions) -> Result<Self, Error> {
+        let origin = source.stream_position()?;
+        let reader = Reader::with_options(source, options.decode)?;
+        let mut hints = Vec::new();
+        if options.use_seektable {
+            for block in &reader.metadata()?.blocks {
+                if block.kind == 3 {
+                    for point in crate::metadata::SeekTable::parse(block.data)?.points() {
+                        if point.sample == u64::MAX {
+                            break;
+                        }
+                        reserve(&mut hints, 1)?;
+                        hints.push(Hint {
+                            point,
+                            rejected: false,
+                        });
+                    }
+                }
+            }
+        }
+        Ok(Self {
+            reader,
+            origin,
+            options,
+            hints,
+            index: Vec::new(),
+            basis: None,
+            pending: None,
+            stats: SeekStats::default(),
+            failed: false,
+        })
+    }
+    pub fn stream_info(&self) -> StreamInfo {
+        self.reader.stream_info()
+    }
+    pub fn metadata(&self) -> Result<Metadata<'_>, Error> {
+        self.reader.metadata()
+    }
+    pub fn integrity(&self) -> Integrity {
+        self.reader.integrity()
+    }
+    pub fn position(&self) -> u64 {
+        self.pending
+            .map_or(self.reader.position(), |(_, start, skip)| {
+                start + skip as u64
+            })
+    }
+    pub fn index_len(&self) -> usize {
+        self.index.len()
+    }
+    pub fn seek_stats(&self) -> SeekStats {
+        self.stats
+    }
+    pub fn into_inner(self) -> R {
+        self.reader.into_inner()
+    }
+    fn remember(&mut self, offset: u64, header: FrameHeader, sample: u64) -> Result<(), Error> {
+        if sample == 0 {
+            self.basis = Some(header);
+        }
+        match self.index.binary_search_by_key(&sample, |f| f.sample) {
+            Ok(i) => {
+                if self.index[i].offset != offset || self.index[i].number != header.number {
+                    return Err(Error::Invalid("indexed native frame changed"));
+                }
+            }
+            Err(i) => {
+                if self.index.len() >= self.options.max_index_frames {
+                    return Err(Error::LimitExceeded("indexed native frames"));
+                }
+                reserve(&mut self.index, 1)?;
+                self.index.insert(
+                    i,
+                    FileLandmark {
+                        offset,
+                        sample,
+                        number: header.number,
+                    },
+                );
+            }
+        }
+        Ok(())
+    }
+    fn next_frame(&mut self) -> Result<Option<(FrameHeader, u64)>, Error> {
+        let offset = self.reader.offset;
+        let result = self.reader.next_inner()?;
+        if let Some((header, sample)) = result {
+            self.remember(offset, header, sample)?;
+        }
+        Ok(result)
+    }
+    pub fn read_next(&mut self) -> Result<Option<StreamFrame<'_>>, Error> {
+        if self.failed {
+            return Err(Error::Invalid("native seek reader is terminal after error"));
+        }
+        let result = match self.pending.take() {
+            Some(frame) => Ok(Some(frame)),
+            None => self
+                .next_frame()
+                .map(|f| f.map(|(header, start)| (header, start, 0))),
+        };
+        match result {
+            Ok(Some((header, start, skip))) => Ok(Some(StreamFrame {
+                start_sample: start + skip as u64,
+                header,
+                pcm: self.reader.decoder.pcm(header).trim_start(skip),
+            })),
+            Ok(None) => Ok(None),
+            Err(error) => {
+                self.failed = true;
+                Err(error)
+            }
+        }
+    }
+    fn restore(&mut self, point: FileLandmark, partial: bool) -> Result<(), Error> {
+        let absolute = self
+            .origin
+            .checked_add(point.offset)
+            .ok_or(Error::Invalid("seek offset overflow"))?;
+        if self.reader.source.seek(SeekFrom::Start(absolute))? != absolute {
+            return Err(Error::Io("seek returned a different position".into()));
+        }
+        self.reader.sequence = Sequence::new(self.reader.stream_info(), self.options.decode);
+        if let Some(basis) = self.basis {
+            self.reader.sequence.variable = Some(basis.variable_block_size);
+            self.reader.sequence.fixed_size = basis.block_size;
+            self.reader.sequence.frames =
+                if basis.variable_block_size || self.reader.sequence.legacy_variable {
+                    u64::from(point.sample != 0)
+                } else {
+                    point.number
+                };
+        }
+        self.reader.sequence.samples = point.sample;
+        if partial {
+            self.reader.sequence.digest = None;
+            self.reader.sequence.integrity = Integrity::Partial;
+        }
+        self.reader.offset = point.offset;
+        self.reader.buffer.clear();
+        self.reader.consumed = 0;
+        self.reader.eof = false;
+        self.reader.done = false;
+        self.reader.failed = false;
+        self.pending = None;
+        Ok(())
+    }
+    /// Next PCM begins exactly at `sample`. Zero restarts whole-stream integrity;
+    /// nonzero seeks verify the selected frame and mark integrity partial. Bad
+    /// SEEKTABLE targets are discarded and a validated earlier frame is used.
+    /// A successful explicit seek recovers the reader after a previous error.
+    pub fn seek(&mut self, sample: u64) -> Result<(), Error> {
+        if self.stream_info().total_samples != 0 && sample > self.stream_info().total_samples {
+            return Err(Error::Invalid("seek beyond end"));
+        }
+        self.failed = true;
+        let result = self.seek_inner(sample);
+        if result.is_ok() {
+            self.failed = false;
+        }
+        result
+    }
+    fn seek_inner(&mut self, sample: u64) -> Result<(), Error> {
+        let beginning = FileLandmark {
+            offset: self.reader.metadata.len() as u64,
+            sample: 0,
+            number: 0,
+        };
+        if sample == 0 {
+            self.restore(beginning, false)?;
+            return Ok(());
+        }
+        // Establish the blocking strategy and nominal fixed size from the first
+        // CRC-validated frame, never from a potentially stale table entry.
+        if self.basis.is_none() {
+            self.restore(beginning, true)?;
+            if self.next_frame()?.is_none() {
+                return Err(Error::Invalid("seek beyond end"));
+            }
+        }
+        let i = self.index.partition_point(|p| p.sample <= sample);
+        let landmark = if i == 0 { beginning } else { self.index[i - 1] };
+        let hint = self.hints.partition_point(|h| h.point.sample <= sample);
+        let hint = hint
+            .checked_sub(1)
+            .filter(|&i| !self.hints[i].rejected && self.hints[i].point.sample > landmark.sample);
+        if let Some(i) = hint {
+            let point = self.hints[i].point;
+            let basis = self.basis.unwrap();
+            let variable = basis.variable_block_size || self.reader.sequence.legacy_variable;
+            let checked = (|| {
+                if point.samples == 0
+                    || (!variable && !point.sample.is_multiple_of(basis.block_size as u64))
+                {
+                    return Err(Error::Invalid("SEEKTABLE sample alignment"));
+                }
+                let offset = beginning
+                    .offset
+                    .checked_add(point.offset)
+                    .ok_or(Error::Invalid("SEEKTABLE offset overflow"))?;
+                let number = if variable {
+                    point.sample
+                } else {
+                    point.sample / basis.block_size as u64
+                };
+                self.restore(
+                    FileLandmark {
+                        offset,
+                        sample: point.sample,
+                        number,
+                    },
+                    true,
+                )?;
+                let (header, start) = self.reader.next_inner()?.ok_or(Error::Truncated)?;
+                if header.block_size != point.samples as usize {
+                    return Err(Error::Invalid("SEEKTABLE block size"));
+                }
+                self.remember(offset, header, start)?;
+                Ok((header, start))
+            })();
+            match checked {
+                Ok((header, start)) => {
+                    self.stats.table_hits += 1;
+                    if sample < self.reader.position() {
+                        self.pending = Some((header, start, (sample - start) as usize));
+                        return Ok(());
+                    }
+                    return self.scan_to(sample);
+                }
+                Err(error @ (Error::Io(_) | Error::Allocation | Error::LimitExceeded(_))) => {
+                    return Err(error);
+                }
+                Err(_) => {
+                    self.hints[i].rejected = true;
+                    self.stats.table_rejections += 1;
+                }
+            }
+        }
+        self.restore(landmark, true)?;
+        self.scan_to(sample)
+    }
+    fn scan_to(&mut self, sample: u64) -> Result<(), Error> {
+        while let Some((header, start)) = self.next_frame()? {
+            if sample < self.reader.position() {
+                self.pending = Some((header, start, (sample - start) as usize));
+                return Ok(());
+            }
+        }
+        if self.reader.position() != sample {
+            return Err(Error::Invalid("seek beyond end"));
+        }
+        Ok(())
     }
 }
 

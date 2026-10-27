@@ -79,6 +79,7 @@ cmake --build target/deadlib-flac-reference/oracle-build --config Release --targ
 $env:DEADLIB_FLAC_CORPUS = (Resolve-Path target/deadlib-flac-reference/conformance).Path
 $env:DEADLIB_FLAC_ORACLE = (Resolve-Path target/deadlib-flac-reference/oracle-build/Release/deadlib_flac_oracle.exe).Path
 $env:DEADLIB_FLAC_REPORT = "$pwd/crates/deadlib-audio/decode/flac/validation/native-corpus.tsv"
+$env:DEADLIB_FLAC_SEEK_REPORT = "$pwd/crates/deadlib-audio/decode/flac/validation/native-seeking.tsv"
 cargo test -p deadlib-audio-decode-flac --release --test conformance -- --ignored --nocapture
 ```
 
@@ -90,10 +91,11 @@ when explicitly run, missing artifacts are failures, never silent skips.
 
 Native encoding is covered in [ENCODING.md](ENCODING.md) and Ogg mapping,
 streaming, encoding and indexed file seeking in [OGG.md](OGG.md).
-A native file-backed seek reader and direct SEEKTABLE
-acceleration remain outstanding. No fuzz campaign or performance benchmark has
+Native file-backed seeking and validated SEEKTABLE acceleration are covered in
+[SEEKING.md](SEEKING.md), including another 1,533 exact official-corpus seeks.
+No fuzz campaign or performance benchmark has
 run. Current decoded scratch uses i64 intermediates plus i32 output to keep
-reconstruction safe; optimization needs measurements. The initial forward seek
+reconstruction safe; optimization needs measurements. The borrowed-input decoder's initial forward seek
 scans/decompresses frames up to its target, and the lazy index retains one entry
 per visited frame. Whole-stream MD5 is unavailable after a nonzero seek until a
 new sequential pass from sample zero completes.
