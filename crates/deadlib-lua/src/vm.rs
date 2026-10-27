@@ -1623,6 +1623,7 @@ impl Vm {
                             && (usize::from(frame.barriers)
                                 + usize::from(self.threads[slot_index(self.thread.0)].depth)
                                 >= 197
+                                || self.threads[slot_index(self.thread.0)].native_bias != 0
                                 || !self.loads.is_empty())
                         {
                             self.check_iterator_call()?;

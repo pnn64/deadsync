@@ -142,6 +142,67 @@ fn vm() -> Vm {
 }
 
 #[test]
+fn stock_reader_loads_wrap_the_c_call_count_and_restore_parser_failures() {
+    let mut vm = vm();
+    run(&mut vm,br#"
+for _,mode in ipairs{'value','empty','syntax','error','invalid'}do
+ local co=api(0);api(1,co,function()
+  local me=current_thread();local zero,keep=api(0),api(0);api(7,me,keep)
+  pcall(function()api(7,zero,me)end);assert(api(8,me)==65535)
+  local trace={};local n=0
+  local f,e=load(function()
+   n=n+1;trace[n]=api(8,me)
+   if mode=='empty'then return nil elseif mode=='error'then error('bad',0)
+   elseif mode=='invalid'then return {} elseif n==1 then return mode=='syntax'and'local x = )'or'return 42'end
+  end,'=wrapped-reader')
+  assert(api(8,me)==65535);api(7,keep,me)
+  assert(trace[1]==0)
+  if mode=='value'or mode=='empty'then assert(type(f)=='function'and e==nil and n==2)
+  else assert(f==nil and type(e)=='string')end
+  if mode=='value'then assert(f()==42 and trace[2]==1)end
+  return 42
+ end)
+ assert(api(6,co,0)==0 and api(8,co)==0)
+end
+"#);
+}
+
+#[test]
+fn stock_readers_execute_before_syntax_limits_in_the_c_error_reserve() {
+    std::thread::Builder::new().stack_size(32*1024*1024).spawn(||{
+        let mut vm=vm();run(&mut vm,br#"
+local exact=api(0);local capture=api(0)
+local function nest(n,f)if n==0 then return f()end;return native_call(function()return nest(n-1,f)end)end
+api(1,capture,function()local me=current_thread();nest(198,function()api(7,me,exact)end)end)
+assert(api(6,capture,0)==0 and api(8,exact)==199)
+for _,mode in ipairs{'value','empty','error','invalid'}do
+ local co=api(0);api(1,co,function()
+  local me=current_thread();assert(api(8,me)==200);local n=0
+  local f,e=load(function()
+   n=n+1;assert(api(8,me)==201)
+   if mode=='empty'then return nil elseif mode=='error'then error('bad',0)
+   elseif mode=='invalid'then return {} else return 'return 42'end
+  end,'=reserve-reader')
+  assert(f==nil and type(e)=='string'and api(8,me)==200)
+  assert(n==(mode=='empty'and 2 or 1));return 42
+ end)
+ api(7,exact,co);assert(api(6,co,0)==0 and api(8,co)==199)
+end
+local co=api(0);api(1,co,function()
+ local me=current_thread();local visits=0
+ local ok,e=pcall(function()
+  api(7,exact,me)
+  for _ in function()visits=visits+1;return 1 end do break end
+ end)
+ assert(not ok and visits==0 and api(8,me)==1 and e:find('C stack overflow',1,true))
+ return 42
+end)
+assert(api(6,co,0)==0)
+"#);
+    }).unwrap().join().unwrap();
+}
+
+#[test]
 fn copied_call_levels_preserve_stacks_and_reach_active_and_normal_threads() {
     let mut vm = vm();
     run(&mut vm, br#"

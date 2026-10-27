@@ -708,9 +708,7 @@ impl Vm {
                 }
             }
         }
-        if self.native_depth(self.frames.len()) >= 199 {
-            return Err(Error::new(ErrorKind::Runtime, 0, "C stack overflow"));
-        }
+        self.check_c_call()?;
         self.loads[index].awaiting = true;
         self.registers[base + 3] = self.registers[base];
         if let Some(actual) = self.start_call(base + 3, 0, 1, false)? {

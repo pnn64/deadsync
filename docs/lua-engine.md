@@ -1111,6 +1111,14 @@ open, along with complete coroutine/C API and standalone Lua 5.1 parity. The
 boundary declares 66 of 80 core APIs, which is not proof of full semantics.
 Optimization and benchmarks stay deferred.
 
+The [reader call-limit checks](testing/2026-10-27-rust-lua-native-reader.md)
+fix stock `load(reader)` at wrapped/high C-call counts and generic-for entry
+after a counter change. A checked build of unchanged official sources diagnoses
+the retained lowered-count yield case at the resume counter invariant; its
+ordinary control and the reader/iterator cases pass. The release mismatch still
+exists and its strict audit still fails. This additional evidence does not close
+complete coroutine/C API or standalone Lua 5.1 parity. Optimization stays deferred.
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the

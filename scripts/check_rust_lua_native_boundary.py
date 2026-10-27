@@ -115,6 +115,7 @@ def main():
     thread_stack_runs={}
     resume_runs={}
     level_runs={}
+    reader_level_runs={}
     for engine in ['reference','rust']:
         with tempfile.TemporaryDirectory(prefix='deadlua-native-boundary-')as temporary:
             work=Path(temporary);(work/'boundary.lua').write_bytes((fixture/'cases.lua').read_bytes())
@@ -149,6 +150,10 @@ def main():
             command=command[:-1]+[str(work/'native-levels.lua')]
             run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=60)
             level_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
+            (work/'reader-call-levels.lua').write_bytes((fixture/'reader-call-levels.lua').read_bytes())
+            command=command[:-1]+[str(work/'reader-call-levels.lua')]
+            run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=60)
+            reader_level_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
     assert hashes()==before,'sources changed during boundary proof'
     reference_run=runs['reference'];rust=runs['rust']
     buffers={engine:bool(re.search(rb'(?m)^aux-buffer-complete\t99\t40\r*$',bytes.fromhex(run.get('stdout_hex',''))))for engine,run in runs.items()}
@@ -180,6 +185,9 @@ def main():
     levels_complete=all(run['returncode']==0 and b'native-call-levels-complete\t1000'in bytes.fromhex(run['stdout_hex'])for run in level_runs.values())
     levels_equal=levels_complete and level_runs['reference']['stdout_hex']==level_runs['rust']['stdout_hex'] and not level_runs['reference']['stderr_hex']
     result['native_call_levels_probe']=dict(runs=level_runs,completed=levels_complete,observations_equal=levels_equal,fixture='crates/deadlib-lua/tests/native-boundary/native-levels.lua',reference_counter='source-built Lua 5.1.5 lua_State.nCcalls',complete_coroutine_api_proven=False)
+    reader_levels_complete=all(run['returncode']==0 and b'reader-call-levels-complete\t26'in bytes.fromhex(run['stdout_hex'])for run in reader_level_runs.values())
+    reader_levels_equal=reader_levels_complete and reader_level_runs['reference']['stdout_hex']==reader_level_runs['rust']['stdout_hex'] and not reader_level_runs['reference']['stderr_hex']
+    result['reader_call_levels_probe']=dict(runs=reader_level_runs,completed=reader_levels_complete,observations_equal=reader_levels_equal,fixture='crates/deadlib-lua/tests/native-boundary/reader-call-levels.lua')
     result['native_file_complete']=file_loaders
     result['native_dump_complete']=dumpers
     result['native_thread_complete']=threads
@@ -190,6 +198,6 @@ def main():
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
     print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,'state lifetimes balanced:',states,flush=True)
-    if not matched or not returned or not states or not scratch_complete or not result['parser_scratch_probe']['observations_equal'] or not roots_equal or not thread_stacks_equal or not resume_equal or not levels_equal:raise SystemExit(1)
+    if not matched or not returned or not states or not scratch_complete or not result['parser_scratch_probe']['observations_equal'] or not roots_equal or not thread_stacks_equal or not resume_equal or not levels_equal or not reader_levels_equal:raise SystemExit(1)
 
 if __name__=='__main__':main()
