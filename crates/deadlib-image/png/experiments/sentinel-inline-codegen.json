@@ -1,0 +1,13 @@
+{
+  "binary_sha256": "f34c5500f9585fecb847fe22865bf237240ef1072f37323f43d0a1af6d3f8885",
+  "pdb_sha256": "304509e2e2c8f2c87d1d0aca8ee64d48574cb43d3b20fb02c289d4debcf3355e",
+  "functions": [
+    {
+      "name": "deadlib_image_png::zlib::decompress_prefix",
+      "address": "0x140018a60",
+      "code_bytes": 4754,
+      "assembly": "experiments/sentinel-inline-decompress_prefix.txt",
+      "assembly_sha256": "65a34a16ff145f1e048b629489e42f3762ad94b08280ec32578e778e42864bcf"
+    }
+  ]
+}

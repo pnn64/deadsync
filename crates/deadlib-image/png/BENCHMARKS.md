@@ -893,3 +893,70 @@ corpora. No full second-candidate suite or fresh sanitizer campaign is claimed.
 Existing full validation remains applicable to the byte-identical restored
 sources. Initial pair summaries remain exploratory. Decoder performance remains
 open; encoding remains outside the deliverable.
+
+## Current buffered profiles and rejected marker reservoirs (2026-10-27)
+
+Fresh Linux profiles bind the selected `b19a1d1b3` production bytes, shared
+primitives, entry point and 24-photo corpus to the saved executable and raw
+recordings. Buffered decode captures 5,936 samples and raw inflation 4,016,
+with zero lost samples. The requested 499 Hz is capped by the host at 250 Hz.
+Setup validates the corpus, including native/reference raw checks for inflation,
+before eighty repeated corpus passes. These are diagnostic cycle attributions;
+setup, sampling skid and shared-host effects prevent isolated-kernel timing claims.
+
+Buffered decode attributes 61.95% to decompression, including 27.21% to inlined
+primary Huffman lookup and 7.40% to refill; unfiltering accounts for 11.97%.
+Raw inflation attributes 78.18% to the containing decompressor, including 34.36%
+to primary lookup and 9.64% to refill. `perf annotate` exits with SIGSEGV on the
+saved trace. The fallback maps original `perf script` symbol offsets to matching
+static disassembly, retaining commands, raw samples, assembly and hashes in
+`profiling/inflate-b19a1d1b3.json`. Hot-address attribution is not instruction
+latency evidence. The raw recordings and dedicated Linux binary remain at the
+paths in both profile manifests.
+
+Three decoder-only prototypes replace the separate bit count with a marker above
+the available data: an explicit marker replacement, an equivalent one-shift
+addition refill, and that addition variant with only the primary lookup forced
+inline. The arithmetic form uses the old marker as part of the addition; its
+representation and overflow/partial-input proof are retained in the checkpoint.
+All byte/32-bit refill boundaries remain unchanged. Each patch reconstructs both
+changed source files from `b19a1d1b3`. All three candidates are rejected; the
+explicit bit-count implementation is restored exactly.
+
+Comparisons run baseline/marker/baseline/addition/baseline/inline/baseline.
+Every position uses three processes per corpus, twelve iterations, three warmups
+and CPU 0. Each final comparison combines its adjacent baseline positions
+(six processes) against three candidate processes. Fourteen manifests verify
+all forty-two processes, with 24 photos / 60 format inputs and identical harness,
+toolchain, corpus and reported size fields. Peak allocation is not measured by
+the zero pipeline-memory column. No task builds, tests, fuzzing or profiling
+overlap timed processes; host frequency and unrelated work remain uncontrolled.
+
+Percentage changes below are relative to Rust png for PNG operations and flate2
+for raw inflation. Absolute rates and exploratory first pairs remain retained.
+
+| Candidate / corpus | Buffered PNG | Reader PNG | Buffered inflate | Streaming inflate |
+| --- | ---: | ---: | ---: | ---: |
+| Marker / photos | -3.14% | -2.27% | -3.43% | -1.37% |
+| Marker / formats | -3.07% | -3.08% | -6.88% | -2.49% |
+| Addition / photos | -11.09% | -1.40% | -13.89% | -1.78% |
+| Addition / formats | -2.35% | +0.97% | -12.14% | +4.05% |
+| Forced inline / photos | -5.93% | -2.78% | -2.32% | -0.27% |
+| Forced inline / formats | -3.79% | -3.51% | -8.41% | +2.60% |
+
+The addition candidate emits a 322-byte outlined primary lookup called twice
+from buffered decompression. Forcing it inline removes that function and grows
+`decompress_prefix` from 4,030 to 4,754 code bytes, but does not establish a
+consistent decoder benefit. PE/PDB and extracted assembly hashes bind this
+observation to the timed executables. Neither shorter source nor fewer logical
+state fields establishes faster generated code.
+
+Both reservoir/refill algorithms pass 29 focused tests, with three external C
+checks ignored; the addition candidate also passes strict main all-target Clippy.
+The third changes only its inline annotation and agrees with references on all
+84 benchmark files. No full candidate suite or new sanitizer campaign is claimed.
+All 21 production sources and 885 source/fixture/example/benchmark files match the
+previous tested standalone copy, preserving its 134-test / 70,852-execution
+validation. `experiments/sentinel-selection.json` verifies reconstruction, exact
+sources, fourteen timing groups, six recomputed summaries and both profiles.
+The measured decoder performance requirement remains open.

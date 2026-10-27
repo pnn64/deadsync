@@ -1772,3 +1772,36 @@ seed ZIP used by later campaigns is unchanged.
 This milestone adds no production change and no fuzz executions. Remaining
 corpus gaps, the final completion audit and competitive decoder performance
 stay open. Encoder requirements remain excluded.
+
+## Buffered profile and marker-reservoir experiments (2026-10-27)
+
+Two fresh selected-source cycle profiles cover 24 photos and eighty corpus
+passes, with setup/native/reference validation included in the recording.
+Buffered decode captures 5,936 samples and raw inflation 4,016; neither loses
+samples. The kernel caps the requested 499 Hz at 250 Hz. All 23 PNG/shared/
+entry-point source hashes, corpus bytes, Linux executable and raw profile hashes
+are verified. `profiling/{decode,inflate}-b19a1d1b3.json` retains the exact binding.
+The failed `perf annotate` attempt is recorded separately from the successful
+sampled-address/static-disassembly mapping. Attribution remains diagnostic and
+does not prove kernel latency or a portable speedup.
+
+Three reconstructible decoder-only source variants test marker-bit availability
+checking, one-shift arithmetic refill and forced primary inlining. The two bit
+algorithms each pass 29 focused tests with three optional external checks ignored.
+The arithmetic variant also passes strict main all-target Clippy. The third
+changes only its inline annotation; all 84 benchmark corpus outputs agree with
+references. The experimental private consumed-byte unit preserves the original
+virtual-count 0-64 arithmetic oracle while checking representable marker states
+0-63 separately. Original production/unit bytes are restored after rejection.
+No full candidate regression suite or fresh sanitizer campaign is claimed.
+
+`BENCHMARKS.md` records the fourteen timing groups / six final summaries and
+inlining evidence. All variants fail to establish a consistent decoder benefit.
+`experiments/sentinel-selection.json` reconstructs every source hash, verifies
+saved executables/manifests and recomputes the comparisons. All 21 production
+files, shared primitives and recorded regression inputs match the selected
+baseline; all 885 copied source/fixture/example/benchmark files match the prior
+tested independent workspace. Existing full release and decoder ASan validation
+are reused for these identical restored bytes, not repeated or counted again.
+Remaining corpus gaps, the completion audit and competitive decoder performance
+remain open. No encoder requirement is added.

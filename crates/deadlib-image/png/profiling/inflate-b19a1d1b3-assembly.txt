@@ -1,0 +1,828 @@
+
+/tmp/deadlib-image-buffered-b19a1d1b3-profile-target-20261027-a/release/examples/decode_profile:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+000000000003cdc0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix>:
+   3cdc0:	push   %rbp
+   3cdc1:	push   %r15
+   3cdc3:	push   %r14
+   3cdc5:	push   %r13
+   3cdc7:	push   %r12
+   3cdc9:	push   %rbx
+   3cdca:	sub    $0x1000,%rsp
+   3cdd1:	movq   $0x0,(%rsp)
+   3cdd9:	sub    $0x1000,%rsp
+   3cde0:	movq   $0x0,(%rsp)
+   3cde8:	sub    $0x888,%rsp
+   3cdef:	mov    %rdi,%rbx
+   3cdf2:	cmp    $0x5,%rdx
+   3cdf6:	ja     3ce08 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x48>
+   3cdf8:	movabs $0x8000000000000000,%rax
+   3ce02:	mov    %rax,0x8(%rbx)
+   3ce06:	jmp    3ce62 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa2>
+   3ce08:	mov    %rcx,%rbp
+   3ce0b:	movzbl (%rsi),%eax
+   3ce0e:	mov    %eax,%ecx
+   3ce10:	and    $0xf,%cl
+   3ce13:	cmp    $0x8,%cl
+   3ce16:	jne    3ce3e <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x7e>
+   3ce18:	test   %al,%al
+   3ce1a:	js     3ce3e <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x7e>
+   3ce1c:	mov    %rdx,%r15
+   3ce1f:	movzwl %ax,%ecx
+   3ce22:	mov    %ecx,%edx
+   3ce24:	shl    $0x8,%edx
+   3ce27:	movzbl 0x1(%rsi),%eax
+   3ce2b:	or     %eax,%edx
+   3ce2d:	imul   $0x7bdf,%edx,%edx
+   3ce33:	movzwl %dx,%edx
+   3ce36:	cmp    $0x842,%edx
+   3ce3c:	jbe    3ce7b <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xbb>
+   3ce3e:	movabs $0x8000000000000000,%rax
+   3ce48:	inc    %rax
+   3ce4b:	mov    %rax,0x8(%rbx)
+   3ce4f:	lea    -0x316e0(%rip),%rax        # b776 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0x77e>
+   3ce56:	mov    %rax,0x10(%rbx)
+   3ce5a:	movq   $0xb,0x18(%rbx)
+   3ce62:	movq   $0xffffffffffffffff,(%rbx)
+   3ce69:	add    $0x2888,%rsp
+   3ce70:	pop    %rbx
+   3ce71:	pop    %r12
+   3ce73:	pop    %r13
+   3ce75:	pop    %r14
+   3ce77:	pop    %r15
+   3ce79:	pop    %rbp
+   3ce7a:	ret
+   3ce7b:	test   $0x20,%al
+   3ce7d:	jne    3d890 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xad0>
+   3ce83:	shr    $0x4,%ecx
+   3ce86:	or     $0x8,%cl
+   3ce89:	mov    $0x1,%eax
+   3ce8e:	shl    %cl,%rax
+   3ce91:	mov    %rax,0xa8(%rsp)
+   3ce99:	lea    -0x2(%r15),%rax
+   3ce9d:	mov    %rsi,0xa0(%rsp)
+   3cea5:	lea    0x2(%rsi),%rcx
+   3cea9:	mov    %rcx,0x8(%rsp)
+   3ceae:	mov    %rax,0x10(%rsp)
+   3ceb3:	xorps  %xmm0,%xmm0
+   3ceb6:	movups %xmm0,0x18(%rsp)
+   3cebb:	movb   $0x0,0x28(%rsp)
+   3cec0:	movq   $0x0,0x38(%rsp)
+   3cec9:	movq   $0x1,0x40(%rsp)
+   3ced2:	movq   $0x0,0x48(%rsp)
+   3cedb:	lea    0x756(%rsp),%r12
+   3cee3:	mov    $0x7,%al
+   3cee5:	add    $0xfe,%al
+   3cee7:	mov    %al,0x37(%rsp)
+   3ceeb:	mov    0x5282e(%rip),%r13        # 8f720 <memcpy@GLIBC_2.14>
+   3cef2:	mov    %rax,0x58(%rsp)
+   3cef7:	mov    %rax,0x50(%rsp)
+   3cefc:	mov    %rax,0x70(%rsp)
+   3cf01:	mov    %rbp,0x60(%rsp)
+   3cf06:	movzbl 0x28(%rsp),%ecx
+   3cf0b:	test   %cl,%cl
+   3cf0d:	je     3cf85 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x1c5>
+   3cf0f:	mov    0x20(%rsp),%rdx
+   3cf14:	lea    -0x1(%rcx),%eax
+   3cf17:	mov    %rdx,0x78(%rsp)
+   3cf1c:	shr    $1,%rdx
+   3cf1f:	mov    %rdx,0x20(%rsp)
+   3cf24:	mov    %al,0x28(%rsp)
+   3cf28:	cmp    $0x2,%cl
+   3cf2b:	ja     3cfdf <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x21f>
+   3cf31:	mov    0x18(%rsp),%rsi
+   3cf36:	cmp    0x10(%rsp),%rsi
+   3cf3b:	jae    3d980 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xbc0>
+   3cf41:	mov    0x8(%rsp),%rcx
+   3cf46:	movzbl (%rcx,%rsi,1),%edi
+   3cf4a:	mov    %eax,%ecx
+   3cf4c:	shl    %cl,%rdi
+   3cf4f:	or     %rdx,%rdi
+   3cf52:	inc    %rsi
+   3cf55:	mov    %rsi,0x18(%rsp)
+   3cf5a:	or     $0x8,%al
+   3cf5c:	mov    %edi,%esi
+   3cf5e:	and    $0x3,%esi
+   3cf61:	shr    $0x2,%rdi
+   3cf65:	mov    %rdi,0x20(%rsp)
+   3cf6a:	add    $0xfe,%al
+   3cf6c:	mov    %al,0x28(%rsp)
+   3cf70:	lea    -0x36aaf(%rip),%rdx        # 64c8 <__abi_tag+0x61cc>
+   3cf77:	mov    %rsi,0x58(%rsp)
+   3cf7c:	movslq (%rdx,%rsi,4),%rcx
+   3cf80:	add    %rdx,%rcx
+   3cf83:	jmp    *%rcx
+   3cf85:	mov    0x18(%rsp),%rax
+   3cf8a:	cmp    0x10(%rsp),%rax
+   3cf8f:	jae    3d92f <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xb6f>
+   3cf95:	mov    0x8(%rsp),%rcx
+   3cf9a:	movzbl (%rcx,%rax,1),%edi
+   3cf9e:	or     0x20(%rsp),%rdi
+   3cfa3:	inc    %rax
+   3cfa6:	mov    %rax,0x18(%rsp)
+   3cfab:	mov    %rdi,0x78(%rsp)
+   3cfb0:	shr    $1,%rdi
+   3cfb3:	mov    %edi,%esi
+   3cfb5:	and    $0x3,%esi
+   3cfb8:	shr    $0x2,%rdi
+   3cfbc:	mov    %rdi,0x20(%rsp)
+   3cfc1:	movzbl 0x37(%rsp),%eax
+   3cfc6:	mov    %al,0x28(%rsp)
+   3cfca:	lea    -0x36b09(%rip),%rdx        # 64c8 <__abi_tag+0x61cc>
+   3cfd1:	mov    %rsi,0x58(%rsp)
+   3cfd6:	movslq (%rdx,%rsi,4),%rcx
+   3cfda:	add    %rdx,%rcx
+   3cfdd:	jmp    *%rcx
+   3cfdf:	mov    %edx,%edi
+   3cfe1:	and    $0x3,%edi
+   3cfe4:	shr    $0x2,%rdx
+   3cfe8:	mov    %rdx,0x20(%rsp)
+   3cfed:	add    $0xfe,%al
+   3cfef:	mov    %al,0x28(%rsp)
+   3cff3:	lea    -0x36b32(%rip),%rsi        # 64c8 <__abi_tag+0x61cc>
+   3cffa:	mov    %rdi,0x58(%rsp)
+   3cfff:	movslq (%rsi,%rdi,4),%rcx
+   3d003:	add    %rsi,%rcx
+   3d006:	mov    %rdx,%rdi
+   3d009:	jmp    *%rcx
+   3d00b:	mov    %eax,%ecx
+   3d00d:	and    $0x7,%cl
+   3d010:	shr    %cl,%rdi
+   3d013:	mov    %rdi,0x20(%rsp)
+   3d018:	mov    %eax,%esi
+   3d01a:	and    $0xf8,%sil
+   3d01e:	mov    %sil,0x28(%rsp)
+   3d023:	cmp    $0xf,%al
+   3d025:	ja     3d675 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x8b5>
+   3d02b:	mov    0x10(%rsp),%r9
+   3d030:	mov    0x18(%rsp),%r8
+   3d035:	cmp    %r9,%r8
+   3d038:	cmova  %r8,%r9
+   3d03c:	jae    3da29 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xc69>
+   3d042:	mov    0x8(%rsp),%r10
+   3d047:	movzbl (%r10,%r8,1),%edx
+   3d04c:	mov    %eax,%ecx
+   3d04e:	and    $0x8,%cl
+   3d051:	shl    %cl,%rdx
+   3d054:	or     %rdi,%rdx
+   3d057:	lea    0x1(%r8),%rcx
+   3d05b:	mov    %rcx,0x18(%rsp)
+   3d060:	cmp    $0x7,%al
+   3d062:	ja     3d67a <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x8ba>
+   3d068:	cmp    %r9,%rcx
+   3d06b:	je     3da29 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xc69>
+   3d071:	movzbl 0x1(%r10,%r8,1),%eax
+   3d077:	shl    $0x8,%eax
+   3d07a:	or     %rax,%rdx
+   3d07d:	add    $0x2,%r8
+   3d081:	mov    %r8,0x18(%rsp)
+   3d086:	mov    $0x10,%sil
+   3d089:	jmp    3d67e <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x8be>
+   3d08e:	lea    0xdf8(%rsp),%rdi
+   3d096:	lea    0x8(%rsp),%rsi
+   3d09b:	call   3dd50 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib7dynamic>
+   3d0a0:	cmpb   $0x0,0xdf8(%rsp)
+   3d0a8:	jne    3d963 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xba3>
+   3d0ae:	mov    $0xd44,%edx
+   3d0b3:	lea    0xb4(%rsp),%rbp
+   3d0bb:	mov    %rbp,%rdi
+   3d0be:	lea    0xdfa(%rsp),%rsi
+   3d0c6:	call   *%r13
+   3d0c9:	jmp    3d0db <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x31b>
+   3d0cb:	lea    0xb4(%rsp),%rbp
+   3d0d3:	mov    %rbp,%rdi
+   3d0d6:	call   3db90 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib5fixed>
+   3d0db:	mov    $0x6a2,%edx
+   3d0e0:	lea    0x1b44(%rsp),%rdi
+   3d0e8:	mov    %rbp,%rsi
+   3d0eb:	call   *%r13
+   3d0ee:	mov    $0x6a2,%edx
+   3d0f3:	lea    0x21e6(%rsp),%rdi
+   3d0fb:	mov    %r12,%rsi
+   3d0fe:	call   *%r13
+   3d101:	mov    0x60(%rsp),%rbp
+   3d106:	lea    0x38(%rsp),%r13
+   3d10b:	jmp    3d121 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x361>
+   3d10d:	nopl   (%rax)
+   3d110:	mov    0x40(%rsp),%rax
+   3d115:	mov    %r12b,(%rax,%rsi,1)
+   3d119:	inc    %rsi
+   3d11c:	mov    %rsi,0x48(%rsp)
+   3d121:	movzbl 0x28(%rsp),%eax
+   3d126:	cmp    $0x9,%rax
+   3d12a:	jae    3d183 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x3c3>
+   3d12c:	mov    0x10(%rsp),%rdx
+   3d131:	mov    0x18(%rsp),%rdi
+   3d136:	mov    %rdx,%rcx
+   3d139:	sub    %rdi,%rcx
+   3d13c:	cmp    $0x3,%rcx
+   3d140:	jbe    3d25f <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x49f>
+   3d146:	lea    0x4(%rdi),%rsi
+   3d14a:	cmp    $0xfffffffffffffffb,%rdi
+   3d14e:	ja     3db2d <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd6d>
+   3d154:	cmp    %rdx,%rsi
+   3d157:	ja     3db2d <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd6d>
+   3d15d:	mov    0x8(%rsp),%rcx
+   3d162:	mov    (%rcx,%rdi,1),%r8d
+   3d166:	mov    %eax,%ecx
+   3d168:	shl    %cl,%r8
+   3d16b:	or     0x20(%rsp),%r8
+   3d170:	mov    %r8,0x20(%rsp)
+   3d175:	mov    %rsi,0x18(%rsp)
+   3d17a:	add    $0x20,%eax
+   3d17d:	mov    %al,0x28(%rsp)
+   3d181:	jmp    3d188 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x3c8>
+   3d183:	mov    0x20(%rsp),%r8
+   3d188:	mov    %r8d,%ecx
+   3d18b:	and    $0x1ff,%ecx
+   3d191:	movzwl 0x1b44(%rsp,%rcx,2),%r12d
+   3d19a:	mov    %r12d,%ecx
+   3d19d:	and    $0xf,%cl
+   3d1a0:	lea    -0x1(%rcx),%edx
+   3d1a3:	cmp    %al,%dl
+   3d1a5:	jae    3d1bb <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x3fb>
+   3d1a7:	shr    %cl,%r8
+   3d1aa:	mov    %r8,0x20(%rsp)
+   3d1af:	sub    %cl,%al
+   3d1b1:	mov    %al,0x28(%rsp)
+   3d1b5:	shr    $0x4,%r12d
+   3d1b9:	jmp    3d1ef <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x42f>
+   3d1bb:	lea    0x80(%rsp),%rdi
+   3d1c3:	lea    0xb4(%rsp),%rsi
+   3d1cb:	lea    0x8(%rsp),%rdx
+   3d1d0:	call   3c540 <_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB4_7Huffman11decode_slow>
+   3d1d5:	mov    0x80(%rsp),%rax
+   3d1dd:	mov    0x88(%rsp),%r12
+   3d1e5:	cmp    $0xffffffffffffffff,%rax
+   3d1e9:	jne    3d8e0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xb20>
+   3d1ef:	cmp    $0x100,%r12
+   3d1f6:	jae    3d2d9 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x519>
+   3d1fc:	mov    0x48(%rsp),%rsi
+   3d201:	cmp    %rbp,%rsi
+   3d204:	je     3d8b9 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xaf9>
+   3d20a:	cmp    0x38(%rsp),%rsi
+   3d20f:	jne    3d110 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x350>
+   3d215:	mov    $0x1,%edx
+   3d21a:	mov    $0x1,%ecx
+   3d21f:	mov    $0x1,%r8d
+   3d225:	mov    %r13,%rdi
+   3d228:	call   4fd30 <_RNvMs2_NtCsgFX3jaOk65H_5alloc7raw_vecNtB5_11RawVecInner11try_reserveCsbAPiY69f4r2_17deadlib_image_png>
+   3d22d:	cmp    $0xffffffffffffffff,%rax
+   3d231:	jne    3d8c9 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xb09>
+   3d237:	mov    0x48(%rsp),%rsi
+   3d23c:	cmp    0x38(%rsp),%rsi
+   3d241:	jne    3d110 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x350>
+   3d247:	mov    %r13,%rdi
+   3d24a:	mov    %rsi,%r13
+   3d24d:	call   30040 <_RNvMs4_NtCsgFX3jaOk65H_5alloc7raw_vecINtB5_6RawVechE8grow_oneB7_>
+   3d252:	mov    %r13,%rsi
+   3d255:	lea    0x38(%rsp),%r13
+   3d25a:	jmp    3d110 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x350>
+   3d25f:	mov    0x20(%rsp),%r10
+   3d264:	cmp    %rdx,%rdi
+   3d267:	mov    %rdx,%rsi
+   3d26a:	cmova  %rdi,%rsi
+   3d26e:	jae    3d2a7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x4e7>
+   3d270:	mov    0x8(%rsp),%r9
+   3d275:	movzbl (%r9,%rdi,1),%r8d
+   3d27a:	mov    %eax,%ecx
+   3d27c:	shl    %cl,%r8
+   3d27f:	or     %r10,%r8
+   3d282:	lea    0x1(%rdi),%r10
+   3d286:	lea    0x8(%rax),%ecx
+   3d289:	test   %al,%al
+   3d28b:	jne    3d2c4 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x504>
+   3d28d:	cmp    %r10,%rdx
+   3d290:	jne    3d2af <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x4ef>
+   3d292:	mov    %r8,0x20(%rsp)
+   3d297:	mov    %rsi,0x18(%rsp)
+   3d29c:	mov    %cl,0x28(%rsp)
+   3d2a0:	mov    $0x8,%al
+   3d2a2:	jmp    3d188 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x3c8>
+   3d2a7:	mov    %r10,%r8
+   3d2aa:	jmp    3d188 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x3c8>
+   3d2af:	movzbl 0x1(%r9,%rdi,1),%eax
+   3d2b5:	add    $0x2,%rdi
+   3d2b9:	shl    $0x8,%eax
+   3d2bc:	or     %rax,%r8
+   3d2bf:	mov    $0x10,%cl
+   3d2c1:	mov    %rdi,%r10
+   3d2c4:	mov    %r8,0x20(%rsp)
+   3d2c9:	mov    %r10,0x18(%rsp)
+   3d2ce:	mov    %cl,0x28(%rsp)
+   3d2d2:	mov    %ecx,%eax
+   3d2d4:	jmp    3d188 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x3c8>
+   3d2d9:	je     3d83f <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa7f>
+   3d2df:	cmp    $0x11e,%r12
+   3d2e6:	jae    3da00 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xc40>
+   3d2ec:	lea    -0x31a33(%rip),%rax        # b8c0 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0x8c8>
+   3d2f3:	mov    -0x808(%rax,%r12,8),%r11
+   3d2fb:	lea    -0x3195a(%rip),%rax        # b9a8 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0x9b0>
+   3d302:	movzbl -0x101(%r12,%rax,1),%edx
+   3d30b:	movzbl 0x28(%rsp),%eax
+   3d310:	cmp    %dl,%al
+   3d312:	jae    3d361 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x5a1>
+   3d314:	mov    0x10(%rsp),%rsi
+   3d319:	mov    0x18(%rsp),%rdi
+   3d31e:	cmp    %rsi,%rdi
+   3d321:	cmova  %rdi,%rsi
+   3d325:	mov    0x8(%rsp),%r8
+   3d32a:	mov    0x20(%rsp),%r12
+   3d32f:	inc    %rdi
+   3d332:	neg    %rsi
+   3d335:	lea    (%rsi,%rdi,1),%rcx
+   3d339:	cmp    $0x1,%rcx
+   3d33d:	je     3d8f9 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xb39>
+   3d343:	movzbl -0x1(%r8,%rdi,1),%r9d
+   3d349:	mov    %eax,%ecx
+   3d34b:	shl    %cl,%r9
+   3d34e:	or     %r9,%r12
+   3d351:	mov    %rdi,0x18(%rsp)
+   3d356:	add    $0x8,%al
+   3d358:	inc    %rdi
+   3d35b:	cmp    %dl,%al
+   3d35d:	jb     3d335 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x575>
+   3d35f:	jmp    3d366 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x5a6>
+   3d361:	mov    0x20(%rsp),%r12
+   3d366:	mov    $0xffffffffffffffff,%rsi
+   3d36d:	mov    %edx,%ecx
+   3d36f:	shl    %cl,%rsi
+   3d372:	mov    %rsi,0x50(%rsp)
+   3d377:	mov    %r12,%r8
+   3d37a:	shr    %cl,%r8
+   3d37d:	mov    %r8,0x20(%rsp)
+   3d382:	sub    %dl,%al
+   3d384:	mov    %al,0x28(%rsp)
+   3d388:	cmp    $0x8,%al
+   3d38a:	ja     3d442 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x682>
+   3d390:	mov    0x10(%rsp),%rdx
+   3d395:	mov    0x18(%rsp),%rdi
+   3d39a:	mov    %rdx,%rcx
+   3d39d:	sub    %rdi,%rcx
+   3d3a0:	cmp    $0x3,%rcx
+   3d3a4:	jbe    3d3de <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x61e>
+   3d3a6:	lea    0x4(%rdi),%rsi
+   3d3aa:	cmp    $0xfffffffffffffffb,%rdi
+   3d3ae:	ja     3db2d <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd6d>
+   3d3b4:	cmp    %rdx,%rsi
+   3d3b7:	ja     3db2d <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd6d>
+   3d3bd:	mov    0x8(%rsp),%rcx
+   3d3c2:	mov    (%rcx,%rdi,1),%r9d
+   3d3c6:	mov    %eax,%ecx
+   3d3c8:	shl    %cl,%r9
+   3d3cb:	or     %r8,%r9
+   3d3ce:	mov    %r9,0x20(%rsp)
+   3d3d3:	mov    %rsi,0x18(%rsp)
+   3d3d8:	or     $0x20,%al
+   3d3da:	mov    %eax,%ecx
+   3d3dc:	jmp    3d43b <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x67b>
+   3d3de:	cmp    %rdx,%rdi
+   3d3e1:	mov    %rdx,%rsi
+   3d3e4:	cmova  %rdi,%rsi
+   3d3e8:	jae    3d442 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x682>
+   3d3ea:	mov    0x8(%rsp),%r10
+   3d3ef:	movzbl (%r10,%rdi,1),%r9d
+   3d3f4:	mov    %eax,%ecx
+   3d3f6:	shl    %cl,%r9
+   3d3f9:	or     %r8,%r9
+   3d3fc:	lea    0x1(%rdi),%r8
+   3d400:	lea    0x8(%rax),%ecx
+   3d403:	test   %al,%al
+   3d405:	jne    3d42f <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x66f>
+   3d407:	cmp    %r8,%rdx
+   3d40a:	jne    3d41a <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x65a>
+   3d40c:	mov    %r9,0x20(%rsp)
+   3d411:	mov    %rsi,0x18(%rsp)
+   3d416:	mov    $0x8,%al
+   3d418:	jmp    3d43b <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x67b>
+   3d41a:	movzbl 0x1(%r10,%rdi,1),%eax
+   3d420:	add    $0x2,%rdi
+   3d424:	shl    $0x8,%eax
+   3d427:	or     %rax,%r9
+   3d42a:	mov    $0x10,%cl
+   3d42c:	mov    %rdi,%r8
+   3d42f:	mov    %r9,0x20(%rsp)
+   3d434:	mov    %r8,0x18(%rsp)
+   3d439:	mov    %ecx,%eax
+   3d43b:	mov    %cl,0x28(%rsp)
+   3d43f:	mov    %r9,%r8
+   3d442:	mov    %r8d,%ecx
+   3d445:	and    $0x1ff,%ecx
+   3d44b:	movzwl 0x21e6(%rsp,%rcx,2),%edx
+   3d453:	mov    %edx,%ecx
+   3d455:	and    $0xf,%cl
+   3d458:	lea    -0x1(%rcx),%esi
+   3d45b:	cmp    %al,%sil
+   3d45e:	jae    3d473 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x6b3>
+   3d460:	shr    %cl,%r8
+   3d463:	mov    %r8,0x20(%rsp)
+   3d468:	sub    %cl,%al
+   3d46a:	mov    %al,0x28(%rsp)
+   3d46e:	shr    $0x4,%edx
+   3d471:	jmp    3d4ad <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x6ed>
+   3d473:	mov    %r11,%r14
+   3d476:	lea    0x80(%rsp),%rdi
+   3d47e:	lea    0x756(%rsp),%rsi
+   3d486:	lea    0x8(%rsp),%rdx
+   3d48b:	call   3c540 <_RNvMs_NtCsbAPiY69f4r2_17deadlib_image_png4zlibNtB4_7Huffman11decode_slow>
+   3d490:	mov    0x80(%rsp),%rax
+   3d498:	mov    0x88(%rsp),%rdx
+   3d4a0:	cmp    $0xffffffffffffffff,%rax
+   3d4a4:	jne    3dae3 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd23>
+   3d4aa:	mov    %r14,%r11
+   3d4ad:	cmp    $0x1d,%rdx
+   3d4b1:	ja     3da5d <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xc9d>
+   3d4b7:	lea    -0x31af6(%rip),%rax        # b9c8 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0x9d0>
+   3d4be:	mov    (%rax,%rdx,8),%rbp
+   3d4c2:	lea    -0x31a11(%rip),%rax        # bab8 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0xac0>
+   3d4c9:	movzbl (%rdx,%rax,1),%eax
+   3d4cd:	movzbl 0x28(%rsp),%edx
+   3d4d2:	cmp    %al,%dl
+   3d4d4:	jae    3d524 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x764>
+   3d4d6:	mov    0x10(%rsp),%rdi
+   3d4db:	mov    0x18(%rsp),%r8
+   3d4e0:	cmp    %rdi,%r8
+   3d4e3:	cmova  %r8,%rdi
+   3d4e7:	mov    0x8(%rsp),%r9
+   3d4ec:	mov    0x20(%rsp),%rsi
+   3d4f1:	inc    %r8
+   3d4f4:	neg    %rdi
+   3d4f7:	lea    (%rdi,%r8,1),%rcx
+   3d4fb:	cmp    $0x1,%rcx
+   3d4ff:	je     3d914 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xb54>
+   3d505:	movzbl -0x1(%r9,%r8,1),%r10d
+   3d50b:	mov    %edx,%ecx
+   3d50d:	shl    %cl,%r10
+   3d510:	or     %r10,%rsi
+   3d513:	mov    %r8,0x18(%rsp)
+   3d518:	add    $0x8,%dl
+   3d51b:	inc    %r8
+   3d51e:	cmp    %al,%dl
+   3d520:	jb     3d4f7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x737>
+   3d522:	jmp    3d529 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x769>
+   3d524:	mov    0x20(%rsp),%rsi
+   3d529:	mov    $0xffffffffffffffff,%rdi
+   3d530:	mov    %eax,%ecx
+   3d532:	shl    %cl,%rdi
+   3d535:	not    %edi
+   3d537:	and    %esi,%edi
+   3d539:	shr    %cl,%rsi
+   3d53c:	mov    %rsi,0x20(%rsp)
+   3d541:	sub    %al,%dl
+   3d543:	mov    %dl,0x28(%rsp)
+   3d547:	add    %rdi,%rbp
+   3d54a:	mov    0x48(%rsp),%rsi
+   3d54f:	cmp    %rsi,%rbp
+   3d552:	ja     3dabd <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xcfd>
+   3d558:	cmp    0xa8(%rsp),%rbp
+   3d560:	ja     3dabd <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xcfd>
+   3d566:	mov    0x50(%rsp),%rdx
+   3d56b:	not    %edx
+   3d56d:	and    %r12d,%edx
+   3d570:	add    %rdx,%r11
+   3d573:	mov    0x60(%rsp),%rax
+   3d578:	sub    %rsi,%rax
+   3d57b:	mov    $0x0,%ecx
+   3d580:	cmovae %rax,%rcx
+   3d584:	cmp    %rcx,%r11
+   3d587:	ja     3d8b9 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xaf9>
+   3d58d:	mov    %rdi,0x70(%rsp)
+   3d592:	mov    %rdx,0x50(%rsp)
+   3d597:	mov    $0x1,%ecx
+   3d59c:	mov    $0x1,%r8d
+   3d5a2:	mov    %r13,%rdi
+   3d5a5:	mov    %r11,%r14
+   3d5a8:	mov    %r11,%rdx
+   3d5ab:	call   4fd30 <_RNvMs2_NtCsgFX3jaOk65H_5alloc7raw_vecNtB5_11RawVecInner11try_reserveCsbAPiY69f4r2_17deadlib_image_png>
+   3d5b0:	cmp    $0xffffffffffffffff,%rax
+   3d5b4:	jne    3d8c9 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xb09>
+   3d5ba:	mov    0x48(%rsp),%r13
+   3d5bf:	mov    %r13,%r12
+   3d5c2:	sub    %rbp,%r12
+   3d5c5:	cmp    $0x1,%rbp
+   3d5c9:	jne    3d5f3 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x833>
+   3d5cb:	test   %r13,%r13
+   3d5ce:	je     3db5c <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd9c>
+   3d5d4:	mov    0x40(%rsp),%rax
+   3d5d9:	add    %r14,%r13
+   3d5dc:	movzbl (%rax,%r12,1),%edx
+   3d5e1:	lea    0x38(%rsp),%rdi
+   3d5e6:	mov    %r13,%rsi
+   3d5e9:	call   4af60 <_RNvMs1_NtCsgFX3jaOk65H_5alloc3vecINtB5_3VechE6resizeCsbAPiY69f4r2_17deadlib_image_png>
+   3d5ee:	jmp    3d101 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x341>
+   3d5f3:	test   %r14,%r14
+   3d5f6:	je     3d101 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x341>
+   3d5fc:	mov    %r13,%rbp
+   3d5ff:	sub    %r12,%rbp
+   3d602:	cmp    %rbp,%r14
+   3d605:	cmovb  %r14,%rbp
+   3d609:	lea    (%r12,%rbp,1),%rsi
+   3d60d:	cmp    %r13,%rsi
+   3d610:	ja     3db39 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd79>
+   3d616:	cmp    %rsi,%r12
+   3d619:	ja     3db4a <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd8a>
+   3d61f:	mov    0x38(%rsp),%rax
+   3d624:	sub    %r13,%rax
+   3d627:	cmp    %rax,%rbp
+   3d62a:	ja     3d653 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x893>
+   3d62c:	mov    0x40(%rsp),%rsi
+   3d631:	lea    (%rsi,%r13,1),%rdi
+   3d635:	add    %r12,%rsi
+   3d638:	mov    %rbp,%rdx
+   3d63b:	call   *0x520df(%rip)        # 8f720 <memcpy@GLIBC_2.14>
+   3d641:	add    %rbp,%r13
+   3d644:	mov    %r13,0x48(%rsp)
+   3d649:	sub    %rbp,%r14
+   3d64c:	jne    3d5fc <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x83c>
+   3d64e:	jmp    3d101 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x341>
+   3d653:	mov    $0x1,%ecx
+   3d658:	mov    $0x1,%r8d
+   3d65e:	lea    0x38(%rsp),%rdi
+   3d663:	mov    %r13,%rsi
+   3d666:	mov    %rbp,%rdx
+   3d669:	call   4fb70 <_RINvNvMs2_NtCsgFX3jaOk65H_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECsbAPiY69f4r2_17deadlib_image_png>
+   3d66e:	mov    0x48(%rsp),%r13
+   3d673:	jmp    3d62c <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x86c>
+   3d675:	mov    %rdi,%rdx
+   3d678:	jmp    3d67e <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x8be>
+   3d67a:	add    $0x8,%sil
+   3d67e:	mov    %rdx,%rdi
+   3d681:	shr    $0x10,%rdi
+   3d685:	mov    %rdi,0x20(%rsp)
+   3d68a:	lea    -0x10(%rsi),%ecx
+   3d68d:	mov    %cl,0x28(%rsp)
+   3d691:	cmp    $0xf,%cl
+   3d694:	ja     3d6f4 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x934>
+   3d696:	mov    0x10(%rsp),%r9
+   3d69b:	mov    0x18(%rsp),%r8
+   3d6a0:	cmp    %r9,%r8
+   3d6a3:	cmova  %r8,%r9
+   3d6a7:	jae    3da43 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xc83>
+   3d6ad:	mov    0x8(%rsp),%r10
+   3d6b2:	movzbl %cl,%eax
+   3d6b5:	movzbl (%r10,%r8,1),%r11d
+   3d6ba:	shl    %cl,%r11
+   3d6bd:	or     %r11,%rdi
+   3d6c0:	lea    0x1(%r8),%r11
+   3d6c4:	mov    %r11,0x18(%rsp)
+   3d6c9:	add    $0x8,%rax
+   3d6cd:	cmp    $0x7,%cl
+   3d6d0:	ja     3d6f8 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x938>
+   3d6d2:	cmp    %r9,%r11
+   3d6d5:	je     3da43 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xc83>
+   3d6db:	movzbl 0x1(%r10,%r8,1),%r9d
+   3d6e1:	mov    %eax,%ecx
+   3d6e3:	shl    %cl,%r9
+   3d6e6:	or     %r9,%rdi
+   3d6e9:	add    $0x2,%r8
+   3d6ed:	mov    %r8,0x18(%rsp)
+   3d6f2:	jmp    3d6fa <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x93a>
+   3d6f4:	mov    %ecx,%esi
+   3d6f6:	jmp    3d6fa <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x93a>
+   3d6f8:	mov    %eax,%esi
+   3d6fa:	movzwl %dx,%r9d
+   3d6fe:	movzwl %di,%r8d
+   3d702:	shr    $0x10,%rdi
+   3d706:	mov    %rdi,0x20(%rsp)
+   3d70b:	add    $0xf0,%sil
+   3d70f:	mov    %sil,0x28(%rsp)
+   3d714:	mov    %r8d,%eax
+   3d717:	xor    %r9d,%eax
+   3d71a:	cmp    $0xffff,%eax
+   3d71f:	jne    3d99b <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xbdb>
+   3d725:	movzwl %dx,%r13d
+   3d729:	mov    0x48(%rsp),%rsi
+   3d72e:	sub    %rsi,%rbp
+   3d731:	mov    $0x0,%ecx
+   3d736:	cmovb  %rcx,%rbp
+   3d73a:	cmp    %r13,%rbp
+   3d73d:	jb     3d8b9 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xaf9>
+   3d743:	mov    %r9d,0x6c(%rsp)
+   3d748:	mov    %r8d,0x68(%rsp)
+   3d74d:	mov    $0x1,%ecx
+   3d752:	mov    $0x1,%r8d
+   3d758:	lea    0x38(%rsp),%rdi
+   3d75d:	mov    %r13,%rdx
+   3d760:	call   4fd30 <_RNvMs2_NtCsgFX3jaOk65H_5alloc7raw_vecNtB5_11RawVecInner11try_reserveCsbAPiY69f4r2_17deadlib_image_png>
+   3d765:	cmp    $0xffffffffffffffff,%rax
+   3d769:	jne    3d8c9 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xb09>
+   3d76f:	test   %r13,%r13
+   3d772:	setne  %al
+   3d775:	movzbl 0x28(%rsp),%ecx
+   3d77a:	cmp    $0x8,%cl
+   3d77d:	setae  %dl
+   3d780:	and    %al,%dl
+   3d782:	cmp    $0x1,%dl
+   3d785:	jne    3d7e1 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa21>
+   3d787:	mov    0x38(%rsp),%rax
+   3d78c:	mov    0x48(%rsp),%r12
+   3d791:	mov    0x20(%rsp),%rbp
+   3d796:	mov    %rbp,%rdx
+   3d799:	shr    $0x8,%rdx
+   3d79d:	mov    %rdx,0x20(%rsp)
+   3d7a2:	add    $0xf8,%cl
+   3d7a5:	mov    %cl,0x28(%rsp)
+   3d7a9:	cmp    %rax,%r12
+   3d7ac:	je     3d7d0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa10>
+   3d7ae:	mov    0x40(%rsp),%rcx
+   3d7b3:	mov    %bpl,(%rcx,%r12,1)
+   3d7b7:	inc    %r12
+   3d7ba:	mov    %r12,0x48(%rsp)
+   3d7bf:	dec    %r13
+   3d7c2:	je     3d7e1 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa21>
+   3d7c4:	movzbl 0x28(%rsp),%ecx
+   3d7c9:	cmp    $0x7,%cl
+   3d7cc:	ja     3d791 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x9d1>
+   3d7ce:	jmp    3d7e1 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa21>
+   3d7d0:	lea    0x38(%rsp),%rdi
+   3d7d5:	call   30040 <_RNvMs4_NtCsgFX3jaOk65H_5alloc7raw_vecINtB5_6RawVechE8grow_oneB7_>
+   3d7da:	mov    0x38(%rsp),%rax
+   3d7df:	jmp    3d7ae <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x9ee>
+   3d7e1:	mov    0x18(%rsp),%r14
+   3d7e6:	mov    %r14,%rbp
+   3d7e9:	add    %r13,%rbp
+   3d7ec:	jb     3d8b9 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xaf9>
+   3d7f2:	cmp    0x10(%rsp),%rbp
+   3d7f7:	ja     3d9f1 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xc31>
+   3d7fd:	mov    0x8(%rsp),%rsi
+   3d802:	mov    0x38(%rsp),%rax
+   3d807:	mov    0x48(%rsp),%r12
+   3d80c:	sub    %r12,%rax
+   3d80f:	cmp    %rax,%r13
+   3d812:	ja     3d85e <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa9e>
+   3d814:	test   %r13,%r13
+   3d817:	je     3d82d <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa6d>
+   3d819:	add    %r14,%rsi
+   3d81c:	mov    0x40(%rsp),%rdi
+   3d821:	add    %r12,%rdi
+   3d824:	mov    %r13,%rdx
+   3d827:	call   *0x51ef3(%rip)        # 8f720 <memcpy@GLIBC_2.14>
+   3d82d:	add    %r13,%r12
+   3d830:	mov    %r12,0x48(%rsp)
+   3d835:	mov    %rbp,0x18(%rsp)
+   3d83a:	mov    0x60(%rsp),%rbp
+   3d83f:	testb  $0x1,0x78(%rsp)
+   3d844:	lea    0x756(%rsp),%r12
+   3d84c:	mov    0x51ecd(%rip),%r13        # 8f720 <memcpy@GLIBC_2.14>
+   3d853:	je     3cf06 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0x146>
+   3d859:	jmp    3d9c4 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xc04>
+   3d85e:	mov    $0x1,%ecx
+   3d863:	mov    $0x1,%r8d
+   3d869:	lea    0x38(%rsp),%rdi
+   3d86e:	mov    %rsi,0x98(%rsp)
+   3d876:	mov    %r12,%rsi
+   3d879:	mov    %r13,%rdx
+   3d87c:	call   4fb70 <_RINvNvMs2_NtCsgFX3jaOk65H_5alloc7raw_vecINtB8_11RawVecInnerpE7reserve21do_reserve_and_handleNtNtBa_5alloc6GlobalECsbAPiY69f4r2_17deadlib_image_png>
+   3d881:	mov    0x98(%rsp),%rsi
+   3d889:	mov    0x48(%rsp),%r12
+   3d88e:	jmp    3d819 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa59>
+   3d890:	movabs $0x8000000000000000,%rax
+   3d89a:	inc    %rax
+   3d89d:	mov    %rax,0x8(%rbx)
+   3d8a1:	lea    -0x3214f(%rip),%rax        # b759 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0x761>
+   3d8a8:	mov    %rax,0x10(%rbx)
+   3d8ac:	movq   $0x1d,0x18(%rbx)
+   3d8b4:	jmp    3ce62 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa2>
+   3d8b9:	movabs $0x8000000000000000,%rax
+   3d8c3:	or     $0x3,%rax
+   3d8c7:	jmp    3d8d7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xb17>
+   3d8c9:	movabs $0x8000000000000000,%rax
+   3d8d3:	or     $0x4,%rax
+   3d8d7:	mov    %rax,0x8(%rbx)
+   3d8db:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3d8e0:	mov    0x90(%rsp),%rcx
+   3d8e8:	mov    %rax,0x8(%rbx)
+   3d8ec:	mov    %r12,0x10(%rbx)
+   3d8f0:	mov    %rcx,0x18(%rbx)
+   3d8f4:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3d8f9:	movabs $0x8000000000000000,%rax
+   3d903:	mov    %rax,0x8(%rbx)
+   3d907:	mov    0x50(%rsp),%rax
+   3d90c:	mov    %eax,0x10(%rbx)
+   3d90f:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3d914:	movabs $0x8000000000000000,%rax
+   3d91e:	mov    %rax,0x8(%rbx)
+   3d922:	mov    0x70(%rsp),%rax
+   3d927:	mov    %eax,0x10(%rbx)
+   3d92a:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3d92f:	movabs $0x8000000000000000,%rax
+   3d939:	mov    %rax,0x8(%rbx)
+   3d93d:	movl   $0x0,0x10(%rbx)
+   3d944:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3d949:	movabs $0x8000000000000000,%rax
+   3d953:	inc    %rax
+   3d956:	mov    %rax,0x8(%rbx)
+   3d95a:	lea    -0x321e0(%rip),%rax        # b781 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0x789>
+   3d961:	jmp    3d9b3 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xbf3>
+   3d963:	mov    0xe10(%rsp),%rax
+   3d96b:	mov    %rax,0x18(%rbx)
+   3d96f:	movups 0xe00(%rsp),%xmm0
+   3d977:	movups %xmm0,0x8(%rbx)
+   3d97b:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3d980:	movabs $0x8000000000000000,%rax
+   3d98a:	mov    %rax,0x8(%rbx)
+   3d98e:	mov    0x58(%rsp),%rax
+   3d993:	mov    %eax,0x10(%rbx)
+   3d996:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3d99b:	movabs $0x8000000000000000,%rax
+   3d9a5:	inc    %rax
+   3d9a8:	mov    %rax,0x8(%rbx)
+   3d9ac:	lea    -0x3221f(%rip),%rax        # b794 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0x79c>
+   3d9b3:	mov    %rax,0x10(%rbx)
+   3d9b7:	movq   $0x13,0x18(%rbx)
+   3d9bf:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3d9c4:	mov    0x18(%rsp),%r12
+   3d9c9:	movzbl 0x28(%rsp),%eax
+   3d9ce:	shr    $0x3,%eax
+   3d9d1:	sub    %rax,%r12
+   3d9d4:	lea    0x2(%r12),%rax
+   3d9d9:	add    $0x6,%r12
+   3d9dd:	cmp    %rax,%r12
+   3d9e0:	setae  %cl
+   3d9e3:	cmp    %r15,%r12
+   3d9e6:	setbe  %dl
+   3d9e9:	test   %dl,%cl
+   3d9eb:	jne    3da83 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xcc3>
+   3d9f1:	movabs $0x8000000000000000,%rax
+   3d9fb:	jmp    3d8d7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xb17>
+   3da00:	movabs $0x8000000000000000,%rax
+   3da0a:	inc    %rax
+   3da0d:	mov    %rax,0x8(%rbx)
+   3da11:	lea    -0x32172(%rip),%rax        # b8a6 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0x8ae>
+   3da18:	mov    %rax,0x10(%rbx)
+   3da1c:	movq   $0x17,0x18(%rbx)
+   3da24:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3da29:	movabs $0x8000000000000000,%rax
+   3da33:	mov    %rax,0x8(%rbx)
+   3da37:	mov    0x6c(%rsp),%eax
+   3da3b:	mov    %eax,0x10(%rbx)
+   3da3e:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3da43:	movabs $0x8000000000000000,%rax
+   3da4d:	mov    %rax,0x8(%rbx)
+   3da51:	mov    0x68(%rsp),%eax
+   3da55:	mov    %eax,0x10(%rbx)
+   3da58:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3da5d:	movabs $0x8000000000000000,%rax
+   3da67:	inc    %rax
+   3da6a:	mov    %rax,0x8(%rbx)
+   3da6e:	lea    -0x31f80(%rip),%rax        # baf5 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0xafd>
+   3da75:	mov    %rax,0x10(%rbx)
+   3da79:	movq   $0x18,0x18(%rbx)
+   3da81:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3da83:	mov    0xa0(%rsp),%rcx
+   3da8b:	mov    (%rcx,%rax,1),%ebp
+   3da8e:	bswap  %ebp
+   3da90:	mov    0x40(%rsp),%rdi
+   3da95:	mov    0x48(%rsp),%rsi
+   3da9a:	call   4d4a0 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png8checksum7adler32>
+   3da9f:	cmp    %eax,%ebp
+   3daa1:	jne    3db1a <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd5a>
+   3daa3:	mov    0x48(%rsp),%rax
+   3daa8:	mov    %rax,0x10(%rbx)
+   3daac:	movups 0x38(%rsp),%xmm0
+   3dab1:	movups %xmm0,(%rbx)
+   3dab4:	mov    %r12,0x18(%rbx)
+   3dab8:	jmp    3ce69 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa9>
+   3dabd:	movabs $0x8000000000000000,%rax
+   3dac7:	inc    %rax
+   3daca:	mov    %rax,0x8(%rbx)
+   3dace:	lea    -0x31fff(%rip),%rax        # bad6 <_RNvNtNtNtCskADBYZwJmSU_4core7unicode12unicode_data2cf17SHORT_OFFSET_RUNS+0xade>
+   3dad5:	mov    %rax,0x10(%rbx)
+   3dad9:	movq   $0x1f,0x18(%rbx)
+   3dae1:	jmp    3daf7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xd37>
+   3dae3:	mov    0x90(%rsp),%rcx
+   3daeb:	mov    %rax,0x8(%rbx)
+   3daef:	mov    %rdx,0x10(%rbx)
+   3daf3:	mov    %rcx,0x18(%rbx)
+   3daf7:	movq   $0xffffffffffffffff,(%rbx)
+   3dafe:	cmpq   $0x0,0x38(%rsp)
+   3db04:	je     3ce69 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa9>
+   3db0a:	mov    0x40(%rsp),%rdi
+   3db0f:	call   *0x51c13(%rip)        # 8f728 <free@GLIBC_2.2.5>
+   3db15:	jmp    3ce69 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xa9>
+   3db1a:	movabs $0x8000000000000000,%rax
+   3db24:	or     $0x2,%rax
+   3db28:	jmp    3d8d7 <_RNvNtCsbAPiY69f4r2_17deadlib_image_png4zlib17decompress_prefix+0xb17>
+   3db2d:	lea    0x4ded4(%rip),%rcx        # 8ba08 <__frame_dummy_init_array_entry+0x5d8>
+   3db34:	call   320b0 <_RNvNtNtCskADBYZwJmSU_4core5slice5index16slice_index_fail>
+   3db39:	lea    0x508f0(%rip),%rcx        # 8e430 <__frame_dummy_init_array_entry+0x3000>
+   3db40:	xor    %edi,%edi
+   3db42:	mov    %r13,%rdx
+   3db45:	call   320b0 <_RNvNtNtCskADBYZwJmSU_4core5slice5index16slice_index_fail>
+   3db4a:	lea    0x508f7(%rip),%rcx        # 8e448 <__frame_dummy_init_array_entry+0x3018>
+   3db51:	mov    %r12,%rdi
+   3db54:	mov    %r13,%rdx
+   3db57:	call   320b0 <_RNvNtNtCskADBYZwJmSU_4core5slice5index16slice_index_fail>
+   3db5c:	lea    0x4df55(%rip),%rdx        # 8bab8 <__frame_dummy_init_array_entry+0x688>
+   3db63:	mov    %r12,%rdi
+   3db66:	xor    %esi,%esi
+   3db68:	call   32191 <_RNvNtCskADBYZwJmSU_4core9panicking18panic_bounds_check>
+
+Disassembly of section .init:
+
+Disassembly of section .fini:
+
+Disassembly of section .plt:
