@@ -683,3 +683,10 @@ EXPORT int boundary_loadtop(lua_State *L) {
   lua_load(L,reader_top,&calls,"=scratch");
   return 1;
 }
+EXPORT int boundary_loadfile(lua_State *L) {
+  const char *path=lua_tolstring(L,1,NULL);
+  int before=lua_gettop(L),status=luaL_loadfile(L,path);
+  lua_pushinteger(L,status);lua_insert(L,-2);
+  lua_pushinteger(L,lua_gettop(L)-before-1);
+  return 3;
+}

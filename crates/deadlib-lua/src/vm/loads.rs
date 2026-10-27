@@ -24,6 +24,70 @@ pub(super) struct FileReader {
     owned: bool,
     phase: u8,
 }
+impl FileReader {
+    pub(super) fn borrowed(self) -> Self {
+        Self {
+            owned: false,
+            ..self
+        }
+    }
+    /// Advance the executable-header/binary-reopen prelude. False requests
+    /// another prelude step; prefix contains the optional synthetic newline.
+    pub(super) fn prepare(
+        &mut self,
+        stream: &mut io::Stream,
+        name: &[u8],
+        prefix: &mut Vec<u8>,
+        binary: &mut bool,
+    ) -> Result<bool, (i32, bool)> {
+        if self.phase == 0 {
+            self.phase = if stream.peek().map_err(|e| (e, false))? == Some(b'#') {
+                1
+            } else {
+                2
+            };
+        }
+        if self.phase == 1 {
+            for _ in 0..io::LINE_BUFFER {
+                if matches!(stream.get().map_err(|e| (e, false))?, None | Some(b'\n')) {
+                    self.phase = 2;
+                    prefix.push(b'\n');
+                    break;
+                }
+            }
+            return Ok(false);
+        }
+        if self.phase == 2 {
+            *binary = stream.peek().map_err(|e| (e, false))? == Some(27);
+            if self.owned && *binary {
+                // Reopen raw bytes before locating a signature behind a header.
+                let _ = stream.close();
+                *stream = io::open(&name[1..], b"rb").map_err(|e| (e, true))?;
+                prefix.clear();
+                self.phase = 3;
+            } else {
+                self.phase = 4;
+            }
+        }
+        if self.phase == 3 {
+            for _ in 0..io::LINE_BUFFER {
+                match stream.peek().map_err(|e| (e, false))? {
+                    Some(27) | None => {
+                        self.phase = 4;
+                        break;
+                    }
+                    _ => {
+                        stream.get().map_err(|e| (e, false))?;
+                    }
+                }
+            }
+            if self.phase == 3 {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
 
 #[derive(Debug)]
 pub(super) struct Loading {
@@ -89,52 +153,8 @@ impl Loading {
     }
     fn read_file(&mut self, stream: &mut io::Stream) -> Result<(), (i32, bool)> {
         let file = self.file.as_mut().expect("active file reader");
-        if file.phase == 0 {
-            file.phase = if stream.peek().map_err(|e| (e, false))? == Some(b'#') {
-                1
-            } else {
-                2
-            };
-        }
-        if file.phase == 1 {
-            for _ in 0..io::LINE_BUFFER {
-                if matches!(stream.get().map_err(|e| (e, false))?, None | Some(b'\n')) {
-                    file.phase = 2;
-                    self.source.push(b'\n');
-                    break;
-                }
-            }
+        if !file.prepare(stream, &self.name, &mut self.source, &mut self.binary_mode)? {
             return Ok(());
-        }
-        if file.phase == 2 {
-            self.binary_mode = stream.peek().map_err(|e| (e, false))? == Some(27);
-            if file.owned && self.binary_mode {
-                // Text-mode buffering may already have translated CRLF or ^Z.
-                // Reopen from byte zero, then locate the first signature just
-                // as luaL_loadfile does after an executable header.
-                let _ = stream.close();
-                *stream = io::open(&self.name[1..], b"rb").map_err(|e| (e, true))?;
-                self.source.clear();
-                file.phase = 3;
-            } else {
-                file.phase = 4;
-            }
-        }
-        if file.phase == 3 {
-            for _ in 0..io::LINE_BUFFER {
-                match stream.peek().map_err(|e| (e, false))? {
-                    Some(27) | None => {
-                        file.phase = 4;
-                        break;
-                    }
-                    _ => {
-                        stream.get().map_err(|e| (e, false))?;
-                    }
-                }
-            }
-            if file.phase == 3 {
-                return Ok(());
-            }
         }
         let before = self.source.len();
         stream
@@ -146,7 +166,13 @@ impl Loading {
 }
 
 impl Vm {
-    pub(super) fn start_native_load(&mut self, owner: usize, name: &[u8], depth: usize) -> usize {
+    pub(super) fn start_native_load(
+        &mut self,
+        owner: usize,
+        name: &[u8],
+        depth: usize,
+        file: Option<FileReader>,
+    ) -> usize {
         let index = self.loads.len();
         let capacity = self.loads.capacity();
         let source = self.take_buffer(0);
@@ -161,7 +187,7 @@ impl Vm {
             awaiting: false,
             closed: false,
             probed: false,
-            file: None,
+            file,
         });
         self.gc_note_control(
             (self.loads.capacity() - capacity) * std::mem::size_of::<Loading>() + name.len(),
@@ -278,24 +304,74 @@ impl Vm {
             }
         }
     }
-    fn file_load_error(&mut self, name: &[u8], what: &[u8], code: i32) -> Value {
+    pub(super) fn file_load_error(&mut self, name: &[u8], what: &[u8], code: i32) -> Value {
         let mut bytes = self.take_buffer(name.len() + 64);
         bytes.extend_from_slice(b"cannot ");
         bytes.extend_from_slice(what);
         bytes.push(b' ');
-        bytes.extend_from_slice(&name[1..]);
+        bytes.extend_from_slice(name.get(1..).unwrap_or_default());
         bytes.extend_from_slice(b": ");
         bytes.extend_from_slice(&io::message(code));
         self.finish_buffer(bytes)
     }
     fn finish_file_load(&mut self) {
         let job = self.loads.pop().expect("completed file reader");
-        if let Some(file) = job.file
-            && file.owned
-        {
-            self.io.files.remove(file.key);
+        if let Some(file) = job.file {
+            self.close_file_reader(file);
         }
         self.buffers.push(job.source);
+    }
+    pub(super) fn open_file_reader(&mut self, path: Option<&[u8]>) -> Result<FileReader, i32> {
+        match path {
+            None => Ok(FileReader {
+                key: self.io.stdin.expect("standard input initialized").get(),
+                owned: false,
+                phase: 0,
+            }),
+            Some(path) => io::open(io::c_bytes(path), b"r").map(|stream| FileReader {
+                key: self.io.files.insert(stream),
+                owned: true,
+                phase: 0,
+            }),
+        }
+    }
+    pub(super) fn close_file_reader(&mut self, file: FileReader) {
+        if file.owned {
+            self.io.files.remove(file.key);
+        }
+    }
+    pub(super) fn prepare_file_reader(
+        &mut self,
+        file: &mut FileReader,
+        name: &[u8],
+    ) -> Result<Vec<u8>, (i32, bool)> {
+        let stream = &mut self.io.files[slot_index(file.key)];
+        let before = stream.heap_bytes();
+        let mut prefix = Vec::new();
+        let mut binary = false;
+        let result = loop {
+            match file.prepare(stream, name, &mut prefix, &mut binary) {
+                Ok(true) => break Ok(prefix),
+                Ok(false) => {}
+                Err(error) => break Err(error),
+            }
+        };
+        self.io.files.note_alloc(
+            self.io.files[slot_index(file.key)]
+                .heap_bytes()
+                .saturating_sub(before),
+        );
+        result
+    }
+    pub(super) fn read_file_reader(&mut self, file: FileReader) -> Result<Option<Vec<u8>>, i32> {
+        let stream = &mut self.io.files[slot_index(file.key)];
+        let before = stream.heap_bytes();
+        let mut bytes = Vec::new();
+        let result = stream.read_chars(&mut bytes, io::LINE_BUFFER);
+        let growth = stream.heap_bytes().saturating_sub(before);
+        self.io.files.note_alloc(growth);
+        result?;
+        Ok((!bytes.is_empty()).then_some(bytes))
     }
     pub(super) fn file_load_step(
         &mut self,
@@ -316,14 +392,7 @@ impl Vm {
         if frame.pc == 0 {
             let args = frame.vararg_start - 1;
             let (name, opened) = if self.argument(args, frame.argc(), 0) == Value::Nil {
-                (
-                    b"=stdin".to_vec(),
-                    Ok(FileReader {
-                        key: self.io.stdin.expect("standard input initialized").get(),
-                        owned: false,
-                        phase: 0,
-                    }),
-                )
+                (b"=stdin".to_vec(), self.open_file_reader(None))
             } else {
                 let path = self.string_argument(args, frame.argc(), 0)?;
                 self.registers[frame.vararg_start] = Value::String(path);
@@ -331,11 +400,7 @@ impl Vm {
                 let mut name = Vec::with_capacity(path.len() + 1);
                 name.push(b'@');
                 name.extend_from_slice(path);
-                let opened = io::open(path, b"r").map(|stream| FileReader {
-                    key: self.io.files.insert(stream),
-                    owned: true,
-                    phase: 0,
-                });
+                let opened = self.open_file_reader(Some(&name[1..]));
                 (name, opened)
             };
             // Preserve all original arguments while the loaded chunk executes.

@@ -13,6 +13,8 @@ pub enum NativeLoadStatus {
     SyntaxError = 3,
     /// An inherited error handler failed.
     ErrorHandler = 5,
+    /// A file could not be opened, reopened or read.
+    FileError = 6,
 }
 #[derive(Clone, Copy)]
 struct Scope {
@@ -39,6 +41,14 @@ impl NativeStack<'_, '_> {
     pub fn load_reader(
         &mut self,
         name: Option<&[u8]>,
+        reader: impl FnMut(&mut Self) -> Result<Option<Vec<u8>>, Error>,
+    ) -> Result<NativeLoadStatus, Error> {
+        self.load_reader_impl(name, None, reader)
+    }
+    pub(super) fn load_reader_impl(
+        &mut self,
+        name: Option<&[u8]>,
+        file: Option<loads::FileReader>,
         mut reader: impl FnMut(&mut Self) -> Result<Option<Vec<u8>>, Error>,
     ) -> Result<NativeLoadStatus, Error> {
         self.check_error()?;
@@ -71,7 +81,10 @@ impl NativeStack<'_, '_> {
             .iter()
             .position(|&byte| byte == 0)
             .unwrap_or(name.len())];
-        let index = self.call.vm.start_native_load(scope.depth, name, depth);
+        let index = self
+            .call
+            .vm
+            .start_native_load(scope.depth, name, depth, file);
         let mut first = true;
         loop {
             if !first {

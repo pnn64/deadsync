@@ -38,6 +38,7 @@ API int boundary_read(lua_State *, void *, BoundaryDispatch, lua_Reader, void *,
 API int lua_load(lua_State *, lua_Reader, void *, const char *);
 API int luaL_loadbuffer(lua_State *, const char *, size_t, const char *);
 API int luaL_loadstring(lua_State *, const char *);
+API int luaL_loadfile(lua_State *, const char *);
 API int lua_gettop(lua_State *);
 API void lua_pushnumber(lua_State *, double);
 API void lua_pushboolean(lua_State *, int);

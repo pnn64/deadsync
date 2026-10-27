@@ -131,6 +131,20 @@ mod windows {
             value: &mut BoundaryValue,
         ) -> Result<(), Error> {
             match op {
+                49 => {
+                    // SAFETY: luaL_loadfile lends an optional C-string path;
+                    // copy it before loading can reenter Lua and mutate slots.
+                    let path = if value.bytes.is_null() {
+                        None
+                    } else {
+                        Some(
+                            unsafe { std::ffi::CStr::from_ptr(value.bytes) }
+                                .to_bytes()
+                                .to_vec(),
+                        )
+                    };
+                    value.integer = self.stack.load_file(path.as_deref())? as c_int;
+                }
                 48 => {
                     let reader = value
                         .reader
@@ -571,6 +585,7 @@ mod windows {
             "boundary_load",
             "boundary_loadbuffer",
             "boundary_loadtop",
+            "boundary_loadfile",
             "boundary_cpcall",
         ] {
             let function = vm

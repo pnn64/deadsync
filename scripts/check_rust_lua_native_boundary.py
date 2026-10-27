@@ -81,6 +81,7 @@ def main():
     names+=['boundary_upget','boundary_upset','boundary_upbind']
     names+=['boundary_gc','boundary_gc_counts']
     names+=['boundary_load','boundary_loadbuffer','boundary_loadtop']
+    names+=['boundary_loadfile']
     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
     runs={}
     # This independent probe deliberately retains a known compatibility gap.
@@ -96,7 +97,7 @@ def main():
             env['PATH']=str(directory/engine)+os.pathsep+env.get('PATH','')
             command=[str(reference),'-e',boot,'boundary.lua']if engine=='reference'else[str(runner),str(directory/'rust/boundary.dll'),str(directory/'rust/rust_module.dll'),str(work/'boundary.lua')]
             try:
-                run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=30)
+                run=subprocess.run(command,cwd=work,env=env,input=b'17 return 42\n',capture_output=True,timeout=30)
                 runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
             except subprocess.TimeoutExpired:runs[engine]=dict(command=command,timeout=True)
             (work/'scratch.lua').write_text(scratch_source,encoding='utf-8')
@@ -109,7 +110,8 @@ def main():
     upvalues={engine:b'native-upvalues-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
     collectors={engine:b'native-gc-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
     loaders={engine:b'native-load-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
-    matched=reference_run.get('returncode')==rust.get('returncode')==0 and reference_run.get('stdout_hex')==rust.get('stdout_hex')and not reference_run.get('stderr_hex')and all(buffers.values())and all(upvalues.values())and all(collectors.values())and all(loaders.values())
+    file_loaders={engine:b'native-file-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
+    matched=reference_run.get('returncode')==rust.get('returncode')==0 and reference_run.get('stdout_hex')==rust.get('stdout_hex')and not reference_run.get('stderr_hex')and all(buffers.values())and all(upvalues.values())and all(collectors.values())and all(loaders.values())and all(file_loaders.values())
     match=re.fullmatch(rb'BOUNDARY operations=(\d+) drops=(\d+) panic_abort=true\r?\nSTATES created=(\d+) collected=(\d+) destroyed=(\d+)\r?\n',bytes.fromhex(rust.get('stderr_hex','')))
     returned=bool(match and int(match[1])==int(match[2])and int(match[1])>1000)
     states=bool(match and int(match[3])==int(match[5]) and 0<int(match[4])<int(match[3]))
@@ -118,7 +120,9 @@ def main():
     result.update(native_load_complete=loaders,native_gc_complete=collectors,native_upvalues_complete=upvalues,native_upvalue_fixture=dict(source=wire_source,command=wire_command,original_chunk_hex=original.hex(),chunks={name:dict(sha256=hashlib.sha256(chunk).hexdigest(),hex=chunk.hex())for name,chunk in chunks.items()}))
     scratch_complete=all(run['returncode']==0 and b'parser-scratch-slots'in bytes.fromhex(run['stdout_hex'])for run in scratch_runs.values())
     result['parser_scratch_probe']=dict(source=scratch_source,runs=scratch_runs,completed=scratch_complete,observations_equal=scratch_complete and scratch_runs['reference']['stdout_hex']==scratch_runs['rust']['stdout_hex'],full_native_loader_parity_proven=False)
-    result['limitations']+=' Native reader/buffer/string loading is a development subset: the independent parser_scratch_probe retains the observable lua_gettop mismatch from PUC parser roots. luaL_loadfile, allocator/OOM statuses, full native loader/C API parity and production loading remain unfinished.'
+    result['native_file_complete']=file_loaders
+    result['stdin_hex']=b'17 return 42\n'.hex()
+    result['limitations']+=' Native reader/buffer/string/file loading is a development subset: the independent parser_scratch_probe retains the observable lua_gettop mismatch from PUC parser roots. Allocator/OOM statuses, full native loader/C API parity and production loading remain unfinished.'
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
     print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,'state lifetimes balanced:',states,flush=True)

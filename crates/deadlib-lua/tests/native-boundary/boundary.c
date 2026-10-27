@@ -54,6 +54,9 @@ API int luaL_loadbuffer(lua_State *L, const char *bytes, size_t length, const ch
 API int luaL_loadstring(lua_State *L, const char *string) {
   return luaL_loadbuffer(L,string,strlen(string),string);
 }
+API int luaL_loadfile(lua_State *L, const char *name) {
+  BoundaryValue value={0};value.bytes=name;operation(L,49,0,0,&value);return value.integer;
+}
 
 API double lua_tonumber(lua_State *L, int index) {
   BoundaryValue value = {0}; operation(L, 35, index, 0, &value); return value.number;

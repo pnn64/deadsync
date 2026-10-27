@@ -1,5 +1,6 @@
 //! Mutable native argument/temporary storage in the VM register window.
 use super::*;
+mod file;
 mod loader;
 mod objects;
 mod protected;

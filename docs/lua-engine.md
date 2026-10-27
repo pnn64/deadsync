@@ -243,6 +243,22 @@ native loader parity is explicitly unproven. File-loading auxiliary APIs,
 allocator/OOM statuses, full C API coverage and standalone Lua 5.1 parity remain
 open. Performance work stays deferred.
 
+The [native file checks](testing/2026-10-27-rust-lua-native-file.md) add
+`NativeStack::load_file` and development `luaL_loadfile`. Native and Lua loaders
+share stream ownership and executable-header/binary-reopen handling. The native
+API reads the actual shared stdin stream, preserves buffered lookahead, returns
+Lua 5.1 file status 6 and closes named streams on parser, collector and quota
+failures. Active parser jobs trace borrowed file handles while their native scope
+owns cleanup. Filename pushes and file-error formatting check collection outside
+parser protection. Windows empty paths now return MSVC's EINVAL diagnostic.
+The shared C fixture covers text/binary files, long headers, source names,
+missing/empty paths, shared stdin, coroutine environments and mutable global
+loader isolation. Rust groups cover nested finalizer loads and collection,
+pre-open collector errors, file-error precedence and cancellation recovery.
+Parser scratch slots, allocator/OOM statuses, remaining C APIs, production
+native loading and full standalone Lua 5.1 parity remain open; optimization stays
+deferred.
+
 The [standalone suite checks](testing/2026-10-27-rust-lua-full-suite.md) invoke
 the real CLIs with the official README's `LUA_PATH="?;./?.lua"` setup. Each run
 gets unchanged suite files and a private `lua` executable on PATH, so child

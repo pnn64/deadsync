@@ -1242,3 +1242,77 @@ do
   end
   print('native-load-complete',checked)
 end
+
+do
+  local function load(path)
+    local status,value,delta=boundary_loadfile(path)
+    assert(delta==1)
+    return status,value
+  end
+  local function write(path,bytes)
+    local f=assert(io.open(path,'wb'));assert(f:write(bytes));assert(f:close())
+  end
+  local original=loadfile
+  loadfile=function()error('native loading must not use _G.loadfile')end
+  local path='native-file.lua'
+  local cases={
+    '', 'return 42', '#!/lua\nreturn 42', '# no newline',
+    '#!\r\nlocal =', 'local =', '--comment\r\nreturn 42',
+    '#!'..string.rep('header',2000)..'\nreturn 42',
+    string.rep('--comment\n',1000)..'return 42',
+    '\239\187\191return 42', 'return 42\26invalid',
+  }
+  local binary=assert(io.open('upvalues-2-original.luac','rb'))
+  local bytes=binary:read('*a');assert(binary:close())
+  cases[#cases+1]=bytes
+  cases[#cases+1]='#!/lua\n'..bytes
+  cases[#cases+1]='#!'..string.rep('long',3000)..'\r\n'..bytes
+  cases[#cases+1]=bytes:sub(1,-2)
+  cases[#cases+1]='#!/lua\n\27Lua'
+  for i,source in ipairs(cases)do
+    write(path,source)
+    local status,value=load(path..'\0ignored')
+    local reference,message=original(path)
+    assert((status==0)==(reference~=nil))
+    if status~=0 then assert(status==3 and value==message)end
+    if status==0 and i==2 then assert(value()==42)end
+    if status==0 and i>=12 then
+      local g=value();local a,b=g();assert(a==17 and b==29)
+    end
+    assert(os.remove(path)) -- named streams must already be closed on Windows
+    print('native-file',i,status,status~=0 and value or 'loaded')
+  end
+  local status,value=load('native-file-missing.lua')
+  assert(status==6);print('native-file-open',status,value)
+  status,value=load('')
+  assert(status==6);print('native-file-empty-path',status,value)
+  local handled=false
+  local ok,s,e=xpcall(function()return load('native-file-missing.lua')end,
+    function()handled=true end)
+  assert(ok and s==6 and not handled)
+  write(path,'local =')
+  ok,s,e=xpcall(function()return load(path)end,function()handled=true end)
+  assert(ok and s==3 and not handled);assert(os.remove(path))
+
+  -- luaL_loadfile(NULL) shares the actual stdin FILE/lookahead, not io.input.
+  write(path,'return 99')
+  local alternate=assert(io.open(path,'r'));io.input(alternate)
+  assert(io.stdin:read('*n')==17)
+  status,value=load(nil);assert(status==0 and value()==42)
+  assert(io.stdin:read('*a')=='')
+  status,value=load(nil);assert(status==0 and value()==nil)
+  assert(io.type(io.stdin)=='file' and io.read('*a')=='return 99')
+  io.input(io.stdin);assert(alternate:close());assert(os.remove(path))
+  local co=coroutine.create(function()
+    write(path,'return answer')
+    local old=getfenv(0);local env=setmetatable({answer=73},{__index=old})
+    setfenv(0,env)
+    local status,f=load(path)
+    setfenv(0,old)
+    assert(status==0 and getfenv(f)==env and f()==73)
+    assert(os.remove(path))
+  end)
+  assert(coroutine.resume(co))
+  loadfile=original
+  print('native-file-complete',#cases)
+end

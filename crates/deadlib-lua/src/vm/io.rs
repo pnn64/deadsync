@@ -133,6 +133,10 @@ fn runtime(text: impl Into<Box<str>>) -> Error {
     Error::new(ErrorKind::Runtime, 0, text)
 }
 pub(super) fn open(path: &[u8], mode: &[u8]) -> Result<Stream, i32> {
+    // MSVC fopen rejects the empty C-string as EINVAL, before opening a path.
+    if cfg!(windows) && c_bytes(path).is_empty() {
+        return Err(22);
+    }
     let mode = c_bytes(mode);
     let first = *mode.first().ok_or(22)?;
     if !matches!(first, b'r' | b'w' | b'a')
