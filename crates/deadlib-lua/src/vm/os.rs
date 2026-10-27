@@ -21,15 +21,22 @@ pub(super) const LAST: u64 = SETLOCALE;
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn temporary_name() -> std::io::Result<std::path::PathBuf> {
+    #[cfg(windows)]
     let root = std::env::temp_dir();
+    // Lua 5.1's POSIX template uses /tmp and an extensionless basename.
+    // In particular, require(os.tmpname()) with LUA_PATH="?" must not turn
+    // an added filename extension into a module directory separator.
+    #[cfg(not(windows))]
+    let root = std::path::Path::new("/tmp");
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
     for _ in 0..64 {
         let nonce = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let suffix = if cfg!(windows) { ".tmp" } else { "" };
         let path = root.join(format!(
-            "deadsync-lua-{}-{stamp}-{nonce}.tmp",
+            "deadsync-lua-{}-{stamp}-{nonce}{suffix}",
             std::process::id()
         ));
         #[cfg(windows)]

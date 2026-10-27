@@ -41,12 +41,16 @@ performance JSON keeps its recorded measurement provenance.
 | Performance | Deferred until full standalone Lua 5.1 parity. Preserve existing reference harnesses and historical measurements; later work covers throughput, startup, compile cost, allocations, live/peak memory and representative scaling. |
 | Independent stages | The literal-folding pass is separate internally. Public compile/optimization and scene-baking stages, cached stage identities and equivalence gates remain open. |
 
-Next work should run unchanged `all.lua` and `main.lua` against both runtimes,
-retain failures and use them to direct compatibility fixes. The C/auxiliary
-APIs, production native loading and remaining language, library, debug, GC and
-resource behavior must also be completed. Selected passing probes and
-declaration counts do not close these gates. Production migration also requires
-the subsequent performance gates.
+Unchanged `all.lua` and `main.lua` now run against both standalone CLIs, with
+retained failures directing compatibility fixes. Linux `main.lua` passes in
+both engines after fixing POSIX temporary module names. Rust `all.lua` first
+fails at missing POSIX locale support; the 64-bit C reference later fails the
+`big.lua:11` overflow assertion. Windows stops in `main.lua:53` in both engines.
+Next work should implement native POSIX locale behavior and continue the full
+suite investigation. The C/auxiliary APIs, production native loading and
+remaining language, library, debug, GC and resource behavior must also be
+completed. Selected passing probes and declaration counts do not close these
+gates. Production migration also requires the subsequent performance gates.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
 crate, 550 differential/adversarial integration tests, seventy-three unit tests and
@@ -170,6 +174,17 @@ Rust groups accompany 24 additional declarations. The development header now
 declares 52 of 80 core and 23 of 36 auxiliary functions; validation lists missing
 names. Complete semantics, production native loading, the full official suite
 and standalone Lua 5.1 parity remain open. Performance work stays deferred.
+
+The [standalone suite checks](testing/2026-10-27-rust-lua-full-suite.md) invoke
+the real CLIs with the official README's `LUA_PATH="?;./?.lua"` setup. Each run
+gets unchanged suite files and a private `lua` executable on PATH, so child
+commands use the same engine. No `_U` or other Lua bootstrap is injected.
+POSIX temporary names now use `/tmp` and an extensionless basename, allowing
+the suite's `require(os.tmpname())` usage. Linux `main.lua` changes from a Rust
+failure to a pass; the reference passes throughout. Both `all.lua` failures and
+the common Windows entry-point failure remain visible. The internal T module
+and suite native libraries are not provided by this stock-mode runner, so
+their automatically skipped tests are not established by these results.
 
 GC coverage includes cyclic and weak graphs, collection inside native callbacks,
 collected suspended/failed threads with escaping cells, 20,000-link graphs,

@@ -537,6 +537,14 @@ and recovery after chunk/print errors. The version banner identifies DeadLua.
 Console signals, terminal-mode/echo details and broader standalone compatibility
 remain unfinished; raw CLI audit results retain all banner differences.
 
+On POSIX, `os.tmpname` reserves an extensionless file under `/tmp`, matching
+Lua 5.1's template. These names can be required directly when `package.path`
+contains `?`. The
+[standalone suite checks](../../docs/testing/2026-10-27-rust-lua-full-suite.md)
+run unchanged `main.lua` and `all.lua` through each real CLI, including child
+processes. Linux `main.lua` passes in both engines; complete suite passage
+remains open.
+
 ```sh
 cargo test -p deadlib-lua
 cargo clippy -p deadlib-lua --all-targets --no-deps -- -D warnings
@@ -544,6 +552,7 @@ cargo tree -p deadlib-lua --edges normal,build
 cargo bench -p deadlib-lua --bench baseline
 cargo run -p deadlib-lua --bin deadlua -- -e 'assert(6*7 == 42)'
 python scripts/check_rust_lua_suite.py --output docs/testing/rust-lua-suite.json
+python scripts/check_rust_lua_full_suite.py --output docs/testing/rust-lua-full-suite.json
 ```
 
 Tests use the official vendored Lua 5.1 interpreter through the legacy binding

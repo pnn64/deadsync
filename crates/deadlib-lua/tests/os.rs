@@ -447,6 +447,24 @@ fn temporary_names_are_unique_and_round_trip_through_files_and_gc() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn temporary_names_load_as_extensionless_modules() {
+    compare(
+        br#"
+        local name=os.tmpname()
+        local file=assert(io.open(name,'wb'))
+        assert(file:write('return {value=42}'));assert(file:close())
+        local old=package.path;package.path='?'
+        local ok,value=pcall(require,name)
+        package.path=old;package.loaded[name]=nil
+        assert(os.remove(name))
+        assert(ok,value)
+        return value.value
+    "#,
+    );
+}
+
 #[test]
 fn os_module_identity_and_native_environments_survive_registry_mutations() {
     compare(
