@@ -14,6 +14,53 @@ static void word(unsigned int n) {
     unsigned char bytes[4]={(unsigned char)(n>>24),(unsigned char)(n>>16),(unsigned char)(n>>8),(unsigned char)n};
     if (fwrite(bytes,1,4,stdout)!=4) exit(3);
 }
+static void blob(const void *bytes,size_t size) {
+    if (size && fwrite(bytes,1,size,stdout)!=size) exit(3);
+}
+static void named_header(const char *kind,const char *name,size_t size) {
+    size_t length=strlen(name);
+    blob(kind,4);word((unsigned int)length);blob(name,length);word((unsigned int)size);
+}
+/* Version 1: record count, then kind/name-length/name/value-length/value.
+ * Text and ICC values are decompressed; sPLT is depth then five u16 BE fields
+ * per entry, independent of its original eight-/sixteen-bit sample encoding. */
+static void named_metadata(png_structp png,png_infop info) {
+    png_textp text=NULL;
+    png_sPLT_tp palettes=NULL;
+    png_charp name=NULL;
+    png_bytep profile=NULL;
+    png_uint_32 profile_size=0;
+    int compression=0,text_count=0,i,j,n;
+    (void)png_get_text(png,info,&text,&text_count);
+    n=png_get_sPLT(png,info,&palettes);
+    (void)png_get_iCCP(png,info,&name,&compression,&profile,&profile_size);
+    word(1);word((unsigned int)(text_count+n+(profile!=NULL)));
+    for (i=0;i<text_count;i++) {
+        int international=text[i].compression==PNG_ITXT_COMPRESSION_NONE ||
+            text[i].compression==PNG_ITXT_COMPRESSION_zTXt;
+        const char *kind=international ? "iTXt" :
+            (text[i].compression==PNG_TEXT_COMPRESSION_zTXt ? "zTXt" : "tEXt");
+        size_t size=international ? text[i].itxt_length : text[i].text_length;
+        named_header(kind,text[i].key,size);blob(text[i].text,size);
+    }
+    if (profile!=NULL) {
+        named_header("iCCP",name,profile_size);blob(profile,profile_size);
+    }
+    for (i=0;i<n;i++) {
+        unsigned char depth=palettes[i].depth;
+        named_header("sPLT",palettes[i].name,1+10*(size_t)palettes[i].nentries);
+        blob(&depth,1);
+        for (j=0;j<palettes[i].nentries;j++) {
+            png_sPLT_entry *entry=palettes[i].entries+j;
+            unsigned int values[5]={entry->red,entry->green,entry->blue,entry->alpha,entry->frequency};
+            int k;
+            for (k=0;k<5;k++) {
+                unsigned char bytes[2]={(unsigned char)(values[k]>>8),(unsigned char)values[k]};
+                blob(bytes,2);
+            }
+        }
+    }
+}
 /* Batch protocol: input length, output capacity, compressed bytes. Emit signed
  * zlib status, successful output length, then successful output bytes (u32 BE).
  * A failed stream is a result record, not a failure of the batch transport. */
@@ -56,8 +103,9 @@ int main(int argc,char **argv) {
     png_uint_32 width,height,y;
     size_t stride;
     int metadata=argc==3 && strcmp(argv[1],"--metadata")==0;
+    int names=argc==3 && strcmp(argv[1],"--named-metadata")==0;
     int batch=argc==3 && strcmp(argv[1],"--zlib-batch")==0;
-    const char *path=argc==2 ? argv[1] : ((metadata || batch) ? argv[2] : NULL);
+    const char *path=argc==2 ? argv[1] : ((metadata || names || batch) ? argv[2] : NULL);
     if (path==NULL || !(file=fopen(path,"rb"))) return 2;
 #ifdef _WIN32
     _setmode(_fileno(stdout),_O_BINARY);
@@ -81,7 +129,9 @@ int main(int argc,char **argv) {
     if (!data || !rows) return 3;
     for (y=0;y<height;y++) rows[y]=data+y*stride;
     png_read_image(png,rows); png_read_end(png,info);
-    if (metadata) {
+    if (names) {
+        named_metadata(png,info);
+    } else if (metadata) {
         png_charp name=NULL;
         int compression=0;
         png_bytep icc=NULL,exif=NULL;

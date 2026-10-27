@@ -137,3 +137,33 @@ IDAT/IEND); Rust png 0.18.1 accepts 11, including PLTE after IDAT/IEND.
 Both native parsers reject all 719 invalid permutations. Reference recovery
 does not override those assertions. Counts, commands and source/binary hashes
 are retained in `chunks-validation.log` and `chunks-validation.json`.
+
+
+## Named metadata values
+
+`--named-metadata file.png` emits a version-1 record stream: version and record
+count (u32 BE), then each four-byte chunk kind, u32 BE name length, literal name,
+u32 BE value length, and value. Text/profile values are decompressed. Suggested
+palette values contain one depth byte followed by five u16 BE fields per entry,
+including when the original samples used eight-bit encoding. Language and
+translated-keyword fields are not part of this protocol.
+
+```powershell
+cmake --build target/deadlib-image-reference/oracle-build --config Release --target deadlib_png_oracle --parallel 4
+$env:DEADLIB_LIBPNG_ORACLE = (Resolve-Path target/deadlib-image-reference/oracle-build/Release/deadlib_png_oracle.exe).Path
+cargo test -p deadlib-image-png --release --test keywords libpng_ -- --ignored --nocapture
+```
+
+The named-field test checks 3,710 files covering all single-byte names, every
+byte in a 79-byte name's interior, length boundaries and spacing. All 2,702
+positive files retain their exact names and text/profile/palette values.
+Malformed-name decoder policies are counted separately: native strict metadata
+validation and encoder rejection do not use C recovery as a negative oracle.
+A further 158 suggested-palette files cover sample/frequency/count boundaries.
+Libpng retains 114 valid palettes exactly, ignores two valid empty palettes,
+and retains all 42 invalid ascending-frequency palettes; native validation
+accepts empty palettes and rejects ascending frequencies. Native interpretation
+also checks independent big-endian values across the full normal test matrix.
+`keywords-validation.log` and `keywords-validation.json` retain the commands,
+counts and hashes, including compatibility checks of the original pixel and
+ICC/Exif oracle modes.

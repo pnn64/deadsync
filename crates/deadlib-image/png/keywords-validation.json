@@ -1,0 +1,345 @@
+{
+  "date": "2026-10-27",
+  "production_checkpoint": "cafedc93d",
+  "production_logic_unchanged": true,
+  "commands": [
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--release"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 27.85
+    },
+    {
+      "argv": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 0.991
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "keywords",
+        "libpng_",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 67.561
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "libpng",
+        "libpng_native_sample_conformance",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 35.3
+    },
+    {
+      "argv": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "profiles",
+        "libpng_preserves_independent_icc_and_exif_payloads",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 7.924
+    },
+    {
+      "argv": [
+        "cargo",
+        "run",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--example",
+        "seed_fuzz",
+        "--",
+        "C:\\GitHub\\deadsync\\target\\png-named-fresh-20261027-a"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 19.089
+    },
+    {
+      "argv": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\verify_independent.ps1"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 142.935
+    }
+  ],
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "oracle_sha256": "7ed72b51b6e183b9f11220ee0dc22d12876e1f898a8827158c9851cc2a60a512",
+  "source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "33d55ee2eca45b88852d6e2c1feb0390e3894cd5e576df7272a8e304e7dbdea9"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "548ec2169b7c2c6d8abe4715f284f65fe9bd70189c670f320d6e2f244fcb2919"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "4d2004134299397ba9fd691f41ce5d0a17ae90115aa7ed92dd8627cd9c4c916a"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "9269ee9cc1083986a2b507f2e3ead67c8780411c2aae286257b9b8f8c1dbb035"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "1a4431ffdc2d477ea928b8f97f439b0293b31cca599a47dec885d454e4690601"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "70a7980389a5f9fd7fdd6aedb9c574e7da32b67e1ca5602bb901c0f3fb855ed3"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "cda4227e750c1ccf5a77fd300d541e9d6ff45cbe48f0af2aa60633fbe264495d"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "9de8d5ae51577e8438f8fca56fc7698b16f9e4e68aee0548ea61aa569e304cf7"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "b9d9a6d9b2ca92d56db5b81f17bf6f71a590695d7dbad27276cbad509122ca9a"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "f9db3d3cbf32fb492ed524205e2c0699cc8a116b89b3c03e98b2c9c6253f576e"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "46ad510363bbe080b2401a327a6b9e017b259ec80d2bdb67fdfecb2a0a8b6117"
+    },
+    {
+      "path": "tests/keywords.rs",
+      "sha256": "6c079a602d64d442ab3a0d7039cfde050b0173ca9b3b48e4e76114a391413a12"
+    },
+    {
+      "path": "tests/support/named.rs",
+      "sha256": "0e4c993567f273180885e42c8c74bac7f09c6bac0431b556c9b3ba63c7f0eaa3"
+    },
+    {
+      "path": "tests/support/chunks.rs",
+      "sha256": "414380bb3ffe06aa356d0d494252cd6a92f95e2830eb167b6b2c658777069077"
+    },
+    {
+      "path": "examples/seed_fuzz.rs",
+      "sha256": "c7e9e22625b46f256f80e25f50e69fe2a4825142fd4aeea3440dcbb98f8f7024"
+    },
+    {
+      "path": "tests/oracle/oracle.c",
+      "sha256": "33bbc0d81fad91b81cc939b1c1e82682cb660eb0a06e328381fbd490d5ff4c6d"
+    }
+  ],
+  "suite_results": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image",
+        "-p",
+        "deadlib-image-png",
+        "--release"
+      ],
+      "passed": 86,
+      "ignored": 8
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "keywords",
+        "libpng_",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "passed": 2,
+      "ignored": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "libpng",
+        "libpng_native_sample_conformance",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "passed": 1,
+      "ignored": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-image-png",
+        "--release",
+        "--test",
+        "profiles",
+        "libpng_preserves_independent_icc_and_exif_payloads",
+        "--",
+        "--ignored",
+        "--nocapture"
+      ],
+      "passed": 1,
+      "ignored": 0
+    },
+    {
+      "command": [
+        "powershell",
+        "-NoProfile",
+        "-File",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\scripts\\verify_independent.ps1"
+      ],
+      "passed": 86,
+      "ignored": 8
+    }
+  ],
+  "baseline_commit": "2e085d647",
+  "named_cases": {
+    "name_equivalence_classes": 2718,
+    "wire_forms": 7,
+    "file_cases": 19026,
+    "positive_files": 13027,
+    "malformed_files": 5999,
+    "fragment_sizes": [
+      1,
+      17
+    ],
+    "direct_stream_cases": 3584,
+    "libpng_named_files": 3710,
+    "libpng_valid_names_and_values_exact": 2702,
+    "libpng_malformed_name_files": 1008,
+    "libpng_palette_boundary_files": 158,
+    "libpng_palette_valid_exact": 114,
+    "libpng_empty_valid_palettes_ignored": 2,
+    "libpng_invalid_ascending_palettes_retained": 42
+  },
+  "reference_source": {
+    "libpng_commit": "2b978915d82377df13fcbb1fb56660195ded868a",
+    "zlib_commit": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf",
+    "libpng_worktree_clean": true,
+    "zlib_config_note": "Upstream CMakeLists.txt lines 68-84 rename source zconf.h to zconf.h.included and generate the build header; other tracked sources unchanged.",
+    "default_zlib_strict_window": false,
+    "default_zlib_pkzip_workaround": false
+  },
+  "sanitizer_executions": 40000,
+  "sanitizer_manifest": "fuzz/reports/named-source.json",
+  "fresh_windows_corpus_hashes_verified": true,
+  "next_open_audit": {
+    "topic": "Latin-1 text-body encoder repertoire; strict encoding versus permissive raw decode",
+    "observed_to_chunk_accepted_single_byte_values": 255,
+    "observed_non_lf_control_bytes_accepted": 63,
+    "forms": [
+      "tEXt",
+      "zTXt"
+    ],
+    "probe_source": "target\\png-text-repertoire-probe\\src\\main.rs",
+    "probe_source_sha256": "cfeebd7f5521c2ff735a6c0425d85c59854d4e4b320606577fa8f32fb91c1ddf",
+    "probe_command": [
+      "cargo",
+      "run",
+      "--offline",
+      "--manifest-path",
+      "target/png-text-repertoire-probe/Cargo.toml",
+      "--target-dir",
+      "target/png-text-repertoire-probe-build"
+    ],
+    "probe_exit_code": 0,
+    "status": "Needs specification-boundary correction/verification; not marked covered."
+  }
+}

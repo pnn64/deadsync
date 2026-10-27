@@ -24,7 +24,7 @@ evidence, application responsibilities and explicitly open items.
 | Bounded streaming with arbitrary input boundaries | `zlib::{Inflater,Deflater}`, `StreamDecoder`, `decode_reader`, `encode_writer` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
 | Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eight targets; 310,000 recorded successful sanitizer executions across milestones, including 30,000 with the compatible positive oracle and 40,000 with extended chunk-grammar seeds; longer campaigns and native fuzz coverage audit pending |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Eight targets; 350,000 recorded successful sanitizer executions across milestones, including 30,000 with the compatible positive oracle, 40,000 with chunk-grammar seeds and 40,000 with named-metadata seeds; longer campaigns and native fuzz coverage audit pending |
 | Benchmarks and profile-guided optimization | `benches/pipeline.rs`, `BENCHMARKS.md`, checked-in TSV | Baseline and first scalar bulk-copy improvement measured; competitive performance still pending |
 
 Milestones: (1) shared primitives and native compression; (2) static PNG codec and
@@ -585,3 +585,63 @@ successful total to 310,000. Counter totals include harness/reference code and
 are not native-only fuzz coverage or proof of completeness. Broader ancillary
 and APNG ordering, metadata field boundaries, external rendered APNG comparisons
 and competitive pipeline/encoder performance remain open.
+
+
+## Named ancillary and suggested-palette audit (2026-10-27)
+
+`tests/keywords.rs` constructs 19,026 files from 2,718 independent name cases
+and seven wire forms: tEXt, zTXt, plain/compressed iTXt, iCCP, and 8-/16-bit
+sPLT. Its constructors use independent stored zlib, big-endian field assembly
+and bitwise CRCs. All byte values are tested in single/first/interior/last
+positions and five positions of 79-byte names. Lengths 0 through 256, every
+single-space position, and every consecutive-space position in a 79-byte name
+are covered. There are 13,027 positive and 5,999 malformed files.
+
+Buffered, one-byte and 17-byte readers agree with these expected outcomes and
+retain exact raw names, data, typed values and native samples. Both encoders
+check the same matrix before output. Typed metadata construction checks both
+compression modes; all positive writer outputs have independently compared
+Rust png 0.18.1 pixels and text/profile values. Rust png exposes neither the ICC
+profile name nor sPLT, which the extended C oracle checks instead. Direct push
+metadata and fused-error tests cover 3,584 single-byte-name/fragment cases.
+Repeated text keywords are valid; sPLT name uniqueness is case-sensitive, names
+can be shared across metadata types, and iCCP remains a singleton.
+
+Suggested palettes additionally cover all 256 depth bytes, all incomplete-entry
+remainders, zero through 257 entry-count boundaries, 49 frequency pairs for
+each depth, sample range boundaries in all four channels, and both palette
+depths in all 15 PNG image formats. Inputs and expected values use independent
+big-endian fields. Zero entries, repeated entries, ties, zero frequencies,
+non-gray suggested colors in grayscale images, and palette depths independent
+of image depth are preserved. More than 256 entries are allowed. Ascending
+frequencies, incomplete entries and unsupported depths are rejected; supplied
+eight-bit channel values above 255 are rejected before encoding.
+
+The pinned C libpng/zlib oracle compares 3,710 named-field files: all 2,702
+positives retain exact names and values, while malformed ancillary fields use
+its documented recovery policy. Another 158 sPLT comparisons retain 114 valid
+palettes exactly, ignore two valid empty palettes and retain 42 invalid
+ascending-frequency palettes. Native validation follows the normative field
+constraints rather than those recovery choices. The original oracle modes
+still pass 1,061 native-pixel and 480 exact ICC/Exif comparisons.
+
+Release and isolated offline runs pass 86 tests, with eight optional C tests
+ignored. Four relevant optional C tests and strict all-target Clippy pass.
+The isolated normal dependency tree remains only `deadlib-image`.
+`keywords-validation.log`/`.json` retain exact commands and source/oracle hashes.
+
+The seed generator adds 3,710 named-field files to each PNG corpus. Each fresh
+corpus contains 5,779 files / 1,251,344 bytes (maximum 63,435). Linux nightly
+ASan completes 20,000 decode executions in four fuzzing seconds (372 MiB peak
+RSS) and 20,000 CRC-repaired streaming executions in 16 seconds (460 MiB).
+Source/corpus/binary hashes and runtime instrumentation checks are retained in
+`fuzz/reports/named-source.json`, with full logs. These 40,000 successes bring
+the historical successful total to 350,000; native-only fuzz coverage and longer
+campaigns remain open.
+
+Runtime library logic did not change in this milestone. This audit exposed a
+separate open encoder boundary: tEXt/zTXt construction currently accepts all
+255 non-null byte values, including 63 control bytes outside the printable
+Latin-1/LF repertoire specified in 11.3.3.1. Strict encoder handling and permissive
+raw decoding need separate verification/correction. This is the next metadata
+item; the broader APNG/fallback/rendering and performance work remains open.

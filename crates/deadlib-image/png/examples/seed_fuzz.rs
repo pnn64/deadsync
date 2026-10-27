@@ -4,6 +4,9 @@
 mod chunks;
 #[path = "../tests/support/huffman.rs"]
 mod huffman;
+#[allow(dead_code)]
+#[path = "../tests/support/named.rs"]
+mod named;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -101,6 +104,20 @@ fn main() -> std::io::Result<()> {
         }
     }
     println!("PNG chunk grammar: {} independent seeds", chunk_cases.len());
+    let mut named_count = 0;
+    for case in named::names().into_iter().filter(|case| case.c_reference) {
+        for (index, form) in named::FORMS.into_iter().enumerate() {
+            let bytes = form.fixture(&case.bytes, deadlib_image_png::ChunkPosition::BeforePalette);
+            for directory in [&png, &png_stream] {
+                fs::write(
+                    directory.join(format!("named-{}-{index}", case.label)),
+                    &bytes,
+                )?;
+            }
+            named_count += 1;
+        }
+    }
+    println!("Named PNG metadata: {named_count} independent seeds");
     for entry in fs::read_dir(root.join("tests/fixtures/pngsuite"))? {
         let path = entry?.path();
         if path.extension().is_none_or(|v| v != "png") {

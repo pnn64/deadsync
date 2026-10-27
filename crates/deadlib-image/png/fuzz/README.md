@@ -26,6 +26,10 @@ Both PNG corpora additionally receive 1,893 independent chunk-grammar files:
 all property flags, case variants of the 25 standard names and every permutation
 of a six-chunk indexed image. Seed filenames encode the literal case-sensitive
 names as hexadecimal so they remain distinct on Windows filesystems.
+Another 3,710 independent files cover text/profile/palette name bytes, spacing
+and length boundaries across seven named-metadata wire forms. Current fresh PNG
+corpora contain 5,779 files each; `reports/named-source.json` records their exact
+hashes and the corresponding 40,000-execution ASan campaigns.
 Working corpora, crash artifacts and builds are
 ignored. Committed fixtures and the seed generator reproduce the initial corpus;
 do not reuse a previously mutated corpus when reproducing an exact smoke run.
