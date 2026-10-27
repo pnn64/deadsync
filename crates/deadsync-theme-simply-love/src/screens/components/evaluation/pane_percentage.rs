@@ -39,20 +39,27 @@ pub(crate) struct PercentageText {
     score: TextContent,
     ex: TextContent,
     hard_ex: TextContent,
+    /// Routine's taller background also covers the participant's own score.
+    routine: bool,
     cached: RefCell<Option<(PercentageCacheKey, Arc<[Actor]>)>>,
 }
 
 impl PercentageText {
     pub(crate) fn new(score: &ScoreInfo) -> Self {
-        Self::with_itg_percent(score, score.score_percent)
+        Self::with_itg_percent(score, score.score_percent, false)
     }
 
     /// Simply Love's Pane1 Percentage shows Routine's shared stats.
-    pub(crate) fn with_itg_percent(score: &ScoreInfo, itg_percent: f64) -> Self {
+    pub(crate) fn routine(score: &ScoreInfo, shared_percent: f64) -> Self {
+        Self::with_itg_percent(score, shared_percent, true)
+    }
+
+    fn with_itg_percent(score: &ScoreInfo, itg_percent: f64, routine: bool) -> Self {
         Self {
             score: percent_text(itg_percent * 100.0),
             ex: percent_text(score.ex_score_percent.max(0.0)),
             hard_ex: percent_text(score.hard_ex_score_percent.max(0.0)),
+            routine,
             cached: RefCell::new(None),
         }
     }
@@ -308,10 +315,11 @@ fn pane_percentage_actor(
             ));
         }
         EvalPane::Standard => {
+            let (bg_y, bg_h) = if text.routine { (14.0, 88.0) } else { (0.0, 60.0) };
             children.push(act!(quad:
                 align(bg_align_x, 0.5):
-                xy(bg_x, 0.0):
-                setsize(158.5, 60.0):
+                xy(bg_x, bg_y):
+                setsize(158.5, bg_h):
                 diffuse(score_bg_color[0], score_bg_color[1], score_bg_color[2], score_bg_alpha)
             ));
             children.push(act!(text:

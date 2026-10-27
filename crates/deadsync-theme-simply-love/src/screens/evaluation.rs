@@ -3155,7 +3155,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
     });
     let percentage_text = std::array::from_fn(|index| {
         score_info[index].as_ref().map(|si| match routine_shared_score_percent {
-            Some(percent) => eval_panes::PercentageText::with_itg_percent(si, percent),
+            Some(percent) => eval_panes::PercentageText::routine(si, percent),
             None => eval_panes::PercentageText::new(si),
         })
     });
