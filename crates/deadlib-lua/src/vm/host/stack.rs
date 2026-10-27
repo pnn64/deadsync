@@ -7,6 +7,7 @@ mod objects;
 mod protected;
 mod scalars;
 mod tables;
+mod thread;
 mod upvalues;
 pub use loader::NativeLoadStatus;
 pub use protected::NativeCallStatus;

@@ -33,6 +33,7 @@ pub use host::{
     HostCall, HostFunction, HostThreadState, NativeCallStatus, NativeLoadStatus, NativeStack,
 };
 use native::format_number;
+pub use threads::NativeThreadStatus;
 
 // Lua 5.1's lua_Integer is ptrdiff_t. The supported SSE2/MSVC profiles
 // truncate valid numbers and return the native minimum for invalid ranges.

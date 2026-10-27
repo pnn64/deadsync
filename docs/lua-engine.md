@@ -273,6 +273,20 @@ blocks directly with official Lua and verify quota recovery. Native loader
 scratch slots, allocator/OOM behavior, remaining C APIs, complete standalone
 Lua 5.1 parity and later stages remain open. Optimization stays deferred.
 
+The [native thread checks](testing/2026-10-27-rust-lua-native-thread.md) add
+`lua_tothread`, `lua_pushthread` and readonly `lua_status` queries. The safe stack
+API converts/pushes thread values, reports retained execution statuses and can
+attach typed host resources to any live thread without activating it. Fresh,
+running and successfully completed threads report zero; yielded threads report
+one, and failed children report two. The C adapter lazily creates stable states
+for never-resumed coroutines and removes its pointer lookup when a thread's
+resource drops. This lookup does not retain Lua threads. The shared C fixture
+checks identity before/after resume, parent/main flags, pseudo-index captures,
+status transitions and weak lifetimes. Rust groups cover inactive resource roots,
+self cycles, VM moves, collected IDs and quota cancellation. Inactive C stack
+mutation, C coroutine creation/resume/yield, allocator/OOM statuses and the other
+full Lua 5.1 gates remain unfinished. Optimization remains deferred.
+
 The [standalone suite checks](testing/2026-10-27-rust-lua-full-suite.md) invoke
 the real CLIs with the official README's `LUA_PATH="?;./?.lua"` setup. Each run
 gets unchanged suite files and a private `lua` executable on PATH, so child

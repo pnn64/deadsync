@@ -4,11 +4,13 @@
 //! Temporary values use the VM-owned mutable native stack.
 #[cfg(windows)]
 mod windows {
-    use deadlib_lua::{Error, HostCall, HostThreadState, NativeStack, Value, Vm, compile_named};
+    use deadlib_lua::{
+        Error, HostCall, HostThreadState, NativeStack, ThreadId, Value, Vm, compile_named,
+    };
     use std::{
         ffi::{CString, c_char, c_int, c_void},
         sync::{
-            Arc,
+            Arc, Mutex,
             atomic::{AtomicUsize, Ordering},
         },
     };
@@ -96,6 +98,7 @@ mod windows {
         new_state: NewState,
         free_state: FreeState,
         state_bytes: usize,
+        states: Mutex<std::collections::HashMap<usize, ThreadId>>,
     }
     struct StateOwner {
         state: usize,
@@ -112,12 +115,57 @@ mod windows {
     }
     impl Drop for StateOwner {
         fn drop(&mut self) {
+            assert!(
+                self.bridge
+                    .states
+                    .lock()
+                    .unwrap()
+                    .remove(&self.state)
+                    .is_some()
+            );
             // SAFETY: thread ownership outlives every active invocation; the Arc
             // keeps the allocating DLL loaded until its matching free returns.
             let freed = unsafe { (self.bridge.free_state)(self.state as *mut c_void) };
             assert_eq!(freed, 1, "C state was still executing during destruction");
             DESTROYED.fetch_add(1, Ordering::Relaxed);
         }
+    }
+    impl Drop for Bridge {
+        fn drop(&mut self) {
+            assert!(self.states.lock().unwrap().is_empty());
+        }
+    }
+    fn state_for(
+        stack: &mut NativeStack<'_, '_>,
+        bridge: &Arc<Bridge>,
+        thread: ThreadId,
+    ) -> Result<usize, Error> {
+        if let Some(owner) = stack.thread_state::<StateOwner>(thread) {
+            assert!(Arc::ptr_eq(&owner.bridge, bridge));
+            return Ok(owner.state);
+        }
+        // SAFETY: the fixture constructor creates one idle heap-owned C state.
+        let state = unsafe { (bridge.new_state)() } as usize;
+        if state == 0 {
+            return Err(stack.error(b"cannot allocate boundary state"));
+        }
+        assert!(
+            bridge
+                .states
+                .lock()
+                .unwrap()
+                .insert(state, thread)
+                .is_none()
+        );
+        CREATED.fetch_add(1, Ordering::Relaxed);
+        stack.initialize_thread_state(
+            thread,
+            StateOwner {
+                state,
+                bridge: bridge.clone(),
+            },
+        )?;
+        Ok(state)
     }
     static CREATED: AtomicUsize = AtomicUsize::new(0);
     static DESTROYED: AtomicUsize = AtomicUsize::new(0);
@@ -144,6 +192,25 @@ mod windows {
             value: &mut BoundaryValue,
         ) -> Result<(), Error> {
             match op {
+                51 => {
+                    value.userdata = match self.stack.to_thread(a as isize) {
+                        Some(thread) => state_for(self.stack, &self.bridge, thread)? as *mut c_void,
+                        None => std::ptr::null_mut(),
+                    };
+                }
+                52 => value.integer = c_int::from(self.stack.push_thread()?),
+                53 => {
+                    let thread = self
+                        .bridge
+                        .states
+                        .lock()
+                        .unwrap()
+                        .get(&(value.userdata as usize))
+                        .copied();
+                    let status = thread.and_then(|thread| self.stack.thread_status(thread));
+                    value.integer =
+                        status.ok_or_else(|| self.stack.error(b"unknown C state"))? as c_int;
+                }
                 50 => {
                     let writer = value.writer;
                     let data = value.userdata;
@@ -503,26 +570,13 @@ mod windows {
         let binding = call.function_data::<Binding>().expect("C function binding");
         let function = binding.function;
         let bridge = binding.bridge.clone();
-        if call.thread_state::<StateOwner>().is_none() {
-            // SAFETY: typed fixture constructor creates an idle, heap-owned state.
-            let state = unsafe { (bridge.new_state)() };
-            if state.is_null() {
-                return Err(call.error(b"cannot allocate boundary state"));
-            }
-            CREATED.fetch_add(1, Ordering::Relaxed);
-            call.initialize_thread_state(StateOwner {
-                state: state as usize,
-                bridge: bridge.clone(),
-            })?;
-        }
-        let owner = call.thread_state::<StateOwner>().unwrap();
-        assert!(Arc::ptr_eq(&owner.bridge, &bridge));
-        let state = owner.state as *mut c_void;
         // SAFETY: bindings come from trusted symbols or lua_pushcclosure,
         // both of which provide lua_CFunction's C signature.
         let function: CFunction = unsafe { std::mem::transmute(function) };
         let invoke = bridge.invoke;
         let mut stack = call.native_stack()?;
+        let thread = stack.thread_id();
+        let state = state_for(&mut stack, &bridge, thread)? as *mut c_void;
         let mut context = Context {
             stack: &mut stack,
             error: None,
@@ -569,6 +623,7 @@ mod windows {
                 state_bytes: std::mem::transmute::<usize, unsafe extern "C" fn() -> usize>(
                     library.symbol("boundary_state_size"),
                 )(),
+                states: Mutex::new(std::collections::HashMap::new()),
                 module,
                 _library: library,
             })
@@ -646,6 +701,10 @@ mod windows {
             "boundary_loadfile",
             "boundary_dump",
             "boundary_dump_null",
+            "boundary_thread",
+            "boundary_thread_status",
+            "boundary_thread_pointer",
+            "boundary_thread_capture",
             "boundary_cpcall",
         ] {
             let function = vm

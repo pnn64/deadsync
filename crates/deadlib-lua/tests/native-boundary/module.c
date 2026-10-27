@@ -720,3 +720,25 @@ EXPORT int boundary_dump(lua_State *L) {
 EXPORT int boundary_dump_null(lua_State *L) {
   lua_pushvalue(L,1);lua_pushinteger(L,lua_dump(L,NULL,NULL));return 1;
 }
+EXPORT int boundary_thread(lua_State *L) {
+  int before=lua_gettop(L),main=lua_pushthread(L),current;
+  current=lua_tothread(L,-1)==L;
+  lua_pushboolean(L,main);lua_pushboolean(L,current);
+  lua_pushinteger(L,lua_gettop(L)-before-2);lua_pushinteger(L,lua_status(L));return 5;
+}
+EXPORT int boundary_thread_status(lua_State *L) {
+  lua_State *thread=lua_tothread(L,1);
+  if(thread)lua_pushinteger(L,lua_status(thread));else lua_pushnil(L);return 1;
+}
+EXPORT int boundary_thread_pointer(lua_State *L) {
+  int index=(int)luaL_optinteger(L,2,1);
+  lua_State *thread=lua_tothread(L,index);
+  lua_pushlightuserdata(L,thread);lua_pushboolean(L,thread==L);return 2;
+}
+static int thread_capture(lua_State *L) {
+  lua_State *thread=lua_tothread(L,lua_upvalueindex(1));
+  lua_pushlightuserdata(L,thread);lua_pushinteger(L,thread?lua_status(thread):-1);return 2;
+}
+EXPORT int boundary_thread_capture(lua_State *L) {
+  lua_pushvalue(L,1);lua_pushcclosure(L,thread_capture,1);return 1;
+}

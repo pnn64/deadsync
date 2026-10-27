@@ -33,7 +33,7 @@ impl ThreadData {
     pub(in crate::vm) fn heap_bytes(&self) -> usize {
         std::mem::size_of_val(self.0.as_ref()).saturating_add(self.0.heap_bytes())
     }
-    fn get<T: HostThreadState>(&self) -> Option<&T> {
+    pub(super) fn get<T: HostThreadState>(&self) -> Option<&T> {
         let state: &dyn Any = self.0.as_ref();
         state.downcast_ref()
     }
@@ -44,7 +44,21 @@ impl Vm {
         &mut self,
         state: T,
     ) -> Result<(), Error> {
-        let index = slot_index(self.thread.0);
+        self.initialize_thread_state_for(self.thread, state)
+    }
+    pub(in crate::vm) fn initialize_thread_state_for<T: HostThreadState>(
+        &mut self,
+        thread: ThreadId,
+        state: T,
+    ) -> Result<(), Error> {
+        if !self.threads.contains(thread.0) {
+            return Err(Error::new(
+                ErrorKind::Runtime,
+                0,
+                "invalid or collected Lua thread",
+            ));
+        }
+        let index = slot_index(thread.0);
         if self.threads[index]
             .host_states
             .iter()

@@ -15,6 +15,17 @@ pub(super) enum Status {
     Normal,
     Dead,
 }
+/// Lua 5.1 execution status retained by a thread, separate from coroutine.status.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(u8)]
+pub enum NativeThreadStatus {
+    /// Fresh, running, normal or successfully completed execution.
+    Ok = 0,
+    /// Execution is suspended at a yield.
+    Yielded = 1,
+    /// The coroutine failed with an unprotected runtime error.
+    RuntimeError = 2,
+}
 impl Status {
     fn name(self) -> &'static [u8] {
         match self {
@@ -65,6 +76,7 @@ pub(super) struct Thread {
     pub(super) hooks: hooks::Hooks,
     pub(super) entry: Option<FunctionId>,
     pub(super) status: Status,
+    pub(super) resume_status: NativeThreadStatus,
     pub(super) resumer: Option<ThreadId>,
     pub(super) depth: u16,
     pub(super) line: u32,
@@ -87,6 +99,7 @@ impl Thread {
             hooks: hooks::Hooks::default(),
             entry: None,
             status: Status::Running,
+            resume_status: NativeThreadStatus::Ok,
             resumer: None,
             depth: 0,
             line: 0,
@@ -291,6 +304,13 @@ impl Vm {
         } else {
             Status::Dead
         };
+        self.threads[slot_index(id.0)].resume_status = if failed {
+            NativeThreadStatus::RuntimeError
+        } else if suspended {
+            NativeThreadStatus::Yielded
+        } else {
+            NativeThreadStatus::Ok
+        };
         if !suspended && !failed {
             self.registers.clear();
         }
@@ -331,6 +351,7 @@ impl Vm {
             self.registers.clear();
             self.top = 0;
             self.threads[slot_index(id.0)].status = Status::Dead;
+            self.threads[slot_index(id.0)].resume_status = NativeThreadStatus::RuntimeError;
             self.switch_thread(parent, line);
         }
         self.threads[slot_index(target.0)].status = Status::Running;
@@ -552,6 +573,7 @@ impl Vm {
         }
         state.resumer = Some(self.thread);
         state.status = Status::Running;
+        state.resume_status = NativeThreadStatus::Ok;
         state.depth = (depth + 1) as u16;
         let growth = (state.registers.capacity() - capacity) * std::mem::size_of::<Value>();
         self.threads.note_alloc(growth);

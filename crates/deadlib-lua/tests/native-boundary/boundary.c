@@ -55,6 +55,18 @@ API int lua_dump(lua_State *L, lua_Writer writer, void *data) {
   BoundaryValue value={0};value.writer=writer;value.userdata=data;
   operation(L,50,0,0,&value);return value.integer;
 }
+API lua_State *lua_tothread(lua_State *L, int index) {
+  BoundaryValue value={0};operation(L,51,index,0,&value);return (lua_State *)value.userdata;
+}
+API int lua_pushthread(lua_State *L) {
+  BoundaryValue value={0};operation(L,52,0,0,&value);return value.integer;
+}
+API int lua_status(lua_State *L) {
+  BoundaryValue value={0};value.userdata=L;
+  /* Readonly status queries route through the active callback, even when L is
+     inactive. Other inactive-state API operations remain unsupported. */
+  operation(active_state,53,0,0,&value);return value.integer;
+}
 typedef struct BufferReader {const char *bytes;size_t size;} BufferReader;
 static const char *read_buffer(lua_State *L, void *data, size_t *size) {
   BufferReader *input=(BufferReader *)data;

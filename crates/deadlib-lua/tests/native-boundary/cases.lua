@@ -1386,3 +1386,65 @@ do
   s,b=dump(f);string.dump=saved;assert(s==0 and assert(loadstring(b))(17)==17)
   print('native-dump-complete',#names,#canonical_trace)
 end
+
+do
+  local main,is_main,current,delta,status=boundary_thread()
+  assert(type(main)=='thread' and is_main and current and delta==1 and status==0)
+  local main_pointer,same=boundary_thread_pointer(main)
+  assert(same and main_pointer==boundary_state() and boundary_thread_status(main)==0)
+  local co=coroutine.create(function()
+    local self,is_main,current,delta,status=boundary_thread()
+    assert(self==coroutine.running() and not is_main and current and delta==1 and status==0)
+    assert(boundary_thread_status(main)==0 and coroutine.status(main)=='normal')
+    local pointer,same=boundary_thread_pointer(self);assert(same and pointer==boundary_state())
+    coroutine.yield(pointer)
+    assert(boundary_thread_status(self)==0)
+    return pointer
+  end)
+  -- Resolve a C state before this coroutine has ever called native code.
+  local pointer,same=boundary_thread_pointer(co)
+  assert(not same and pointer~=main_pointer and boundary_thread_status(co)==0)
+  local captured=boundary_thread_capture(co)
+  local p,s=captured();assert(p==pointer and s==0)
+  collectgarbage();assert(boundary_thread_pointer(co)==pointer)
+  local ok,p=coroutine.resume(co);assert(ok and p==pointer and boundary_thread_status(co)==1)
+  local p,s=captured();assert(p==pointer and s==1)
+  print('native-thread-yield',boundary_thread_status(co),boundary_thread_status(main))
+  ok,p=coroutine.resume(co);assert(ok and p==pointer and boundary_thread_status(co)==0)
+  assert(not coroutine.resume(co));assert(boundary_thread_status(co)==0)
+  local marker={}
+  local failed=coroutine.create(function()assert(select(5,boundary_thread())==0);error(marker)end)
+  local failed_pointer=boundary_thread_pointer(failed)
+  ok,p=coroutine.resume(failed);assert(not ok and p==marker and boundary_thread_status(failed)==2)
+  assert(not coroutine.resume(failed));assert(boundary_thread_status(failed)==2)
+  assert(boundary_thread_pointer(failed)==failed_pointer)
+  print('native-thread-failure',boundary_thread_status(failed),boundary_thread_status(co))
+  local protected=coroutine.create(function()assert(not pcall(error,marker));return 42 end)
+  assert(coroutine.resume(protected));assert(boundary_thread_status(protected)==0)
+  local weak=setmetatable({},{__mode='v'})
+  do local fresh=coroutine.create(function()error('never resumed')end)
+    weak[1]=fresh;boundary_thread_pointer(fresh)
+  end
+  collectgarbage();assert(weak[1]==nil)
+  local retained
+  do local fresh=coroutine.create(function()end)
+    weak[2]=fresh;retained=boundary_thread_capture(fresh);assert(select(2,retained())==0)
+  end
+  collectgarbage();assert(weak[2]~=nil)
+  retained=nil;collectgarbage();assert(weak[2]==nil)
+  local all,pointers={},{}
+  for i=1,100 do
+    all[i]=coroutine.create(function()end)
+    local p=boundary_thread_pointer(all[i]);assert(not pointers[p]);pointers[p]=true
+  end
+  collectgarbage()
+  for i=1,#all do assert(pointers[boundary_thread_pointer(all[i])])end
+  assert(boundary_thread_pointer(co,-2)==pointer)
+  for _,v in ipairs{false,17,'thread',{},boundary_sum,newproxy()}do
+    assert(boundary_thread_status(v)==nil)
+    local p,same=boundary_thread_pointer(v);assert(not same)
+    assert(p==select(1,boundary_thread_pointer(nil)))
+  end
+  assert(boundary_thread_status(nil)==nil)
+  print('native-thread-complete',#all)
+end

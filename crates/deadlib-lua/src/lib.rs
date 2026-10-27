@@ -41,7 +41,7 @@ pub use value::{FunctionId, StringId, TableId, ThreadId, UserdataId, Value};
 #[doc(inline)]
 pub use vm::{
     GcOperation, HeapStats, HostCall, HostFunction, HostThreadState, NativeCallStatus,
-    NativeLoadStatus, NativeStack, Root, Vm,
+    NativeLoadStatus, NativeStack, NativeThreadStatus, Root, Vm,
 };
 
 /// Compile Lua 5.1 source or a native chunk into verified, VM-independent bytecode.

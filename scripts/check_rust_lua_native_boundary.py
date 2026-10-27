@@ -96,6 +96,7 @@ def main():
     names+=['boundary_load','boundary_loadbuffer','boundary_loadtop']
     names+=['boundary_loadfile']
     names+=['boundary_dump','boundary_dump_null']
+    names+=['boundary_thread','boundary_thread_status','boundary_thread_pointer','boundary_thread_capture']
     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
     runs={}
     # This independent probe deliberately retains a known compatibility gap.
@@ -127,7 +128,8 @@ def main():
     loaders={engine:b'native-load-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
     file_loaders={engine:b'native-file-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
     dumpers={engine:b'native-dump-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
-    matched=reference_run.get('returncode')==rust.get('returncode')==0 and reference_run.get('stdout_hex')==rust.get('stdout_hex')and not reference_run.get('stderr_hex')and all(buffers.values())and all(upvalues.values())and all(collectors.values())and all(loaders.values())and all(file_loaders.values())and all(dumpers.values())
+    threads={engine:b'native-thread-complete'in bytes.fromhex(run.get('stdout_hex',''))for engine,run in runs.items()}
+    matched=reference_run.get('returncode')==rust.get('returncode')==0 and reference_run.get('stdout_hex')==rust.get('stdout_hex')and not reference_run.get('stderr_hex')and all(buffers.values())and all(upvalues.values())and all(collectors.values())and all(loaders.values())and all(file_loaders.values())and all(dumpers.values())and all(threads.values())
     match=re.fullmatch(rb'BOUNDARY operations=(\d+) drops=(\d+) panic_abort=true\r?\nSTATES created=(\d+) collected=(\d+) destroyed=(\d+)\r?\n',bytes.fromhex(rust.get('stderr_hex','')))
     returned=bool(match and int(match[1])==int(match[2])and int(match[1])>1000)
     states=bool(match and int(match[3])==int(match[5]) and 0<int(match[4])<int(match[3]))
@@ -138,6 +140,7 @@ def main():
     result['parser_scratch_probe']=dict(source=scratch_source,runs=scratch_runs,completed=scratch_complete,observations_equal=scratch_complete and scratch_runs['reference']['stdout_hex']==scratch_runs['rust']['stdout_hex'],full_native_loader_parity_proven=False)
     result['native_file_complete']=file_loaders
     result['native_dump_complete']=dumpers
+    result['native_thread_complete']=threads
     result['native_dump_fixtures']={name:dict(sha256=hashlib.sha256(chunk).hexdigest(),hex=chunk.hex())for name,chunk in extra_chunks.items()}
     result['stdin_hex']=b'17 return 42\n'.hex()
     result['limitations']+=' Native reader/buffer/string/file loading is a development subset: the independent parser_scratch_probe retains the observable lua_gettop mismatch from PUC parser roots. Allocator/OOM statuses, full native loader/C API parity and production loading remain unfinished.'
