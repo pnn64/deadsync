@@ -142,6 +142,36 @@ fn verify(paths: &[String]) {
             }
         }
     }
+    // Prefix lookahead must preserve exact short-tail errors and cursor state.
+    for pattern in 0..256u32 {
+        let data: [u8; 8] = std::array::from_fn(|n| (pattern * 37 + n as u32 * 113) as u8);
+        for start in 0..8 {
+            for available in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16, 23, 31, 47, 56] {
+                for book in (0..=32).chain([255]) {
+                    let mut bits = BitReader::bounded(&data, start, available).unwrap();
+                    writeln!(
+                        out,
+                        "{:?} {} {}",
+                        huffman::pair(&mut bits, book),
+                        bits.position(),
+                        bits.remaining()
+                    )
+                    .unwrap();
+                }
+                for table_b in [false, true] {
+                    let mut bits = BitReader::bounded(&data, start, available).unwrap();
+                    writeln!(
+                        out,
+                        "{:?} {} {}",
+                        huffman::quad(&mut bits, table_b),
+                        bits.position(),
+                        bits.remaining()
+                    )
+                    .unwrap();
+                }
+            }
+        }
+    }
     for crc in 0..=u16::MAX {
         for byte in 0..=u8::MAX {
             out.write_all(&checksum::bytes(crc, &[byte]).to_le_bytes())
@@ -462,6 +492,84 @@ fn main() {
                 black_box(huffman::quad(&mut bits, table_b).unwrap());
             }
         });
+    }
+    // Numeric fixture codewords match tests/data/huffman.csv. Setup is untimed.
+    for (book, code, width, x, y, lin) in [
+        (1, 1, 1, 0, 0, 0),
+        (1, 0, 3, 1, 1, 0),
+        (7, 1, 1, 0, 0, 0),
+        (7, 0, 10, 5, 5, 0),
+        (13, 1, 1, 0, 0, 0),
+        (13, 1, 16, 15, 15, 0),
+        (23, 1, 1, 0, 0, 13),
+        (23, 3, 8, 15, 15, 13),
+        (31, 15, 4, 0, 0, 13),
+        (31, 3, 4, 15, 15, 13),
+    ] {
+        let mut writer = bits::BitWriter::new();
+        let mut expected = [0; 2];
+        for _ in 0..256 {
+            writer.write(code, width).unwrap();
+            for (n, value) in [x, y].into_iter().enumerate() {
+                let extra = if value == 15 { (1 << lin) - 1 } else { 0 };
+                if value == 15 && lin != 0 {
+                    writer.write(extra, lin).unwrap();
+                }
+                if value != 0 {
+                    writer.write(1, 1).unwrap();
+                }
+                expected[n] = -((value + extra) as i16);
+            }
+        }
+        let data = writer.as_bytes();
+        let length = writer.len_bits();
+        let mut check = BitReader::bounded(data, 0, length).unwrap();
+        for _ in 0..256 {
+            assert_eq!(huffman::pair(&mut check, book).unwrap(), expected);
+        }
+        assert_eq!(check.remaining(), 0);
+        probe(&format!("huffman/pattern/{book}/{x}/{y}"), 1000, || {
+            let mut bits = BitReader::bounded(black_box(data), 0, length).unwrap();
+            for _ in 0..256 {
+                black_box(huffman::pair(&mut bits, book).unwrap());
+            }
+        });
+    }
+    for table_b in [false, true] {
+        for (value, code, width) in [(0u8, 1, 1), (1, 5, 4), (5, 5, 6), (15, 1, 6)] {
+            let mut writer = bits::BitWriter::new();
+            let mut expected = [0; 4];
+            for _ in 0..256 {
+                if table_b {
+                    writer.write(u32::from(15 ^ value), 4).unwrap();
+                } else {
+                    writer.write(code, width).unwrap();
+                }
+                for (n, sample) in expected.iter_mut().enumerate() {
+                    if value & (1 << (3 - n)) != 0 {
+                        writer.write((n & 1) as u32, 1).unwrap();
+                        *sample = if n & 1 == 0 { 1 } else { -1 };
+                    }
+                }
+            }
+            let data = writer.as_bytes();
+            let length = writer.len_bits();
+            let mut check = BitReader::bounded(data, 0, length).unwrap();
+            for _ in 0..256 {
+                assert_eq!(huffman::quad(&mut check, table_b).unwrap(), expected);
+            }
+            assert_eq!(check.remaining(), 0);
+            probe(
+                &format!("huffman/count1-pattern/{table_b}/{value}"),
+                1000,
+                || {
+                    let mut bits = BitReader::bounded(black_box(data), 0, length).unwrap();
+                    for _ in 0..256 {
+                        black_box(huffman::quad(&mut bits, table_b).unwrap());
+                    }
+                },
+            );
+        }
     }
     for (kind, mixed) in [(0, false), (2, false), (2, true)] {
         for intensity in [false, true] {

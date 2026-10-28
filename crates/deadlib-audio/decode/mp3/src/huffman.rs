@@ -56,10 +56,9 @@ pub fn quad(bits: &mut BitReader<'_>, table_b: bool) -> Result<[i16; 4], Error> 
     } else {
         symbol(&mut cursor, tables::ROOTS[32])?
     };
-    let mut output = [0; 4];
-    for (n, sample) in output.iter_mut().enumerate() {
-        *sample = signed(&mut cursor, ((value >> (3 - n)) & 1) as u16)?;
-    }
+    let layout = tables::SIGN_LAYOUT[value as usize];
+    let signs = cursor.read(u32::from(layout & 7))? as usize;
+    let output = tables::COUNT1_SIGNS[usize::from(layout >> 3) + signs];
     *bits = cursor;
     Ok(output)
 }

@@ -141,6 +141,30 @@ fn pair_truncation_and_reserved_books_are_atomic() {
 }
 
 #[test]
+fn every_pair_codeword_truncates_atomically_across_prefix_boundaries() {
+    let codes = codes();
+    for number in 1..32 {
+        if number == 4 || number == 14 {
+            continue;
+        }
+        let (base, lin) = book(number);
+        for &row in codes.iter().filter(|row| row.book == base) {
+            for prefix in [0, 3, 7] {
+                for signs in [0, 3] {
+                    let (data, length, _) = pair_data(row, lin, [(1 << lin) - 1; 2], signs, prefix);
+                    for available in 0..length {
+                        let mut bits = BitReader::bounded(&data, prefix, available).unwrap();
+                        assert_eq!(huffman::pair(&mut bits, number), Err(Error::Truncated));
+                        assert_eq!(bits.position(), prefix);
+                        assert_eq!(bits.remaining(), available);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn all_quadruples_signs_offsets_and_final_symbol_truncations() {
     for row in codes().into_iter().filter(|r| r.book >= 32) {
         for signs in 0..16 {
