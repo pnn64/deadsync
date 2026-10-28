@@ -179,3 +179,20 @@ initial run is also retained as `pcm16-known-output.*`; it overlapped verificati
 work and is not the basis for a performance claim. The repeat ran after those
 checks and mutation processes finished. Broader output formats/ADPCM throughput,
 OS pipe/file costs and RSS remain outstanding.
+
+## Forward-only native input
+
+`validation/pcm16-forward-reader.{tsv,json}` adds the complete 4 MiB resident
+PCM16 stream through a Read-only slice and ForwardReader, with the same 4096-sample
+caller buffer and final form validation. Its median is 0.195 ms, versus 0.193 ms
+for Reader and 13.336 ms for Hound in that run. The two native ranges overlap;
+no speed advantage between these native reader APIs is claimed. These are logical
+resident-audio rates, not disk/network throughput.
+
+Forward opening plus full streaming requests one 16-byte format allocation,
+versus Reader's two allocations / 112 bytes. No audio allocation or retained chunk
+inventory is added; caller input/output, stack and process RSS are excluded.
+Hound still allocates zero in this PCM16 case. Broader native formats, forward
+ADPCM throughput, actual pipes/files and peak RSS remain unmeasured. The native
+conversion code is now shared by both reader APIs; the repeated baseline rows
+and sample-bit checks are retained in the same report.

@@ -1,8 +1,9 @@
 //! Shared property checks for deterministic mutation tests and libFuzzer.
 //! Input and codec scratch are capped here, independently of production limits.
 use deadlib_audio_decode_wav::{
-    Adpcm, AdpcmData, AdpcmKind, AdpcmReader, AdpcmSpec, Container, Endian, Format, Limits, Pcm,
-    RawChunk, Reader, SampleFormat, Spec, Stream, Wave, WriteOptions, Writer,
+    Adpcm, AdpcmData, AdpcmForwardReader, AdpcmKind, AdpcmReader, AdpcmSpec, Container, Endian,
+    Format, ForwardReader, Limits, Pcm, RawChunk, Reader, SampleFormat, Spec, Stream, Wave,
+    WriteOptions, Writer,
     metadata::{self, Metadata},
 };
 use std::io::{self, Cursor, Read, Seek, SeekFrom};
@@ -13,7 +14,7 @@ const LIMITS: Limits = Limits {
     size_table_entries: 16,
     format_bytes: 4096,
 };
-pub const PATHS: [&str; 15] = [
+pub const PATHS: [&str; 16] = [
     "container",
     "pcm",
     "adpcm_file",
@@ -29,6 +30,7 @@ pub const PATHS: [&str; 15] = [
     "block_encoded",
     "native_encoded",
     "raw_metadata",
+    "forward",
 ];
 
 /// Returns a bit for each successfully entered family, not a code-coverage count.
@@ -86,6 +88,12 @@ fn container(data: &[u8]) -> u64 {
         "borrowed/file container acceptance"
     );
     let (Ok(wave), Ok(mut reader)) = (wave, reader) else {
+        assert!(
+            ForwardReader::with_limits(ShortReads::new(data), LIMITS)
+                .and_then(ForwardReader::finish)
+                .is_err(),
+            "full forward acceptance implies borrowed container acceptance"
+        );
         // Even a rejected audio descriptor can have structurally valid chunks.
         if let Ok(mut stream) = Stream::with_limits(ShortReads::new(data), LIMITS) {
             let mut prefix = [0; 23];
@@ -107,6 +115,69 @@ fn container(data: &[u8]) -> u64 {
     assert_eq!(wave.data_offset(), reader.data_chunk().offset);
     assert_eq!(wave.data().len() as u64, reader.data_chunk().size);
     let mut paths = 1;
+    if wave.chunks().unwrap().any(|c| {
+        let c = c.unwrap();
+        c.id == *b"fmt " && c.offset < wave.data_offset()
+    }) {
+        let mut forward = ForwardReader::with_limits(ShortReads::new(data), LIMITS).unwrap();
+        if let Ok(pcm) = wave.pcm() {
+            let align = usize::from(wave.format.block_align);
+            let mut out = [0; 1027];
+            if align <= out.len() {
+                let mut start = 0;
+                loop {
+                    let n = forward.read_frames(&mut out).unwrap();
+                    if n == 0 {
+                        break;
+                    }
+                    assert_eq!(
+                        pcm.frame_range(start, n as u64).unwrap().as_bytes(),
+                        &out[..n * align]
+                    );
+                    start += n as u64;
+                }
+                assert_eq!(start, pcm.frames());
+            }
+            forward.finish().unwrap();
+            paths |= 1 << 15;
+        } else if let Ok(audio) = AdpcmData::new(&wave) {
+            if audio.codec().scratch_samples() <= 8192
+                && audio.codec().block_bytes() <= 4096
+                && audio.codec().channels() <= 256
+            {
+                let mut forward =
+                    AdpcmForwardReader::from_reader_with_frames(forward, audio.frames()).unwrap();
+                let mut out = [0i16; 1025];
+                let mut expected = [0i16; 1025];
+                let mut scratch = [0i16; 8192];
+                let mut position = 0;
+                let mut failed = false;
+                loop {
+                    let a = audio.read_frames(position, &mut expected, &mut scratch);
+                    let b = forward.read_i16(&mut out);
+                    assert_eq!(a.is_ok(), b.is_ok());
+                    match (a, b) {
+                        (Ok(n), Ok(m)) => {
+                            assert_eq!(n, m);
+                            assert_eq!(&out[..n], &expected[..m]);
+                            if n == 0 {
+                                break;
+                            }
+                            position += (n / audio.codec().channels()) as u64;
+                        }
+                        _ => {
+                            failed = true;
+                            break;
+                        }
+                    }
+                }
+                assert_eq!(forward.finish().is_err(), failed);
+                paths |= 1 << 15;
+            }
+        } else {
+            forward.finish().unwrap();
+        }
+    }
     let mut stream = Stream::with_limits(ShortReads::new(data), LIMITS).unwrap();
     assert_eq!(stream.form_bytes(), wave.as_bytes().len() as u64);
     let chunks: Vec<_> = wave

@@ -11,13 +11,15 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    extensible format, native integers/floats, unknown chunk retention, boundaries.
 2. Read/seek, chunk streaming and native PCM/float encoding implemented (14 total
    integration tests, debug/release and Clippy; see COVERAGE.md). Forward-only
-   audio convenience remains. Known-length nonseekable output is now implemented
+   audio convenience is now implemented for native formats and 4-bit ADPCM.
+   Known-length nonseekable output is now implemented
    for generic encoded data, native samples and ADPCM; see STREAMING.md. RIFF and
    64-bit output, extensible valid bits/masks, metadata and exact roundtrips.
 3. Microsoft and 4-bit WAV IMA ADPCM block encoding/decoding, incremental encoding,
    borrowed range access and file-backed cached seeking are implemented. See
    ADPCM.md for 40 decode, 144 encoder and 204 file/range cases, including explicit
-   reference rounding disagreements. Forward-only audio convenience, 3-bit IMA and
+   reference rounding disagreements. Forward-only reading is implemented with exact
+   known-duration trimming; see STREAMING.md for trailing-fact handling. 3-bit IMA and
    extensible mappings remain. Additional encoded formats must remain possible
    without coupling container parsing to codecs; shared Muxer supports that boundary.
 4. Rich metadata views and preservation: INFO, BEXT, cue/adtl, smpl, RF64 markers,
@@ -64,10 +66,15 @@ and the four-reference encoder campaign are recorded in ADPCM.md. Compressed
 reader work followed below; standard variants and remaining validation/performance
 work stay open.
 
-File-backed cached ADPCM reading is now implemented and validated against the
-retained corpus. All 31 integration tests pass on x86_64 (debug/release) and i686
-(debug); all 204 real-file sequential/range cases pass. Forward-only convenience,
-known-length nonseekable output, metadata, 3-bit/extensible ADPCM, PCM differential
-coverage, fuzzing and broad performance/RSS evidence remain required. Structured
-metadata was implemented next as recorded in METADATA.md; profile/semantic
-validation remains open.
+File-backed cached ADPCM reading passes 204 real-file sequential/range cases.
+Forward-only native/ADPCM reading and known-length Write-only output are now
+implemented; see STREAMING.md for exact ordering/duration/finalization contracts.
+All 56 integration tests pass on x64 debug/release and i686 debug, and all 432
+forward real-file reference cases pass. The latest checked mutation and ASan
+campaigns also cover these new paths, with archived corpus bytes and hashes.
+
+Required work still includes 3-bit/extensible ADPCM, wavl/slnt and multiple-data
+handling, broader PCM oracle coverage, physical large/sparse files, representative
+comparative benchmarks and RSS evidence. Metadata profile/semantic certification
+and broader fuzz coverage remain unproven. Forward PCM16 streaming currently
+allocates one 16-byte format buffer; the benchmark records that boundary.

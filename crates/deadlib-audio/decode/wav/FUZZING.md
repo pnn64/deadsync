@@ -134,3 +134,14 @@ Sanitizer process memory includes instrumentation/runtime overhead and must not 
 reported as the normal codec's peak RSS. Longer corpora, more architectures,
 large-file/resource limits beyond this harness, injected arbitrary I/O failures,
 and unsupported format variants still require validation.
+
+The shared harness now includes known-length output parity and forward native/
+ADPCM state checks. Forward full acceptance implies borrowed container acceptance;
+valid format-before-data inputs additionally compare raw native frames and exact
+sequential ADPCM samples/errors. Two one-million-mutation runs on x64/i686 pass,
+as do all 1474 earlier corpus inputs. The fresh 100000-execution ASan run passes
+in 66.83 seconds with 1757 added units and no failure artifact. Reports are
+`validation/fuzz-forward-*`; its complete 1108-file corpus is preserved in
+`fuzz-forward-asan-100k-corpus.zip`. These checks also cover the known-length muxer
+and writers introduced immediately before the forward readers. All 56 crate
+tests and Clippy pass as described in STREAMING.md.

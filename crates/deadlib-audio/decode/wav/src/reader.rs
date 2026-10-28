@@ -1,4 +1,4 @@
-use crate::{ChunkInfo, Container, Error, Format, Limits, SampleFormat, Stream, reserve};
+use crate::{ChunkInfo, Container, Error, Format, Limits, Stream, reserve};
 use std::io::{Read, Seek, SeekFrom};
 
 /// File-backed reader: scans headers once, skips audio with Seek, retains only
@@ -158,103 +158,20 @@ impl<R: Read + Seek> Reader<R> {
         Ok(frames)
     }
     pub fn read_i16(&mut self, out: &mut [i16]) -> Result<usize, Error> {
-        let n = self.read_native(out, SampleFormat::I16)?;
-        if !self.container.endian().native() {
-            for v in &mut out[..n] {
-                *v = v.swap_bytes();
-            }
-        }
-        Ok(n)
+        crate::native_io::NativeIo::new(self.format())?.read_i16(out, |b| self.read_frames(b))
     }
     pub fn read_i32(&mut self, out: &mut [i32]) -> Result<usize, Error> {
-        let n = self.read_native(out, SampleFormat::I32)?;
-        if !self.container.endian().native() {
-            for v in &mut out[..n] {
-                *v = v.swap_bytes();
-            }
-        }
-        Ok(n)
+        crate::native_io::NativeIo::new(self.format())?.read_i32(out, |b| self.read_frames(b))
     }
-    /// Explicit U8/I16/I24/I32 expansion in container scale. Reads packed bytes
-    /// into the output's own storage and expands backwards, with no scratch allocation.
+    /// Explicit integer expansion in container scale, using caller storage.
     pub fn read_integers(&mut self, out: &mut [i32]) -> Result<usize, Error> {
-        let f = self.format();
-        let sample = f.sample_format()?;
-        if sample.is_float() {
-            return Err(Error::Unsupported("float to integer conversion"));
-        }
-        let e = f.endian;
-        let channels = usize::from(f.channels);
-        let width = usize::from(sample.bits() / 8);
-        let capacity = out.len() / channels * channels;
-        // SAFETY: all i32 bit patterns are valid. The temporary byte view covers
-        // only the exclusive output borrow, which is not used until it ends.
-        let b = unsafe {
-            core::slice::from_raw_parts_mut(
-                out.as_mut_ptr().cast::<u8>(),
-                core::mem::size_of_val(out),
-            )
-        };
-        let n = self.read_frames(&mut b[..capacity * width])? * channels;
-        for i in (0..n).rev() {
-            let src = &b[i * width..(i + 1) * width];
-            let v = match sample {
-                SampleFormat::U8 => i32::from(src[0]) - 128,
-                SampleFormat::I16 => i32::from(e.u16(src) as i16),
-                SampleFormat::I24 => match e {
-                    crate::Endian::Little => {
-                        ((u32::from(src[0]) << 8
-                            | u32::from(src[1]) << 16
-                            | u32::from(src[2]) << 24) as i32)
-                            >> 8
-                    }
-                    crate::Endian::Big => {
-                        ((u32::from(src[2]) << 8
-                            | u32::from(src[1]) << 16
-                            | u32::from(src[0]) << 24) as i32)
-                            >> 8
-                    }
-                },
-                SampleFormat::I32 => e.u32(src) as i32,
-                _ => unreachable!(),
-            };
-            b[i * 4..i * 4 + 4].copy_from_slice(&v.to_ne_bytes());
-        }
-        Ok(n)
+        crate::native_io::NativeIo::new(self.format())?.read_integers(out, |b| self.read_frames(b))
     }
     pub fn read_f32(&mut self, out: &mut [f32]) -> Result<usize, Error> {
-        let n = self.read_native(out, SampleFormat::F32)?;
-        if !self.container.endian().native() {
-            for v in &mut out[..n] {
-                *v = f32::from_bits(v.to_bits().swap_bytes());
-            }
-        }
-        Ok(n)
+        crate::native_io::NativeIo::new(self.format())?.read_f32(out, |b| self.read_frames(b))
     }
     pub fn read_f64(&mut self, out: &mut [f64]) -> Result<usize, Error> {
-        let n = self.read_native(out, SampleFormat::F64)?;
-        if !self.container.endian().native() {
-            for v in &mut out[..n] {
-                *v = f64::from_bits(v.to_bits().swap_bytes());
-            }
-        }
-        Ok(n)
-    }
-    fn read_native<T>(&mut self, out: &mut [T], sample: SampleFormat) -> Result<usize, Error> {
-        let f = self.format();
-        if f.sample_format()? != sample {
-            return Err(Error::Unsupported("requested native sample type"));
-        }
-        let channels = usize::from(f.channels);
-        // SAFETY: private callers pass only numeric types with all bit patterns
-        // valid. The byte view covers exactly the exclusive output borrow.
-        let bytes = unsafe {
-            core::slice::from_raw_parts_mut(
-                out.as_mut_ptr().cast::<u8>(),
-                core::mem::size_of_val(out),
-            )
-        };
-        Ok(self.read_frames(bytes)? * channels)
+        crate::native_io::NativeIo::new(self.format())?.read_f64(out, |b| self.read_frames(b))
     }
     /// Read a retained metadata payload into a caller buffer, preserving audio position.
     pub fn read_metadata(&mut self, c: ChunkInfo, out: &mut [u8]) -> Result<usize, Error> {

@@ -1,5 +1,7 @@
 //! Resident PCM16 baseline with caller-owned buffers and scoped heap accounting.
-use deadlib_audio_decode_wav::{Container, Reader, SampleFormat, Spec, Wave, WriteOptions, Writer};
+use deadlib_audio_decode_wav::{
+    Container, ForwardReader, Reader, SampleFormat, Spec, Wave, WriteOptions, Writer,
+};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     hint::black_box,
@@ -188,6 +190,21 @@ fn main() {
             black_box(&out);
         }
         assert_eq!(count, samples.len());
+    });
+    bench("wav/forward_4096_samples", 64, samples.len() * 2, || {
+        let mut r = ForwardReader::new(black_box(encoded.as_slice())).unwrap();
+        let mut out = [0i16; 4096];
+        let mut count = 0;
+        loop {
+            let n = r.read_i16(black_box(&mut out)).unwrap();
+            if n == 0 {
+                break;
+            }
+            count += n;
+            black_box(&out);
+        }
+        assert_eq!(count, samples.len());
+        r.finish().unwrap();
     });
     bench("hound/stream_4096_samples", 32, samples.len() * 2, || {
         let mut r = hound::WavReader::new(Cursor::new(black_box(&encoded))).unwrap();

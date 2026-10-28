@@ -1,0 +1,235 @@
+//! Bounded forward-only WAVE data with native caller-buffer frame access.
+use crate::{
+    ChunkInfo, Container, Encoding, Error, Format, Limits, Stream, native_io::NativeIo, reserve,
+};
+use std::io::{self, Read};
+
+/// A metadata callback can read only this payload, never its padding or the next
+/// header. Unread bytes are automatically drained after the callback returns.
+pub struct ChunkPayload<'a, R> {
+    stream: &'a mut Stream<R>,
+    remaining: u64,
+}
+impl<R> ChunkPayload<'_, R> {
+    pub fn remaining(&self) -> u64 {
+        self.remaining
+    }
+}
+impl<R: Read> Read for ChunkPayload<'_, R> {
+    fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+        let n = self.stream.read_chunk(out).map_err(|e| match e {
+            Error::Io(e) => e,
+            Error::Truncated => io::ErrorKind::UnexpectedEof.into(),
+            e => io::Error::new(io::ErrorKind::InvalidData, e),
+        })?;
+        self.remaining -= n as u64;
+        Ok(n)
+    }
+}
+
+/// Opening reads through the first data header, without buffering audio. fmt
+/// must precede data. Call finish to validate the remaining form and padding;
+/// EOF from a data read alone does not validate trailing chunks.
+pub struct ForwardReader<R> {
+    stream: Stream<R>,
+    format: Vec<u8>,
+    data: ChunkInfo,
+    fact: Option<u64>,
+    bytes_read: u64,
+}
+impl<R: Read> ForwardReader<R> {
+    pub fn new(inner: R) -> Result<Self, Error> {
+        Self::with_limits(inner, Limits::default())
+    }
+    pub fn with_limits(inner: R, limits: Limits) -> Result<Self, Error> {
+        Self::with_metadata(inner, limits, |_, _| Ok(()))
+    }
+    /// Visit leading ancillary payloads without retaining their descriptors or
+    /// allocating their data. fmt/fact/ds64 are handled internally. A callback
+    /// error aborts opening; use Stream directly for arbitrary demux policies.
+    pub fn with_metadata(
+        inner: R,
+        limits: Limits,
+        mut visit: impl FnMut(ChunkInfo, &mut ChunkPayload<'_, R>) -> Result<(), Error>,
+    ) -> Result<Self, Error> {
+        let mut stream = Stream::with_limits(inner, limits)?;
+        let mut format = Vec::new();
+        let mut fact = None;
+        let data = loop {
+            let chunk = stream
+                .next_chunk()?
+                .ok_or(Error::Invalid("missing data chunk"))?;
+            match &chunk.id {
+                b"fmt " => {
+                    if !format.is_empty() {
+                        return Err(Error::Invalid("duplicate format chunk"));
+                    }
+                    if chunk.size > limits.format_bytes as u64 {
+                        return Err(Error::Limit("format size"));
+                    }
+                    reserve(&mut format, chunk.size as usize)?;
+                    format.resize(chunk.size as usize, 0);
+                    stream.read_chunk(&mut format)?;
+                    Format::parse(&format, stream.container().endian())?;
+                }
+                b"fact" => {
+                    if fact.is_some() {
+                        return Err(Error::Invalid("duplicate fact chunk"));
+                    }
+                    fact = Some(read_fact(&mut stream, chunk)?);
+                }
+                b"data" => {
+                    if format.is_empty() {
+                        return Err(Error::Unsupported("forward-only data before format"));
+                    }
+                    break chunk;
+                }
+                _ => visit(
+                    chunk,
+                    &mut ChunkPayload {
+                        stream: &mut stream,
+                        remaining: chunk.size,
+                    },
+                )?,
+            }
+        };
+        let f = Format::parse(&format, stream.container().endian())?;
+        if matches!(f.encoding, Encoding::Pcm | Encoding::Float)
+            && !data.size.is_multiple_of(u64::from(f.block_align))
+        {
+            return Err(Error::Invalid("partial PCM frame"));
+        }
+        Ok(Self {
+            stream,
+            format,
+            data,
+            fact,
+            bytes_read: 0,
+        })
+    }
+    pub fn container(&self) -> Container {
+        self.stream.container()
+    }
+    pub fn format(&self) -> Format<'_> {
+        Format::parse(&self.format, self.container().endian()).unwrap()
+    }
+    /// fact encountered before data. A trailing fact is checked during finish.
+    pub fn fact(&self) -> Option<u64> {
+        self.fact
+    }
+    pub fn ds64_sample_count(&self) -> Option<u64> {
+        self.stream.ds64().map(|d| d.sample_count)
+    }
+    pub fn data_chunk(&self) -> ChunkInfo {
+        self.data
+    }
+    pub fn data_bytes_read(&self) -> u64 {
+        self.bytes_read
+    }
+    pub fn frames(&self) -> Result<u64, Error> {
+        let f = self.format();
+        f.sample_format()?;
+        Ok(self.data.size / u64::from(f.block_align))
+    }
+    pub fn position(&self) -> Result<u64, Error> {
+        let f = self.format();
+        f.sample_format()?;
+        if !self.bytes_read.is_multiple_of(u64::from(f.block_align)) {
+            return Err(Error::Invalid(
+                "native stream position is not frame aligned",
+            ));
+        }
+        Ok(self.bytes_read / u64::from(f.block_align))
+    }
+    /// Raw encoded bytes for any supported or opaque descriptor. Mixing raw
+    /// reads with native frame calls requires a frame-aligned current position.
+    pub fn read_data(&mut self, out: &mut [u8]) -> Result<usize, Error> {
+        let n = self.stream.read_chunk(out)?;
+        self.bytes_read += n as u64;
+        Ok(n)
+    }
+    pub fn read_frames(&mut self, out: &mut [u8]) -> Result<usize, Error> {
+        let frames = self.frames()?;
+        let pos = self.position()?;
+        let align = usize::from(self.format().block_align);
+        let n = (frames - pos).min((out.len() / align) as u64) as usize;
+        Ok(self.read_data(&mut out[..n * align])? / align)
+    }
+    pub fn read_i16(&mut self, out: &mut [i16]) -> Result<usize, Error> {
+        NativeIo::new(self.format())?.read_i16(out, |b| self.read_frames(b))
+    }
+    pub fn read_i32(&mut self, out: &mut [i32]) -> Result<usize, Error> {
+        NativeIo::new(self.format())?.read_i32(out, |b| self.read_frames(b))
+    }
+    pub fn read_integers(&mut self, out: &mut [i32]) -> Result<usize, Error> {
+        NativeIo::new(self.format())?.read_integers(out, |b| self.read_frames(b))
+    }
+    pub fn read_f32(&mut self, out: &mut [f32]) -> Result<usize, Error> {
+        NativeIo::new(self.format())?.read_f32(out, |b| self.read_frames(b))
+    }
+    pub fn read_f64(&mut self, out: &mut [f64]) -> Result<usize, Error> {
+        NativeIo::new(self.format())?.read_f64(out, |b| self.read_frames(b))
+    }
+    pub fn into_inner(self) -> R {
+        self.stream.into_inner()
+    }
+    /// Drain unread audio and validate all trailing headers/padding. Does not
+    /// consume bytes after this form. Unread compressed blocks are not decoded.
+    pub fn finish(self) -> Result<R, Error> {
+        self.finish_with_metadata(|_, _| Ok(()))
+    }
+    pub fn finish_with_metadata(
+        self,
+        visit: impl FnMut(ChunkInfo, &mut ChunkPayload<'_, R>) -> Result<(), Error>,
+    ) -> Result<R, Error> {
+        self.finish_checked(None, visit)
+    }
+    pub(crate) fn finish_checked(
+        mut self,
+        frames: Option<u64>,
+        mut visit: impl FnMut(ChunkInfo, &mut ChunkPayload<'_, R>) -> Result<(), Error>,
+    ) -> Result<R, Error> {
+        while let Some(chunk) = self.stream.next_chunk()? {
+            match &chunk.id {
+                b"fmt " => return Err(Error::Invalid("duplicate format chunk")),
+                b"data" => return Err(Error::Unsupported("multiple data chunks")),
+                b"fact" => {
+                    if self.fact.is_some() {
+                        return Err(Error::Invalid("duplicate fact chunk"));
+                    }
+                    self.fact = Some(read_fact(&mut self.stream, chunk)?);
+                }
+                _ => visit(
+                    chunk,
+                    &mut ChunkPayload {
+                        stream: &mut self.stream,
+                        remaining: chunk.size,
+                    },
+                )?,
+            }
+        }
+        if let Some(frames) = frames {
+            let actual = self
+                .fact
+                .or(self.ds64_sample_count())
+                .ok_or(Error::Invalid("ADPCM requires fact sample count"))?;
+            if actual != frames {
+                return Err(Error::Invalid("forward ADPCM duration mismatch"));
+            }
+        }
+        Ok(self.stream.into_inner())
+    }
+}
+fn read_fact<R: Read>(stream: &mut Stream<R>, chunk: ChunkInfo) -> Result<u64, Error> {
+    if chunk.size < 4 {
+        return Err(Error::Truncated);
+    }
+    let mut bytes = [0; 4];
+    stream.read_chunk(&mut bytes)?;
+    let frames = stream.container().endian().u32(&bytes);
+    Ok(if frames == u32::MAX {
+        stream.ds64().map_or(u64::from(frames), |d| d.sample_count)
+    } else {
+        u64::from(frames)
+    })
+}

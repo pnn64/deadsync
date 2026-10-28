@@ -4,8 +4,65 @@
 form/chunk extents, RF64/BW64 size tables, limits and odd padding without buffering
 audio. Its `read_chunk` never crosses the current payload; `next_chunk` drains
 any remainder and padding. A caller can supply its own codec and metadata policy.
-Native/ADPCM forward-only frame convenience readers are the next implementation
-step; seekable Reader and AdpcmReader already provide frame APIs and exact seeks.
+`ForwardReader<R: Read>` adds native frame reads and raw encoded-data access;
+`AdpcmForwardReader<R: Read>` adds Microsoft/4-bit IMA frame decoding. Seekable
+Reader and AdpcmReader provide arbitrary exact seeks.
+
+## Forward-only frame reading
+
+Opening a ForwardReader consumes only headers through the first data header. It
+retains bounded format bytes and no per-chunk inventory or audio allocation.
+Native calls fill complete interleaved frames in caller buffers: raw bytes,
+native i16/i32/f32/f64, or explicit integer expansion via read_integers. The
+conversion implementation is shared with Reader, with integer container scale,
+valid-bit padding and exact float payload bits unchanged. A raw read_data call
+also supports opaque encoded formats; subsequent native calls require the current
+byte position to be frame aligned.
+
+```rust
+use deadlib_audio_decode_wav::{Error, ForwardReader};
+use std::io::Read;
+
+fn drain_native_i16(input: impl Read) -> Result<u64, Error> {
+    let mut reader = ForwardReader::new(input)?;
+    let channels = usize::from(reader.format().channels);
+    let mut samples = vec![0i16; channels * 128];
+    let mut frames = 0;
+    loop {
+        let n = reader.read_i16(&mut samples)?;
+        if n == 0 { break; }
+        frames += (n / channels) as u64;
+    }
+    reader.finish()?;
+    Ok(frames)
+}
+```
+
+The convenience reader requires fmt before data, matching the ordering requirement
+in the [1991 IBM/Microsoft WAVE specification, page 3-22](https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Docs/riffmci.pdf).
+Data-before-fmt files use the seekable Reader compatibility path. Finish drains
+unread data and validates the remaining form, including duplicate reserved chunks,
+chunk limits, physical truncation and odd padding. Reading zero samples at the
+data boundary does not validate the footer. Bytes following the RIFF form stay
+unconsumed. I/O errors poison the stream; failed reads may have modified output.
+
+with_metadata visits leading ancillary chunks, and finish_with_metadata visits
+trailing ones. The callback receives ChunkInfo and a bounded ChunkPayload that
+implements Read. It can consume any payload prefix; the rest is drained before
+the next header. It cannot read padding/headers or advance the demuxer. fmt,
+fact and ds64 are handled internally. Raw outer padding is skipped; use borrowed
+Chunk/Wave views when exact original pad bytes must be retained. The callback
+chooses whether to copy, parse or discard payloads, and its errors are propagated.
+
+AdpcmForwardReader retains one encoded and one decoded block, shared by arbitrary
+caller read sizes. It knows the exact decoded length before emitting samples from
+a leading fact, ds64 sample count, or an explicit external frame count supplied
+to from_reader_with_frames. Finish checks the final encountered fact/ds64 against
+that count and rejects a missing required duration. Trailing fact therefore works
+with ds64 or an externally known count. A plain RIFF stream whose count is only
+available after data needs that explicit count; this API does not buffer the
+whole encoded stream or emit untrimmed speculative samples. Its initial and final
+duration checks do not decode intentionally unread compressed blocks.
 
 ## Known-length Write-only output
 
@@ -79,3 +136,23 @@ All 49 tests pass in x64 release and i686 debug, and Clippy passes. Two checked
 one-million-mutation campaigns (x64/i686, distinct seeds) pass with the new native
 and ADPCM known-length properties. Reports are retained in
 `validation/fuzz-known-output-{x64,i686}-1m.json`.
+
+Seven forward-reading tests bring the total to 56, passing x64 debug/release and
+i686 debug with Clippy. Tests cover all native widths/containers, 1/3/4097
+channels, NaN payloads, caller-buffer and physical-read splits, bounded metadata
+before/after format/data, complete truncation sweeps, duplicate footers, raw/frame
+alignment, short ADPCM blocks, trailing duration checks, I/O/codec poisoning and
+u64 durations from tiny physical sources. These large declarations do not prove
+successful physical multi-gigabyte streaming.
+
+The retained 144 four-reference ADPCM fixtures pass all 432 Read-only real-file
+decodes with frame buffers 1/127/4097 and physical read limits 1/17/4096, including
+recurring Interrupted. Exact fixture/output hashes and reference provenance are
+in `validation/adpcm-forward-references.json`. The reference arithmetic scope and
+disagreements remain those documented in ADPCM.md.
+
+Two million checked x64/i686 mutations pass with forward native/ADPCM state
+properties; all 1474 earlier archived corpus files replay. A fresh 100000-execution
+ASan campaign also passes and its complete 1108-file corpus is archived. See
+FUZZING.md for budgets, source hashes, commands and raw evidence. These checks
+remain bounded evidence rather than exhaustive conformance or malformed-input proof.

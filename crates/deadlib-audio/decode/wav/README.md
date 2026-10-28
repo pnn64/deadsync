@@ -65,6 +65,11 @@ Known-length output also works with Write-only sinks: `Muxer::with_lengths`,
 and finalize with `finish_stream`. See [STREAMING.md](STREAMING.md) for count
 validation, RF64 selection and sequential I/O semantics.
 
+`ForwardReader<R: Read>` provides native frame/typed reads and raw encoded-data
+access; `AdpcmForwardReader` adds bounded-block compressed decoding. Metadata
+callbacks can inspect leading/trailing ancillary payloads. See STREAMING.md for
+final validation and duration/order requirements on a forward-only source.
+
 `metadata` provides borrowed LIST/INFO/adtl, cue, sampler, broadcast extension,
 RF64 marker and BW64 CHNA/XML envelope views. Matching helpers serialize into
 caller buffers. `Chunk::metadata` performs explicit bounded parsing; raw payloads

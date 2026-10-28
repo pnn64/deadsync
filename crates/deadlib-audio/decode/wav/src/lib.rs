@@ -4,22 +4,27 @@
 
 pub mod adpcm;
 pub mod adpcm_encode;
+pub mod adpcm_forward;
 pub mod adpcm_reader;
 pub mod container;
 pub mod encode;
 pub mod format;
+pub mod forward;
 pub mod metadata;
 pub mod mux;
+mod native_io;
 pub mod pcm;
 pub mod reader;
 pub mod stream;
 
 pub use adpcm::{Adpcm, AdpcmData};
 pub use adpcm_encode::{AdpcmKind, AdpcmSpec, AdpcmWriter};
+pub use adpcm_forward::AdpcmForwardReader;
 pub use adpcm_reader::AdpcmReader;
 pub use container::{Chunk, Chunks, Container, Ds64, Wave};
 pub use encode::{RawChunk, Spec, WriteOptions, Writer};
 pub use format::{Encoding, Endian, Format, SampleFormat};
+pub use forward::{ChunkPayload, ForwardReader};
 pub use mux::{DataLength, Muxer};
 pub use pcm::Pcm;
 pub use reader::Reader;

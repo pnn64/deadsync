@@ -108,10 +108,17 @@ All 49 integration tests pass in x64 release and i686 debug, and Clippy passes.
 Two million checked mutations cover the new known-length output comparisons.
 STREAMING.md documents the API and PERFORMANCE.md records scoped heap/cycle data.
 
-Remaining work: forward-only audio convenience, metadata profile/semantic validation,
+Forward-only native/ADPCM readers now add bounded ancillary callbacks, exact known
+duration trimming, large-frame buffers, raw encoded access and explicit final
+container validation. All 56 tests pass in x64 debug/release and i686 debug, and
+Clippy passes. All 432 Read-only real-file ADPCM cases match the retained reference
+truth. Two million checked mutations, 1474 earlier corpus inputs and 100000 fresh
+ASan executions pass with the new forward state properties. STREAMING.md and
+FUZZING.md document ordering/duration requirements, source hashes and evidence.
+
+Remaining work: metadata profile/semantic validation,
 wavl/slnt and multiple-data handling, oracle comparisons, broader fuzzing, sparse >4 GiB
 evidence and broad performance coverage (the first PCM16 baseline is in
-[PERFORMANCE.md](PERFORMANCE.md)); forward-only audio convenience APIs,
-and extensible compressed formats. BW64 shares 64-bit container
+[PERFORMANCE.md](PERFORMANCE.md)); 3-bit IMA and extensible compressed formats. BW64 shares 64-bit container
 mechanics; ADM profile conformance is not yet claimed. RIFX extensible GUID byte
 order follows the container but needs external-reference validation.
