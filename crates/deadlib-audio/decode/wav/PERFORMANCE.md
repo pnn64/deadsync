@@ -665,3 +665,15 @@ The repeated checks and corrected replay pass with unchanged inputs.
 python crates/deadlib-audio/decode/wav/benches/compare_wavl_profile.py --output target/wav/new-writer
 python crates/deadlib-audio/decode/wav/benches/compare_wavl_profile.py --bench adpcm_file --baseline 491b3c88d --output target/wav/new-adpcm
 ```
+
+
+## Same-output Symphonia and physical compressed-file assessment
+
+REFERENCE_PERFORMANCE.md records the new isolated 89-case native/ADPCM matrix,
+38 matching Symphonia complete/stream gates, exact range gates, 48 fresh-process
+memory probes and 32 dense cached-file runs. A smaller i686 campaign and source/
+package checks are retained. Native PCM/float results remain competitive, but
+physical ADPCM throughput exposes 127.94-times buffered read amplification.
+An underlying-File counter probe verifies the per-block seek cause. The i686
+Microsoft arithmetic path also remains slower. These are measured optimization
+requirements; broad compressed-file superiority is not claimed.

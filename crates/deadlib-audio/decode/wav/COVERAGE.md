@@ -282,3 +282,14 @@ The fixture-driven native benchmark now exits cleanly when Cargo invokes its
 test entry without fixture arguments. Native replay uses an isolated build tree
 and private binary to avoid concurrent example rebuilds. The interrupted attempt
 and executable-lock build log remain separate from successful repeated checks.
+
+
+The independent reference performance matrix now gates 89 native/compressed
+cases and 11392 exact native seek ranges against scalar/bit-word truth. All 34
+RIFF native cases match Symphonia complete/stream/range output; four compressed
+cases match complete/stream output but fail its seek adapter. Random IMA rounding,
+3-bit rejection and unsupported containers/channels are retained. The campaign
+also passes 48 fresh-process memory probes, 32 cached-file runs and 105 complete
+file/storage checks. The i686 subset passes 10/24/16 resident/memory/file runs.
+REFERENCE_PERFORMANCE.md documents the contracts, artifacts and the new buffered
+ADPCM I/O amplification and 32-bit arithmetic optimization requirements.

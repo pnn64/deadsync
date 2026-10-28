@@ -279,3 +279,19 @@ Next: finish the reference/profile assessment and the final requirement audit.
 The measured writer construction cost is an explicit architectural tradeoff;
 it is not an untested throughput optimization candidate. No completion or
 platform-wide speed certification is claimed by this milestone.
+
+
+The wider Rust/reference assessment now has an isolated Symphonia 0.6.1 benchmark
+with its SIMD feature enabled. All 89 independently packed native/compressed
+cases pass native complete/stream and 128-range gates. Symphonia matches 38
+full/stream cases and 34 native range sets; compressed rounding/probe/seek errors
+remain explicit. There are 48 fresh-process memory probes, 32 real cached-file
+runs and a ten-case i686 subset with 24/16 memory/file runs. Published dependency
+source and fixture/storage verification are retained. No production source changed.
+
+REFERENCE_PERFORMANCE.md records native wins and compressed shortcomings. The
+physical compressed-file test finds a concrete bug in performance: a seek per
+uncached block discards BufReader read-ahead. A counter below that buffer records
+127.94-times reads on 64 MiB encoded files. Next work is to preserve known source
+position for sequential compressed reads, then address the measured i686
+Microsoft arithmetic and IMA decoding costs and finish the requirements audit.

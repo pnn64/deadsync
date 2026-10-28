@@ -127,7 +127,9 @@ Bounded mutation, coverage-guided fuzzing and sanitizer evidence is recorded in
 Performance history and remaining targets are in [PERFORMANCE.md](PERFORMANCE.md).
 [NATIVE_PERFORMANCE.md](NATIVE_PERFORMANCE.md) records all six native widths,
 same-output Hound comparisons, dense real-file streaming, process memory and the
-measured PCM32 integer-path optimization. [AUDIT.md](AUDIT.md) tracks the full goal.
+measured PCM32 integer-path optimization. [REFERENCE_PERFORMANCE.md](REFERENCE_PERFORMANCE.md)
+extends the comparison to Symphonia, ADPCM and both Windows architectures,
+including the remaining compressed-file I/O bottleneck. [AUDIT.md](AUDIT.md) tracks the full goal.
 Native PCM/float sample and encoder comparisons against four references are in
 [PCM.md](PCM.md). Real NTFS files over 16 GiB, 32/64-bit seek checks and scoped
 whole-process memory measurements are in [LARGE_FILES.md](LARGE_FILES.md).
