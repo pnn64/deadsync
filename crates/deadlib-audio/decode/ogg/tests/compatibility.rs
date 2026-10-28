@@ -212,3 +212,96 @@ fn capture_and_reset_preserve_the_selected_validation_flags() {
     };
     assert_eq!(error, Error::LimitExceeded("packet size"));
 }
+
+#[test]
+fn unknown_spans_retain_near_maximum_granules_and_reset_clears_them() {
+    for allow_decreasing_eos_granule in [false, true] {
+        for end in [u64::MAX - 1, u64::MAX - 3, 0, UNKNOWN_GRANULE_POSITION] {
+            let options = ValidationOptions {
+                allow_decreasing_eos_granule,
+                ..ValidationOptions::default()
+            };
+            let frames: Vec<_> = [
+                (BOS, u64::MAX - 2, vec![1], vec![b'h']),
+                (0, UNKNOWN_GRANULE_POSITION, vec![255], vec![b'a'; 255]),
+                (CONTINUED | EOS, end, vec![1], vec![b'b']),
+            ]
+            .into_iter()
+            .enumerate()
+            .map(|(sequence, (flags, granule_position, lacing, body))| {
+                encode_page(
+                    PageHeader {
+                        flags,
+                        granule_position,
+                        serial: 7,
+                        sequence: sequence as u32,
+                    },
+                    &lacing,
+                    &body,
+                )
+                .unwrap()
+            })
+            .collect();
+            let mut demux = Demuxer::with_validation(Limits::default(), options);
+            let mut capture = PacketCapture::with_validation(7, Limits::default(), options);
+            let mut offset = 0;
+            for (number, bytes) in frames.iter().enumerate() {
+                let page = Page::parse(bytes).unwrap().0;
+                let mut whole = Vec::new();
+                let mut selected = Vec::new();
+                let a = demux.push_page(page, offset, |p| {
+                    whole.push((p.data.to_vec(), p.info.granule_position));
+                });
+                let b = capture.push_page(page, offset, |p| {
+                    selected.push((p.data.to_vec(), p.info.granule_position));
+                });
+                assert_eq!(whole, selected);
+                if number == 2 && end == UNKNOWN_GRANULE_POSITION {
+                    let error = Error::Invalid("unknown granule on page with completed packets");
+                    assert_eq!(a, Err(error.clone()));
+                    assert_eq!(b, Err(error));
+                    assert!(whole.is_empty());
+                } else if number == 2 && end < u64::MAX - 2 && !allow_decreasing_eos_granule {
+                    assert_eq!(a, Err(Error::Invalid("decreasing granule position")));
+                    assert_eq!(b, Err(Error::Invalid("decreasing captured granule")));
+                    assert!(whole.is_empty());
+                } else {
+                    a.unwrap();
+                    b.unwrap();
+                    if number == 2 {
+                        assert_eq!(
+                            whole,
+                            vec![([vec![b'a'; 255], vec![b'b']].concat(), Some(end))]
+                        );
+                        assert_eq!(
+                            demux.compatibility().decreasing_eos_granules,
+                            u64::from(end < u64::MAX - 2)
+                        );
+                        assert_eq!(capture.compatibility(), demux.compatibility());
+                    }
+                }
+                offset += bytes.len() as u64;
+            }
+            demux.reset();
+            capture.reset();
+            let bytes = encode_page(
+                PageHeader {
+                    flags: BOS | EOS,
+                    granule_position: 0,
+                    serial: 7,
+                    sequence: 0,
+                },
+                &[0],
+                &[],
+            )
+            .unwrap();
+            let page = Page::parse(&bytes).unwrap().0;
+            demux.push_page(page, 0, |_| {}).unwrap();
+            capture.push_page(page, 0, |_| {}).unwrap();
+            demux.finish().unwrap();
+            capture.finish().unwrap();
+            assert_eq!(demux.compatibility(), CompatibilityStats::default());
+            assert_eq!(capture.compatibility(), CompatibilityStats::default());
+        }
+    }
+}

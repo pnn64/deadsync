@@ -1,5 +1,6 @@
 use crate::{
-    CompatibilityStats, Error, MAX_PAGE_SIZE, Page, ValidationOptions, reserve, validation,
+    CompatibilityStats, Error, MAX_PAGE_SIZE, Page, UNKNOWN_GRANULE_POSITION, ValidationOptions,
+    reserve, validation,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -52,7 +53,7 @@ struct Stream {
     partial: Vec<u8>,
     packet_offset: u64,
     packets: u64,
-    granule: Option<u64>,
+    granule: u64,
 }
 
 /// Physical-stream validator and demultiplexer, strict by default. Named
@@ -200,16 +201,17 @@ impl Demuxer {
                     partial: Vec::new(),
                     packet_offset: offset,
                     packets: 0,
-                    granule: None,
+                    granule: UNKNOWN_GRANULE_POSITION,
                 });
                 self.active += 1;
                 self.streams.len() - 1
             }
         };
         let stream = &mut self.streams[index];
+        let previous = (stream.granule != UNKNOWN_GRANULE_POSITION).then_some(stream.granule);
         let (granule, compatibility) =
-            validation::granule(page, complete, stream.granule, self.validation)?;
-        if granule.is_some() {
+            validation::granule(page, complete, previous, self.validation)?;
+        if let Some(granule) = granule {
             stream.granule = granule;
         }
         // Preflight the entire page before emitting any of its packets.
