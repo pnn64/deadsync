@@ -71,6 +71,12 @@ fn joint(rate: u32, mode: u8) -> FrameHeader {
 
 fn verify(paths: &[String]) {
     let mut out = io::BufWriter::new(io::stdout().lock());
+    for crc in 0..=u16::MAX {
+        for byte in 0..=u8::MAX {
+            out.write_all(&checksum::bytes(crc, &[byte]).to_le_bytes())
+                .unwrap();
+        }
+    }
     for seed in [1, 0x73429, 0x982374ab] {
         let mut synthesis = Synthesis::new();
         for slot in 0..40 {

@@ -100,6 +100,9 @@ def main():
     parser.add_argument("--runs", type=int, default=7)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    for fixture in args.fixture:
+        if not fixture.is_file():
+            parser.error(f"fixture does not exist: {fixture}")
     root = args.root.resolve()
     if args.capture:
         capture(root, args.capture, [p.resolve() for p in args.fixture], args.source_stage)
