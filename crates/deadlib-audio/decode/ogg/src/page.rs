@@ -249,8 +249,7 @@ pub fn encode_page(fields: PageHeader, lacing: &[u8], body: &[u8]) -> Result<Vec
     out.extend_from_slice(&encoded_header(fields, lacing.len() as u8));
     out.extend_from_slice(lacing);
     out.extend_from_slice(body);
-    let header = 27 + lacing.len();
-    let checksum = crc::update(crc::update(0, &out[..header]), &out[header..]);
+    let checksum = crc::update(0, &out);
     out[22..26].copy_from_slice(&checksum.to_le_bytes());
     Ok(out)
 }
