@@ -60,7 +60,7 @@ pub struct StreamDecoder {
     state: State,
     event: Option<Event>,
     failure: Option<Error>,
-    fixed: [u8; 8],
+    fixed: [u8; 13],
     have: usize,
     input_left: usize,
     chunks: usize,
@@ -118,7 +118,7 @@ impl StreamDecoder {
             state: State::Signature,
             event: None,
             failure: None,
-            fixed: [0; 8],
+            fixed: [0; 13],
             have: 0,
             input_left: options.limits.max_input_bytes,
             chunks: 0,
@@ -410,7 +410,7 @@ impl StreamDecoder {
         self.crc = Crc32::new();
         self.crc.update(&self.kind);
         self.data.clear();
-        if !matches!(&self.kind, b"IDAT" | b"fdAT") && !self.discarded_animation_chunk() {
+        if !matches!(&self.kind, b"IHDR" | b"IDAT" | b"fdAT") && !self.discarded_animation_chunk() {
             reserve(&mut self.data, self.length)?;
             self.data.resize(self.length, 0);
         }
@@ -422,7 +422,11 @@ impl StreamDecoder {
             return Ok(None);
         }
         let h = self.header;
-        let d = self.data.as_slice();
+        let d = if &self.kind == b"IHDR" {
+            &self.fixed[..]
+        } else {
+            self.data.as_slice()
+        };
         let event = match &self.kind {
             b"IHDR" => {
                 let h = Header::parse(d)?;
@@ -574,13 +578,13 @@ impl StreamDecoder {
                     if !fill(
                         input,
                         &mut pos,
-                        &mut self.fixed,
+                        &mut self.fixed[..8],
                         &mut self.have,
                         &mut self.input_left,
                     )? {
                         break;
                     }
-                    if &self.fixed != SIGNATURE {
+                    if &self.fixed[..8] != SIGNATURE {
                         return Err(Error::Invalid("signature"));
                     }
                     self.have = 0;
@@ -590,7 +594,7 @@ impl StreamDecoder {
                     if !fill(
                         input,
                         &mut pos,
-                        &mut self.fixed,
+                        &mut self.fixed[..8],
                         &mut self.have,
                         &mut self.input_left,
                     )? {
@@ -703,7 +707,12 @@ impl StreamDecoder {
                         let n = self.left.min(input.len() - pos).min(self.input_left);
                         let start = self.length - self.left;
                         if !self.discarded_animation_chunk() {
-                            self.data[start..start + n].copy_from_slice(&input[pos..pos + n]);
+                            let data = if &self.kind == b"IHDR" {
+                                &mut self.fixed[..]
+                            } else {
+                                self.data.as_mut_slice()
+                            };
+                            data[start..start + n].copy_from_slice(&input[pos..pos + n]);
                         }
                         self.crc.update(&input[pos..pos + n]);
                         self.left -= n;
@@ -723,13 +732,13 @@ impl StreamDecoder {
                     if !fill(
                         input,
                         &mut pos,
-                        &mut self.fixed[..4],
+                        &mut self.prefix,
                         &mut self.have,
                         &mut self.input_left,
                     )? {
                         break;
                     }
-                    if be32(&self.fixed) != self.crc.finish() {
+                    if be32(&self.prefix) != self.crc.finish() {
                         if animation_chunk(&self.kind) {
                             self.animation_fault = Some(AnimationFault::Complete);
                         }

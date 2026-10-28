@@ -1,4 +1,4 @@
-use super::{Bits, DIST_BASE, DIST_EXTRA, Huffman, LENGTH_BASE, LENGTH_EXTRA, fixed};
+use super::{Bits, DIST_BASE, DIST_EXTRA, FIXED, Huffman, LENGTH_BASE, LENGTH_EXTRA};
 use crate::{Error, checksum::Adler32, reserve};
 
 /// Why a streaming codec stopped. Only `Done` proves checksum-verified completion.
@@ -55,8 +55,9 @@ pub struct Inflater {
     window: usize,
     history: Vec<u8>,
     history_pos: usize,
-    literals: Huffman,
-    distances: Huffman,
+    // None borrows fixed tables; Some owns a dynamic table.
+    literals: Option<Huffman>,
+    distances: Option<Huffman>,
     code_lengths: [u8; 19],
     lengths: [u8; 318],
     nl: usize,
@@ -86,8 +87,8 @@ impl Inflater {
             window: 32768,
             history,
             history_pos: 0,
-            literals: Huffman::new(&[], false, true)?,
-            distances: Huffman::new(&[], false, true)?,
+            literals: None,
+            distances: None,
             code_lengths: [0; 19],
             lengths: [0; 318],
             nl: 0,
@@ -262,7 +263,8 @@ impl Inflater {
                         self.state = State::StoredLength;
                     }
                     1 => {
-                        (self.literals, self.distances) = fixed();
+                        self.literals = None;
+                        self.distances = None;
                         self.state = State::Codes;
                     }
                     2 => self.state = State::DynamicCounts,
@@ -330,7 +332,7 @@ impl Inflater {
                         self.code_lengths[ORDER[self.index]] = read!(3) as u8;
                         self.index += 1;
                     }
-                    self.literals = Huffman::new(&self.code_lengths, true, false)?;
+                    self.literals = Some(Huffman::new(&self.code_lengths, true, false)?);
                     self.index = 0;
                     self.state = State::DynamicLengths;
                 }
@@ -339,13 +341,16 @@ impl Inflater {
                         if self.lengths[256] == 0 {
                             return Err(Error::Invalid("missing end of block code"));
                         }
-                        self.literals = Huffman::new(&self.lengths[..self.nl], false, false)?;
-                        self.distances =
-                            Huffman::new(&self.lengths[self.nl..self.nl + self.nd], false, true)?;
+                        self.literals = Some(Huffman::new(&self.lengths[..self.nl], false, false)?);
+                        self.distances = Some(Huffman::new(
+                            &self.lengths[self.nl..self.nl + self.nd],
+                            false,
+                            true,
+                        )?);
                         self.state = State::Codes;
                         continue;
                     }
-                    match symbol!(&self.literals) {
+                    match symbol!(self.literals.as_ref().unwrap()) {
                         value @ 0..=15 => {
                             self.lengths[self.index] = value as u8;
                             self.index += 1;
@@ -384,7 +389,7 @@ impl Inflater {
                     self.state = State::DynamicLengths;
                 }
                 State::Codes => loop {
-                    match symbol!(&self.literals) {
+                    match symbol!(self.literals.as_ref().unwrap_or(&FIXED.0)) {
                         value @ 0..=255 => {
                             if self.total_out == self.limit {
                                 return Err(Error::LimitExceeded);
@@ -413,7 +418,7 @@ impl Inflater {
                             self.state = State::LengthExtra(index);
                             let length = LENGTH_BASE[index] + read!(LENGTH_EXTRA[index]) as usize;
                             self.state = State::DistanceCode(length);
-                            let symbol = symbol!(&self.distances);
+                            let symbol = symbol!(self.distances.as_ref().unwrap_or(&FIXED.1));
                             if symbol >= 30 {
                                 return Err(Error::Invalid("reserved distance symbol"));
                             }
@@ -448,7 +453,7 @@ impl Inflater {
                     )
                 }
                 State::DistanceCode(length) => {
-                    let symbol = symbol!(&self.distances);
+                    let symbol = symbol!(self.distances.as_ref().unwrap_or(&FIXED.1));
                     if symbol >= 30 {
                         return Err(Error::Invalid("reserved distance symbol"));
                     }

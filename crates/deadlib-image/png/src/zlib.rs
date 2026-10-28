@@ -212,26 +212,23 @@ impl Huffman {
     }
 }
 
-fn fixed() -> (Huffman, Huffman) {
-    const TABLES: (Huffman, Huffman) = {
-        let mut lengths = [8; 288];
-        let mut n = 144;
-        while n < 280 {
-            lengths[n] = if n < 256 { 9 } else { 7 };
-            n += 1;
-        }
-        let literals = match Huffman::build(&lengths, false, false) {
-            Ok(tree) => tree,
-            Err(_) => panic!("invalid fixed literal tree"),
-        };
-        let distances = match Huffman::build(&[5; 32], false, false) {
-            Ok(tree) => tree,
-            Err(_) => panic!("invalid fixed distance tree"),
-        };
-        (literals, distances)
+const FIXED: (Huffman, Huffman) = {
+    let mut lengths = [8; 288];
+    let mut n = 144;
+    while n < 280 {
+        lengths[n] = if n < 256 { 9 } else { 7 };
+        n += 1;
+    }
+    let literals = match Huffman::build(&lengths, false, false) {
+        Ok(tree) => tree,
+        Err(_) => panic!("invalid fixed literal tree"),
     };
-    TABLES
-}
+    let distances = match Huffman::build(&[5; 32], false, false) {
+        Ok(tree) => tree,
+        Err(_) => panic!("invalid fixed distance tree"),
+    };
+    (literals, distances)
+};
 
 fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
     let nl = bits.read(5)? as usize + 257;
@@ -304,7 +301,13 @@ fn inflate_codes(
     window: usize,
     limit: usize,
 ) -> Result<(), Error> {
-    let (lit, dist) = if fixed_codes { fixed() } else { dynamic(bits)? };
+    let dynamic_tables;
+    let (lit, dist) = if fixed_codes {
+        (&FIXED.0, &FIXED.1)
+    } else {
+        dynamic_tables = dynamic(bits)?;
+        (&dynamic_tables.0, &dynamic_tables.1)
+    };
     loop {
         match lit.decode(bits)? {
             literal @ 0..=255 => {

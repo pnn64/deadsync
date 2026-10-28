@@ -1,0 +1,64 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index 75a3b1edd..be9670fbe 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -212,25 +212,26 @@ impl Huffman {
+     }
+ }
+ 
+-fn fixed() -> (Huffman, Huffman) {
+-    const TABLES: (Huffman, Huffman) = {
+-        let mut lengths = [8; 288];
+-        let mut n = 144;
+-        while n < 280 {
+-            lengths[n] = if n < 256 { 9 } else { 7 };
+-            n += 1;
+-        }
+-        let literals = match Huffman::build(&lengths, false, false) {
+-            Ok(tree) => tree,
+-            Err(_) => panic!("invalid fixed literal tree"),
+-        };
+-        let distances = match Huffman::build(&[5; 32], false, false) {
+-            Ok(tree) => tree,
+-            Err(_) => panic!("invalid fixed distance tree"),
+-        };
+-        (literals, distances)
++const FIXED: (Huffman, Huffman) = {
++    let mut lengths = [8; 288];
++    let mut n = 144;
++    while n < 280 {
++        lengths[n] = if n < 256 { 9 } else { 7 };
++        n += 1;
++    }
++    let literals = match Huffman::build(&lengths, false, false) {
++        Ok(tree) => tree,
++        Err(_) => panic!("invalid fixed literal tree"),
+     };
+-    TABLES
++    let distances = match Huffman::build(&[5; 32], false, false) {
++        Ok(tree) => tree,
++        Err(_) => panic!("invalid fixed distance tree"),
++    };
++    (literals, distances)
++};
++
++fn fixed() -> (Huffman, Huffman) {
++    FIXED
+ }
+ 
+ fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
+@@ -304,7 +305,13 @@ fn inflate_codes(
+     window: usize,
+     limit: usize,
+ ) -> Result<(), Error> {
+-    let (lit, dist) = if fixed_codes { fixed() } else { dynamic(bits)? };
++    let dynamic_tables;
++    let (lit, dist) = if fixed_codes {
++        (&FIXED.0, &FIXED.1)
++    } else {
++        dynamic_tables = dynamic(bits)?;
++        (&dynamic_tables.0, &dynamic_tables.1)
++    };
+     loop {
+         match lit.decode(bits)? {
+             literal @ 0..=255 => {

@@ -2237,3 +2237,113 @@ value, 32 word offsets and ten update splits against independent bitwise CRC.
 caller processes, exact reconstructed source identities, unchanged independent
 test/support/fixture sources and recorded binary/log/summary hashes before
 commit. `audit.json` records source, report, support and evidence identities.
+
+## Borrowed Huffman values and inline IHDR storage (2026-10-29)
+
+Three safe Rust changes remove table and header intermediates:
+
+1. Buffered fixed blocks borrow the immutable Huffman values directly. Only a
+   dynamic block constructs local owned tables. This removes the fixed pair's
+   value copies while preserving canonical decoding and existing limit/error
+   checks. The precomputed values move to module scope without changing them.
+2. Streaming literal/distance fields use optional dynamic ownership. None
+   selects the immutable fixed table; Some retains a dynamic table. The
+   constructor no longer builds empty tables and fixed blocks no longer copy
+   complete values into the decoder. Dynamic code-length state is entered only
+   after successful owned-table construction; completed literal/distance values
+   replace it before coded tokens are decoded. Input suspension retains them.
+3. The fixed scratch buffer holds the thirteen-byte IHDR body. Signature and
+   chunk-header reads still use eight bytes, and CRC reads use the existing
+   four-byte prefix scratch after any fdAT sequence has been checked. Header
+   parsing and publication still follow CRC verification. This omits the initial
+   IHDR vector allocation; later chunks retain their existing vector path.
+
+Component measurements alternate four complete processes per version. On the
+RGBA16 1x1 Fast case, buffered table borrowing changes 1,926 -> 1,317 cycles
+(1.46x throughput). The streaming ownership component changes 4,766 -> 4,455
+reader cycles (1.07x). Intermediate reader controls vary even in the buffered
+component, whose reader algorithm does not change; those records are retained.
+
+The inline-header component's established benefit is allocation reduction,
+not a claimed universal CPU gain. The same tiny RGBA16 reader changes five to
+four heap allocation calls and 54 -> 41 requested bytes, with no reallocation.
+Its isolated Fast CPU ratio is 0.971x and Stored 0.991x. RGBA8 33x9 similarly
+changes five to four calls and 3,515 -> 3,502 requested bytes. Indexed8 33x9
+keeps seven allocation calls but removes one reallocation and changes
+3,194 -> 3,181 requested bytes. These are full public API probes. Metadata
+sequences outside the timing corpus can reuse capacity differently.
+
+A supplemental caller links Git baseline source and selected source, uses the
+same native image types and copied optimized/LTO bench settings, and black-boxes
+complete Png results. Every case checks complete samples and palettes before
+timing. Three processes each retain eleven alternating batches per variant
+after one warmup. Combined medians include:
+
+| Within-process combined case | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| RGBA16 1x1 Fast buffered | 1,833 | 1,561 | 1.17x |
+| RGBA16 1x1 Fast reader | 6,280 | 4,434 | 1.42x |
+| RGBA16 1x1 Stored reader | 5,997 | 4,382 | 1.37x |
+| RGBA8 33x9 Fast buffered | 6,503 | 5,869 | 1.11x |
+| RGBA8 33x9 Fast reader | 11,342 | 9,439 | 1.20x |
+| RGBA8 4097x257 Stored reader control | 11,552,797 | 11,897,632 | 0.971x |
+| RGBA16 4097x257 Stored reader control | 27,883,377 | 27,938,546 | 0.998x |
+| Reference dynamic RGBA16 513x257 level9 reader | 2,364,308 | 2,283,459 | 1.035x |
+
+Across the six large reference-dynamic cases, buffered ratios span
+0.987x-1.067x and reader ratios 0.959x-1.044x. One dynamic reader control is
+about 4% slower, and the large RGBA8 Stored reader is about 3% slower. Caller,
+allocator and host variation remain visible; the targeted small-image gains
+do not establish a universal throughput improvement. Raw process ranges and
+all component controls are preserved.
+
+The x64 object-size probes record Inflater 3,896 -> 3,904 bytes and
+StreamDecoder 4,680 -> 4,696 bytes. Zero-limit inflater owned memory changes
+3,904 -> 3,912 bytes. Optional-table tags and the larger fixed scratch therefore
+increase object storage while eliminating explicit table setup and an initial
+heap allocation. Heap-call reduction does not imply an overall resident-memory
+reduction. The existing working-memory accounting includes the larger inflater.
+
+The unchanged `DEADLIB_PNG_BENCH_STAGE=deflate-tables` corpus covers 212 complete
+PNG API case/operations: Stored noise, native fixed-Huffman gradients and
+independently framed reference-zlib inputs, with native byte/16-bit/packed
+formats, indexed palettes, plain/Adam7, Paeth controls and tails. Large reference
+inputs assert dynamic first-block type 2. Complete scalar-modeled filtered bytes
+and decoded samples/palettes are checked outside timing; input fingerprints
+must match at every checkpoint. Logical CPU 2, Windows thread cycles, Rust
+1.99.1 and optimized/LTO bench settings are used. Allocation probes are untimed.
+There are three warmups and seven batches, requesting three iterations with
+minimums of 64 for readers up to 65,536 native bytes and 2,048 for other outputs
+below 4,096 bytes. The supplemental caller uses 512 iterations for small cases
+and three for large cases. Our jobs are serialized; other activity, frequency
+and preemption are uncontrolled.
+
+The source diff adds 17 lines net (61 added, 44 removed), including movement
+of the existing fixed constants. Runtime work removed includes empty/fixed
+table value setup, buffered table copies and the IHDR vector reservation and
+initialization. No unsafe code, runtime dependency or public API is added.
+Integration tests, library oracles, support generators and fixtures are unchanged.
+
+Evidence is in [`experiments/borrow-headers-20261029`](experiments/borrow-headers-20261029).
+`borrowed-paired-summary.tsv`, `optional-paired-summary.tsv` and
+`header-paired-summary.tsv` retain the three components.
+`selected-paired-summary.tsv` and `in-process-summary.tsv` retain combined
+results; the latter's logs also record object and owned-memory probes.
+`compare.py`/`compare.rs` retain the linked caller, `summary.py` recomputes
+its medians, and `protocol.json` records invariants and measurement scopes.
+Cumulative patches are relative to `7fdecb9d4`.
+
+Selected source passes 71 release tests and 65 debug tests, including thirteen
+library oracles in both profiles, strict all-target Clippy and scoped formatting.
+All six optional C audits run in release and remain ignored in debug. The
+unchanged suites cover valid/malformed and permuted Huffman trees, fixed/dynamic/
+Stored transitions, empty distances, suspension within code-length repeats,
+literal/match output boundaries, exact prefixes/trailers, every IHDR field,
+PNG/APNG CRCs and sequence/recovery behavior, native samples/palettes, metadata
+and resource/I/O boundaries. Signature/chunk reads, provisional rows and Header
+publication retain their existing consumption and verification behavior.
+`final-validation.json` and `library-validation.json` retain commands and logs.
+`audit.py` verifies four frozen checkpoints, 32 pipeline processes, three paired
+caller processes, decoder-size probes, unchanged independent test/support/
+fixture sources and every recorded source, binary, log and summary identity.
+`audit.json` records the report, support and evidence hashes before commit.
