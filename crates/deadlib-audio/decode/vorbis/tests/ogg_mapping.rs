@@ -778,3 +778,49 @@ fn libvorbisfile_local_corpus_final_counts_and_pcm() {
         fs::write(path, report).unwrap();
     }
 }
+
+#[test]
+#[ignore = "requires DEADLIB_VORBIS_CORPUS directory of Vorbis files"]
+fn local_corpus_fragmented_streaming_and_reset() {
+    let root = std::env::var_os("DEADLIB_VORBIS_CORPUS").expect("set corpus");
+    let paths = support::paths(Path::new(&root));
+    assert!(!paths.is_empty());
+    for path in paths {
+        let bytes = fs::read(&path).unwrap();
+        let expected = decode(&bytes);
+        let mut decoder = OggStreamDecoder::default();
+        for chunk in [17, 4093] {
+            decoder.reset();
+            let mut actual = Output::default();
+            for input in bytes.chunks(chunk) {
+                let mut offset = 0;
+                while offset < input.len() {
+                    let n = decoder.push(&input[offset..], |e| actual.event(e)).unwrap();
+                    assert!(n > 0);
+                    offset += n;
+                }
+            }
+            decoder.finish().unwrap();
+            assert_eq!(actual.ignored, expected.ignored);
+            assert_eq!(actual.streams.len(), expected.streams.len());
+            for (id, a) in &actual.streams {
+                let b = &expected.streams[id];
+                assert_eq!(a.info, b.info);
+                assert_eq!(a.end, b.end);
+                assert_eq!(a.warnings, b.warnings);
+                assert_eq!(a.planes.len(), b.planes.len());
+                for (a, b) in a.planes.iter().zip(&b.planes) {
+                    assert_eq!(a.len(), b.len());
+                    for (&a, &b) in a.iter().zip(b) {
+                        assert_eq!(
+                            a.to_bits(),
+                            b.to_bits(),
+                            "{}, chunk {chunk}",
+                            path.display()
+                        );
+                    }
+                }
+            }
+        }
+    }
+}

@@ -327,50 +327,100 @@ fn reference_seeks_match_mode_tables_residues_submaps_and_truncated_preroll() {
                             empty_first_submap,
                             ..Default::default()
                         };
-                        let headers = config.headers();
-                        let mut decoder = support::decoder(&headers);
-                        let mut writer =
-                            deadlib_audio_decode_ogg::PacketWriter::new(Vec::new(), 779);
-                        for header in &headers {
-                            writer.write_packet(header, 0, false).unwrap();
-                        }
-                        writer.flush_page().unwrap();
-                        let mut end = 0;
-                        let mut packets = Vec::new();
-                        for i in 0..64 {
-                            let mode = (i % modes.min(2) as u32) as u8;
-                            let mut packet = config.audio(mode, 3, i, None);
-                            if (first_truncated && i < 2)
-                                || (11..=12).contains(&i)
-                                || (31..=32).contains(&i)
-                            {
-                                packet.truncate(1);
-                            }
-                            if let Some(block) = decoder.decode(&packet).unwrap() {
-                                end = block.start_frame + block.frames as u64;
-                            }
-                            writer.write_packet(&packet, end, i == 63).unwrap();
-                            packets.push(packet);
-                        }
-                        let label =
-                            format!("synthetic/{config:?}/first-truncated-{first_truncated}");
-                        let cases = [raw_cases::Case {
-                            name: label.clone(),
-                            packets,
-                        }];
-                        let reference =
-                            raw_cases::reference("reference-seek-synthetic", &headers, &cases);
-                        raw_cases::report(&label, raw_cases::compare(&headers, &cases, &reference));
-                        let capture = modes == 33
-                            && first_long
-                            && kind == 0
-                            && !empty_first_submap
-                            && first_truncated;
-                        check_file_capture(&writer.into_inner(), &label, capture);
+                        synthetic_seek_case(config, first_truncated, None);
                     }
                 }
             }
         }
+    }
+}
+
+#[test]
+#[ignore = "requires independent libvorbisfile seek oracle"]
+fn reference_seeks_match_repeated_blocks_and_pending_preroll() {
+    for modes in [33, 64] {
+        for first_long in [false, true] {
+            for kind in 0..=2 {
+                for empty_first_submap in [false, true] {
+                    let config = synthetic::Config {
+                        modes,
+                        first_long,
+                        kind,
+                        empty_first_submap,
+                        ..Default::default()
+                    };
+                    for mode in [0, 1] {
+                        synthetic_seek_case(config, true, Some(mode));
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+fn synthetic_seek_case(
+    config: synthetic::Config,
+    first_truncated: bool,
+    repeated_mode: Option<u8>,
+) {
+    let headers = config.headers();
+    let mut decoder = support::decoder(&headers);
+    let mut writer = deadlib_audio_decode_ogg::PacketWriter::new(Vec::new(), 779);
+    for header in &headers {
+        writer.write_packet(header, 0, false).unwrap();
+    }
+    writer.flush_page().unwrap();
+    let mut end = 0;
+    let mut packets = Vec::new();
+    for i in 0..64 {
+        let mode = repeated_mode.unwrap_or((i % config.modes.min(2) as u32) as u8);
+        let mut packet = config.audio(mode, 3, i, None);
+        if (first_truncated && i < 2) || (11..=12).contains(&i) || (31..=32).contains(&i) {
+            packet.truncate(1);
+        }
+        if let Some(block) = decoder.decode(&packet).unwrap() {
+            end = block.start_frame + block.frames as u64;
+        }
+        writer.write_packet(&packet, end, i == 63).unwrap();
+        packets.push(packet);
+    }
+    let label = format!(
+        "synthetic/{config:?}/first-truncated-{first_truncated}/repeated-{repeated_mode:?}"
+    );
+    let cases = [raw_cases::Case {
+        name: label.clone(),
+        packets,
+    }];
+    let reference = raw_cases::reference("reference-seek-synthetic", &headers, &cases);
+    raw_cases::report(&label, raw_cases::compare(&headers, &cases, &reference));
+    let capture = config.modes == 33
+        && config.first_long
+        && config.kind == 0
+        && !config.empty_first_submap
+        && first_truncated
+        && repeated_mode.is_none();
+    let bytes = writer.into_inner();
+    check_file_capture(&bytes, &label, capture);
+    if repeated_mode.is_some() {
+        // Failed preroll can expose retained PCM even at the declared end.
+        // Request past that end rather than clipping the oracle's output to a
+        // presumed sequential suffix length.
+        let requests = [
+            (end / 2, 100000),
+            (0, 100000),
+            (end, 100000),
+            (1, 1),
+            (end - 1, 100000),
+            (end / 2, 100000),
+        ];
+        let (wire, output) = oracle(&bytes, &requests);
+        compare(
+            &bytes,
+            &wire,
+            &output,
+            &format!("{label}/read-past-declared-end"),
+        );
     }
 }
 

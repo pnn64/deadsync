@@ -1,0 +1,65 @@
+path	decoder	samples	peak_abs_error	rms_error	reference_peak
+Club Fantastic Season 1\BACK UP\backup.ogg	libvorbisfile-1.3.7	11061474	7.152557373047e-7	7.518673741543e-8	1.077636123
+Club Fantastic Season 1\BACK UP\backup.ogg	Symphonia-0.6.1	11061474	5.364418029785e-7	4.216449100916e-8	1.077635884
+Club Fantastic Season 1\BOSSY\bossy.ogg	libvorbisfile-1.3.7	10505770	8.344650268555e-7	6.155709438079e-8	1.096905828
+Club Fantastic Season 1\BOSSY\bossy.ogg	Symphonia-0.6.1	10505770	5.960464477539e-7	3.720103048401e-8	1.096905589
+Club Fantastic Season 1\COOL_EXCEPTION\cool_exception.ogg	libvorbisfile-1.3.7	11788432	5.960464477539e-7	7.683278581336e-8	1.133423209
+Club Fantastic Season 1\COOL_EXCEPTION\cool_exception.ogg	Symphonia-0.6.1	11788432	4.172325134277e-7	4.502116740653e-8	1.133423328
+Club Fantastic Season 1\Can't You Bounce\bounce.ogg	libvorbisfile-1.3.7	11564536	8.344650268555e-7	8.834086940258e-8	1.269260526
+Club Fantastic Season 1\Can't You Bounce\bounce.ogg	Symphonia-0.6.1	11564536	5.364418029785e-7	5.207677000628e-8	1.269260526
+Club Fantastic Season 1\Dysangel\dysangel.ogg	libvorbisfile-1.3.7	8804830	6.705522537231e-7	7.464756836642e-8	1.083512545
+Club Fantastic Season 1\Dysangel\dysangel.ogg	Symphonia-0.6.1	8804830	4.172325134277e-7	4.356289050581e-8	1.083512664
+Club Fantastic Season 1\Fantastic World\fantasticworld.ogg	libvorbisfile-1.3.7	9405698	5.364418029785e-7	5.972122399248e-8	1.078373194
+Club Fantastic Season 1\Fantastic World\fantasticworld.ogg	Symphonia-0.6.1	9405698	3.576278686523e-7	3.457471905487e-8	1.078373313
+Club Fantastic Season 1\Horsepower\horsepower.ogg	libvorbisfile-1.3.7	10944000	5.960464477539e-7	7.128082349484e-8	1.302278996
+Club Fantastic Season 1\Horsepower\horsepower.ogg	Symphonia-0.6.1	10944000	4.172325134277e-7	4.246197442553e-8	1.302279115
+Club Fantastic Season 1\Melody Mountain\melodymountain.ogg	libvorbisfile-1.3.7	11508000	4.768371582031e-7	5.434958209207e-8	1.104051590
+Club Fantastic Season 1\Melody Mountain\melodymountain.ogg	Symphonia-0.6.1	11508000	3.576278686523e-7	3.038876968058e-8	1.104051471
+Club Fantastic Season 1\Oceania 909\oceania909.ogg	libvorbisfile-1.3.7	23096896	5.364418029785e-7	6.675471238046e-8	1.106731534
+Club Fantastic Season 1\Oceania 909\oceania909.ogg	Symphonia-0.6.1	23096896	4.768371582031e-7	4.032976792180e-8	1.106731296
+Club Fantastic Season 1\Roadman\roadman.ogg	libvorbisfile-1.3.7	11360160	5.960464477539e-7	7.636734903637e-8	1.157847762
+Club Fantastic Season 1\Roadman\roadman.ogg	Symphonia-0.6.1	11360160	4.768371582031e-7	4.451200585587e-8	1.157847762
+Club Fantastic Season 1\Shoes (Club Fantastic Edit)\shoes.ogg	libvorbisfile-1.3.7	9816154	7.152557373047e-7	6.632607420450e-8	1.028429747
+Club Fantastic Season 1\Shoes (Club Fantastic Edit)\shoes.ogg	Symphonia-0.6.1	9816154	5.364418029785e-7	4.015384063327e-8	1.028429747
+Club Fantastic Season 1\Six Million\sixmillion.ogg	libvorbisfile-1.3.7	11984910	8.046627044678e-7	9.346931672352e-8	1.260921597
+Club Fantastic Season 1\Six Million\sixmillion.ogg	Symphonia-0.6.1	11984910	5.364418029785e-7	5.344706978382e-8	1.260921478
+Club Fantastic Season 1\Wandering (VIP)\wanderingvip.ogg	libvorbisfile-1.3.7	11922524	8.344650268555e-7	8.947056138749e-8	1.179276228
+Club Fantastic Season 1\Wandering (VIP)\wanderingvip.ogg	Symphonia-0.6.1	11922524	5.960464477539e-7	5.342120345263e-8	1.179276466
+Club Fantastic Season 1\Y.E.A.H\Y.E.A.H.ogg	libvorbisfile-1.3.7	11289600	7.152557373047e-7	8.469956847734e-8	1.389161825
+Club Fantastic Season 1\Y.E.A.H\Y.E.A.H.ogg	Symphonia-0.6.1	11289600	4.768371582031e-7	4.929770120983e-8	1.389161706
+Club Fantastic Season 2\Adore\adore.ogg	libvorbisfile-1.3.7	13406400	5.364418029785e-7	6.593884911485e-8	1.009675622
+Club Fantastic Season 2\Adore\adore.ogg	Symphonia-0.6.1	13406400	3.576278686523e-7	3.941764872740e-8	1.009675860
+Club Fantastic Season 2\Artifacts\artifacts.ogg	libvorbisfile-1.3.7	31445218	6.109476089478e-7	5.722549282922e-8	1.041344523
+Club Fantastic Season 2\Artifacts\artifacts.ogg	Symphonia-0.6.1	31445218	3.576278686523e-7	3.361953291850e-8	1.041344643
+Club Fantastic Season 2\BOSSY (Jorts Speedy Mix)\bossyremix.ogg	libvorbisfile-1.3.7	11471906	6.258487701416e-7	7.419137152610e-8	1.111657619
+Club Fantastic Season 2\BOSSY (Jorts Speedy Mix)\bossyremix.ogg	Symphonia-0.6.1	11471906	4.768371582031e-7	4.334352747416e-8	1.111657619
+Club Fantastic Season 2\Beachside Photoshoot\Beachside Photoshoot.ogg	libvorbisfile-1.3.7	11793994	6.407499313354e-7	7.454289799863e-8	1.139517188
+Club Fantastic Season 2\Beachside Photoshoot\Beachside Photoshoot.ogg	Symphonia-0.6.1	11793994	4.768371582031e-7	4.471092675955e-8	1.139517069
+Club Fantastic Season 2\DNA\dna.ogg	libvorbisfile-1.3.7	11121076	6.258487701416e-7	8.159539445117e-8	1.048457861
+Club Fantastic Season 2\DNA\dna.ogg	Symphonia-0.6.1	11121076	4.768371582031e-7	4.941193587373e-8	1.048457861
+Club Fantastic Season 2\Oceania 909 (T2KAZUYA Remix)\oceaniat2k.ogg	libvorbisfile-1.3.7	10963714	6.556510925293e-7	7.693830982373e-8	1.046638012
+Club Fantastic Season 2\Oceania 909 (T2KAZUYA Remix)\oceaniat2k.ogg	Symphonia-0.6.1	10963714	4.172325134277e-7	4.471469862030e-8	1.046638131
+Club Fantastic Season 2\POT\pot.ogg	libvorbisfile-1.3.7	10919838	8.344650268555e-7	7.000733781526e-8	1.057042956
+Club Fantastic Season 2\POT\pot.ogg	Symphonia-0.6.1	10919838	5.960464477539e-7	4.264733321327e-8	1.057042956
+Club Fantastic Season 2\SSS\sss.ogg	libvorbisfile-1.3.7	11378588	5.960464477539e-7	6.428556280160e-8	1.066279292
+Club Fantastic Season 2\SSS\sss.ogg	Symphonia-0.6.1	11378588	4.768371582031e-7	3.717357269064e-8	1.066279292
+Club Fantastic Season 2\SWEETHEART\sweetheart.ogg	libvorbisfile-1.3.7	11760000	5.960464477539e-7	6.779129766753e-8	0.989829421
+Club Fantastic Season 2\SWEETHEART\sweetheart.ogg	Symphonia-0.6.1	11760000	3.576278686523e-7	3.900546695035e-8	0.989829540
+Club Fantastic Season 2\Save New Jersey\Save New Jersey.ogg	libvorbisfile-1.3.7	11882194	7.748603820801e-7	8.787665146131e-8	1.043506503
+Club Fantastic Season 2\Save New Jersey\Save New Jersey.ogg	Symphonia-0.6.1	11882194	5.364418029785e-7	5.242199289629e-8	1.043506622
+Club Fantastic Season 2\Singularity\Singularity.ogg	libvorbisfile-1.3.7	11808002	5.960464477539e-7	7.274806987165e-8	1.176835775
+Club Fantastic Season 2\Singularity\Singularity.ogg	Symphonia-0.6.1	11808002	5.364418029785e-7	4.405080436315e-8	1.176835775
+Club Fantastic Season 2\Step It\stepit.ogg	libvorbisfile-1.3.7	11557240	5.662441253662e-7	7.063363383384e-8	1.083642840
+Club Fantastic Season 2\Step It\stepit.ogg	Symphonia-0.6.1	11557240	3.576278686523e-7	4.157312730497e-8	1.083642840
+Club Fantastic Season 2\TerpZone\terpzone.ogg	libvorbisfile-1.3.7	13191806	6.556510925293e-7	7.641765023380e-8	1.051414609
+Club Fantastic Season 2\TerpZone\terpzone.ogg	Symphonia-0.6.1	13191806	4.768371582031e-7	4.311156766971e-8	1.051414728
+Club Fantastic Season 2\WRVTH\wrvth.ogg	libvorbisfile-1.3.7	11261786	7.152557373047e-7	8.132366599386e-8	1.188066959
+Club Fantastic Season 2\WRVTH\wrvth.ogg	Symphonia-0.6.1	11261786	4.768371582031e-7	4.673121418668e-8	1.188066959
+Club Fantastic Season 2\We Can Bounce\WeCanBounce_CleanUp.ogg	libvorbisfile-1.3.7	10874890	7.152557373047e-7	7.505140076837e-8	1.119001746
+Club Fantastic Season 2\We Can Bounce\WeCanBounce_CleanUp.ogg	Symphonia-0.6.1	10874890	4.172325134277e-7	4.272344270636e-8	1.119001746
+Club Fantastic Season 2\Wipeout\wipeout.ogg	libvorbisfile-1.3.7	9760064	5.960464477539e-7	6.423401644557e-8	1.090715885
+Club Fantastic Season 2\Wipeout\wipeout.ogg	Symphonia-0.6.1	9760064	5.364418029785e-7	3.775817578412e-8	1.090715766
+Club Fantastic Season 2\demonstration protocol\demonstration_protocol.ogg	libvorbisfile-1.3.7	11074270	4.768371582031e-7	5.008782863279e-8	0.749428868
+Club Fantastic Season 2\demonstration protocol\demonstration_protocol.ogg	Symphonia-0.6.1	11074270	2.980232238770e-7	2.926705778482e-8	0.749428630
+Club Fantastic Season 2\succulynt\succulynt.ogg	libvorbisfile-1.3.7	12452570	5.960464477539e-7	6.163749801327e-8	1.088829517
+Club Fantastic Season 2\succulynt\succulynt.ogg	Symphonia-0.6.1	12452570	4.768371582031e-7	3.701668977125e-8	1.088829756
