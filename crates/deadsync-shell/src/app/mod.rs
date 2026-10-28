@@ -24,7 +24,8 @@ use crate::command::Command;
 use crate::course::{
     CourseRunState, append_endless_cycle, build_course_graph_stages,
     build_course_run_from_selection, build_course_summary_score_info, build_course_summary_stage,
-    course_display_timing_for_run, course_life_config_for_stage,
+    course_display_timing_for_run, course_life_config_for_stage, course_summary_records,
+    routine_shared_course_player,
 };
 #[cfg(test)]
 use crate::course::{CourseStageRuntime, score_info_from_stage};
@@ -799,7 +800,7 @@ fn simply_love_visual_policy(config: &config::app_config::Config) -> SimplyLoveV
 
 fn build_course_summary_eval_state(
     stage: &stage_stats::StageSummary,
-    routine_shared_score_percent: Option<f64>,
+    routine_shared: Option<&stage_stats::PlayerStageSummary>,
     course_graph_stages: &[Vec<deadsync_theme_simply_love::views::CourseGraphStage>; MAX_PLAYERS],
     active_color_index: i32,
     session_elapsed: f32,
@@ -813,13 +814,14 @@ fn build_course_summary_eval_state(
     );
     let score_info = build_course_summary_score_info(
         stage,
+        routine_shared,
         course_graph_stages,
         profile.scorebox.play_style,
         profile.scorebox.player_side,
     );
     let mut state = evaluation::init_from_score_info(
         score_info,
-        routine_shared_score_percent,
+        routine_shared.map(|shared| shared.score_percent),
         stage.duration_seconds,
         evaluation_context_view(
             evaluation_views::EvaluationFramePolicy::from_config(config).context(),
@@ -2789,7 +2791,7 @@ impl App {
             crate::heart_rate::devices_view(),
             crate::player_options::init_view(),
         );
-        let scroll_speeds = player_options::apply_no_cmod_alternative(
+        let mut scroll_speeds = player_options::apply_no_cmod_alternative(
             &mut options,
             cfg.tournament.enabled && cfg.tournament.enforce_no_cmod,
         );
@@ -2799,9 +2801,9 @@ impl App {
             &options.heart_rate_device_ids,
             cfg.tournament,
             play_style,
+            &mut scroll_speeds,
+            true,
         );
-        let scroll_speeds =
-            crate::player_options::routine_master_scroll_speeds(scroll_speeds, play_style);
         let mut requested_chart_ixs = plan.chart_indices.to_vec();
         if let Some(light_plan) = cabinet_light_plan(song.as_ref(), plan.chart_indices[0]) {
             requested_chart_ixs.extend(light_plan.request_chart_ixs());
@@ -7212,8 +7214,11 @@ impl App {
         self.state.session.record_stage_result(stage);
         let course = self.state.session.take_final_course(failed)?;
         let summary = build_course_summary_stage(&course)?;
+        let routine_shared =
+            routine_shared_course_player(&course, &summary, profile::get_session_play_style());
+        let records = course_summary_records(&summary, routine_shared.as_ref());
         for side in [profile_data::PlayerSide::P1, profile_data::PlayerSide::P2] {
-            if let Some(player) = &summary.players[profile_data::player_side_index(side)] {
+            if let Some(player) = records[profile_data::player_side_index(side)] {
                 scores::save_local_summary_score_for_side(
                     &course.score_hash,
                     side,
@@ -7231,7 +7236,6 @@ impl App {
         config: &config::app_config::Config,
         failed: bool,
         completed_course: Option<(CourseRunState, stage_stats::StageSummary)>,
-        course_routine_shared_score_percent: Option<f64>,
     ) {
         if let Some(backend) = self.backend.as_mut() {
             self.dynamic_media
@@ -7266,9 +7270,14 @@ impl App {
             let (session_elapsed, _) =
                 evaluation::elapsed_times(&self.state.screens.evaluation_state);
             let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
+            let routine_shared = routine_shared_course_player(
+                &course_run,
+                &course_stage,
+                profile::get_session_play_style(),
+            );
             let mut course_page = build_course_summary_eval_state(
                 &course_stage,
-                course_routine_shared_score_percent,
+                routine_shared.as_ref(),
                 &course_graph_stages,
                 color_idx,
                 session_elapsed,
@@ -9661,7 +9670,7 @@ impl App {
                 // Auto-switch CMod → the player's configured alternative for
                 // no-cmod charts (this play only; the persisted profile is
                 // untouched, so song select restores CMod).
-                let scroll_speeds = player_options::apply_no_cmod_alternative(
+                let mut scroll_speeds = player_options::apply_no_cmod_alternative(
                     &mut po_state,
                     cfg.tournament.enabled && cfg.tournament.enforce_no_cmod,
                 );
@@ -9671,9 +9680,9 @@ impl App {
                     &po_state.heart_rate_device_ids,
                     cfg.tournament,
                     play_style,
+                    &mut scroll_speeds,
+                    true,
                 );
-                let scroll_speeds =
-                    crate::player_options::routine_master_scroll_speeds(scroll_speeds, play_style);
 
                 let mut gameplay_session = gameplay_session();
                 let mut gameplay_init_view = crate::gameplay_runtime::init_view(
@@ -10106,7 +10115,7 @@ impl App {
                 // untouched, so song select restores CMod). Replays must
                 // reproduce the recorded scroll speed, so skip the swap there.
                 commands.extend(last_played_commands);
-                let scroll_speeds = if replay_pending.is_none() {
+                let mut scroll_speeds = if replay_pending.is_none() {
                     player_options::apply_no_cmod_alternative(
                         &mut po_state,
                         cfg.tournament.enabled && cfg.tournament.enforce_no_cmod,
@@ -10167,9 +10176,10 @@ impl App {
                     &po_state.heart_rate_device_ids,
                     cfg.tournament,
                     play_style,
+                    &mut scroll_speeds,
+                    // Replays reproduce each participant's recorded options.
+                    replay_pending.is_none(),
                 );
-                let scroll_speeds =
-                    crate::player_options::routine_master_scroll_speeds(scroll_speeds, play_style);
                 let mut gameplay_session = gameplay_session();
                 let mut gameplay_init_view = crate::gameplay_runtime::init_view(
                     &cfg,
@@ -10318,10 +10328,6 @@ impl App {
                 Self::execute_evaluation_score_runtime(gameplay);
             }
             let in_course_run = self.state.session.course_run.is_some();
-            // The course summary shows the Routine score of the whole course.
-            let course_routine_shared_score_percent = gameplay_results
-                .as_ref()
-                .and_then(|gameplay| gameplay.routine_shared_itg_score_percent());
             let (init_view, failed, completed_course) = if let Some(gameplay) =
                 gameplay_results.as_ref()
             {
@@ -10357,12 +10363,7 @@ impl App {
                     .course_stage_eval_pages
                     .push(self.state.screens.evaluation_state.clone());
             }
-            self.finalize_entered_evaluation(
-                &config,
-                failed,
-                completed_course,
-                course_routine_shared_score_percent,
-            );
+            self.finalize_entered_evaluation(&config, failed, completed_course);
             self.evaluation_policy = evaluation_views::EvaluationFramePolicy::from_config(&config);
             self.mark_evaluation_runtime_dirty();
             self.sync_evaluation_runtime_view(self.evaluation_policy, Instant::now());
@@ -12096,6 +12097,96 @@ mod tests {
         assert!((song_page.score_percent - 1.0).abs() <= f64::EPSILON);
         assert!(!course_page.histogram.bins.is_empty());
         assert_eq!(course_page.scatter.len(), 1);
+    }
+
+    #[test]
+    fn routine_course_saves_and_highlights_only_the_shared_master_result() {
+        crate::tests::init_paths();
+        let song = test_song_with_duration("Songs/Test/a.ssc", "a", 60.0);
+        let chart = Arc::new(test_chart("stage-a"));
+        let stage = stage_stats::StageSummary {
+            song: song.clone(),
+            music_rate: 1.0,
+            duration_seconds: 60.0,
+            players: [
+                Some(test_player_stage_summary(
+                    chart.clone(),
+                    score_data::Grade::Tier01,
+                    1.0,
+                    100,
+                    100,
+                )),
+                Some(test_player_stage_summary(
+                    chart,
+                    score_data::Grade::Tier01,
+                    0.4,
+                    20,
+                    50,
+                )),
+            ],
+        };
+        // An Endless cycle of two songs that ended after the first.
+        let course = CourseRunState {
+            path: PathBuf::from("Courses/Test.crs"),
+            name: "Test Course".to_string(),
+            banner_path: None,
+            score_hash: "routine-course-hash".to_string(),
+            course_difficulty_name: "Hard".to_string(),
+            course_meter: Some(12),
+            course_stepchart_label: "Hard".to_string(),
+            course_type: deadsync_theme::views::CourseTypeView::Endless,
+            lives: -1,
+            song_stub: song.clone(),
+            stages: vec![test_course_stage(song.clone()), test_course_stage(song)],
+            course_display_totals: [
+                CourseDisplayTotals {
+                    possible_grade_points: 200,
+                    ..CourseDisplayTotals::default()
+                },
+                CourseDisplayTotals {
+                    possible_grade_points: 100,
+                    ..CourseDisplayTotals::default()
+                },
+            ],
+            next_stage_index: 1,
+            stage_summaries: vec![stage],
+        };
+        let summary = build_course_summary_stage(&course).expect("course summary");
+
+        assert!(
+            routine_shared_course_player(&course, &summary, profile_data::PlayStyle::Versus)
+                .is_none()
+        );
+        let shared =
+            routine_shared_course_player(&course, &summary, profile_data::PlayStyle::Routine)
+                .expect("shared result");
+        // The played songs only, as each participant's own result.
+        assert_eq!(shared.possible_grade_points, 150);
+        assert!((shared.score_percent - 0.8).abs() < 1e-12);
+
+        let records = course_summary_records(&summary, Some(&shared));
+        assert!(records[0].is_some_and(|record| std::ptr::eq(record, &shared)));
+        assert!(records[1].is_none());
+        let own = course_summary_records(&summary, None);
+        assert!(own[0].is_some() && own[1].is_some());
+
+        let graphs = std::array::from_fn(|_| Vec::new());
+        let score_info = build_course_summary_score_info(
+            &summary,
+            Some(&shared),
+            &graphs,
+            profile_data::PlayStyle::Routine,
+            profile_data::PlayerSide::P1,
+        );
+        let [Some(master), Some(partner)] = &score_info else {
+            panic!("both course pages");
+        };
+        // Each page keeps its own percent beside its judgments.
+        assert!((master.score_percent - 1.0).abs() < 1e-12);
+        assert!((partner.score_percent - 0.4).abs() < 1e-12);
+        // Nothing is saved for the partner, so it highlights no record.
+        assert!(partner.machine_record_highlight_rank.is_none());
+        assert!(partner.personal_record_highlight_rank.is_none());
     }
 
     #[test]

@@ -239,8 +239,10 @@ pub fn course_display_timing_for_run(course: &CourseRunState) -> CourseDisplayTi
     })
 }
 
-pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::StageSummary> {
-    let totals = if course.course_type == CourseTypeView::Endless {
+fn course_summary_totals(
+    course: &CourseRunState,
+) -> [stage_stats::CourseSummaryTotals; MAX_PLAYERS] {
+    if course.course_type == CourseTypeView::Endless {
         [stage_stats::CourseSummaryTotals::default(); MAX_PLAYERS]
     } else {
         course
@@ -252,7 +254,11 @@ pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats
                 rolls_total: total.rolls_total,
                 mines_total: total.mines_total,
             })
-    };
+    }
+}
+
+pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats::StageSummary> {
+    let totals = course_summary_totals(course);
     stage_stats::build_course_summary_stage(stage_stats::CourseSummaryInput {
         path: course.path.as_path(),
         name: course.name.as_str(),
@@ -267,9 +273,52 @@ pub fn build_course_summary_stage(course: &CourseRunState) -> Option<stage_stats
     })
 }
 
+/// The Routine course result both participants share, which the course saves
+/// for the master player only.
+pub fn routine_shared_course_player(
+    course: &CourseRunState,
+    summary: &stage_stats::StageSummary,
+    play_style: PlayStyle,
+) -> Option<stage_stats::PlayerStageSummary> {
+    if !play_style.is_routine() {
+        return None;
+    }
+    let [Some(first), Some(second)] = &summary.players else {
+        return None;
+    };
+    Some(stage_stats::routine_shared_course_player(
+        first,
+        second,
+        course_summary_totals(course),
+    ))
+}
+
+/// The result each side saves for a course: StageStats::CommitScores saves
+/// one shared Routine result, for the master player.
+pub fn course_summary_records<'a>(
+    summary: &'a stage_stats::StageSummary,
+    routine_shared: Option<&'a stage_stats::PlayerStageSummary>,
+) -> [Option<&'a stage_stats::PlayerStageSummary>; MAX_PLAYERS] {
+    match routine_shared {
+        Some(shared) => std::array::from_fn(|idx| (idx == 0).then_some(shared)),
+        None => summary.players.each_ref().map(Option::as_ref),
+    }
+}
+
 pub fn score_info_from_stage(
     stage: &stage_stats::StageSummary,
     side: PlayerSide,
+) -> Option<ScoreInfo> {
+    let idx = profile_data::player_side_index(side);
+    score_info_from_stage_with_record(stage, side, stage.players[idx].as_ref())
+}
+
+/// `record` is the result saved for `side`, which record highlights rank.
+/// None means nothing is saved for `side`, so it highlights no record.
+fn score_info_from_stage_with_record(
+    stage: &stage_stats::StageSummary,
+    side: PlayerSide,
+    record: Option<&stage_stats::PlayerStageSummary>,
 ) -> Option<ScoreInfo> {
     let idx = profile_data::player_side_index(side);
     let player = stage.players[idx].as_ref()?;
@@ -277,11 +326,12 @@ pub fn score_info_from_stage(
     let machine_records = scores::get_machine_leaderboard_local(chart_hash, usize::MAX);
     let personal_records =
         scores::get_personal_leaderboard_local_for_side(chart_hash, side, usize::MAX);
+    let record_percent = record.map_or(player.score_percent, |record| record.score_percent);
     let machine_record_highlight_rank =
-        score_data::leaderboard_rank_for_score(machine_records.as_slice(), player.score_percent);
+        score_data::leaderboard_rank_for_score(machine_records.as_slice(), record_percent);
     let personal_record_highlight_rank =
-        score_data::leaderboard_rank_for_score(personal_records.as_slice(), player.score_percent);
-    let local_score_valid = player.score_valid && !player.disqualified;
+        score_data::leaderboard_rank_for_score(personal_records.as_slice(), record_percent);
+    let local_score_valid = record.is_some_and(|record| record.score_valid && !record.disqualified);
     let earned_machine_record =
         local_score_valid && machine_record_highlight_rank.is_some_and(|rank| rank <= 10);
     let earned_top2_personal =
@@ -369,11 +419,13 @@ pub fn score_info_from_stage(
 
 pub fn build_course_summary_score_info(
     stage: &stage_stats::StageSummary,
+    routine_shared: Option<&stage_stats::PlayerStageSummary>,
     course_graph_stages: &[Vec<CourseGraphStage>; MAX_PLAYERS],
     play_style: PlayStyle,
     active_side: PlayerSide,
 ) -> [Option<ScoreInfo>; MAX_PLAYERS] {
     let mut score_info = std::array::from_fn(|_| None);
+    let records = course_summary_records(stage, routine_shared);
     match play_style {
         PlayStyle::Versus
         | PlayStyle::PumpVersus
@@ -383,7 +435,7 @@ pub fn build_course_summary_score_info(
         | PlayStyle::PumpRoutine => {
             for side in [PlayerSide::P1, PlayerSide::P2] {
                 let idx = profile_data::player_side_index(side);
-                score_info[idx] = score_info_from_stage(stage, side);
+                score_info[idx] = score_info_from_stage_with_record(stage, side, records[idx]);
                 if let Some(score) = score_info[idx].as_mut() {
                     score
                         .course_graph_stages

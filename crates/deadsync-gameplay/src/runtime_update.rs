@@ -1851,6 +1851,11 @@ where
             .map_or(0.0, itg_score_percent_from_inputs)
     }
 
+    pub fn participant_display_itg_score_percent(&self, player_idx: usize) -> f64 {
+        self.participant_display_itg_score_inputs(player_idx)
+            .map_or(0.0, itg_score_percent_from_inputs)
+    }
+
     pub fn stage_itg_score_percent(&self, player_idx: usize) -> f64 {
         self.stage_itg_score_inputs(player_idx)
             .map_or(0.0, itg_score_percent_from_inputs)

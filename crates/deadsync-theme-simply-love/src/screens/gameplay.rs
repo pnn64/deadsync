@@ -187,6 +187,10 @@ fn player_blue_window_ms(state: &GameplayCoreState, player_idx: usize) -> f32 {
 /// Compare the precise normal score values rather than their formatted or
 /// predictive display values, matching the upstream theme's behavior.
 pub fn gameplay_score_leader_alphas(state: &GameplayCoreState) -> [f32; MAX_PLAYERS] {
+    // Routine participants play for one shared score, so neither trails.
+    if state.setup.session.play_style.is_routine() {
+        return [1.0; MAX_PLAYERS];
+    }
     let golf: [bool; MAX_PLAYERS] = std::array::from_fn(|i| {
         let p = &state.profiles()[i];
         p.show_golf_score
@@ -2352,7 +2356,8 @@ fn gameplay_lobby_player_stats(
     };
     Some(lobby_data::MachinePlayerStats {
         judgments: Some(judgments),
-        score: Some((state.display_itg_score_percent(player_idx) * 100.0) as f32),
+        // Each participant's own score, like its judgments and EX score.
+        score: Some((state.participant_display_itg_score_percent(player_idx) * 100.0) as f32),
         ex_score: Some(state.display_ex_score_percent(player_idx, blue_window_ms) as f32),
     })
 }
