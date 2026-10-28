@@ -69,7 +69,7 @@ impl Timeline {
 
 /// Expand only the caller's bounded buffer. Every byte, including float NaN
 /// payloads and low unused valid bits, is repeated without numeric conversion.
-pub(crate) fn repeat(out: &mut [u8], frame: &[u8]) {
+pub(crate) fn repeat<T: Copy>(out: &mut [T], frame: &[T]) {
     if out.is_empty() {
         return;
     }

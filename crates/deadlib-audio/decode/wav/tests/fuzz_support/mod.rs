@@ -1,9 +1,9 @@
 //! Shared property checks for deterministic mutation tests and libFuzzer.
 //! Input and codec scratch are capped here, independently of production limits.
 use deadlib_audio_decode_wav::{
-    Adpcm, AdpcmData, AdpcmForwardReader, AdpcmKind, AdpcmReader, AdpcmSpec, Container, DataLength,
-    Endian, Error, Format, ForwardReader, Limits, Pcm, RawChunk, Reader, SampleFormat, Spec,
-    Stream, Wave, WavlMuxer, WavlWriter, WriteOptions, Writer,
+    Adpcm, AdpcmData, AdpcmForwardReader, AdpcmKind, AdpcmReader, AdpcmSpec, AdpcmWavl, Container,
+    DataLength, Endian, Error, Format, ForwardReader, Limits, Pcm, RawChunk, Reader, SampleFormat,
+    Spec, Stream, Wave, WavlMuxer, WavlWriter, WriteOptions, Writer,
     metadata::{self, Metadata},
 };
 use std::io::{self, Cursor, Read, Seek, SeekFrom};
@@ -14,7 +14,7 @@ const LIMITS: Limits = Limits {
     size_table_entries: 16,
     format_bytes: 4096,
 };
-pub const PATHS: [&str; 18] = [
+pub const PATHS: [&str; 19] = [
     "container",
     "pcm",
     "adpcm_file",
@@ -33,6 +33,7 @@ pub const PATHS: [&str; 18] = [
     "forward",
     "wavl",
     "wavl_mux",
+    "adpcm_wavl",
 ];
 
 /// Returns a bit for each successfully entered family, not a code-coverage count.
@@ -123,6 +124,7 @@ fn container(data: &[u8]) -> u64 {
     let mut paths = 1;
     if wave.data().is_none() {
         paths |= 1 << 16;
+        paths |= adpcm_wavl(&wave);
     }
     if wave.chunks().unwrap().any(|c| {
         let c = c.unwrap();
@@ -261,6 +263,80 @@ fn container(data: &[u8]) -> u64 {
         }
     }
     paths
+}
+
+fn adpcm_wavl(wave: &Wave<'_>) -> u64 {
+    let Ok(audio) = AdpcmWavl::new(wave) else {
+        return 0;
+    };
+    let codec = audio.codec();
+    let channels = codec.channels();
+    if codec.scratch_samples() > 8192 || codec.block_bytes() > 4096 || channels > 256 {
+        return 0;
+    }
+    // Independent sequential prefix model: no index, random access or data_frames.
+    // Bound expansion even when a tiny input declares billions of silent frames.
+    let frames = audio.frames().min((1024 / channels) as u64) as usize;
+    let mut expected = Vec::with_capacity(frames * channels);
+    let mut held = vec![0; channels];
+    let mut scratch = [0; 8192];
+    let result = (|| -> Result<(), Error> {
+        for c in wave.wavl_chunks().unwrap() {
+            if expected.len() == frames * channels {
+                break;
+            }
+            if c.id == *b"data" {
+                for b in c.data.chunks(codec.block_bytes()) {
+                    let n = codec.decode_block(b, &mut scratch)?;
+                    let take = n.min(frames - expected.len() / channels);
+                    expected.extend_from_slice(&scratch[..take * channels]);
+                    held.copy_from_slice(&scratch[(n - 1) * channels..n * channels]);
+                    if expected.len() == frames * channels {
+                        break;
+                    }
+                }
+            } else if c.id == *b"slnt" {
+                let count = c.data.try_into().unwrap();
+                let n = u64::from(if wave.format.endian == Endian::Little {
+                    u32::from_le_bytes(count)
+                } else {
+                    u32::from_be_bytes(count)
+                })
+                .min((frames - expected.len() / channels) as u64) as usize;
+                for _ in 0..n {
+                    expected.extend_from_slice(&held);
+                }
+            }
+        }
+        assert_eq!(expected.len(), frames * channels);
+        Ok(())
+    })();
+    let mut out = [0x1234; 1025];
+    let actual = audio.read_frames(0, &mut out[..frames * channels], &mut scratch);
+    assert_eq!(
+        result.is_ok(),
+        actual.is_ok(),
+        "compressed wavl prefix acceptance"
+    );
+    if let Ok(n) = actual {
+        assert_eq!(n, expected.len());
+        assert_eq!(&out[..n], expected);
+        for start in [0, frames / 2, frames] {
+            let count = (frames - start).min(7);
+            let n = audio
+                .read_frames(start as u64, &mut out[..count * channels], &mut scratch)
+                .unwrap();
+            assert_eq!(n, count * channels);
+            assert_eq!(&out[..n], &expected[start * channels..start * channels + n]);
+        }
+    }
+    assert!(
+        audio
+            .read_frames(audio.frames().saturating_add(1), &mut out, &mut scratch)
+            .is_err()
+    );
+    assert!(audio.read_frames(0, &mut out, &mut []).is_err());
+    1 << 18
 }
 
 fn pcm_ranges(pcm: Pcm<'_>, reader: &mut Reader<ShortReads<'_>>) {

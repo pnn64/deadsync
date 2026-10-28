@@ -117,6 +117,14 @@ impl<'a> Adpcm<'a> {
     /// Validate fact/ds64 duration against the encoded byte extent without
     /// reading audio. A complete short last block contributes its actual capacity.
     pub fn validate_frame_count(self, bytes: u64, frames: u64) -> Result<(), Error> {
+        if frames > self.data_frames(bytes)? {
+            return Err(Error::Invalid("ADPCM fact exceeds encoded data"));
+        }
+        Ok(())
+    }
+    /// Decoded capacity of a data payload, including complete short last blocks
+    /// and any encoder padding. This checks geometry without reading block headers.
+    pub fn data_frames(self, bytes: u64) -> Result<u64, Error> {
         let block = self.block_bytes as u64;
         let full = bytes / block;
         let tail = bytes % block;
@@ -125,14 +133,9 @@ impl<'a> Adpcm<'a> {
         } else {
             self.block_frames(tail as usize)? as u64
         };
-        let capacity = full
-            .checked_mul(self.frames_per_block as u64)
+        full.checked_mul(self.frames_per_block as u64)
             .and_then(|n| n.checked_add(tail_frames))
-            .ok_or(Error::Invalid("ADPCM byte extent or frame count overflow"))?;
-        if frames > capacity {
-            return Err(Error::Invalid("ADPCM fact exceeds encoded data"));
-        }
-        Ok(())
+            .ok_or(Error::Invalid("ADPCM byte extent or frame count overflow"))
     }
     /// Number of decodable frames in a full or structurally complete short block.
     pub fn block_frames(self, bytes: usize) -> Result<usize, Error> {
@@ -341,14 +344,30 @@ impl<'a> AdpcmData<'a> {
         }
         let channels = self.codec.channels;
         let frames = (self.frames - start).min((out.len() / channels) as u64) as usize;
+        self.codec
+            .read_data(self.bytes, start, &mut out[..frames * channels], scratch)
+    }
+}
+
+impl Adpcm<'_> {
+    /// The caller has validated the data extent and bounded the requested range.
+    pub(crate) fn read_data(
+        self,
+        bytes: &[u8],
+        start: u64,
+        out: &mut [i16],
+        scratch: &mut [i16],
+    ) -> Result<usize, Error> {
+        let channels = self.channels;
+        let frames = out.len() / channels;
         let mut done = 0;
         while done < frames {
             let position = start + done as u64;
-            let block = (position / self.codec.frames_per_block as u64) as usize;
-            let skip = (position % self.codec.frames_per_block as u64) as usize;
-            let offset = block * self.codec.block_bytes;
-            let bytes = &self.bytes[offset..self.bytes.len().min(offset + self.codec.block_bytes)];
-            let decoded = self.codec.decode_block(bytes, scratch)?;
+            let block = (position / self.frames_per_block as u64) as usize;
+            let skip = (position % self.frames_per_block as u64) as usize;
+            let offset = block * self.block_bytes;
+            let block = &bytes[offset..bytes.len().min(offset + self.block_bytes)];
+            let decoded = self.decode_block(block, scratch)?;
             let n = (decoded - skip).min(frames - done);
             out[done * channels..(done + n) * channels]
                 .copy_from_slice(&scratch[skip * channels..(skip + n) * channels]);

@@ -30,7 +30,7 @@ def main():
         if Path(str(stem)+suffix).exists(): ap.error('choose a new output stem')
     corpus=Path(str(stem)+'-corpus');artifacts=Path(str(stem)+'-artifacts');artifacts.mkdir()
     seeds=write_corpus(corpus)
-    paths=sorted((root/'src').rglob('*.rs'))+sorted((root/'fuzz').rglob('*.rs'))+[root/'tests/fuzz_support/mod.rs',root/'tests/fuzz_corpus.py',Path(__file__),root/'Cargo.toml',root/'fuzz/Cargo.toml',root/'fuzz/Cargo.lock',root/'fuzz/wav.dict',workspace/'.cargo/config.toml']
+    paths=sorted((root/'src').rglob('*.rs'))+sorted((root/'fuzz').rglob('*.rs'))+[root/'tests/fuzz_support/mod.rs',root/'tests/fuzz_corpus.py',root/'tests/adpcm_wavl_fixtures.py',root/'tests/ima_extensible_fixtures.py',root/'tests/ima3_fixtures.py',Path(__file__),root/'Cargo.toml',root/'fuzz/Cargo.toml',root/'fuzz/Cargo.lock',root/'fuzz/wav.dict',workspace/'.cargo/config.toml']
     before={p.relative_to(workspace).as_posix():sha(p) for p in paths}
     tool=args.cargo_fuzz.resolve()
     env=os.environ.copy();env['RUSTUP_TOOLCHAIN']=args.toolchain

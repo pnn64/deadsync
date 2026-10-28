@@ -331,3 +331,57 @@ complete writer outputs under the established BW64 dummy-byte rule. Two million
 checked mutations, 1580 earlier corpus files and 100000 fresh ASan executions
 also pass. WAVL.md records the raw descriptor/count API and the remaining
 compressed-sequence decoding work; FUZZING.md records corpus and resource limits.
+
+## Borrowed compressed wavl access
+
+`benches/adpcm_wavl.rs` measures the new AdpcmWavl view on resident encoded input:
+512 data children, four complete blocks per child and three held frames after
+each child. Microsoft mono/stereo uses 256-byte blocks; stereo 4-bit IMA uses 256
+and 3-bit IMA uses 248. The source is constant zero. The independent expected
+reconstruction is zero for Microsoft/4-bit IMA and alternating 0/1 inside each
+3-bit IMA block, with its final zero held during silence. Samples are verified
+outside measurement. This is a narrow low-entropy workload, not a realistic
+music/speech mix or an external-library comparison.
+
+`validation/adpcm-wavl-bench-final.*` retains three warmed trials per operation,
+thread cycles, CPU/compiler/source/binary fingerprints and unchanged-input checks.
+Index/open rows run 10000 iterations, full decoded reads 32, and range rows
+100000. Data ranges request 62 samples (whole frames); held seeks request one
+frame from a rotating child. Medians on this Windows x64 machine:
+
+| Case | Retained-Wave index us | Open + index us | Full decoded MiB/s | Data range us | Held-frame seek us |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Microsoft mono | 5.924 | 34.411 | 267.837 | 2.939 | 2.939 |
+| Microsoft stereo | 5.945 | 34.537 | 265.765 | 2.880 | 2.891 |
+| IMA 4-bit stereo | 5.924 | 33.837 | 256.409 | 3.123 | 3.035 |
+| IMA 3-bit stereo | 5.923 | 36.443 | 243.034 | 4.096 | 4.101 |
+
+These timings have no affinity/frequency control or confidence intervals and do
+not establish comparative performance. Full-read throughput counts decoded i16
+bytes, including held silence. The implementation decodes a final block again
+when entering silence, even after the preceding range decoded it; caller scratch
+does not retain a cross-call cache. Caching and segment-aware file/forward readers
+remain future work. The earlier measured native wavl output regression also
+remains unresolved; this new benchmark does not address it.
+
+The dedicated allocator test separates allocation from timing. View construction
+for eight inventoried children requests one allocation/128 bytes on x64/i686;
+reads request zero. Each added bound is 16 bytes, with Vec minimum-capacity
+rounding for small inventories. The underlying Wave inventory and caller
+scratch/output already exist and are excluded. AdpcmWavl object state is 128
+bytes on x64 and 80 on i686; the unchanged flat AdpcmData is 88/64 and still
+constructs without allocation. These are requested heap/object counts, not codec
+RSS. No additional unsafe production code or dependency is introduced.
+
+The initial `adpcm-wavl-bench.*` run stopped at the 3-bit verification because
+the harness incorrectly expected exact zero reconstruction. Its partial timing
+rows, panic stderr and exact initial benchmark/runner snapshots are preserved;
+they do not support a speed comparison with the corrected run. The final harness
+uses the explicit 0/1 waveform and completes all four formats. All 87 tests,
+Clippy, 216 independent fixture gates/1296 range checks, two million checked
+mutations, 1581 prior corpus inputs, 100000 ASan executions and the 708-case native
+sample/byte replay pass. WAVL.md documents the decoded-count/padding contract.
+
+```sh
+python crates/deadlib-audio/decode/wav/benches/run_adpcm_wavl.py --output target/wav/new-adpcm-wavl-bench
+```

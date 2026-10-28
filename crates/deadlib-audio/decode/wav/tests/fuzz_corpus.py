@@ -153,6 +153,10 @@ def corpus():
         for n,fmt in enumerate(formats):
             result[f'wavl-mux-{selector}-{n}']=b'\2'+bytes([selector])+struct.pack('<H',len(fmt))+fmt+bytes(range(128))
 
+    from adpcm_wavl_fixtures import cases as compressed_sequences
+    for info,payload,*_ in compressed_sequences():
+        result['adpcm-wavl-'+info['name']]=b'\0'+payload
+
     metadata=[]
     for e in ('<','>'):
         metadata.extend([

@@ -176,3 +176,22 @@ counts remain unchanged, but the final paired runs show slower construction and
 segmented output. This regression is an explicit optimization target. Generic
 encoded serialization does not complete compressed wavl decoding/seeking/forward
 routing; those paths, broader profiles and comparative performance/RSS remain open.
+
+Borrowed compressed wavl decoding is now implemented as AdpcmWavl. It borrows
+Wave's checked inventory, adds compact 16-byte bounds and reads exact ranges with
+caller scratch. It decodes held frames on direct silence seeks without expanding
+virtual duration. Microsoft and legacy/extensible 3/4-bit IMA pass 216 independent
+fixture gates/1296 full/range checks across all containers. Ten paired flat block
+component gates pass; all four references reject direct wavl input. Global fact
+trimming cannot describe hidden interior per-child padding; WAVL.md makes that
+producer obligation and the natural-order/playlist policy explicit.
+
+All 87 tests pass x64 debug/release and i686 debug, plus Clippy, two million checked
+mutations, 1581 earlier corpus inputs, 100000 fresh ASan executions and the retained
+708-case native sample/byte replay. The new 1827-file corpus is archived. The
+eight-child index probe requests one allocation/128 bytes and reads allocate
+nothing; flat AdpcmData state/zero-allocation creation is preserved. Resident
+Microsoft/IMA indexing, full-read and seek timings are recorded in PERFORMANCE.md
+with their narrow low-entropy scope and corrected benchmark-fixture failure.
+Compressed file-backed/forward routing, cached segmented reads, broader profile
+validation, the native writer slowdown and comparative performance/RSS remain open.

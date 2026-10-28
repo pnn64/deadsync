@@ -211,9 +211,22 @@ prior corpus inputs and 100000 fresh ASan executions pass. WAVL.md records the
 raw-format/count contract. PERFORMANCE.md retains measured native-output
 regressions; encoded convenience decoding/seeking/forward routing remains open.
 
-Remaining work: metadata profile/semantic validation, compressed wavl routing,
+Borrowed compressed wavl now works through AdpcmWavl, with exact ranges and
+held-frame seeks, complete short blocks, global fact trimming and a compact
+index borrowing the original inventory. Flat AdpcmData remains allocation-free.
+Four tests bring the total to 87, passing x64 debug/release and i686 debug with
+Clippy. All 216 independent compressed fixtures and 1296 full/range checks pass;
+all four reference drivers reject the direct segmented forms, while ten declared
+flat component gates pass under the documented arithmetic policies. An allocator
+probe records one allocation/128 bytes for eight index entries and zero for reads.
+Two million checked mutations, 1581 prior corpus files, 100000 ASan executions
+and all 708 retained native gates/1912 writer outputs pass. WAVL.md documents
+interior padding, lazy block errors and missing file/forward routing; PERFORMANCE.md
+records narrow resident timings and the outstanding native-writer regression.
+
+Remaining work: metadata profile/semantic validation, compressed wavl file/forward routing,
 broader fuzzing and representative comparative performance/RSS coverage
-(the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); extensible
-compressed formats. BW64 shares 64-bit container mechanics; ADM profile
+(the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); additional
+extensible compressed mappings. BW64 shares 64-bit container mechanics; ADM profile
 conformance is not yet claimed. These fixture results do not certify every
 standard variant or workload.

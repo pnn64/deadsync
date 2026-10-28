@@ -1,0 +1,1 @@
+{"iterations":1000000,"seeds":700,"elapsed_seconds":16.3802447,"paths":{"container":304116,"pcm":128094,"adpcm_file":41438,"list":244710,"cue":1167,"sampler":1184,"bext":4869,"chna":521,"bxml":2095,"sxml":773,"markers":800,"block":67814,"block_encoded":54552,"native_encoded":52879,"raw_metadata":306666,"forward":133789,"wavl":206101,"wavl_mux":100706,"adpcm_wavl":102831}}

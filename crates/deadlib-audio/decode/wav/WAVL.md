@@ -4,6 +4,8 @@ Native PCM and IEEE float now support a LIST/wavl audio section containing
 multiple data/slnt chunks. Borrowed `Wave`/`Pcm`, seekable `Reader`, Read-only
 `ForwardReader` and `WavlWriter` share this layout. The ordinary contiguous data
 path remains available and does not allocate a segment index.
+Borrowed Microsoft/3-bit/4-bit IMA sequences also work through `AdpcmWavl`.
+File-backed and forward ADPCM convenience wrappers still require flat data.
 
 The [IBM/Microsoft WAVE specification, sections 3-26–3-28](https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Docs/riffmci.pdf)
 defines wavl, silence, its mandatory fact count and compressed-data cue addressing.
@@ -139,8 +141,9 @@ records the expanded properties and preserved corpus. This is retained sample
 truth and byte parity, not a new external reader comparison. As documented below,
 the reference drivers do not directly support wavl here.
 
-Generic encoded serialization is implemented; compressed convenience decoding,
-segment-aware cached seeking and forward ADPCM routing remain open. The measured
+Generic encoded serialization is implemented; borrowed compressed decoding is
+described below. Segment-aware cached file seeking and forward ADPCM routing
+remain open. The measured
 native writer slowdown is retained as an outstanding optimization issue in
 PERFORMANCE.md. This milestone does not claim completion of those requirements.
 
@@ -190,7 +193,79 @@ cargo test --locked -p deadlib-audio-decode-wav --tests --target-dir target/wav
 python crates/deadlib-audio/decode/wav/tests/reference_wavl.py --output target/wav/new-wavl.json
 ```
 
-Compressed wavl audio is retained as container chunks but is not yet decoded by
-the ADPCM convenience APIs; those reject segmented encoded data explicitly.
-Extensible compressed mappings, broader reference support, comparative segmented
+Compressed file-backed/forward ADPCM wrappers still reject segmented data;
+the borrowed implementation below now decodes it. Broader extensible compressed
+mappings, reference support, comparative segmented
 throughput/RSS and application-profile/metadata semantic certification remain open.
+
+## Borrowed compressed sequences
+
+`AdpcmWavl::new(&wave)` supports Microsoft mono/stereo and 3/4-bit IMA, including
+the extensible IMA mapping, in RIFF/RIFX/RF64/BW64. Keep the Wave binding alive:
+the view borrows its already checked child inventory and original encoded bytes.
+Container parsing stays codec independent. The separate flat AdpcmData API and
+its Copy behavior, 88-byte x64 state and zero-allocation construction are unchanged.
+
+Each data child restarts a block sequence; complete short last blocks contribute
+their actual capacity. Empty data, zero silence and unknown children preserve the
+held frame. Initial silence is i16 zero; later silence repeats the final decoded
+interleaved frame of the last nonempty data child. A range beginning inside
+silence decodes only that child's final block to reconstruct the frame. Binary
+search selects the first child for a range, and only requested blocks are decoded.
+The view reads natural physical child order. Cue/playlist metadata is preserved;
+automatic playlist execution is not implemented for native or compressed audio.
+
+The mandatory global fact count limits the complete natural-order timeline.
+Capacity is the sum of every data child's block capacity and every slnt count;
+fact above that capacity is rejected. A smaller fact truncates the sequence's
+end. There is no serialized per-child decoded count here: padding in an interior
+encoded data child remains audible. Producers must choose independently decodable
+boundaries and account for padding before subsequent silence/data. Supplying a
+smaller decoded count to WavlMuxer does not encode a hidden per-child trim. The
+primary specification defines compressed block addressing but does not supply
+such a trim field; this API makes its natural-order policy explicit rather than
+guessing how to distribute global padding across children.
+
+`read_frames(start, output, scratch)` returns interleaved samples, leaves an
+incomplete output frame untouched and requires one reusable full-block scratch.
+Construction checks descriptor geometry, all child extents and aggregate counts
+without decoding headers. Malformed block predictors/indices fail when requested
+audio or a held frame depends on them; output can contain a decoded prefix.
+The borrowed view remains reusable for independent ranges after an error.
+Tiny files with u64 silence never allocate or iterate over that logical duration.
+
+The added index stores 16 bytes per inventoried child on x64/i686, in one fallible
+Vec allocation (small capacities can round up). It borrows the container's larger
+inventory. An eight-child allocator probe requests one allocation/128 bytes for
+construction and zero allocations/bytes for reads. Caller scratch/output, Wave's
+existing inventory and process RSS are outside those counts. PERFORMANCE.md
+records object sizes and the resident throughput/seek measurements.
+
+`validation/adpcm-wavl-references-final.*` records 216 independently packed
+fixtures, all passing 1296 full/range checks. The generator's scalar Microsoft
+and IMA arithmetic does not call production code. Cases cover 1/2/6/33 channels
+where applicable, both IMA headers, all four containers, short and repeated
+blocks, leading/held/zero silence, empty children, odd metadata, trailing fact,
+empty duration and final truncation. Every external driver rejects the direct
+segmented fixtures. Ten predeclared RIFF mono/stereo flat block components pass:
+Microsoft against FFmpeg, 4-bit IMA against dr_wav/libsndfile, 3-bit IMA against
+FFmpeg's alternate combined rounding. These are component checks, not direct
+external wavl parity. Every outcome, fixture and truth hash is retained.
+The initial matching report predates the benchmark manifest entry; its exact
+Cargo snapshot is retained. Both fixture archives are byte-identical.
+
+Four new tests bring the suite to 87, passing x64 debug/release and i686 debug
+with denied-warning Clippy. Fixed scalar vectors check every frame position and
+buffer split, malformed geometry/lazy headers, repeatable post-error access,
+RF64 silence above u32 and BW64's literal fact/dummy-word distinction. The native
+replay retains all 708 gates, 4484 descriptor/read/range checks and 1912 complete
+writer outputs under the existing BW64 rule. Two million checked mutations,
+1581 prior corpus inputs and 100000 ASan executions pass; FUZZING.md retains the
+new 1827-file corpus and budgets. Initial check logs retain a corrected Clippy
+test-style failure and an i686 incremental-cache missing-object error; final
+checks disable incremental compilation and pass, with exact source snapshots.
+
+```sh
+python crates/deadlib-audio/decode/wav/tests/reference_adpcm_wavl.py --output target/wav/new-adpcm-wavl.json
+cargo run --locked -p deadlib-audio-decode-wav --example adpcm_wavl -- INPUT.wav START FRAMES
+```

@@ -62,6 +62,10 @@ for count limits, the RF64 distinction and remaining profile requirements.
 `Adpcm` provides independent Microsoft/IMA block decoding into i16 caller buffers.
 `AdpcmData` adds fact-trimmed borrowed audio and exact range access using reusable
 block scratch. See [ADPCM.md](ADPCM.md) for coverage and reference disagreements.
+`AdpcmWavl::new(&wave)` adds borrowed compressed data/slnt sequences with exact
+range reads and held-frame seeks. It retains one compact index and uses caller
+scratch without expanding virtual silence. Flat AdpcmData remains allocation-free.
+See [WAVL.md](WAVL.md) for global fact trimming and segment-padding requirements.
 
 `Adpcm::encode_block` writes a full lossy block into caller-owned encoded storage;
 the last real frame is repeated as padding. `AdpcmSpec` emits standard descriptors.
@@ -79,6 +83,8 @@ one decoded block. It reads interleaved i16 into caller storage and supports exa
 frame seeks, including RF64 positions above 4 GiB. Its memory depends on block
 geometry and metadata descriptors. Metadata access preserves the logical audio
 position. I/O or decode errors require a successful seek before reading again.
+AdpcmReader and AdpcmForwardReader currently require a flat data chunk;
+compressed wavl decoding is available through the borrowed AdpcmWavl view.
 
 `Muxer<W: Write + Seek>` accepts a raw format descriptor, encoded bytes and
 decoded frame counts. It preserves the descriptor without codec dispatch and

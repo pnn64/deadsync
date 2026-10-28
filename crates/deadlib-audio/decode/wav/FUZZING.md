@@ -263,3 +263,28 @@ instrumented peak is not normal codec RSS. All listed inputs remain unchanged.
 The full 83-test suite, Clippy and the 708-case native byte/sample replay pass.
 WAVL.md documents the producer boundary; PERFORMANCE.md retains the native
 output regression and does not claim competitive performance from these checks.
+
+Borrowed compressed sequences add a nineteenth reported family, adpcm_wavl,
+and 216 independent seeds (700 total). They cover Microsoft, both IMA widths,
+legacy/extensible IMA, 1/2/6/33 channels where applicable, all containers, initial
+and held silence, empty data, complete short blocks, metadata and fact trimming.
+The shared harness constructs AdpcmWavl independently of the flat wrappers and
+compares bounded prefixes/ranges with a sequential child/block model that does
+not use its index or data_frames helper. Expansion is capped at 1024 samples;
+scratch remains capped at 8192 samples, blocks at 4096 bytes, channels at 256,
+input at 32768 bytes and child traversal at the existing 64-chunk limit. Invalid
+block-header acceptance and requested empty/partial ranges are checked too.
+Both campaign runners now fingerprint imported fixture generators as well.
+
+`validation/adpcm-wavl-mutation-{x64,i686}.*` each pass one million checked
+mutations, including 102831/102676 successful new-family entries. All 1581 inputs
+from the prior archived corpus pass (`adpcm-wavl-prior-replay.*`); those older
+inputs do not enter the new family. `adpcm-wavl-asan.*` passes 100000 fresh
+executions in 121.30 seconds, adds 1899 units and produces no failure artifact.
+The final 1827-file corpus is retained in `adpcm-wavl-asan-corpus.zip`, SHA-256
+`007e6b967715c609e9371360c66827f38d7356b7a7fc969e1b5c6d89539b4085`,
+with a verified archive/report sidecar. Its 260 MiB instrumented peak is not
+normal codec RSS. All listed campaign inputs remain unchanged. The complete
+87-test suite and Clippy pass on the recorded configurations; 216 independent
+fixtures/1296 borrowed ranges and all 708 retained native gates also pass.
+WAVL.md records the count/padding and file/forward limitations.

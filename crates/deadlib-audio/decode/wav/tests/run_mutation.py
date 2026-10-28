@@ -25,7 +25,7 @@ def main():
     if args.iterations<0 or not 0<args.seed<2**64: ap.error('invalid iteration count/seed')
     root=Path(__file__).resolve().parents[1];workspace=root.parents[3]
     stem=args.output.resolve();stem.parent.mkdir(parents=True,exist_ok=True)
-    paths=sorted((root/'src').rglob('*.rs'))+[root/'tests/fuzz_support/mod.rs',root/'examples/mutate.rs',root/'tests/fuzz_corpus.py',Path(__file__),root/'Cargo.toml',workspace/'Cargo.toml',workspace/'Cargo.lock',workspace/'.cargo/config.toml']
+    paths=sorted((root/'src').rglob('*.rs'))+[root/'tests/fuzz_support/mod.rs',root/'examples/mutate.rs',root/'tests/fuzz_corpus.py',root/'tests/adpcm_wavl_fixtures.py',root/'tests/ima_extensible_fixtures.py',root/'tests/ima3_fixtures.py',Path(__file__),root/'Cargo.toml',workspace/'Cargo.toml',workspace/'Cargo.lock',workspace/'.cargo/config.toml']
     before={p.relative_to(workspace).as_posix():sha(p) for p in paths}
     for suffix in ('.json','.stdout','.stderr','.build.log','-corpus'):
         if Path(str(stem)+suffix).exists(): ap.error('choose a new output stem')

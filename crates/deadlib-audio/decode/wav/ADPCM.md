@@ -11,6 +11,13 @@ Each block restarts from its header. Neither block decoder allocates.
 trim padding. `read_frames(start, output, scratch)` gives sample-accurate random
 access with caller-owned block scratch, returning interleaved samples. The
 container retains unrecognized encoded formats without invoking either codec.
+`AdpcmWavl::new(&wave)` handles compressed LIST/wavl data/slnt children with a
+compact frame index and caller-owned block scratch. It implements exact borrowed
+range reads, including direct seeks into held silence. `Adpcm::data_frames`
+reports a payload's decoded capacity without reading its block headers. Per-child
+padding, the global fact limit and evidence are documented in [WAVL.md](WAVL.md).
+File-backed/forward ADPCM wrappers still require flat data; segmented routing
+through those wrappers remains unfinished.
 Extensible IMA now uses its GUID and samples-per-block union through every block
 and file API. `AdpcmSpec::format_extensible` serializes speaker masks, and IMA
 writers honor force_extensible. [IMA_EXTENSIBLE.md](IMA_EXTENSIBLE.md) records the

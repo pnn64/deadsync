@@ -1,0 +1,5 @@
+   Compiling deadlib-audio-decode-wav v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\wav)
+error: cached cgu 879855mlz6nfnos6q06up8dos should have an object file, but doesn't
+
+error: could not compile `deadlib-audio-decode-wav` (example "adpcm_forward") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...

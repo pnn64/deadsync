@@ -343,6 +343,9 @@ impl<'a> Wave<'a> {
             .as_ref()
             .map(|t| t.entries.iter().map(|e| self.chunk(e.chunk)))
     }
+    pub(crate) fn timeline(&self) -> Option<&Timeline> {
+        self.timeline.as_ref()
+    }
     fn chunk(&self, c: ChunkInfo) -> Chunk<'a> {
         let start = c.offset as usize;
         let end = start + c.size as usize;
