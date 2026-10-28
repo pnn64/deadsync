@@ -57,9 +57,28 @@ cycles), separately from wall-clock nanoseconds. They must not be converted to
 time using an assumed CPU frequency. Other platforms currently report zero for
 that unavailable counter. All raw trials and cycle values are retained.
 
-Next measured opportunity: borrowed native reads currently loop over endian
-loads, while writer and file-backed reads can use a bulk copy. Measure a native
-byte-copy specialization with unaligned/swapped/float-bit parity before keeping it.
+## Retained native byte-copy specialization
+
+Native-order borrowed I16/I32/F32/F64 caller-buffer reads now copy bytes in bulk.
+This also accepts unaligned source bytes; direct typed slices still require
+alignment. Opposite-order input retains endian conversion. Float payloads are
+copied without arithmetic. No allocation is added.
+
+The same harness measured full PCM16 reads at median 0.322 ms and 0.342 ms in
+validation/pcm16-native-copy.tsv and pcm16-native-copy-repeat.tsv, versus 0.367 ms
+before specialization (6.6–12.1% lower time in these runs). All candidate trials
+were below all trials of the matching baseline for this operation. Small open and
+seek costs varied between runs; no improvement is claimed for them. The first
+candidate's full-read thread-cycle median fell from 801,460 to 704,768. Larger
+corpora, other numeric formats and controlled interleaved runs remain necessary
+before extrapolating the gain.
+
+Verification: all 20 integration tests pass on Windows x86_64 (debug/release) and
+i686 (debug), including integer extrema, float bit patterns, opposite byte order,
+unaligned input and >4 GiB virtual seeking. Clippy with warnings denied passes;
+the production library also checks for x86_64-unknown-linux-gnu. A cross-check is
+not Linux runtime evidence. `cargo tree --edges normal -p deadlib-audio-decode-wav`
+confirms no production dependencies.
 
 Outstanding coverage: PCM8/24/32 and floats, ADPCM, large metadata inventories,
 real-file cold/warm startup and streaming, nonseekable input, realistic and large

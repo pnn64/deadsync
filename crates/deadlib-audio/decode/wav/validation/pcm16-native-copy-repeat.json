@@ -1,0 +1,41 @@
+{
+  "timestamp_utc": "2026-10-28T10:33:36Z",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "machine": "AMD64",
+  "cpu": "{\"Name\":\"Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz\",\"NumberOfCores\":22,\"NumberOfLogicalProcessors\":44}",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "command": [
+    "cargo",
+    "bench",
+    "--locked",
+    "-p",
+    "deadlib-audio-decode-wav",
+    "--bench",
+    "pcm",
+    "--no-run",
+    "--message-format=json",
+    "--target-dir",
+    "target/wav"
+  ],
+  "binary_sha256": "bb73ab04ca4a80a05c13869043fb50a22bb6486d2a7c82e11fb190eba075d917",
+  "sources": {
+    "crates/deadlib-audio/decode/wav/src/adpcm.rs": "f629aac3db69766ca754373cd613f5a1dcae3c8fa9a3a557a559a25f51f811df",
+    "crates/deadlib-audio/decode/wav/src/container.rs": "cfb08cf9d64828ff5e78c5b1ee1493338bd2800bfa6b65bf6d7816f1edcbdf1c",
+    "crates/deadlib-audio/decode/wav/src/encode.rs": "5e7dd8516a648ec6be5d8268f32530d4d3d879cb73d93e6ca53a23888a3b5b9b",
+    "crates/deadlib-audio/decode/wav/src/format.rs": "2dfeac755edae4aee38301b77dd5b1cdbc99d385b0a1429d9a9564577f6c2b1c",
+    "crates/deadlib-audio/decode/wav/src/lib.rs": "bdc013ca6a810bfef12969d05811864e94370aba4e2feb20536e167abcd97d97",
+    "crates/deadlib-audio/decode/wav/src/pcm.rs": "8ea75a806a95f7b5df55c26419d0423165f8adc9fb2dea15e7942a1962451c86",
+    "crates/deadlib-audio/decode/wav/src/reader.rs": "b3fa25fbff4b6510a4ad26f6848929e5246bc035f3b6a9e79db88e3430800dd9",
+    "crates/deadlib-audio/decode/wav/src/stream.rs": "52f0895d47c3362e8d3de2c1a67f0f2af0d69d976b8b2c537ad1ce0fde803ce9",
+    "crates/deadlib-audio/decode/wav/Cargo.toml": "129894b26872bc970bb6c60b45331392dc961c3ea8f3ca517108c6f94d8d32c0",
+    "crates/deadlib-audio/decode/wav/benches/pcm.rs": "c00a94437fef510cc217ccce122820178d7cfd2ceb6eb3a4b15792ebd1557aeb",
+    "crates/deadlib-audio/decode/wav/benches/run_pcm.py": "b093860367481e430970b47a26ed743dfc09437d0cf41cdd95e3303e4617339b",
+    "Cargo.toml": "65b586de3e57b853a4a428a0a137b62ba94666fa48f3eeabe99cd0eaeb06749f",
+    "Cargo.lock": "b22402b93599e6b383c1a749cd1532c1046429e21168a10babbda9cd317c3a19",
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+  },
+  "exit_code": 0,
+  "cycle_counter": "QueryThreadCycleTime",
+  "heap_scope": "single warmed operation, requested allocations only; caller input/output excluded",
+  "timing_scope": "three warmed in-process trials; resident input; no affinity or frequency control"
+}

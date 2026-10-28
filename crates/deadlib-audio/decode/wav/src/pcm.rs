@@ -87,8 +87,12 @@ impl<'a> Pcm<'a> {
                 }
             }
             SampleFormat::I32 => {
-                for (o, b) in out.iter_mut().zip(src.as_chunks::<4>().0) {
-                    *o = e.u32(b) as i32;
+                if e.native() {
+                    copy_native(src, out);
+                } else {
+                    for (o, b) in out.iter_mut().zip(src.as_chunks::<4>().0) {
+                        *o = e.u32(b) as i32;
+                    }
                 }
             }
             _ => unreachable!(),
@@ -100,6 +104,10 @@ impl<'a> Pcm<'a> {
             return Err(Error::Unsupported("native sample type is not i16"));
         }
         let (src, n) = self.window(start_frame, out.len())?;
+        if self.format.endian.native() {
+            copy_native(src, &mut out[..n]);
+            return Ok(n);
+        }
         for (o, b) in out[..n].iter_mut().zip(src.as_chunks::<2>().0) {
             *o = self.format.endian.u16(b) as i16;
         }
@@ -111,6 +119,10 @@ impl<'a> Pcm<'a> {
             return Err(Error::Unsupported("native sample type is not f32"));
         }
         let (src, n) = self.window(start_frame, out.len())?;
+        if self.format.endian.native() {
+            copy_native(src, &mut out[..n]);
+            return Ok(n);
+        }
         for (o, b) in out[..n].iter_mut().zip(src.as_chunks::<4>().0) {
             *o = f32::from_bits(self.format.endian.u32(b));
         }
@@ -121,6 +133,10 @@ impl<'a> Pcm<'a> {
             return Err(Error::Unsupported("native sample type is not f64"));
         }
         let (src, n) = self.window(start_frame, out.len())?;
+        if self.format.endian.native() {
+            copy_native(src, &mut out[..n]);
+            return Ok(n);
+        }
         for (o, b) in out[..n].iter_mut().zip(src.as_chunks::<8>().0) {
             *o = f64::from_bits(self.format.endian.u64(b));
         }
@@ -168,4 +184,15 @@ impl<'a> Pcm<'a> {
             )
         })
     }
+}
+
+fn copy_native<T>(src: &[u8], out: &mut [T]) {
+    // SAFETY: private callers use only i16/i32/f32/f64 (all bit patterns valid),
+    // after checking native byte order and selecting a whole-sample byte window.
+    // An exclusive byte view retains output alignment and lifetime; source bytes
+    // may be unaligned. copy_from_slice checks exact lengths and uses bulk copy.
+    let dst = unsafe {
+        core::slice::from_raw_parts_mut(out.as_mut_ptr().cast::<u8>(), core::mem::size_of_val(out))
+    };
+    dst.copy_from_slice(src);
 }

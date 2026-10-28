@@ -28,6 +28,9 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    Initial resident PCM16 Hound baseline and scoped heap/Windows cycle counts are
    implemented; see PERFORMANCE.md. Wider formats, references, RSS, disks and
    platforms remain outstanding.
+   Native borrowed byte-copy specialization retained after two measured runs and
+   x86_64/i686 correctness checks; full PCM16 read time decreased 6.6–12.1% in
+   the recorded runs. See PERFORMANCE.md for scope and raw results.
 7. Completion audit against every requirement, standards coverage, performance
    results and explicit remaining limitations. Green unit tests alone do not prove
    standards coverage or competitive performance.
