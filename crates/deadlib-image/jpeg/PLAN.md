@@ -95,7 +95,7 @@ Verified milestones:
   Final gates: all 37 tests pass in release and isolated debug builds; rustfmt,
   Clippy and rustdoc with warnings denied pass. Source metadata and existing
   PNG/GIF code remain untouched by the new package APIs.
-- Color reconstruction milestone: explicit CMYK polarity/native raster,
+- `b34941740`: explicit CMYK polarity/native raster,
   in-place polarity conversion, YCCK-to-CMYK and direct RGB output, signed green
   rounding, exact rational interpolation for fractional sampling, and bounded
   validation of public reconstruction models. The C/independent filter gate
@@ -107,3 +107,13 @@ Verified milestones:
   Final gates: all 43 tests pass in release and isolated debug builds; rustfmt,
   Clippy and rustdoc with warnings denied pass. The direct RGB memory-budget
   regression confirms conversion does not require a full CMYK intermediate.
+- CMYK source/encoder milestone: explicit source polarity, native CMYK-to-YCCK
+  conversion during area sampling, Y/K resolution presets, native-raster
+  encoding entry points and source precision scaling. All 192 C decoder gates
+  preserve pre-entropy coefficients exactly. Equivalent source polarities
+  produce byte-identical JPEGs; all 192 C float-encoder comparisons pass, with
+  maximum observed coefficient error 4. See CMYK-ENCODER-VALIDATION.md and
+  tests/reports/cmyk-encode-turbo.json. Arithmetic/lossless/hierarchy, scan and
+  streaming breadth, other references, fuzzing and performance remain open.
+  Final gates: all 47 tests pass in release and isolated debug builds; rustfmt,
+  Clippy and rustdoc with warnings denied pass.

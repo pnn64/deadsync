@@ -1,8 +1,8 @@
 use crate::decode::allocate_components;
 use crate::transform::fdct;
 use crate::{
-    CodingOptions, CoefficientImage, ColorSpace, ComponentSpec, Error, FrameHeader, Limits,
-    MetadataOptions, MetadataSegment, Process, Result, encode_coefficients_with_metadata,
+    CmykPolarity, CodingOptions, CoefficientImage, ColorSpace, ComponentSpec, Error, FrameHeader,
+    Limits, MetadataOptions, MetadataSegment, Process, Result, encode_coefficients_with_metadata,
 };
 use deadlib_image::{ColorType, Image, Samples};
 
@@ -60,6 +60,12 @@ pub struct EncodeOptions {
     pub subsampling: Subsampling,
     /// RGB input uses the JFIF YCbCr transform by default; false retains RGB.
     pub rgb_to_ycbcr: bool,
+    /// Meaning of source CMYK samples. Adobe-complemented values preserve the
+    /// original raw-input convention; conventional ink values are normalized
+    /// during sampling, without allocating a converted source image.
+    pub cmyk_polarity: CmykPolarity,
+    /// Transform source CMYK to YCCK; false writes complemented CMYK directly.
+    pub cmyk_to_ycck: bool,
     /// Clamp scaled Annex K quantizers to 255; false permits extended tables.
     pub baseline_quantization: bool,
     pub coding: CodingOptions,
@@ -73,6 +79,8 @@ impl Default for EncodeOptions {
             precision: 8,
             subsampling: Subsampling::S420,
             rgb_to_ycbcr: true,
+            cmyk_polarity: CmykPolarity::AdobeInverted,
+            cmyk_to_ycck: false,
             baseline_quantization: true,
             coding: CodingOptions::default(),
             limits: Limits::default(),
@@ -131,8 +139,8 @@ pub fn encode_with_metadata(
     encode_samples_with_metadata(&input, options, metadata)
 }
 
-/// Native interleaved sample encoding. CMYK/YCCK inputs are the encoded JPEG
-/// component values (including Adobe polarity), preserved without ICC changes.
+/// Native interleaved sample encoding. CMYK polarity and CMYK-to-YCCK are
+/// explicit options; YCCK input already contains encoded component values.
 pub fn encode_samples(input: &EncodeInput<'_>, options: EncodeOptions) -> Result<Vec<u8>> {
     encode_samples_with_metadata(input, options, MetadataOptions::default())
 }
@@ -185,14 +193,19 @@ pub fn quantize(
     }
     let output_space = if input.color_space == ColorSpace::Rgb && options.rgb_to_ycbcr {
         ColorSpace::YCbCr
+    } else if input.color_space == ColorSpace::Cmyk && options.cmyk_to_ycck {
+        ColorSpace::Ycck
     } else {
         input.color_space
     };
-    let factors = if channels == 1 {
+    let mut factors = if channels == 1 {
         [(1, 1); 4]
     } else {
         options.subsampling.factors()
     };
+    if output_space == ColorSpace::Ycck && !matches!(options.subsampling, Subsampling::Custom(_)) {
+        factors[3] = factors[0]; // Y and K retain matching spatial resolution.
+    }
     let mut blocks_per_mcu = 0;
     for &(h, v) in &factors[..channels] {
         if !(1..=4).contains(&h) || !(1..=4).contains(&v) {
@@ -293,8 +306,11 @@ pub fn quantize(
                         let sy = (by * 8 + y).min(c.height - 1);
                         block[y * 8 + x] = resample(
                             input,
-                            options.precision,
-                            output_space,
+                            ColorTransform {
+                                precision: options.precision,
+                                space: output_space,
+                                cmyk_polarity: options.cmyk_polarity,
+                            },
                             i,
                             sx,
                             sy,
@@ -332,11 +348,28 @@ pub fn quantize(
     })
 }
 
+#[derive(Clone, Copy)]
+struct ColorTransform {
+    precision: u8,
+    space: ColorSpace,
+    cmyk_polarity: CmykPolarity,
+}
+
+impl ColorTransform {
+    #[cfg(test)]
+    fn new(precision: u8, space: ColorSpace) -> Self {
+        Self {
+            precision,
+            space,
+            cmyk_polarity: CmykPolarity::AdobeInverted,
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resample(
     input: &EncodeInput<'_>,
-    precision: u8,
-    space: ColorSpace,
+    transform: ColorTransform,
     component: usize,
     x: usize,
     y: usize,
@@ -346,6 +379,12 @@ fn resample(
     max_h: usize,
     max_v: usize,
 ) -> u16 {
+    let ColorTransform {
+        precision,
+        space,
+        cmyk_polarity,
+    } = transform;
+    let maximum = (1i32 << precision) - 1;
     // Integrate the rectangular source footprint using integer overlap weights.
     // This also handles legal fractional sampling ratios such as H=3 and H=2.
     let (left, right, top, bottom) = (x * max_h, (x + 1) * max_h, y * max_v, (y + 1) * max_v);
@@ -365,8 +404,20 @@ fn resample(
                 let source_max = (1u32 << input.precision) - 1;
                 ((value * ((1u32 << precision) - 1) + source_max / 2) / source_max) as i32
             };
-            let value = if input.color_space == ColorSpace::Rgb && space == ColorSpace::YCbCr {
-                let (r, g, b) = (read(0), read(1), read(2));
+            let to_ycc = (input.color_space == ColorSpace::Rgb && space == ColorSpace::YCbCr)
+                || (input.color_space == ColorSpace::Cmyk
+                    && space == ColorSpace::Ycck
+                    && component < 3);
+            let value = if to_ycc {
+                let mut rgb = [read(0), read(1), read(2)];
+                // YCCK applies the same matrix to conventional CMY values;
+                // the complemented K component passes through separately.
+                if input.color_space == ColorSpace::Cmyk
+                    && cmyk_polarity == CmykPolarity::AdobeInverted
+                {
+                    rgb = rgb.map(|v| maximum - v);
+                }
+                let [r, g, b] = rgb;
                 let center = 1i32 << (precision - 1);
                 let value = match component {
                     0 => (19595 * r + 38470 * g + 7471 * b + 32768) >> 16,
@@ -374,6 +425,10 @@ fn resample(
                     _ => ((32768 * r - 27439 * g - 5329 * b + 32768) >> 16) + center,
                 };
                 value.clamp(0, (1 << precision) - 1)
+            } else if input.color_space == ColorSpace::Cmyk
+                && cmyk_polarity == CmykPolarity::Conventional
+            {
+                maximum - read(component)
             } else {
                 read(component)
             };
@@ -397,19 +452,63 @@ mod tests {
             samples: SampleData::U8(&[128, 0, 128, 128, 30, 128, 128, 90, 128]),
         };
         assert_eq!(
-            resample(&input, 8, ColorSpace::YCbCr, 1, 0, 0, 3, 2, 1, 3, 1),
+            resample(
+                &input,
+                ColorTransform::new(8, ColorSpace::YCbCr),
+                1,
+                0,
+                0,
+                3,
+                2,
+                1,
+                3,
+                1
+            ),
             10
         );
         assert_eq!(
-            resample(&input, 8, ColorSpace::YCbCr, 1, 1, 0, 3, 2, 1, 3, 1),
+            resample(
+                &input,
+                ColorTransform::new(8, ColorSpace::YCbCr),
+                1,
+                1,
+                0,
+                3,
+                2,
+                1,
+                3,
+                1
+            ),
             70
         );
         assert_eq!(
-            resample(&input, 8, ColorSpace::YCbCr, 1, 0, 0, 3, 1, 1, 2, 1),
+            resample(
+                &input,
+                ColorTransform::new(8, ColorSpace::YCbCr),
+                1,
+                0,
+                0,
+                3,
+                1,
+                1,
+                2,
+                1
+            ),
             15
         );
         assert_eq!(
-            resample(&input, 8, ColorSpace::YCbCr, 1, 1, 0, 3, 1, 1, 2, 1),
+            resample(
+                &input,
+                ColorTransform::new(8, ColorSpace::YCbCr),
+                1,
+                1,
+                0,
+                3,
+                1,
+                1,
+                2,
+                1
+            ),
             90
         );
         let input = EncodeInput {
@@ -420,7 +519,18 @@ mod tests {
             samples: SampleData::U8(&[0, 10, 20, 30, 40, 50, 60, 70]),
         };
         assert_eq!(
-            resample(&input, 8, ColorSpace::Grayscale, 0, 0, 0, 1, 1, 1, 4, 2),
+            resample(
+                &input,
+                ColorTransform::new(8, ColorSpace::Grayscale),
+                0,
+                0,
+                0,
+                1,
+                1,
+                1,
+                4,
+                2
+            ),
             35
         );
     }
@@ -443,7 +553,18 @@ mod tests {
             };
             for (c, expected) in want.into_iter().enumerate() {
                 assert_eq!(
-                    resample(&input, 8, ColorSpace::YCbCr, c, 0, 0, 3, 1, 1, 1, 1),
+                    resample(
+                        &input,
+                        ColorTransform::new(8, ColorSpace::YCbCr),
+                        c,
+                        0,
+                        0,
+                        3,
+                        1,
+                        1,
+                        1,
+                        1
+                    ),
                     expected
                 );
             }

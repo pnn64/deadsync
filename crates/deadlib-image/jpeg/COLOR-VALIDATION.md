@@ -26,9 +26,9 @@ ICC profile. `PlanarImage::to_image` performs its RGB conversion directly and
 allocates only the requested RGB buffer. A regression test permits that path
 under a budget too small for a full intermediate CMYK raster.
 
-The encoder currently accepts already encoded CMYK/YCCK component values.
-Additional encoder source-polarity controls and CMYK-to-YCCK transformation
-remain in the plan; this milestone covers reconstruction/output conversion.
+The encoder accepts explicit CMYK source polarity and can transform CMYK to
+YCCK while sampling. Native CMYK rasters carry their polarity into encoding.
+See CMYK-ENCODER-VALIDATION.md for that separate reference gate.
 
 ## Chroma sample positions
 

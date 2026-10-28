@@ -28,10 +28,11 @@ approximation scan generation remains planned.
 images. Quality, output precision (8/12), subsampling, RGB-to-YCbCr conversion,
 quantizer range and entropy coding are configurable. `encode_samples` accepts
 native interleaved U8/U16 gray, RGB, YCbCr, CMYK and YCCK sources at 1–16-bit
-precision, explicitly scaled to output precision. CMYK/YCCK values use encoded
-JPEG component polarity. `quantize` exposes the coefficient result before
+precision, explicitly scaled to output precision. CMYK source polarity is
+explicit (`cmyk_polarity`, default Adobe-complemented); `cmyk_to_ycck` enables
+the native transform. Already encoded YCCK values pass through. `quantize` exposes the coefficient result before
 entropy coding. Alpha/indexed conversion is explicit; grayscale is always 1x1
-sampled. Color presets enlarge the first component; `Subsampling::Custom`
+sampled. Color presets enlarge the first component and also K for YCCK; `Subsampling::Custom`
 specifies every component's factors, including fractional ratios.
 
 ```rust
@@ -87,3 +88,4 @@ See ENCODER-VALIDATION.md for external encoder checks and measured size/quality
 results, including their numerical bounds and limits.
 COLOR-VALIDATION.md describes CMYK/YCCK conversion, exact rational chroma
 siting, profile/polarity policies and the 486-case color reference gate.
+CMYK-ENCODER-VALIDATION.md covers source-polarity and CMYK-to-YCCK encoding.

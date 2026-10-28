@@ -13,7 +13,7 @@ claim is made. The complete user scope is retained in PLAN.md.
 | Predictive lossless SOF3/SOF11, 2–16-bit | Pending: predictors, point transform, entropy |
 | Hierarchical SOF5/6/7/13/14/15, DHP/EXP | Pending: differential frames and expansion |
 | DNL, abbreviated tables/image streams | Pending |
-| Gray, YCbCr, RGB, CMYK, YCCK | Native planes, native CMYK/polarity, all five shared output conversions; 486 reference comparisons across 243 unique files; encoder source-polarity/CMYK-to-YCCK controls pending |
+| Gray, YCbCr, RGB, CMYK, YCCK | Native planes, native CMYK/polarity, all five shared output conversions; 486 color comparisons plus 192 CMYK source/transform encoder cases; broader corpus pending |
 | All legal sampling factors and scan layouts | Sequential interleaved/non-interleaved implemented; common/fractional encoding verified through C coefficients; full scan-layout corpus pending |
 | Full component-count range | Encoder currently accepts 1–4 components; complete sequential component-count coverage pending |
 | Restart intervals and sequence validation | Sequential/progressive implemented; external 8/12-bit fixtures, corruption and EOB boundary tests |

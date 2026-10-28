@@ -405,6 +405,30 @@ impl PlanarImage {
 }
 
 impl CmykImage {
+    /// Encode using this raster's explicit source polarity. Select YCCK with
+    /// `EncodeOptions::cmyk_to_ycck`; no converted source buffer is allocated.
+    pub fn encode(&self, options: crate::EncodeOptions) -> Result<Vec<u8>> {
+        self.encode_with_metadata(options, crate::MetadataOptions::default())
+    }
+    pub fn encode_with_metadata(
+        &self,
+        mut options: crate::EncodeOptions,
+        metadata: crate::MetadataOptions<'_>,
+    ) -> Result<Vec<u8>> {
+        self.validate()?;
+        options.cmyk_polarity = self.polarity;
+        crate::encode_samples_with_metadata(
+            &crate::EncodeInput {
+                width: self.width,
+                height: self.height,
+                precision: self.precision,
+                color_space: ColorSpace::Cmyk,
+                samples: crate::SampleData::U16(&self.samples),
+            },
+            options,
+            metadata,
+        )
+    }
     pub fn convert_polarity(&mut self, polarity: CmykPolarity) -> Result<()> {
         let (_, max) = self.validate()?;
         if polarity != self.polarity {
