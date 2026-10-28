@@ -67,6 +67,155 @@ fn impulse(version: u32, channels: usize, crc: bool, back: u32, part_bits: Optio
     data
 }
 #[test]
+fn channel_transitions_match_independent_mono_histories() {
+    for version in [3, 2, 0] {
+        let mono = impulse(version, 1, false, 0, None);
+        let stereo = impulse(version, 2, false, 0, None);
+        let mut negative = mono.clone();
+        let offset = FrameHeader::parse(&negative).unwrap().main_data_offset();
+        negative[offset] ^= 0x20;
+        let mut actual = FrameDecoder::new();
+        let mut left = FrameDecoder::new();
+        let mut right = FrameDecoder::new();
+        for channels in [2, 1, 1, 1, 2, 2, 1, 2, 0, 1, 2, 1, 1, 2] {
+            if channels == 0 {
+                actual.reset();
+                left.reset();
+                right.reset();
+                continue;
+            }
+            let data = if channels == 1 { &mono } else { &stereo };
+            let frame = actual.decode(data, None).unwrap();
+            let expected = left.decode(&mono, None).unwrap();
+            assert_eq!(
+                frame
+                    .pcm
+                    .plane(0)
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.to_bits())
+                    .collect::<Vec<_>>(),
+                expected
+                    .pcm
+                    .plane(0)
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.to_bits())
+                    .collect::<Vec<_>>()
+            );
+            if channels == 2 {
+                let expected = right.decode(&negative, None).unwrap();
+                assert_eq!(
+                    frame
+                        .pcm
+                        .plane(1)
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>(),
+                    expected
+                        .pcm
+                        .plane(0)
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.to_bits())
+                        .collect::<Vec<_>>()
+                );
+            } else {
+                right.reset();
+            }
+        }
+    }
+}
+
+#[test]
+fn frame_scfsi_reuse_matches_explicit_factors_in_both_channels() {
+    fn frame(channels: usize, mask: u32) -> Vec<u8> {
+        let word = 0xfffb9000u32 | if channels == 1 { 3 << 6 } else { 0 };
+        let header = FrameHeader::parse(&word.to_be_bytes()).unwrap();
+        let mut side = BitWriter::new();
+        side.write(0, 9).unwrap();
+        side.write(0, if channels == 1 { 5 } else { 3 }).unwrap();
+        for _ in 0..channels {
+            for group in 0..4 {
+                side.write(u32::from(mask & (1 << group) != 0), 1).unwrap();
+            }
+        }
+        for granule in 0..2 {
+            let count = if granule == 0 {
+                21
+            } else {
+                [6, 5, 5, 5]
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(g, _)| mask & (1 << g) == 0)
+                    .map(|(_, n)| n)
+                    .sum()
+            };
+            for _ in 0..channels {
+                for (value, width) in [(count + 3, 12), (1, 9), (206, 8), (5, 4), (0, 1)] {
+                    side.write(value, width).unwrap();
+                }
+                for _ in 0..3 {
+                    side.write(1, 5).unwrap();
+                }
+                for width in [4, 3, 1, 1, 1] {
+                    side.write(0, width).unwrap();
+                }
+            }
+        }
+        assert_eq!(side.as_bytes().len(), header.side_info_bytes());
+        let mut main = BitWriter::new();
+        for granule in 0..2 {
+            for channel in 0..channels {
+                for (group, count) in [6, 5, 5, 5].into_iter().enumerate() {
+                    if granule == 0 || mask & (1 << group) == 0 {
+                        for _ in 0..count {
+                            main.write(u32::from(channel == 0), 1).unwrap();
+                        }
+                    }
+                }
+                main.write(1, 2).unwrap();
+                main.write(channel as u32, 1).unwrap();
+            }
+        }
+        let mut data = vec![0; header.frame_bytes().unwrap()];
+        data[..4].copy_from_slice(&word.to_be_bytes());
+        data[4..header.main_data_offset()].copy_from_slice(side.as_bytes());
+        data[header.main_data_offset()..header.main_data_offset() + main.as_bytes().len()]
+            .copy_from_slice(main.as_bytes());
+        data
+    }
+    for channels in [1, 2] {
+        let explicit = frame(channels, 0);
+        for mask in 0..16 {
+            let reused = frame(channels, mask);
+            let mut reference = FrameDecoder::new();
+            let mut actual = FrameDecoder::new();
+            for _ in 0..3 {
+                let expected: Vec<_> = reference
+                    .decode(&explicit, None)
+                    .unwrap()
+                    .pcm
+                    .planes()
+                    .flatten()
+                    .map(|v| v.to_bits())
+                    .collect();
+                let got: Vec<_> = actual
+                    .decode(&reused, None)
+                    .unwrap()
+                    .pcm
+                    .planes()
+                    .flatten()
+                    .map(|v| v.to_bits())
+                    .collect();
+                assert_eq!(got, expected, "channels={channels} mask={mask}");
+            }
+        }
+    }
+}
+
+#[test]
 fn caller_payload_can_change_before_a_later_frame_reuses_its_tail() {
     for version in [3, 2, 0] {
         for channels in [1, 2] {

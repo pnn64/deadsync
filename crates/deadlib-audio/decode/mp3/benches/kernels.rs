@@ -69,6 +69,15 @@ fn joint(rate: u32, mode: u8) -> FrameHeader {
     FrameHeader::parse(&word.to_be_bytes()).unwrap()
 }
 
+fn empty_frame(mut word: u32, channels: usize) -> Vec<u8> {
+    word = (word | (1 << 16)) & !((15 << 12) | (3 << 6) | (3 << 4));
+    word |= (9 << 12) | if channels == 1 { 3 << 6 } else { 0 };
+    let header = FrameHeader::parse(&word.to_be_bytes()).unwrap();
+    let mut data = vec![0; header.frame_bytes().unwrap()];
+    data[..4].copy_from_slice(&word.to_be_bytes());
+    data
+}
+
 fn verify(paths: &[String]) {
     let mut out = io::BufWriter::new(io::stdout().lock());
     for size in 0..=16 {
@@ -278,11 +287,44 @@ fn verify(paths: &[String]) {
         }
     }
     for path in paths {
+        let frames = packets(Path::new(path));
         let mut decoder = FrameDecoder::new();
-        for (data, free) in packets(Path::new(path)) {
-            let frame = decoder.decode(&data, free).unwrap();
+        for (data, free) in &frames {
+            let frame = decoder.decode(data, *free).unwrap();
             for value in frame.pcm.planes().flatten() {
                 out.write_all(&value.to_le_bytes()).unwrap();
+            }
+        }
+        if let Some((signal, free)) = frames.iter().find(|(data, free)| {
+            let frame = Frame::parse(data, *free, true, Limits::default()).unwrap();
+            frame.header.channels() == 2
+                && frame.side_info.main_data_begin == 0
+                && frame.side_info.main_data_bits(frame.header) != 0
+        }) {
+            let header = FrameHeader::parse(signal).unwrap();
+            let mono = empty_frame(u32::from_be_bytes(header.to_bytes()), 1);
+            let stereo = empty_frame(u32::from_be_bytes(header.to_bytes()), 2);
+            let mut decoder = FrameDecoder::new();
+            for choice in [2, 1, 1, 2, 0, 1, 2] {
+                let (data, format) = match choice {
+                    2 => (signal.as_slice(), *free),
+                    1 => (mono.as_slice(), None),
+                    _ => (stereo.as_slice(), None),
+                };
+                for value in decoder.decode(data, format).unwrap().pcm.planes().flatten() {
+                    out.write_all(&value.to_le_bytes()).unwrap();
+                }
+            }
+        }
+    }
+    for version in [3, 2, 0] {
+        for channels in [1, 2] {
+            let data = empty_frame(0xffe00000 | (version << 19) | (1 << 17), channels);
+            let mut decoder = FrameDecoder::new();
+            for _ in 0..8 {
+                for value in decoder.decode(&data, None).unwrap().pcm.planes().flatten() {
+                    out.write_all(&value.to_le_bytes()).unwrap();
+                }
             }
         }
     }
@@ -325,10 +367,13 @@ fn verify(paths: &[String]) {
                     preflag: gain & 1 != 0,
                     ..Default::default()
                 };
-                let mut output = [0.0; 576];
-                spectral::requantize(&input, &info, &factors, bands, &mut output).unwrap();
-                for value in output {
-                    out.write_all(&value.to_le_bytes()).unwrap();
+                for input in [&input, &[0; 576]] {
+                    let mut output =
+                        std::array::from_fn(|n| f64::from_bits(0x7ff8_0000_0000_0000 | n as u64));
+                    spectral::requantize(input, &info, &factors, bands, &mut output).unwrap();
+                    for value in output {
+                        out.write_all(&value.to_le_bytes()).unwrap();
+                    }
                 }
             }
         }
@@ -790,6 +835,39 @@ fn main() {
             });
         }
     }
+    for (kind, mixed) in [(0, false), (2, false), (2, true)] {
+        for pattern in ["zero", "first", "last"] {
+            let mut input = [0; 576];
+            if pattern == "first" {
+                input[0] = -1;
+            } else if pattern == "last" {
+                input[575] = 1;
+            }
+            let info = GranuleChannel {
+                global_gain: 210,
+                block_type: kind,
+                mixed_block: mixed,
+                ..Default::default()
+            };
+            let factors = ScaleFactors::default();
+            let bands = Bands::for_rate(44100).unwrap();
+            let mut output = [0.0; 576];
+            probe(
+                &format!("requantize/{kind}/{mixed}/{pattern}"),
+                1000,
+                || {
+                    spectral::requantize(
+                        black_box(&input),
+                        black_box(&info),
+                        black_box(&factors),
+                        bands,
+                        black_box(&mut output),
+                    )
+                    .unwrap();
+                },
+            );
+        }
+    }
     for mode in 1..=3 {
         let source = [signal::<576>(19), signal::<576>(31)];
         let info = [GranuleChannel::default(); 2];
@@ -852,6 +930,27 @@ fn main() {
                     },
                 );
             }
+        }
+    }
+    for version in [3, 2, 0] {
+        for channels in [1, 2] {
+            let data = empty_frame(0xffe00000 | (version << 19) | (1 << 17), channels);
+            let mut decoder = FrameDecoder::new();
+            assert!(
+                decoder
+                    .decode(&data, None)
+                    .unwrap()
+                    .pcm
+                    .planes()
+                    .flatten()
+                    .all(|v| v.to_bits() == 0)
+            );
+            probe(&format!("decode-empty/{version}/{channels}"), 128, || {
+                let frame = decoder.decode(black_box(&data), None).unwrap();
+                for plane in frame.pcm.planes() {
+                    black_box(plane);
+                }
+            });
         }
     }
     for path in &args {

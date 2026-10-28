@@ -88,6 +88,7 @@ pub struct FrameDecoder {
     output: [f32; 2304],
     failed: bool,
     payload_consumed: bool,
+    right_active: bool,
 }
 impl Default for FrameDecoder {
     fn default() -> Self {
@@ -110,6 +111,7 @@ impl FrameDecoder {
             output: [0.0; 2304],
             failed: false,
             payload_consumed: false,
+            right_active: false,
         }
     }
     fn reset_dsp(&mut self) {
@@ -119,6 +121,7 @@ impl FrameDecoder {
         for s in &mut self.synthesis {
             s.reset();
         }
+        self.right_active = false;
     }
     pub fn reset(&mut self) {
         self.reservoir.clear();
@@ -193,6 +196,7 @@ impl FrameDecoder {
                 }
             }
         }
+        self.right_active |= header.channels() == 2;
         Ok(())
     }
     pub(crate) fn drained_pcm(&self, header: FrameHeader) -> Pcm<'_> {
@@ -297,9 +301,12 @@ impl FrameDecoder {
             previous[0] = Some(std::mem::take(&mut factors[0]));
             previous[1] = Some(std::mem::take(&mut factors[1]));
         }
-        if header.channels() == 1 {
+        if header.channels() == 2 {
+            self.right_active = true;
+        } else if self.right_active {
             self.hybrid[1].reset();
             self.synthesis[1].reset();
+            self.right_active = false;
         }
         Ok(())
     }
