@@ -1,5 +1,8 @@
 # Complete pages, short reads and packet starts, 2026-10-28
 
+The later [encoding and page-view pass](ENCODING.md) measures direct owned
+encoding, contiguous CRC and compact borrowed pages against this baseline.
+
 This pass follows [buffered verification and recovery](RECOVERY.md), using
 production source `414ad31ac` as its baseline. Three changes remove staged
 buffer growth, repeated buffer initialization and repeated index searches.

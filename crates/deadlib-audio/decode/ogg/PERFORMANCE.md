@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [page-buffer and packet-start measurements](BUFFERS.md) cover complete
+The latest [encoding and page-view measurements](ENCODING.md) cover direct owned
+encoding, a contiguous CRC update and smaller borrowed page values, including
+CPU/heap comparisons and exact byte, debug-format and IO checks.
+
+The earlier [page-buffer and packet-start measurements](BUFFERS.md) cover complete
 page copies, short-read initialization and reused index searches, including CPU
 cycles, allocation counters and exact behavior comparisons.
 

@@ -139,6 +139,7 @@ fn main() {
         );
     }
     for n in [0, 36, 228, 4096, 65025] {
+        let body = vec![37; n];
         let mut lacing = vec![255; n / 255];
         if lacing.len() < 255 {
             lacing.push((n % 255) as u8);
@@ -151,9 +152,19 @@ fn main() {
                 sequence: 0,
             },
             &lacing,
-            &vec![37; n],
+            &body,
         )
         .unwrap();
+        let fields = Page::parse(&bytes).unwrap().0.header();
+        probe(
+            &format!("encode/{n}"),
+            if n >= 4096 { 100 } else { 10_000 },
+            || {
+                black_box(
+                    encode_page(black_box(fields), black_box(&lacing), black_box(&body)).unwrap(),
+                );
+            },
+        );
         probe(
             &format!("parse/{n}"),
             if n >= 4096 { 100 } else { 10_000 },
@@ -181,7 +192,7 @@ fn main() {
         for limit in [1, 7, 4096, usize::MAX] {
             probe(
                 &format!("capped-reader/{n}/{limit}"),
-                if n >= 4096 { 1 } else { 1000 },
+                if n >= 4096 { 16 } else { 1000 },
                 || {
                     let mut reader = PageReader::new(Capped {
                         input: black_box(&bytes),
@@ -199,7 +210,7 @@ fn main() {
         for chunk in [1, 7, 4096, usize::MAX] {
             probe(
                 &format!("incremental/{n}/{chunk}"),
-                if n >= 4096 { 1 } else { 1000 },
+                if n >= 4096 { 16 } else { 1000 },
                 || {
                     let mut decoder = PageDecoder::new();
                     let mut ready = 0;
