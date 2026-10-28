@@ -58,6 +58,7 @@ pub enum PageOut<'a> {
 pub struct SyncBuffer {
     data: Vec<u8>,
     start: usize,
+    length: usize,
     position: u64,
     current: Option<(u64, Range<usize>)>,
     unsynced: bool,
@@ -82,6 +83,7 @@ impl SyncBuffer {
         Self {
             data: Vec::new(),
             start: 0,
+            length: 0,
             position: 0,
             current: None,
             unsynced: false,
@@ -106,6 +108,7 @@ impl SyncBuffer {
     pub fn reset_at(&mut self, position: u64) {
         self.data.clear();
         self.start = 0;
+        self.length = 0;
         self.position = position;
         self.current = None;
         self.unsynced = false;
@@ -156,6 +159,7 @@ impl SyncBuffer {
             .ok_or(Error::LimitExceeded("sync byte position"))?;
         self.start += bytes;
         self.position = next;
+        self.length = 0;
         Ok(())
     }
     fn step(&mut self) -> Result<Step, Error> {
@@ -165,11 +169,16 @@ impl SyncBuffer {
             return Ok(Step::NeedMore);
         }
         if bytes.starts_with(b"OggS") {
-            let header = 27 + bytes[26] as usize;
-            if bytes.len() < header {
-                return Ok(Step::NeedMore);
-            }
-            let length = header + bytes[27..header].iter().map(|&v| v as usize).sum::<usize>();
+            let length = if self.length != 0 {
+                self.length
+            } else {
+                let header = 27 + bytes[26] as usize;
+                if bytes.len() < header {
+                    return Ok(Step::NeedMore);
+                }
+                self.length = header + bytes[27..header].iter().map(|&v| v as usize).sum::<usize>();
+                self.length
+            };
             if bytes.len() < length {
                 return Ok(Step::NeedMore);
             }

@@ -561,6 +561,38 @@ fn append_limits_and_offset_errors_preserve_unread_data() {
     assert_eq!(reader.position(), 0);
     assert_eq!(reader.buffered_bytes(), 27);
 }
+
+#[test]
+fn partial_capture_length_survives_compaction_and_rejection_but_not_reset() {
+    let large = page(65025);
+    let small = page(37);
+    let header = 27 + large[26] as usize;
+    let mut input = small.clone();
+    input.extend_from_slice(&large[..header]);
+    let mut sync = SyncBuffer::with_limit(large.len() + small.len());
+    sync.push(&input).unwrap();
+    assert!(matches!(sync.page_seek().unwrap(), PageSeek::Page(_)));
+    assert!(matches!(sync.page_seek().unwrap(), PageSeek::NeedMore));
+    assert!(sync.push(&large).is_err());
+    assert_eq!(sync.position(), small.len() as u64);
+    assert_eq!(sync.buffered_bytes(), header);
+    assert!(matches!(sync.page_seek().unwrap(), PageSeek::NeedMore));
+    sync.push(&large[header..]).unwrap();
+    let PageSeek::Page(found) = sync.page_seek().unwrap() else {
+        panic!("compacted page missing");
+    };
+    assert_eq!(found.offset, small.len() as u64);
+    assert_eq!(found.page.bytes(), large);
+    sync.push(&large[..header]).unwrap();
+    assert!(matches!(sync.page_seek().unwrap(), PageSeek::NeedMore));
+    sync.reset_at(123);
+    sync.push(&small).unwrap();
+    let PageSeek::Page(found) = sync.page_seek().unwrap() else {
+        panic!("page after reset missing");
+    };
+    assert_eq!(found.offset, 123);
+    assert_eq!(found.page.bytes(), small);
+}
 fn golden_inputs() -> Vec<(u8, Vec<u8>)> {
     let s = streams();
     vec![
