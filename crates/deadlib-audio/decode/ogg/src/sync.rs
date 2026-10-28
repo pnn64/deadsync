@@ -192,10 +192,15 @@ impl SyncBuffer {
                 return Ok(Step::Page);
             }
         }
-        let skip = bytes[1..]
-            .iter()
-            .position(|&v| v == b'O')
-            .map_or(bytes.len(), |n| n + 1);
+        let skip = if bytes[1] == b'O' {
+            1
+        } else if bytes[2] == b'O' {
+            2
+        } else if bytes[3] == b'O' {
+            3
+        } else {
+            capture_byte(&bytes[4..]).map_or(bytes.len(), |n| n + 4)
+        };
         self.advance(skip)?;
         Ok(Step::Skipped(skip))
     }
@@ -339,5 +344,50 @@ impl<R: Read + Seek> SyncReader<R> {
             self.sync.reset_at(offset);
         }
         Ok(())
+    }
+}
+
+#[inline(never)]
+fn capture_byte(bytes: &[u8]) -> Option<usize> {
+    let (words, tail) = bytes.as_chunks::<8>();
+    for (i, word) in words.iter().enumerate() {
+        let different = u64::from_le_bytes(*word) ^ 0x4f4f_4f4f_4f4f_4f4f;
+        let matches =
+            different.wrapping_sub(0x0101_0101_0101_0101) & !different & 0x8080_8080_8080_8080;
+        if matches != 0 {
+            // Borrow propagation may mark later bytes, but the first is exact.
+            return Some(i * 8 + matches.trailing_zeros() as usize / 8);
+        }
+    }
+    tail.iter()
+        .position(|&byte| byte == b'O')
+        .map(|i| bytes.len() - tail.len() + i)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::capture_byte;
+
+    #[test]
+    fn capture_byte_matches_scalar_for_all_bytes_positions_and_tails() {
+        for fill in 0..=255 {
+            for length in 0..80 {
+                let bytes = vec![fill; length];
+                assert_eq!(capture_byte(&bytes), bytes.iter().position(|&b| b == b'O'));
+                for offset in 0..length {
+                    let mut bytes = bytes.clone();
+                    bytes[offset] = b'O';
+                    assert_eq!(capture_byte(&bytes), bytes.iter().position(|&b| b == b'O'));
+                }
+            }
+        }
+        // 0x4e differs from O by one bit; subtraction can propagate a borrow.
+        for pattern in [b"NOOO".as_slice(), b"ONNO", b"NNNO", b"\x80\xffONN"] {
+            let bytes = pattern.repeat(32);
+            for offset in 0..bytes.len() {
+                let bytes = &bytes[offset..];
+                assert_eq!(capture_byte(bytes), bytes.iter().position(|&b| b == b'O'));
+            }
+        }
     }
 }
