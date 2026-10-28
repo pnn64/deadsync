@@ -185,7 +185,7 @@ Verified milestones:
   directory. Full component counts, lossless/hierarchy, DNL/abbreviated streams,
   incremental I/O, other references/conformance, coverage-guided fuzzing and
   measured performance/optimization remain required.
-- Predictive lossless Huffman decoder milestone: native SOF3 at every unsigned
+- `5e807d1c4`: native SOF3 at every unsigned
   precision from 2 through 16, all seven predictors, unclamped integer
   prediction, arithmetic half shifts, modulo-65536 differences, category 16
   without appended bits, per-component Pt, whole-row restarts and interleaved
@@ -206,3 +206,27 @@ Verified milestones:
   lossless, hierarchy, DNL/abbreviated streams, incremental I/O, other references
   and conformance, coverage-guided fuzzing and all measured performance work
   remain required.
+- Predictive lossless Huffman encoder milestone: native SOF3 at P=2..16, all
+  seven predictors, explicit Pt, fixed/Annex K optimized tables, whole-row
+  restarts, generated and borrowed caller scans, mixed predictor/Pt/restart
+  parameters, original component IDs/sampling and the full 255-component range.
+  Shared gray/RGB and native interleaved gray/RGB/YCbCr/CMYK/YCCK APIs preserve
+  original integers without a DCT, color transform, inversion or precision
+  scaling. Planar construction/rewriting reads existing samples without a raster
+  copy or predictor row buffer. Generated scans split large layouts into legal
+  MCUs automatically; per-scan DRI changes include clearing a prior interval.
+  Metadata additions and ICC preserve/remove/replace share the DCT writer.
+  All 4,448 native encoder C/native/source comparisons pass exactly, with zero
+  C warnings: 2,520 raw files, 848 boundary cases covering every Pt at selected
+  boundary precisions, and 1,080 rewrites of independently C-encoded sources.
+  Literal Annex H entropy bytes validate category 16, full integer wrapping,
+  subsampled odd edges and vertically sampled restart prediction independently
+  of the native decoder. Tests also cover fractional/4x4 sampling, 255 components,
+  source polarity, metadata/ICC, shared U8/U16 sources, malformed models/scripts
+  and resource limits. All 600 earlier C-verified DCT output hashes stay
+  unchanged after metadata helper extraction. All 84 tests pass in release and
+  isolated debug builds; rustfmt, Clippy and rustdoc with warnings denied pass.
+  See LOSSLESS-VALIDATION.md and tests/reports/lossless-encode-turbo.json.
+  Arithmetic/differential lossless, hierarchy, DNL/abbreviated streams,
+  incremental I/O, other reference/conformance corpora, coverage-guided fuzzing
+  and all measured performance/optimization work remain required.

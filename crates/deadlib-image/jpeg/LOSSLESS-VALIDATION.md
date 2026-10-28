@@ -84,7 +84,68 @@ decoder matches them. A separate literal-table test covers a 255-component
 frame with 4x4 factors and reversed separate scan order. These are native
 standards regression tests, not successful C decoder comparisons.
 
-SOF3 encoding, arithmetic SOF11, differential/hierarchical lossless, DNL and
+## Native SOF3 encoding
+
+`encode_lossless(&shared_image, LosslessOptions::default())` accepts grayscale
+and RGB without changing their original precision or integers. Shared one-bit,
+alpha and indexed sources require explicit caller conversion.
+`encode_lossless_samples` accepts native interleaved U8/U16 gray, RGB, YCbCr,
+CMYK and YCCK at P=2..16. U8 storage requires P<=8. The native planar constructor
+`LosslessImage::from_planes` accepts original sampling, IDs and 1..255 components;
+`LosslessImage::encode` can rewrite decoded samples without a raster copy.
+There is no implicit scaling, color transform or downsampling. Conventional
+CMYK is the raw API default, and `cmyk_polarity` labels complemented CMYK
+without changing its integers. RGB/YCbCr/YCCK use Adobe transform hints. No JFIF
+marker is generated for the lossless process. Metadata variants share the DCT
+writer's borrowed additions and ICC preserve/remove/replace controls.
+
+`LosslessOptions` selects predictor 1..7, Pt, fixed or Annex K optimized Huffman
+tables and restart rows. The optimized path collects two shared category
+histograms; the fixed path skips that pass. Both write to bounded output with
+no entropy/raster intermediary and no predictor row buffer. The encoder reads
+previous original samples at the scan's Pt and replicates edge values for
+dummy samples. A fixed fallback gives categories 0..16 five-bit codes, including
+the category-16 special case. Literal native output tests match independently
+derived Annex H bytes for the 16-bit midpoint difference and unclamped/wrapped
+two-dimensional prediction.
+
+Generated scans pack consecutive components, splitting at four components or
+ten samples per actual interleaved MCU; a single component may have 4x4 factors.
+`separate_components` forces one scan per component. A borrowed `LosslessScan`
+script specifies IDs, predictor, Pt and restart rows per scan. Separate scans
+can visit components in any order, and IDs inside one scan follow frame order.
+Each component appears exactly once. The emitted DRI is MCU columns multiplied
+by restart rows, must fit u16, and is redefined (including zero) when a later
+scan requires another interval. Pixel/sample/metadata/scan/output budgets and
+public model mutations are checked. Planar rewriting retains the source image's
+limits even if the caller supplies looser encoding limits.
+
+The independent encoder gate uses native output and both C/native decoders:
+
+```text
+python crates/deadlib-image/jpeg/tests/reference_lossless_encode.py --native crates/deadlib-image/jpeg/experiments/arithmetic-encode-target/release/examples/lossless_encode.exe --inspect crates/deadlib-image/jpeg/experiments/arithmetic-encode-target/release/examples/lossless_inspect.exe --oracle crates/deadlib-image/jpeg/experiments/oracle-build/Release/jpeg-lossless.exe --out crates/deadlib-image/jpeg/experiments/lossless-encode-gate
+```
+
+Every native file must decode identically in C and Rust and match the exact
+input integers after its explicit per-component Pt. The matrix covers all
+precisions, all seven predictors, both Huffman policies, all five color spaces,
+both CMYK conventions, four scan layouts, row restarts and independently
+C-encoded source rewrites. Boundary cases cover every Pt at P=2,8,12,15,16,
+alternating full-range extrema, predictor over/underflow and restart sequence
+wraparound. Tools are snapshotted and hashed; checkpoints support resuming.
+Evidence is retained in `tests/reports/lossless-encode-turbo.json`.
+All **4,448 cases** pass exactly, with zero C warnings: 2,520 raw encodes,
+848 boundary encodes and 1,080 rewrites of independently C-encoded sources.
+
+Native tests additionally cover common/fractional sampling, up to 4x4 factors,
+odd edge padding, 255 components, mixed custom scans, DRI changes, source
+polarity, shared U8/U16 input, metadata/ICC roundtrips, and invalid inputs and
+limits. These extend beyond the C decoder's lossless sampling/component limits
+and are not claimed as successful C comparisons. Extracting the common metadata
+helpers leaves all 600 earlier C-verified DCT encoder hashes unchanged; see
+`tests/reports/rewrite-lossless-refactor-turbo.json`.
+
+Arithmetic SOF11, differential/hierarchical lossless, DNL and
 incremental input/output remain required. Independent conformance corpora,
 IJG/mozjpeg checks, coverage-guided fuzzing and measured lossless performance
 also remain open. No complete-conformance or throughput claim is made.

@@ -34,6 +34,21 @@ without copying samples. Shared output keeps 8-bit values and scales other
 precisions to 16-bit storage; use the native planes for exact original values.
 See LOSSLESS-VALIDATION.md for reference gates and remaining lossless work.
 
+`encode_lossless(&shared_image, LosslessOptions::default())` preserves shared
+gray/RGB integers at their original 2..16-bit precision. The native
+`encode_lossless_samples` API also accepts interleaved YCbCr, CMYK and YCCK.
+It performs no color transform, inversion, downsampling or precision scaling.
+CMYK polarity is explicit; RGB/YCbCr/YCCK use Adobe hints and no JFIF header is
+generated. Use `LosslessImage::from_planes(...).encode(...)` to retain arbitrary
+component IDs, sampling and up to 255 components. Decoded lossless images can
+also be rewritten directly without another sample buffer. Options select all
+seven predictors, Pt, fixed/optimized Huffman tables, separate component scans,
+whole MCU rows between restarts and borrowed `LosslessScan` scripts. Explicit
+scans can vary predictor/Pt/restart rows and visit components in any order;
+each individual scan follows frame order. Generated scans pack legal MCUs and
+split larger layouts automatically. The metadata variants preserve APPn/COM,
+add segments, and preserve/remove/replace ICC bytes through the same writer.
+
 `encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
 without another lossy transform. It preserves quantizer values, visible blocks,
 and APPn/COM payloads. Controls select sequential or progressive
@@ -102,7 +117,7 @@ Limits bound pixels, coefficient/sample storage, metadata (including segment
 record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark; allocation instrumentation remains planned.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
-unsupported errors. Predictive lossless encoding and arithmetic lossless, hierarchy,
+unsupported errors. Arithmetic lossless, hierarchy,
 DNL, streaming, additional encoder scan strategies, and the broader validation
 and performance work remain required.
 

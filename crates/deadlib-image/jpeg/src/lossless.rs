@@ -28,6 +28,51 @@ pub struct LosslessImage<'a> {
     pub(crate) memory_bytes: usize,
 }
 impl<'a> LosslessImage<'a> {
+    /// Construct validated native planes for predictive encoding. Samples stay
+    /// at original precision and sampling; metadata is borrowed unchanged.
+    pub fn from_planes(
+        frame: FrameHeader,
+        components: Vec<ComponentPlane>,
+        metadata: Vec<MetadataSegment<'a>>,
+        limits: Limits,
+    ) -> Result<Self> {
+        if frame.components.is_empty() || frame.components.len() > 255 {
+            return Err(Error::Invalid("lossless image component count"));
+        }
+        let mut coding = Vec::new();
+        coding
+            .try_reserve_exact(frame.components.len())
+            .map_err(|_| Error::Allocation)?;
+        coding.resize(
+            frame.components.len(),
+            LosslessCoding {
+                predictor: 1,
+                point_transform: 0,
+            },
+        );
+        let mut image = Self {
+            frame,
+            components,
+            coding,
+            metadata,
+            scans: 0,
+            consumed: 0,
+            limits,
+            memory_bytes: 0,
+        };
+        image.memory_bytes = image.validate()?;
+        Ok(image)
+    }
+    pub fn encode(&self, options: crate::LosslessOptions) -> Result<Vec<u8>> {
+        self.encode_with_metadata(options, crate::MetadataOptions::default())
+    }
+    pub fn encode_with_metadata(
+        &self,
+        options: crate::LosslessOptions,
+        metadata: crate::MetadataOptions<'_>,
+    ) -> Result<Vec<u8>> {
+        crate::lossless_encode::encode_planes(self, options, metadata)
+    }
     pub fn color_space(&self) -> ColorSpace {
         crate::reconstruct::infer_color(&self.frame, &self.metadata)
     }

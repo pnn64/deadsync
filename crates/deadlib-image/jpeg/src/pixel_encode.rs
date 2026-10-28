@@ -17,7 +17,8 @@ pub enum SampleData<'a> {
 pub struct EncodeInput<'a> {
     pub width: u16,
     pub height: u16,
-    /// Source precision, 1..16. Values are explicitly scaled to output precision.
+    /// Source precision, 1..16. DCT output scales to its selected precision;
+    /// lossless output requires 2..16 and preserves native integers.
     pub precision: u8,
     pub color_space: ColorSpace,
     pub samples: SampleData<'a>,

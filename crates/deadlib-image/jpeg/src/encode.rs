@@ -100,7 +100,7 @@ pub fn encode_coefficients_with_metadata(
     metadata: MetadataOptions<'_>,
 ) -> Result<Vec<u8>> {
     validate(image)?;
-    validate_metadata(image, metadata)?;
+    validate_metadata(&image.metadata, image.limits, metadata)?;
     let n = image.components.len();
     let plan = Plan::new(
         &image.frame.components,
@@ -169,18 +169,14 @@ pub fn encode_coefficients_with_metadata(
     let mut out = Output::new(options.max_output_bytes);
     out.marker(0xd8)?;
     let mut metadata_index = 0;
-    emit_metadata(&mut out, image, &mut metadata_index, 0, metadata.icc)?;
-    for segment in metadata.additional_segments {
-        if matches!(metadata.icc, IccWrite::Preserve) || !is_icc(segment) {
-            out.segment(segment.marker, segment.data)?;
-        }
-    }
-    if let IccWrite::Replace(profile) = metadata.icc {
-        let count = profile.len().div_ceil(ICC_CHUNK_BYTES) as u8;
-        for (i, chunk) in profile.chunks(ICC_CHUNK_BYTES).enumerate() {
-            out.segment_parts(0xe2, &[ICC_IDENTIFIER, &[i as u8 + 1, count], chunk])?;
-        }
-    }
+    emit_metadata(
+        &mut out,
+        &image.metadata,
+        &mut metadata_index,
+        0,
+        metadata.icc,
+    )?;
+    emit_additional(&mut out, metadata)?;
     for (i, q) in quantizers.iter().enumerate() {
         let wide = q.iter().any(|&v| v > 255);
         let mut data = [0u8; 129];
@@ -232,7 +228,13 @@ pub fn encode_coefficients_with_metadata(
     }
     for s in 0..scan_count {
         if s > 0 {
-            emit_metadata(&mut out, image, &mut metadata_index, s, metadata.icc)?;
+            emit_metadata(
+                &mut out,
+                &image.metadata,
+                &mut metadata_index,
+                s,
+                metadata.icc,
+            )?;
         }
         let scan = plan.get(s)?;
         let mut sos = [0u8; 12];
@@ -316,7 +318,7 @@ pub fn encode_coefficients_with_metadata(
     }
     emit_metadata(
         &mut out,
-        image,
+        &image.metadata,
         &mut metadata_index,
         usize::MAX,
         metadata.icc,
@@ -325,14 +327,14 @@ pub fn encode_coefficients_with_metadata(
     Ok(out.bytes)
 }
 
-fn emit_metadata(
+pub(crate) fn emit_metadata(
     out: &mut Output,
-    image: &CoefficientImage<'_>,
+    segments: &[MetadataSegment<'_>],
     index: &mut usize,
     scan: usize,
     icc: IccWrite<'_>,
 ) -> Result<()> {
-    while let Some(s) = image.metadata.get(*index) {
+    while let Some(s) = segments.get(*index) {
         if s.preceding_scans > scan {
             break;
         }
@@ -340,6 +342,21 @@ fn emit_metadata(
             out.segment(s.marker, s.data)?;
         }
         *index += 1;
+    }
+    Ok(())
+}
+
+pub(crate) fn emit_additional(out: &mut Output, metadata: MetadataOptions<'_>) -> Result<()> {
+    for segment in metadata.additional_segments {
+        if matches!(metadata.icc, IccWrite::Preserve) || !is_icc(segment) {
+            out.segment(segment.marker, segment.data)?;
+        }
+    }
+    if let IccWrite::Replace(profile) = metadata.icc {
+        let count = profile.len().div_ceil(ICC_CHUNK_BYTES) as u8;
+        for (i, chunk) in profile.chunks(ICC_CHUNK_BYTES).enumerate() {
+            out.segment_parts(0xe2, &[ICC_IDENTIFIER, &[i as u8 + 1, count], chunk])?;
+        }
     }
     Ok(())
 }
@@ -411,12 +428,13 @@ fn validate(image: &CoefficientImage<'_>) -> Result<()> {
     Ok(())
 }
 
-fn validate_metadata(image: &CoefficientImage<'_>, options: MetadataOptions<'_>) -> Result<()> {
+pub(crate) fn validate_metadata(
+    segments: &[MetadataSegment<'_>],
+    limits: crate::Limits,
+    options: MetadataOptions<'_>,
+) -> Result<usize> {
     let mut bytes = 0usize;
-    for (additional, segments) in [
-        (false, image.metadata.as_slice()),
-        (true, options.additional_segments),
-    ] {
+    for (additional, segments) in [(false, segments), (true, options.additional_segments)] {
         for s in segments {
             if !matches!(s.marker, 0xe0..=0xef | 0xfe)
                 || s.data.len() > 65533
@@ -445,10 +463,10 @@ fn validate_metadata(image: &CoefficientImage<'_>, options: MetadataOptions<'_>)
             .and_then(|n| n.checked_add(count * (14 + core::mem::size_of::<MetadataSegment<'_>>())))
             .ok_or(Error::LimitExceeded("encoder metadata"))?;
     }
-    if bytes > image.limits.max_metadata_bytes {
+    if bytes > limits.max_metadata_bytes {
         return Err(Error::LimitExceeded("encoder metadata"));
     }
-    Ok(())
+    Ok(bytes)
 }
 
 fn walk(

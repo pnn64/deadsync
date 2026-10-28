@@ -154,6 +154,17 @@ impl Codebook {
         }
     }
 
+    pub fn lossless_fixed() -> Result<Self> {
+        let mut counts = [0; 16];
+        counts[4] = 17;
+        let mut symbols = Vec::new();
+        symbols
+            .try_reserve_exact(17)
+            .map_err(|_| Error::Allocation)?;
+        symbols.extend(0..=16);
+        Self::new(counts, symbols)
+    }
+
     #[inline]
     pub fn write(&self, out: &mut Output, symbol: u8) -> Result<()> {
         let length = self.lengths[symbol as usize];
