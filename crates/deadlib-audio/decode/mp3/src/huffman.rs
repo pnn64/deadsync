@@ -39,10 +39,7 @@ pub fn pair(bits: &mut BitReader<'_>, book: u8) -> Result<[i16; 2], Error> {
         return Ok([entry as u8 as i8 as i16, (entry >> 8) as u8 as i8 as i16]);
     }
     let value = if book >= 24 {
-        let width = cursor.remaining().min(5) as u32;
-        let mut lookahead = cursor;
-        let prefix = lookahead.read(width)? << (5 - width);
-        let entry = tables::ESCAPE_PREFIX[prefix as usize];
+        let entry = tables::ESCAPE_PREFIX[cursor.peek5()];
         if entry & 0x8000 != 0 {
             cursor.skip(((entry >> 8) & 7) as usize)?;
             entry as u8
@@ -77,10 +74,7 @@ pub fn quad(bits: &mut BitReader<'_>, table_b: bool) -> Result<[i16; 4], Error> 
     } else if cursor.flag()? {
         0
     } else {
-        let width = cursor.remaining().min(5) as u32;
-        let mut lookahead = cursor;
-        let prefix = lookahead.read(width)? << (5 - width);
-        let entry = tables::COUNT1[prefix as usize];
+        let entry = tables::COUNT1[cursor.peek5()];
         cursor.skip((entry >> 8) as usize)?;
         entry as u8
     };
