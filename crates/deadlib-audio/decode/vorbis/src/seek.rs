@@ -422,6 +422,7 @@ impl IndexBuilder {
             }
         } else if page.completed_packets() != 0 || header.is_eos() {
             state.timing.check_page(header)?;
+            let header = state.timing.resolve_eos_page(header);
             if let Some(packet) = state.last_audio
                 && !(header.is_eos() && self.options.eos_behavior == EosBehavior::Libvorbis)
                 && stream
@@ -851,7 +852,13 @@ impl<R: Read + Seek> OggSeekReader<R> {
             } else {
                 stream.origin + decoder.position() as i128
             };
-            let actual = granule(page.header().granule_position)? as i128;
+            let actual = if page.header().is_eos()
+                && page.header().granule_position == UNKNOWN_GRANULE_POSITION
+            {
+                stream.end.end_granule as i128
+            } else {
+                granule(page.header().granule_position)? as i128
+            };
             if page.header().is_eos() {
                 if self.index.options.eos_behavior == EosBehavior::Vorbis
                     && (actual > expected

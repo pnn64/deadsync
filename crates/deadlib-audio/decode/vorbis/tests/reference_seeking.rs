@@ -358,6 +358,16 @@ fn reference_seeks_match_repeated_blocks_and_pending_preroll() {
     }
 }
 
+#[test]
+#[ignore = "requires independent libvorbisfile zero-duration seek oracle"]
+fn reference_seeks_match_unknown_nil_eos_zero_duration_and_readable_pcm() {
+    let bytes = include_bytes!("fixtures/unknown-nil-eos-v1.ogg");
+    // The reference declares zero duration, yet actual reads after seek(0)
+    // return PCM. Do not apply the older helper's zero-total shortcut.
+    let requests = [(0, 100000), (0, 1), (0, 4097), (0, 0), (0, 100000)];
+    let (wire, output) = oracle(bytes, &requests);
+    compare(bytes, &wire, &output, "unknown nil EOS");
+}
 
 fn synthetic_seek_case(
     config: synthetic::Config,

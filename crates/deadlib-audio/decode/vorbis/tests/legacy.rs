@@ -56,6 +56,75 @@ fn rewrite(
     }
     out
 }
+
+#[test]
+fn completed_audio_pages_reject_negative_and_unknown_granules_in_every_policy() {
+    let source = baseline(true);
+    for value in [u64::MAX, u64::MAX - 1, i64::MAX as u64 + 1] {
+        for location in [2, 10, u32::MAX] {
+            let broken = rewrite(&source, |header, complete| {
+                assert!(complete != 0);
+                if header.sequence == location || (location == u32::MAX && header.is_eos()) {
+                    header.granule_position = value;
+                }
+            });
+            assert_ne!(source, broken);
+            for eos_behavior in [EosBehavior::Vorbis, EosBehavior::Libvorbis] {
+                let options = OggOptions {
+                    eos_behavior,
+                    allow_zero_span_granules: true,
+                    ..Default::default()
+                };
+                assert!(decode_reader(broken.as_slice(), options, |_| {}).is_err());
+                let mut pull = OggReader::with_options(broken.as_slice(), options);
+                while matches!(pull.read_next(|_| {}), Ok(true)) {}
+                assert_eq!(pull.read_next(|_| {}), Err(Error::Failed));
+                let mut push = OggStreamDecoder::new(options);
+                let mut failed = false;
+                for chunk in broken.chunks(17) {
+                    let mut offset = 0;
+                    while offset < chunk.len() {
+                        match push.push(&chunk[offset..], |_| {}) {
+                            Ok(n) => {
+                                assert!(n != 0);
+                                offset += n;
+                            }
+                            Err(_) => {
+                                failed = true;
+                                break;
+                            }
+                        }
+                    }
+                    if failed {
+                        break;
+                    }
+                }
+                assert!(failed || push.finish().is_err());
+                assert_eq!(push.push(&[], |_| {}), Err(Error::Failed));
+                push.reset();
+                let mut offset = 0;
+                while offset < source.len() {
+                    offset += push.push(&source[offset..], |_| {}).unwrap();
+                }
+                push.finish().unwrap();
+                for seek_behavior in [SeekBehavior::Retained, SeekBehavior::Libvorbis] {
+                    assert!(
+                        OggSeekReader::with_options(
+                            Cursor::new(&broken),
+                            SeekOptions {
+                                eos_behavior,
+                                seek_behavior,
+                                allow_zero_span_granules: true,
+                                ..Default::default()
+                            }
+                        )
+                        .is_err()
+                    );
+                }
+            }
+        }
+    }
+}
 fn full(bytes: &[u8], options: OggOptions) -> Vec<Vec<f32>> {
     let mut pcm = Vec::new();
     decode_reader(bytes, options, |event| match event {

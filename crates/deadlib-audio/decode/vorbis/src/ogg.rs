@@ -91,6 +91,9 @@ pub struct StreamEnd {
     /// Declared start offset, derived from the first marked audio page's
     /// header-only block counts under the reference EOS policy.
     pub start_granule: u64,
+    /// Effective final timestamp. An empty EOS with unknown position inherits
+    /// the preceding completed landmark, or the declared start under the
+    /// reference duration policy (whose declared duration is then zero).
     pub end_granule: u64,
 }
 pub enum OggEvent<'a> {
@@ -121,6 +124,7 @@ pub(crate) struct Timing {
     reference_gp: Option<i128>,
     reference_samples: Option<u64>,
     reference_gap: bool,
+    last_granule: Option<u64>,
 }
 pub(crate) struct Crop {
     pub(crate) skip: usize,
@@ -271,6 +275,26 @@ impl Timing {
         Ok(Some(crop))
     }
     pub(crate) fn check_page(&mut self, page: PageHeader) -> Result<(), Error> {
+        let page = self.resolve_eos_page(page);
+        self.check_known_page(page)?;
+        self.last_granule = Some(granule(page.granule_position)?);
+        Ok(())
+    }
+    // Container validation rejects unknown granules on completed packets, so
+    // an unknown EOS reaching this point is an empty page. It introduces no
+    // samples or padding. Native timing inherits the last completed landmark;
+    // vorbisfile's seekable duration scan instead clamps this sentinel to zero.
+    pub(crate) fn resolve_eos_page(&self, mut page: PageHeader) -> PageHeader {
+        if page.is_eos() && page.granule_position == container::UNKNOWN_GRANULE_POSITION {
+            page.granule_position = if self.eos_behavior == EosBehavior::Libvorbis {
+                self.declared_origin.unwrap_or(0)
+            } else {
+                self.last_granule.unwrap_or(0)
+            };
+        }
+        page
+    }
+    fn check_known_page(&mut self, page: PageHeader) -> Result<(), Error> {
         if self.eos_behavior == EosBehavior::Libvorbis && self.declared_origin.is_none() {
             let end = granule(page.granule_position)?;
             self.declared_origin = Some(end.saturating_sub(self.declared_raw_end));
@@ -288,6 +312,7 @@ impl Timing {
         check_granule(self, page, self.last_span)
     }
     pub(crate) fn end(&self, id: StreamId, page: PageHeader) -> Result<StreamEnd, Error> {
+        let page = self.resolve_eos_page(page);
         let end = granule(page.granule_position)?;
         let emitted_origin = self.origin.unwrap_or(0).max(0) as u64;
         let origin = if self.eos_behavior == EosBehavior::Libvorbis {
@@ -318,6 +343,7 @@ impl Timing {
         })
     }
     pub(crate) fn end_padding(&self, page: PageHeader) -> Result<(u64, bool), Error> {
+        let page = self.resolve_eos_page(page);
         if self.eos_behavior == EosBehavior::Libvorbis {
             let front = (-self.origin.unwrap_or(0)).max(0) as u64;
             let retained = self.raw_end.saturating_sub(front);

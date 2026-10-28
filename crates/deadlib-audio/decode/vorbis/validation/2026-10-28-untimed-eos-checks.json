@@ -1,0 +1,73 @@
+{
+  "created_utc": "2026-10-28T10:56:56.710493+00:00",
+  "scope": "Valid empty EOS with unknown granule; completed audio pages retain negative/unknown rejection. Full completion gates are recorded separately.",
+  "git_head": "22d57bf31665f99da478c2eb4164e55fff5cbf44",
+  "source_sha256": {
+    "src/ogg.rs": "ba7c1cfe0eaba17a17ebdc05920e94c64ba46e683493297dcad6f118ab2f0600",
+    "src/seek.rs": "118abf252fd76806e93a27b0a03633545b8bdf784679499b442ad1940496b09c",
+    "tests/legacy.rs": "bf74aa0a9e30c45f59ed2e1e5552bea5b39b9948a697ea3f38b2f4c8cbbbc5b3",
+    "tests/reference_seeking.rs": "570957ba00241ce7909c01e71635af574c1ed298daa2c5807d28f76e452bb2a2",
+    "tests/nil_eos.rs": "235c1a452668f8f837f03d2ec9a36ba4226428a90f95fad0a5e3d3de14424975",
+    "tests/fixtures/unknown-nil-eos-v1.ogg": "dd260ef1c699e2cd42a701001d23f75fd34a9531b861c5885acb26abc7f131b4"
+  },
+  "checks": [
+    {
+      "name": "nil-eos",
+      "exit_code": 0,
+      "passed": 2,
+      "failed": 0,
+      "ignored": 0,
+      "log": "2026-10-28-untimed-eos-nil-eos.log",
+      "sha256": "e46a334ac89cf6dd5776472b4c3581ee302cd4f380d9737a525a70e7ed623027",
+      "original_sha256": "286c111708c69d5ac51c3f8595d0618a9353a20ae94e4673d1ba71b694539891"
+    },
+    {
+      "name": "unknown-eos-focused",
+      "exit_code": 0,
+      "passed": 4,
+      "failed": 0,
+      "ignored": 0,
+      "log": "2026-10-28-untimed-eos-unknown-eos-focused.log",
+      "sha256": "a3a2ea811f1bcb768795abb8d6652b072b9797653d9a8b606ca89adb2644749f",
+      "original_sha256": "02a7fad85942b9b04c9dcf3b8f418f9a3b9a88bfad2c5ee4e8f49186f9981c07"
+    }
+  ],
+  "independent_pcm": {
+    "oracle": "libvorbis 1.3.7 unseekable oggstream plus actual repeated oggseekstates calls",
+    "emitted_frames_per_channel": 4672,
+    "channels": 2,
+    "rate": 48000,
+    "reference_declared_frames": 0,
+    "numeric_bounds": "unchanged floor-one peak 3e-6 / RMS 5e-7 times max(1, reference peak); exact counts/positions"
+  },
+  "acceptance_checks": {
+    "invalid_completed_granules": [
+      -1,
+      -2,
+      -9223372036854775808
+    ],
+    "api_policy_paths": 90,
+    "reset_recovery_checks": 18,
+    "fragmented_nil_streams": 16,
+    "byte_chunks": [
+      1,
+      17,
+      4093
+    ],
+    "eos_policies": [
+      "Vorbis",
+      "Libvorbis"
+    ]
+  },
+  "post_fix_songpack_checks": {
+    "scratch": "target/deadlib-audio-reference/songpack-validation-nil-eos-20261028/checks.json",
+    "sha256": "c906b4220bc4616da11a1719c1c9ed7b8ba27fbb7b5d90f66aadf90518c497a1",
+    "gates_passed": 8,
+    "songs": 32
+  },
+  "formatting": {
+    "command": "cargo fmt -p deadlib-audio-decode-ogg -p deadlib-audio-decode-vorbis -- --check",
+    "exit_code": 0
+  },
+  "format": "UTF-8, LF, line-final whitespace removed; original log hashes retained."
+}

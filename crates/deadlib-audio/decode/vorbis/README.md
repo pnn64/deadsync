@@ -42,8 +42,8 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
   partial reads and retained-buffer restart behavior matching libvorbis.
   `PacketTiming` supplies sequence/granule/EOS fields independently of Ogg;
   `SynthesisState` exposes the exact queue and clocks. Numerical policies remain
-  explicit. See [synthesis state](SYNTHESIS_STATE.md), including the remaining
-  libvorbisfile seek work.
+  explicit. See [synthesis state](SYNTHESIS_STATE.md) and
+  [reference file seeking](REFERENCE_SEEKING.md).
   Transform tables/scratch use f64 to retain PCM accuracy through cancellation;
   [configuration parity](CONFIGURATION_PARITY.md) records the regression.
   The first block primes overlap and returns zero frames. `reset` keeps tables
@@ -262,3 +262,8 @@ The [EOS count follow-up](EOS_CLAMPING.md) adds explicit bounded reference EOS
 clipping and separates declared duration from emitted PCM. It retains the
 original retained-PCM/libvorbisfile differences as an exact inventory. The
 explicit reference seek mode checks all of those requests against C directly.
+
+[Empty EOS pages without timestamps](UNTIMED_EOS.md) inherit the last completed
+audio landmark under the default policy. The explicit reference EOS policy
+preserves libvorbisfile's zero declared duration and separately records emitted
+PCM. Completed audio pages with unknown or negative granules remain errors.
