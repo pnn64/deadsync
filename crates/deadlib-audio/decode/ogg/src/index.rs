@@ -270,7 +270,8 @@ impl OggIndex {
                 header,
                 stream: stream_index,
                 first_packet: stream.packets,
-                completed_packets: page.completed_packets() as u16,
+                // Demux already numbered every completed packet on this page.
+                completed_packets: last.map_or(0, |last| (last.number - stream.packets + 1) as u16),
                 first_packet_offset,
                 granule_floor: 0,
                 landmark: 0,
