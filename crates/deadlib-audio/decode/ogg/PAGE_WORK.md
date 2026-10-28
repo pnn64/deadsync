@@ -1,5 +1,8 @@
 # Page metadata and checksum work
 
+The later [index-query and stream-storage measurements](PACKET_STATE.md) cover
+early-exit granule checks, endpoint stream selection and smaller demux state.
+
 This pass starts at `b776787db`. The measurements isolate three source changes
 using the same current probes, compiler, dependencies and build flags.
 Production grows by 32 lines; the added word arithmetic removes byte-loop work

@@ -376,9 +376,59 @@ fn main() {
             }
             capture.finish().unwrap();
         });
+        probe(&format!("paused-capture/{n}"), 8, || {
+            let mut capture = PacketCapture::new(42, Limits::default());
+            for &(page, offset) in black_box(&pages) {
+                while !capture
+                    .push_page_until(page, offset, |p| {
+                        black_box(p);
+                        std::ops::ControlFlow::Break(())
+                    })
+                    .unwrap()
+                {}
+            }
+            capture.finish().unwrap();
+        });
+        probe(&format!("batched-capture/{n}"), 8, || {
+            let mut capture = PacketCapture::new(42, Limits::default());
+            for &(page, offset) in black_box(&pages) {
+                loop {
+                    let mut emitted = 0;
+                    if capture
+                        .push_page_until(page, offset, |p| {
+                            black_box(p);
+                            emitted += 1;
+                            if emitted == 16 {
+                                std::ops::ControlFlow::Break(())
+                            } else {
+                                std::ops::ControlFlow::Continue(())
+                            }
+                        })
+                        .unwrap()
+                    {
+                        break;
+                    }
+                }
+            }
+            capture.finish().unwrap();
+        });
         probe(&format!("dense-index/{n}"), 16, || {
             black_box(
                 OggIndex::read(black_box(bytes.as_slice()), IndexOptions::default()).unwrap(),
+            );
+        });
+        let mut target = 0;
+        probe(&format!("granule-search/{n}"), 32, || {
+            target = (target + 131) & 4095;
+            let mut reader = io::Cursor::new(black_box(bytes.as_slice()));
+            black_box(
+                find_granule(
+                    &mut reader,
+                    0..bytes.len() as u64,
+                    black_box(42),
+                    black_box(target),
+                )
+                .unwrap(),
             );
         });
     }
@@ -428,6 +478,16 @@ fn main() {
             offset += len;
         }
         let index = OggIndex::read(bytes.as_slice(), IndexOptions::default()).unwrap();
+        for (name, serial) in [
+            ("first", 0),
+            ("middle", history / 2),
+            ("last", history),
+            ("missing", u32::MAX),
+        ] {
+            probe(&format!("stream/{history}/{name}"), 10_000, || {
+                black_box(index.stream(black_box(serial)));
+            });
+        }
         let mut number = 0;
         probe(&format!("packet-start/{history}"), 10_000, || {
             number = (number + 17) & 2047;
@@ -447,6 +507,39 @@ fn main() {
                     .unwrap();
             }
             demux.finish().unwrap();
+        });
+        probe(&format!("runtime-stats-demux/{history}"), 8, || {
+            let validation = black_box(ValidationOptions {
+                allow_zero_span_granules: true,
+                allow_decreasing_eos_granule: true,
+            });
+            let mut demux = Demuxer::with_validation(Limits::default(), validation);
+            for &(page, offset) in black_box(&pages) {
+                demux
+                    .push_page(page, offset, |p| {
+                        black_box(p);
+                    })
+                    .unwrap();
+            }
+            demux.finish().unwrap();
+            black_box(demux.compatibility());
+        });
+        probe(&format!("runtime-stats-capture/{history}"), 8, || {
+            let validation = black_box(ValidationOptions {
+                allow_zero_span_granules: true,
+                allow_decreasing_eos_granule: true,
+            });
+            let mut capture =
+                PacketCapture::with_validation(history, Limits::default(), validation);
+            for &(page, offset) in black_box(&pages) {
+                capture
+                    .push_page(page, offset, |p| {
+                        black_box(p);
+                    })
+                    .unwrap();
+            }
+            capture.finish().unwrap();
+            black_box(capture.compatibility());
         });
         probe(&format!("chained-index/{history}"), 4, || {
             black_box(

@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [page metadata and checksum measurements](PAGE_WORK.md) cover word
+The latest [index-query and stream-storage measurements](PACKET_STATE.md) cover
+early-exit packet-existence checks, endpoint stream selection and a smaller
+stored granule, with paired query measurements and exact state comparisons.
+
+The earlier [page metadata and checksum measurements](PAGE_WORK.md) cover word
 packet counts, directly folded checksum zeros and shared word lacing sums,
 with isolated CPU/heap comparisons and exact state and index checks.
 

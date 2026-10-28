@@ -104,7 +104,7 @@ def main():
             counts = {label: dict(re.findall(r"(\w+): (\d+)", fields))
                       for label, fields in allocation.findall(output)}
             measurements = timing.findall(output)
-            assert len(measurements) == len(counts) == 119
+            assert len(measurements) == len(counts) == 146
             for label, cycles, ns in measurements:
                 rows.append(dict(run=run, stage=stage, workload=label,
                                  cycles_per_op=float(cycles), ns_per_op=float(ns),

@@ -1,0 +1,556 @@
+{
+  "baseline_revision": "a1b778586",
+  "source_sha256": {
+    "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "484a0e92b96339d6a810839c8f0180c5a03707de14c57973d18850283a928a0b",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "6286c6320592f63ef3960dfab609057e0d42468d372daef70b0b23462247f286",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "7efa8d4fb6b4f54b17f6ba5379f10ff45665ba98356aecdc960c5c1f6c655df6",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "d84f5094e5857eccac55375baf56f34f2bf0b45624595df0db3072248d1154d5",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "33ff27ee1b726d63a92c951b94cfc36b6a8e68fa88d6968cf5cb7febc1be5a43",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "1c40d98777d45a3831ca03f75d7019af6f084e43744b4288970d361c125272c6",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "7787d5e43170750e6b723d10eb686ba92b4f8bba314dac462907542f7207dea7",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "aa63339e7362fed1c382ff694e8103d99f18476172cf2166b212cab8452f8797",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "90c5c0cbd1940cdbc7e926b7e52998526fad5396bad93d82ae818c1fcb8b5765"
+  },
+  "tests_sha256": {
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\compatibility.rs": "f8024be128779b8e8f19f8a7a7e6d3ee7f6787bfe2c838c54f259a861edc0694",
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\container.rs": "8456afc5fc6a6533193dff764b6d751d3062acdc1a4d9ccd10e6892694dbf6d6",
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\libogg.rs": "3b75b7067c505b0af951babe26a3d3388df6b851f59b4d49843132acbbbc81fe",
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\seeking.rs": "e2b602100d76ea95f574b2eeb58f3c783356ffdd8ebb3aa5ebf5ffea30ff305a",
+    "crates\\deadlib-audio\\decode\\ogg\\tests\\synchronization.rs": "b39f1dee10df0eba488accdcb5e93aa88e459c5ae8822a5eab1995d373d2e035"
+  },
+  "environment": {
+    "DEADLIB_LIBOGG_ORACLE": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\ogg-oracle-build\\Release\\deadlib_ogg_oracle.exe",
+    "DEADLIB_OGG_CORPUS": "C:\\GitHub\\deadsync\\assets",
+    "DEADLIB_OGG_EXTERNAL_CORPUS": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\corpus"
+  },
+  "checks": [
+    {
+      "label": "ogg-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--release",
+        "--target-dir",
+        "target/ogg-kernels-checks",
+        "--",
+        "--include-ignored",
+        "--skip",
+        "regenerate_sync_state_golden",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-packet-state-ogg-tests.log",
+      "log_sha256": "d93824480cc522bdbe14708d12b19cb60b9065a2b91eef74de9ee1dcff8f63f3"
+    },
+    {
+      "label": "vorbis-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--release",
+        "--target-dir",
+        "target/ogg-kernels-checks"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-packet-state-vorbis-tests.log",
+      "log_sha256": "564813f012f58a8a56ca6a1b080473a7bfc088843ee968840f36f024ab35d1ae"
+    },
+    {
+      "label": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--all-targets",
+        "--all-features",
+        "--target-dir",
+        "target/ogg-kernels-checks",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-packet-state-clippy.log",
+      "log_sha256": "255219d0ef5e85803625b1096068d29c27d5cf4b28c8022588e264fe55dd6362"
+    },
+    {
+      "label": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-packet-state-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "python",
+      "command": [
+        "python",
+        "-m",
+        "py_compile",
+        "crates/deadlib-audio/decode/scripts/benchmark_ogg_kernels.py"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-packet-state-python.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "probe-fmt",
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "crates/deadlib-audio/decode/ogg/validation/2026-10-28-capture-state-probe.rs"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-packet-state-probe-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "pair-fmt",
+      "command": [
+        "rustfmt",
+        "--edition",
+        "2024",
+        "--check",
+        "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-granule-pair.rs"
+      ],
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-packet-state-pair-fmt.log",
+      "exit_code": 0,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "tested_source_unchanged": true,
+  "oracle_sha256": "364bab1990fa7c276f3bb54483c53458f8c45af66d08b4065a9060a82f779f48",
+  "protocol_record_sha256": "748d3988c72256a0dd1e248df50d11e3878b257edb1de66ddb3bcc1d847aec79",
+  "baseline_matches_revision": true,
+  "source_diffs": {
+    "query-before->query-any": [
+      "index.rs"
+    ],
+    "query-any->query-lookup": [
+      "index.rs"
+    ],
+    "query-lookup->query-streams": [
+      "demux.rs"
+    ]
+  },
+  "final_worker_source_matches": true,
+  "build_and_dependency_controls_match": true,
+  "saved_workers_unchanged": true,
+  "benchmark_control_sha256": {
+    "tests\\support\\asset_upload_pairs.rs": "55a6e5f538332846e0dda77bf51c8dd7b3a0839f0aedd997d99148dd5ae80554",
+    "tests\\support\\draw_batching.rs": "60d2acf121fec7254b729eb76a38e8401b12f1afce8ec2b80e92fef62d4b1a19",
+    "tests\\support\\kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+    "tests\\support\\paired_bench.rs": "b7f64377a3665aee3272f72ea7c531d2fcddd4d02c84f4a62ea0125a194bfcf8",
+    "tests\\support\\paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+    "tests\\support\\perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "tests\\support\\perf_1870_popular.rs": "31de29d77dc79572ed1fd36ca34a520f4d3eadbc8175534f1d4fca4f60379467",
+    "tests\\support\\perf_1870_ranges.rs": "1c58cfa11b49819906b51da3a1209f22512d8ff56b38799a43adf934291cec3f",
+    "tests\\support\\perf_1870_subline.rs": "bea5fb660547eab8471c88a77ed786d30d5e9af45c4de0deaee65c5058bc3430",
+    "tests\\support\\song_fixture.rs": "e822e40be30452002a647d4af57f07a5d38e57771e6220c9781736a91eabbb2c",
+    "tests\\support\\song_lua_metrics.rs": "54c3654a3f8df64b0d17e1a1fbc89d9207184dba6f65aa56c255e2217a5e8e59",
+    "tests\\support\\song_lua_progress.rs": "43905891d5a03bb02c35b832df93a54cc95a159c610c4ac3508e2799cd54c45f",
+    "tests\\support\\song_lua_source_identity.rs": "f42774066bfd4dac9a2e465ff991593a0e2a83c3f22f8b8a4077551e985fa1d8",
+    "tests\\support\\workshop_fixture.rs": "1a0de4a2e3dea82e80927ec3a215452a51fc2c84218dca34e3f953d083b30412",
+    "crates\\deadlib-audio\\decode\\ogg\\benches\\container.rs": "95de98f357e80218fff47d296f0d62a0769240db503dabd09cbde017d40bbae8",
+    "crates\\deadlib-audio\\decode\\ogg\\benches\\kernels.rs": "804c431cd1cc44c09c776327a2355c0bc6c1bf9fd831a4d9c01a12efef8856ec"
+  },
+  "benchmark_runner_sha256": "ad2cc029f16499a688475ac88674065984b51cfb4fe7c2b0e1ad39abe5033b2c",
+  "measurements": {
+    "rows": 4672,
+    "json_sha256": "77042eefe2e28f5fbe145f877ae02a9a9ac33c2a0ddcf43d00da9bad89984eca",
+    "tsv_sha256": "1409fd2aecd8a3ae6cf3739396f6a1de8d53074733f360994c062661071c0659",
+    "allocation_counts_identical": true,
+    "heap_bytes_never_increase": true,
+    "summary_recomputed": true
+  },
+  "test_counts": {
+    "ogg-tests": {
+      "passed": 55,
+      "failed": 0,
+      "ignored": 0
+    },
+    "vorbis-tests": {
+      "passed": 113,
+      "failed": 0,
+      "ignored": 87
+    }
+  },
+  "heap_changes": {
+    "chained-index/0": {
+      "before": {
+        "allocs": 5,
+        "reallocs": 10,
+        "frees": 5,
+        "allocated_bytes": 327985,
+        "freed_bytes": 327985,
+        "peak_bytes": 164438
+      },
+      "after": {
+        "allocs": 5,
+        "reallocs": 10,
+        "frees": 5,
+        "allocated_bytes": 327953,
+        "freed_bytes": 327953,
+        "peak_bytes": 164406
+      }
+    },
+    "dense-demux/0": {
+      "before": {
+        "allocs": 1,
+        "reallocs": 0,
+        "frees": 1,
+        "allocated_bytes": 288,
+        "freed_bytes": 288,
+        "peak_bytes": 288
+      },
+      "after": {
+        "allocs": 1,
+        "reallocs": 0,
+        "frees": 1,
+        "allocated_bytes": 256,
+        "freed_bytes": 256,
+        "peak_bytes": 256
+      }
+    },
+    "dense-index/17": {
+      "before": {
+        "allocs": 5,
+        "reallocs": 6,
+        "frees": 5,
+        "allocated_bytes": 10324,
+        "freed_bytes": 10324,
+        "peak_bytes": 7721
+      },
+      "after": {
+        "allocs": 5,
+        "reallocs": 6,
+        "frees": 5,
+        "allocated_bytes": 10292,
+        "freed_bytes": 10292,
+        "peak_bytes": 7689
+      }
+    },
+    "demux/8192": {
+      "before": {
+        "allocs": 2,
+        "reallocs": 3,
+        "frees": 2,
+        "allocated_bytes": 8729,
+        "freed_bytes": 8729,
+        "peak_bytes": 8540
+      },
+      "after": {
+        "allocs": 2,
+        "reallocs": 3,
+        "frees": 2,
+        "allocated_bytes": 8697,
+        "freed_bytes": 8697,
+        "peak_bytes": 8508
+      }
+    },
+    "chained-demux/64": {
+      "before": {
+        "allocs": 1,
+        "reallocs": 5,
+        "frees": 1,
+        "allocated_bytes": 18144,
+        "freed_bytes": 18144,
+        "peak_bytes": 9216
+      },
+      "after": {
+        "allocs": 1,
+        "reallocs": 5,
+        "frees": 1,
+        "allocated_bytes": 16128,
+        "freed_bytes": 16128,
+        "peak_bytes": 8192
+      }
+    },
+    "dense-index/0": {
+      "before": {
+        "allocs": 5,
+        "reallocs": 5,
+        "frees": 5,
+        "allocated_bytes": 5707,
+        "freed_bytes": 5707,
+        "peak_bytes": 3386
+      },
+      "after": {
+        "allocs": 5,
+        "reallocs": 5,
+        "frees": 5,
+        "allocated_bytes": 5675,
+        "freed_bytes": 5675,
+        "peak_bytes": 3354
+      }
+    },
+    "demux/1": {
+      "before": {
+        "allocs": 2,
+        "reallocs": 3,
+        "frees": 2,
+        "allocated_bytes": 1215,
+        "freed_bytes": 1215,
+        "peak_bytes": 852
+      },
+      "after": {
+        "allocs": 2,
+        "reallocs": 3,
+        "frees": 2,
+        "allocated_bytes": 1183,
+        "freed_bytes": 1183,
+        "peak_bytes": 820
+      }
+    },
+    "runtime-stats-demux/512": {
+      "before": {
+        "allocs": 1,
+        "reallocs": 8,
+        "frees": 1,
+        "allocated_bytes": 147168,
+        "freed_bytes": 147168,
+        "peak_bytes": 73728
+      },
+      "after": {
+        "allocs": 1,
+        "reallocs": 8,
+        "frees": 1,
+        "allocated_bytes": 130816,
+        "freed_bytes": 130816,
+        "peak_bytes": 65536
+      }
+    },
+    "dense-demux/1": {
+      "before": {
+        "allocs": 1,
+        "reallocs": 0,
+        "frees": 1,
+        "allocated_bytes": 288,
+        "freed_bytes": 288,
+        "peak_bytes": 288
+      },
+      "after": {
+        "allocs": 1,
+        "reallocs": 0,
+        "frees": 1,
+        "allocated_bytes": 256,
+        "freed_bytes": 256,
+        "peak_bytes": 256
+      }
+    },
+    "chained-index/64": {
+      "before": {
+        "allocs": 5,
+        "reallocs": 26,
+        "frees": 5,
+        "allocated_bytes": 689393,
+        "freed_bytes": 689393,
+        "peak_bytes": 345142
+      },
+      "after": {
+        "allocs": 5,
+        "reallocs": 26,
+        "frees": 5,
+        "allocated_bytes": 687377,
+        "freed_bytes": 687377,
+        "peak_bytes": 344118
+      }
+    },
+    "runtime-stats-demux/0": {
+      "before": {
+        "allocs": 1,
+        "reallocs": 0,
+        "frees": 1,
+        "allocated_bytes": 288,
+        "freed_bytes": 288,
+        "peak_bytes": 288
+      },
+      "after": {
+        "allocs": 1,
+        "reallocs": 0,
+        "frees": 1,
+        "allocated_bytes": 256,
+        "freed_bytes": 256,
+        "peak_bytes": 256
+      }
+    },
+    "demux/255": {
+      "before": {
+        "allocs": 2,
+        "reallocs": 3,
+        "frees": 2,
+        "allocated_bytes": 8985,
+        "freed_bytes": 8985,
+        "peak_bytes": 8796
+      },
+      "after": {
+        "allocs": 2,
+        "reallocs": 3,
+        "frees": 2,
+        "allocated_bytes": 8953,
+        "freed_bytes": 8953,
+        "peak_bytes": 8764
+      }
+    },
+    "chained-index/512": {
+      "before": {
+        "allocs": 5,
+        "reallocs": 35,
+        "frees": 5,
+        "allocated_bytes": 933105,
+        "freed_bytes": 933105,
+        "peak_bytes": 466998
+      },
+      "after": {
+        "allocs": 5,
+        "reallocs": 35,
+        "frees": 5,
+        "allocated_bytes": 916753,
+        "freed_bytes": 916753,
+        "peak_bytes": 458806
+      }
+    },
+    "dense-demux/17": {
+      "before": {
+        "allocs": 1,
+        "reallocs": 0,
+        "frees": 1,
+        "allocated_bytes": 288,
+        "freed_bytes": 288,
+        "peak_bytes": 288
+      },
+      "after": {
+        "allocs": 1,
+        "reallocs": 0,
+        "frees": 1,
+        "allocated_bytes": 256,
+        "freed_bytes": 256,
+        "peak_bytes": 256
+      }
+    },
+    "runtime-stats-demux/64": {
+      "before": {
+        "allocs": 1,
+        "reallocs": 5,
+        "frees": 1,
+        "allocated_bytes": 18144,
+        "freed_bytes": 18144,
+        "peak_bytes": 9216
+      },
+      "after": {
+        "allocs": 1,
+        "reallocs": 5,
+        "frees": 1,
+        "allocated_bytes": 16128,
+        "freed_bytes": 16128,
+        "peak_bytes": 8192
+      }
+    },
+    "chained-demux/512": {
+      "before": {
+        "allocs": 1,
+        "reallocs": 8,
+        "frees": 1,
+        "allocated_bytes": 147168,
+        "freed_bytes": 147168,
+        "peak_bytes": 73728
+      },
+      "after": {
+        "allocs": 1,
+        "reallocs": 8,
+        "frees": 1,
+        "allocated_bytes": 130816,
+        "freed_bytes": 130816,
+        "peak_bytes": 65536
+      }
+    },
+    "demux/17": {
+      "before": {
+        "allocs": 2,
+        "reallocs": 3,
+        "frees": 2,
+        "allocated_bytes": 5268,
+        "freed_bytes": 5268,
+        "peak_bytes": 4905
+      },
+      "after": {
+        "allocs": 2,
+        "reallocs": 3,
+        "frees": 2,
+        "allocated_bytes": 5236,
+        "freed_bytes": 5236,
+        "peak_bytes": 4873
+      }
+    },
+    "dense-index/1": {
+      "before": {
+        "allocs": 5,
+        "reallocs": 6,
+        "frees": 5,
+        "allocated_bytes": 6271,
+        "freed_bytes": 6271,
+        "peak_bytes": 3668
+      },
+      "after": {
+        "allocs": 5,
+        "reallocs": 6,
+        "frees": 5,
+        "allocated_bytes": 6239,
+        "freed_bytes": 6239,
+        "peak_bytes": 3636
+      }
+    },
+    "chained-demux/0": {
+      "before": {
+        "allocs": 1,
+        "reallocs": 0,
+        "frees": 1,
+        "allocated_bytes": 288,
+        "freed_bytes": 288,
+        "peak_bytes": 288
+      },
+      "after": {
+        "allocs": 1,
+        "reallocs": 0,
+        "frees": 1,
+        "allocated_bytes": 256,
+        "freed_bytes": 256,
+        "peak_bytes": 256
+      }
+    }
+  },
+  "reference_revision": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+  "reference_source_clean": true,
+  "production_line_delta": 11,
+  "paired_measurements": {
+    "rows": 48,
+    "json_sha256": "984994ddc41a7e3368293742ac23d7e5e27bea77b15e9915235de32e41958f54",
+    "tsv_sha256": "c14339e6d8cf6f5b8301a9426de2f904b68b6301e2ca2c136a2e6800caad7401",
+    "summaries_recomputed": true
+  },
+  "audit_passed": true,
+  "production_commits": {
+    "packet_existence": "2d6e81461578552ea6fc2ee1475977ed8d5f5bf2",
+    "stream_endpoints": "73fa2403921a1d84f13fded1f7411a998e1b1660",
+    "stored_granule": "d8336a3f15a3270e116d425466f7ac9d35498312"
+  },
+  "cpu": {
+    "Name": "Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz",
+    "NumberOfCores": 22,
+    "NumberOfLogicalProcessors": 44
+  }
+}
