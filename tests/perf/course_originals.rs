@@ -71,6 +71,7 @@ pub(super) fn build_course_run_from_selection(
         stages,
         course_display_totals,
         next_stage_index: 0,
+        interrupted: false,
         stage_summaries: Vec::new(),
     })
 }

@@ -67,45 +67,44 @@ impl App {
         {
             return target;
         }
-        let Some(course) = self.state.session.course_run.as_ref() else {
+        let Some(course) = self.state.session.course_run.as_mut() else {
             return target;
         };
-        if course.course_type != deadsync_theme::views::CourseTypeView::Endless
-            || course.next_stage_index < course.stages.len()
-        {
-            return target;
-        }
-        // A cursor beyond the prepared history cannot be repaired by silently
-        // skipping songs. A normal boundary is exactly the end of that history.
-        let renewed = course.next_stage_index == course.stages.len()
-            && select_course::reroll_selected_endless_plan(&self.state.screens.select_course_state)
-                .or_else(|| {
-                    select_course::selected_course_plan(&self.state.screens.select_course_state)
-                })
-                .is_some_and(|selection| {
-                    super::append_endless_cycle(
-                        self.state
-                            .session
-                            .course_run
-                            .as_mut()
-                            .expect("active course checked"),
-                        selection,
-                        profile::get_session_play_style().chart_type(),
-                    )
-                });
+        let renewed = match (
+            course.course_type,
+            course.next_stage_index.cmp(&course.stages.len()),
+        ) {
+            (deadsync_theme::views::CourseTypeView::Endless, std::cmp::Ordering::Equal) => {
+                select_course::reroll_selected_endless_plan(&self.state.screens.select_course_state)
+                    .or_else(|| {
+                        select_course::selected_course_plan(&self.state.screens.select_course_state)
+                    })
+                    .is_some_and(|selection| {
+                        super::append_endless_cycle(
+                            course,
+                            selection,
+                            profile::get_session_play_style().chart_type(),
+                        )
+                    })
+            }
+            // Skipping unprepared history cannot repair an invalid cursor.
+            (deadsync_theme::views::CourseTypeView::Endless, std::cmp::Ordering::Greater) => false,
+            _ => return target,
+        };
         if renewed {
             return target;
         }
-        warn!("Unable to renew Endless course; returning to course selection.");
+        course.interrupted = true;
+        warn!("Unable to renew Endless course; finishing with the recorded course result.");
         self.state.shell.interaction.show_message(
             "Unable to prepare next course stage".to_string(),
             std::time::Instant::now(),
         );
         self.state.screens.player_options_state = None;
         self.pending_gameplay_init = None;
-        // The normal Gameplay -> SelectCourse lifecycle records the finished
-        // song, exits gameplay, and then clears the interrupted course.
-        CurrentScreen::SelectCourse
+        // The normal evaluation lifecycle records the finished song, saves the
+        // accumulated course score and retains its per-song evaluation pages.
+        CurrentScreen::Evaluation
     }
 
     fn reject_missing_course_plan(

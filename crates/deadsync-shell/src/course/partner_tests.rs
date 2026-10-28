@@ -84,6 +84,7 @@ fn empty_course(song: &Arc<SongData>) -> CourseRunState {
         stages: Vec::new(),
         course_display_totals: [CourseDisplayTotals::default(); MAX_PLAYERS],
         next_stage_index: 0,
+        interrupted: false,
         stage_summaries: Vec::new(),
     }
 }
@@ -230,4 +231,46 @@ fn second_participant_missing_chart_does_not_commit_first_participants_totals() 
         assert_eq!(total.total_steps, 0);
         assert_eq!(total.possible_grade_points, 0);
     }
+}
+
+#[test]
+fn interrupted_endless_is_final_without_player_failure_and_cannot_resume() {
+    let (song, parsed) = partner_song("dance-routine");
+    let mut course = empty_course(&song);
+    append_endless_cycle_with_loader(
+        &mut course,
+        plan(&song, 1),
+        "dance-routine",
+        &mut |_, indices, offset| build_requested_gameplay_charts(&parsed, indices, offset),
+    )
+    .unwrap();
+    course.next_stage_index = 1;
+    course.interrupted = true;
+    assert!(course.is_finished(false));
+    assert!(!course.has_next_stage());
+    assert!(course.next_stage().is_none());
+    let totals = course.course_display_totals;
+    assert!(
+        !append_endless_cycle_with_loader(
+            &mut course,
+            plan(&song, 1),
+            "dance-routine",
+            &mut |_, _, _| panic!("an interrupted course must not load another chart"),
+        )
+        .unwrap()
+    );
+    assert_eq!(course.stages.len(), 1);
+    let counters = |total: CourseDisplayTotals| {
+        (
+            total.possible_grade_points,
+            total.total_steps,
+            total.holds_total,
+            total.rolls_total,
+            total.mines_total,
+        )
+    };
+    assert_eq!(
+        course.course_display_totals.map(counters),
+        totals.map(counters)
+    );
 }

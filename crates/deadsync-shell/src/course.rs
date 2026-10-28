@@ -40,18 +40,21 @@ pub struct CourseRunState {
     pub stages: Vec<CourseStageRuntime>,
     pub course_display_totals: [CourseDisplayTotals; MAX_PLAYERS],
     pub next_stage_index: usize,
+    /// A loading error ends the course without marking its players as failed.
+    pub interrupted: bool,
     pub stage_summaries: Vec<stage_stats::StageSummary>,
 }
 
 impl CourseRunState {
     pub fn has_next_stage(&self) -> bool {
-        !self.stages.is_empty()
+        !self.interrupted
+            && !self.stages.is_empty()
             && (self.course_type == CourseTypeView::Endless
                 || self.next_stage_index < self.stages.len())
     }
 
     pub fn next_stage(&self) -> Option<&CourseStageRuntime> {
-        if self.stages.is_empty() {
+        if self.interrupted || self.stages.is_empty() {
             return None;
         }
         let index = if self.course_type == CourseTypeView::Endless {
@@ -64,6 +67,7 @@ impl CourseRunState {
 
     pub fn is_finished(&self, failed: bool) -> bool {
         failed
+            || self.interrupted
             || (self.course_type != CourseTypeView::Endless
                 && self.next_stage_index >= self.stages.len())
     }
@@ -227,7 +231,10 @@ fn append_endless_cycle_with_loader(
     chart_type: &str,
     load: &mut impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
 ) -> Result<bool, String> {
-    if course.course_type != CourseTypeView::Endless || selection.path != course.path {
+    if course.interrupted
+        || course.course_type != CourseTypeView::Endless
+        || selection.path != course.path
+    {
         return Ok(false);
     }
     let previous_len = course.stages.len();
@@ -286,6 +293,7 @@ pub fn build_course_run_from_selection(
         stages,
         course_display_totals,
         next_stage_index: 0,
+        interrupted: false,
         stage_summaries: Vec::new(),
     })
 }

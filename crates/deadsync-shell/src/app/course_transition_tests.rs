@@ -159,7 +159,7 @@ fn prepare_boundary(app: &mut App, root: &std::path::Path, pump: bool) -> Arc<So
 }
 
 #[test]
-fn endless_failed_renewal_transitions_to_course_selection_and_records_completed_song() {
+fn endless_failed_renewal_finishes_with_course_evaluation_and_completed_song() {
     on_app_thread(|| {
         for pump in [false, true] {
             for failure in ["payload", "plan", "cursor"] {
@@ -169,12 +169,12 @@ fn endless_failed_renewal_transitions_to_course_selection_and_records_completed_
                     profile_data::PlayStyle::Routine
                 };
                 with_session(style, profile_data::PlayerSide::P1, true, true, || {
-                    let root = std::env::temp_dir().join(format!(
-                        "pr845-transition-failure-{}-{pump}-{failure}",
-                        std::process::id()
-                    ));
-                    let mut app = test_app(&root);
-                    let b = prepare_boundary(&mut app, &root, pump);
+                    let root = tempfile::Builder::new()
+                        .prefix(&format!("pr845-transition-failure-{pump}-{failure}-"))
+                        .tempdir()
+                        .unwrap();
+                    let mut app = test_app(root.path());
+                    let b = prepare_boundary(&mut app, root.path(), pump);
                     match failure {
                         // Selection still has B's metadata, but its payload load fails.
                         "payload" => std::fs::remove_file(&b.simfile_path).unwrap(),
@@ -192,30 +192,29 @@ fn endless_failed_renewal_transitions_to_course_selection_and_records_completed_
                         }
                         _ => unreachable!(),
                     }
-                    let (target, commands) = app.prepare_global_fade_entry(CurrentScreen::Gameplay);
-                    assert_eq!(target, CurrentScreen::SelectCourse);
+                    let (target, _) = app.prepare_global_fade_entry(CurrentScreen::Gameplay);
+                    assert_eq!(target, CurrentScreen::Evaluation);
                     assert_eq!(
                         app.state.shell.interaction.message(),
                         Some("Unable to prepare next course stage")
                     );
-                    assert_eq!(
-                        app.state.screens.current_screen,
-                        CurrentScreen::SelectCourse
-                    );
+                    assert_eq!(app.state.screens.current_screen, CurrentScreen::Evaluation);
                     assert!(app.state.session.course_run.is_none());
                     assert!(app.state.screens.player_options_state.is_none());
                     assert!(app.pending_gameplay_init.is_none());
                     assert!(app.state.screens.gameplay_state.is_none());
-                    assert_eq!(app.state.session.played_stages.len(), 1);
+                    assert_eq!(app.state.session.played_stages.len(), 2);
                     assert_eq!(app.state.session.played_stages[0].song.title, "A");
-                    assert!(app.state.session.course_stage_eval_pages.is_empty());
-                    assert!(
-                        !commands.is_empty(),
-                        "normal selection entry effects must run"
+                    assert_eq!(
+                        app.state.session.played_stages[1].song.title,
+                        "PR845 transition"
                     );
+                    assert!(app.state.session.course_stage_eval_pages.is_empty());
+                    assert_eq!(app.state.session.course_eval_pages.len(), 2);
+                    assert!(app.state.screens.evaluation_state.return_to_course);
                     assert_eq!(
                         app.state.session.last_course_wheel_path.as_deref(),
-                        Some(root.join("endless.crs").as_path())
+                        Some(root.path().join("endless.crs").as_path())
                     );
                 });
             }
@@ -232,10 +231,12 @@ fn endless_successful_renewal_starts_next_song_with_extended_totals() {
             true,
             true,
             || {
-                let root = std::env::temp_dir()
-                    .join(format!("pr845-transition-success-{}", std::process::id()));
-                let mut app = test_app(&root);
-                prepare_boundary(&mut app, &root, false);
+                let root = tempfile::Builder::new()
+                    .prefix("pr845-transition-success-")
+                    .tempdir()
+                    .unwrap();
+                let mut app = test_app(root.path());
+                prepare_boundary(&mut app, root.path(), false);
                 let before = app
                     .state
                     .session
@@ -318,5 +319,118 @@ fn endless_successful_renewal_starts_next_song_with_extended_totals() {
                 );
             },
         );
+    });
+}
+
+/// Profiles live under the test services' root and are removed after restoring
+/// the active identities, including when an assertion unwinds.
+struct ScoreProfiles {
+    previous: [profile_data::ActiveProfile; MAX_PLAYERS],
+    directories: [tempfile::TempDir; MAX_PLAYERS],
+}
+impl ScoreProfiles {
+    fn new() -> Self {
+        let root = profile_data::app_runtime::profiles_root();
+        std::fs::create_dir_all(&root).unwrap();
+        let directories = std::array::from_fn(|_| {
+            tempfile::Builder::new()
+                .prefix("pr858-score-profile-")
+                .tempdir_in(&root)
+                .unwrap()
+        });
+        let previous = profile_data::runtime_active_profiles();
+        let profiles = std::array::from_fn(|side| profile_data::ActiveProfile::Local {
+            // Non-GUID ids resolve to these exact temporary profile folders.
+            id: directories[side]
+                .path()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned(),
+        });
+        let _ = profile_data::runtime_set_active_profiles(profiles);
+        Self {
+            previous,
+            directories,
+        }
+    }
+}
+impl Drop for ScoreProfiles {
+    fn drop(&mut self) {
+        let _ = profile_data::runtime_set_active_profiles(self.previous.clone());
+    }
+}
+
+#[test]
+fn interrupted_endless_saves_accumulated_routine_score_and_all_evaluation_pages() {
+    on_app_thread(|| {
+        for pump in [false, true] {
+            let style = if pump {
+                profile_data::PlayStyle::PumpRoutine
+            } else {
+                profile_data::PlayStyle::Routine
+            };
+            with_session(style, profile_data::PlayerSide::P1, true, true, || {
+                let root = tempfile::Builder::new()
+                    .prefix("pr858-endless-result-")
+                    .tempdir()
+                    .unwrap();
+                let mut app = test_app(root.path());
+                let b = prepare_boundary(&mut app, root.path(), pump);
+                let profiles = ScoreProfiles::new();
+                let score_hash = app
+                    .state
+                    .session
+                    .course_run
+                    .as_ref()
+                    .unwrap()
+                    .score_hash
+                    .clone();
+                // Finish the previous cycle and both songs of the next cycle.
+                for _ in 0..2 {
+                    let (target, _) = app.prepare_global_fade_entry(CurrentScreen::Gameplay);
+                    assert_eq!(target, CurrentScreen::Gameplay);
+                    finish_pending_stage(&mut app);
+                    app.state
+                        .screens
+                        .gameplay_state
+                        .as_mut()
+                        .unwrap()
+                        .progress
+                        .stage
+                        .song_completed_naturally = true;
+                }
+                assert_eq!(app.state.session.played_stages.len(), 2);
+                assert_eq!(app.state.session.course_stage_eval_pages.len(), 2);
+                std::fs::remove_file(&b.simfile_path).unwrap();
+                let (target, _) = app.prepare_global_fade_entry(CurrentScreen::Gameplay);
+                assert_eq!(target, CurrentScreen::Evaluation);
+                assert!(app.state.session.course_run.is_none());
+                assert!(app.state.screens.gameplay_state.is_none());
+                assert!(app.pending_gameplay_init.is_none());
+                assert_eq!(app.state.session.played_stages.len(), 4);
+                assert_eq!(app.state.session.course_eval_pages.len(), 4);
+                assert!(app.state.session.course_stage_eval_pages.is_empty());
+                assert_eq!(app.state.session.played_stages[0].song.title, "A");
+                assert_eq!(app.state.session.played_stages[1].song.title, "A");
+                assert_eq!(app.state.session.played_stages[2].song.title, "B");
+                assert_eq!(
+                    app.state.session.played_stages[3].song.title,
+                    "PR845 transition"
+                );
+                assert!(app.state.screens.evaluation_state.return_to_course);
+                for (side, directory) in profiles.directories.iter().enumerate() {
+                    let index = score_data::load_local_score_index_from_root(
+                        &directory.path().join("scores/local"),
+                    );
+                    assert_eq!(
+                        index.best_itg.contains_key(&score_hash),
+                        side == 0,
+                        "Routine saves the accumulated course result for its master only"
+                    );
+                }
+            });
+        }
     });
 }
