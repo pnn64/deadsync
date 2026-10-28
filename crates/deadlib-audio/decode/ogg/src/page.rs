@@ -192,6 +192,32 @@ impl<'a> Iterator for Fragments<'a> {
     }
 }
 
+#[inline]
+fn validate_page(fields: PageHeader, lacing: &[u8], body_length: usize) -> Result<(), Error> {
+    if fields.flags & !7 != 0 {
+        return Err(Error::Invalid("reserved page flags"));
+    }
+    if lacing.len() > 255 {
+        return Err(Error::Invalid("more than 255 page segments"));
+    }
+    if lacing.iter().map(|&n| n as usize).sum::<usize>() != body_length {
+        return Err(Error::Invalid("lacing/body size mismatch"));
+    }
+    Ok(())
+}
+
+#[inline]
+fn encoded_header(fields: PageHeader, segments: u8) -> [u8; 27] {
+    let mut header = [0; 27];
+    header[..4].copy_from_slice(b"OggS");
+    header[5] = fields.flags;
+    header[6..14].copy_from_slice(&fields.granule_position.to_le_bytes());
+    header[14..18].copy_from_slice(&fields.serial.to_le_bytes());
+    header[18..22].copy_from_slice(&fields.sequence.to_le_bytes());
+    header[26] = segments;
+    header
+}
+
 /// Write a page without copying its payload. Handles partial/Interrupted IO.
 /// This is a framing primitive; it does not validate logical stream grammar.
 pub fn write_page(
@@ -200,23 +226,10 @@ pub fn write_page(
     lacing: &[u8],
     body: &[u8],
 ) -> Result<usize, Error> {
-    if fields.flags & !7 != 0 {
-        return Err(Error::Invalid("reserved page flags"));
-    }
-    if lacing.len() > 255 {
-        return Err(Error::Invalid("more than 255 page segments"));
-    }
-    if lacing.iter().map(|&n| n as usize).sum::<usize>() != body.len() {
-        return Err(Error::Invalid("lacing/body size mismatch"));
-    }
+    validate_page(fields, lacing, body.len())?;
     let mut header = [0; 282];
     let len = 27 + lacing.len();
-    header[..4].copy_from_slice(b"OggS");
-    header[5] = fields.flags;
-    header[6..14].copy_from_slice(&fields.granule_position.to_le_bytes());
-    header[14..18].copy_from_slice(&fields.serial.to_le_bytes());
-    header[18..22].copy_from_slice(&fields.sequence.to_le_bytes());
-    header[26] = lacing.len() as u8;
+    header[..27].copy_from_slice(&encoded_header(fields, lacing.len() as u8));
     header[27..len].copy_from_slice(lacing);
     let checksum = crc::update(crc::update(0, &header[..len]), body);
     header[22..26].copy_from_slice(&checksum.to_le_bytes());
@@ -232,6 +245,12 @@ pub fn encode_page(fields: PageHeader, lacing: &[u8], body: &[u8]) -> Result<Vec
     }
     let mut out = Vec::new();
     reserve(&mut out, 27 + lacing.len() + body.len())?;
-    write_page(&mut out, fields, lacing, body)?;
+    validate_page(fields, lacing, body.len())?;
+    out.extend_from_slice(&encoded_header(fields, lacing.len() as u8));
+    out.extend_from_slice(lacing);
+    out.extend_from_slice(body);
+    let header = 27 + lacing.len();
+    let checksum = crc::update(crc::update(0, &out[..header]), &out[header..]);
+    out[22..26].copy_from_slice(&checksum.to_le_bytes());
     Ok(out)
 }
