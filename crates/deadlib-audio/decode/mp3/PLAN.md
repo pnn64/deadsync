@@ -43,8 +43,8 @@ playback and backends remain unchanged. Commit every verified milestone.
    declaring the complete goal achieved.
 
 Passing a primitive test does not establish completion of its parent item.
-The goal remains active until decoding, encoding and their complete validation
-and performance requirements are implemented and verified.
+The broader roadmap remains unfinished until decoding, encoding and their
+validation and performance requirements are implemented and verified.
 
 The current user goal is decoder correctness and encoder interoperability.
 Native encoding and performance work remain on the broader roadmap, but are
@@ -65,10 +65,13 @@ now passes exact PCM/coordinate checks on nine read schedules for all 84 files
 and the 18 legacy PCM fixtures with one-byte reads; see STREAMING.md. Gapless
 sample mapping and exact indexed seeking now pass 41 integration tests, 120
 LAME-file comparisons against three reference decoders, and indexed raw checks
-on the 18 legacy PCM pairs; see SEEKING.md. Adversarial campaigns, broader encoder
-compatibility, encoding and measured optimization remain required on the
-roadmap. MPEG25.md now independently confirms the selected 8-kHz mixed-block
-equations while documenting reference implementation differences.
+on the 18 legacy PCM pairs; see SEEKING.md. Subsequent milestones pass 42 tests,
+Shine/Media Foundation/FFmpeg-LAME interoperability, two sanitizer campaigns, and
+full historical music/rejection/recovery checks; see ENCODER_COMPATIBILITY.md,
+fuzz/README.md and HISTORICAL.md. MPEG25.md and STEREO.md independently verify
+the selected equations while preserving reference implementation disagreements.
+The decoding completion audit remains active. Native encoding and measured
+optimization remain future roadmap work outside the current goal.
 
 ## Source material
 

@@ -1,0 +1,45 @@
+{
+  "files": [
+    {
+      "file": "ascii.mp3",
+      "url": "https://samples.ffmpeg.org/A-codecs/MP3/ascii.mp3",
+      "bytes": 319488,
+      "sha256": "7c72e328ad3fe508ba244d8a20bac3d2c646ceca42341dcb7dc4fbf7bb3badeb",
+      "role": "invalid_side_information",
+      "first_rejected_byte": 0,
+      "native_error": "Layer III big_values",
+      "mad_error": "bad big_values count"
+    },
+    {
+      "file": "Die Jodelschule.mp3",
+      "url": "https://samples.ffmpeg.org/A-codecs/MP3/Die%20Jodelschule.mp3",
+      "bytes": 3074217,
+      "sha256": "80315202fd39a13cad3fed1740fb75672d592d6371222c7cb758988e21d293a9",
+      "role": "layer_ii"
+    },
+    {
+      "file": "Silent_Light.mp3",
+      "url": "https://samples.ffmpeg.org/A-codecs/MP3/Silent_Light.mp3",
+      "bytes": 4206720,
+      "sha256": "10793142947d5bdb77165b6c94bae67f077a7c39c1b9a6327d5906f370913bc3",
+      "role": "valid_music"
+    },
+    {
+      "file": "Ed_Rush_-_Sabotage.mp3",
+      "url": "https://samples.ffmpeg.org/A-codecs/MP3/Ed_Rush_-_Sabotage.mp3",
+      "bytes": 7036343,
+      "sha256": "f7de854f9e313f8e5b5050f2a43932cdf100426a722a22533c774e0a6b190e38",
+      "role": "invalid_scfsi",
+      "first_rejected_byte": 3678041,
+      "native_error": "SCFSI reuse of short-block factors",
+      "mad_error": "bad scalefactor selection info"
+    },
+    {
+      "file": "01 - Charity Case.mp3",
+      "url": "https://samples.ffmpeg.org/A-codecs/MP3/01%20-%20Charity%20Case.mp3",
+      "bytes": 7699852,
+      "sha256": "937858498fd1e92eaa1c47238f7cf4a67bc5eb8b8428d0358845b07d85a38469",
+      "role": "valid_music"
+    }
+  ]
+}

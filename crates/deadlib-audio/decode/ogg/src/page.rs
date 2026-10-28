@@ -140,10 +140,8 @@ impl<'a> Iterator for Fragments<'a> {
             .iter()
             .position(|&n| n < 255)
             .map_or(self.lacing.len(), |n| n + 1);
-        let len = self.lacing[..count]
-            .iter()
-            .map(|&n| n as usize)
-            .sum::<usize>();
+        // Every segment before the terminator is exactly 255 bytes.
+        let len = (count - 1) * 255 + self.lacing[count - 1] as usize;
         let ends_packet = self.lacing[count - 1] < 255;
         let fragment = Fragment {
             data: &self.body[..len],

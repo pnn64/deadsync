@@ -1,0 +1,27 @@
+{
+  "command": [
+    "ffprobe",
+    "-v",
+    "error",
+    "-show_entries",
+    "stream=codec_name,sample_rate,channels,duration",
+    "-of",
+    "json",
+    "target\\deadlib-mp3-reference\\historical-probe\\Die Jodelschule.mp3"
+  ],
+  "exit_code": 0,
+  "result": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "mp2",
+        "sample_rate": "44100",
+        "channels": 2,
+        "duration": "192.138563"
+      }
+    ]
+  },
+  "header_layer_bits": 2,
+  "source_sha256": "80315202fd39a13cad3fed1740fb75672d592d6371222c7cb758988e21d293a9"
+}
