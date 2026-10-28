@@ -1,6 +1,13 @@
 use deadlib_image_gif::*;
 use std::{borrow::Cow, hint::black_box, time::Instant};
 
+#[path = "../../../../tests/support/perf.rs"]
+#[allow(dead_code)]
+mod alloc;
+#[path = "../../../../tests/support/kernel_bench.rs"]
+#[allow(dead_code)]
+mod cpu;
+
 fn fixture(kind: usize) -> Gif {
     let mut g = Gif::new(Header::new(512, 512));
     g.header.global_palette = Some(
@@ -187,20 +194,35 @@ fn first_lzw(bytes: &[u8]) -> (u8, Vec<u8>) {
     }
     (min, data)
 }
-fn measure<T>(mut f: impl FnMut() -> T, iters: usize, samples: usize) -> (u128, u128, u128) {
+fn measure<T>(
+    mut f: impl FnMut() -> T,
+    iters: usize,
+    samples: usize,
+) -> (u128, u128, u128, u64, alloc::Churn) {
     for _ in 0..3 {
         black_box(f());
     }
     let mut times = Vec::new();
+    let mut cycles = Vec::new();
     for _ in 0..samples {
+        let start_cycles = cpu::cycles();
         let start = Instant::now();
         for _ in 0..iters {
             black_box(f());
         }
         times.push(start.elapsed().as_nanos() / iters as u128);
+        cycles.push((cpu::cycles() - start_cycles) / iters as u64);
     }
     times.sort();
-    (times[times.len() / 2], times[0], times[times.len() - 1])
+    cycles.sort();
+    let (_, churn) = alloc::measure(|| black_box(f()));
+    (
+        times[times.len() / 2],
+        times[0],
+        times[times.len() - 1],
+        cycles[cycles.len() / 2],
+        churn,
+    )
 }
 struct Report<'a> {
     name: &'a str,
@@ -211,19 +233,34 @@ struct Report<'a> {
 }
 impl Report<'_> {
     fn time<T>(&self, codec: &str, operation: &str, bytes: usize, f: impl FnMut() -> T) {
-        let (ns, min, max) = measure(f, self.iters, self.samples);
+        if std::env::var("DEADLIB_GIF_BENCH_NATIVE_ONLY").is_ok() && codec != "native" {
+            return;
+        }
+        if std::env::var("DEADLIB_GIF_BENCH_CASE").is_ok_and(|s| s != self.name) {
+            return;
+        }
+        if std::env::var("DEADLIB_GIF_BENCH_OPERATION").is_ok_and(|s| s != operation) {
+            return;
+        }
+        let (ns, min, max, cycles, churn) = measure(f, self.iters, self.samples);
         println!(
-            "{}\t{codec}\t{operation}\t{}\t{}\t{}\t{}\t{ns}\t{min}\t{max}\t{:.2}",
+            "{}\t{codec}\t{operation}\t{}\t{}\t{}\t{}\t{ns}\t{min}\t{max}\t{:.2}\t{cycles}\t{:.6}\t{}\t{}\t{}\t{}",
             self.name,
             self.iters,
             self.samples,
             self.encoded,
             self.pixels,
-            bytes as f64 * 1e9 / ns as f64 / 1048576.0
+            bytes as f64 * 1e9 / ns as f64 / 1048576.0,
+            bytes as f64 / cycles.max(1) as f64,
+            churn.allocs,
+            churn.reallocs,
+            churn.allocated_bytes,
+            churn.peak_bytes,
         );
     }
 }
 fn main() {
+    cpu::pin_thread();
     let iters = std::env::var("DEADLIB_GIF_BENCH_ITERS")
         .ok()
         .map(|s| s.parse::<usize>().unwrap())
@@ -235,7 +272,7 @@ fn main() {
         .unwrap_or(5)
         .max(1);
     println!(
-        "case\tcodec\toperation\titerations\tsamples\tencoded_bytes\tindexed_bytes\tmedian_ns\tmin_ns\tmax_ns\tMiB_per_second"
+        "case\tcodec\toperation\titerations\tsamples\tencoded_bytes\tindexed_bytes\tmedian_ns\tmin_ns\tmax_ns\tMiB_per_second\tmedian_cycles\tbytes_per_cycle\tallocations\treallocations\tallocated_bytes\tpeak_bytes"
     );
     for (kind, name) in [
         "solid",
@@ -244,11 +281,24 @@ fn main() {
         "noise256",
         "interlaced-noise",
         "animation32",
+        "tiles16-palette",
+        "solid2-palette",
     ]
     .into_iter()
     .enumerate()
     {
-        let g = fixture(kind);
+        let mut g = fixture(match kind {
+            6 => 1,
+            7 => 0,
+            n => n,
+        });
+        if kind >= 6 {
+            g.header
+                .global_palette
+                .as_mut()
+                .unwrap()
+                .truncate(if kind == 6 { 16 } else { 2 });
+        }
         let bytes = reference_encode(&g);
         let native_bytes = encode(&g, &EncodeOptions::default()).unwrap();
         assert_eq!(
@@ -356,6 +406,51 @@ fn main() {
             weezl::decode::Decoder::new(weezl::BitOrder::Lsb, minimum)
                 .decode(black_box(&compressed))
                 .unwrap()
+        });
+    }
+    // Repeated plain-text graphics reuse the compositor's indices and cell mask.
+    // Include small text where a temporary palette allocation is significant.
+    struct Font;
+    impl TextRasterizer for Font {
+        fn rasterize(&mut self, character: u8, _: u8, _: u8, mask: &mut [u8]) -> Result<(), Error> {
+            mask.fill(character & 1);
+            Ok(())
+        }
+    }
+    for (name, width, height) in [("text-small", 8, 8), ("text-grid", 256, 128)] {
+        let mut header = Header::new(width, height);
+        header.global_palette = Some(vec![[0, 0, 0], [255, 255, 255]]);
+        let text = PlainText {
+            left: 0,
+            top: 0,
+            width,
+            height,
+            cell_width: 8,
+            cell_height: 8,
+            foreground_index: 1,
+            background_index: 0,
+            control: None,
+            data: vec![vec![b'A'; width as usize * height as usize / 64]],
+        };
+        let mut compositor = Compositor::new(&header).unwrap();
+        assert!(
+            compositor
+                .render_text(&text, &mut Font)
+                .unwrap()
+                .rgba
+                .iter()
+                .all(|&v| v == 255)
+        );
+        let pixels = width as usize * height as usize;
+        Report {
+            name,
+            iters: iters * 100,
+            samples,
+            encoded: 0,
+            pixels,
+        }
+        .time("native", "render-text-reuse", pixels, || {
+            black_box(compositor.render_text(black_box(&text), &mut Font).unwrap());
         });
     }
 }

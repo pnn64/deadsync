@@ -93,3 +93,53 @@ Further tuning opportunities include larger independent corpora, encoder
 adaptive-clear/compression-effort choices, code-batch decoding and palette
 expansion on other architectures. None changes indexed-data or animation
 semantics, and future candidates must retain differential parity.
+
+## CPU cycles and allocations (2026-10-28)
+
+Windows x86-64, Intel Core i7-1250U, Rust 1.97.1 / LLVM 22.1.6, workspace
+bench profile (opt-level 3, LTO, debug info 1, static MSVC CRT). The harness
+pins its thread to logical CPU 2. Windows `QueryThreadCycleTime` measures
+scheduled thread cycles, excluding time descheduled. These are OS-reported
+cycles, not retired instructions; frequency, cache contention, and other host
+activity remain uncontrolled. Other platforms currently report zero cycles.
+Allocation counts use the repository's thread-local System allocator probe,
+in a separate invocation outside the timed samples. Allocated bytes include
+all allocations and replacement sizes on reallocation, not just live memory.
+
+`pipeline` now also includes real 2/16-entry palettes and repeated plain-text
+rendering after warming reusable buffers. Its existing assertions compare
+indexed pixels and RGBA output against gif/gif-dispose before timing.
+The text fixture independently checks that its all-foreground RGBA is white.
+
+Save an executable after each build, then alternate before/after builds:
+
+```powershell
+cargo bench -p deadlib-image-gif --bench pipeline --no-run
+# Copy the printed executable to before.exe / after.exe at the relevant revisions.
+./crates/deadlib-image/gif/benches/paired.ps1 before.exe after.exe out.tsv composite tiles16-palette solid2-palette
+```
+
+Each comparison runs six pairs, alternates which variant runs first, and uses
+40 iterations x 7 samples per invocation (100x iterations for text). Tables
+report the upper median of the six invocation medians. The TSVs retain every
+invocation and its sample min/max. Throughput ratios below use before/after
+cycles; wall-clock throughput remains available in the raw data. The broad
+`00-baseline.tsv` and `01-validation.tsv` runs used 80 x 9; changing host load
+also moved unchanged operations, so only alternating comparisons support the
+individual optimization claims.
+
+Replacing the per-pixel early-exit predicate with a byte-maximum reduction
+allows compiler SIMD on valid small-palette frames. The 256-color fast path
+still skips scanning. Invalid indices return the same error, though validation
+now scans the whole buffer before rejecting an invalid small-palette frame.
+
+| Workload / operation | Before cycles | After cycles | CPU throughput | Allocations |
+|---|---:|---:|---:|---:|
+| tiles16-palette / decode-retain | 1,407,561 | 935,109 | 1.51x | 4 -> 4 |
+| solid2-palette / decode-retain | 857,843 | 372,132 | 2.31x | 4 -> 4 |
+| tiles16-palette / composite | 1,029,242 | 744,411 | 1.38x | 2 -> 2 |
+| solid2-palette / composite | 1,628,508 | 1,185,984 | 1.37x | 2 -> 2 |
+
+Raw comparisons: `validation/2026-10-28/01-paired-{decode,composite}.tsv`.
+Production change: one validation predicate, removing the branch on each
+pixel. All production code retains `forbid(unsafe_code)`.
