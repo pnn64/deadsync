@@ -191,3 +191,8 @@ The paired and protocol records retain exact rustc commands, source paths and
 linked library hashes. Correctness logs preserve untrimmed tool output. Shared
 host timings are observations of these fixtures and builds, not portable
 performance guarantees.
+
+The subsequent [packet-count lane and short-tail pass](LANES.md) compares the
+earlier CRC and fragment controls through shared function-pointer/outlined
+calls, records compiler function merging, and retains two further reductions
+in page-metadata work. The earlier full-worker costs remain in this record.

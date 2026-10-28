@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [empty-continuation and packet-writer measurements](FRAMING.md)
+The latest [packet-count lane and short-tail measurements](LANES.md) cover
+once-per-page horizontal folding and direct short fallback scans, with paired
+CPU/heap evidence and an investigation of earlier control regressions.
+
+The earlier [empty-continuation and packet-writer measurements](FRAMING.md)
 cover zero-body preflight, reused framing invariants and a rejected guard change,
 with paired CPU measurements and exact state/IO comparisons.
 
