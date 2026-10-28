@@ -691,3 +691,40 @@ the successful retry uses the established login shell and fresh directories.
 All duplicated seed bytes were verified against the immutable archive before
 removing the failed launch's extraction. The two corpus-storage reports preserve
 completed older mutable corpora in workspace ZIPs after byte-for-byte checks.
+
+## Encoder correctness completion campaigns (2026-10-28)
+
+The separate encoder goal excludes performance. Fresh campaigns pass 30,000
+`encode_stream` and 20,000 `deflate_stream` executions with ASan and native-crate
+mutation feedback. The PNG target checks generated PNG/APNG samples with Rust
+png; the raw target checks both buffered and streaming compression with flate2,
+then native streaming inflation. All formats, filter/interlace options, metadata,
+transparency and animation roles vary. Raw inputs include empty/short cases and
+32/64/128 KiB block/history boundaries, all input/output fragmentation choices,
+empty output calls and separate final input. No performance measurement or
+compression-ratio completion claim is made.
+
+`../experiments/encoder-fuzz-seeds.py` deterministically creates a narrow ZIP
+without invoking a production encoder: 2,250 PNG generator seeds and 1,152 raw
+seeds. `reports/encoder-seeds.json` binds archive/content digests and the producer.
+The archived `../experiments/encoder-fuzz-native.py` adapts the existing native
+runner for these targets, with 256-/131,072-byte caps, 30,000-/20,000-run defaults,
+offline Cargo and fresh output/build directories. The shared decoder runner and
+harnesses remain unchanged. To reproduce, generate the seed ZIP in a fresh
+checkout with `python experiments/encoder-fuzz-seeds.py` from the PNG package,
+or reuse the matching retained archive. Then run the archived runner on Linux
+from the workspace root:
+
+```sh
+python3 crates/deadlib-image/png/experiments/encoder-fuzz-native.py --cargo-fuzz /path/to/cargo-fuzz --seed-archive target/png-encoder-20261028-seeds.zip --target-dir /fresh/encoder-build --output-dir /fresh/encoder-campaign
+```
+
+`reports/encoder-source.json` and `encoder-encode_stream.log` /
+`encoder-deflate_stream.log` retain exact successful counts, commands,
+source/corpus/binary/log hashes, ASan runtime checks and compiler/object audits.
+Both native archives have feedback; fourteen dependency archives and four
+harness objects have no feedback counters or PC tables. All 57 source identities
+match current files. Full mutable corpora, binaries and object audits remain in
+`/home/perfecttaste/png-encoder-asan-20261028-a` and its matching build directory.
+These 50,000 new successful encoder executions are bounded evidence, not a
+universal safety or conformance proof. No production code changed.

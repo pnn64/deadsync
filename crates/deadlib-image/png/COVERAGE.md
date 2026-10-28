@@ -1,10 +1,11 @@
 # PNG Third Edition implementation and verification
 
-The PNG/APNG decoder correctness deliverable is complete. The
-[final validation](DECODER-VALIDATION.md) records the requirement audit and fresh
-full-suite/reference checks. On 2026-10-28 the user explicitly excluded
-performance from completion. Encoder features, compression ratio and encoder
-speed are also outside the decoder deliverable.
+The PNG/APNG encoder and decoder correctness deliverables are complete. The
+[encoder validation](ENCODER-VALIDATION.md) and
+[decoder validation](DECODER-VALIDATION.md) record their requirement audits and
+fresh full-suite/reference checks. On 2026-10-28 the user explicitly excluded
+performance from completion and added the encoder correctness goal after the
+decoder audit. Earlier encoder exclusions below describe the old decoder goal.
 Milestones are committed only after their relevant checks pass. Sections below
 the current requirement table are a chronological development record: earlier
 statements about pending work describe those snapshots, not current gates.
@@ -15,6 +16,8 @@ evidence, application responsibilities and explicitly open items.
 | --- | --- | --- |
 | Separate packages, no application integration | Package names, production tree, isolated offline workspace tests (`independent-build.log`) | Verified outside the application workspace; production dependency is only `deadlib-image` |
 | Native samples, all legal formats | Shared `Image`, `Samples`, `ColorType` | Primitives implemented |
+| Complete native PNG/APNG encoding | Both writers, explicit reference-depth conversion, all formats/filters/Adam7, metadata, raw compression and frame serialization | 145 regular plus all 21 optional tests pass; direct C libpng/Rust png encoder comparisons, exact independent field/control bytes, invalid-input and every-byte writer fault matrices pass |
+| Encoder sanitizers and independent reuse | `fuzz/reports/encoder-source.json`, `encoder-completion-validation.json` | 50,000 fresh encoder/DEFLATE ASan executions; native feedback isolation and current sources verified; standalone offline debug suite passes with only the shared image production dependency |
 | CRC-32 / Adler-32 | Known-answer tests | Verified known answers |
 | Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, history/output limits; compression / zlib-header / Huffman / prefix suites | All 65,536 headers, 92 window fixtures, 19,645 Huffman fixtures, 88,414 prefix/suffix cases, 65,668 literal-pair streams and 10,744 symbol/depth streams pass. Selected shapes cover every legal symbol/depth cell; this does not enumerate all trees |
 | PNG chunk framing and normative ordering | Independent `tests/chunks.rs`, `ancillary_order.rs`, `animation_fields.rs` and metadata suites | Property/name/case matrices, 720 core permutations, all 18 ancillary types across native formats, ordered pairs and critical boundaries, 120 APNG permutations and every small-stream IDAT split pass |
@@ -2066,3 +2069,45 @@ reference, command and result identities. Earlier open-performance statements
 above are historical and do not block this correctness deliverable. The goal is
 complete for independent PNG/APNG decoding and stored-sample rendering; caller
 color management and animation scheduling retain their documented API roles.
+
+## Encoder correctness completion (2026-10-28)
+
+After closing the decoder goal, the user requested the same correctness and
+independent-comparison standard for encoding, again excluding performance.
+Milestone `337da6b64` adds three encoder-specific integration targets and a
+separate C libpng encoder. The [encoder audit](ENCODER-VALIDATION.md) records
+109,376 exact literal scalar files, 82,396 rejected scalar inputs, 49,419
+metadata-order pairs, 308,033 invalid native boundary inputs, direct APNG wire
+controls/streams, and 2,616 every-byte writer-failure checks. Every case exercises
+both native writers where applicable. Unrepresentable malformed wire lengths
+are explicitly distinguished from invalid native API inputs.
+
+Direct encoder comparison checks 1,620 C libpng files plus 3,240 native files,
+and 2,160 Rust png animations / 180 static files plus 8,640 corresponding native
+animations. Original samples, palette/transparency bytes and frame controls
+remain exact. The adapter uses Rust png's documented/native metadata layout and
+the known zero-initialized, canvas-stride Adam7 scatter behavior; initial adapter
+failures required no production fix.
+
+The fresh complete release suite and isolated offline debug suite each pass
+145 regular tests. All 21 optional reference tests pass separately, including
+native sample/metadata getters and regeneration of the independent animation
+goldens. All 892 copied package files match the worktree. Strict all-target
+Clippy and scoped rustfmt pass; the production graph still contains only the
+shared image package.
+
+Fresh native-feedback ASan campaigns pass 30,000 PNG/APNG writer and 20,000 raw
+buffered/streaming DEFLATE executions. Seeds cover all image formats/options and
+empty/short/32/64/128 KiB raw boundaries with noisy, periodic and mixed data.
+Source identities, ASan runtime symbols, sixteen Rust archive audits and four
+harness-object audits are retained in `fuzz/reports/encoder-*`. Only the two
+native image crates have mutation feedback; no decoder-only source coverage
+percentage is inferred. All 57 recorded source identities still match.
+
+The three encoder conditions and datastream prerequisites are mapped in
+`CONFORMANCE.md`; the machine-readable final record is
+`encoder-completion-validation.json`. No required encoder feature or known
+correctness defect remains, and no production source change was needed.
+Application color conversion, quantization, opaque metadata interpretation and
+animation scheduling retain their documented roles. Performance measurements
+and historical encoder exclusions do not block this completed correctness goal.
