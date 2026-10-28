@@ -216,3 +216,28 @@ outputs, yet regressed noise/interlaced-noise encoding by roughly 50% in cycles
 and did not consistently improve the other fixtures. It was discarded; the
 original separate key/value arrays remain. `03-before-encode.tsv` and
 `03-packed-rejected.tsv` preserve that experiment's measurements.
+
+## Removing repeated work (2026-10-28, second batch)
+
+The same pinned-CPU alternating harness and environment described above apply.
+This batch starts from `17066c76d`; each subsequent comparison includes the
+earlier retained changes in both variants. Cycle columns remain independent
+upper medians; throughput is the median paired cycle ratio.
+
+Frame validation now accepts the existing external palette fallback, allowing
+decoding and compositing to validate the active palette once. This removes the
+second index scan/control check for local and global palettes, while preserving
+external palette validation and the original error order. The private helper
+is shared by the same three callers; no public API changes. Net production
+source change: 14 added / 16 removed lines.
+
+| Workload / operation | Before cycles | After cycles | CPU throughput | Allocations |
+|---|---:|---:|---:|---:|
+| solid2-palette / decode-retain | 194,848 | 181,622 | 1.08x | 4 -> 4 |
+| tiles16-palette / decode-retain | 510,694 | 354,498 | 1.44x | 4 -> 4 |
+| solid2-palette / composite | 710,845 | 693,874 | 1.03x | 2 -> 2 |
+| tiles16-palette / composite | 694,387 | 675,896 | effectively unchanged | 2 -> 2 |
+| noise256 / composite (control) | 678,150 | 692,434 | effectively unchanged | 2 -> 2 |
+
+Raw data: `04-before-decode.tsv`, `04-paired-decode.tsv`, and
+`04-paired-composite.tsv`. Allocation bytes are unchanged on every case.

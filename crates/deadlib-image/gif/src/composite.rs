@@ -173,13 +173,11 @@ impl Compositor {
         Ok(())
     }
     pub fn render(&mut self, frame: &Frame) -> Result<RenderedFrame<'_>, Error> {
-        frame.validate(&self.header, false)?;
+        frame.validate(&self.header, self.options.external_palette.as_deref(), false)?;
         let p = frame
             .palette(&self.header)
             .or(self.options.external_palette.as_deref())
             .ok_or(Error::MissingPalette)?;
-        validate_indices(&frame.indices, p.len())?;
-        validate_control(frame.control, p.len())?;
         let mut table = [[0u8; 4]; 256];
         for (dest, src) in table.iter_mut().zip(p) {
             *dest = [src[0], src[1], src[2], 255];

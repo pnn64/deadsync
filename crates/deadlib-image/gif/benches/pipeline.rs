@@ -380,6 +380,12 @@ fn main() {
             }
             c
         });
+        report.time(
+            "native",
+            "composite-init",
+            g.header.width as usize * g.header.height as usize * 4,
+            || Compositor::new(black_box(&g.header)).unwrap(),
+        );
         report.time("gif-dispose", "composite", render_bytes, || {
             let mut c = gif_dispose::Screen::new_decoder(&reference);
             for f in &frames {

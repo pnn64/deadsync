@@ -117,7 +117,7 @@ impl<W: Write> Encoder<W> {
         Ok(())
     }
     fn frame(&mut self, f: &Frame) -> Result<(), Error> {
-        f.validate(&self.header, true)?;
+        f.validate(&self.header, None, true)?;
         if f.sorted {
             self.require89()?;
         }
