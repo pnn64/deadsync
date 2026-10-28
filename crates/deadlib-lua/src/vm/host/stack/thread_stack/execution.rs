@@ -209,6 +209,8 @@ impl NativeStack<'_, '_> {
                 vm: self.call.vm,
                 hook: None,
                 id: 0,
+                data: None,
+                activation: None,
                 arguments: base,
                 count,
                 output: base.min(end),

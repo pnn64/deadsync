@@ -147,7 +147,7 @@ impl Vm {
         self.registers.extend_from_slice(&stack);
         self.relocate_native_error_functions(old.clone(), window);
         self.registers[old.start..old.end.min(window)].fill(Value::Nil);
-        self.registers[frame.base..window].fill(Value::Nil);
+        self.registers[frame.base.min(window)..window].fill(Value::Nil);
         frame.base = window;
         frame.vararg_start = window;
         frame.vararg_count = stack.len() as u32;

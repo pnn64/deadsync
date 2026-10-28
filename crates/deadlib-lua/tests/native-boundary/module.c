@@ -1265,3 +1265,8 @@ EXPORT int boundary_table_yield(lua_State *L) {return selected_table_yield(L);}
 EXPORT int boundary_table_c_yield_all(lua_State *L) {return selected_table_yield_all(L);}
 EXPORT int boundary_table_c_yield_tail(lua_State *L) {return selected_table_yield_tail(L);}
 EXPORT int boundary_table_c_yield_zero(lua_State *L) {return selected_table_yield_zero(L);}
+#include "../native-default/io-closers.c"
+EXPORT int boundary_file_closer(lua_State *L) {return file_closer(L);}
+EXPORT int boundary_file_capture(lua_State *L) {return file_closer_capture(L);}
+EXPORT int boundary_file_body(lua_State *L) {return file_body(L);}
+EXPORT int boundary_file_hook(lua_State *L) {return file_hook(L);}

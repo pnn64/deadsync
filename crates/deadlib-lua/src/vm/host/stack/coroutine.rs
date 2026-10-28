@@ -182,6 +182,9 @@ impl NativeStack<'_, '_> {
     /// # Errors
     /// Rejects an invalid result count or a metamethod/C-call boundary.
     pub fn yield_results(mut self, count: usize) -> Result<(), Error> {
+        self.request_yield(count)
+    }
+    pub(super) fn request_yield(&mut self, count: usize) -> Result<(), Error> {
         if let Err(error) = self.check_yield(count) {
             let value = self.intern(error.message_bytes());
             return Err(error.with_value(value));

@@ -29,11 +29,21 @@ pub(in crate::vm) struct Body {
     code: u64,
     closure: Value,
     visible_owner: usize,
+    hook: Option<NativeHookEvent>,
     complete: Option<(usize, usize)>,
     yielded: Option<(usize, usize)>,
 }
 
 impl Vm {
+    pub(in crate::vm) fn builtin_hook(&self, code: u64) -> Option<NativeHookEvent> {
+        self.active_native.and_then(|owner| {
+            self.native_bodies
+                .iter()
+                .rev()
+                .find(|b| b.thread == self.thread && b.owner == owner && b.code == code)
+                .and_then(|b| b.hook)
+        })
+    }
     pub(in crate::vm) fn body_code(&self, thread: ThreadId, index: usize) -> Option<u64> {
         self.native_bodies
             .iter()
@@ -120,6 +130,77 @@ impl Vm {
 }
 
 impl NativeStack<'_, '_> {
+    pub(in crate::vm) fn call_close_body(
+        &mut self,
+        function: Value,
+    ) -> Result<Option<usize>, Error> {
+        if let Some(body) = self.builtin_body_of(function) {
+            let count = self.call_builtin_body(body)?;
+            if count >= 0 {
+                return Ok(Some(count as usize));
+            }
+            let count = if self.call.hook.is_some() {
+                0
+            } else {
+                self.top()
+            };
+            self.request_yield(count)?;
+            return Ok(None);
+        }
+        let Value::Native(id) = function else {
+            return Err(self.error(b"invalid file close handler"));
+        };
+        let body = self
+            .call
+            .vm
+            .host_binding(id)
+            .cloned()
+            .ok_or_else(|| self.error(b"invalid file close handler"))?;
+        let activation = self.context_function();
+        let arguments = self.top();
+        let output = self.call.vm.frames[self.frame].base;
+        let mut context = HostCall {
+            vm: self.call.vm,
+            hook: self.call.hook,
+            id: self.call.id,
+            data: body.data,
+            activation,
+            arguments: self.base,
+            count: arguments,
+            output,
+            results: 0,
+            abort: None,
+            stack_opened: false,
+        };
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            (body.callback)(&mut context)
+        }));
+        let result = match result {
+            Ok(result) => context.abort.take().map_or(result, Err),
+            Err(payload) => {
+                context.vm.gc.closing = true;
+                std::panic::resume_unwind(payload)
+            }
+        };
+        let output = context.output;
+        let count = context.results;
+        let yielded = context.vm.frames[self.frame].pc == threads::HOST_YIELDED
+            || (context.hook.is_some() && context.vm.hooks.yielding);
+        let frame = context.vm.frames[self.frame];
+        self.base = frame.vararg_start;
+        self.call.output = self.base;
+        self.call.results = frame.argc();
+        result?;
+        if yielded {
+            self.call.output = output;
+            self.call.results = count;
+            self.finished = true;
+            Ok(None)
+        } else {
+            Ok(Some(count))
+        }
+    }
+
     /// Read a builtin body without retaining or calling its closure.
     /// Foreign host functions retain their own binding/function-pointer APIs.
     pub fn builtin_body(&self, index: isize) -> Option<NativeBuiltinBody> {
@@ -195,6 +276,7 @@ impl NativeStack<'_, '_> {
             code: body.0,
             closure,
             visible_owner,
+            hook: self.call.hook,
             complete: None,
             yielded: None,
         });
@@ -256,10 +338,12 @@ impl NativeStack<'_, '_> {
         let frame = vm.frames[depth];
         let (start, len, count, yielded) = if let Some((source, count)) = context.yielded {
             vm.transition = None;
-            (source, count, count, true)
+            let start = frame.vararg_start.min(source);
+            let end = (frame.vararg_start + frame.argc()).max(source + count);
+            (start, end - start, count, Some(source - start))
         } else {
             let (_, count) = context.complete.unwrap();
-            (frame.vararg_start, frame.argc(), count, false)
+            (frame.vararg_start, frame.argc(), count, None)
         };
         vm.relocate_native_error_functions(start..start + len, self.base);
         vm.registers.copy_within(start..start + len, self.base);
@@ -267,6 +351,16 @@ impl NativeStack<'_, '_> {
         vm.frames[depth] = original;
         self.call.results = len;
         self.sync();
-        Ok(if yielded { -1 } else { count as isize })
+        if let Some(offset) = yielded {
+            // lua_yield exposes a suffix while ci->base still owns the prefix.
+            // The C wrapper returns immediately, then the ordinary native
+            // yield path publishes this suffix without discarding that prefix.
+            self.base += offset;
+            self.call.output = self.base;
+            self.call.results = count;
+            Ok(-1)
+        } else {
+            Ok(count as isize)
+        }
     }
 }

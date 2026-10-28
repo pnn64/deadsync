@@ -1,0 +1,45 @@
+{
+  "runs": {
+    "reference": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-closers-focused-comparison\\reference\\hook-yield.lua"
+      ],
+      "returncode": 0,
+      "stdout_hex": "666972737409320d0a76616c7565093109626f6f6c65616e0966616c73650d0a76616c75650932097468726561643a73656c660d0a7374617475730973757370656e6465640d0a7365636f6e6409320d0a76616c7565093109626f6f6c65616e09747275650d0a76616c75650932096e756d6265720931370d0a73746174757309646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    },
+    "checked": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-gc-integers-checked-1793206232800616700\\lua.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-closers-focused-comparison\\checked\\hook-yield.lua"
+      ],
+      "returncode": 86,
+      "stdout_hex": "666972737409320d0a76616c7565093109626f6f6c65616e0966616c73650d0a76616c75650932097468726561643a73656c660d0a7374617475730973757370656e6465640d0a",
+      "stderr_hex": "4c55415f41535345525420746f2d3e63692d3e746f70202d20746f2d3e746f70203e3d206e20433a5c4769744875625c6465616473796e635c7461726765745c6c75612d636c692d7265666572656e63655c6c75612d352e312e355c7372635c6c6170692e633a3131360d0a"
+    },
+    "rust": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-closers-focused-comparison\\rust\\hook-yield.lua"
+      ],
+      "returncode": 0,
+      "stdout_hex": "666972737409310d0a76616c7565093109626f6f6c65616e09747275650d0a7374617475730973757370656e6465640d0a7365636f6e6409320d0a76616c7565093109626f6f6c65616e09747275650d0a76616c75650932096e756d6265720931370d0a73746174757309646561640d0a757361626c650934360d0a",
+      "stderr_hex": ""
+    }
+  },
+  "observations_equal": false,
+  "source": "local file=assert(io.tmpfile());local original=debug.getfenv(file)\nlocal closer=m.file_closer('yield-zero',false);debug.setfenv(file,{__close=closer})\nlocal fn=function(f)return 17 end;debug.setfenv(fn,{marker='Lua activation'})\nlocal co=coroutine.create(fn);m.file_hook(io.close,fn,co)\nlocal function pack(...)return{n=select('#',...),...}end\nlocal function emit(label,r)\n  print(label,r.n)\n  for i=1,r.n do local v=r[i];if rawequal(v,co)then print('value',i,'thread:self')\n  elseif type(v)=='string'then print('value',i,'string',v:gsub('.',function(c)return('%02x'):format(c:byte())end))\n  elseif type(v)=='number'or type(v)=='boolean'or v==nil then print('value',i,type(v),tostring(v))\n  else print('value',i,type(v))end end\nend\nlocal first=pack(coroutine.resume(co,file));debug.setfenv(file,original)\nemit('first',first);print('status',coroutine.status(co))\nemit('second',pack(coroutine.resume(co)));print('status',coroutine.status(co))\nif io.type(file)=='file'then assert(file:close())end\nprint('usable',17+29)\n",
+  "artifacts": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe": "41a7b92c086e3987d6484bfb1fd3680b81aef4e2742b588ccb42e64e71a5d9a4",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-closers-focused-comparison\\reference\\native.dll": "422a3140bed615d29716815ae53d36dd27add033446799fbe9a232abfffea47c",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-closers-focused-comparison\\reference\\hook-yield.lua": "ed433361f003a921da0284dfaabdb30b6f389a8b892695c0dfdfd7744fb46562",
+    "C:\\GitHub\\deadsync\\target\\lua-gc-integers-checked-1793206232800616700\\lua.exe": "8bb5a7e74007ee0a4d47d777262382369845968f247692260ee3b9af533e92e4",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-closers-focused-comparison\\checked\\native.dll": "2ef6e8870d7aa2eb01722aca9a2a7290b87fb5adbdb96e68a0573c2041cdff61",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-closers-focused-comparison\\checked\\hook-yield.lua": "28cfa375c7cf98146d783c3279d3a58d0d459593140bf09b3a8addd6b0bf27e3",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe": "84f945678aa043595a7e5f83227dcde06986da0931360cd9350c64168d5daa5b",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-closers-focused-comparison\\rust\\native.dll": "eb713df53d4f941fa72d7fb297f7ad2e6c8fb4a47e902ce14598ff1d2c5e5a08",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-closers-focused-comparison\\rust\\hook-yield.lua": "c87ff4c0c656992e6cb809d66f6484bf75983d408cfcb9c051b5d42c9c17c9d9"
+  },
+  "audit_script_sha256": "76915800b69d6c5babb388b8f02de7c26a9ed18d69ca97673bca78309b989a46"
+}

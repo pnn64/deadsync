@@ -14,6 +14,9 @@ impl Vm {
         if !(FIRST..=LAST).contains(&code) && !lines {
             return false;
         }
+        if frame.pc == STACK_READY || frame.pc == threads::HOST_YIELDED {
+            return true;
+        }
         if lines {
             if results.is_empty() {
                 let captures =

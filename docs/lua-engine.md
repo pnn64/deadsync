@@ -55,7 +55,7 @@ passed 629 Rust tests on each platform after fixing the remaining fixture
 assumptions. Crashing GNU C `unpack` inputs run in a separate strict audit;
 five native crashes remain recorded, with signed-overflow diagnostics and an
 independent wrapping control. The default reference flags remain unchanged.
-The current runs pass 810 Rust tests on Windows x64 and 811 on Linux x64 and
+The current runs pass 812 Rust tests on Windows x64 and 813 on Linux x64 and
 Linux i686 SSE2. The default x87 arithmetic baseline and five bounded traceback
 requests retain failed/incomplete observations. Complete C/auxiliary APIs and
 remaining language, library, debug, GC and resource behavior must also be
@@ -1464,6 +1464,15 @@ twelve opening orders and nine environment settings, including native loading,
 partial errors and initialization on yielded or waiting C activations. I/O's
 direct C close-handler path, I/O/openlibs initialization, lifecycle/allocator
 APIs and the other full Lua 5.1 parity gates remain open.
+
+The [I/O close callback path](testing/2026-10-28-rust-lua-io-closers.md) now
+looks up `__close` through table semantics and invokes its native body inside
+the existing activation. Binding data stays separate from caller environments
+and captures; modified C windows and yielded prefixes survive return hooks and
+resumption. Comparisons match 231 observations on both tested widths. A separate
+hook-yield audit retains unequal release behavior and a checked-reference
+assertion. I/O/openlibs initialization, lifecycle/allocator APIs and the broader
+standalone parity gates remain unfinished.
 
 ## Reference contract
 

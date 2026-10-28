@@ -1,0 +1,8 @@
+{
+  "commit": "fa1aaed3ceff4e4e575efbec3b96f25f4bbd3849",
+  "artifacts": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-closers-before\\deadlua.exe": "ee9ac5bad7948362541b3d974949dbc6180c50944378cec8e88e2347f21a08e9",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-closers-before\\lua51.dll": "54581b9a66ab5c20cec283c7ba751983d4fb4fb359a69a2ed93ef07cf0d43096",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\io-closers-before\\lua51.lib": "e4ca4c177eeb2ab8007b44fb64a32764178e7c19a19ad2191297422fad91cdb9"
+  }
+}

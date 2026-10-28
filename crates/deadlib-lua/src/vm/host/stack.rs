@@ -8,6 +8,7 @@ mod dump;
 mod file;
 mod hooks;
 mod inspection;
+pub(in crate::vm) mod io_callbacks;
 pub use hooks::{NativeHook, NativeHookEvent, NativeHookInfo};
 pub use inspection::{NativeDebugFrame, NativeDebugInfo, NativeDebugString};
 mod loader;
@@ -165,6 +166,9 @@ impl NativeStack<'_, '_> {
         usize::try_from((-10003isize).checked_sub(index)?).ok()
     }
     fn context_function(&self) -> Option<Value> {
+        if let Some(activation) = self.call.activation {
+            return Some(activation);
+        }
         // A C hook executes inside the interrupted activation. HostCall.id
         // still identifies the registered Rust hook and its private binding.
         let window = matches!(

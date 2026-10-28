@@ -178,6 +178,10 @@ mod supported {
             "boundary_table_c_yield_all",
             "boundary_table_c_yield_tail",
             "boundary_table_c_yield_zero",
+            "boundary_file_closer",
+            "boundary_file_capture",
+            "boundary_file_body",
+            "boundary_file_hook",
         ] {
             boot.push_str(&format!(
                 "{name}=assert(package.loadlib({},{}));",

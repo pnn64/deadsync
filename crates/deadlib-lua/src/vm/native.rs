@@ -793,9 +793,6 @@ impl Vm {
         if id == host::stack::body::MATCH {
             return self.match_iterator(closure, base);
         }
-        if id == host::stack::body::LINES {
-            return self.io_iterator(closure, base);
-        }
         if id == debug::GET_REGISTRY {
             self.registers[base] = Value::Table(self.registry);
             return Ok(1);
@@ -831,12 +828,6 @@ impl Vm {
             return self.table_native(id, base, count);
         }
         if id >= strings::ITERATOR_FIRST {
-            if matches!(
-                self.native_closures.get(id).map(|c| &c.kind),
-                Some(threads::NativeKind::Lines)
-            ) {
-                return self.io_iterator(id, base);
-            }
             return self.match_iterator(id, base);
         }
         let arg = |vm: &Self, index: usize| {

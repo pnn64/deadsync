@@ -61,6 +61,15 @@ const REAL_CLOSE: u64 = 148;
 const NO_CLOSE: u64 = 149;
 const PIPE_CLOSE: u64 = 150;
 pub(super) const LAST: u64 = PIPE_CLOSE;
+pub(super) const STACK_READY: u32 = 2;
+pub(super) fn callback(id: u64) -> Option<HostFunction> {
+    match id {
+        CLOSE | FCLOSE => Some(host::stack::io_callbacks::close),
+        GC => Some(host::stack::io_callbacks::finalize),
+        host::stack::body::LINES => Some(host::stack::io_callbacks::readline),
+        _ => None,
+    }
+}
 thread_local! { static ERRNO:ErrnoCell<i32>=const {ErrnoCell::new(0)}; }
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -348,7 +357,7 @@ impl Vm {
         }
         Value::Userdata(id)
     }
-    fn file_key(&self, value: Value, check_meta: bool) -> Option<u64> {
+    pub(in crate::vm) fn file_key(&self, value: Value, check_meta: bool) -> Option<u64> {
         let Value::Userdata(id) = value else {
             return None;
         };
@@ -367,7 +376,7 @@ impl Vm {
             _ => None,
         }
     }
-    fn checked_file(&self, value: Value, check_meta: bool) -> Result<u64, Error> {
+    pub(in crate::vm) fn checked_file(&self, value: Value, check_meta: bool) -> Result<u64, Error> {
         let missing = self
             .active_native
             .is_some_and(|i| self.frames[i].argc() == 0);
@@ -445,25 +454,6 @@ impl Vm {
             Err(code) => self.io_failure(base, code, None),
         }
     }
-    fn close_file(&mut self, value: Value, base: usize) -> Result<usize, Error> {
-        let key = self.checked_file(value, true)?;
-        let Value::Userdata(id) = value else {
-            unreachable!()
-        };
-        let env = self.userdata[slot_index(id.0)].env;
-        let name = self.intern(b"__close");
-        let closer = self.tables[slot_index(env.0)].get(name);
-        if closer == Value::Native(NO_CLOSE) {
-            self.resize_registers(self.registers.len().max(base + 2));
-            self.registers[base] = Value::Nil;
-            self.registers[base + 1] = self.intern(b"cannot close standard file");
-            return Ok(2);
-        }
-        if !matches!(closer, Value::Native(REAL_CLOSE | PIPE_CLOSE)) {
-            return Err(runtime("invalid file close handler"));
-        }
-        Ok(self.close_backend(key, base))
-    }
     fn close_backend(&mut self, key: u64, base: usize) -> usize {
         let result = self.io.files[slot_index(key)].close();
         match result {
@@ -471,47 +461,8 @@ impl Vm {
             Err(code) => self.io_failure(base, code, None),
         }
     }
-    pub(super) fn io_iterator(&mut self, id: u64, base: usize) -> Result<usize, Error> {
-        let file = self.native_closures[slot_index(id)].captures[0];
-        let close = self.native_closures[slot_index(id)].captures[1].is_truthy();
-        let key = self
-            .file_key(file, false)
-            .ok_or_else(|| runtime("file is already closed"))?;
-        if self.io.files[slot_index(key)].resource.is_none() {
-            return Err(runtime("file is already closed"));
-        }
-        let mut bytes = self.take_buffer(128);
-        let before = self.io.files[slot_index(key)].heap_bytes();
-        let result = self.io.files[slot_index(key)].read_line(&mut bytes);
-        self.io.files.note_alloc(
-            self.io.files[slot_index(key)]
-                .heap_bytes()
-                .saturating_sub(before),
-        );
-        match result {
-            Ok(true) => {
-                self.registers[base] = self.finish_buffer(bytes);
-                Ok(1)
-            }
-            Ok(false) => {
-                self.buffers.push(bytes);
-                if close {
-                    self.close_file(file, base)?;
-                }
-                Ok(0)
-            }
-            Err(code) => {
-                self.buffers.push(bytes);
-                ERRNO.set(code);
-                Err(Error::from_bytes(
-                    ErrorKind::Runtime,
-                    0,
-                    message(code).into_owned(),
-                ))
-            }
-        }
-    }
     pub(super) fn io_native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
+        debug_assert!(callback(id).is_none());
         let arg = self.argument(base, count, 0);
         if id == NO_CLOSE {
             self.resize_registers(self.registers.len().max(base + 2));
@@ -608,23 +559,20 @@ impl Vm {
             )?;
             return Ok(1);
         }
-        let default = matches!(id, READ | WRITE | FLUSH | LINES)
-            || (matches!(id, CLOSE | FCLOSE) && count == 0);
+        let default = matches!(id, READ | WRITE | FLUSH | LINES);
         if id == LINES && arg == Value::Nil && count != 0 {
             // io_lines appends the default file, but f_lines still checks slot 1.
             self.checked_file(arg, true)?;
         }
-        let pushed_default = default && matches!(id, LINES | CLOSE | FCLOSE);
+        let pushed_default = default && id == LINES;
         let value = if pushed_default {
-            self.tables[slot_index(self.builtin_environment(id).0)].get(Value::Number(
-                if matches!(id, CLOSE | FCLOSE) { 2. } else { 1. },
-            ))
+            self.tables[slot_index(self.builtin_environment(id).0)].get(Value::Number(1.))
         } else if default {
-            self.default_file(id, matches!(id, WRITE | FLUSH | CLOSE))?
+            self.default_file(id, matches!(id, WRITE | FLUSH))?
         } else {
             arg
         };
-        let key = if id == GC || id == TO_STRING {
+        let key = if id == TO_STRING {
             self.file_key(value, true)
                 .ok_or_else(|| self.argument_type_error(base, count, 0, "FILE*"))?
         } else if pushed_default {
@@ -636,13 +584,6 @@ impl Vm {
         let first = usize::from(!default);
         let before = self.io.files[slot].heap_bytes();
         let result = (|| match id {
-            CLOSE | FCLOSE | REAL_CLOSE | NO_CLOSE | PIPE_CLOSE => self.close_file(value, base),
-            GC => {
-                if self.io.files[slot].resource.is_some() {
-                    self.close_file(value, base)?;
-                }
-                Ok(0)
-            }
             TO_STRING => {
                 self.registers[base] = if self.io.files[slot].resource.is_none() {
                     self.intern(b"file (closed)")

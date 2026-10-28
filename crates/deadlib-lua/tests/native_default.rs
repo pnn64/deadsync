@@ -466,6 +466,17 @@ fn selected_table_tag_methods_preserve_yields_and_later_resumptions() {
 }
 
 #[test]
+fn file_close_bodies_keep_c_windows_context_errors_and_yields() {
+    let _guard = VMS.lock().unwrap();
+    let fixture = fixture();
+    let mut vm = Vm::new();
+    let path = vm.intern(fixture.module.to_string_lossy().as_bytes());
+    vm.set_global(b"library_path", path).unwrap();
+    script(&mut vm,b"local m=assert(package.loadlib(library_path,'luaopen_native'))('file closers');boundary_file_closer=m.file_closer;boundary_file_capture=m.file_closer_capture;boundary_file_body=m.file_body;boundary_file_hook=m.file_hook");
+    script(&mut vm, include_bytes!("native-boundary/io-closers.lua"));
+}
+
+#[test]
 fn default_cli_loads_an_unmodified_public_header_module() {
     let f = fixture();
     for entry in ["direct", "require"] {

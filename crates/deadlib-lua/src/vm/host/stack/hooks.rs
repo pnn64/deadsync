@@ -218,10 +218,13 @@ impl Vm {
         self.hooks.running = Some(depth as u16);
         self.hooks.host_running = Some(id);
         self.active_native = Some(depth);
+        let data = self.host_binding(id).and_then(|f| f.data.clone());
         let mut context = HostCall {
             vm: self,
             hook: Some(event),
             id,
+            data,
+            activation: None,
             arguments: base,
             count: end - base,
             output: end,

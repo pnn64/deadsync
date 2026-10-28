@@ -50,9 +50,10 @@ impl Action<'_> {
 /// VM; its Lua finalizers are skipped because execution was interrupted.
 pub type HostFunction = fn(&mut HostCall<'_>) -> Result<(), Error>;
 
+#[derive(Clone)]
 pub(super) struct Function {
     callback: HostFunction,
-    data: Option<Box<dyn Any + Send + Sync>>,
+    data: Option<Arc<dyn Any + Send + Sync>>,
 }
 impl std::fmt::Debug for Function {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -76,6 +77,8 @@ pub struct HostCall<'vm> {
     vm: &'vm mut Vm,
     hook: Option<NativeHookEvent>,
     id: u64,
+    data: Option<Arc<dyn Any + Send + Sync>>,
+    activation: Option<Value>,
     arguments: usize,
     count: usize,
     output: usize,
@@ -167,18 +170,26 @@ impl Vm {
         for &value in captures {
             self.validate_value(value)?;
         }
-        let function = Function { callback, data };
+        let function = Function {
+            callback,
+            data: data.map(Arc::from),
+        };
         self.native_closures.note_alloc(function.heap_bytes());
         self.new_native(threads::NativeKind::Host(function), captures)
     }
 
     #[inline]
     pub(super) fn host_callback(&self, id: u64) -> Option<HostFunction> {
+        if let Some(callback) = io::callback(id) {
+            return Some(callback);
+        }
         if id < strings::ITERATOR_FIRST {
             return None;
         }
         match self.native_closures.get(id).map(|f| &f.kind) {
             Some(threads::NativeKind::Host(function)) => Some(function.callback),
+            Some(threads::NativeKind::Builtin(code)) => io::callback(*code),
+            Some(threads::NativeKind::Lines) => Some(stack::io_callbacks::readline),
             _ => None,
         }
     }
@@ -191,10 +202,15 @@ impl Vm {
         callback: HostFunction,
     ) -> Result<(usize, usize), Error> {
         let arguments = self.frames[self.active_native.expect("native host frame")].vararg_start;
+        let data = self.host_binding(id).and_then(|f| f.data.clone());
+        let activation = self.builtin_context(id);
+        let hook = self.builtin_hook(id);
         let mut context = HostCall {
             vm: self,
-            hook: None,
+            hook,
             id,
+            data,
+            activation,
             arguments,
             count,
             output: base,
@@ -218,6 +234,13 @@ impl Vm {
         }
         result?;
         Ok((context.output, context.results))
+    }
+
+    fn host_binding(&self, id: u64) -> Option<&Function> {
+        let threads::NativeKind::Host(function) = &self.native_closures.get(id)?.kind else {
+            return None;
+        };
+        Some(function)
     }
 
     fn host_error(&self, value: Value) -> Error {
@@ -375,15 +398,12 @@ impl HostCall<'_> {
     pub fn hook_event(&self) -> Option<NativeHookEvent> {
         self.hook
     }
-    /// Borrow private binding data of the currently executing host closure.
+    /// Borrow private binding data of the executing host callback.
+    /// Direct body invocation keeps this binding separate from the caller's
+    /// Lua environment and captured values.
     /// The borrow ends before a mutable operation can reenter Lua.
     pub fn function_data<T: Any + Send + Sync>(&self) -> Option<&T> {
-        let threads::NativeKind::Host(function) =
-            &self.vm.native_closures[slot_index(self.id)].kind
-        else {
-            unreachable!("active host function")
-        };
-        function.data.as_deref()?.downcast_ref()
+        self.data.as_deref()?.downcast_ref()
     }
 
     /// Invoke a Lua/native function or callable value without leaving this callback.
@@ -711,7 +731,11 @@ impl HostCall<'_> {
 
     /// Borrow the closure's captured values.
     pub fn captures(&self) -> &[Value] {
-        &self.vm.native_closures[slot_index(self.id)].captures
+        let function = self.activation.unwrap_or(Value::Native(self.id));
+        let Value::Native(id) = function else {
+            return &[];
+        };
+        self.vm.native_closures.get(id).map_or(&[], |f| &f.captures)
     }
 
     /// Replace a captured value without changing its slot or closure identity.
@@ -719,7 +743,10 @@ impl HostCall<'_> {
     /// # Errors
     /// Returns an error for a missing slot or invalid/collected value.
     pub fn set_capture(&mut self, index: usize, value: Value) -> Result<(), Error> {
-        self.vm.set_native_capture(self.id, index, value)
+        let Value::Native(id) = self.activation.unwrap_or(Value::Native(self.id)) else {
+            return Err(self.error(b"invalid host capture index"));
+        };
+        self.vm.set_native_capture(id, index, value)
     }
 
     /// Read a number, accepting Lua numeric strings.

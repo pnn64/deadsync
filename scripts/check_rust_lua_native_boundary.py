@@ -131,6 +131,7 @@ def main():
     names+=['boundary_yield_call','boundary_yield_resume']
     names+=['boundary_table_thread','boundary_table_thread_panic','boundary_table_invoke']
     names+=['boundary_table_yield','boundary_table_c_yield_all','boundary_table_c_yield_tail','boundary_table_c_yield_zero']
+    names+=['boundary_file_closer','boundary_file_capture','boundary_file_body','boundary_file_hook']
     names+=['boundary_newthread','boundary_thread_values','boundary_thread_push','boundary_thread_move','boundary_thread_primitives','boundary_thread_selfmove','boundary_thread_resize','boundary_thread_hold']
     boot=';'.join(f"{name}=assert(package.loadlib({json.dumps(str(directory/'reference/reference_module.dll'))},{json.dumps(name)}))"for name in names)
     runs={}
@@ -176,6 +177,7 @@ def main():
     gc_integer_runs={}
     table_thread_runs={}
     table_yield_runs={}
+    io_closer_runs={}
     for engine in ['reference','rust']:
         with tempfile.TemporaryDirectory(prefix='deadlua-native-boundary-')as temporary:
             work=Path(temporary);(work/'boundary.lua').write_bytes((fixture/'cases.lua').read_bytes())
@@ -319,6 +321,9 @@ def main():
             (work/'boundary.lua').write_bytes((fixture/'table-yields.lua').read_bytes())
             run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=60)
             table_yield_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
+            (work/'boundary.lua').write_bytes((fixture/'io-closers.lua').read_bytes())
+            run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=60)
+            io_closer_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
             thread_unprotected_exit_runs[engine]={}
             for kind in ['fresh','completed','yielded','failed','partial']:
                 for native in [False,True]:
@@ -467,6 +472,10 @@ def main():
     table_yields_complete=all(run['returncode']==0 and b'table-yields-complete\t1078'in bytes.fromhex(run['stdout_hex'])for run in table_yield_runs.values())
     table_yields_equal=table_yields_complete and table_yield_runs['reference']['stdout_hex']==table_yield_runs['rust']['stdout_hex']and not table_yield_runs['reference']['stderr_hex']
     result['native_table_yields_probe']=dict(runs=table_yield_runs,completed=table_yields_complete,observations_equal=table_yields_equal,fixture='crates/deadlib-lua/tests/native-boundary/table-yields.lua',complete_interleaved_execution_proven=False)
+    io_closers_complete=all(run['returncode']==0 and b'io-closers-complete\t231'in bytes.fromhex(run['stdout_hex'])for run in io_closer_runs.values())
+    io_closers_equal=io_closers_complete and io_closer_runs['reference']['stdout_hex']==io_closer_runs['rust']['stdout_hex']and not io_closer_runs['reference']['stderr_hex']
+    result['native_io_closers_probe']=dict(runs=io_closer_runs,completed=io_closers_complete,observations_equal=io_closers_equal,fixture='crates/deadlib-lua/tests/native-boundary/io-closers.lua',complete_io_callback_interleavings_proven=False)
+    if not io_closers_equal:raise SystemExit('native I/O close callback observations differ')
     unprotected_exit_equal={key:all(row['returncode']==1 and row['stdout_hex']==row['expected_stdout_hex']and not row['stderr_hex']and row['buffered_file_hex']==b'waiting\0buffered\n'.hex()for row in [thread_unprotected_exit_runs[engine][key]for engine in ['reference','rust']])for key in thread_unprotected_exit_runs['reference']}
     result['native_thread_unprotected_exit_probe']=dict(runs=thread_unprotected_exit_runs,observations_equal=unprotected_exit_equal,expected_exit_code=1,fixture='crates/deadlib-lua/tests/native-boundary/thread-unprotected-exit.lua')
     gc_thread_equal={}
