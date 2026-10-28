@@ -127,6 +127,9 @@ pub fn requantize(
     }
     let powers = &*POWERS;
     output.fill(0.0);
+    if input.iter().fold(0, |combined, &value| combined | value) == 0 {
+        return Ok(());
+    }
     let gain = ((info.global_gain as f64 - 210.0) * 0.25).exp2();
     let scale = 1 + i32::from(info.scalefac_scale);
     let short = info.block_type == 2;
