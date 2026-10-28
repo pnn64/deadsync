@@ -122,8 +122,10 @@ cargo bench -p deadlib-image-gif --bench pipeline --no-run
 Each comparison runs six pairs, alternates which variant runs first, and uses
 40 iterations x 7 samples per invocation (100x iterations for text). Tables
 report the upper median of the six invocation medians. The TSVs retain every
-invocation and its sample min/max. Throughput ratios below use before/after
-cycles; wall-clock throughput remains available in the raw data. The broad
+invocation and its sample min/max. Throughput is the upper median of the six
+paired before/after cycle ratios, reducing drift between invocations; this can
+differ from dividing the two independently selected cycle medians. Wall-clock
+throughput remains available in the raw data. The broad
 `00-baseline.tsv` and `01-validation.tsv` runs used 80 x 9; changing host load
 also moved unchanged operations, so only alternating comparisons support the
 individual optimization claims.
@@ -136,9 +138,9 @@ now scans the whole buffer before rejecting an invalid small-palette frame.
 | Workload / operation | Before cycles | After cycles | CPU throughput | Allocations |
 |---|---:|---:|---:|---:|
 | tiles16-palette / decode-retain | 1,407,561 | 935,109 | 1.51x | 4 -> 4 |
-| solid2-palette / decode-retain | 857,843 | 372,132 | 2.31x | 4 -> 4 |
-| tiles16-palette / composite | 1,029,242 | 744,411 | 1.38x | 2 -> 2 |
-| solid2-palette / composite | 1,628,508 | 1,185,984 | 1.37x | 2 -> 2 |
+| solid2-palette / decode-retain | 857,843 | 372,132 | 2.46x | 4 -> 4 |
+| tiles16-palette / composite | 1,029,242 | 744,411 | 1.47x | 2 -> 2 |
+| solid2-palette / composite | 1,628,508 | 1,185,984 | 1.47x | 2 -> 2 |
 
 Raw comparisons: `validation/2026-10-28/01-paired-{decode,composite}.tsv`.
 Production change: one validation predicate, removing the branch on each
@@ -160,3 +162,57 @@ external palette rendering.
 Raw comparison: `validation/2026-10-28/02-paired-text.tsv`, immediately after
 the validation change. Production change: delete the palette allocation/copy
 and temporary local-palette field (10 lines removed, 3 added).
+
+LZW decoding now handles literals directly, with the control-code tests and
+phrase lookup inside the nonliteral branch. This removes the intermediate
+`Option` for a phrase source and the later literal/phrase dispatch. Output
+limits, fallible growth, dictionary updates, clear/EOI handling, and KwKwK
+expansion are retained. There is no new allocation or unsafe code; the source
+change is 36 lines added / 32 removed, mostly rearranging the existing loop.
+
+| Workload / operation | Before cycles | After cycles | CPU throughput |
+|---|---:|---:|---:|
+| tiles16 / lzw-decode | 485,523 | 345,229 | 1.41x |
+| gradient256 / lzw-decode | 905,731 | 851,200 | 1.06x |
+| noise256 / lzw-decode (confirmation) | 2,228,716 | 1,782,301 | 1.25x |
+| interlaced-noise / lzw-decode (confirmation) | 2,369,127 | 1,778,631 | 1.33x |
+| noise256 / decode-retain | 2,432,019 | 1,991,762 | 1.22x |
+| interlaced-noise / decode-retain | 4,039,421 | 3,332,081 | 1.23x |
+| gradient256 / decode-retain | 945,003 | 889,419 | 1.07x |
+| animation32 / decode-retain | 1,435,231 | 1,349,252 | 1.07x |
+
+Solid decoding is effectively unchanged. Tiles16 full decode improves only
+about 3%, despite the larger contiguous-LZW gain: full decoding calls LZW on
+GIF sub-block fragments, so the two paths exercise different loop boundaries.
+Allocation counts/bytes are unchanged on every case. The first interlaced LZW
+run straddled a host-load change; individual pair ratios and the confirmation
+both support the improvement. No universal CPU or corpus speedup is claimed.
+Raw data: `03-before-lzw.tsv`, `03-paired-lzw.tsv`,
+`03-paired-lzw-confirm.tsv`, and `03-paired-decode.tsv` in the validation folder.
+
+Correctness: all 20 ordinary integration tests pass in release, including the
+upstream corpus and gif/gif-dispose differential checks. A standalone comparison
+against `18f241c4c` also verifies 336 exact encoded-byte cases and roundtrips,
+1,376,256 exhaustive two-byte decode output/error comparisons across minimum
+code sizes 2..=8 and output limits 0/1/8, and fragmented updates with a retained
+output prefix. Reproduce from the workspace root:
+
+```powershell
+$scratch = 'target/gif-perf-parity'
+New-Item -ItemType Directory -Force -Path $scratch | Out-Null
+git show '18f241c4c:crates/deadlib-image/gif/src/lzw.rs' | Set-Content "$scratch/original-lzw.rs"
+Copy-Item 'crates/deadlib-image/gif/src/lzw.rs' "$scratch/current-lzw.rs"
+Copy-Item 'crates/deadlib-image/gif/validation/2026-10-28/lzw-parity.rs' "$scratch/lzw-parity.rs"
+rustc --edition=2024 -O "$scratch/lzw-parity.rs" -o "$scratch/parity.exe"
+& "$scratch/parity.exe"
+```
+
+`03-lzw-parity.log` records the result. The optional native giflib test still
+requires an external oracle executable and was not run in this session.
+
+A separate packed encoder-table experiment reduced the table from 48 KiB to
+32 KiB but added key extraction to every probe. It preserved 336 exact encoded
+outputs, yet regressed noise/interlaced-noise encoding by roughly 50% in cycles
+and did not consistently improve the other fixtures. It was discarded; the
+original separate key/value arrays remain. `03-before-encode.tsv` and
+`03-packed-rejected.tsv` preserve that experiment's measurements.

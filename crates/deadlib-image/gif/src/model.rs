@@ -293,7 +293,13 @@ pub(crate) fn validate_palette(p: &[[u8; 3]]) -> Result<(), Error> {
 pub(crate) fn validate_indices(data: &[u8], len: usize) -> Result<(), Error> {
     // A byte maximum lets the compiler validate a palette's indices in SIMD
     // batches instead of branching on every pixel. Every u8 fits 256 colors.
-    if len < 256 && data.iter().copied().max().is_some_and(|v| v as usize >= len) {
+    if len < 256
+        && data
+            .iter()
+            .copied()
+            .max()
+            .is_some_and(|v| v as usize >= len)
+    {
         Err(Error::Invalid("pixel index outside active palette"))
     } else {
         Ok(())
