@@ -154,8 +154,16 @@ pub(crate) fn page_size(input: &[u8]) -> Result<usize, Error> {
     Ok(header + body_size(&input[27..header]))
 }
 
-#[inline(never)]
+#[inline]
 pub(crate) fn body_size(lacing: &[u8]) -> usize {
+    if lacing.len() < 8 {
+        return lacing.iter().map(|&n| n as usize).sum();
+    }
+    body_size_words(lacing)
+}
+
+#[inline(never)]
+fn body_size_words(lacing: &[u8]) -> usize {
     let (words, tail) = lacing.as_chunks::<8>();
     let mut sums = 0;
     for word in words {
