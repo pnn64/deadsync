@@ -41,7 +41,7 @@ def capture(root, stage, fixtures, source_stage):
     package = folder / PACKAGE
     source = root / source_stage if source_stage else REPO
     for name in ("src", "benches"):
-        shutil.copytree(source / PACKAGE / name, package / name)
+        shutil.copytree((REPO if name == "benches" else source) / PACKAGE / name, package / name)
     shutil.copy2(source / PACKAGE / "Cargo.toml", package / "Cargo.toml")
     shutil.copytree(source / "tests/support", folder / "tests/support")
     profiles = tomllib.loads((REPO / "Cargo.toml").read_text())["profile"]
@@ -92,7 +92,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=REPO / "target/mp3-perf-20261028")
     parser.add_argument("--capture")
-    parser.add_argument("--source-stage", help="recapture saved production source through the fixed build path")
+    parser.add_argument("--source-stage", help="rebuild saved production source with current probes through the fixed build path")
     parser.add_argument("--fixture", action="append", type=Path, default=[])
     parser.add_argument("--stage", action="append", default=[])
     parser.add_argument("--verify-corpus", action="append", type=Path, default=[],

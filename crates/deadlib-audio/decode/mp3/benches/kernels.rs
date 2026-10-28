@@ -45,6 +45,30 @@ fn packets(path: &Path) -> Vec<(Vec<u8>, Option<FreeFormat>)> {
     frames
 }
 
+fn joint(rate: u32, mode: u8) -> FrameHeader {
+    let (version, index) = match rate {
+        44100 => (3, 0),
+        48000 => (3, 1),
+        32000 => (3, 2),
+        22050 => (2, 0),
+        24000 => (2, 1),
+        16000 => (2, 2),
+        11025 => (0, 0),
+        12000 => (0, 1),
+        8000 => (0, 2),
+        _ => panic!("benchmark sample rate"),
+    };
+    let word = 0xffe00000u32
+        | version << 19
+        | 1 << 17
+        | 1 << 16
+        | 9 << 12
+        | index << 10
+        | 1 << 6
+        | u32::from(mode) << 4;
+    FrameHeader::parse(&word.to_be_bytes()).unwrap()
+}
+
 fn verify(paths: &[String]) {
     let mut out = io::BufWriter::new(io::stdout().lock());
     for seed in [1, 0x73429, 0x982374ab] {
@@ -141,6 +165,54 @@ fn verify(paths: &[String]) {
             }
         }
     }
+    for rate in [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000] {
+        let bands = Bands::for_rate(rate).unwrap();
+        for mode in 0..=3 {
+            for (kind, mixed) in [(0, false), (1, false), (3, false), (2, false), (2, true)] {
+                for pan in 0..16 {
+                    let info = [GranuleChannel {
+                        block_type: kind,
+                        mixed_block: mixed,
+                        ..Default::default()
+                    }; 2];
+                    let factors = std::array::from_fn(|_| ScaleFactors {
+                        long: [pan; 22],
+                        short: [[pan; 3]; 13],
+                        long_width: [pan % 8; 22],
+                        short_width: [[pan % 8; 3]; 13],
+                        intensity_scale: pan & 1 != 0,
+                        ..Default::default()
+                    });
+                    for seed in 1..=3 {
+                        let mut input = [signal::<576>(seed), signal::<576>(seed + 19)];
+                        input[1][(seed as usize - 1) * 192..].fill(0.0);
+                        if seed == 3 {
+                            for (n, value) in [
+                                0.0,
+                                -0.0,
+                                f64::MIN_POSITIVE,
+                                f64::from_bits(1),
+                                f64::MAX,
+                                f64::INFINITY,
+                                f64::NEG_INFINITY,
+                            ]
+                            .into_iter()
+                            .enumerate()
+                            {
+                                input[0][n] = value;
+                                input[1][n] = -value;
+                            }
+                        }
+                        spectral::stereo(joint(rate, mode), &info, &factors, bands, &mut input)
+                            .unwrap();
+                        for value in input.into_iter().flatten() {
+                            out.write_all(&value.to_le_bytes()).unwrap();
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn main() {
@@ -227,6 +299,24 @@ fn main() {
                 .unwrap();
             });
         }
+    }
+    for mode in 1..=3 {
+        let source = [signal::<576>(19), signal::<576>(31)];
+        let info = [GranuleChannel::default(); 2];
+        let factors = [ScaleFactors::default(), ScaleFactors::default()];
+        let header = joint(44100, mode);
+        let bands = Bands::for_rate(44100).unwrap();
+        probe(&format!("stereo/{mode}"), 10_000, || {
+            let mut input = source;
+            spectral::stereo(
+                header,
+                black_box(&info),
+                black_box(&factors),
+                bands,
+                black_box(&mut input),
+            )
+            .unwrap();
+        });
     }
     for path in &args {
         let frames = packets(Path::new(path));

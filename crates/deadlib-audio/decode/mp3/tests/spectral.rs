@@ -167,6 +167,69 @@ fn joint_header(rate: u32, mode: u8) -> FrameHeader {
 }
 
 #[test]
+fn mid_side_only_preserves_exact_equations_and_checks_shapes_first() {
+    let pairs = [
+        (0.0, -0.0),
+        (-0.0, 0.0),
+        (1.0, 1.0),
+        (1.0, -1.0),
+        (f64::MAX, f64::MAX),
+        (f64::MIN_POSITIVE, f64::from_bits(1)),
+        (f64::from_bits(1), -f64::from_bits(1)),
+    ];
+    for rate in [44100, 22050, 8000] {
+        let bands = Bands::for_rate(rate).unwrap();
+        let header = joint_header(rate, 2);
+        let factors = [ScaleFactors::default(), ScaleFactors::default()];
+        let source: [[f64; 576]; 2] = std::array::from_fn(|channel| {
+            std::array::from_fn(|n| {
+                if channel == 0 {
+                    pairs[n % pairs.len()].0
+                } else {
+                    pairs[n % pairs.len()].1
+                }
+            })
+        });
+        for kind in 0..=255 {
+            for mixed in [false, true] {
+                let mut info = [GranuleChannel {
+                    block_type: kind,
+                    mixed_block: mixed,
+                    ..Default::default()
+                }; 2];
+                let mut output = source;
+                spectral::stereo(header, &info, &factors, bands, &mut output).unwrap();
+                for n in 0..576 {
+                    let (mid, side) = (source[0][n], source[1][n]);
+                    assert_eq!(
+                        output[0][n].to_bits(),
+                        ((mid + side) * std::f64::consts::FRAC_1_SQRT_2).to_bits()
+                    );
+                    assert_eq!(
+                        output[1][n].to_bits(),
+                        ((mid - side) * std::f64::consts::FRAC_1_SQRT_2).to_bits()
+                    );
+                }
+                info[1].mixed_block = !mixed;
+                let mut output = source;
+                assert_eq!(
+                    spectral::stereo(header, &info, &factors, bands, &mut output),
+                    Err(Error::Invalid("joint-stereo block mismatch"))
+                );
+                assert_eq!(output, source);
+                info[1].mixed_block = mixed;
+                info[1].block_type = kind.wrapping_add(1);
+                assert_eq!(
+                    spectral::stereo(header, &info, &factors, bands, &mut output),
+                    Err(Error::Invalid("joint-stereo block mismatch"))
+                );
+                assert_eq!(output, source);
+            }
+        }
+    }
+}
+
+#[test]
 fn intensity_positions_and_zero_width_partitions() {
     for rate in [44100, 22050, 8000] {
         let header = joint_header(rate, 3);

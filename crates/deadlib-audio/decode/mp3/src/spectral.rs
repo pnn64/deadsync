@@ -180,6 +180,16 @@ pub fn stereo(
     if info[0].block_type != info[1].block_type || info[0].mixed_block != info[1].mixed_block {
         return Err(Error::Invalid("joint-stereo block mismatch"));
     }
+    if mode == 2 {
+        let [left, right] = spectra;
+        for (left, right) in left.iter_mut().zip(right) {
+            let mid = *left;
+            let side = *right;
+            *left = (mid + side) * std::f64::consts::FRAC_1_SQRT_2;
+            *right = (mid - side) * std::f64::consts::FRAC_1_SQRT_2;
+        }
+        return Ok(());
+    }
     let mut coupled = [false; 576];
     if mode & 1 != 0 {
         let right = &spectra[1];
