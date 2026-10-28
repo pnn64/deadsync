@@ -234,26 +234,25 @@ impl FrameDecoder {
             frame.main_data,
             frame.side_info.main_data_bits(header),
         )?;
-        let mut previous: [Option<ScaleFactors>; 2] = [None, None];
+        let mut factors = [ScaleFactors::default(), ScaleFactors::default()];
         let mut position = 0;
         for granule in 0..header.granules() {
-            let mut factors = [ScaleFactors::default(), ScaleFactors::default()];
-            for channel in 0..header.channels() {
+            for (channel, factor) in factors.iter_mut().enumerate().take(header.channels()) {
                 let info = &frame.side_info.granules[granule][channel];
                 let mut bits = BitReader::bounded(main, position, info.part2_3_bits as usize)?;
-                factors[channel] = scalefactors::read(
+                *factor = scalefactors::read(
                     &mut bits,
                     header,
                     &frame.side_info,
                     granule,
                     channel,
-                    previous[channel].as_ref(),
+                    if granule == 0 { None } else { Some(factor) },
                 )?;
                 spectral::quantized(&mut bits, info, bands, &mut self.quantized[channel])?;
                 spectral::requantize(
                     &self.quantized[channel],
                     info,
-                    &factors[channel],
+                    factor,
                     bands,
                     &mut self.spectra[channel],
                 )?;
@@ -298,8 +297,6 @@ impl FrameDecoder {
                     }
                 }
             }
-            previous[0] = Some(std::mem::take(&mut factors[0]));
-            previous[1] = Some(std::mem::take(&mut factors[1]));
         }
         if header.channels() == 2 {
             self.right_active = true;
