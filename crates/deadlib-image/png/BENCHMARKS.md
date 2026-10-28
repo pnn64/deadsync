@@ -1258,3 +1258,9 @@ triplet. All-target Clippy with warnings denied and scoped formatting pass.
 Commands, source/reference binary hashes and output are retained in
 `validation.json`, `release.log`, `debug.log`, `clippy.log` and `fmt.log` in the
 evidence directory.
+
+The standalone offline debug suite passes 145 tests. Its 21 optional reference
+checks ran separately in the complete release suite above. All 894 copied
+source/test/example/benchmark files match the current package, and the normal
+dependency tree contains only `deadlib-image`; see `independent.log` and
+`independent.json` in the same evidence directory.
