@@ -1,0 +1,16 @@
+cargo :     Finished `release` profile [optimized] target(s) in 0.53s
+At line:2 char:799
++ ... NDOW = '1'; cargo test -p deadlib-image-png --release --test zlib_hea ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (    Finished `r...get(s) in 0.53s:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+     Running tests\zlib_headers.rs (target\release\deps\zlib_headers-ae3863b55d069959.exe)
+
+running 1 test
+C zlib checked 65652 cases; accepted 0/28 over-advertised-window references
+C libpng rejected all 24 pre-output-reference PNGs at DEFLATE distance validation
+test c_zlib_header_and_history_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.65s
+
