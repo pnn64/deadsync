@@ -1,7 +1,7 @@
 //! CPU cycles and untimed allocation counts for decoding and RGBA expansion.
 use deadlib_image_png::{
     Animation, BlendOp, ColorType, DisposeOp, EncodeOptions, Filter, Frame, FrameControl, Image,
-    Limits, Png, Samples, decode, encode,
+    Limits, Png, Samples, Transparency, decode, encode,
 };
 use std::{
     alloc::{GlobalAlloc, Layout, System},
@@ -11,8 +11,17 @@ use std::{
 };
 
 #[allow(dead_code)]
+#[path = "../tests/support/apng_recovery.rs"]
+mod apng_recovery;
+#[allow(dead_code)]
+#[path = "../tests/support/chunks.rs"]
+mod chunks;
+#[allow(dead_code)]
 #[path = "support/cpu.rs"]
 mod cpu;
+#[allow(dead_code)]
+#[path = "../tests/support/compositor.rs"]
+mod oracle;
 
 struct Counting;
 static TRACK: AtomicBool = AtomicBool::new(false);
@@ -92,6 +101,7 @@ fn measure<T>(case: &str, operation: &str, bytes: usize, hash: u64, mut run: imp
         .parse()
         .unwrap();
     assert!(iterations > 0);
+    let iterations = iterations.max(if bytes < 4096 { 2048 } else { 1 });
     for _ in 0..3 {
         black_box(run());
     }
@@ -140,6 +150,15 @@ fn main() {
         for depth in [8, 16] {
             let mut png = fixture(513, 257, color, depth);
             let expected = png.to_rgba16(Limits::default()).unwrap();
+            assert_eq!(
+                expected.samples,
+                Samples::U16(
+                    oracle::expand(&png, &png.image)
+                        .into_iter()
+                        .flatten()
+                        .collect()
+                )
+            );
             let hash = fingerprint(&expected.samples);
             measure(
                 &format!("{name}{depth}"),
@@ -180,6 +199,113 @@ fn main() {
                 hash,
                 || {
                     compositor.reset();
+                    black_box(compositor.next_frame().unwrap().unwrap().samples);
+                },
+            );
+        }
+    }
+    for palette_len in [2, 256] {
+        for (width, height) in [(1, 1), (17, 1), (255, 1), (256, 1), (257, 1), (513, 257)] {
+            let mut png = fixture(width, height, ColorType::Indexed, 8);
+            png.palette = (0..palette_len)
+                .map(|n| [n as u8, (n * 71 + 19) as u8, (n * 113 + 27) as u8])
+                .collect();
+            png.transparency = Some(Transparency::Palette(
+                (0..palette_len / 2).map(|n| (n * 73) as u8).collect(),
+            ));
+            let expected = Samples::U16(
+                oracle::expand(&png, &png.image)
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+            );
+            assert_eq!(png.to_rgba16(Limits::default()).unwrap().samples, expected);
+            measure(
+                &format!("indexed8-{palette_len}-{width}x{height}"),
+                "rgba16",
+                expected.len() * 2,
+                fingerprint(&expected),
+                || black_box(&png).to_rgba16(Limits::default()).unwrap(),
+            );
+        }
+    }
+    for depth in [8, 16] {
+        for background in ["transparent", "translucent", "opaque", "mixed"] {
+            let mut png = fixture(513, 257, ColorType::Rgba, depth);
+            let mut foreground = fixture(513, 257, ColorType::Rgba, depth).image;
+            let max = ((1u32 << depth) - 1) as u16;
+            let alpha = |n| match background {
+                "transparent" => 0,
+                "translucent" => max / 2,
+                "opaque" => max,
+                _ => [0, max / 2, max][n % 3],
+            };
+            match &mut png.image.samples {
+                Samples::U8(v) => v
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(n, p)| p[3] = alpha(n) as u8),
+                Samples::U16(v) => v
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(n, p)| p[3] = alpha(n)),
+            }
+            match &mut foreground.samples {
+                Samples::U8(v) => v
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(n, _)| n % 4 != 3)
+                    .for_each(|(_, v)| *v = !*v),
+                Samples::U16(v) => v
+                    .iter_mut()
+                    .enumerate()
+                    .filter(|(n, _)| n % 4 != 3)
+                    .for_each(|(_, v)| *v = !*v),
+            }
+            let control = FrameControl {
+                width: png.image.width,
+                height: png.image.height,
+                x_offset: 0,
+                y_offset: 0,
+                delay_num: 1,
+                delay_den: 10,
+                dispose: DisposeOp::None,
+                blend: BlendOp::Source,
+            };
+            png.animation = Some(Animation {
+                plays: 0,
+                default_is_frame: true,
+                frames: vec![
+                    Frame {
+                        control,
+                        image: None,
+                    },
+                    Frame {
+                        control: FrameControl {
+                            blend: BlendOp::Over,
+                            ..control
+                        },
+                        image: Some(foreground),
+                    },
+                ],
+            });
+            let expected = oracle::render(&png);
+            let mut compositor = png.compositor(Limits::default()).unwrap();
+            for frame in &expected {
+                assert_eq!(compositor.next_frame().unwrap().unwrap().samples, frame);
+            }
+            measure(
+                &format!("rgba{depth}-over-{background}"),
+                "apng-over",
+                expected[1].len() * 4,
+                fingerprint(&Samples::U16(expected[1].clone())),
+                || {
+                    compositor.reset();
+                    black_box(compositor.next_frame().unwrap().unwrap().samples);
                     black_box(compositor.next_frame().unwrap().unwrap().samples);
                 },
             );

@@ -32,6 +32,7 @@ fn validate(png: &Png) -> Result<(), Error> {
     )
 }
 
+#[inline(always)]
 fn rgba(png: &Png, image: &Image, index: usize, factor: u16) -> [u16; 4] {
     let raw = |n| match &image.samples {
         Samples::U8(v) => u16::from(v[n]),
@@ -113,8 +114,37 @@ impl Png {
         let mut out = canvas(self, limits)?;
         // Every valid sample mask (1, 3, 15, 255, 65535) divides 65535 exactly.
         let factor = (65535 / ((1u32 << self.image.bit_depth) - 1)) as u16;
-        for (n, pixel) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-            *pixel = rgba(self, &self.image, n, factor);
+        match (&self.image.samples, self.image.color_type) {
+            (Samples::U8(samples), ColorType::Rgba) => {
+                for (out, &value) in out.iter_mut().zip(samples) {
+                    *out = u16::from(value) * 257;
+                }
+            }
+            (Samples::U16(samples), ColorType::Rgba) => out.copy_from_slice(samples),
+            (Samples::U8(samples), ColorType::Indexed) if samples.len() >= 256 => {
+                let mut palette = [[0, 0, 0, 65535]; 256];
+                for (out, &[r, g, b]) in palette.iter_mut().zip(&self.palette) {
+                    *out = [
+                        u16::from(r) * 257,
+                        u16::from(g) * 257,
+                        u16::from(b) * 257,
+                        65535,
+                    ];
+                }
+                if let Some(Transparency::Palette(alpha)) = &self.transparency {
+                    for (out, &alpha) in palette.iter_mut().zip(alpha) {
+                        out[3] = u16::from(alpha) * 257;
+                    }
+                }
+                for (out, &index) in out.as_chunks_mut::<4>().0.iter_mut().zip(samples) {
+                    *out = palette[usize::from(index)];
+                }
+            }
+            _ => {
+                for (n, pixel) in out.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+                    *pixel = rgba(self, &self.image, n, factor);
+                }
+            }
         }
         Ok(Image {
             width: self.image.width,
@@ -222,7 +252,18 @@ impl Compositor<'_> {
                 let dst: &mut [u16; 4] = (&mut self.canvas[offset..offset + 4]).try_into().unwrap();
                 if c.blend == BlendOp::Source || src[3] == 65535 {
                     *dst = src;
-                } else if src[3] != 0 {
+                } else if src[3] == 0 {
+                    continue;
+                } else if dst[3] == 65535 {
+                    // An opaque destination stays opaque. The exact rounded
+                    // numerator is at most 65535^2 + 32767, which fits in u32.
+                    let sa = u32::from(src[3]);
+                    let inv = 65535 - sa;
+                    for n in 0..3 {
+                        dst[n] = ((u32::from(src[n]) * sa + u32::from(dst[n]) * inv + 32767)
+                            / 65535) as u16;
+                    }
+                } else {
                     let sa = u64::from(src[3]);
                     let da = u64::from(dst[3]);
                     let inv = 65535 - sa;

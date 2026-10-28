@@ -1264,3 +1264,94 @@ checks ran separately in the complete release suite above. All 894 copied
 source/test/example/benchmark files match the current package, and the normal
 dependency tree contains only `deadlib-image`; see `independent.log` and
 `independent.json` in the same evidence directory.
+
+## Native pixel expansion and opaque blending (2026-10-28)
+
+Three changes accelerate explicit RGBA16 expansion and APNG rendering:
+
+1. Native RGBA8 widens directly into the destination slice; RGBA16 copies its
+   native slice. This removes per-pixel color/storage dispatch and channel
+   indexing; native RGBA16 also avoids per-channel multiplication.
+2. Indexed images with at least 256 pixels build a 2 KiB stack table of RGBA16
+   values. Each pixel then needs one indexed load. Missing palette entries stay
+   opaque black, and missing transparency entries stay opaque. Smaller images
+   keep direct expansion, avoiding the fixed table initialization cost.
+3. OVER against an opaque destination uses exact u32 interpolation with the
+   constant divisor 65535. The destination alpha stays opaque. Transparent
+   source pixels skip the remaining blend work. The shared pixel kernel is
+   explicitly inlined to retain fast grayscale expansion and SOURCE rendering.
+
+With M=65535, an opaque destination makes the original alpha denominator M².
+Its rounded channel result is exactly `(source*sa + destination*(M-sa) + 32767)
+/ M`. M is odd, so removing the common factor preserves rounding. The largest
+new numerator is M²+32767=4,294,868,992, which fits u32. This removes variable
+u64 channel divisions and repeated alpha normalization from opaque pixels.
+Production remains safe Rust under `forbid(unsafe_code)`.
+
+| Change / 513x257 case | Before cycles | After cycles | CPU throughput | Before MiB/s | After MiB/s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Direct RGBA8 expansion | 2,610,093 | 1,132,995 | 2.30x | 843.1 | 1,940.0 |
+| Direct RGBA16 expansion | 2,677,690 | 1,223,191 | 2.19x | 815.2 | 1,802.6 |
+| Indexed8, two palette entries | 2,264,920 | 1,153,454 | 1.96x | 970.7 | 1,904.1 |
+| Indexed8, 256 palette entries | 4,229,866 | 1,179,191 | 3.59x | 520.3 | 1,867.5 |
+| Two-frame RGBA8, opaque destination | 13,246,880 | 4,688,419 | 2.83x | 328.4 | 938.2 |
+| Two-frame RGBA16, opaque destination | 13,266,690 | 4,573,292 | 2.90x | 326.0 | 963.8 |
+
+The first four rows compare sequential checkpoints using medians from six
+processes each: three original runs and three reverse-order saved-binary
+controls. The last two use four alternating processes per version, comparing
+the palette checkpoint with the selected `inline` checkpoint. Mixed destination
+alpha improves CPU throughput 1.28–1.30x in the latter comparison. Grayscale8
+expansion improves from 2,601,002 to 1,630,428 cycles; grayscale16 improves from
+2,577,936 to 1,714,268 cycles. Full results include the final cumulative source.
+
+The intermediate `opaque` checkpoint showed slower grayscale expansion in
+alternating controls (2.37M to 2.71M cycles for grayscale8). It was superseded
+by `inline`, which retains the opaque arithmetic and forces the pixel kernel
+inline. Both intermediate and selected measurements are retained. Some unchanged
+decoder/control cases vary with host load; small differences are not attributed
+to these optimizations. CPU cycles take precedence over wall throughput, which
+also reflects preemption. Host frequency and competing workloads are uncontrolled.
+
+Measurements use the same Windows x86-64 Xeon E5-2696 v4, Rust 1.99.1 and bench
+profile as the preceding experiment. Windows thread-cycle counters run on CPU 2.
+Each process warms an operation three times, then takes the median of seven
+batches: twelve iterations for large cases, at least 2,048 for outputs smaller
+than 4,096 bytes. Static rates count expanded RGBA16 bytes. APNG rates count both
+full-canvas frames and include reset, SOURCE background rendering and OVER
+foreground rendering. Native parser/inflater cases remain in the harness as
+controls.
+
+Every benchmark process compares complete outputs against the existing
+independent expansion/rational-compositing model outside timing. All 46 cases
+have matching fingerprints across five checkpoints and the alternating controls.
+Untimed allocation probes agree throughout: one 1,054,728-byte output allocation
+for large static expansion, zero allocations during reused two-frame rendering.
+The palette table adds fixed stack scratch space and no heap allocation.
+
+The selected source passes 13 focused release tests with no skips, including
+independent C/Python regeneration of 35 WPT and 240 precision animations. Nine
+debug checks pass; their optional regeneration check ran in the release suite.
+New tests cover every legal palette size at depths 1/2/4/8, short transparency
+tables, recovered black indices, 255/256/257-pixel boundaries and exact output
+limits. A white-over-opaque-white property checks every source alpha at maximum
+channel arithmetic bounds; the existing rational test covers every source alpha
+at fifteen destination-alpha boundaries. All-target Clippy with warnings denied
+and scoped formatting pass.
+
+The production diff adds 41 lines net (44 added, three removed). It removes
+execution steps: per-pixel RGBA interpretation, repeated palette/transparency
+lookups and scaling, and variable u64 divisions for opaque blends. Public APIs
+and dependencies are unchanged.
+
+Raw measurements, cumulative source patches from `22d57bf31`, source/binary/
+oracle hashes, archived original drivers, validation logs and summaries are in
+[`experiments/pixels-20261028`](experiments/pixels-20261028). `summary.tsv` contains
+the five six-process checkpoints; `selected-paired-summary.tsv` contains the
+selected alternating comparison. `selected-validation.json` identifies the final
+source and verification commands. The example and all oracle modules are inside
+the PNG package. Run the current benchmark with:
+
+```powershell
+cargo run --offline -p deadlib-image-png --profile bench --example reconstruction_bench
+```
