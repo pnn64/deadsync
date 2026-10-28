@@ -487,18 +487,29 @@ impl BitWriter {
         if width > 64 {
             return Err(Error::Invalid("bit write width"));
         }
-        crate::reserve(&mut self.data, (width as usize + 14) / 8)?;
-        let mut left = width;
-        while left != 0 {
-            if self.bits == 0 {
-                self.data.push(0);
-            }
-            let n = left.min(u32::from(8 - self.bits));
-            left -= n;
-            let last = self.data.last_mut().unwrap();
-            *last |= (((value >> left) & ((1 << n) - 1)) as u8) << (8 - self.bits - n as u8);
-            self.bits = (self.bits + n as u8) % 8;
+        if width == 0 {
+            return Ok(());
         }
+        let bits = u32::from(self.bits);
+        let count = (bits + width).div_ceil(8) as usize;
+        let prefix = usize::from(bits != 0);
+        crate::reserve(&mut self.data, count - prefix)?;
+        // Align the low `width` bits once, then append their big-endian bytes.
+        // A partial prefix can spill a 64-bit field into one additional byte.
+        let word = value << (64 - width);
+        let bytes = (word >> bits).to_be_bytes();
+        if prefix != 0 {
+            *self.data.last_mut().unwrap() |= bytes[0];
+        }
+        match count - prefix {
+            0 => (),
+            1 => self.data.push(bytes[prefix]),
+            _ => self.data.extend_from_slice(&bytes[prefix..count.min(8)]),
+        }
+        if count == 9 {
+            self.data.push((word << (8 - bits)) as u8);
+        }
+        self.bits = ((bits + width) % 8) as u8;
         Ok(())
     }
     pub fn signed(&mut self, value: i64, width: u32) -> Result<(), Error> {
@@ -510,14 +521,17 @@ impl BitWriter {
             self.write(0, 64)?;
             left -= 64;
         }
-        self.write(0, left as u32)?;
-        self.write(1, 1)
+        self.write(1, left as u32 + 1)
     }
     pub fn align_zero(&mut self) {
         self.bits = 0;
     }
     pub fn as_bytes(&self) -> &[u8] {
         &self.data
+    }
+    pub(crate) fn aligned_bytes_mut(&mut self) -> &mut Vec<u8> {
+        debug_assert_eq!(self.bits, 0);
+        &mut self.data
     }
     pub fn into_bytes(self) -> Vec<u8> {
         self.data

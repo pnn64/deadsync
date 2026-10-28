@@ -730,3 +730,93 @@ Evidence: [per-change residual statistics](benches/validation/2026-10-28-encodin
 [validation scope](benches/validation/2026-10-28-encoding/validation.json).
 The same directory preserves source/toolchain hashes and build logs for every
 binary. Executables and generated PCM/output remain under `target/flac-perf`.
+
+## Direct frame output and word packing, 2026-10-28
+
+The next pass uses `55ea6aaa2` as its baseline and retains three safe-Rust changes:
+
+1. Write headers, subframes and CRC into the bit writer's single buffer. This
+   removes `FrameEncoder::output`, its allocation and the completed-payload copy.
+2. Emit each unary tail and its terminating one bit with one `write` call.
+   This removes the second field write and its capacity check.
+3. Align each field in a `u64` once and append its big-endian bytes, replacing
+   the byte-at-a-time packing loop. Zero/one-byte appends have direct paths.
+   An unaligned 64-bit field explicitly emits its ninth byte; zero-width writes
+   return immediately without reserving storage. All stores remain checked.
+
+Each change was measured against its predecessor. The allocation improvement
+does not depend on a CPU-speed claim; its measured CPU cost is largely unchanged.
+
+| Change and case | Before cycles/frame | After cycles/frame | CPU throughput | PCM Msamples/s, before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Single buffer, 24-bit noise, level 2 | 2,253,080 | 2,259,333 | 0.997x | 6.83 → 6.81 |
+| Fused unary, smooth 16-bit, level 0 | 586,126 | 514,653 | 1.139x | 26.25 → 29.90 |
+| Word packing, 32-bit noise, level 0 | 467,208 | 404,297 | 1.156x | 32.91 → 38.08 |
+
+The single-buffer case reduces cold allocation calls from 8 to 7, reallocations
+from 14 to 12, and cumulative requested bytes from 235,976 to 213,024. Every one
+of the nine final cases removes one cold allocation. All retain zero allocations
+and reallocations per frame after warmup. Requested-byte totals include repeated
+reallocation requests and do not measure RSS or retained heap. The existing Hann
+scratch buffer from the preceding pass is unchanged.
+
+Final comparison against the starting encoder, with 4,096 samples/channel except
+the explicitly short case:
+
+| Case | Before cycles/frame | After cycles/frame | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Smooth 16-bit stereo, level 0 | 582,899 | 502,612 | 1.160x |
+| Smooth 16-bit stereo, level 2 | 2,381,354 | 2,122,344 | 1.122x |
+| Smooth 16-bit stereo, level 5 | 6,306,574 | 6,217,710 | 1.014x |
+| Smooth 16-bit stereo, level 8 | 33,220,100 | 33,431,378 | 0.994x |
+| Noise 16-bit stereo, level 2 | 1,969,506 | 1,964,086 | 1.003x |
+| Noise 24-bit stereo, level 2 | 2,256,599 | 2,117,926 | 1.065x |
+| Smooth 32-bit mono, level 5 | 2,271,061 | 2,211,086 | 1.027x |
+| Smooth 16-bit stereo, level 2, block 16 | 11,964 | 11,797 | 1.014x |
+| Noise 32-bit stereo, level 0 | 604,978 | 404,809 | 1.494x |
+
+The largest final gains raise PCM throughput from 26.39 to 30.62 Msamples/s on
+smooth 16-bit level 0 and from 25.43 to 38.00 Msamples/s on 32-bit noise level 0.
+LPC-heavy level 8 remains dominated by analysis; its -0.6% result is recorded.
+
+These measurements use the preceding host, compiler, Cargo profile and logical
+CPU 2. Initial process comparisons varied substantially with CPU power state.
+The maintained harness now performs a 200 ms untimed encoding warmup and gives
+both variants the same iteration count. Per-change trials use 11 rounds at about
+100 ms per variant. The added 32-bit noise case uses 21 rounds at 150 ms; the
+final nine-case comparison uses 15 rounds at 150 ms. Windows thread cycles are
+the primary metric; PCM throughput uses elapsed time. Each process independently
+checks original PCM and encoded-frame digests outside timing. The host still has
+variable frequency and raw rows retain outliers; these are paired comparisons,
+not portable absolute performance claims.
+
+The first word-packing implementation regressed smooth 16-bit level 0 by 4.8%.
+It was discarded. Direct zero/one-byte appends remove that regression; the
+revised comparison is 1.004x on that case and improves wide-field encoding.
+Initial measurements and the rejected candidate's report remain in the evidence.
+
+Correctness: the 1,044-frame matrix is still byte-identical (635,954 bytes with
+the same SHA-256 as the preceding pass). A new independent bit-at-a-time test
+checks 7,800 fields over widths 0–64, every initial bit offset, high discarded
+bits, three clear/reuse passes, long unary prefixes, padding and invalid-width
+failure state. Debug and release pass all 14 unit tests, 36 integration tests and
+three doctests. Clippy and formatting pass. Eight external oracle/corpus gates
+remain ignored and were not rerun. No production unsafe code was added.
+
+Reproduce with the preceding commands and the updated encoding harness. To
+rebuild the baseline, check out `55ea6aaa2` in isolation and copy the current
+`benches/encoding.rs` and `benches/encoding_perf.py` into that checkout before
+building. The benchmark is already registered at that revision. `--case
+noise32-l0` selects the new wide-field case. Saved binaries and complete encoded
+matrices remain under `target/flac-pass2`.
+
+Evidence: [single-buffer trials](benches/validation/2026-10-28-bitwriter/direct-warm.json),
+[unary fusion](benches/validation/2026-10-28-bitwriter/unary.json),
+[rejected word packing](benches/validation/2026-10-28-bitwriter/word.json),
+[small-field append paths](benches/validation/2026-10-28-bitwriter/word-small.json),
+[wide-field trials](benches/validation/2026-10-28-bitwriter/word-wide.json),
+[final comparison](benches/validation/2026-10-28-bitwriter/final.json),
+[validation scope](benches/validation/2026-10-28-bitwriter/validation.json).
+Build manifests, compiler logs, complete check results and the initial protocol
+diagnostics are preserved in the same directory. These results measure synthetic
+resident-frame encoding; they do not establish decoder or playback throughput.

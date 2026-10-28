@@ -125,7 +125,6 @@ pub struct FrameEncoder {
     plans: [SubframePlan; 8],
     analysis: Analysis,
     writer: BitWriter,
-    output: Vec<u8>,
     assignment: u8,
 }
 impl FrameEncoder {
@@ -137,7 +136,6 @@ impl FrameEncoder {
             plans: std::array::from_fn(|_| SubframePlan::default()),
             analysis: Analysis::default(),
             writer: BitWriter::new(),
-            output: Vec::new(),
             assignment: 0,
         })
     }
@@ -210,9 +208,14 @@ impl FrameEncoder {
                 }
             }
         }
-        self.output.clear();
-        write_header(&mut self.output, self.options, n, self.assignment, number)?;
         self.writer.clear();
+        write_header(
+            self.writer.aligned_bytes_mut(),
+            self.options,
+            n,
+            self.assignment,
+            number,
+        )?;
         for &ch in &selected[..channels] {
             let start = self.writer.position();
             write_subframe(
@@ -224,11 +227,11 @@ impl FrameEncoder {
             debug_assert_eq!((self.writer.position() - start) as u64, self.plans[ch].bits);
         }
         self.writer.align_zero();
-        reserve(&mut self.output, self.writer.as_bytes().len() + 2)?;
-        self.output.extend_from_slice(self.writer.as_bytes());
-        let crc = crc16(&self.output);
-        self.output.extend_from_slice(&crc.to_be_bytes());
-        Ok(&self.output)
+        let output = self.writer.aligned_bytes_mut();
+        reserve(output, 2)?;
+        let crc = crc16(output);
+        output.extend_from_slice(&crc.to_be_bytes());
+        Ok(output)
     }
     pub fn channel_assignment(&self) -> u8 {
         self.assignment

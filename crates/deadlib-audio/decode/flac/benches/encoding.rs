@@ -1,6 +1,10 @@
 //! Resident-PCM encoding; setup, verification and allocation counts are untimed.
 use deadlib_audio_decode_flac::{checksum::Md5, *};
-use std::{hint::black_box, io::Write, time::Instant};
+use std::{
+    hint::black_box,
+    io::Write,
+    time::{Duration, Instant},
+};
 
 #[allow(dead_code)]
 #[path = "../../../../../tests/support/perf.rs"]
@@ -79,6 +83,7 @@ fn main() {
         "smooth16-l8" => (16, 2, 8, 4096, false),
         "noise16-l2" => (16, 2, 2, 4096, true),
         "noise24-l2" => (24, 2, 2, 4096, true),
+        "noise32-l0" => (32, 2, 0, 4096, true),
         "smooth32-l5" => (32, 1, 5, 4096, false),
         "short16-l2" => (16, 2, 2, 16, false),
         _ => panic!("unknown case: {case}"),
@@ -104,6 +109,11 @@ fn main() {
     let (_, warm) = alloc::measure(|| {
         black_box(encoder.encode(&refs, 0).unwrap());
     });
+    // Give short kernels time to reach the same sustained CPU power state.
+    let warmup = Instant::now();
+    while warmup.elapsed() < Duration::from_millis(200) {
+        black_box(encoder.encode(black_box(&refs), 0).unwrap());
+    }
     let cycles = cpu::cycles();
     let start = Instant::now();
     for _ in 0..iterations {

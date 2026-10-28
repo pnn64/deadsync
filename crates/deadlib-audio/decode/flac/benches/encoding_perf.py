@@ -10,7 +10,7 @@ import subprocess
 from bench_host import cpu_info
 
 CASES = ['smooth16-l0', 'smooth16-l2', 'smooth16-l5', 'smooth16-l8',
-         'noise16-l2', 'noise24-l2', 'smooth32-l5', 'short16-l2']
+         'noise16-l2', 'noise24-l2', 'smooth32-l5', 'short16-l2', 'noise32-l0']
 
 
 def sha(path):
@@ -47,13 +47,14 @@ def main():
         pilots = {k: execute(p, case, 1) for k, p in binaries.items()}
         for field in ['samples', 'bytes', 'signature']:
             assert pilots['before'][field] == pilots['after'][field], (case, field)
-        iterations = {k: max(1, round(args.milliseconds * 1e6 / v['ns'])) for k, v in pilots.items()}
+        # Equal work counts avoid a calibration difference biasing power state.
+        iterations = max(1, round(args.milliseconds * 1e6 / max(v['ns'] for v in pilots.values())))
         rows = []
         for trial in range(args.rounds):
             order = list(binaries)
             rng.shuffle(order)
             for variant in order:
-                row = execute(binaries[variant], case, iterations[variant])
+                row = execute(binaries[variant], case, iterations)
                 assert row['signature'] == pilots['before']['signature']
                 rows.append(dict(variant=variant, trial=trial, **row))
         summary = {}
