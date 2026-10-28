@@ -23,14 +23,27 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def capture(root, stage, fixtures):
+def verification(command):
+    digest = hashlib.sha256()
+    size = 0
+    with subprocess.Popen(list(map(str, command)), cwd=REPO, stdout=subprocess.PIPE) as process:
+        while chunk := process.stdout.read(1 << 20):
+            digest.update(chunk)
+            size += len(chunk)
+        if process.wait():
+            raise subprocess.CalledProcessError(process.returncode, command)
+    return digest.hexdigest(), size
+
+
+def capture(root, stage, fixtures, source_stage):
     folder = root / stage
     folder.mkdir(parents=True, exist_ok=False)
     package = folder / PACKAGE
+    source = root / source_stage if source_stage else REPO
     for name in ("src", "benches"):
-        shutil.copytree(REPO / PACKAGE / name, package / name)
-    shutil.copy2(REPO / PACKAGE / "Cargo.toml", package / "Cargo.toml")
-    shutil.copytree(REPO / "tests/support", folder / "tests/support")
+        shutil.copytree(source / PACKAGE / name, package / name)
+    shutil.copy2(source / PACKAGE / "Cargo.toml", package / "Cargo.toml")
+    shutil.copytree(source / "tests/support", folder / "tests/support")
     profiles = tomllib.loads((REPO / "Cargo.toml").read_text())["profile"]
     manifest = f'[workspace]\nmembers = ["{PACKAGE.as_posix()}"]\nresolver = "3"\n'
     for profile in ("release", "bench"):
@@ -38,18 +51,27 @@ def capture(root, stage, fixtures):
         for key, value in profiles[profile].items():
             manifest += f"{key} = {json.dumps(value)}\n"
     (folder / "Cargo.toml").write_text(manifest, encoding="utf-8")
-    build = invoke(["cargo", "bench", "--offline", "--manifest-path", folder / "Cargo.toml",
+    # Keep Cargo's package identity, symbol hashes and build paths fixed across
+    # production stages. Save a separate executable before the next rebuild.
+    build_root = root / "build"
+    for name in ("src", "benches"):
+        shutil.copytree(package / name, build_root / PACKAGE / name, dirs_exist_ok=True)
+    shutil.copy2(package / "Cargo.toml", build_root / PACKAGE / "Cargo.toml")
+    shutil.copytree(folder / "tests/support", build_root / "tests/support", dirs_exist_ok=True)
+    shutil.copy2(folder / "Cargo.toml", build_root / "Cargo.toml")
+    for path in (build_root / PACKAGE).rglob("*.rs"):
+        path.touch()
+    build = invoke(["cargo", "bench", "--offline", "--manifest-path", build_root / "Cargo.toml",
                     "--bench", "kernels", "--no-run", "--message-format=json"])
     (folder / "build.jsonl").write_bytes(build)
     artifacts = [json.loads(line) for line in build.splitlines()]
     artifact, = [a for a in artifacts if a.get("reason") == "compiler-artifact"
                  and a.get("executable") and a["target"]["name"] == "kernels"]
-    binary = Path(artifact["executable"])
-    # Stream the complete verification bytes to disk; compare SHA-256 outside timing.
-    with (folder / "verify.bin").open("wb") as output:
-        subprocess.run([str(binary), "verify", *map(str, fixtures)], cwd=REPO,
-                       stdout=output, check=True)
+    binary = folder / Path(artifact["executable"]).name
+    shutil.copy2(artifact["executable"], binary)
+    output_sha, output_bytes = verification([binary, "verify", *fixtures])
     record = dict(binary=str(binary), binary_sha256=sha(binary), profile=artifact["profile"],
+                  source_stage=source_stage, build_root=str(build_root),
                   head=invoke(["git", "rev-parse", "HEAD"]).decode().strip(),
                   rustc=invoke(["rustc", "-Vv"]).decode(),
                   config=tomllib.loads((REPO / ".cargo/config.toml").read_text()),
@@ -57,7 +79,7 @@ def capture(root, stage, fixtures):
                   sources={str(p.relative_to(folder)): sha(p) for p in folder.rglob("*.rs")
                            if "target" not in p.relative_to(folder).parts},
                   fixtures={str(p): sha(p) for p in fixtures},
-                  output_sha256=sha(folder / "verify.bin"))
+                  output_sha256=output_sha, output_bytes=output_bytes)
     (folder / "manifest.json").write_text(json.dumps(record, indent=2) + "\n")
     initial = invoke([binary, *fixtures])
     (folder / "initial.log").write_bytes(initial)
@@ -68,17 +90,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=REPO / "target/mp3-perf-20261028")
     parser.add_argument("--capture")
+    parser.add_argument("--source-stage", help="recapture saved production source through the fixed build path")
     parser.add_argument("--fixture", action="append", type=Path, default=[])
     parser.add_argument("--stage", action="append", default=[])
+    parser.add_argument("--verify-corpus", action="append", type=Path, default=[],
+                        help="compare exact PCM for every MP3 in these directories instead of timing")
     parser.add_argument("--runs", type=int, default=7)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     root = args.root.resolve()
     if args.capture:
-        capture(root, args.capture, [p.resolve() for p in args.fixture])
+        capture(root, args.capture, [p.resolve() for p in args.fixture], args.source_stage)
     if not args.stage:
         return
-    if not args.output or args.runs < 3:
+    if not args.output or (not args.verify_corpus and args.runs < 3):
         parser.error("comparison needs --output and at least three runs")
     manifests = {s: json.loads((root / s / "manifest.json").read_text()) for s in args.stage}
     first = next(iter(manifests.values()))
@@ -89,6 +114,7 @@ def main():
         assert record["rustc"] == first["rustc"]
         assert record["config"] == first["config"]
         assert record["rustflags"] == first["rustflags"]
+        assert record.get("build_root") == first.get("build_root")
         assert sha(Path(record["binary"])) == record["binary_sha256"]
         for source, digest in record["sources"].items():
             assert sha(root / stage / source) == digest
@@ -96,6 +122,21 @@ def main():
                 assert digest == first["sources"][source], source
         for fixture, digest in record["fixtures"].items():
             assert sha(Path(fixture)) == digest
+    if args.verify_corpus:
+        fixtures = sorted(p.resolve() for directory in args.verify_corpus for p in directory.glob("*.mp3"))
+        assert fixtures, "no corpus MP3s found"
+        outputs = {}
+        for stage, record in manifests.items():
+            command = [record["binary"], "verify", *map(str, fixtures)]
+            digest, size = verification(command)
+            outputs[stage] = dict(command=command, sha256=digest, bytes=size,
+                                  binary_sha256=record["binary_sha256"])
+            print(f"Verified {stage}: {len(fixtures)} files; {size} bytes; SHA-256 {digest}", flush=True)
+        assert len({v["sha256"] for v in outputs.values()}) == 1, "corpus PCM differs"
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json.dumps(dict(passed=True, files=len(fixtures), outputs=outputs,
+                                              fixtures={str(p): sha(p) for p in fixtures}), indent=2) + "\n")
+        return
     rows = []
     timing = re.compile(r"([^\r\n]+): cycles/op ([\d.]+); ns/op ([\d.]+)")
     allocation = re.compile(r"([^\r\n]+): allocation Churn \{ ([^}]+) \}")

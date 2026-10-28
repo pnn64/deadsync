@@ -130,15 +130,18 @@ impl Synthesis {
                 *value += sample * coefficient;
             }
         }
-        for (n, sample) in pcm.iter_mut().enumerate() {
-            let mut value = 0.0;
-            for group in 0..8 {
-                value += tables::DEWINDOW[64 * group + n]
-                    * self.values[(self.offset + 128 * group + n) & 1023];
-                value += tables::DEWINDOW[64 * group + 32 + n]
-                    * self.values[(self.offset + 128 * group + 96 + n) & 1023];
+        pcm.fill(0.0);
+        for group in 0..8 {
+            // Both 32-value spans are contiguous: the ring offset is a
+            // multiple of 64, and the second span starts 96 values later.
+            let first = (self.offset + 128 * group) & 1023;
+            let second = (self.offset + 128 * group + 96) & 1023;
+            let first = &self.values[first..first + 32];
+            let second = &self.values[second..second + 32];
+            for n in 0..32 {
+                pcm[n] += tables::DEWINDOW[64 * group + n] * first[n];
+                pcm[n] += tables::DEWINDOW[64 * group + 32 + n] * second[n];
             }
-            *sample = value;
         }
     }
 }
