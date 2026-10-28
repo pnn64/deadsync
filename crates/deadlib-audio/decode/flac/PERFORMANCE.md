@@ -632,3 +632,101 @@ Reports: [Windows 27-class trials](benches/validation/2026-10-27-platforms/windo
 [Linux primed seeks](benches/validation/2026-10-27-platforms/linux-seek-warm-raw.tsv),
 [heap checks](benches/validation/2026-10-27-platforms/memory-checkpoints.json),
 [provenance and validation](benches/validation/2026-10-27-platforms/final-validation.json).
+
+## Exact encoder search and LPC work, 2026-10-28
+
+Three safe-Rust changes reduce repeated work in `FrameEncoder`:
+
+1. Combine the residual sum and escape-width scan. Zigzag bit length equals
+   signed sample width, and an OR reduction retains the maximum bit length.
+   This removes the separate per-sample width calculation and its branches.
+2. Skip Rice method 1 when every method-0 partition chose `k < 14`. Convex
+   Rice cost means those parameters are already unrestricted optima; method 1
+   can only add one header bit per partition. Boundary parameters and escapes
+   retain the full search, including the original tie decisions.
+3. Compute Hann-weighted PCM once per plane, reusing it across LPC correlation
+   lags. The cosine closure, sample conversion and window multiplication leave
+   the inner loop. Arithmetic and summation order remain unchanged.
+
+Each change was built separately and measured against the preceding preserved
+binary. On the same 4,096-sample, stereo 16-bit smooth/noisy signal at level 5:
+
+| Change | Before cycles/frame | After cycles/frame | CPU throughput | PCM Msamples/s, before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Combined residual statistics | 18,479,892 | 13,070,740 | 1.414x | 0.83 → 1.18 |
+| Skip redundant Rice method | 13,081,264 | 9,913,760 | 1.320x | 1.17 → 1.55 |
+| Reuse Hann-weighted PCM | 9,908,080 | 6,303,152 | 1.572x | 1.55 → 2.44 |
+
+Final build versus the original `9e8f72ac0` encoder:
+
+| Case | Before cycles/frame | After cycles/frame | CPU throughput | PCM Msamples/s, before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Smooth 16-bit stereo, level 0 | 897,148 | 583,497 | 1.538x | 17.15 → 26.37 |
+| Smooth 16-bit stereo, level 2 | 5,901,446 | 2,505,130 | 2.356x | 2.59 → 6.08 |
+| Smooth 16-bit stereo, level 5 | 18,475,349 | 6,299,192 | 2.933x | 0.83 → 2.44 |
+| Smooth 16-bit stereo, level 8 | 78,509,418 | 33,193,964 | 2.365x | 0.20 → 0.46 |
+| Noise 16-bit stereo, level 2 | 3,387,361 | 1,976,098 | 1.714x | 4.54 → 7.79 |
+| Noise 24-bit stereo, level 2 | 3,665,044 | 2,256,545 | 1.624x | 4.20 → 6.82 |
+| Smooth 32-bit mono, level 5 | 4,521,837 | 2,276,339 | 1.986x | 1.70 → 3.38 |
+| Smooth 16-bit stereo, level 2, block 16 | 19,457 | 11,945 | 1.629x | 3.09 → 5.03 |
+
+Host: Intel Core i7-1250U, Windows x86-64 MSVC, rustc 1.97.1, existing Cargo
+bench profile and static CRT. The benchmark pins its thread to logical CPU 2.
+Cycles are current-thread `QueryThreadCycleTime` differences; throughput uses
+`Instant`. PCM generation, roundtrip verification and heap accounting are
+outside timing. Each trial warms and reuses one encoder. Trials interleave the
+two executables in seeded random order: 11 rounds at approximately 60 ms per
+variant for individual changes, 15 rounds at approximately 100 ms for the final
+comparison. Tables report medians. An initial unchanged-binary control stayed
+within 0.24%. The host is not frequency-locked: absolute counts vary across
+measurement sessions, so compare paired variants within each report.
+
+The second change's initial wide-input differences of -3.5% and -1.4% did not
+repeat: 21 rounds at 100 ms measured both within 0.1%. The initial Hann change
+measured -1.8% on block-16 level-2 encoding, which does not enter the LPC path;
+the final comparison retains a 1.629x gain on that case. All raw trials, including
+these initial results, are retained.
+
+All eight cases allocate and reallocate zero times per frame after warmup.
+The first two changes leave cold heap counts unchanged. The LPC change adds
+one reusable `Vec<f64>` allocation of `8 * block_size` bytes: 32,768 bytes for
+these 4,096-sample blocks, shared across channels. At level 5 stereo, cold
+allocation calls increase from 10 to 11 and cumulative requested bytes from
+169,406 to 202,174. No buffer is allocated for levels 0–2. Requested bytes include
+reallocation requests; they do not represent RSS or retained heap.
+
+Correctness: each intermediate and final binary emits exactly the same 635,954
+bytes as the baseline over 1,044 generated frames (depths 4–32, channels 1/2/8,
+levels 0/2/5/8, block sizes 16/67/257). The larger benchmark frames additionally
+match the baseline's encoded-frame digest and original integer PCM. Two new
+tests check signed-width boundaries and 1,920 Rice plans against exhaustive
+parameter, method and partition-order enumeration. Debug and release suites
+pass all 14 unit tests, 35 integration tests and three doctests; Clippy and
+format checks pass. The eight external corpus/oracle gates remain ignored and
+were not rerun. No production unsafe code was added.
+
+The evidence concerns synthetic resident-frame **encoding** on this host.
+It does not establish full music-file encoding, decoder or playback speed.
+The benchmark and preserved build manifests are reproducible with:
+
+```powershell
+python crates/deadlib-audio/decode/flac/benches/build_native.py --bench encoding --target-dir target --output target/flac-perf/current.exe
+python crates/deadlib-audio/decode/flac/benches/encoding_perf.py --before target/flac-perf/baseline.exe --after target/flac-perf/current.exe --rounds 15 --milliseconds 100 --output target/flac-perf/comparison.json
+target/flac-perf/current.exe matrix target/flac-perf/current-matrix.bin
+fc.exe /B target\flac-perf\baseline-matrix.bin target\flac-perf\current-matrix.bin
+```
+
+To rebuild the baseline, use `src/encode.rs` from `9e8f72ac0` in an isolated
+checkout with the current encoding benchmark, shared test support and benchmark
+registration. Use the same Cargo profile and target configuration for both.
+`--case` selects individual cases; the cycle counter currently supports Windows.
+
+Evidence: [per-change residual statistics](benches/validation/2026-10-28-encoding/width.json),
+[Rice method](benches/validation/2026-10-28-encoding/rice.json),
+[Rice repeat](benches/validation/2026-10-28-encoding/rice-repeat.json),
+[Hann reuse](benches/validation/2026-10-28-encoding/window.json),
+[final trials](benches/validation/2026-10-28-encoding/final.json),
+[unchanged control](benches/validation/2026-10-28-encoding/control.json),
+[validation scope](benches/validation/2026-10-28-encoding/validation.json).
+The same directory preserves source/toolchain hashes and build logs for every
+binary. Executables and generated PCM/output remain under `target/flac-perf`.
