@@ -331,3 +331,15 @@ inputs and 100000 ASan executions pass. The verified new corpus has 1868 files.
 MS_ARITHMETIC.md records details and the random-reference IMA control slowdown.
 Next: assess IMA arithmetic including that control regression, assess native
 wavl file I/O, and finish the original requirements audit.
+
+
+The user subsequently replaced the original broad objective with completion of
+WAV decoding, passing tests and accurate interoperability, explicitly removing
+performance as a criterion. That goal is complete. DECODING_VALIDATION.md and
+validation/decoding-final-audit.json bind the final implementation to all 95
+passing tests in x64 debug/release and i686 debug, both-target Clippy, current
+native/compressed replays and fuzz evidence. A fresh direct pass also passes
+460 native fixture gates, all 24 four-reference core gates, 40 ADPCM arithmetic
+cases and 144 encoded-file decoding cases. Known external rounding/support
+differences remain explicit. No further performance work is scheduled by this
+goal; earlier next-step paragraphs are historical.

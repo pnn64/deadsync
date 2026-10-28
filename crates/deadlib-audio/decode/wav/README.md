@@ -121,8 +121,9 @@ Build and test by package name:
 cargo test -p deadlib-audio-decode-wav
 ```
 
-See [COVERAGE.md](COVERAGE.md) for evidence and limitations and [PLAN.md](PLAN.md)
-for the full outstanding objective. The current implementation is under development.
+See [DECODING_VALIDATION.md](DECODING_VALIDATION.md) for the completed decoding
+audit and [COVERAGE.md](COVERAGE.md) for evidence and limitations. [PLAN.md](PLAN.md)
+retains milestone history; performance follow-up is outside the current goal.
 Bounded mutation, coverage-guided fuzzing and sanitizer evidence is recorded in
 [FUZZING.md](FUZZING.md).
 Performance history and remaining targets are in [PERFORMANCE.md](PERFORMANCE.md).
@@ -130,7 +131,8 @@ Performance history and remaining targets are in [PERFORMANCE.md](PERFORMANCE.md
 same-output Hound comparisons, dense real-file streaming, process memory and the
 measured PCM32 integer-path optimization. [REFERENCE_PERFORMANCE.md](REFERENCE_PERFORMANCE.md)
 extends the comparison to Symphonia, ADPCM and both Windows architectures,
-including the measured buffered-read fix and remaining compressed arithmetic costs. [AUDIT.md](AUDIT.md) tracks the full goal.
+including the measured buffered-read fix and compressed arithmetic observations.
+[AUDIT.md](AUDIT.md) records implementation scope and the revised decoding goal.
 Native PCM/float sample and encoder comparisons against four references are in
 [PCM.md](PCM.md). Real NTFS files over 16 GiB, 32/64-bit seek checks and scoped
 whole-process memory measurements are in [LARGE_FILES.md](LARGE_FILES.md).

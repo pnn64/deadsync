@@ -1,0 +1,16 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadlib-audio-decode-wav",
+    "--doc",
+    "--target-dir",
+    "target/wav"
+  ],
+  "exit_code": 0,
+  "log_sha256": "51b67cc4ceaf28bb8cb2907c759f199133038596a91eb9abec9deefc44bab765",
+  "readme_sha256": "a2e608b3aef409d2938fc1aa69a0087cf100b38796a2f2caee9679f6f39c2415",
+  "scope": "documentation-only update after the full decoder/reference checks; production Rust source unchanged"
+}

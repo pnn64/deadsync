@@ -1,8 +1,11 @@
 # Requirement audit, 2026-10-28
 
-The original attached request and active goal remain the completion criteria.
-This ledger distinguishes implementation evidence from the still-unproven
-performance objective. It is not a completion declaration.
+The user replaced the broader original goal with a decoding correctness and
+interoperability goal, explicitly excluding performance. That goal is complete;
+[DECODING_VALIDATION.md](DECODING_VALIDATION.md) and its machine audit record the
+final current-source checks. This ledger retains the broader implementation
+history and scope boundaries. Performance observations below are not completion
+conditions for the current goal.
 
 | Requirement | Current authoritative evidence | Assessment / remaining work |
 | --- | --- | --- |
@@ -18,15 +21,12 @@ performance objective. It is not a completion declaration.
 | Malformed files, ordering, boundaries, fuzzing | 95-test x64 debug/release and i686 suite, denied-warning Clippy on both targets; FUZZING.md has checked mutation/ASan campaigns and verified corpus archives. | Substantial bounded evidence, not exhaustive proof. Latest campaign: two million checked mutations, 100000 x64 ASan executions and 1846 prior corpus inputs; new verified corpus has 1868 files. |
 | Four reference libraries and independent fixtures | PCM.md, ADPCM.md, WAVL.md and immutable reports/archives for libsndfile, dr_wav, Symphonia and FFmpeg. | Correctness comparisons implemented, with unsupported and nonexact results preserved; no false simultaneous-parity claim. |
 | Opening, metadata, complete decode, stream, seek, encode, CPU cycles, allocations and process memory | PERFORMANCE.md and NATIVE_PERFORMANCE.md: 52 six-width cases, 25 same-output Hound gates, 34 fresh-process small/large memory probes, 22 dense cached-file stream runs; earlier cue/INFO/dr_wav, ADPCM controls and sparse-process snapshots; REFERENCE_PERFORMANCE.md adds 89 Symphonia comparison cases, 48 memory probes, 32 cached-file runs and an i686 subset. MS_ARITHMETIC.md repeats the full/subset matrix and adds paired random/low-entropy arithmetic comparisons. | Native evidence is substantiated against Hound and Symphonia on Windows x64/i686. Compressed cached-file read amplification is 1.0, improving measured file throughput 2.26-2.57 times. Bounded i686 Microsoft arithmetic improves paired random full/stream 2.65/2.62 times, but remains slower than Symphonia; IMA controls need follow-up. Other platforms are unmeasured; no universal claim is made. |
-| Optimize measured bottlenecks and compete with established Rust WAV libraries | Compact Pcm state, native copies and the measured PCM32 integer-stream bypass have source-pinned before/after evidence. The latter improves repeated little-endian streams 16–20 times and RIFX 4.1–4.5 times. Cached ADPCM geometry/cursor and bounded 32-bit Microsoft arithmetic address measured costs; pinned native wavl construction retains a roughly 6-10 ns cost, with overlapping full-stream ranges. | **Incomplete:** assess IMA arithmetic including the paired control slowdown, assess native wavl file I/O and finish the final requirements audit. Broad same-output Hound results are measured, with memory and opening tradeoffs retained. |
-| Document limits, preserve unrelated work, commit milestones | README and focused coverage/performance documents; scoped milestone commits. | Ongoing. No playback/backend integration is authorized. |
+| Optimize measured bottlenecks and compete with established Rust WAV libraries | Compact Pcm state, native copies and the measured PCM32 integer-stream bypass have source-pinned before/after evidence. The latter improves repeated little-endian streams 16–20 times and RIFX 4.1–4.5 times. Cached ADPCM geometry/cursor and bounded 32-bit Microsoft arithmetic address measured costs; pinned native wavl construction retains a roughly 6-10 ns cost, with overlapping full-stream ranges. | Historical performance follow-up is outside the user-revised goal. It does not block the verified decoding result, and no additional optimization is scheduled. |
+| Document limits, preserve unrelated work, commit milestones | README, DECODING_VALIDATION.md and focused coverage documents; scoped milestone commits. | Decoding audit complete. No playback/backend integration was added; unrelated work is preserved. |
 
-Next work: assess IMA arithmetic including the measured control slowdown, assess
-native wavl file I/O, then perform the final requirement audit. Bounded 32-bit
-Microsoft arithmetic now has a proof, independent wide oracle and paired gains.
-Redundant
-sequential compressed seeks are removed and verified. The native writer
-construction overhead remains a documented architectural tradeoff. Reference/profile assessment now includes Hound,
-Symphonia, Windows x64/i686 and explicit unmeasured-platform limits.
-Before completion, audit these rows against the then-current source,
-reports and actual requirement scope again; green tests alone are insufficient.
+The final direct reference pass confirms 460 native fixture gates, 24 four-peer
+core gates, 40 ADPCM arithmetic gates and 144 encoded-file decoding gates.
+All 95 tests pass in the three recorded configurations. Current source hashes,
+native/compressed replays, fuzz evidence and known peer differences are verified
+by decoding-final-audit.json. No decoding defect remains identified. The former
+IMA/native-wavl performance follow-up is explicitly outside the revised goal.

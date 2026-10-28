@@ -1,0 +1,26 @@
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import time
+
+root = Path('crates/deadlib-audio/decode/wav')
+stem = Path('target/wav/decoding-final-checks')
+assert not Path(str(stem) + '.json').exists()
+sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
+paths = sorted((root / 'src').rglob('*.rs')) + [root / 'README.md']
+before = {p.as_posix(): sha(p) for p in paths}
+runs = []
+for tool, output in [('reference_pcm.py', 'decoding-final-pcm.json'), ('reference_adpcm.py', 'decoding-final-adpcm.json'), ('reference_adpcm_encode.py', 'decoding-final-encoded.json')]:
+    command = ['python', str(root / 'tests' / tool), '--output', 'target/wav/' + output]
+    p = subprocess.run(command, capture_output=True)
+    raw = Path(str(stem) + '-' + tool.removesuffix('.py'))
+    Path(str(raw) + '.stdout').write_bytes(p.stdout)
+    Path(str(raw) + '.stderr').write_bytes(p.stderr)
+    runs.append(dict(command=command, driver_sha256=sha(root / 'tests' / tool), exit_code=p.returncode, stdout_sha256=hashlib.sha256(p.stdout).hexdigest(), stderr_sha256=hashlib.sha256(p.stderr).hexdigest()))
+    print(tool, 'exit', p.returncode, p.stdout.decode(errors='replace')[-500:], flush=True)
+    if p.returncode:
+        break
+report = dict(timestamp_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), driver_sha256=sha(Path(__file__)), sources=before, inputs_unchanged=before == {p.as_posix(): sha(p) for p in paths}, runs=runs, scope='final current-source direct decoder interoperability; no performance criterion')
+Path(str(stem) + '.json').write_text(json.dumps(report, indent=2) + '\n')
+assert len(runs) == 3 and all(r['exit_code'] == 0 for r in runs) and report['inputs_unchanged']

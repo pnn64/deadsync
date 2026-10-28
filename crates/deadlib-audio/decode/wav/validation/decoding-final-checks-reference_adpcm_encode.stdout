@@ -1,0 +1,5 @@
+144/144 encoder/reference cases pass specified arithmetic and exact fact length
+dr_wav 132 / 144 exact after fact trimming
+libsndfile 113 / 144 exact after fact trimming
+ffmpeg 108 / 144 exact after fact trimming
+symphonia 108 / 144 exact after fact trimming

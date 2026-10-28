@@ -1,0 +1,4 @@
+40/40 specified-arithmetic differential cases; report: target\wav\decoding-final-adpcm.json
+ffmpeg 20 / 40 fact-trimmed exact
+dr_wav 38 / 40 fact-trimmed exact
+libsndfile 38 / 40 fact-trimmed exact

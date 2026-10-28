@@ -9,3 +9,4 @@ adpcm-cache-* -text
 symphonia-widths-* -text
 adpcm-cursor-* -text
 ms-narrow-* -text
+decoding-final-* -text

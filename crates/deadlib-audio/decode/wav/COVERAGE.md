@@ -317,3 +317,13 @@ two million checked mutations, 1846 prior corpus inputs and 100000 x64 ASan
 executions pass. The verified final corpus contains 1868 inputs. The narrow
 branch is checked on i686; x64 ASan covers wide arithmetic. MS_ARITHMETIC.md
 records measured gains, the i32 bound proof and the IMA control performance issue.
+
+
+The final decoding-only audit is complete. A fresh direct current-source pass
+confirms 460 native fixture gates, 24 core cases against all four external
+decoders, 40 ADPCM arithmetic cases and 144 encoded-file decoding cases.
+DECODING_VALIDATION.md explains the standards-based rounding choices, external
+support differences and retained scope boundaries. Its machine audit verifies
+all 23 production source hashes against the complete 95-test three-configuration
+suite, current replays and fuzz evidence. Performance is excluded from the
+user-revised completion criteria.
