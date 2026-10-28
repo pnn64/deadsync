@@ -23,7 +23,9 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    ADM XML/CHNA, unknown chunks. Unusual ordering, large/sparse files and multichannel.
    Borrowed views and caller-buffer serialization are implemented (41 total tests,
    allocator probe and external metadata fixtures); see METADATA.md. Full broadcast
-   profile/ADM semantics, XML compression and broad metadata benchmarks remain open.
+   profile/ADM semantics, XML compression and broader metadata benchmarks remain open.
+   A resident cue/INFO comparison with dr_wav is recorded in PERFORMANCE.md;
+   open+walk wins in the measured cases, retained-view walks remain slower.
 5. Differential validation against libsndfile, dr_wav, Symphonia; independent
    fixtures, malformed corpus, streaming split matrix and bounded fuzz campaigns.
    Four million checked deterministic mutations pass across x64/i686, plus two

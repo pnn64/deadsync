@@ -85,3 +85,45 @@ real-file cold/warm startup and streaming, nonseekable input, realistic and larg
 corpora, Symphonia and other Rust WAV libraries, dr_wav/libsndfile performance,
 multiple architectures, peak RSS, fuzz/optimization parity, and broad confidence
 intervals. These results do not establish superiority across those unmeasured cases.
+
+## Resident cue/INFO metadata baseline
+
+`benches/run_metadata.py` independently packs three leading-metadata RIFF fixtures
+and computes a checksum over all six cue fields (including FourCC bytes) and
+every INFO text byte. Both implementations must match that truth. Audio is skipped;
+all input is resident and all metadata precedes data. Five warmed trials per
+operation, same Windows/Xeon host, no affinity/frequency control. The reference is
+the pinned dr_wav revision used by the differential campaigns, built with MSVC
+/O2 /MT. Rust uses the fingerprinted workspace bench profile. Raw data, source/
+binary hashes and fixture sizes are in `validation/metadata-baseline.{tsv,json}`.
+
+```sh
+python crates/deadlib-audio/decode/wav/benches/run_metadata.py --output target/wav/metadata-run
+```
+
+Median microseconds per operation:
+
+| Fixture | Cue points / INFO entries | Open + walk, this crate | Open + walk, dr_wav | Retained walk, this crate | Retained walk, dr_wav |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Small, 960 metadata bytes | 32 / 4 | 0.379 | 1.297 | 0.205 | 0.112 |
+| Medium, 103,064 metadata bytes | 4096 / 64 | 12.763 | 69.959 | 11.846 | 8.937 |
+| Large, 529,432 metadata bytes | 16384 / 512 | 156.442 | 334.196 | 161.687 | 75.734 |
+
+Fresh open+walk is 2.1–5.5x faster in these cases. Reusing retained borrowed views
+is slower than walking dr_wav's already materialized metadata. That measured cost
+remains an optimization target; these results do not imply every metadata query
+is faster. Header-only opening is also recorded separately in the TSV and does
+not interpret cue/INFO payload fields.
+
+Rust operations request zero heap bytes. dr_wav's fresh structured open requests
+one allocation of 1467/109751/582263 bytes respectively. Both retained-walk probes
+allocate zero during the operation; dr_wav's retained object still owns the
+allocation made before measurement, while the Rust views borrow the input.
+The reference uses allocation callbacks with a 16-byte accounting header excluded
+from requested bytes; timings include those callbacks. The Rust probe likewise
+excludes allocator overhead. Caller input, stack, retained state and process RSS
+are outside the scoped allocation counts. No native codec RSS claim is made.
+
+This comparison covers little-endian leading cue/INFO metadata only. Broader
+metadata families, trailing RF64/BW64 metadata, disks, other references/platforms,
+and controlled confidence intervals remain outstanding.

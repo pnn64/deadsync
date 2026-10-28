@@ -18,3 +18,7 @@ perf = { level = "warn", priority = -1 }
 [[bench]]
 name = "pcm"
 harness = false
+
+[[bench]]
+name = "metadata"
+harness = false
