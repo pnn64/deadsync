@@ -67,8 +67,8 @@ sample mapping and exact indexed seeking now pass 41 integration tests, 120
 LAME-file comparisons against three reference decoders, and indexed raw checks
 on the 18 legacy PCM pairs; see SEEKING.md. Adversarial campaigns, broader encoder
 compatibility, encoding and measured optimization remain required on the
-roadmap. The MPEG-2.5 8 kHz mixed-block disagreement is
-still open.
+roadmap. MPEG25.md now independently confirms the selected 8-kHz mixed-block
+equations while documenting reference implementation differences.
 
 ## Source material
 

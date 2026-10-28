@@ -80,8 +80,10 @@ For MPEG-2.5, 11.025/12 kHz use the documented LSF-style band tables. The 8 kHz
 mixed profile has six long bands spanning 72 lines/four subbands, followed by
 short band three. The current implementation follows that geometry, including
 alias reduction across its long subbands. Synthetic 8 kHz mixed-block PCM
-disagrees substantially with libmad, mpg123 and Symphonia; resolution remains
-required. Ordinary long/short LAME files at 8 kHz pass the generated-file gate.
+disagrees substantially with libmad, mpg123 and Symphonia. The subsequent
+independent all-frequency equation audit in [MPEG25.md](MPEG25.md) confirms the
+native 1997 profile and preserves the reference disagreements explicitly.
+Ordinary long/short LAME files at 8 kHz pass the generated-file gate.
 
 Band boundaries are factual numeric data from ISO simulation tables and the
 pinned LAME numeric table, with provenance in tests/data/bands.json. The 24 kHz
