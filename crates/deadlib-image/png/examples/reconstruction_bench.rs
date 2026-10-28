@@ -148,6 +148,10 @@ fn main() {
         "case\toperation\titerations\tsample_bytes\tcycles_per_image\tns_per_image\tMiB_per_second\tallocations\treallocations\trequested_bytes\tfingerprint"
     );
     let stage = std::env::var("DEADLIB_PNG_BENCH_STAGE");
+    if stage.as_deref() == Ok("reader-buffers") {
+        reader_buffers();
+        return;
+    }
     if stage.as_deref() == Ok("decoder-lanes") {
         decoder_lanes();
         return;
@@ -640,5 +644,99 @@ fn decoder_lanes() {
         measure(&case, "decode-reader", count, hash, || {
             decode_reader(black_box(bytes.as_slice()), &Default::default()).unwrap()
         });
+    }
+}
+
+fn reader_buffers() {
+    use deadlib_image_png::zlib::Compression;
+    let mut cases = Vec::new();
+    for color in [
+        ColorType::Grayscale,
+        ColorType::GrayscaleAlpha,
+        ColorType::Rgb,
+        ColorType::Rgba,
+        ColorType::Indexed,
+    ] {
+        for depth in [8, 16] {
+            if color.allows_depth(depth) {
+                for (width, height) in [(513, 257), (33, 9)] {
+                    for interlaced in [false, true] {
+                        cases.push((width, height, color, depth, interlaced, Filter::None));
+                    }
+                }
+            }
+        }
+    }
+    for depth in [1, 2, 4] {
+        for interlaced in [false, true] {
+            cases.push((33, 9, ColorType::Grayscale, depth, interlaced, Filter::None));
+        }
+    }
+    for depth in [8, 16] {
+        cases.push((513, 257, ColorType::Rgba, depth, true, Filter::Paeth));
+        cases.push((4097, 257, ColorType::Rgba, depth, false, Filter::None));
+        cases.push((1, 1, ColorType::Rgba, depth, false, Filter::None));
+    }
+    for (width, height, color, depth, interlaced, filter) in cases {
+        for (mode, compression) in [("stored", Compression::Stored), ("fast", Compression::Fast)] {
+            if width == 4097 && mode == "fast" {
+                continue;
+            }
+            let mut png = fixture(width, height, color, depth);
+            if color == ColorType::Indexed {
+                png.palette = (0..256)
+                    .map(|n| [n as u8, (n * 37) as u8, 255 - n as u8])
+                    .collect();
+            }
+            if mode == "fast" {
+                let channels = color.channels();
+                let value = |n: usize| {
+                    ((n / channels % width as usize + n % channels) & 31) as u16
+                        & ((1u32 << depth) - 1) as u16
+                };
+                match &mut png.image.samples {
+                    Samples::U8(v) => v
+                        .iter_mut()
+                        .enumerate()
+                        .for_each(|(n, v)| *v = value(n) as u8),
+                    Samples::U16(v) => v.iter_mut().enumerate().for_each(|(n, v)| *v = value(n)),
+                }
+            }
+            let bytes = encode(
+                &png,
+                &EncodeOptions {
+                    interlaced,
+                    filter,
+                    compression,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                apng_recovery::inflate_idat(&bytes),
+                apng_recovery::filtered_with(&png.image, interlaced, filter)
+            );
+            for actual in [
+                decode(&bytes).unwrap(),
+                decode_reader(bytes.as_slice(), &Default::default()).unwrap(),
+            ] {
+                assert_eq!(actual.image, png.image);
+                assert_eq!(actual.palette, png.palette);
+            }
+            let case = format!(
+                "reader-c{}-d{depth}-{width}x{height}-i{}-f{}-{mode}",
+                color as u8,
+                u8::from(interlaced),
+                filter as u8
+            );
+            let hash = fingerprint(&Samples::U8(bytes.clone()));
+            let count = png.image.samples.len() * if depth == 16 { 2 } else { 1 };
+            measure(&case, "decode", count, hash, || {
+                decode(black_box(&bytes)).unwrap()
+            });
+            measure(&case, "decode-reader", count, hash, || {
+                decode_reader(black_box(bytes.as_slice()), &Default::default()).unwrap()
+            });
+        }
     }
 }

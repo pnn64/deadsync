@@ -181,7 +181,6 @@ pub fn check(input: &[u8], crc: impl Fn(&[u8]) -> u32) {
                 assert_eq!(offset == bytes.len(), expected.is_ok());
                 decoder.finish().unwrap();
                 if let Ok(png) = &expected {
-                    assert!(decoder.peak_image_buffer_bytes() > 32768);
                     assert_eq!(decoder.animation_error(), png.animation_error.as_ref());
                 }
                 return;

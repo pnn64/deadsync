@@ -1,0 +1,140 @@
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling cfg-if v1.0.5
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image)
+   Compiling crc32fast v1.5.3
+   Compiling miniz_oxide v0.9.1
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling bitflags v2.13.2
+   Compiling flate2 v1.1.10
+   Compiling png v0.18.1
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 14.18s
+     Running tests\apng_recovery.rs (target\png-reader-buffers-20261028\build\debug\deps\apng_recovery-dbedf7b8833c7c6e.exe)
+
+running 8 tests
+test libpng_static_fallback_known_answers_and_crc_policy ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test palette_strictness_keeps_static_and_animation_errors_distinct ... ok
+test recovery_never_accepts_bad_core_png_or_bypasses_limits ... ok
+test animation_chunk_permutations_and_reencoding_clear_diagnostics ... ok
+test discarded_large_chunks_stay_bounded_and_report_only_the_first_fault ... ok
+test all_truncations_io_errors_and_multiple_fdat_boundaries ... ok
+test default_control_before_actl_all_formats_faults_and_deferred_events ... ok
+Recovered 3000 independent APNG faults across 60 format/interlace/default-role configurations
+test independent_valid_animation_and_recovered_static_samples_all_formats ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 2.63s
+
+     Running tests\decoder_boundaries.rs (target\png-reader-buffers-20261028\build\debug\deps\decoder_boundaries-d00ad6f732f55a60.exe)
+
+running 4 tests
+Native resource fuzzer contract: 6376 independent format/policy/IO/budget seeds
+test native_resource_fuzzer_contract_accepts_independent_boundary_and_io_seeds ... ok
+Independent resource audit: 120 files, 4680 budget/policy probes, 2400 accepted, 2280 rejected, 32760 buffered/reader/push API checks
+test exact_input_sample_inflation_metadata_chunk_and_frame_budgets ... ok
+IHDR audit: 960 dimension pairs, 65536 color/depth pairs, 11520 method bytes, 468096 parser/policy API checks; no giant allocation
+test ihdr_integer_color_depth_and_method_fields_fail_before_large_allocation ... ok
+Reader fault audit: 80760 interruption/short-read/IO/oversized-count checks across all formats, interlace modes, animation roles and EOF probing
+test interruptions_and_reader_faults_at_chunk_boundaries_and_final_eof_probe ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.93s
+
+     Running tests\deflate_prefix.rs (target\png-reader-buffers-20261028\build\debug\deps\deflate_prefix-ce560e5f6991ef8e.exe)
+
+running 2 tests
+Mixed/one-bit prefix audit: 740 independent streams, 45140 suffix/padding combinations, three streaming fragment shapes each
+test one_bit_end_codes_and_huffman_stored_huffman_transitions_at_every_alignment ... ok
+Prefix audit: 3091 independent positive Huffman fixtures, 43274 suffix placements, 24728 trailer/body truncations and three streaming fragment shapes each
+test every_valid_huffman_fixture_keeps_exact_prefix_trailer_limits_and_truncations ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 25.02s
+
+     Running tests\deflate_stream.rs (target\png-reader-buffers-20261028\build\debug\deps\deflate_stream-a55f63789189db61.exe)
+
+running 4 tests
+test empty_output_and_input_after_finish ... ok
+test cross_block_history_and_separate_finish ... ok
+test mixed_compressibility_block_transitions_and_full_window_reuse ... ok
+test input_output_fragments_and_block_boundaries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.50s
+
+     Running tests\encoder_filter_bytes.rs (target\png-reader-buffers-20261028\build\debug\deps\encoder_filter_bytes-67ff9f79d06d11ec.exe)
+
+running 1 test
+test all_formats_filters_and_pass_tails_match_normative_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.64s
+
+     Running tests\inflate_stream.rs (target\png-reader-buffers-20261028\build\debug\deps\inflate_stream-4796efc83e52b28e.exe)
+
+running 4 tests
+test zero_capacity_prefix_truncations_and_terminal_errors ... ok
+test exact_small_output_limits_and_power_of_two_boundaries ... ok
+test every_input_output_fragment_combination ... ok
+test ring_wrap_history_and_long_matches ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.99s
+
+     Running tests\png_stream.rs (target\png-reader-buffers-20261028\build\debug\deps\png_stream-dd9b5eda8d24da6f.exe)
+
+running 5 tests
+test prefix_consumption_provisional_rows_and_verified_image_end ... ok
+test apng_image_roles_and_completion ... ok
+test every_truncation_limits_and_reader_errors ... ok
+test row_pipeline_memory_is_bounded_for_growing_heights ... ok
+test pngsuite_and_apng_arbitrary_reads ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+
+     Running tests\pngsuite.rs (target\png-reader-buffers-20261028\build\debug\deps\pngsuite-e4c2a1baf4ad95dd.exe)
+
+running 1 test
+test pngsuite_native_samples_and_reencoding ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.04s
+
+     Running tests\reference_samples.rs (target\png-reader-buffers-20261028\build\debug\deps\reference_samples-25650afd2cd76695.exe)
+
+running 7 tests
+test libpng_native_and_sbit_shift_recover_exact_reference_samples ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test native_containers_are_reused_and_invalid_reference_inputs_are_rejected ... ok
+test each_low_precision_value_is_exact_when_another_channel_requires_sixteen_bits ... ok
+test every_uniform_source_value_and_container_preserves_high_bits_and_endpoints ... ok
+test every_mixed_channel_depth_declaration_uses_the_smallest_legal_depth ... ok
+test converted_apng_frames_share_precision_and_preserve_reference_values ... ok
+test both_writers_all_source_precisions_filters_and_interlace_recover_original_samples ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 49.52s
+
+     Running tests\static_png.rs (target\png-reader-buffers-20261028\build\debug\deps\static_png-f860a6acf3292a71.exe)
+
+running 3 tests
+test decode_reference_encodings ... ok
+test one_byte_idat_and_truncations ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.15s
+
+     Running tests\stream_literals.rs (target\png-reader-buffers-20261028\build\debug\deps\stream_literals-5f2a1a4354f57420.exe)
+
+running 2 tests
+test c_zlib_literal_runs_and_history_wraps ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+Streaming literal audit: 172 independent fixed/dynamic streams; exact flate2/native bytes and prefixes; alternating zero-output calls, input/output 1/1, 7/31 and whole/257, history wraps, limits and four trailer truncations
+test literal_runs_history_wrap_pending_output_limits_and_trailer_fragments ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 7.69s
+
+     Running tests\zlib_headers.rs (target\png-reader-buffers-20261028\build\debug\deps\zlib_headers-a3b8e7cc2265ae6b.exe)
+
+running 5 tests
+test c_zlib_header_and_history_oracle ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE; see tests/oracle/README.md
+Invalid pre-output references accepted: flate2 24/24, Rust png 0/24
+test distance_must_not_precede_actual_output ... ok
+test every_cmf_and_flg_value_buffered_and_fragmented ... ok
+test every_png_zlib_header_value ... ok
+test advertised_window_distances_and_ring_wrap ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 7.81s
+

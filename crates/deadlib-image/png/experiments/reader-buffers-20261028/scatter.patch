@@ -1,0 +1,49 @@
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index d05521e6a..31fc7d21c 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -150,7 +150,7 @@ pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
+     }
+ }
+ 
+-fn scatter8<const CHANNELS: usize>(row: &[u8], out: &mut [u8], step: usize) {
++pub(crate) fn scatter<T: Copy, const CHANNELS: usize>(row: &[T], out: &mut [T], step: usize) {
+     for (pixel, dst) in row
+         .as_chunks::<CHANNELS>()
+         .0
+@@ -297,10 +297,10 @@ pub(crate) fn decode(
+                     let dst = (dst_y * width as usize + x as usize) * channels;
+                     let out = &mut v[dst..];
+                     match channels {
+-                        1 => scatter8::<1>(row, out, dx as usize),
+-                        2 => scatter8::<2>(row, out, dx as usize),
+-                        3 => scatter8::<3>(row, out, dx as usize),
+-                        _ => scatter8::<4>(row, out, dx as usize),
++                        1 => scatter::<_, 1>(row, out, dx as usize),
++                        2 => scatter::<_, 2>(row, out, dx as usize),
++                        3 => scatter::<_, 3>(row, out, dx as usize),
++                        _ => scatter::<_, 4>(row, out, dx as usize),
+                     }
+                 }
+                 position += stride + 1;
+diff --git a/crates/deadlib-image/png/src/stream/read.rs b/crates/deadlib-image/png/src/stream/read.rs
+index 70b50218c..5cf27bd9f 100644
+--- a/crates/deadlib-image/png/src/stream/read.rs
++++ b/crates/deadlib-image/png/src/stream/read.rs
+@@ -35,9 +35,13 @@ fn scatter(image: &mut Image, row: Row<'_>) -> Result<(), Error> {
+             if row.x_step == 1 {
+                 $dest[start..start + $src.len()].copy_from_slice($src);
+             } else {
+-                for (pixel, values) in $src.chunks(channels).enumerate() {
+-                    let offset = start + pixel * row.x_step as usize * channels;
+-                    $dest[offset..offset + channels].copy_from_slice(values);
++                let out = &mut $dest[start..];
++                let step = row.x_step as usize;
++                match channels {
++                    1 => crate::scanline::scatter::<_, 1>($src, out, step),
++                    2 => crate::scanline::scatter::<_, 2>($src, out, step),
++                    3 => crate::scanline::scatter::<_, 3>($src, out, step),
++                    _ => crate::scanline::scatter::<_, 4>($src, out, step),
+                 }
+             }
+         };

@@ -71,6 +71,41 @@ fn ring_wrap_history_and_long_matches() {
 }
 
 #[test]
+fn exact_small_output_limits_and_power_of_two_boundaries() {
+    let mut random = 0x109b_4131u32;
+    for len in [
+        0usize, 1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 255, 256, 257, 1023, 1024, 1025, 4095,
+        4096, 4097, 16383, 16384, 16385, 32767, 32768, 32769,
+    ] {
+        let mut raw: Vec<_> = (0..len.div_ceil(2))
+            .map(|_| {
+                random ^= random << 13;
+                random ^= random >> 17;
+                random ^= random << 5;
+                random as u8
+            })
+            .collect();
+        raw.extend_from_within(..len - raw.len());
+        for level in [0, 9] {
+            let compressed = reference(&raw, level);
+            let mut trailing = compressed.clone();
+            trailing.extend_from_slice(b"sentinel");
+            for (input, output) in [(1, 1), (7, 31), (4096, 65536)] {
+                let (actual, used) = support::inflate(&trailing, input, output, len).unwrap();
+                assert_eq!(actual, raw, "length={len} level={level}");
+                assert_eq!(used, compressed.len());
+            }
+            if len != 0 {
+                assert_eq!(
+                    support::inflate(&compressed, 7, 31, len - 1),
+                    Err(Error::LimitExceeded)
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn zero_capacity_prefix_truncations_and_terminal_errors() {
     let raw = b"one byte at a time";
     let compressed = reference(raw, 6);

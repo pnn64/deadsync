@@ -1,0 +1,52 @@
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.3
+   Compiling cfg-if v1.0.5
+   Compiling bitflags v2.13.2
+   Compiling miniz_oxide v0.9.1
+   Compiling fdeflate v0.3.7
+   Compiling miniz_oxide v0.8.9
+   Compiling flate2 v1.1.10
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image)
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+   Compiling png v0.18.1
+    Finished `release` profile [optimized] target(s) in 1m 04s
+     Running tests\apng_recovery.rs (target\png-reader-buffers-20261028\build\release\deps\apng_recovery-d2c2d3b61989e332.exe)
+
+running 8 tests
+test palette_strictness_keeps_static_and_animation_errors_distinct ... ok
+test recovery_never_accepts_bad_core_png_or_bypasses_limits ... ok
+test discarded_large_chunks_stay_bounded_and_report_only_the_first_fault ... ok
+test animation_chunk_permutations_and_reencoding_clear_diagnostics ... ok
+test all_truncations_io_errors_and_multiple_fdat_boundaries ... ok
+test default_control_before_actl_all_formats_faults_and_deferred_events ... ok
+Recovered 3000 independent APNG faults across 60 format/interlace/default-role configurations
+test independent_valid_animation_and_recovered_static_samples_all_formats ... ok
+libpng APNG static images: exact native defaults=2880, strict CRC rejections=240
+test libpng_static_fallback_known_answers_and_crc_policy ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 54.63s
+
+     Running tests\decoder_boundaries.rs (target\png-reader-buffers-20261028\build\release\deps\decoder_boundaries-4099308e19535f87.exe)
+
+running 4 tests
+
+thread 'native_resource_fuzzer_contract_accepts_independent_boundary_and_io_seeds' (44964) panicked at crates\deadlib-image\png\tests\support\resource.rs:184:21:
+assertion failed: decoder.peak_image_buffer_bytes() > 32768
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test native_resource_fuzzer_contract_accepts_independent_boundary_and_io_seeds ... FAILED
+Independent resource audit: 120 files, 4680 budget/policy probes, 2400 accepted, 2280 rejected, 32760 buffered/reader/push API checks
+test exact_input_sample_inflation_metadata_chunk_and_frame_budgets ... ok
+Reader fault audit: 80760 interruption/short-read/IO/oversized-count checks across all formats, interlace modes, animation roles and EOF probing
+test interruptions_and_reader_faults_at_chunk_boundaries_and_final_eof_probe ... ok
+IHDR audit: 960 dimension pairs, 65536 color/depth pairs, 11520 method bytes, 468096 parser/policy API checks; no giant allocation
+test ihdr_integer_color_depth_and_method_fields_fail_before_large_allocation ... ok
+
+failures:
+
+failures:
+    native_resource_fuzzer_contract_accepts_independent_boundary_and_io_seeds
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+
+error: test failed, to rerun pass `-p deadlib-image-png --test decoder_boundaries`

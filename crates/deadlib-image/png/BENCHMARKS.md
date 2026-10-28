@@ -1998,3 +1998,120 @@ and raw logs. `audit.py` verifies the selected source, ten frozen checkpoints,
 80 whole-pipeline processes, twelve supplemental paired callers, unchanged
 independent test sources and all recorded binary/log/summary identities before
 commit; `audit.json` records the audited report and evidence hashes.
+
+## Reader pixel copies, plain output and bounded history (2026-10-28)
+
+Three safe Rust changes remove reader work and shrink small-stream storage:
+
+1. Reader Adam7 scatter shares the existing fixed-channel pixel copier with
+   buffered reconstruction. Its sample type is generic over native u8/u16;
+   channel widths stay constant at the copy sites. This replaces dynamic
+   per-pixel slice lengths and copy dispatch without another scratch buffer.
+2. Plain images reserve their complete final sample vector, then append each
+   native row. They omit full-image zero initialization followed by overwrites.
+   Adam7 vectors remain initialized for scattered passes. The partially filled
+   vector is private to the collector until verified PNG completion; frames use
+   the same allocation path and retain their roles and native sample lengths.
+3. Streaming inflater history uses a power-of-two length capped by both the
+   output limit and 32 KiB, with a nonzero length for zero-limit streams. A legal
+   distance cannot exceed produced output, the output limit or the advertised
+   RFC window, so this storage covers every legal reference. Larger streams keep
+   the 32 KiB ring. Ring indices remain masked; history never grows during decode.
+
+Each component comparison alternates four complete processes per version,
+including the public PNG API and its allocations:
+
+| Component and reader case | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Pixel copies, RGBA8 513x257 Adam7 Stored | 2,063,995 | 1,686,894 | 1.22x |
+| Pixel copies, RGB8 513x257 Adam7 Fast | 1,422,799 | 1,139,242 | 1.25x |
+| Plain append, RGBA16 513x257 Fast | 2,881,998 | 2,635,280 | 1.09x |
+| Plain append, RGBA8 33x9 Stored | 13,854 | 13,004 | 1.07x |
+| Bounded history, RGBA8 33x9 plain Stored | 12,793 | 8,903 | 1.44x |
+| Bounded history, RGBA16 1x1 Stored | 7,993 | 4,201 | 1.90x |
+
+Allocation/reallocation calls do not increase. Bounded history reduces the
+complete RGBA8 33x9 reader's requested bytes from 34,235 to 3,515, saving 30,720
+bytes with the same five allocation calls. RGBA16 1x1 drops from 32,806 to 54
+requested bytes, saving 32,752 with the same five calls. The packed gray1 33x9
+reader drops from 33,127 to 423 bytes. These are actual allocation requests,
+including the allocator's minimum vector capacity, rather than only logical
+history lengths. Larger outputs retain the same history allocation.
+
+The supplemental caller links immutable Git baseline source and selected
+source with shared native image types and copied optimized/LTO bench settings.
+Both APIs must reproduce complete source samples and palettes before timing;
+timed branches black-box the complete Png result. Three processes each retain
+eleven alternating batches per variant after one warmup. Combined medians are:
+
+| Within-process reader comparison | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| RGBA8 513x257 Adam7 Stored | 1,867,506 | 1,500,209 | 1.25x |
+| RGBA16 513x257 Adam7 Stored | 4,735,566 | 4,071,140 | 1.16x |
+| RGB8 513x257 Adam7 Fast | 1,257,589 | 868,708 | 1.45x |
+| RGBA8 33x9 plain Stored | 13,001 | 9,995 | 1.30x |
+| RGBA16 33x9 Adam7 Fast | 35,539 | 32,351 | 1.10x |
+| RGBA16 1x1 Stored | 7,632 | 4,736 | 1.61x |
+| RGBA8 4097x257 plain Stored control | 12,505,281 | 13,002,010 | 0.962x |
+| RGBA16 4097x257 plain Stored control | 29,004,730 | 27,635,197 | 1.050x |
+
+The large RGBA8 reader control is slower by about 4%; its process ranges overlap
+(12.215-13.445M before, 12.129-13.589M after cycles). Its buffered control is
+0.979x. In the isolated plain-append comparison the large RGBA8/16 reader ratios
+are 0.991x/1.021x. These shifts remain sensitive to caller, allocator and shared
+host conditions; they are recorded alongside the targeted gains and do not
+establish a universal throughput improvement. Plain append's removed memset
+does not imply a gain for every image size or compression mode.
+
+`DEADLIB_PNG_BENCH_STAGE=reader-buffers` covers 188 case/operations across both
+complete APIs. Stored cases use noise; Fast cases use repeating gradients to
+exercise coded matches. Native gray/GA/RGB/RGBA8/16, indexed8, packed gray1/2/4,
+plain/Adam7, Paeth controls, small tails and large outputs are included. Input
+fingerprints identify complete PNG bytes. Complete filtered bytes are checked
+against an independent scalar model, and complete samples/palettes are checked
+before timing. Logical CPU 2, Windows thread cycles, Rust 1.99.1 and the existing
+optimized/LTO bench settings are used. Allocation probes are untimed. There are
+three warmups and seven batches; requested iterations are three, readers up to
+65,536 native bytes use at least 64, and other outputs below 4,096 bytes use at
+least 2,048. The supplemental caller uses 512 iterations for small cases and
+three for large cases. Our jobs are serialized; other host activity/frequency
+is uncontrolled. These Fast fixtures do not establish a compression-effort or
+compression-ratio improvement.
+
+The production-source diff adds 15 lines net (34 added, 19 removed), including
+the updated history allocation documentation. It removes dynamic pixel-copy
+work, complete plain-image initialization and oversized history initialization,
+without new unsafe code, runtime dependencies or public APIs. Native samples,
+palettes, input acceptance and error/event policy are preserved; reported
+working memory truthfully decreases for small output limits.
+
+Evidence is in [`experiments/reader-buffers-20261028`](experiments/reader-buffers-20261028).
+`scatter-paired-summary.tsv`, `append-paired-summary.tsv` and
+`history-paired-summary.tsv` retain the three components;
+`selected-paired-summary.tsv` and `in-process-summary.tsv` retain the combined
+comparisons. Cumulative source patches are relative to `ead443b04`.
+`compare.py`/`compare.rs` retain the linked caller, `summary.py` recomputes its
+medians, and `protocol.json` records measurement and allocation scopes.
+
+Selected-source verification passes 58 release tests and 54 debug tests,
+including all twelve library oracles in both profiles, strict all-target
+Clippy and scoped formatting. Four optional C checks run in release and remain
+ignored in debug. Checks cover native/filter/Adam7 parity, exact PNG/APNG
+samples and palettes, fragmented and interrupted I/O, all zlib header fields,
+advertised history windows, ring wrap, pending matches/literals, output limits,
+trailer/prefix consumption, truncations and terminal errors. The C header/history
+audit includes 65,652 cases; its existing documented stock-zlib window-policy
+differences remain recorded in the raw log rather than changing Rust policy.
+
+The new independent flate2 fixture test covers 28 output lengths around powers
+of two, 168 successful fragmented/prefix decodes and 54 undersized-limit
+rejections. The old memory test now checks bounded growth and equal saturated
+peaks instead of requiring identical allocation for tiny and tall images.
+Two assertions requiring more than 32 KiB of decoder memory were removed;
+sample/error/event checks, resource upper bounds and fixture generators stay
+intact. The first validation run found the remaining shared-fuzzer lower bound
+and is preserved as `final-validation.json`/`final-tests.log`. Successful complete
+checks are in `selected-validation.json` and `library-validation.json`.
+`audit.py` verifies four frozen checkpoints, 32 pipeline processes, three paired
+callers, source/binary/log/summary hashes and the exact one-line shared-helper
+change; `audit.json` retains the report, evidence and test-support identities.

@@ -150,7 +150,7 @@ pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
     }
 }
 
-fn scatter8<const CHANNELS: usize>(row: &[u8], out: &mut [u8], step: usize) {
+pub(crate) fn scatter<T: Copy, const CHANNELS: usize>(row: &[T], out: &mut [T], step: usize) {
     for (pixel, dst) in row
         .as_chunks::<CHANNELS>()
         .0
@@ -297,10 +297,10 @@ pub(crate) fn decode(
                     let dst = (dst_y * width as usize + x as usize) * channels;
                     let out = &mut v[dst..];
                     match channels {
-                        1 => scatter8::<1>(row, out, dx as usize),
-                        2 => scatter8::<2>(row, out, dx as usize),
-                        3 => scatter8::<3>(row, out, dx as usize),
-                        _ => scatter8::<4>(row, out, dx as usize),
+                        1 => scatter::<_, 1>(row, out, dx as usize),
+                        2 => scatter::<_, 2>(row, out, dx as usize),
+                        3 => scatter::<_, 3>(row, out, dx as usize),
+                        _ => scatter::<_, 4>(row, out, dx as usize),
                     }
                 }
                 position += stride + 1;

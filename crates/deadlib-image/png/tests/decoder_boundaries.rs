@@ -173,7 +173,6 @@ fn push(
                         ended,
                         case.frames.len() + usize::from(!case.default_is_frame)
                     );
-                    assert!(decoder.peak_image_buffer_bytes() > 32768);
                 }
                 return Ok(());
             }

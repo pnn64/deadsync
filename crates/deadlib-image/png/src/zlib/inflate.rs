@@ -41,7 +41,7 @@ enum State {
     Done,
 }
 
-/// Resumable RFC 1950/1951 decoder with a fixed 32 KiB history allocation.
+/// Resumable RFC 1950/1951 decoder with at most 32 KiB of history allocation.
 ///
 /// Retains partial fields, code-length repeats, Huffman symbols and matches;
 /// never replays previously consumed input. Output is provisional until `Done`.
@@ -73,8 +73,11 @@ pub struct Inflater {
 impl Inflater {
     pub fn new(output_limit: usize) -> Result<Self, Error> {
         let mut history = Vec::new();
-        reserve(&mut history, 32768)?;
-        history.resize(32768, 0);
+        // A distance cannot exceed produced bytes or the output limit. Round
+        // the bounded history to a power of two to retain masked ring indices.
+        let size = output_limit.clamp(1, 32768).next_power_of_two();
+        reserve(&mut history, size)?;
+        history.resize(size, 0);
         Ok(Self {
             state: State::HeaderCmf,
             word: 0,
@@ -155,10 +158,11 @@ impl Inflater {
     }
     fn remember(&mut self, mut bytes: &[u8]) {
         self.total_out += bytes.len();
+        let size = self.history.len();
         while !bytes.is_empty() {
-            let n = bytes.len().min(32768 - self.history_pos);
+            let n = bytes.len().min(size - self.history_pos);
             self.history[self.history_pos..self.history_pos + n].copy_from_slice(&bytes[..n]);
-            self.history_pos = (self.history_pos + n) & 32767;
+            self.history_pos = (self.history_pos + n) & (size - 1);
             bytes = &bytes[n..];
         }
     }
@@ -180,8 +184,9 @@ impl Inflater {
     fn copy_match(&mut self, distance: usize, output: &mut [u8]) {
         let n = output.len();
         let seed = distance.min(n);
-        let start = (self.history_pos + 32768 - distance) & 32767;
-        let first = seed.min(32768 - start);
+        let size = self.history.len();
+        let start = (self.history_pos + size - distance) & (size - 1);
+        let first = seed.min(size - start);
         output[..first].copy_from_slice(&self.history[start..start + first]);
         output[first..seed].copy_from_slice(&self.history[..seed - first]);
         let mut filled = seed;
@@ -388,7 +393,7 @@ impl Inflater {
                             // dispatch or a one-byte ring-copy operation.
                             output[written] = value as u8;
                             self.history[self.history_pos] = value as u8;
-                            self.history_pos = (self.history_pos + 1) & 32767;
+                            self.history_pos = (self.history_pos + 1) & (self.history.len() - 1);
                             self.total_out += 1;
                             written += 1;
                         }

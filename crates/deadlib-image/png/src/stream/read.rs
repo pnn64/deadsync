@@ -10,12 +10,16 @@ fn allocate(info: ImageInfo) -> Result<Image, Error> {
     let samples = if info.bit_depth == 16 {
         let mut v = Vec::new();
         reserve(&mut v, count)?;
-        v.resize(count, 0);
+        if info.interlaced {
+            v.resize(count, 0);
+        }
         Samples::U16(v)
     } else {
         let mut v = Vec::new();
         reserve(&mut v, count)?;
-        v.resize(count, 0);
+        if info.interlaced {
+            v.resize(count, 0);
+        }
         Samples::U8(v)
     };
     Ok(Image {
@@ -32,12 +36,18 @@ fn scatter(image: &mut Image, row: Row<'_>) -> Result<(), Error> {
     let start = (row.y as usize * image.width as usize + row.x as usize) * channels;
     macro_rules! copy {
         ($dest:expr,$src:expr) => {
-            if row.x_step == 1 {
+            if row.pass == 0 {
+                $dest.extend_from_slice($src);
+            } else if row.x_step == 1 {
                 $dest[start..start + $src.len()].copy_from_slice($src);
             } else {
-                for (pixel, values) in $src.chunks(channels).enumerate() {
-                    let offset = start + pixel * row.x_step as usize * channels;
-                    $dest[offset..offset + channels].copy_from_slice(values);
+                let out = &mut $dest[start..];
+                let step = row.x_step as usize;
+                match channels {
+                    1 => crate::scanline::scatter::<_, 1>($src, out, step),
+                    2 => crate::scanline::scatter::<_, 2>($src, out, step),
+                    3 => crate::scanline::scatter::<_, 3>($src, out, step),
+                    _ => crate::scanline::scatter::<_, 4>($src, out, step),
                 }
             }
         };

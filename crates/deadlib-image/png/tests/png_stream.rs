@@ -208,9 +208,9 @@ fn prefix_consumption_provisional_rows_and_verified_image_end() {
 }
 
 #[test]
-fn row_pipeline_memory_is_independent_of_height() {
+fn row_pipeline_memory_is_bounded_for_growing_heights() {
     let mut peaks = Vec::new();
-    for height in [2, 4096] {
+    for height in [2, 512, 4096] {
         let bytes = fixture(height);
         let (used, count, peak) = rows(&bytes, 31).unwrap();
         assert_eq!(used, bytes.len());
@@ -218,7 +218,8 @@ fn row_pipeline_memory_is_independent_of_height() {
         assert!(peak < 45 * 1024);
         peaks.push(peak);
     }
-    assert_eq!(peaks[0], peaks[1]);
+    assert!(peaks[0] <= peaks[1]);
+    assert_eq!(peaks[1], peaks[2]);
 }
 
 #[test]
