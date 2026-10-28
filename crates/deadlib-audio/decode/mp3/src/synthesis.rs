@@ -71,12 +71,14 @@ impl Hybrid {
                     } else {
                         block_type as usize
                     };
-                    for (n, result) in transformed.iter_mut().enumerate() {
-                        let mut value = 0.0;
-                        for (k, &sample) in samples.iter().enumerate() {
-                            value += sample * tables::IMDCT_LONG[n][k];
+                    for (&sample, coefficients) in samples.iter().zip(&tables::IMDCT_LONG) {
+                        for (value, &coefficient) in transformed.iter_mut().zip(coefficients) {
+                            *value += sample * coefficient;
                         }
-                        *result = value * tables::WINDOW_LONG[window][n];
+                    }
+                    for (value, &weight) in transformed.iter_mut().zip(&tables::WINDOW_LONG[window])
+                    {
+                        *value *= weight;
                     }
                 }
             }

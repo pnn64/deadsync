@@ -13,7 +13,7 @@ def main():
     rows=re.findall(r'D\[\s*(\d+)\s*\]\s*=\s*([-+0-9.]+)',a.dewindow.read_text(encoding='ascii'))
     assert [int(n) for n,_ in rows]==list(range(512))
     window=[float(v) for _,v in rows]
-    long=[[math.cos(math.pi/72*(2*n+19)*(2*k+1)) for k in range(18)] for n in range(36)]
+    long=[[math.cos(math.pi/72*(2*n+19)*(2*k+1)) for n in range(36)] for k in range(18)]
     short=[[math.cos(math.pi/24*(2*n+7)*(2*k+1)) for k in range(6)] for n in range(12)]
     synth=[[math.cos(math.pi/64*(16+n)*(2*k+1)) for n in range(64)] for k in range(32)]
     windows=[]
