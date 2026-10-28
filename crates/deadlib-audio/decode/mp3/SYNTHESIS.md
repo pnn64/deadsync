@@ -5,7 +5,10 @@ window placement, retained overlap and frequency inversion. Input is reordered
 frequency data; output is 18 time-major sets of 32 subband values. Mixed blocks
 use normal windows below the caller's long-subband boundary. `Synthesis` maps
 each set into 32 PCM samples using the MPEG cosine matrix, U-vector/window
-mapping and a sixteen-block ring history. Both states reset without allocation.
+mapping and a sixteen-block ring history. The history starts at a 16-byte
+aligned address. Its offset remains a multiple of 64 values; the ring update
+masks the low six bits explicitly so contiguous matrix and window spans have
+provable bounds and alignment. Both states reset without allocation.
 
 The kernels use f64 arithmetic and fixed arrays. Long IMDCT coefficients are
 stored as three tiles of eighteen rows and twelve output lanes. Each tile

@@ -1,0 +1,100 @@
+{
+  "layout": {
+    "before": {
+      "synthesis_size": 8200,
+      "synthesis_align": 8,
+      "decoder_size": 51552,
+      "decoder_align": 8
+    },
+    "after": {
+      "synthesis_size": 8208,
+      "synthesis_align": 16,
+      "decoder_size": 51568,
+      "decoder_align": 16
+    }
+  },
+  "command": [
+    "rustc",
+    "--edition=2024",
+    "target\\mp3-perf-20261028\\layout_probe.rs",
+    "--extern",
+    "before=target\\mp3-checks-20261028\\debug\\deps\\libdeadlib_audio_decode_mp3-9f5d3843f171cf70.rlib",
+    "--extern",
+    "after=target\\mp3-perf-20261028\\build\\target\\release\\deps\\libdeadlib_audio_decode_mp3-59d2bc9a9922c556.rlib",
+    "-L",
+    "dependency=target\\mp3-checks-20261028\\debug\\deps",
+    "-L",
+    "dependency=target\\mp3-perf-20261028\\build\\target\\release\\deps",
+    "-C",
+    "panic=abort",
+    "-C",
+    "target-feature=+crt-static",
+    "-o",
+    "target\\mp3-perf-20261028\\layout_probe.exe"
+  ],
+  "inputs": {
+    "target\\mp3-checks-20261028\\debug\\deps\\libdeadlib_audio_decode_mp3-9f5d3843f171cf70.rlib": "1d47bd5a245dd354c2373cd97bf7d4243f4cfca1109baed5e8ba00246bb9b3a0",
+    "target\\mp3-perf-20261028\\build\\target\\release\\deps\\libdeadlib_audio_decode_mp3-59d2bc9a9922c556.rlib": "fd6c913f57ba412422a2c55698bf9ae0361014aaa6d86a56b4e8edb1ac9017a7",
+    "target\\mp3-perf-20261028\\layout_probe.rs": "d4ad9f0aa67e266ac134b59ea3666e42d8f32aee2e5a82ba1dee7265df4bf3f2"
+  },
+  "before_assembly": {
+    "path": "target\\mp3-perf-20261028\\build\\target\\release\\deps\\kernels-e3dfda799fa3d815.s",
+    "sha256": "55fd7c6e798dc8c3851863b024ccb8ab49f15a4f67d78927069acd29f7bc3cfc",
+    "unaligned_moves": 637,
+    "aligned_moves": 115,
+    "bounds_fail_calls": 3,
+    "function_path": "target\\mp3-perf-20261028\\synthesis-before.s",
+    "function_sha256": "e4815a8929a62a80145828e85facaca9e8d5ae925d6ea2487af628cba66273b1",
+    "instruction_lines": 1436,
+    "production_stage": "round3-formats-final"
+  },
+  "source_audit": {
+    "passed": true,
+    "original_commit": "e372c77f0",
+    "stages": [
+      "round3-formats-before",
+      "round3-formats-final",
+      "synthesis-aligned-final"
+    ],
+    "final_sources_match_workspace": true,
+    "original_production_sources_match_commit": true,
+    "workspace_profiles_match": true,
+    "manifest_sha256": {
+      "round3-formats-before": "fa7489d4522a1fd8e6b08d531a58c9ba7b4edfd4ff207366f5398dbfa700bfcb",
+      "round3-formats-final": "3e93f21f3c74d87d351b29a9fe5becaa7ff24cb4acaf8a7af1ca0cb985eb1afb",
+      "synthesis-aligned-final": "00bf1289f2ac5aa7ed81a8a57c93f860f84ef30b59f6b6ab0b8188061044a574"
+    }
+  },
+  "after_assembly": {
+    "function_path": "target\\mp3-perf-20261028\\synthesis-after.s",
+    "function_sha256": "deb18aeb4b2076e317219d77635c849e89613bedcb4352916fc15e26a4c9982a",
+    "unaligned_moves": 560,
+    "aligned_moves": 192,
+    "bounds_fail_calls": 2,
+    "instruction_lines": 1429,
+    "path": "target\\mp3-perf-20261028\\build\\target\\release\\deps\\kernels-e3dfda799fa3d815.s",
+    "sha256": "daf2cd04c3d9f4b0fb1527893d1ffadb6a25cc904c6cdc772c41cfa5c3adfd70",
+    "production_stage": "synthesis-aligned-final"
+  },
+  "assembly_command": [
+    "cargo",
+    "rustc",
+    "--offline",
+    "--manifest-path",
+    "target/mp3-perf-20261028/build/Cargo.toml",
+    "-p",
+    "deadlib-audio-decode-mp3",
+    "--bench",
+    "kernels",
+    "--profile",
+    "bench",
+    "--",
+    "--emit=asm"
+  ],
+  "assembly_count_method": {
+    "unaligned_moves": "static movupd and movups instruction sites",
+    "aligned_moves": "static movapd and movaps instruction sites",
+    "bounds_fail_calls": "call instructions containing slice or panic_bounds",
+    "instruction_lines": "lines matching a tab, lowercase mnemonic and whitespace; excludes assembler directives and labels"
+  }
+}

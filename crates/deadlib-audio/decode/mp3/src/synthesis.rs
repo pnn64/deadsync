@@ -106,6 +106,7 @@ impl Hybrid {
 }
 
 #[derive(Clone)]
+#[repr(C, align(16))]
 pub struct Synthesis {
     values: [f64; 1024],
     offset: usize,
@@ -129,7 +130,9 @@ impl Synthesis {
     /// One time slot: 32 subband values produce 32 PCM samples. The ring retains
     /// sixteen 64-value matrix outputs, avoiding a full history copy per slot.
     pub fn process(&mut self, subbands: &[f64; 32], pcm: &mut [f64; 32]) {
-        self.offset = (self.offset + 960) & 1023;
+        // Every reachable offset is a multiple of 64. Exposing those zero bits
+        // preserves aligned block accesses and proves the window spans fit.
+        self.offset = (self.offset + 960) & 960;
         let values = &mut self.values[self.offset..self.offset + 64];
         values.fill(0.0);
         // Contiguous output lanes let the compiler vectorize without changing
