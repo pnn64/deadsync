@@ -1,0 +1,204 @@
+diff --git a/control/blockbuffer.cpp b/control/blockbuffer.cpp
+--- a/control/blockbuffer.cpp
++++ b/control/blockbuffer.cpp
+@@ -50,6 +50,8 @@
+ /// Includes
+ #include "control/bitmapctrl.hpp"
+ #include "control/blockbuffer.hpp"
++#include <cstdio>
++#include <cstdlib>
+ #include "control/residualblockhelper.hpp"
+ #include "interface/imagebitmap.hpp"
+ #include "upsampling/upsamplerbase.hpp"
+@@ -64,6 +66,35 @@
+ #include "colortrafo/colortrafo.hpp"
+ #include "std/string.hpp"
+ ///
++
++// Test-only read-only observation of entropy-decoded visible blocks.
++void BlockBuffer::ObserveDecoded(void) const
++{
++  const char *path = std::getenv("DEADLIB_JPEG_FRAME_DUMP");
++  FILE *dump = path ? std::fopen(path,"a") : NULL;
++  if (!dump) return;
++  ULONG mh = 0,mv = 0;
++  for(unsigned i = 0;i < m_ucCount;i++) {
++    class Component *c = m_pFrame->ComponentOf(i);
++    if (c->MCUWidthOf() > mh) mh = c->MCUWidthOf();
++    if (c->MCUHeightOf() > mv) mv = c->MCUHeightOf();
++  }
++  for(unsigned i = 0;i < m_ucCount;i++) {
++    class Component *c = m_pFrame->ComponentOf(i);
++    ULONG w = (m_pFrame->WidthOf() * c->MCUWidthOf() + mh - 1) / mh;
++    ULONG h = (m_pFrame->HeightOf() * c->MCUHeightOf() + mv - 1) / mv;
++    class QuantizedRow *row = m_ppQTop[i];
++    for(ULONG y = 0;y < (h + 7) / 8 && row;y++,row = row->NextOf()) {
++      for(ULONG x = 0;x < (w + 7) / 8;x++) {
++        const LONG *src = row->BlockAt(x)->m_Data;
++        std::fprintf(dump,"D %d %lu %lu %u",int(m_pFrame->ScanTypeOf()),m_pFrame->WidthOf(),m_pFrame->HeightOf(),unsigned(c->IDOf()));
++        for(unsigned k = 0;k < 64;k++) std::fprintf(dump," %ld",src[k]);
++        std::fprintf(dump,"\n");
++      }
++    }
++  }
++  std::fclose(dump);
++}
+ 
+ /// BlockBuffer::BlockBuffer
+ BlockBuffer::BlockBuffer(class Frame *frame)
+diff --git a/control/blockbuffer.hpp b/control/blockbuffer.hpp
+--- a/control/blockbuffer.hpp
++++ b/control/blockbuffer.hpp
+@@ -116,7 +116,8 @@
+   //
+   BlockBuffer(class Frame *frame);
+   //
+-  virtual ~BlockBuffer(void); 
++  virtual ~BlockBuffer(void);
++  void ObserveDecoded(void) const;
+   //
+   // Return a pointer to an array of DCT transformers.
+   class DCT *const *DCTsOf(void) const
+diff --git a/control/linebuffer.cpp b/control/linebuffer.cpp
+--- a/control/linebuffer.cpp
++++ b/control/linebuffer.cpp
+@@ -50,6 +50,9 @@
+ /// Includes
+ #include "control/bitmapctrl.hpp"
+ #include "control/linebuffer.hpp"
++#include "colortrafo/colortrafo.hpp"
++#include <cstdio>
++#include <cstdlib>
+ #include "control/residualblockhelper.hpp"
+ #include "interface/imagebitmap.hpp"
+ #include "upsampling/upsamplerbase.hpp"
+@@ -66,6 +69,32 @@
+ #include "std/string.hpp"
+ ///
+ 
++// Test-only read-only observation of decoded sample/residual rows.
++void LineBuffer::ObserveDecoded(void) const
++{
++  const char *path = std::getenv("DEADLIB_JPEG_FRAME_DUMP");
++  FILE *dump = path ? std::fopen(path,"a") : NULL;
++  if (!dump) return;
++  ULONG mh = 0,mv = 0;
++  for(unsigned i = 0;i < m_ucCount;i++) {
++    class Component *c = m_pFrame->ComponentOf(i);
++    if (c->MCUWidthOf() > mh) mh = c->MCUWidthOf();
++    if (c->MCUHeightOf() > mv) mv = c->MCUHeightOf();
++  }
++  for(unsigned i = 0;i < m_ucCount;i++) {
++    class Component *c = m_pFrame->ComponentOf(i);
++    ULONG w = (m_pFrame->WidthOf() * c->MCUWidthOf() + mh - 1) / mh;
++    ULONG h = (m_pFrame->HeightOf() * c->MCUHeightOf() + mv - 1) / mv;
++    struct Line *line = m_ppTop[i];
++    for(ULONG y = 0;y < h && line;y++,line = line->m_pNext) {
++      std::fprintf(dump,"L %d %lu %lu %u",int(m_pFrame->ScanTypeOf()),m_pFrame->WidthOf(),m_pFrame->HeightOf(),unsigned(c->IDOf()));
++      for(ULONG x = 0;x < w;x++) std::fprintf(dump," %ld",line->m_pData[x] >> ColorTrafo::COLOR_BITS);
++      std::fprintf(dump,"\n");
++    }
++  }
++  std::fclose(dump);
++}
++
+ /// LineBuffer::LineBuffer
+ LineBuffer::LineBuffer(class Frame *frame)
+   : JKeeper(frame->EnvironOf()), m_pFrame(frame), m_pulY(NULL), m_pulCurrentY(NULL),
+diff --git a/control/linebuffer.hpp b/control/linebuffer.hpp
+--- a/control/linebuffer.hpp
++++ b/control/linebuffer.hpp
+@@ -115,7 +115,8 @@
+   //
+   LineBuffer(class Frame *frame);
+   //
+-  virtual ~LineBuffer(void); 
++  virtual ~LineBuffer(void);
++  void ObserveDecoded(void) const;
+   //
+   // Return the current top MCU quantized line.
+   struct Line *CurrentLineOf(UBYTE comp)
+diff --git a/marker/frame.hpp b/marker/frame.hpp
+--- a/marker/frame.hpp
++++ b/marker/frame.hpp
+@@ -214,6 +214,7 @@
+   {
+     m_pImage = img;
+   }
++  class BufferCtrl *ObservationBufferOf(void) const { return m_pImage; }
+   //
+   // Return an indicator whether the end of a frame was reached.
+   bool isEndOfFrame(void) const
+diff --git a/codestream/image.cpp b/codestream/image.cpp
+--- a/codestream/image.cpp
++++ b/codestream/image.cpp
+@@ -63,6 +63,10 @@
+ #include "control/bufferctrl.hpp"
+ #include "control/residualbuffer.hpp"
+ #include "control/hierarchicalbitmaprequester.hpp"
++#include "control/blockbitmaprequester.hpp"
++#include "control/blocklineadapter.hpp"
++#include "control/linelineadapter.hpp"
++#include <cstdlib>
+ #include "boxes/checksumbox.hpp"
+ ///
+ 
+@@ -1086,6 +1090,23 @@
+ // Reconstruct a rectangle of coefficients.
+ void Image::ReconstructRegion(class BitMapHook *bmh,const struct RectangleRequest *rr)
+ {
++  // Test-only raw-frame observation bypasses the <=4-channel bitmap output.
++  // The original input has already passed the unchanged parser/entropy coder.
++  if (DepthOf() > 4 && !rr->rr_bUpsampling && std::getenv("DEADLIB_JPEG_FRAME_DUMP")) {
++    if (rr->rr_usFirstComponent == 0 && rr->rr_Request.ra_MinY == 0) {
++      if (isHierarchical()) {
++        for(class Frame *frame = FirstFrameOf();frame;frame = frame->NextOf()) {
++          if (frame->ScanTypeOf() == Lossless || frame->ScanTypeOf() == ACLossless ||
++              frame->ScanTypeOf() == DifferentialLossless || frame->ScanTypeOf() == ACDifferentialLossless)
++            ((class LineLineAdapter *)frame->ObservationBufferOf())->ObserveDecoded();
++          else
++            ((class BlockLineAdapter *)frame->ObservationBufferOf())->ObserveDecoded();
++        }
++      } else if (m_pDimensions->isDCTBased())
++        ((class BlockBitmapRequester *)m_pImageBuffer)->ObserveDecoded();
++    }
++    return;
++  }
+   struct RectangleRequest rralpha = *rr;
+   bool doalpha = m_pAlphaChannel && rr->rr_bIncludeAlpha;
+   RectAngle<LONG> region;
+diff --git a/cmd/reconstruct.cpp b/cmd/reconstruct.cpp
+--- a/cmd/reconstruct.cpp
++++ b/cmd/reconstruct.cpp
+@@ -140,10 +140,30 @@
+           JPG_PointerTag(JPGTAG_ALPHA_TAGLIST,atags),
+           JPG_PointerTag(JPGTAG_IMAGE_SUBX,subx),
+           JPG_PointerTag(JPGTAG_IMAGE_SUBY,suby),
+-          JPG_ValueTag(JPGTAG_IMAGE_SUBLENGTH,4),
++          JPG_ValueTag(JPGTAG_IMAGE_SUBLENGTH,256),
+           JPG_EndTag
+         };
+         if (jpeg->GetInformation(itags)) {
++          // Test-only observer request: bypass the four-channel PGX/bitmap
++          // client. The library logs the already decoded original frame data.
++          if (itags->GetTagData(JPGTAG_IMAGE_DEPTH) > 4 && getenv("DEADLIB_JPEG_FRAME_DUMP")) {
++            struct JPG_TagItem observe[] = {
++              JPG_ValueTag(JPGTAG_DECODER_MINY,0),
++              JPG_ValueTag(JPGTAG_DECODER_MAXY,itags->GetTagData(JPGTAG_IMAGE_HEIGHT)-1),
++              JPG_ValueTag(JPGTAG_DECODER_MINCOMPONENT,0),
++              JPG_ValueTag(JPGTAG_DECODER_MAXCOMPONENT,itags->GetTagData(JPGTAG_IMAGE_DEPTH)-1),
++              JPG_ValueTag(JPGTAG_DECODER_UPSAMPLE,false),
++              JPG_EndTag
++            };
++            if (!jpeg->DisplayRectangle(observe)) {
++              const char *error;
++              int code = jpeg->LastError(error);
++              fprintf(stderr,"frame observation failed - error %d - %s\n",code,error);
++            }
++            JPEG::Destruct(jpeg);
++            fclose(in);
++            return;
++          }
+           ULONG width  = itags->GetTagData(JPGTAG_IMAGE_WIDTH);
+           ULONG height = itags->GetTagData(JPGTAG_IMAGE_HEIGHT);
+           UBYTE depth  = itags->GetTagData(JPGTAG_IMAGE_DEPTH);

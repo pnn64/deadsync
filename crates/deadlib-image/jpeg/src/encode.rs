@@ -80,14 +80,15 @@ enum Token {
 }
 
 enum BlockToken<'a> {
-    Block(usize, &'a [i16; 64]),
+    Block(usize, usize, &'a [i16; 64]),
     Restart(u8),
 }
 
 /// Encode original quantized coefficients without an IDCT/FDCT or color
 /// conversion. Quantizer values and APPn/COM payloads are preserved. Metadata
 /// keeps its relative order; positions past the new last scan move before EOI.
-/// Accepts one to four components from Huffman/arithmetic DCT frames.
+/// Accepts 1..255 sequential or 1..4 progressive DCT components. Generated
+/// scans obey the component/MCU limits and redefine quantizers when necessary.
 pub fn encode_coefficients(
     image: &CoefficientImage<'_>,
     options: CodingOptions,
@@ -276,7 +277,8 @@ pub(crate) fn encode_frame(
     };
     let mut quantizers = [[0u16; 64]; 4];
     let mut quantizer_count = 0;
-    let mut qslots = [0u8; 4];
+    let mut qslots = [0u8; 255];
+    let mut redefine_quantizers = false;
     for (i, c) in image.components.iter().enumerate() {
         let slot = if let Some(j) = quantizers[..quantizer_count]
             .iter()
@@ -284,6 +286,10 @@ pub(crate) fn encode_frame(
         {
             j
         } else {
+            if quantizer_count == 4 {
+                redefine_quantizers = true;
+                break;
+            }
             quantizers[quantizer_count] = c.quantization;
             quantizer_count += 1;
             quantizer_count - 1
@@ -291,11 +297,31 @@ pub(crate) fn encode_frame(
         qslots[i] = slot as u8;
     }
     let process = frame_process(image, options);
-    for (i, q) in quantizers[..quantizer_count].iter().enumerate() {
-        let wide = q.iter().any(|&v| v > 255);
-        tables.quantization(out, i as u8, q, wide)?;
+    if redefine_quantizers {
+        // Sequential components occur exactly once. Destinations can be reused
+        // after a component's scan, allowing more than four distinct tables.
+        for s in 0..scan_count {
+            let scan = plan.get(s)?;
+            let mut count = 0;
+            for &i in &scan.indices[..scan.count] {
+                let q = image.components[i].quantization;
+                let slot = if let Some(j) = quantizers[..count].iter().position(|old| old == &q) {
+                    j
+                } else {
+                    quantizers[count] = q;
+                    count += 1;
+                    count - 1
+                };
+                qslots[i] = slot as u8;
+            }
+        }
+    } else {
+        for (i, q) in quantizers[..quantizer_count].iter().enumerate() {
+            let wide = q.iter().any(|&v| v > 255);
+            tables.quantization(out, i as u8, q, wide)?;
+        }
     }
-    let mut header = [0u8; 18];
+    let mut header = [0u8; 6 + 3 * 255];
     header[0] = image.frame.precision;
     header[1..3].copy_from_slice(
         &options
@@ -345,10 +371,22 @@ pub(crate) fn encode_frame(
     if reset_restart || options.restart_interval != 0 {
         out.segment(0xdd, &options.restart_interval.to_be_bytes())?;
     }
+    let mut active_quantizers = 0u8;
     for s in 0..scan_count {
         before_scan(out, s)?;
-        tables.scan_started();
         let scan = plan.get(s)?;
+        if redefine_quantizers {
+            for &i in &scan.indices[..scan.count] {
+                let slot = qslots[i] as usize;
+                let q = image.components[i].quantization;
+                if active_quantizers & (1 << slot) == 0 || quantizers[slot] != q {
+                    tables.quantization(out, slot as u8, &q, q.iter().any(|&v| v > 255))?;
+                    quantizers[slot] = q;
+                    active_quantizers |= 1 << slot;
+                }
+            }
+        }
+        tables.scan_started();
         let mut sos = [0u8; 12];
         sos[0] = scan.count as u8;
         for (position, &i) in scan.indices[..scan.count].iter().enumerate() {
@@ -389,10 +427,10 @@ pub(crate) fn encode_frame(
                         predictors.fill(0);
                         classes.fill(0);
                     }
-                    BlockToken::Block(i, block) => {
+                    BlockToken::Block(i, j, block) => {
                         let group = usize::from(i != 0);
                         if image.frame.process.is_differential() {
-                            predictors[i] = 0;
+                            predictors[j] = 0;
                         }
                         if scan.has_dc() {
                             let al = scan.progression.map_or(0, |s| s.al);
@@ -403,8 +441,8 @@ pub(crate) fn encode_frame(
                                     &mut coder,
                                     group,
                                     i32::from(block[0]) >> al,
-                                    &mut predictors[i],
-                                    &mut classes[i],
+                                    &mut predictors[j],
+                                    &mut classes[j],
                                     options.arithmetic_conditioning,
                                 )?;
                             }
@@ -479,10 +517,8 @@ pub(crate) fn validate_frame(image: DctFrame<'_>, limits: crate::Limits) -> Resu
             "coefficient encoding of non-DCT process",
         ));
     }
-    if n == 0 || n > 4 {
-        return Err(Error::Unsupported(
-            "coefficient encoder component count outside 1..4",
-        ));
+    if n == 0 || n > 255 || (f.process.is_progressive() && n > 4) {
+        return Err(Error::Invalid("coefficient encoder frame component count"));
     }
     if f.width == 0 || f.height == 0 || !matches!(f.precision, 8 | 12) || f.components.len() != n {
         return Err(Error::Invalid("encoder frame dimensions or precision"));
@@ -497,6 +533,7 @@ pub(crate) fn validate_frame(image: DctFrame<'_>, limits: crate::Limits) -> Resu
             || image.components[..i].iter().any(|p| p.spec.id == c.spec.id)
             || !(1..=4).contains(&c.spec.horizontal_sampling)
             || !(1..=4).contains(&c.spec.vertical_sampling)
+            || c.spec.quantization_table > 3
             || c.quantization.contains(&0)
         {
             return Err(Error::Invalid(
@@ -575,10 +612,10 @@ fn walk(
                 emit(Token::Restart(index))?;
                 predictors.fill(0);
             }
-            BlockToken::Block(i, block) => {
+            BlockToken::Block(i, j, block) => {
                 let group = usize::from(i != 0);
                 if image.frame.process.is_differential() {
-                    predictors[i] = 0;
+                    predictors[j] = 0;
                 }
                 if scan.has_dc() {
                     let al = scan.progression.map_or(0, |s| s.al);
@@ -590,8 +627,8 @@ fn walk(
                         if scan.progression.is_none() && (value < -limit || value >= limit) {
                             return Err(Error::Invalid("encoder DC coefficient range"));
                         }
-                        let difference = value - predictors[i];
-                        predictors[i] = value;
+                        let difference = value - predictors[j];
+                        predictors[j] = value;
                         let size = category(difference);
                         if size > image.frame.precision + 3 {
                             return Err(Error::Invalid("encoder DC magnitude"));
@@ -655,7 +692,7 @@ fn walk_blocks<'a>(
             emit(BlockToken::Restart(restart))?;
             restart = (restart + 1) & 7;
         }
-        for &i in &scan.indices[..scan.count] {
+        for (j, &i) in scan.indices[..scan.count].iter().enumerate() {
             let c = &image.components[i];
             let (h, v) = if interleaved {
                 (
@@ -669,7 +706,7 @@ fn walk_blocks<'a>(
                 for x in 0..h {
                     let block =
                         &c.blocks[(mcu / cols * v + y) * c.blocks_wide + mcu % cols * h + x];
-                    emit(BlockToken::Block(i, block))?;
+                    emit(BlockToken::Block(i, j, block))?;
                 }
             }
         }

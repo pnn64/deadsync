@@ -376,7 +376,7 @@ Verified milestones:
   all measured performance/optimization work remain required. The full goal
   stays active; no application integration is made.
 
-- Abbreviated table/image milestone: caller-owned persistent DQT/DHT banks,
+- `16ec8b10c`: abbreviated table/image milestone: caller-owned persistent DQT/DHT banks,
   validated external definitions, table-only metadata/serialization and direct
   table/image emission through all existing native/source encoders. All thirteen
   frame processes reuse caches without cloning compiled tables per image.
@@ -405,3 +405,28 @@ Verified milestones:
   scan/Pt combinations, independent conformance/IJG/mozjpeg corpora,
   coverage-guided fuzzing and measured performance/optimization remain required.
   The full goal remains active; there is no application integration.
+
+- Generic component-count milestone: sequential DCT coefficient decoding,
+  native construction, ordinary/abbreviated/direct hierarchical encoding and
+  source pyramids support 1..255 components at P=8/12. Progressive DCT keeps
+  the normative 1..4 range. Generated scans obey Ns/MCU bounds; predictors use
+  scan-local slots; sequential DQT destination reuse supports distinct tables
+  per component. Earlier legal default outputs remain byte-identical.
+  The native gate passes 1,367 cases, including every sequential count, 216
+  hierarchies and 128 progressive cases. IJG libjpeg 10 checks all 1,151 ordinary
+  cases, including fractional sampling and 255 components. JPEG XT checks 1,096
+  native cases: 884,733 DCT blocks and 2,706,492 sample/residual integers.
+  All 672 C-authored cases match IJG/JPEG XT/native decoding. Supplemental gates
+  cover 18 fixed-Huffman cases, 198 unchanged earlier C observations, and 47
+  pinned IJG replays including 12 genuine B.5 pairs. Quantizer snapshots are
+  checked independently. Reference configuration, observer/cleanup patches,
+  intermediate tool provenance and 108 explicit EXP00 C-input copies are
+  recorded; rare fractional C coverage remains open. All 10,612 prior default
+  hashes are unchanged, with 964 fresh Turbo decodes. The 75-session retained
+  corpus passes 36,586 prefixes/boundaries and 2,600 bounded mutations.
+  All 145 tests pass in release and isolated debug builds; rustfmt, Clippy and
+  rustdoc with warnings denied pass. See COMPONENT-VALIDATION.md and component
+  reports in tests/reports. Incremental byte I/O, broader IJG/mozjpeg and rare
+  combinations, independent conformance corpora, coverage-guided fuzzing and
+  measured performance/optimization remain required. The full goal stays active;
+  there is no application integration or added production codec dependency.

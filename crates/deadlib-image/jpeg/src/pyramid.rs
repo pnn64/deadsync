@@ -307,11 +307,6 @@ fn headers(
                 if !matches!(header.precision, 8 | 12) {
                     return Err(Error::Invalid("pyramid DCT precision"));
                 }
-                if header.components.len() > 4 {
-                    return Err(Error::Unsupported(
-                        "pyramid DCT component count outside 1..4",
-                    ));
-                }
                 let q = quantization_tables(level.quality, level.baseline_quantization)?;
                 for (j, c) in frame.components.iter_mut().enumerate() {
                     c.quantization_table = u8::from(
@@ -405,13 +400,18 @@ fn frame_data(
                 options.scan_script,
                 limits.max_scans,
             )?;
-            let precision = plan.precision()?;
+            let progression = if options.progressive {
+                Some(plan.progressive_precision()?)
+            } else {
+                None
+            };
             let (max_h, max_v) = sampling(frame);
             let cols = (frame.width as usize).div_ceil(8 * max_h);
             let rows = (frame.height as usize).div_ceil(8 * max_v);
             let tables = quantization_tables(level.quality, level.baseline_quantization)?;
             let mut components = budget.vector(frame.components.len())?;
             for (i, &spec) in frame.components.iter().enumerate() {
+                let precision = progression.as_ref().map_or([0; 64], |p| p[i]);
                 let (width, height) = dimensions(frame, spec);
                 let bw = cols * spec.horizontal_sampling as usize;
                 let bh = rows * spec.vertical_sampling as usize;
@@ -443,7 +443,7 @@ fn frame_data(
                             crate::transform::fdct(&samples, &q, frame.precision)
                         };
                         for (k, &index) in ZIGZAG.iter().enumerate() {
-                            let al = precision[i][k];
+                            let al = precision[k];
                             block[index] = if al < 0 {
                                 0
                             } else if k == 0 {
@@ -463,7 +463,7 @@ fn frame_data(
                     blocks_wide: bw,
                     blocks_high: bh,
                     quantization: q,
-                    successive_approximation: precision[i],
+                    successive_approximation: precision,
                     blocks,
                 });
             }

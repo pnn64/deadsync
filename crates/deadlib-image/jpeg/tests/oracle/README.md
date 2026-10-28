@@ -157,3 +157,33 @@ reference source is patched. The rare-process JPEG XT comparisons reconstruct
 an equivalent interchange stream from an independent raw table bank; they are
 not genuine C B.5 parser tests. See ../../ABBREVIATED-VALIDATION.md for provenance,
 limitations, pinned session compaction and reproduction commands.
+
+## Generic components and IJG libjpeg
+
+`jpeg-components` authors generic-channel sequential/progressive streams through
+the pinned Turbo public API. Its CLI is `OUTPUT N P layout arithmetic
+restart_rows quality progressive reverse`. Sequential counts cover 1..10,
+progressive 1..4; layouts select 1x1, mixed 2x2 or uniform 4x4 sampling.
+Explicit legal scan groups and custom quantizers are checked independently.
+
+`python tests/build_ijg.py --work experiments/ijg10` downloads the pinned official
+IJG libjpeg 10 archive and builds `ijg-coefficients`. Only the documented
+`MAX_COMPONENTS` configuration is raised to 255; codec algorithms are unchanged.
+The client accepts `INPUT OUTPUT.coef`, or `TABLE_PACKET IMAGE OUTPUT.coef`
+using `jpeg_read_header(FALSE)` on the same object. It emits the existing JCO1
+visible coefficient/quantizer format at 8/12-bit coded precision. This gate
+does not exercise pixel output or rescaling.
+
+The JPEG XT build adds `jpegxt-many-component-observation.patch` and
+`jpegxt-many-component-cleanup.patch` after the four earlier patches. The first
+reads decoded block/line storage above four components without the bitmap/color
+client; the second widens a teardown loop index that otherwise wraps above 31
+components. They change no entropy, transform or prediction algorithms. The
+six-patch chain reproduces all thirteen affected source files, and 198 earlier
+frame logs match the four-patch build exactly.
+
+See ../../COMPONENT-VALIDATION.md for the full-range native/C matrices, archive
+hash, actual per-case executable identities, genuine IJG B.5 checks, Turbo SOS
+selector limitation, JPEG XT fractional-sampling limitation and explicit
+EXP00 C-input copies. Reports and retained inputs are under `tests/reports`
+and `tests/fixtures/components`. No C implementation enters production code.

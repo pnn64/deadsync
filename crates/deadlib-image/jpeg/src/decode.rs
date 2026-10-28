@@ -33,6 +33,61 @@ pub struct CoefficientImage<'a> {
     pub(crate) limits: Limits,
 }
 
+impl<'a> CoefficientImage<'a> {
+    /// Construct native quantized components without first decoding a JPEG.
+    /// Blocks use the padded MCU grid and natural frequency order. Metadata
+    /// stays borrowed; this moves all supplied vectors without copying them.
+    pub fn from_components(
+        frame: FrameHeader,
+        components: Vec<CoefficientComponent>,
+        metadata: Vec<MetadataSegment<'a>>,
+        limits: Limits,
+    ) -> Result<Self> {
+        if frame.process.is_differential()
+            || (frame.process == Process::Baseline && frame.precision != 8)
+        {
+            return Err(Error::Invalid("standalone coefficient frame process"));
+        }
+        crate::encode::validate_frame(
+            crate::encode::DctFrame {
+                frame: &frame,
+                components: &components,
+            },
+            limits,
+        )?;
+        let metadata_bytes =
+            crate::encode::validate_metadata(&metadata, limits, crate::MetadataOptions::default())?;
+        let mut memory_bytes = components
+            .capacity()
+            .checked_mul(core::mem::size_of::<CoefficientComponent>())
+            .and_then(|n| {
+                n.checked_add(frame.components.capacity() * core::mem::size_of::<ComponentSpec>())
+            })
+            .and_then(|n| n.checked_add(metadata_bytes))
+            .ok_or(Error::LimitExceeded("coefficient model storage"))?;
+        for component in &components {
+            memory_bytes = component
+                .blocks
+                .capacity()
+                .checked_mul(128)
+                .and_then(|n| n.checked_add(memory_bytes))
+                .ok_or(Error::LimitExceeded("coefficient model storage"))?;
+        }
+        if memory_bytes > limits.max_memory_bytes {
+            return Err(Error::LimitExceeded("coefficient model storage"));
+        }
+        Ok(Self {
+            frame,
+            components,
+            metadata,
+            scans: 0,
+            consumed: 0,
+            memory_bytes,
+            limits,
+        })
+    }
+}
+
 pub(crate) fn allocate_components(
     frame: &FrameHeader,
     limits: Limits,
@@ -55,7 +110,8 @@ pub(crate) fn allocate_components(
         .unwrap() as usize;
     let cols = (frame.width as usize).div_ceil(8 * max_h);
     let rows = (frame.height as usize).div_ceil(8 * max_v);
-    let mut bytes = 0usize;
+    let mut bytes = frame.components.len() * core::mem::size_of::<CoefficientComponent>()
+        + frame.components.capacity() * core::mem::size_of::<ComponentSpec>();
     for c in &frame.components {
         let count = cols
             .checked_mul(rows)

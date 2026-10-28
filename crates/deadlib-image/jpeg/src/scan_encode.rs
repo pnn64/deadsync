@@ -54,6 +54,8 @@ pub(crate) struct Plan<'a> {
     progressive: bool,
     initial: u8,
     script: &'a [ScanSpec],
+    boundaries: [u8; 256],
+    groups: usize,
 }
 impl<'a> Plan<'a> {
     pub fn new(
@@ -63,20 +65,49 @@ impl<'a> Plan<'a> {
         script: &'a [ScanSpec],
         max_scans: usize,
     ) -> Result<Self> {
+        if components.is_empty() || components.len() > 255 || (progressive && components.len() > 4)
+        {
+            return Err(Error::Invalid("encoder frame component count"));
+        }
         if progressive && script.is_empty() && initial > 13 {
             return Err(Error::Invalid("encoder initial approximation"));
         }
-        let plan = Self {
+        let mut plan = Self {
             components,
             progressive,
             initial,
             script,
+            boundaries: [0; 256],
+            groups: 0,
         };
+        // Consecutive groups preserve frame order and avoid owned scan lists.
+        // A component with more than ten sampling units is non-interleaved.
+        if script.is_empty() {
+            let mut start = 0;
+            while start < components.len() {
+                let mut end = start + 1;
+                let mut blocks = components[start].horizontal_sampling as usize
+                    * components[start].vertical_sampling as usize;
+                while end < components.len() && end - start < 4 {
+                    let next = components[end].horizontal_sampling as usize
+                        * components[end].vertical_sampling as usize;
+                    if blocks + next > 10 {
+                        break;
+                    }
+                    blocks += next;
+                    end += 1;
+                }
+                plan.boundaries[plan.groups] = start as u8;
+                plan.groups += 1;
+                start = end;
+            }
+            plan.boundaries[plan.groups] = components.len() as u8;
+        }
         if plan.len() > max_scans {
             return Err(Error::LimitExceeded("encoder scans"));
         }
         let mut precision = [[-1; 64]; 4];
-        let mut seen = [false; 4];
+        let mut seen = [false; 255];
         for index in 0..plan.len() {
             let scan = plan.get(index)?;
             let mut blocks = 0;
@@ -114,14 +145,17 @@ impl<'a> Plan<'a> {
         if !self.script.is_empty() {
             self.script.len()
         } else if self.progressive {
-            (self.initial as usize + 1) * (self.components.len() + 1)
+            (self.initial as usize + 1) * (self.components.len() + self.groups)
         } else {
-            1
+            self.groups
         }
     }
     /// Realized band precision after the requested script. A pyramid must use
     /// these transmitted values, including unseen bands, as its next reference.
-    pub fn precision(&self) -> Result<[[i8; 64]; 4]> {
+    pub fn progressive_precision(&self) -> Result<[[i8; 64]; 4]> {
+        if !self.progressive {
+            return Err(Error::Invalid("progressive precision for sequential frame"));
+        }
         let mut precision = [[-1; 64]; 4];
         for index in 0..self.len() {
             let scan = self.get(index)?;
@@ -180,23 +214,27 @@ impl<'a> Plan<'a> {
                 progression,
             });
         }
-        let mut indices = [0, 1, 2, 3];
-        let mut count = self.components.len();
+        let mut indices = [0; 4];
+        let count;
         let progression = if self.progressive {
-            let level = index / (count + 1);
-            let band = index % (count + 1);
+            let stride = self.components.len() + self.groups;
+            let level = index / stride;
+            let band = index % stride;
             let al = self.initial - level as u8;
-            if band != 0 {
-                indices[0] = band - 1;
+            if band >= self.groups {
+                indices[0] = band - self.groups;
                 count = 1;
+            } else {
+                count = self.group(band, &mut indices);
             }
             Some(ProgressiveScan {
-                ss: usize::from(band != 0),
-                se: if band == 0 { 0 } else { 63 },
+                ss: usize::from(band >= self.groups),
+                se: if band < self.groups { 0 } else { 63 },
                 ah: if level == 0 { 0 } else { al + 1 },
                 al,
             })
         } else {
+            count = self.group(index, &mut indices);
             None
         };
         Ok(Scan {
@@ -204,5 +242,13 @@ impl<'a> Plan<'a> {
             count,
             progression,
         })
+    }
+    fn group(&self, index: usize, indices: &mut [usize; 4]) -> usize {
+        let start = self.boundaries[index] as usize;
+        let count = self.boundaries[index + 1] as usize - start;
+        for (j, i) in indices[..count].iter_mut().enumerate() {
+            *i = start + j;
+        }
+        count
     }
 }

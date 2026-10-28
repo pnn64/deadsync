@@ -1,0 +1,14 @@
+{
+  "reference_commit": "702114c8130ae818ccd2354cc03e879dac69e579",
+  "patch_sha256": {
+    "jpegxt-lossless-table-selection.patch": "2de2c5c711b4bee456698438c6ec8dd9dc9dbaee5ce383469247f2e9a4e6a38d",
+    "jpegxt-hierarchy-precision.patch": "917648dce983a94b281c667c635525ec994469abda3ddfacc8801bb2577a6eca",
+    "jpegxt-frame-observation.patch": "41fb908bbba43b6f796ff258fc68ccc96d7648a840a94e33546acf4dba3eb63f",
+    "jpegxt-ordinary-observation.patch": "3ea5a2af3870a57226a9b0cd9f9d8532de91e2f708fdb1218b8542f8dcf87e1a",
+    "jpegxt-many-component-observation.patch": "49b59b2b9a5a4d63122e038f311208b33629683b7a47832ed4ad03fb99654167",
+    "jpegxt-many-component-cleanup.patch": "e50d3b65603c61a70ec2c69dc814e745f446c36d1b5fbf4ad739f7f8bb6fe73d"
+  },
+  "applied_source_files": 13,
+  "patch_chain_matches_built_source": true,
+  "tool_sha256": "d6b9bf9370db1add4db5c54f2f44b9192c0d0b18470a3eadc37c168b0cf700d9"
+}

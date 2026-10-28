@@ -70,8 +70,8 @@ one bounded output buffer, preserving native values and each frame's entropy
 family and sequential/progressive choice. Per-frame `HierarchicalFrameOptions`
 select Huffman/arithmetic, fixed/optimized tables, generated/custom scans,
 refinement, signed residual Pt and restarts. Metadata/ICC controls use
-`encode_with_metadata`. DCT frames currently accept 1..4 components; lossless
-frames support 255.
+`encode_with_metadata`. Sequential DCT and lossless frames support 255
+components; progressive DCT frames retain the standard's four-component limit.
 Exact independent frame-data gates and the reference's raster limitations are
 documented in HIERARCHICAL-VALIDATION.md.
 
@@ -129,7 +129,9 @@ error semantics, external checks and reproducible commands.
 without another lossy transform. It preserves quantizer values, visible blocks,
 and APPn/COM payloads. Controls select sequential or progressive
 output, optimized or fixed Huffman tables, restart intervals, and an output
-byte budget. The initial writer accepts one to four components. Metadata keeps
+byte budget. Sequential output supports 1..255 components and progressive
+output 1..4. Generated scans pack legal MCU groups and sequential scans can
+reuse quantizer destinations after earlier components finish. Metadata keeps
 its relative order; segments beyond the new last scan are emitted before EOI.
 Progressive output defaults to full-precision spectral scans. Set
 `successive_approximation` to an initial Al in 1..=13 to generate DC/AC
@@ -146,6 +148,13 @@ DAC tables, configurable `ArithmeticConditioning` and the same restart,
 metadata, precision and sampling controls. `optimize_huffman` applies to
 Huffman output. The arithmetic writer does not collect a Huffman histogram or
 allocate a separate entropy buffer.
+
+`CoefficientImage::from_components(frame, components, metadata, limits)` accepts
+native padded coefficient grids without decoding or copying them. Arbitrary
+component IDs, sampling and per-component quantizers remain available through
+the coefficient, abbreviated and hierarchical writers. Generic source-plane
+pyramids also support the full sequential range. COMPONENT-VALIDATION.md records
+the IJG/Turbo/JPEG XT gates, retained expectations and reference limitations.
 
 `encode(&shared_image, EncodeOptions::default())` encodes shared grayscale/RGB
 images. Quality, output precision (8/12), subsampling, RGB-to-YCbCr conversion,

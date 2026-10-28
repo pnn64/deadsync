@@ -33,7 +33,7 @@ fn append(prefix: &Path, suffix: &str) -> std::path::PathBuf {
     path.push(suffix);
     path.into()
 }
-fn decode(prefix: &Path, inputs: &[String]) -> Result<()> {
+fn decode(prefix: &Path, inputs: &[String], limits: Limits) -> Result<()> {
     let mut cache = Tables::new();
     let (mut images, mut packets) = (0, 0);
     for path in inputs {
@@ -42,7 +42,7 @@ fn decode(prefix: &Path, inputs: &[String]) -> Result<()> {
         while position < bytes.len() {
             let input = &bytes[position..];
             let Some(family) = kind(input)? else {
-                let info = cache.load(input, Limits::default())?;
+                let info = cache.load(input, limits)?;
                 position += info.consumed;
                 packets += 1;
                 continue;
@@ -50,7 +50,7 @@ fn decode(prefix: &Path, inputs: &[String]) -> Result<()> {
             let destination = append(prefix, &format!(".image-{images}"));
             match family {
                 0 => {
-                    let image = cache.decode_coefficients(input, Limits::default())?;
+                    let image = cache.decode_coefficients(input, limits)?;
                     support::coefficients(&image, &append(&destination, ".coef"))?;
                     dump::sample_dump(
                         &append(&destination, ".target.samples"),
@@ -60,7 +60,7 @@ fn decode(prefix: &Path, inputs: &[String]) -> Result<()> {
                     position += image.consumed;
                 }
                 1 => {
-                    let image = cache.decode_lossless(input, Limits::default())?;
+                    let image = cache.decode_lossless(input, limits)?;
                     dump::sample_dump(
                         &append(&destination, ".samples"),
                         &image.frame,
@@ -69,7 +69,7 @@ fn decode(prefix: &Path, inputs: &[String]) -> Result<()> {
                     position += image.consumed;
                 }
                 _ => {
-                    let image = cache.decode_hierarchical(input, Limits::default())?;
+                    let image = cache.decode_hierarchical(input, limits)?;
                     for (i, frame) in image.frames.iter().enumerate() {
                         dump::frame_dump(
                             &append(
@@ -224,8 +224,19 @@ fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("decode") if args.len() >= 3 => {
+            let (limits, paths) = if args[2] == "--max-scans" {
+                (
+                    Limits {
+                        max_scans: args.get(3).ok_or("scan limit missing")?.parse()?,
+                        ..Limits::default()
+                    },
+                    &args[4..],
+                )
+            } else {
+                (Limits::default(), &args[2..])
+            };
             let mut inputs = Vec::new();
-            for path in &args[2..] {
+            for path in paths {
                 if let Some(list) = path.strip_prefix('@') {
                     inputs.extend(
                         std::fs::read_to_string(list)?
@@ -237,7 +248,7 @@ fn main() -> Result<()> {
                     inputs.push(path.clone());
                 }
             }
-            decode(Path::new(&args[1]), &inputs)
+            decode(Path::new(&args[1]), &inputs, limits)
         }
         Some("encode") => encode(&args[1..]),
         _ => Err("decode prefix stream... | encode prefix fixed restart repeat input...".into()),

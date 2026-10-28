@@ -198,13 +198,13 @@ output byte budget bounds its frame writer, and the global byte budget also
 covers DHP/EXP, leading metadata and relocated frame-end metadata. Allocator
 profiling remains open.
 
-DCT frame encoding currently supports one through four components; predictive
-frames support up to 255 with generated legal component scans. This API accepts
-prepared coefficients and signed difference planes. Automatic construction of
-resolution pyramids, source sampling and differential FDCT from shared/native
-raster inputs is the next hierarchy encoder stage, and remains required.
-Large DCT sampling layouts can require explicit component scripts to satisfy
-the ten-block interleaved MCU limit, as with ordinary coefficient encoding.
+Sequential DCT and predictive frame encoding support up to 255 components;
+progressive DCT retains the normative four-component limit. This API accepts
+prepared coefficients and signed difference planes. Generated scans satisfy
+the ten-block interleaved MCU limit, including non-interleaved scans for a
+component with a larger sampling product. The source-pyramid APIs described
+below also support the full sequential component range; additional generic
+component evidence and reference limitations are in COMPONENT-VALIDATION.md.
 
 ### Encoder evidence
 
@@ -290,8 +290,9 @@ component planes, including fractional grids and up to 255 predictive
 components. `build_hierarchical_samples` accepts interleaved U8/U16 samples in
 all five native color spaces. `encode_hierarchical_planes`,
 `encode_hierarchical_samples`, and `encode_hierarchical_image` prepare and write
-the hierarchy; each has a metadata variant. DCT stages currently require
-P=8/12 and 1..4 components. Predictive stages permit P=2..16 and 255 components.
+the hierarchy; each has a metadata variant. DCT stages require P=8/12 and
+1..255 components for sequential coding or 1..4 for progressive coding.
+Predictive stages permit P=2..16 and 255 components.
 Raster defaults retain original precision, color space and CMYK integers with
 4:4:4 sampling. Explicit options select precision scaling, rational component
 sampling, RGB-to-YCbCr or CMYK-to-YCCK. Color matrix intermediates use i64 so
