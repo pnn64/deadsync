@@ -713,6 +713,10 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
     if let Some(scoreboxes) = view.scoreboxes {
         state.scorebox_presentation = prepare_scorebox_presentation(&scoreboxes);
         state.scoreboxes = scoreboxes;
+        let now = state.selection_animation_timer;
+        for (clock, runtime) in state.scorebox_cycle_clocks.iter_mut().zip(&state.scoreboxes) {
+            clock.sync(runtime, now);
+        }
     }
     if let Some(leaderboard) = view.leaderboard {
         select_music_menu::sync_leaderboard_overlay(&mut state.leaderboard, leaderboard);
@@ -1669,6 +1673,8 @@ pub struct State {
     pub p2_preferred_difficulty_index: usize,
     pub active_color_index: i32,
     pub selection_animation_timer: f32,
+    /// Per-side scorebox cycle clocks, restarted when a side's boards change.
+    pub scorebox_cycle_clocks: [gs_scorebox::ScoreboxCycleClock; 2],
     pub wheel_offset_from_selection: f32,
     pub current_banner_key: Arc<str>,
     pub current_cdtitle_key: Option<Arc<str>>,
@@ -3880,6 +3886,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         p2_preferred_difficulty_index: initial_diff_index,
         active_color_index: color::DEFAULT_COLOR_INDEX,
         selection_animation_timer: 0.0,
+        scorebox_cycle_clocks: Default::default(),
         wheel_offset_from_selection: 0.0,
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
@@ -4136,6 +4143,7 @@ pub fn init_placeholder() -> State {
         p2_preferred_difficulty_index: initial_diff_index,
         active_color_index: color::DEFAULT_COLOR_INDEX,
         selection_animation_timer: 0.0,
+        scorebox_cycle_clocks: Default::default(),
         wheel_offset_from_selection: 0.0,
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
@@ -7027,6 +7035,7 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
     refreshed.sync_confidence_percent = state.sync_confidence_percent;
     refreshed.scoreboxes = scoreboxes;
     refreshed.scorebox_presentation = scorebox_presentation;
+    refreshed.scorebox_cycle_clocks = state.scorebox_cycle_clocks.clone();
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
     refreshed.song_search_generation = song_search_generation;
@@ -7219,6 +7228,7 @@ fn refresh_after_style_switch(state: &mut State) {
     refreshed.sync_confidence_percent = state.sync_confidence_percent;
     refreshed.scoreboxes = scoreboxes;
     refreshed.scorebox_presentation = scorebox_presentation;
+    refreshed.scorebox_cycle_clocks = state.scorebox_cycle_clocks.clone();
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
     refreshed.song_search_generation = song_search_generation;
@@ -9371,6 +9381,7 @@ fn finish_style_switch(state: &mut State) {
         .pad_config_intents
         .push(PadConfigIntent::Invalidate { pad: 1 });
     state.selection_animation_timer = 0.0;
+    state.scorebox_cycle_clocks = Default::default();
     deadlib_present::runtime::clear_all();
 }
 
@@ -14181,7 +14192,8 @@ pub fn push_actors(
                 center_x,
                 center_y,
                 zoom,
-                state.selection_animation_timer,
+                state.scorebox_cycle_clocks[profile_data::player_side_index(side)]
+                    .elapsed_seconds(state.selection_animation_timer),
             );
             if z_boost != 0 && actors.len() > start {
                 let children = actors.split_off(start);

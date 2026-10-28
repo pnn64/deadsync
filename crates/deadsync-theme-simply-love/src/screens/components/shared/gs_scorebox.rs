@@ -141,6 +141,36 @@ pub(crate) struct SelectMusicScoreboxView {
 /// Replacement and final cache release happen on the main thread; frame-local
 /// actor Arc decrements remain bounded. Focused scorebox tests cover matched and
 /// stale selection, and performance pass 56 records allocation counts.
+/// Restarts the Select Music scorebox cycle on its first pane whenever a side's
+/// boards change, so a golf hole opens on golf and every other chart on the
+/// player's primary board, instead of landing wherever the screen clock points.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct ScoreboxCycleClock {
+    chart_hash: Option<String>,
+    loaded: bool,
+    origin_seconds: f32,
+}
+
+impl ScoreboxCycleClock {
+    /// Note the chart and whether its boards have arrived; a change restarts the cycle at `now_seconds`.
+    pub(crate) fn sync(&mut self, runtime: &ScoreboxSideView, now_seconds: f32) {
+        let loaded = runtime
+            .leaderboards
+            .as_ref()
+            .is_some_and(|leaderboards| !leaderboards.loading);
+        if self.chart_hash.as_deref() != runtime.chart_hash.as_deref() || self.loaded != loaded {
+            self.chart_hash.clone_from(&runtime.chart_hash);
+            self.loaded = loaded;
+            self.origin_seconds = now_seconds;
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn elapsed_seconds(&self, now_seconds: f32) -> f32 {
+        (now_seconds - self.origin_seconds).max(0.0)
+    }
+}
+
 /// Worst-case frame work is one chart comparison, one view branch, and eleven
 /// bounded Arc clones per visible side.
 #[derive(Clone, Debug)]
@@ -1546,6 +1576,43 @@ mod select_data_original;
 #[cfg(test)]
 #[path = "gs_scorebox/select_data_perf.rs"]
 mod select_data_perf;
+
+#[cfg(test)]
+mod cycle_clock_tests {
+    use super::*;
+
+    fn runtime(chart_hash: Option<&str>, leaderboards: Option<score_data::CachedPlayerLeaderboardData>) -> ScoreboxSideView {
+        ScoreboxSideView {
+            chart_hash: chart_hash.map(str::to_owned),
+            leaderboards,
+            ..ScoreboxSideView::default()
+        }
+    }
+
+    #[test]
+    fn cycle_restarts_when_a_charts_boards_arrive_and_holds_while_they_stay() {
+        let mut clock = ScoreboxCycleClock::default();
+        clock.sync(&runtime(Some("abc"), Some(score_data::CachedPlayerLeaderboardData::loading())), 10.0);
+        assert_eq!(clock.elapsed_seconds(12.0), 2.0);
+
+        let ready = score_data::CachedPlayerLeaderboardData { loading: false, data: None, error: None };
+        clock.sync(&runtime(Some("abc"), Some(ready.clone())), 13.0);
+        assert_eq!(clock.elapsed_seconds(13.5), 0.5, "boards arriving restarts the cycle on the first pane");
+
+        clock.sync(&runtime(Some("abc"), Some(ready.clone())), 40.0);
+        assert_eq!(clock.elapsed_seconds(40.0), 27.0, "the same loaded chart keeps cycling");
+
+        clock.sync(&runtime(Some("def"), Some(ready)), 41.0);
+        assert_eq!(clock.elapsed_seconds(41.0), 0.0, "a new chart restarts the cycle");
+    }
+
+    #[test]
+    fn cycle_never_reports_negative_elapsed_after_a_clock_reset() {
+        let mut clock = ScoreboxCycleClock::default();
+        clock.sync(&runtime(Some("abc"), None), 30.0);
+        assert_eq!(clock.elapsed_seconds(1.0), 0.0);
+    }
+}
 
 #[cfg(test)]
 mod golf_tests {
