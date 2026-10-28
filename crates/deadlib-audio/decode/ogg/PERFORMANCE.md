@@ -1,5 +1,10 @@
 # Container performance
 
+The latest [direct streaming measurements](DIRECT_STREAMING.md) cover borrowed
+packet writes, recent-stream searches and cached incremental page lengths.
+They resolve the earlier large-writer CPU regression and include exact IO and
+decoder-state comparisons, CPU cycles and heap counters.
+
 The [2026-10-28 kernel measurements](KERNELS.md) cover fragment traversal,
 packet-writing allocations and masked-header CRC, with isolated CPU-cycle
 comparisons, complete-byte verification and an explicit large-writer CPU tradeoff.

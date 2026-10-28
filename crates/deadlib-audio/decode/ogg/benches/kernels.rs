@@ -85,6 +85,103 @@ fn main() {
             },
         );
     }
+    for n in [17, 65025] {
+        let mut lacing = vec![255; n / 255];
+        if lacing.len() < 255 {
+            lacing.push((n % 255) as u8);
+        }
+        let bytes = encode_page(
+            PageHeader {
+                flags: 0,
+                granule_position: 0,
+                serial: 42,
+                sequence: 0,
+            },
+            &lacing,
+            &vec![37; n],
+        )
+        .unwrap();
+        for chunk in [1, 7, 4096, usize::MAX] {
+            probe(
+                &format!("incremental/{n}/{chunk}"),
+                if n >= 4096 { 1 } else { 1000 },
+                || {
+                    let mut decoder = PageDecoder::new();
+                    let mut ready = 0;
+                    for input in black_box(&bytes).chunks(chunk) {
+                        let progress = decoder.push(input).unwrap();
+                        assert_eq!(progress.consumed, input.len());
+                        ready += usize::from(progress.page.is_some());
+                        black_box(progress.page);
+                    }
+                    decoder.finish().unwrap();
+                    assert_eq!(ready, 1);
+                },
+            );
+        }
+    }
+    for history in [0, 64, 512] {
+        let mut bytes = Vec::new();
+        for serial in 0..history {
+            bytes.extend(
+                encode_page(
+                    PageHeader {
+                        flags: BOS | EOS,
+                        granule_position: 0,
+                        serial,
+                        sequence: 0,
+                    },
+                    &[1],
+                    &[37],
+                )
+                .unwrap(),
+            );
+        }
+        for sequence in 0..2048 {
+            bytes.extend(
+                encode_page(
+                    PageHeader {
+                        flags: if sequence == 0 {
+                            BOS
+                        } else if sequence == 2047 {
+                            EOS
+                        } else {
+                            0
+                        },
+                        granule_position: sequence as u64,
+                        serial: history,
+                        sequence,
+                    },
+                    &[1],
+                    &[37],
+                )
+                .unwrap(),
+            );
+        }
+        let mut pages = Vec::new();
+        let mut offset = 0;
+        while offset < bytes.len() {
+            let (page, len) = Page::parse(&bytes[offset..]).unwrap();
+            pages.push((page, offset as u64));
+            offset += len;
+        }
+        probe(&format!("chained-demux/{history}"), 8, || {
+            let mut demux = Demuxer::default();
+            for &(page, offset) in black_box(&pages) {
+                demux
+                    .push_page(page, offset, |p| {
+                        black_box(p);
+                    })
+                    .unwrap();
+            }
+            demux.finish().unwrap();
+        });
+        probe(&format!("chained-index/{history}"), 4, || {
+            black_box(
+                OggIndex::read(black_box(bytes.as_slice()), IndexOptions::default()).unwrap(),
+            );
+        });
+    }
     for (name, lacing, flags) in [
         ("tiny", vec![1; 255], 0),
         (

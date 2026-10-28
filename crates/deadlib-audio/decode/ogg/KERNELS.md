@@ -1,5 +1,9 @@
 # Ogg kernel measurements, 2026-10-28
 
+The subsequent [direct streaming pass](DIRECT_STREAMING.md) removes the large
+writer regression recorded below and adds recent-stream and incremental-input
+optimizations. This document retains the first pass's historical measurements.
+
 Three retained changes preserve page bytes, packet boundaries and validation:
 
 * `bcc8a889f`: fragment iteration derives length from the terminator and the
