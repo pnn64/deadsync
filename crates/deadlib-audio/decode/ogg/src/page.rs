@@ -275,12 +275,22 @@ fn encoded_header(fields: PageHeader, segments: u8) -> [u8; 27] {
 /// Write a page without copying its payload. Handles partial/Interrupted IO.
 /// This is a framing primitive; it does not validate logical stream grammar.
 pub fn write_page(
-    mut writer: impl Write,
+    writer: impl Write,
     fields: PageHeader,
     lacing: &[u8],
     body: &[u8],
 ) -> Result<usize, Error> {
     validate_page(fields, lacing, body.len())?;
+    write_page_inner(writer, fields, lacing, body)
+}
+
+// The caller has already checked flags, segment count and lacing/body length.
+pub(crate) fn write_page_inner(
+    mut writer: impl Write,
+    fields: PageHeader,
+    lacing: &[u8],
+    body: &[u8],
+) -> Result<usize, Error> {
     let mut header = [0; 282];
     let len = 27 + lacing.len();
     header[..27].copy_from_slice(&encoded_header(fields, lacing.len() as u8));

@@ -1,6 +1,4 @@
-use crate::{
-    BOS, CONTINUED, EOS, Error, PageHeader, UNKNOWN_GRANULE_POSITION, reserve, write_page,
-};
+use crate::{BOS, CONTINUED, EOS, Error, PageHeader, UNKNOWN_GRANULE_POSITION, reserve};
 use std::io::Write;
 
 #[derive(Clone, Copy, Debug)]
@@ -140,7 +138,7 @@ impl<W: Write> PacketWriter<W> {
         } else {
             self.granule
         };
-        write_page(
+        crate::page::write_page_inner(
             &mut self.inner,
             PageHeader {
                 flags,
