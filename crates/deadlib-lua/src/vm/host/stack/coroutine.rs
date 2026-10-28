@@ -20,7 +20,9 @@ impl NativeStack<'_, '_> {
         let level = self.call.vm.thread_call_level(from);
         let current = self.call.vm.thread_call_level(to);
         let state = &mut self.call.vm.threads[slot_index(to.0)];
-        if to == self.call.vm.thread || state.status == threads::Status::Normal {
+        if to == self.call.vm.thread
+            || (state.status == threads::Status::Normal && !state.abandoned)
+        {
             let bias = state.native_bias.wrapping_add(level.wrapping_sub(current));
             self.call.vm.set_thread_native_bias(to, bias);
         } else {
@@ -44,7 +46,8 @@ impl NativeStack<'_, '_> {
         let owner = self.call.vm.thread;
         let state = &self.call.vm.threads[slot_index(thread.0)];
         let runnable = thread != owner
-            && (state.resume_status == threads::NativeThreadStatus::Yielded
+            && ((state.resume_status == threads::NativeThreadStatus::Yielded
+                && !state.frames.is_empty())
                 || (state.resume_status == threads::NativeThreadStatus::Ok
                     && state.frames.is_empty()));
         if !runnable || state.native_level >= 200 {
@@ -64,6 +67,7 @@ impl NativeStack<'_, '_> {
             }
             return Ok(threads::NativeThreadStatus::RuntimeError);
         }
+        self.call.vm.resume_api_barriers(thread);
         let state = &mut self.call.vm.threads[slot_index(thread.0)];
         if arguments > state.api_stack.len()
             || (state.frames.is_empty() && arguments == state.api_stack.len())
@@ -97,6 +101,12 @@ impl NativeStack<'_, '_> {
                 }
                 Ok(_) => {}
                 Err(error) if error.kind() == ErrorKind::Runtime => {
+                    if error.target_thread.is_some_and(|target| target != thread) {
+                        break Err(error);
+                    }
+                    if error.target_thread == Some(thread) {
+                        self.call.vm.leave_threads_to(thread, &mut line)?;
+                    }
                     match self.call.vm.catch_error(&error) {
                         Ok(true) => {}
                         Ok(false) => self.call.vm.fail_thread(&error, &mut line),
@@ -111,7 +121,23 @@ impl NativeStack<'_, '_> {
             pending = self.call.vm.run(&mut line).map(Some);
         };
         if let Err(error) = &result {
-            self.call.vm.abort_threads_to(owner, &mut line);
+            if error.target_thread.is_some() {
+                self.call.vm.leave_threads_to(owner, &mut line)?;
+                if self.call.vm.frames.is_empty()
+                    && self.call.vm.threads[slot_index(owner.0)].status == threads::Status::Dead
+                {
+                    // A child can panic its unprotected waiting resumer, then
+                    // escape to an outer state. That panic already removed
+                    // this C invocation; it has no frame left to synchronize.
+                    self.call.abort = Some(error.clone());
+                    return Err(error.clone());
+                }
+                // The resumer's C call exits before the destination's handler
+                // runs. Its visible frame belongs to this restored owner.
+                self.call.vm.frames[self.frame].pc = threads::HOST_RESUME_RETURNED;
+            } else {
+                self.call.vm.abort_threads_to(owner, &mut line);
+            }
             self.call.abort = Some(error.clone());
         }
         self.call.results = self.call.vm.frames[self.frame].argc();
@@ -125,11 +151,22 @@ impl NativeStack<'_, '_> {
     /// Rejects an invalid result count or a metamethod/C-call boundary.
     pub fn check_yield(&self, count: usize) -> Result<(), Error> {
         self.check_error()?;
+        if self
+            .call
+            .hook
+            .is_some_and(|e| !matches!(e.event, 2 | 3) || count != 0)
+        {
+            return Err(self.error(b"attempt to yield across metamethod/C-call boundary"));
+        }
         if count > self.top() {
             return Err(self.error(b"invalid native yield result count"));
         }
         if self.call.vm.thread == self.call.vm.main
-            || self.call.vm.frames[self.frame].barriers > 1
+            || (self.call.vm.frames[self.frame].barriers > 1
+                && !self
+                    .call
+                    .vm
+                    .api_yield_allowed(self.call.vm.frames[self.frame].barriers))
             || self.call.vm.thread_call_level(self.call.vm.thread)
                 > self.call.vm.threads[slot_index(self.call.vm.thread.0)].native_base_calls
         {
@@ -148,6 +185,11 @@ impl NativeStack<'_, '_> {
         if let Err(error) = self.check_yield(count) {
             let value = self.intern(error.message_bytes());
             return Err(error.with_value(value));
+        }
+        if self.call.hook.is_some() {
+            self.call.vm.hooks.yielding = true;
+            self.finished = true;
+            return Ok(());
         }
         let source = self.base + self.top() - count;
         self.call.vm.frames[self.frame].pc = threads::HOST_YIELDED;

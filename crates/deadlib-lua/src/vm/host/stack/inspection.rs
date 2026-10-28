@@ -222,14 +222,11 @@ impl NativeStack<'_, '_> {
         let Some((name, slot)) = self.native_local(record, n)? else {
             return Ok(None);
         };
-        let value = match slot {
-            LocalSlot::Register(r) => self
-                .call
-                .vm
-                .debug_register(record.thread, r)
-                .unwrap_or(Value::Nil),
-            LocalSlot::Copy(value) => value,
-        };
+        let value = self
+            .call
+            .vm
+            .debug_local_value(record.thread, &slot)
+            .unwrap_or(Value::Nil);
         let value = if self.call.vm.is_live_value(value) {
             value
         } else {
@@ -258,9 +255,8 @@ impl NativeStack<'_, '_> {
         } else {
             self.thread_stack(record.thread)?.value(-1).unwrap()
         };
-        if let Some((_, LocalSlot::Register(r))) = &slot {
-            self.call.vm.debug_set_register(record.thread, *r, value);
-            self.call.vm.gc_barrier(Value::Thread(record.thread), value);
+        if let Some((_, slot)) = &slot {
+            self.call.vm.debug_write_local(record.thread, slot, value);
         }
         self.debug_pop(record.thread)?;
         Ok(slot.map(|(name, _)| self.native_local_name(name)))

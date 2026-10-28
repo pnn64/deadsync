@@ -30,7 +30,7 @@ def main() -> None:
     if "files.lua" in args.files and Path("/a/b/c/d").resolve().parent.is_dir():
         raise SystemExit("files.lua requires the /a/b/c parent directory to be absent")
     root = Path(__file__).resolve().parents[1]
-    sources = list((root / "crates/deadlib-lua").rglob("*.rs"))
+    sources = [p for p in (root/"crates/deadlib-lua").rglob('*')if p.suffix in {'.rs','.c','.h'}]
     sources += [root / "crates/deadlib-lua/Cargo.toml", Path(__file__).resolve()]
     def source_hashes() -> dict[str, str]:
         return {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(sources)}

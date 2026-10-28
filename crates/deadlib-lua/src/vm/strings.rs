@@ -389,10 +389,13 @@ impl Vm {
     }
     pub(super) fn match_iterator(&mut self, id: u64, base: usize) -> Result<usize, Error> {
         let index = slot_index(id);
-        if !matches!(
-            self.native_closures.get(id).map(|c| &c.kind),
-            Some(threads::NativeKind::Match)
-        ) {
+        if self.body_code(self.thread, self.active_native.expect("active iterator"))
+            != Some(host::stack::body::MATCH)
+            && !matches!(
+                self.native_closures.get(id).map(|c| &c.kind),
+                Some(threads::NativeKind::Match)
+            )
+        {
             return Err(Error::new(ErrorKind::Runtime, 0, "unknown native closure"));
         }
         let mut ids = [StringId(0); 2];
@@ -987,8 +990,13 @@ impl Vm {
     pub(super) fn dump_step(&mut self, mut frame: Frame) -> Result<Option<usize>, Error> {
         let args = frame.vararg_start - 1;
         let function = self.argument(args, frame.argc(), 0);
-        self.string_native(STR_DUMP, args, frame.argc())?;
-        let value = self.registers[args];
+        self.resize_registers(self.registers.len().max(frame.base + frame.argc() + 1));
+        self.registers.copy_within(
+            frame.vararg_start..frame.vararg_start + frame.argc(),
+            frame.base + 1,
+        );
+        self.string_native(STR_DUMP, frame.base, frame.argc())?;
+        let value = self.registers[frame.base];
         self.registers[frame.base] = function;
         self.registers[frame.base + 1] = value;
         frame.vararg_start = frame.base;

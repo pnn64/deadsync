@@ -237,6 +237,7 @@ impl Vm {
     }
     pub(super) fn protected_failure(&mut self, index: usize, value: Value) {
         let frame = self.frames[index];
+        let kind = self.body_kind(index, frame.function);
         self.set_thread_native_bias(self.thread, frame.c_level_bias);
         self.close_upvalues(frame.base);
         self.discard_finalizers(index + 1);
@@ -244,28 +245,85 @@ impl Vm {
         self.restore_calls();
         self.trim_substitutions();
         self.trim_sorts();
+        let base = if matches!(kind, FrameKind::Native(LOAD_READER)) {
+            frame.base + 3
+        } else {
+            frame.base
+        };
         if matches!(frame.function, FrameKind::Native(CONT_HOST_LOAD)) {
             self.resize_registers(frame.base);
         } else {
-            self.registers.truncate(frame.base);
+            self.registers.truncate(base);
         }
-        let first = if loads::protected(frame.function) {
+        let first = if loads::protected(kind) {
             Value::Nil
         } else {
             Value::Boolean(false)
         };
         self.registers.extend_from_slice(&[first, value]);
         self.frames[index].pc = 2;
+        if matches!(kind, FrameKind::Native(LOAD_READER)) {
+            self.frames[index].vararg_count = 5;
+        }
         if matches!(frame.function, FrameKind::Native(CONT_HOST_PCALL)) {
             self.frames[index].vararg_count = 0;
         }
         self.trim_loads();
         self.trim_tracebacks();
         self.trim_hooks();
-        self.top = frame.base + 2;
+        self.top = base + 2;
     }
     pub(super) fn catch_error(&mut self, original: &Error) -> Result<bool, Error> {
         self.catch_error_from(original, 0)
+    }
+
+    fn protection_active(&self, index: usize) -> bool {
+        self.thread_protection_active(self.thread, index)
+    }
+    fn thread_protection_active(&self, thread: ThreadId, index: usize) -> bool {
+        let frames = if thread == self.thread {
+            &self.frames
+        } else {
+            &self.threads[slot_index(thread.0)].frames
+        };
+        // A C function's lua_pcall/lua_load has already returned before its
+        // return hook runs. Keep the visible frame, but do not catch hook errors
+        // with a protection scope that has finished executing.
+        if frames
+            .get(index + 1)
+            .is_some_and(|next| matches!(next.function, FrameKind::Native(CONT_RETURN)))
+        {
+            return false;
+        }
+        let mut frame = frames[index];
+        frame.function = self
+            .body_code(thread, index)
+            .map_or(frame.function, FrameKind::Native);
+        (matches!(
+            frame.function,
+            FrameKind::Native(
+                PCALL
+                    | XPCALL
+                    | CONT_STANDALONE
+                    | CONT_HOST_CALL
+                    | CONT_HOST_PCALL
+                    | debug::CONSOLE
+            )
+        ) && matches!(frame.pc, 1 | 3 | 7))
+            || (loads::protected(frame.function) && matches!(frame.pc, 1 | 3))
+    }
+    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+    pub(super) fn thread_has_protection(&self, thread: ThreadId) -> bool {
+        let state = &self.threads[slot_index(thread.0)];
+        if thread == self.main || state.resumer.is_some() {
+            return true;
+        }
+        let frames = if thread == self.thread {
+            &self.frames
+        } else {
+            &state.frames
+        };
+        (0..frames.len()).any(|index| self.thread_protection_active(thread, index))
     }
 
     pub(super) fn catch_error_from(
@@ -276,24 +334,18 @@ impl Vm {
         let mut pending = None;
         loop {
             let error = pending.as_ref().unwrap_or(original);
-            let Some(relative) = self.frames[floor..].iter().rposition(|f| {
-                (matches!(
-                    f.function,
-                    FrameKind::Native(
-                        PCALL
-                            | XPCALL
-                            | CONT_STANDALONE
-                            | CONT_HOST_CALL
-                            | CONT_HOST_PCALL
-                            | debug::CONSOLE
-                    )
-                ) && matches!(f.pc, 1 | 3 | 7))
-                    || (loads::protected(f.function) && matches!(f.pc, 1 | 3))
-            }) else {
+            if error
+                .target_thread
+                .is_some_and(|target| target != self.thread)
+            {
+                return Err(error.clone());
+            }
+            let Some(index) = (floor..self.frames.len()).rfind(|&i| self.protection_active(i))
+            else {
                 return Ok(false);
             };
-            let index = floor + relative;
-            let frame = self.frames[index];
+            let mut frame = self.frames[index];
+            frame.function = self.body_kind(index, frame.function);
             let value = if let Some(value) = error.value() {
                 value
             } else {
@@ -318,19 +370,10 @@ impl Vm {
                 // this search's unwind floor, but lua_load still inherits the
                 // enclosing error function. A protected host boundary stops
                 // inheritance just like any other handler-free protection.
-                self.frames[..index].iter().rposition(|f| {
-                    (matches!(
-                        f.function,
-                        FrameKind::Native(
-                            PCALL
-                                | XPCALL
-                                | CONT_STANDALONE
-                                | CONT_HOST_CALL
-                                | CONT_HOST_PCALL
-                                | debug::CONSOLE
-                        )
-                    ) && matches!(f.pc, 1 | 3 | 7))
-                        || (loads::protected(f.function) && f.pc == 3)
+                (0..index).rfind(|&i| {
+                    self.protection_active(i)
+                        && (!loads::protected(self.body_kind(i, self.frames[i].function))
+                            || self.frames[i].pc == 3)
                 })
             } else {
                 None
@@ -343,7 +386,12 @@ impl Vm {
             let handler_index = if has_handler(frame) {
                 Some(index)
             } else {
-                inherited.filter(|&i| has_handler(self.frames[i]))
+                inherited.filter(|&i| {
+                    has_handler(Frame {
+                        function: self.body_kind(i, self.frames[i].function),
+                        ..self.frames[i]
+                    })
+                })
             };
             if let Some(handler_index) = handler_index {
                 self.frames[index].pc = 3;
@@ -417,10 +465,7 @@ impl Vm {
                 if matches!(self.transition, Some(threads::Transition::Yield { .. })) {
                     return Ok(None);
                 }
-                let values = self.threads[slot_index(self.thread.0)]
-                    .resumed_values
-                    .take()
-                    .expect("native yield resume arguments");
+                let values = self.take_resume_values(frame)?;
                 self.frames[index].vararg_count = (self.top - frame.vararg_start) as u32;
                 Ok(self.return_frame(self.frames[index], values.start, values.len()))
             }
@@ -429,6 +474,11 @@ impl Vm {
                 self.registers[base] = Value::Number(if frame.pc == 5 { 5. } else { 2. });
                 self.top = base + 2;
                 Ok(Some(2))
+            }
+            CONT_HOST_CALL | CONT_HOST_LOAD | CONT_NATIVE_WINDOW
+                if frame.pc == host::API_YIELDED =>
+            {
+                Ok(self.host_protected_return(frame))
             }
             CONT_HOST_CALL | CONT_HOST_CONCAT => self.host_return(frame),
             CONT_HOST_PCALL => Ok(self.host_protected_return(frame)),
@@ -548,13 +598,13 @@ impl Vm {
                     return Ok(self.return_frame(self.frames[index], source, actual));
                 }
                 // Return hooks run before results replace the caller's slots.
-                self.registers[base] = Value::Native(id);
+                self.registers[base] = self.builtin_context(id).unwrap_or(Value::Native(id));
                 self.registers.copy_within(
                     frame.vararg_start..frame.vararg_start + frame.argc(),
                     base + 1,
                 );
                 let actual = self.native(id, base, frame.argc())?;
-                Ok(self.return_frame(frame, base, actual))
+                Ok(self.return_frame(self.frames[index], base, actual))
             }
         }
     }
@@ -649,7 +699,7 @@ impl Vm {
         let requested = level;
         level -= 1;
         for (index, frame) in self.frames.iter().enumerate().rev() {
-            if self.active_native == Some(index) {
+            if self.active_native == Some(index) || self.builtin_visible_owner() == Some(index) {
                 continue;
             }
             if matches!(frame.function,FrameKind::Native(id) if (CONT_RAW..strings::ITERATOR_FIRST).contains(&id))
@@ -671,7 +721,12 @@ impl Vm {
         }
         Err(self.argument_error(0, b"invalid level"))
     }
-    fn stack_kind(&self, level: usize) -> Result<FrameKind, Error> {
+    pub(super) fn stack_kind(&self, level: usize) -> Result<FrameKind, Error> {
+        if level == 0
+            && let Some(Value::Function(id)) = self.builtin_context(GET_ENV)
+        {
+            return Ok(FrameKind::Lua(id));
+        }
         self.stack_frame(level)
             .map(|index| index.map_or(FrameKind::Native(GET_ENV), |i| self.frames[i].function))
     }
@@ -726,7 +781,7 @@ impl Vm {
 }
 impl Vm {
     pub(super) fn native(&mut self, id: u64, base: usize, count: usize) -> Result<usize, Error> {
-        let closure = id;
+        let closure = self.builtin_closure(id);
         let id = if id >= strings::ITERATOR_FIRST {
             match self.native_closures.get(id).map(|c| &c.kind) {
                 Some(threads::NativeKind::Builtin(code)) => *code,
@@ -735,6 +790,12 @@ impl Vm {
         } else {
             id
         };
+        if id == host::stack::body::MATCH {
+            return self.match_iterator(closure, base);
+        }
+        if id == host::stack::body::LINES {
+            return self.io_iterator(closure, base);
+        }
         if id == debug::GET_REGISTRY {
             self.registers[base] = Value::Table(self.registry);
             return Ok(1);

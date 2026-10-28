@@ -9,6 +9,103 @@ enum Scalar {
 }
 
 #[test]
+fn base_and_string_return_hooks_share_the_real_result_suffix_and_registry_slot() {
+    compare(
+        br#"
+local function pack(...)return {n=select('#',...),...}end
+local function scalar(v)
+ local t=type(v)
+ if t=='nil'or t=='boolean'or t=='number'or t=='string'then return t..':'..tostring(v)end
+ if t=='function'then local d=debug.getinfo(v,'Su');return t..':'..d.what..':'..d.nups end
+ return t
+end
+local out={};local tag={};local mt={__metatable=tag}
+local f=function()return 17,nil,29 end
+local tests={
+ {assert,pack(17,nil,tag)},{type,pack(17,tag)},{tonumber,pack(17,16,tag)},
+ {rawequal,pack(tag,tag,17)},{rawget,pack({x=17},'x',tag)},
+ {rawset,pack({},'x',17,tag)},{select,pack('#',17,nil,tag)},
+ {select,pack(2,17,nil,tag)},{select,pack(99,17,nil,tag)},
+ {next,pack({x=17},nil,tag)},{next,pack({},nil,tag)},
+ {getmetatable,pack(setmetatable({},mt),tag)},
+ {setmetatable,pack({},nil,tag)},{getfenv,pack(f,tag)},
+ {getfenv,pack()},{setfenv,pack(f,{},tag)},{newproxy,pack()},
+ {newproxy,pack(true,tag)},{tostring,pack(17,tag)},
+ {tostring,pack(setmetatable({},{__tostring=function()return tag end}),tag)},
+ {pcall,pack(f,17,tag)},{xpcall,pack(f,function(e)return e end,tag)},
+ {pcall,pack(function()error(tag,0)end)},
+ {loadstring,pack('return 17','=return-stack',tag)},
+ {loadstring,pack('return +','=return-stack',tag)},
+ {string.len,pack(17,tag)},{string.byte,pack('abc',1,3,tag)},
+ {string.byte,pack('abc',2,1,tag)},{string.gsub,pack('a1b2','%d','X',nil,tag)},
+ {string.gmatch,pack('a1b2','%d',tag)},
+ {string.gmatch('a1b2','%d'),pack(tag)},{string.format,pack('%s:%d',17,29,tag)},
+}
+for _,case in ipairs(tests)do
+ for mode=0,2 do
+  local fn,args=case[1],case[2]
+  local co=coroutine.create(function()return fn(unpack(args,1,args.n))end)
+  debug.sethook(co,function(event)
+   if event=='return'and debug.getinfo(2,'f').func==fn then
+    local n=0
+    for i=1,30 do local name,v=debug.getlocal(2,i);if not name then break end
+     n=i;out[#out+1]=name..'='..scalar(v)
+    end
+    out[#out+1]='top='..n
+    if mode~=0 then
+     local slot=mode==1 and 1 or n-1
+     if slot>0 then assert(debug.setlocal(2,slot,'hook-token'))end
+    end
+    collectgarbage()
+   end
+  end,'r')
+  local values=pack(coroutine.resume(co))
+  for i=1,values.n do out[#out+1]='result='..scalar(values[i])end
+ end
+end
+return table.concat(out,'|')
+"#,
+    );
+}
+
+#[test]
+fn native_return_windows_release_discarded_arguments_and_replaced_results() {
+    compare(
+        br#"
+local function run(fn,make)
+ local weak=setmetatable({},{__mode='v'})
+ local args=make(weak);local seen
+ local co=coroutine.create(function()return fn(unpack(args,1,args.n))end)
+ debug.sethook(co,function(event)
+  if event=='return'and debug.getinfo(2,'f').func==fn then
+   args=nil;collectgarbage();seen=weak[1]==nil
+  end
+ end,'r')
+ local ok,v=coroutine.resume(co);assert(ok);return seen,type(v)
+end
+local function pack(...)return {n=select('#',...),...}end
+local function raw(weak)local x={};weak[1]=x;return pack({},'key',17,x)end
+local function meta(weak)local x={};weak[1]=x;return pack({},nil,x)end
+local function proxy(weak)local x={};weak[1]=x;return pack(false,x)end
+local function protected(weak)local x={};weak[1]=x;return pack(function()end,x)end
+local a,b=run(rawset,raw);local c,d=run(setmetatable,meta)
+local e,f=run(newproxy,proxy);local g,h=run(pcall,protected)
+local weak=setmetatable({},{__mode='v'});local released
+local co=coroutine.create(function()
+ return pcall(function()local x={};weak[1]=x;return x end)
+end)
+debug.sethook(co,function(event)
+ if event=='return'and debug.getinfo(2,'f').func==pcall then
+  assert(debug.setlocal(2,2,'replaced'));collectgarbage();released=weak[1]==nil
+ end
+end,'r')
+local ok,status,value=coroutine.resume(co);assert(ok and status and value=='replaced')
+return a,b,c,d,e,f,g,h,released
+"#,
+    );
+}
+
+#[test]
 fn coroutine_return_hooks_see_remaining_arguments_and_transferred_results() {
     compare(br#"
 local rows={}

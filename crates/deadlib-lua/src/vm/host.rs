@@ -1,14 +1,18 @@
 //! Direct Rust function pointers over the native register call boundary.
 use super::*;
 use std::any::Any;
-mod stack;
+mod api;
+pub(in crate::vm) mod stack;
 mod thread;
+pub(super) use api::ApiCall;
+pub(in crate::vm) use stack::Body;
 pub use stack::{
-    NativeCallStatus, NativeDebugFrame, NativeDebugInfo, NativeDebugString, NativeLoadStatus,
-    NativeStack, NativeThreadStack,
+    NativeBuiltinBody, NativeCallStatus, NativeDebugFrame, NativeDebugInfo, NativeDebugString,
+    NativeHook, NativeHookEvent, NativeHookInfo, NativeLoadStatus, NativeStack, NativeThreadStack,
 };
 pub use thread::HostThreadState;
 pub(super) use thread::ThreadData;
+pub(super) const API_YIELDED: u32 = 8;
 
 enum Action<'a> {
     Call(Value, &'a [Value]),
@@ -16,6 +20,7 @@ enum Action<'a> {
     Get([Value; 2]),
     Set([Value; 3]),
     Compare(Op, [Value; 2]),
+    ConcatPair([Value; 2]),
     Concat { first: usize, last: usize },
     Finalize,
     GcCheck,
@@ -26,7 +31,11 @@ impl Action<'_> {
             Self::Call(_, values) | Self::ProtectedCall(_, values, _) => values,
             Self::Get(values) => values,
             Self::Set(values) => values,
-            Self::Compare(..) | Self::Concat { .. } | Self::Finalize | Self::GcCheck => &[],
+            Self::Compare(..)
+            | Self::ConcatPair(..)
+            | Self::Concat { .. }
+            | Self::Finalize
+            | Self::GcCheck => &[],
         }
     }
 }
@@ -64,6 +73,7 @@ impl Function {
 /// rules. Results and captures remain collector roots during Lua execution.
 pub struct HostCall<'vm> {
     vm: &'vm mut Vm,
+    hook: Option<NativeHookEvent>,
     id: u64,
     arguments: usize,
     count: usize,
@@ -140,7 +150,7 @@ impl Vm {
         self.host_function(callback, captures, Some(Box::new(data)))
     }
 
-    fn host_function(
+    pub(super) fn host_function(
         &mut self,
         callback: HostFunction,
         captures: &[Value],
@@ -182,6 +192,7 @@ impl Vm {
         let arguments = self.frames[self.active_native.expect("native host frame")].vararg_start;
         let mut context = HostCall {
             vm: self,
+            hook: None,
             id,
             arguments,
             count,
@@ -232,6 +243,11 @@ impl Vm {
 
     pub(super) fn host_protected_return(&mut self, frame: Frame) -> Option<usize> {
         self.frames.pop();
+        if frame.pc == API_YIELDED {
+            // The C API invocation already returned at a yield. Continue the
+            // retained Lua computation without reactivating its protection.
+            return self.frames.is_empty().then_some(self.top);
+        }
         let status = match frame.pc {
             2 => 2,
             5 => 5,
@@ -240,6 +256,16 @@ impl Vm {
         if status != 0 {
             self.registers[frame.base] = self.registers[frame.base + 1];
             self.top = frame.base + 1;
+        }
+        if frame.base == frame.stack_start {
+            let scope = self.api_calls.last_mut().expect("active C API call");
+            debug_assert_eq!(scope.thread, self.thread);
+            scope.status = match status {
+                2 => NativeCallStatus::RuntimeError,
+                5 => NativeCallStatus::ErrorHandler,
+                _ => NativeCallStatus::Ok,
+            };
+            return Some(self.top - frame.base);
         }
         // Status occupies a hidden slot preceding results.
         self.registers[frame.stack_start] = Value::Number(f64::from(status));
@@ -283,12 +309,13 @@ impl Vm {
         owner: ThreadId,
         depth: usize,
         start: Result<Option<usize>, Error>,
+        wanted: u32,
     ) -> Result<usize, Error> {
         let mut line = 0;
         let mut pending = match start {
             Ok(Some(count)) => {
                 let base = self.frames[depth].base;
-                self.finish_call(base, count, OPEN);
+                self.finish_call(base, count, wanted);
                 None
             }
             Ok(None) => None,
@@ -296,6 +323,13 @@ impl Vm {
         };
         loop {
             let result = pending.take().unwrap_or_else(|| self.run(&mut line));
+            if self
+                .api_calls
+                .last()
+                .is_some_and(|s| s.thread == owner && s.frame == depth && s.yielded.is_some())
+            {
+                return Ok(0);
+            }
             match result {
                 Ok(count) if self.thread == owner && self.frames.len() == depth => {
                     return Ok(count);
@@ -307,11 +341,18 @@ impl Vm {
                     return Err(error.at_line(line));
                 }
                 Err(error) if error.kind() == ErrorKind::Runtime => {
+                    if error.target_thread.is_some_and(|target| target != owner) {
+                        return Err(error);
+                    }
+                    if error.target_thread == Some(owner) {
+                        self.leave_threads_to(owner, &mut line)?;
+                    }
                     let floor = if self.thread == owner { depth } else { 0 };
                     match self.catch_error_from(&error, floor) {
                         Ok(true) => {}
                         Ok(false) if self.thread != owner => self.fail_thread(&error, &mut line),
                         Ok(false) => return Err(error.at_line(line)),
+                        Err(error) if error.target_thread.is_some() => pending = Some(Err(error)),
                         Err(error) => return Err(error.at_line(line)),
                     }
                 }
@@ -329,6 +370,10 @@ impl Vm {
 }
 
 impl HostCall<'_> {
+    /// Event being delivered by an external native hook, without a Lua call frame.
+    pub fn hook_event(&self) -> Option<NativeHookEvent> {
+        self.hook
+    }
     /// Borrow private binding data of the currently executing host closure.
     /// The borrow ends before a mutable operation can reenter Lua.
     pub fn function_data<T: Any + Send + Sync>(&self) -> Option<&T> {
@@ -405,7 +450,7 @@ impl HostCall<'_> {
         if let Action::Call(function, _) | Action::ProtectedCall(function, _, _) = action {
             self.vm.validate_value(function)?;
         }
-        if let Action::Compare(_, values) = action {
+        if let Action::Compare(_, values) | Action::ConcatPair(values) = action {
             for value in values {
                 self.vm.validate_value(value)?;
             }
@@ -459,10 +504,14 @@ impl HostCall<'_> {
             result: base,
             wanted: match action {
                 Action::Call(..) | Action::ProtectedCall(..) => FRAME_OPEN,
-                Action::Get(..) | Action::Compare(..) | Action::Concat { .. } => 1,
+                Action::Get(..)
+                | Action::Compare(..)
+                | Action::ConcatPair(..)
+                | Action::Concat { .. } => 1,
                 Action::Set(..) | Action::Finalize | Action::GcCheck => 0,
             },
-            barriers: self.vm.frames.last().unwrap().barriers,
+            // A bare thread still enters Lua through this C API boundary.
+            barriers: self.vm.frames.last().map_or(1, |f| f.barriers),
             vararg_start: match action {
                 Action::Concat { first, .. } => first,
                 _ if c_protected => {
@@ -491,6 +540,9 @@ impl HostCall<'_> {
             Action::Compare(op, [left, right]) => {
                 self.vm.compare(op, left, right, base).map(|()| None)
             }
+            Action::ConcatPair([left, right]) => {
+                self.vm.concatenate(left, right, base).map(|()| None)
+            }
             Action::Concat { first, last, .. } => {
                 self.vm.concat_range(base, first, last).map(|()| None)
             }
@@ -513,8 +565,46 @@ impl HostCall<'_> {
                 error
             }
         });
-        let result = self.vm.drive_host(owner, depth, start);
+        let synchronous = matches!(
+            action,
+            Action::Get(..) | Action::Set(..) | Action::Compare(..) | Action::ConcatPair(..)
+        ) && self.vm.thread == owner
+            && self.vm.frames.len() == depth + 1
+            && matches!(start, Ok(None));
+        // A raw result needs no interpreter entry. Entering the driver here
+        // would run an unrelated GC check inside the still-active C callback.
+        let result = if synchronous {
+            self.vm
+                .host_return(self.vm.frames[depth])
+                .map(|count| count.expect("completed synchronous host action"))
+        } else {
+            self.vm.drive_host(owner, depth, start, OPEN)
+        };
         self.vm.native_protected = previous_protection;
+        if let Err(error) = &result
+            && error.target_thread.is_some_and(|target| target != owner)
+        {
+            let mut line = 0;
+            self.vm.leave_threads_to(owner, &mut line)?;
+            self.vm.active_native = active;
+            self.abort = Some(error.clone());
+            return Err(error.clone());
+        }
+        if matches!(action, Action::ConcatPair(..))
+            && let Some(range) = self
+                .vm
+                .api_calls
+                .last()
+                .filter(|scope| scope.thread == owner && scope.frame == depth)
+                .and_then(|scope| scope.yielded.clone())
+        {
+            // luaD_call can return while a selected thread remains yielded.
+            // callTMres still consumes the last physical slot as its result.
+            self.vm.active_native = active;
+            self.vm.frames[depth].pc = API_YIELDED;
+            self.vm.frames[depth].vararg_count = 0;
+            return Ok(range.end - 1..range.end);
+        }
         if !protected
             && self.vm.thread == owner
             && let Err(error) = &result

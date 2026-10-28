@@ -1,0 +1,9 @@
+{
+  "runner_sha256_matches_prior_source_build": true,
+  "prior_source_build_report": "docs\\testing\\2026-10-27-rust-lua-return-stacks-boundary-current.json",
+  "prior_source_build_report_sha256": "62ea05c655a311f4965c3b5f2bce4c8afe62ce600bb896205504ae55fe9f2ff0",
+  "native_before_snapshot": "docs\\testing\\2026-10-27-rust-lua-protection-hooks-inputs\\native-before.rs",
+  "native_before_sha256": "108748e2d38e313ee6b1a4836d1ea6c4acbc194456ce0e1c61789255593a4a89",
+  "other_production_sources_unchanged": true,
+  "prebuilt_probe_report": "docs/testing/2026-10-27-rust-lua-protection-hooks-before.json"
+}

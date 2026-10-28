@@ -179,14 +179,7 @@ impl Vm {
                             .ok_or_else(|| self.argument_type_error(base, count, 0, "number"))?,
                     ) as i32,
                 };
-                // Process termination does not close the Lua state or run its
-                // finalizers. Flush owned streams before the OS closes handles.
-                for stream in self.io.files.iter_mut() {
-                    let _ = stream.flush();
-                }
-                use std::io::Write;
-                let _ = io::stdout_flush();
-                let _ = std::io::stderr().flush();
+                self.flush_process_streams();
                 std::process::exit(code);
             }
             DIFFTIME => {

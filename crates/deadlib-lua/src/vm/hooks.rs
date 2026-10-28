@@ -1,12 +1,14 @@
 //! Per-thread hook controls and non-recursive event delivery.
 use super::*;
 use crate::bytecode::Prototype;
+mod returns;
 
 pub(super) fn stack_top(proto: &Prototype, frame: Frame, next: Option<&Frame>) -> Option<usize> {
     let next = next?;
     match next.function {
         FrameKind::Native(CONT_RETURN) => Some(next.vararg_start + next.argc()),
         FrameKind::Native(CONT_HOOK) => Some(frame.base + proto.debug_registers()),
+        FrameKind::Native(CONT_NATIVE_HOOK) => Some(next.vararg_start + next.argc()),
         FrameKind::Native(CONT_TRACE) => {
             let previous = (next.vararg_count as usize)
                 .checked_sub(1)
@@ -35,17 +37,32 @@ const REGISTRY_KEY: Value = Value::LightUserdata(u64::MAX - 1);
 
 #[derive(Debug, Default)]
 pub(super) struct Hooks {
+    pub callback: Callback,
+    pub host_running: Option<u64>,
+    pub host_owner: Option<usize>,
+    pub hidden_start: usize,
+    pub hidden: Vec<Value>,
+    pub yielding: bool,
+    pub yield_top: usize,
+    pub yield_owner: Option<usize>,
+    pub resumed_top: Option<(usize, usize)>,
     pub mask: u8,
     pub finalizers: u16,
-    count: i32,
-    ticks: i32,
+    pub count: i32,
+    pub ticks: i32,
     pub running: Option<u16>,
     pub enter: Option<u16>,
     pub tail: Option<u16>,
     last: Option<(u16, u32)>,
     skip: Option<(u16, u32)>,
 }
-const _: () = assert!(std::mem::size_of::<Hooks>() == 48);
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) enum Callback {
+    #[default]
+    None,
+    Lua,
+    Host(u64),
+}
 impl Hooks {
     pub fn allowed(&self) -> bool {
         self.running.is_none() && self.finalizers == 0
@@ -60,6 +77,7 @@ impl Hooks {
     }
     pub fn inherited(&self) -> Self {
         Self {
+            callback: self.callback,
             mask: self.mask,
             count: self.count,
             ticks: self.count,
@@ -73,6 +91,19 @@ fn visible(frame: Frame) -> bool {
 }
 
 impl Vm {
+    pub(super) fn lua_hook_values(&self) -> Result<(TableId, Value), Error> {
+        let Value::Table(table) = self.tables[slot_index(self.registry.0)].get(REGISTRY_KEY) else {
+            return Err(Error::new(
+                ErrorKind::Runtime,
+                0,
+                "attempt to index a nil value",
+            ));
+        };
+        Ok((
+            table,
+            self.tables[slot_index(table.0)].get(Value::LightUserdata(self.thread.0)),
+        ))
+    }
     fn hook_table(&mut self) -> Result<TableId, Error> {
         if let Value::Table(table) = self.tables[slot_index(self.registry.0)].get(REGISTRY_KEY) {
             return Ok(table);
@@ -83,12 +114,15 @@ impl Vm {
     }
     pub(super) fn trim_hooks(&mut self) {
         if self.hooks.running.is_some_and(|i| {
-            !self
-                .frames
-                .get(usize::from(i))
-                .is_some_and(|f| matches!(f.function, FrameKind::Native(CONT_HOOK)))
+            !self.frames.get(usize::from(i)).is_some_and(|f| {
+                matches!(f.function, FrameKind::Native(CONT_HOOK | CONT_NATIVE_HOOK))
+            })
         }) {
             self.hooks.running = None;
+            self.hooks.host_running = None;
+            self.hooks.host_owner = None;
+            self.hooks.hidden.clear();
+            self.hooks.yielding = false;
         }
         if self
             .hooks
@@ -106,6 +140,20 @@ impl Vm {
         }
         self.hooks.skip = None;
         self.hooks.last = None;
+        if self
+            .hooks
+            .yield_owner
+            .is_some_and(|i| i >= self.frames.len())
+        {
+            self.hooks.yield_owner = None;
+        }
+        if self
+            .hooks
+            .resumed_top
+            .is_some_and(|(i, _)| i >= self.frames.len())
+        {
+            self.hooks.resumed_top = None;
+        }
     }
     pub(super) fn hook_native(
         &mut self,
@@ -150,6 +198,11 @@ impl Vm {
                 &mut self.threads[slot_index(thread.0)].hooks
             };
             state.mask = mask;
+            state.callback = if value == Value::Nil || mask == 0 {
+                Callback::None
+            } else {
+                Callback::Lua
+            };
             state.count = ticks;
             state.ticks = ticks;
             state.last = None;
@@ -160,7 +213,7 @@ impl Vm {
         } else {
             &self.threads[slot_index(thread.0)].hooks
         };
-        let (mask, count) = (state.mask, state.count);
+        let (mask, count, callback) = (state.mask, state.count, state.callback);
         let mut text = [0; 3];
         let mut len = 0;
         for (flag, byte) in [(CALL, b'c'), (RETURN, b'r'), (LINE, b'l')] {
@@ -170,8 +223,12 @@ impl Vm {
             }
         }
         self.resize_registers(self.registers.len().max(base + 3));
-        let table = self.hook_table()?;
-        self.registers[base] = self.tables[slot_index(table.0)].get(Value::LightUserdata(thread.0));
+        self.registers[base] = if matches!(callback, Callback::Host(_)) {
+            self.intern(b"external hook")
+        } else {
+            let table = self.hook_table()?;
+            self.tables[slot_index(table.0)].get(Value::LightUserdata(thread.0))
+        };
         self.registers[base + 1] = self.intern(&text[..len]);
         self.registers[base + 2] = Value::Number(f64::from(count));
         Ok(3)
@@ -190,6 +247,11 @@ impl Vm {
     ) -> Result<(), Error> {
         if !self.hooks.allowed() {
             return Ok(());
+        }
+        match self.hooks.callback {
+            Callback::None => return Ok(()),
+            Callback::Host(id) => return self.host_hook(id, event, line, owner),
+            Callback::Lua => {}
         }
         let Value::Table(table) = self.tables[slot_index(self.registry.0)].get(REGISTRY_KEY) else {
             return Ok(());
@@ -295,6 +357,15 @@ impl Vm {
         pc: usize,
         line: u32,
     ) -> Result<bool, Error> {
+        if self.hooks.yield_owner == Some(index)
+            && self.threads[slot_index(self.thread.0)]
+                .resumed_values
+                .is_some()
+        {
+            self.hooks.yield_owner = None;
+            self.hooks.resumed_top = Some((index, self.top));
+            self.threads[slot_index(self.thread.0)].resumed_values = None;
+        }
         if self.hooks.skip == Some((index as u16, pc as u32)) {
             self.hooks.skip = None;
             return Ok(false);
@@ -344,11 +415,20 @@ impl Vm {
         self.frames[index].pc = pc as u32 + 1;
         Ok(true)
     }
-    pub(super) fn defer_hook_return(&mut self, frame: Frame, source: usize, count: usize) -> bool {
+    pub(super) fn defer_hook_return(
+        &mut self,
+        mut frame: Frame,
+        mut source: usize,
+        count: usize,
+    ) -> bool {
         if self.hooks.mask & RETURN == 0 || !self.hooks.allowed() || !visible(frame) {
             return false;
         }
         self.close_upvalues(frame.base);
+        if let FrameKind::Native(id) = frame.function {
+            source = self.native_return_stack(id, &mut frame, source, count);
+            *self.frames.last_mut().expect("returning native frame") = frame;
+        }
         let base = self.registers.len();
         self.push_record(Frame {
             function: FrameKind::Native(CONT_RETURN),
@@ -405,8 +485,18 @@ impl Vm {
                     self.registers.truncate(frame.base);
                     self.top = frame.result;
                     self.frames[owner].pc = frame.vararg_count;
-                    self.hooks.skip = Some((owner as u16, frame.vararg_count));
-                    self.hooks.last = Some((owner as u16, frame.vararg_count));
+                    if std::mem::take(&mut self.hooks.yielding) {
+                        self.hooks.skip = None;
+                        self.hooks.last = None;
+                        self.hooks.yield_owner = Some(owner);
+                        self.transition = Some(threads::Transition::Yield {
+                            source: self.hooks.yield_top,
+                            count: 0,
+                        });
+                    } else {
+                        self.hooks.skip = Some((owner as u16, frame.vararg_count));
+                        self.hooks.last = Some((owner as u16, frame.vararg_count));
+                    }
                 }
             }
             CONT_RETURN => {

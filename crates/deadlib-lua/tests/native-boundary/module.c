@@ -6,7 +6,11 @@
 #else
 #include "api.h"
 #endif
+#ifdef _WIN32
 #define EXPORT __declspec(dllexport)
+#else
+#define EXPORT __attribute__((visibility("default")))
+#endif
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
@@ -941,3 +945,314 @@ EXPORT int boundary_debug_hold(lua_State *L) {
   lua_pushboolean(L,same && source==ar.source && !strcmp(source,lua_tolstring(L,-1,NULL)));
   lua_pushstring(L,source);return 2;
 }
+
+/* External hook observations use the interrupted stack, never a C call frame. */
+static void probe_hook(lua_State *L, lua_Debug *ar);
+static void second_hook(lua_State *L, lua_Debug *ar);
+static void record_hook(lua_State *L, lua_Debug *ar, int second) {
+  int top=lua_gettop(L),event=ar->event,line=ar->currentline,ci=ar->i_ci,mode,n;
+  lua_Debug current;const char *local;
+  lua_getfield(L,LUA_REGISTRYINDEX,"boundary.hook.mode");mode=(int)lua_tointeger(L,-1);lua_settop(L,top);
+  lua_getfield(L,LUA_REGISTRYINDEX,"boundary.hook.log");
+  if(lua_type(L,-1)!=5){lua_settop(L,top);return;}
+  n=(int)lua_objlen(L,-1)+1;
+  lua_newtable(L);
+  debug_number(L,"event",event);debug_number(L,"line",line);debug_number(L,"ci",ci);debug_number(L,"top",top);
+  debug_number(L,"mask",lua_gethookmask(L));debug_number(L,"count",lua_gethookcount(L));
+#ifdef REFERENCE
+  debug_number(L,"level",L->nCcalls);
+#else
+  debug_number(L,"level",boundary_call_level(L));
+#endif
+  lua_pushboolean(L,lua_gethook(L)==(second?second_hook:probe_hook));lua_setfield(L,-2,"same");
+  lua_pushboolean(L,lua_getstack(L,0,&current));lua_setfield(L,-2,"stack");
+  lua_getinfo(L,"Sln",ar);
+  debug_number(L,"currentline",ar->currentline);debug_number(L,"first",ar->linedefined);
+  lua_pushstring(L,ar->what);lua_setfield(L,-2,"what");
+  lua_pushstring(L,ar->name);lua_setfield(L,-2,"name");
+  debug_number(L,"current_ci",current.i_ci);debug_number(L,"second",second);
+  if(event!=LUA_HOOKTAILRET) {
+    const char *temporary=lua_getlocal(L,ar,top+2);
+    int alias=temporary && !strcmp(temporary,"(*temporary)") && lua_rawequal(L,-1,-2);
+    if(temporary)lua_settop(L,top+2);
+    debug_number(L,"alias",alias);
+  }
+  lua_rawseti(L,-2,n);
+  lua_settop(L,top);
+  if(mode==2 && event==LUA_HOOKCALL && !strcmp(ar->what,"Lua")) {
+    local=lua_getlocal(L,ar,1);
+    if(local && !strcmp(local,"x")) {lua_pushinteger(L,29);lua_setlocal(L,ar,1);}
+    lua_settop(L,top);
+  }
+  if(mode==3 && !strcmp(ar->source,"=hook-error")) {
+    lua_sethook(L,NULL,0,0);
+    lua_getfield(L,LUA_REGISTRYINDEX,"boundary.hook.token");lua_error(L);
+  }
+  if(mode==4 && event==LUA_HOOKCOUNT && !second)lua_sethook(L,second_hook,LUA_MASKLINE,0);
+  if(mode==5 && (event==LUA_HOOKLINE || event==LUA_HOOKCOUNT)) {
+    lua_pushinteger(L,1);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.hook.mode");
+    lua_yield(L,0);return;
+  }
+  if(mode==6 && !strcmp(ar->source,"=hook-reentry")) {
+    lua_getfield(L,LUA_REGISTRYINDEX,"boundary.hook.token");lua_call(L,0,0);
+  }
+  if(mode==7 && event==LUA_HOOKRET && ar->name && !strcmp(ar->name,"abs")) {
+    lua_pushinteger(L,42);lua_replace(L,top);
+  }
+  /* Pushes survive callbacks/GC but are removed by luaD_callhook afterwards. */
+  lua_pushstring(L,"temporary native hook value");
+}
+static void probe_hook(lua_State *L,lua_Debug *ar){record_hook(L,ar,0);}
+static void second_hook(lua_State *L,lua_Debug *ar){record_hook(L,ar,1);}
+EXPORT int boundary_hook_set(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);int mask=(int)lua_tointeger(L,2),count=(int)lua_tointeger(L,3),mode=(int)lua_tointeger(L,4);
+  if(!co)co=L;
+  lua_pushinteger(L,mode);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.hook.mode");
+  lua_pushvalue(L,5);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.hook.log");
+  lua_pushvalue(L,6);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.hook.token");
+  lua_pushinteger(L,lua_sethook(co,mode?probe_hook:NULL,mask,count));return 1;
+}
+EXPORT int boundary_hook_info(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);lua_Hook h;
+  if(!co)co=L;h=lua_gethook(co);
+  lua_pushinteger(L,h==NULL?0:h==probe_hook?1:h==second_hook?2:3);
+  lua_pushinteger(L,lua_gethookmask(co));lua_pushinteger(L,lua_gethookcount(co));return 3;
+}
+EXPORT int boundary_hook_restore(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);static lua_Hook saved;
+  if(!co)co=L;
+  if(lua_toboolean(L,2))saved=lua_gethook(co);
+  else lua_sethook(co,saved,(int)lua_tointeger(L,3),(int)lua_tointeger(L,4));
+  return 0;
+}
+
+static int context_target(lua_State *L) {
+  lua_pushvalue(L,lua_upvalueindex(1));lua_pushvalue(L,lua_upvalueindex(2));return 2;
+}
+EXPORT int boundary_context_make(lua_State *L) {
+  lua_pushvalue(L,1);lua_pushvalue(L,2);lua_pushcclosure(L,context_target,2);return 1;
+}
+/* Read a waiting hook's real closure, not the hook callback's own binding. */
+EXPORT int boundary_context_read(lua_State *L) {
+  lua_State *parent=lua_tothread(L,1);int native=lua_toboolean(L,2);
+  lua_pushvalue(parent,LUA_ENVIRONINDEX);lua_xmove(parent,L,1);
+  lua_pushvalue(parent,LUA_GLOBALSINDEX);lua_xmove(parent,L,1);
+  if(native){lua_pushvalue(parent,lua_upvalueindex(1));lua_xmove(parent,L,1);}else lua_pushnil(L);
+  return 3;
+}
+EXPORT int boundary_context_write(lua_State *L) {
+  lua_State *parent=lua_tothread(L,1);
+  lua_pushvalue(L,2);lua_xmove(L,parent,1);lua_replace(parent,LUA_ENVIRONINDEX);
+  if(lua_toboolean(L,3)){lua_pushvalue(L,4);lua_xmove(L,parent,1);lua_replace(parent,lua_upvalueindex(1));}
+  return 0;
+}
+static void context_hook(lua_State *L,lua_Debug *ar) {
+  int top=lua_gettop(L),fn,env,row,kind,i,match=1,native;
+  lua_State *child;
+  lua_getinfo(L,"fuS",ar);fn=top+1;
+  lua_getfenv(L,fn);env=top+2;
+  lua_getfield(L,env,"context");kind=(int)lua_tointeger(L,-1);lua_settop(L,env);
+  if(!kind){lua_settop(L,top);return;}
+  native=!strcmp(ar->what,"C");
+  lua_getfield(L,LUA_REGISTRYINDEX,"boundary.context.log");
+  lua_newtable(L);row=top+4;
+  debug_number(L,"event",ar->event);debug_number(L,"kind",kind);
+  lua_pushvalue(L,LUA_ENVIRONINDEX);lua_pushboolean(L,lua_rawequal(L,-1,env));
+  lua_setfield(L,row,"environment");lua_settop(L,row);
+  lua_pushvalue(L,LUA_GLOBALSINDEX);lua_setfield(L,row,"globals");
+  lua_pushvalue(L,env);lua_setfield(L,row,"expected");
+  lua_newuserdata(L,8);lua_getfenv(L,-1);
+  lua_pushboolean(L,lua_rawequal(L,-1,env));lua_setfield(L,row,"userdata_environment");
+  lua_settop(L,-2);lua_setfield(L,row,"userdata");
+  lua_pushcfunction(L,context_target);lua_getfenv(L,-1);
+  lua_pushboolean(L,lua_rawequal(L,-1,env));lua_setfield(L,row,"closure_environment");
+  lua_settop(L,-2);lua_setfield(L,row,"closure");
+  if(native) {
+    for(i=1;i<=ar->nups;i++) {
+      lua_getupvalue(L,fn,i);lua_pushvalue(L,lua_upvalueindex(i));
+      match=match && lua_rawequal(L,-1,-2);lua_settop(L,row);
+    }
+  }
+  lua_pushboolean(L,match);lua_setfield(L,row,"captures");
+  lua_pushboolean(L,!native || lua_type(L,lua_upvalueindex(ar->nups+1))==-1);
+  lua_setfield(L,row,"capture_bound");
+  lua_getfield(L,LUA_REGISTRYINDEX,"boundary.context.child");child=lua_tothread(L,-1);lua_settop(L,row);
+  if(child && lua_status(child)==0 && lua_gettop(child)==1) {
+    lua_pushthread(L);lua_xmove(L,child,1);lua_pushboolean(L,native);lua_xmove(L,child,1);
+    i=lua_resume(child,2);debug_number(L,"child_status",i);
+    if(i==0) {
+      lua_xmove(child,L,3);lua_setfield(L,row,"parent_capture");
+      lua_setfield(L,row,"parent_globals");lua_setfield(L,row,"parent_environment");
+      lua_getfield(L,LUA_REGISTRYINDEX,"boundary.context.replacement");
+      lua_pushvalue(L,LUA_ENVIRONINDEX);lua_pushboolean(L,lua_rawequal(L,-1,-2));
+      lua_setfield(L,row,"parent_environment_write");lua_settop(L,row);
+      lua_getfield(L,LUA_REGISTRYINDEX,"boundary.context.token");
+      if(native)lua_pushvalue(L,lua_upvalueindex(1));else lua_pushvalue(L,-1);
+      lua_pushboolean(L,lua_rawequal(L,-1,-2));lua_setfield(L,row,"parent_capture_write");lua_settop(L,row);
+    }
+    lua_pushnil(L);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.context.child");
+  }
+  if(ar->event==LUA_HOOKCALL && (kind==1 || kind==3)) {
+    if(native && lua_type(L,lua_upvalueindex(1))!=-1) {
+      lua_pushinteger(L,29);lua_replace(L,lua_upvalueindex(1));
+    }
+    lua_getfield(L,LUA_REGISTRYINDEX,"boundary.context.replacement");lua_replace(L,LUA_ENVIRONINDEX);
+  }
+  lua_getfield(L,LUA_REGISTRYINDEX,"boundary.context.log");
+  i=(int)lua_objlen(L,-1)+1;lua_settop(L,row);
+  lua_rawseti(L,row-1,i);lua_settop(L,top);
+}
+EXPORT int boundary_context_install(lua_State *L) {
+  lua_pushvalue(L,1);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.context.log");
+  lua_pushvalue(L,2);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.context.replacement");
+  lua_pushvalue(L,3);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.context.child");
+  lua_pushvalue(L,4);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.context.token");
+  lua_sethook(L,context_hook,LUA_MASKCALL|LUA_MASKRET,0);return 0;
+}
+
+static void return_stack_hook(lua_State *L,lua_Debug *ar) {
+  int top=lua_gettop(L),log,row,n,i,index;
+  if(ar->event!=LUA_HOOKRET)return;
+  lua_getinfo(L,"f",ar);lua_getfield(L,LUA_REGISTRYINDEX,"boundary.return.target");
+  i=lua_rawequal(L,-1,-2);lua_settop(L,top);if(!i)return;
+  lua_getfield(L,LUA_REGISTRYINDEX,"boundary.return.log");log=top+1;n=(int)lua_objlen(L,log)+1;
+  lua_createtable(L,top,1);row=top+2;debug_number(L,"top",top);
+  for(i=1;i<=top;i++){lua_pushvalue(L,i);lua_rawseti(L,row,i);}
+  lua_rawseti(L,log,n);lua_settop(L,top);
+  lua_getfield(L,LUA_REGISTRYINDEX,"boundary.return.index");index=(int)lua_tointeger(L,-1);lua_settop(L,top);
+  if(index<0)index=top+index+1;
+  if(index>0 && index<=top){lua_getfield(L,LUA_REGISTRYINDEX,"boundary.return.token");lua_replace(L,index);}
+  lua_gc(L,LUA_GCCOLLECT,0);
+  lua_getfield(L,LUA_REGISTRYINDEX,"boundary.return.action");
+  if(lua_type(L,-1)==6){lua_call(L,0,0);}
+  else if(lua_toboolean(L,-1)){
+    lua_sethook(L,NULL,0,0);lua_settop(L,top);
+    lua_getfield(L,LUA_REGISTRYINDEX,"boundary.return.token");lua_error(L);
+  }
+  else lua_settop(L,top);
+}
+EXPORT int boundary_return_stack(lua_State *L) {
+  lua_State *co=lua_tothread(L,3);if(!co)co=L;
+  lua_pushvalue(L,1);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.return.target");
+  lua_pushvalue(L,2);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.return.log");
+  lua_pushvalue(L,4);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.return.index");
+  lua_pushvalue(L,5);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.return.token");
+  lua_pushvalue(L,6);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.return.action");
+  lua_sethook(co,return_stack_hook,LUA_MASKRET,0);return 0;
+}
+
+EXPORT int boundary_body_call(lua_State *L) {
+  lua_CFunction fn=lua_tocfunction(L,1);
+  if(!fn)return luaL_error(L,"C function expected");
+  lua_remove(L,1);return fn(L);
+}
+
+EXPORT int boundary_library_handle(lua_State *L) {
+  void **handle=(void **)lua_touserdata(L,1);
+  lua_pushboolean(L,handle && *handle!=NULL);return 1;
+}
+static int open_native_module(lua_State *L) {
+  int calls;
+  lua_getfield(L,LUA_REGISTRYINDEX,"native.library.calls");calls=(int)lua_tointeger(L,-1)+1;lua_settop(L,-2);
+  lua_pushinteger(L,calls);lua_setfield(L,LUA_REGISTRYINDEX,"native.library.calls");
+  lua_createtable(L,0,5);
+  lua_pushvalue(L,1);lua_setfield(L,-2,"name");
+  lua_pushvalue(L,LUA_ENVIRONINDEX);lua_setfield(L,-2,"environment");
+  lua_getfield(L,LUA_ENVIRONINDEX,"token");lua_setfield(L,-2,"token");
+  lua_pushcfunction(L,boundary_sum);lua_setfield(L,-2,"sum");
+  lua_pushinteger(L,calls);lua_setfield(L,-2,"calls");return 1;
+}
+EXPORT int luaopen_native_echo(lua_State *L) {return open_native_module(L);}
+EXPORT int luaopen_native_root_leaf(lua_State *L) {return open_native_module(L);}
+EXPORT int luaopen_native_nothing(lua_State *L) {(void)L;return 0;}
+EXPORT int luaopen_native_false(lua_State *L) {lua_pushboolean(L,0);return 1;}
+EXPORT int luaopen_native_error(lua_State *L) {lua_getfield(L,LUA_REGISTRYINDEX,"native.library.error");return lua_error(L);}
+EXPORT int boundary_body_copy(lua_State *L) {
+  lua_CFunction fn=lua_tocfunction(L,1);int count=0;
+  if(!fn)return luaL_error(L,"C function expected");
+  if(lua_toboolean(L,2)){lua_pushcfunction(L,fn);return 1;}
+  while(lua_getupvalue(L,1,count+1)!=NULL)count++;
+  lua_pushcclosure(L,fn,count);lua_getfenv(L,1);lua_setfenv(L,-2);return 1;
+}
+EXPORT int boundary_body_info(lua_State *L) {
+  lua_CFunction first=lua_tocfunction(L,1),second=lua_tocfunction(L,2);
+  lua_State *co=lua_tothread(L,3);int same=1,top;
+  if(co){top=lua_gettop(co);lua_pushvalue(L,1);lua_xmove(L,co,1);same=lua_tocfunction(co,-1)==first;lua_settop(co,top);}
+  lua_pushboolean(L,first!=NULL);lua_pushboolean(L,first==second);lua_pushboolean(L,same);return 3;
+}
+static void body_hook(lua_State *L,lua_Debug *ar) {
+  int top=lua_gettop(L),same,n,after,i,mode,result;
+  lua_CFunction fn;
+  if(ar->event!=LUA_HOOKCALL)return;
+  lua_getinfo(L,"f",ar);lua_getfield(L,LUA_REGISTRYINDEX,"boundary.body.target");
+  same=lua_rawequal(L,-1,-2);lua_settop(L,top);if(!same)return;
+  lua_sethook(L,NULL,0,0);
+  lua_createtable(L,top,0);
+  for(i=1;i<=top;i++){lua_pushvalue(L,i);lua_rawseti(L,top+1,i);}
+  lua_setfield(L,LUA_REGISTRYINDEX,"boundary.body.saved");
+  lua_getfield(L,LUA_REGISTRYINDEX,"boundary.body.function");fn=lua_tocfunction(L,-1);lua_settop(L,top);
+  lua_getfield(L,LUA_REGISTRYINDEX,"boundary.body.mode");mode=(int)lua_tointeger(L,-1);lua_settop(L,top);
+  if(mode){lua_settop(L,0);lua_pushinteger(L,0);}
+  n=fn(L);after=lua_gettop(L);
+  lua_getinfo(L,"f",ar);lua_getfield(L,LUA_REGISTRYINDEX,"boundary.body.target");
+  same=lua_rawequal(L,-1,-2);lua_settop(L,after);
+  lua_pushvalue(L,after);lua_getfield(L,LUA_REGISTRYINDEX,"boundary.body.expected");result=lua_rawequal(L,-1,-2);lua_settop(L,after);
+  lua_getfield(L,LUA_REGISTRYINDEX,"boundary.body.log");
+  debug_number(L,"before",top);debug_number(L,"after",after);debug_number(L,"count",n);
+  lua_pushboolean(L,same);lua_setfield(L,-2,"same");lua_pushboolean(L,result);lua_setfield(L,-2,"result");
+  lua_settop(L,0);lua_getfield(L,LUA_REGISTRYINDEX,"boundary.body.saved");
+  for(i=1;i<=top;i++)lua_rawgeti(L,1,i);
+  lua_remove(L,1);lua_pushnil(L);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.body.saved");
+}
+EXPORT int boundary_body_hook(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);if(!co)co=L;
+  lua_pushvalue(L,2);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.body.target");
+  lua_pushvalue(L,3);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.body.function");
+  lua_pushvalue(L,4);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.body.mode");
+  lua_pushvalue(L,5);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.body.expected");
+  lua_pushvalue(L,6);lua_setfield(L,LUA_REGISTRYINDEX,"boundary.body.log");
+  lua_sethook(co,body_hook,LUA_MASKCALL,0);return 0;
+}
+#include "../native-default/inactive.c"
+EXPORT int boundary_inactive_objects(lua_State *L) {return inactive_objects(L);}
+#include "../native-default/thread-calls.c"
+EXPORT int boundary_thread_pcall(lua_State *L) {return inactive_pcall(L);}
+EXPORT int boundary_thread_yield_tail(lua_State *L) {return inactive_yield_tail(L);}
+EXPORT int boundary_thread_called(lua_State *L) {return inactive_called(L);}
+EXPORT int boundary_thread_cpcall(lua_State *L) {return inactive_cpcall(L);}
+#include "../native-default/thread-loads.c"
+EXPORT int boundary_thread_load(lua_State *L) {return inactive_load(L);}
+#include "../native-default/panic.c"
+EXPORT int boundary_panic_swap(lua_State *L) {return panic_swap(L);}
+EXPORT int boundary_panic_raise(lua_State *L) {return panic_raise(L);}
+EXPORT int boundary_panic_protected_error(lua_State *L) {return panic_protected_error(L);}
+EXPORT int boundary_panic_yield_tail(lua_State *L) {return inactive_yield_tail(L);}
+EXPORT int boundary_panic_unhandled(lua_State *L) {return panic_unhandled(L);}
+#include "../native-default/thread-files.c"
+EXPORT int boundary_thread_file(lua_State *L) {return inactive_loadfile(L);}
+EXPORT int boundary_thread_file_panic(lua_State *L) {return inactive_filepanic(L);}
+#include "../native-default/allocation-gc.c"
+EXPORT int boundary_allocation_gc(lua_State *L) {return allocation_gc(L);}
+#include "../native-default/thread-execution.c"
+EXPORT int boundary_execution_construct(lua_State *L) {return inactive_construct(L);}
+EXPORT int boundary_execution_format(lua_State *L) {return inactive_format(L);}
+EXPORT int boundary_execution_concat(lua_State *L) {return inactive_concat(L);}
+EXPORT int boundary_execution_concat_panic(lua_State *L) {return inactive_concat_panic(L);}
+EXPORT int boundary_execution_yield_tail(lua_State *L) {return inactive_yield_tail(L);}
+EXPORT int boundary_execution_called(lua_State *L) {return inactive_called(L);}
+EXPORT int boundary_concat_offsets(lua_State *L) {return inactive_stack_offsets(L);}
+#include "../native-default/thread-gc.c"
+EXPORT int boundary_gc_thread(lua_State *L) {return inactive_gc(L);}
+EXPORT int boundary_gc_thread_panic(lua_State *L) {return inactive_gc_panic(L);}
+#include "../native-default/waiting-errors.c"
+EXPORT int boundary_waiting_raise(lua_State *L) {return waiting_raise(L);}
+EXPORT int boundary_waiting_snapshot(lua_State *L) {return waiting_snapshot(L);}
+EXPORT int boundary_waiting_c_resume(lua_State *L) {return waiting_c_resume(L);}
+#include "../native-default/thread-unprotected.c"
+EXPORT int boundary_unprotected_call(lua_State *L) {return inactive_call(L);}
+EXPORT int boundary_unprotected_panic(lua_State *L) {return inactive_call_panic(L);}
+EXPORT int boundary_unprotected_fail(lua_State *L) {lua_settop(L,1);return lua_error(L);}
+#include "../native-default/call-yields.c"
+EXPORT int boundary_yield_call(lua_State *L) {return selected_yield_call(L);}
+EXPORT int boundary_yield_resume(lua_State *L) {return selected_yield_resume(L);}
+EXPORT int boundary_allocation_yield_tail(lua_State *L) {return inactive_yield_tail(L);}

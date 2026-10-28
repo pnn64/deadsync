@@ -1,0 +1,18 @@
+{
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-panic-before\\deadlua-release.exe",
+    "-e",
+    "local f,e,where=package.loadlib('./lua51.dll','lua_atpanic');print(type(f),where,type(e));assert(f==nil and where=='init')"
+  ],
+  "returncode": 0,
+  "stdout_hex": "6e696c09696e697409737472696e670d0a",
+  "stderr_hex": "",
+  "rust_cli": {
+    "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-panic-before\\deadlua-release.exe",
+    "sha256": "20f31ce76a1eadcb3ab4dae08f35473a81f3ffdfd46ce309e44d90d458f15ddf"
+  },
+  "image": {
+    "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-panic-before\\lua51.dll",
+    "sha256": "176c9ae696acb31049f5af88c43332cae21ecf63ba2ac9690b65251eed277e56"
+  }
+}

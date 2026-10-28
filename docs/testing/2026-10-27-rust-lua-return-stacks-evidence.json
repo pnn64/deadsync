@@ -1,0 +1,30 @@
+{
+  "reports": {
+    "boundary-current": {
+      "path": "docs/testing/2026-10-27-rust-lua-return-stacks-boundary-current.json",
+      "sha256": "62ea05c655a311f4965c3b5f2bce4c8afe62ce600bb896205504ae55fe9f2ff0",
+      "source_hashes_match": true
+    },
+    "validation": {
+      "path": "docs/testing/2026-10-27-rust-lua-return-stacks-validation.json",
+      "sha256": "20e2111a265d62f9977855ec3e15888fbebd2fbf52827315cff15ef28181272e",
+      "source_hashes_match": true
+    },
+    "windows-suite": {
+      "path": "docs/testing/2026-10-27-rust-lua-return-stacks-windows-suite.json",
+      "sha256": "43ee4cee91957b944c1ff428a7d2bcbe7aa2067ed9fde6ee2c62eb3e1bfc42ce",
+      "source_hashes_match": true
+    },
+    "i686-suite": {
+      "path": "docs/testing/2026-10-27-rust-lua-return-stacks-i686-suite.json",
+      "sha256": "0c68a61ff0633cbb876956f18eb17d42ae079d1d5b8d0c71df0e23f7eb1e09e4",
+      "source_hashes_match": true
+    }
+  },
+  "canonical_sources_match": true,
+  "full_lua_51_parity_proven": false,
+  "remaining_core_c_declarations": 6,
+  "development_native_loading_only": true,
+  "windows_files_rename_failure_retained": true,
+  "stock_suite_internal_T_module": false
+}

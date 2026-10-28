@@ -2,6 +2,10 @@
 use super::*;
 
 impl NativeStack<'_, '_> {
+    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+    pub(crate) fn main_thread_id(&self) -> ThreadId {
+        self.call.vm.main
+    }
     /// Identity of the active Lua thread, including the main thread.
     pub fn thread_id(&self) -> ThreadId {
         self.call.vm.thread
@@ -28,13 +32,11 @@ impl NativeStack<'_, '_> {
     /// children return RuntimeError.
     /// Collected/invalid identities return None. The main thread remains Ok.
     pub fn thread_status(&self, thread: ThreadId) -> Option<NativeThreadStatus> {
-        self.call.vm.threads.get(thread.0).map(|state| {
-            if thread == self.call.vm.thread {
-                NativeThreadStatus::Ok
-            } else {
-                state.resume_status
-            }
-        })
+        self.call
+            .vm
+            .threads
+            .get(thread.0)
+            .map(|state| state.resume_status)
     }
     /// Borrow typed state belonging to any live thread in this VM.
     /// This resource lookup does not activate or retain the target thread.

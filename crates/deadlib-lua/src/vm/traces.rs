@@ -83,7 +83,7 @@ impl Vm {
             (pieces, 3)
         }
     }
-    pub(super) fn traceback_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
+    pub(super) fn traceback_step(&mut self, mut frame: Frame) -> Result<Option<usize>, Error> {
         let owner = self.frames.len() - 1;
         let base = frame.base;
         if frame.pc == 0 {
@@ -103,6 +103,8 @@ impl Vm {
                     Value::String(_) | Value::Number(_)
                 )
             {
+                frame.vararg_count = count as u32;
+                self.frames[owner] = frame;
                 return Ok(self.return_frame(frame, frame.vararg_start + count - 1, 1));
             }
             // All retained Lua values stay in the native register window. A
@@ -181,6 +183,9 @@ impl Vm {
             self.tracebacks[index].reduce = false;
             if self.tracebacks[index].done {
                 self.tracebacks.pop();
+                frame.vararg_start = base;
+                frame.vararg_count = (start + 1 - base) as u32;
+                self.frames[owner] = frame;
                 return Ok(self.return_frame(frame, start, 1));
             }
         }

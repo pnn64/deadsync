@@ -1,9 +1,14 @@
 //! Mutable native argument/temporary storage in the VM register window.
 use super::*;
+pub(in crate::vm) mod body;
+pub(in crate::vm) use body::Body;
+pub use body::NativeBuiltinBody;
 mod coroutine;
 mod dump;
 mod file;
+mod hooks;
 mod inspection;
+pub use hooks::{NativeHook, NativeHookEvent, NativeHookInfo};
 pub use inspection::{NativeDebugFrame, NativeDebugInfo, NativeDebugString};
 mod loader;
 mod objects;
@@ -23,6 +28,8 @@ pub use protected::NativeCallStatus;
 /// Positive indexes start at one; negative indexes count back from the top.
 /// Lua 5.1 pseudo-indexes access the registry (-10000), closure environment
 /// (-10001), thread globals (-10002) and captures (-10003 for the first).
+/// In an external hook they address the interrupted function. The Rust hook's
+/// own captures and binding data remain accessible through [`HostCall`].
 /// This window is separate from closure captures. Nested calls preserve the
 /// live prefix and cannot yield across this callback. [`Self::call`] protects
 /// errors; [`Self::call_unprotected`] propagates them with their fault frames.
@@ -44,6 +51,21 @@ impl<'vm> HostCall<'vm> {
     /// Rejects an existing result writer/stack or more than 8,000 arguments.
     pub fn native_stack(&mut self) -> Result<NativeStack<'_, 'vm>, Error> {
         let frame = self.vm.active_native.expect("active host callback");
+        if self.hook.is_some() && !self.stack_opened {
+            if self.results != 0 {
+                return Err(self.error(b"native stack must precede result writes"));
+            }
+            self.stack_opened = true;
+            let base = self.arguments;
+            self.output = base;
+            self.results = self.count;
+            return Ok(NativeStack {
+                call: self,
+                base,
+                frame,
+                finished: false,
+            });
+        }
         if self.stack_opened || self.results != 0 || self.output != self.vm.frames[frame].base {
             return Err(self.error(b"native stack must precede result writes"));
         }
@@ -92,13 +114,47 @@ impl NativeStack<'_, '_> {
         self.check_error()?;
         let (result, dispatch) = self.call.vm.gc_control(operation);
         if dispatch && !self.call.vm.gc.finalizers.is_empty() {
+            let tag_calls = self.call.vm.gc.tag_calls;
             self.call.run_action(Action::Finalize, false)?;
-            self.call.vm.registers.truncate(self.base + self.top());
+            if self.call.vm.gc.tag_calls != tag_calls {
+                self.restore_window_call_base();
+            }
+            self.call.vm.registers.truncate(self.end());
         }
         Ok(result)
     }
     fn capture_index(index: isize) -> Option<usize> {
         usize::try_from((-10003isize).checked_sub(index)?).ok()
+    }
+    fn context_function(&self) -> Option<Value> {
+        // A C hook executes inside the interrupted activation. HostCall.id
+        // still identifies the registered Rust hook and its private binding.
+        let window = matches!(
+            self.call.vm.frames[self.frame].function,
+            FrameKind::Native(CONT_NATIVE_WINDOW)
+        );
+        if self.call.hook.is_some() || window {
+            let end = if window {
+                self.call.vm.frames.len()
+            } else {
+                self.frame
+            };
+            self.call.vm.frames[..end]
+                .iter()
+                .rev()
+                .find(|f| f.is_call())
+                .map(|frame| match frame.function {
+                    FrameKind::Lua(id) => Value::Function(id),
+                    FrameKind::Native(id) => Value::Native(id),
+                })
+        } else {
+            Some(Value::Native(self.call.id))
+        }
+    }
+    fn context_environment(&self) -> TableId {
+        self.context_function()
+            .and_then(|f| self.call.vm.closure_environment(f))
+            .unwrap_or(self.call.vm.globals)
     }
     fn check_error(&self) -> Result<(), Error> {
         if let Some(error) = &self.call.abort {
@@ -106,9 +162,55 @@ impl NativeStack<'_, '_> {
         }
         Ok(())
     }
+    fn check_gc(&mut self) -> Result<(), Error> {
+        self.check_error()?;
+        let tag_calls = self.call.vm.gc.tag_calls;
+        self.call.run_action(Action::GcCheck, false)?;
+        if self.call.vm.gc.tag_calls != tag_calls {
+            self.restore_window_call_base();
+        }
+        self.call.vm.registers.truncate(self.end());
+        Ok(())
+    }
     fn sync(&mut self) {
         self.call.vm.frames[self.frame].vararg_start = self.base;
         self.call.vm.frames[self.frame].vararg_count = self.call.results as u32;
+    }
+    fn end(&self) -> usize {
+        self.call.output + self.call.results
+    }
+    fn set_window_end(&mut self, end: usize) {
+        self.call.output = self.base.min(end);
+        self.call.results = end.saturating_sub(self.base);
+        self.sync();
+    }
+    fn restore_window_call_base(&mut self) {
+        if !matches!(
+            self.call.vm.frames[self.frame].function,
+            FrameKind::Native(CONT_NATIVE_WINDOW)
+        ) {
+            return;
+        }
+        let base = self.native_call_base();
+        // luaD_poscall restores ci->base even when lua_yield temporarily
+        // exposed only a suffix of that C activation's arguments.
+        let end = self.end();
+        self.base = base;
+        self.set_window_end(end);
+    }
+    fn native_call_base(&self) -> usize {
+        self.call
+            .vm
+            .frames
+            .iter()
+            .rev()
+            .find(|f| f.is_call())
+            .map_or(self.call.vm.frames[self.frame].result, |f| {
+                match f.function {
+                    FrameKind::Lua(_) => f.base,
+                    FrameKind::Native(_) => f.vararg_start,
+                }
+            })
     }
     fn position(&self, index: isize) -> Option<usize> {
         let position = if index > 0 {
@@ -121,6 +223,12 @@ impl NativeStack<'_, '_> {
     /// Number of currently live stack values.
     pub fn top(&self) -> usize {
         self.call.results
+    }
+    /// Signed stack offset reported by Lua 5.1's `lua_gettop`.
+    /// A selected-thread API can return below its yielded base; `top` then
+    /// reports zero accessible values while this offset remains negative.
+    pub fn top_offset(&self) -> isize {
+        self.end() as isize - self.base as isize
     }
     /// Read an indexed object's stable opaque pointer; strings/scalars yield None.
     /// The pointer does not retain the object and must not be dereferenced.
@@ -137,10 +245,21 @@ impl NativeStack<'_, '_> {
     pub fn value(&self, index: isize) -> Option<Value> {
         match index {
             -10000 => Some(Value::Table(self.call.vm.registry)),
-            -10001 => Some(Value::Table(self.call.vm.native_environment(self.call.id))),
+            -10001 => Some(Value::Table(self.context_environment())),
             -10002 => Some(Value::Table(self.call.vm.globals)),
             ..=-10003 => {
-                Self::capture_index(index).and_then(|i| self.call.captures().get(i).copied())
+                let Value::Native(id) = self.context_function()? else {
+                    return None;
+                };
+                Self::capture_index(index).and_then(|i| {
+                    self.call
+                        .vm
+                        .native_closures
+                        .get(id)?
+                        .captures
+                        .get(i)
+                        .copied()
+                })
             }
             _ => self.position(index).map(|p| self.call.vm.registers[p]),
         }
@@ -151,15 +270,15 @@ impl NativeStack<'_, '_> {
         if self.call.abort.is_some() {
             return false;
         }
-        let Some(top) = self
-            .top()
+        let Some(end) = self
+            .end()
             .checked_add(extra)
-            .filter(|&top| top <= limits::MAX_CSTACK)
+            .filter(|&end| extra <= limits::MAX_CSTACK && end <= self.base + limits::MAX_CSTACK)
         else {
             return false;
         };
         let before = self.call.vm.registers.capacity();
-        let needed = (self.base + top).saturating_sub(self.call.vm.registers.len());
+        let needed = end.saturating_sub(self.call.vm.registers.len());
         if self.call.vm.registers.try_reserve(needed).is_err() {
             return false;
         }
@@ -177,9 +296,13 @@ impl NativeStack<'_, '_> {
         if top > limits::MAX_CSTACK {
             return Err(self.error(b"native stack overflow"));
         }
-        self.call.vm.resize_registers(self.base + top);
-        self.call.results = top;
-        self.sync();
+        let end = self.base + top;
+        let before = self.end();
+        self.call.vm.resize_registers(end);
+        if before < end {
+            self.call.vm.registers[before..end].fill(Value::Nil);
+        }
+        self.set_window_end(end);
         Ok(())
     }
     /// Push a live value, retaining it across nested calls and collection.
@@ -189,9 +312,13 @@ impl NativeStack<'_, '_> {
     pub fn push(&mut self, value: Value) -> Result<(), Error> {
         self.check_error()?;
         self.call.vm.validate_value(value)?;
-        let top = self.top();
-        self.set_top(top + 1)?;
-        self.call.vm.registers[self.base + top] = value;
+        if !self.check_stack(1) {
+            return Err(self.error(b"native stack overflow"));
+        }
+        let at = self.end();
+        self.call.vm.resize_registers(at + 1);
+        self.set_window_end(at + 1);
+        self.call.vm.registers[at] = value;
         self.call.vm.gc_new_value(value);
         Ok(())
     }
@@ -212,7 +339,12 @@ impl NativeStack<'_, '_> {
                         self.call.vm.registry = table;
                         self.call.vm.gc_new_value(value);
                     }
-                    -10001 => self.call.vm.set_native_environment(self.call.id, table),
+                    -10001 => {
+                        let function = self
+                            .context_function()
+                            .ok_or_else(|| self.error(b"no calling environment"))?;
+                        self.call.vm.set_closure_environment(function, table);
+                    }
                     _ => self
                         .call
                         .vm
@@ -223,7 +355,10 @@ impl NativeStack<'_, '_> {
             ..=-10003 => {
                 let index = Self::capture_index(index)
                     .ok_or_else(|| self.error(b"invalid native capture index"))?;
-                return self.call.set_capture(index, value);
+                let Some(Value::Native(id)) = self.context_function() else {
+                    return Err(self.error(b"invalid native capture index"));
+                };
+                return self.call.vm.set_native_capture(id, index, value);
             }
             _ => {}
         }
@@ -361,6 +496,43 @@ impl NativeStack<'_, '_> {
         if results.is_some_and(|n| n > limits::MAX_CSTACK - prefix) {
             return Err(self.error(b"native stack overflow"));
         }
+        if !protected
+            && matches!(
+                self.call.vm.frames[self.frame].function,
+                FrameKind::Native(CONT_NATIVE_WINDOW)
+            )
+        {
+            let thread = self.thread_id();
+            let bias = self.call.vm.threads[slot_index(thread.0)].native_bias;
+            self.call
+                .vm
+                .set_thread_native_bias(thread, bias.wrapping_add(1));
+            let outcome =
+                self.call
+                    .vm
+                    .run_thread_api(self.base + prefix, arguments, results, None, false);
+            if outcome.is_ok() {
+                let bias = self.call.vm.threads[slot_index(thread.0)].native_bias;
+                self.call
+                    .vm
+                    .set_thread_native_bias(thread, bias.wrapping_sub(1));
+            }
+            let result = outcome?;
+            let count = match &result.yielded {
+                Some(range) => range.len(),
+                None => self.call.vm.top - self.base - prefix,
+            };
+            if let Some(range) = result.yielded {
+                self.base = range.start;
+                self.call.output = range.start;
+                self.call.results = range.len();
+            } else {
+                self.call.results = self.call.vm.top - self.base;
+                self.restore_window_call_base();
+            }
+            self.sync();
+            return Ok(count);
+        }
         let function = self.call.vm.registers[self.base + prefix];
         let values =
             self.call.vm.registers[self.base + prefix + 1..self.base + self.top()].to_vec();
@@ -377,6 +549,7 @@ impl NativeStack<'_, '_> {
                 self.call.vm.resize_registers(self.base + prefix + count);
                 self.call.results = prefix + count;
                 self.sync();
+                self.restore_window_call_base();
                 Ok(count)
             }
             Err(error) => {

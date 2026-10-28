@@ -9,6 +9,10 @@ repository = "https://github.com/pnn64/deadsync"
 
 [dependencies]
 
+[features]
+default = ["native-c-api"]
+native-c-api = []
+
 [dev-dependencies]
 lua_reference = { package = "deadlib-lua-legacy", path = "../deadlib-lua-legacy", features = ["lua51", "vendored"] }
 
@@ -26,3 +30,7 @@ harness = false
 
 [lints.clippy]
 perf = { level = "warn", priority = -1 }
+
+[[example]]
+name = "native_boundary"
+required-features = ["native-c-api"]

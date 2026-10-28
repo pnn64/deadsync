@@ -22,6 +22,8 @@ mod error;
 mod format;
 mod lexer;
 mod locale;
+#[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+mod native_abi;
 mod numeric;
 mod optimizer;
 mod parser;
@@ -36,13 +38,17 @@ pub use bytecode::Program;
 pub use cache::{CacheStatus, CachedProgram, ProgramCache};
 #[doc(inline)]
 pub use error::{Error, ErrorKind};
+#[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+#[doc(inline)]
+pub use native_abi::{NativeCAbiLoader, NativeCAbiStats};
 #[doc(inline)]
 pub use value::{FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value};
 #[doc(inline)]
 pub use vm::{
-    GcOperation, HeapStats, HostCall, HostFunction, HostThreadState, NativeCallStatus,
-    NativeDebugFrame, NativeDebugInfo, NativeDebugString, NativeLoadStatus, NativeStack,
-    NativeThreadStack, NativeThreadStatus, Root, Vm,
+    GcOperation, HeapStats, HostCall, HostFunction, HostThreadState, NativeBuiltinBody,
+    NativeCallStatus, NativeDebugFrame, NativeDebugInfo, NativeDebugString, NativeHook,
+    NativeHookEvent, NativeHookInfo, NativeLibrary, NativeLibraryLoader, NativeLoadStatus,
+    NativeStack, NativeSymbol, NativeThreadStack, NativeThreadStatus, Root, Vm,
 };
 
 /// Compile Lua 5.1 source or a native chunk into verified, VM-independent bytecode.

@@ -1,0 +1,25 @@
+{
+  "runs": {
+    "reference": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');boundary_execution_construct=m.construct_thread;boundary_execution_format=m.format_thread;boundary_execution_concat=m.concat_thread;boundary_execution_yield_tail=m.yield_tail;boundary_execution_called=m.called;boundary_execution_concat_panic=m.concat_thread_panic;boundary_concat_offsets=m.stack_offsets;boundary_gc_thread=m.gc_thread;boundary_gc_thread_panic=m.gc_thread_panic;boundary_panic_swap=m.panic_swap;boundary_waiting_raise=m.waiting_raise;boundary_waiting_snapshot=m.waiting_snapshot;boundary_waiting_c_resume=m.waiting_c_resume;boundary_thread_pcall=m.pcall_thread;local level=assert(package.loadlib(\"C:\\\\GitHub\\\\deadsync\\\\target\\\\lua-native-boundary-fixtures-1793191078149682600\\\\reference\\\\reference_module.dll\",'boundary_level'))\nlocal parent=boundary_execution_called();local token={};local after=false;local saved\nlocal child=coroutine.create(function()\n  local held={value=71};saved=function()return held.value end\n  local ok,e=pcall(function()boundary_waiting_raise(parent,token)end)\n  after=true;return ok,e==token\nend)\nlocal ok,e=pcall(function()return coroutine.resume(child)end)\nprint('main',ok,e==token,after,coroutine.status(child),boundary_waiting_snapshot(child));print('ghost-level',level(child))\ncollectgarbage();print('saved',saved());assert(debug.setupvalue(saved,1,{value=73})=='held');print('changed',saved())\ndo\n  local parent,child;local token={};local after=false\n  parent=coroutine.create(function()\n    child=coroutine.create(function()boundary_waiting_raise(parent,token);after=true end)\n    return coroutine.resume(child)\n  end)\n  local ok,e=coroutine.resume(parent)\n  print('coroutine',ok,e==token,after,coroutine.status(parent),coroutine.status(child),boundary_waiting_snapshot(child));print('ghost-level',level(child))\nend\nprint('waiting-errors-complete',2)\n"
+      ],
+      "returncode": 0,
+      "stdout_hex": "6d61696e0966616c736509747275650966616c7365096e6f726d616c09300932093409434c434c0d0a67686f73742d6c6576656c09350d0a73617665640937310d0a6368616e6765640937330d0a636f726f7574696e650966616c736509747275650966616c73650964656164096e6f726d616c09300932093209434c0d0a67686f73742d6c6576656c09340d0a77616974696e672d6572726f72732d636f6d706c65746509320d0a",
+      "stderr_hex": ""
+    },
+    "rust": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+        "-e",
+        "local m=assert(package.loadlib('./native.dll','luaopen_native'))('probe');boundary_execution_construct=m.construct_thread;boundary_execution_format=m.format_thread;boundary_execution_concat=m.concat_thread;boundary_execution_yield_tail=m.yield_tail;boundary_execution_called=m.called;boundary_execution_concat_panic=m.concat_thread_panic;boundary_concat_offsets=m.stack_offsets;boundary_gc_thread=m.gc_thread;boundary_gc_thread_panic=m.gc_thread_panic;boundary_panic_swap=m.panic_swap;boundary_waiting_raise=m.waiting_raise;boundary_waiting_snapshot=m.waiting_snapshot;boundary_waiting_c_resume=m.waiting_c_resume;boundary_thread_pcall=m.pcall_thread;local level=assert(package.loadlib(\"C:\\\\GitHub\\\\deadsync\\\\target\\\\lua-native-boundary-fixtures-1793191078149682600\\\\rust\\\\rust_module.dll\",'boundary_level'))\nlocal parent=boundary_execution_called();local token={};local after=false;local saved\nlocal child=coroutine.create(function()\n  local held={value=71};saved=function()return held.value end\n  local ok,e=pcall(function()boundary_waiting_raise(parent,token)end)\n  after=true;return ok,e==token\nend)\nlocal ok,e=pcall(function()return coroutine.resume(child)end)\nprint('main',ok,e==token,after,coroutine.status(child),boundary_waiting_snapshot(child));print('ghost-level',level(child))\ncollectgarbage();print('saved',saved());assert(debug.setupvalue(saved,1,{value=73})=='held');print('changed',saved())\ndo\n  local parent,child;local token={};local after=false\n  parent=coroutine.create(function()\n    child=coroutine.create(function()boundary_waiting_raise(parent,token);after=true end)\n    return coroutine.resume(child)\n  end)\n  local ok,e=coroutine.resume(parent)\n  print('coroutine',ok,e==token,after,coroutine.status(parent),coroutine.status(child),boundary_waiting_snapshot(child));print('ghost-level',level(child))\nend\nprint('waiting-errors-complete',2)\n"
+      ],
+      "returncode": 0,
+      "stdout_hex": "6d61696e0966616c736509747275650966616c7365096e6f726d616c09300932093409434c434c0d0a67686f73742d6c6576656c09360d0a73617665640937310d0a6368616e6765640937330d0a636f726f7574696e650966616c736509747275650966616c73650964656164096e6f726d616c09300932093209434c0d0a67686f73742d6c6576656c09350d0a77616974696e672d6572726f72732d636f6d706c65746509320d0a",
+      "stderr_hex": ""
+    }
+  },
+  "module_report_sha256": "7a5a6572b31255ec9dfdcfcff610ea550222860564aab0bce3f0094f7667edb3"
+}

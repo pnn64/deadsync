@@ -18,6 +18,7 @@ pub(super) enum StackEntry {
 
 pub(super) enum LocalSlot {
     Register(usize),
+    HookHidden(usize),
     Copy(Value),
 }
 
@@ -270,7 +271,8 @@ impl Vm {
         let data = Arc::clone(&self.programs[closure.program].data);
         let name = c_bytes(&data.prototypes[closure.prototype].debug.upvalues[n as usize - 1]);
         if id == SET_UPVALUE {
-            self.set_cell(cell as usize, self.argument(base, count, 2));
+            // lua_setupvalue consumes the actual top, including extra arguments.
+            self.set_cell(cell as usize, self.argument(base, count, count - 1));
         }
         let name = self.intern(name);
         self.registers[base] = name;
@@ -306,8 +308,69 @@ impl Vm {
         index: usize,
         n: usize,
     ) -> Option<(LocalName, LocalSlot)> {
+        let result = self.local_slot_inner(thread, index, n)?;
+        let hooks = if thread == self.thread {
+            &self.hooks
+        } else {
+            &self.threads[slot_index(thread.0)].hooks
+        };
+        if hooks.host_owner == Some(index)
+            && matches!(result.0, LocalName::Named(..))
+            && let LocalSlot::Register(r) = result.1
+            && let Some(slot) = r
+                .checked_sub(hooks.hidden_start)
+                .filter(|&i| i < hooks.hidden.len())
+        {
+            return Some((result.0, LocalSlot::HookHidden(slot)));
+        }
+        Some(result)
+    }
+    pub(super) fn debug_local_value(&self, thread: ThreadId, slot: &LocalSlot) -> Option<Value> {
+        match *slot {
+            LocalSlot::Register(r) => self.debug_register(thread, r),
+            LocalSlot::Copy(value) => Some(value),
+            LocalSlot::HookHidden(i) => {
+                let hooks = if thread == self.thread {
+                    &self.hooks
+                } else {
+                    &self.threads[slot_index(thread.0)].hooks
+                };
+                hooks.hidden.get(i).copied()
+            }
+        }
+    }
+    pub(super) fn debug_write_local(&mut self, thread: ThreadId, slot: &LocalSlot, value: Value) {
+        match *slot {
+            LocalSlot::Register(r) => self.debug_set_register(thread, r, value),
+            LocalSlot::Copy(_) => {}
+            LocalSlot::HookHidden(i) => {
+                let hooks = if thread == self.thread {
+                    &mut self.hooks
+                } else {
+                    &mut self.threads[slot_index(thread.0)].hooks
+                };
+                hooks.hidden[i] = value;
+            }
+        }
+        self.gc_barrier(Value::Thread(thread), value);
+    }
+    fn local_slot_inner(
+        &self,
+        thread: ThreadId,
+        index: usize,
+        n: usize,
+    ) -> Option<(LocalName, LocalSlot)> {
         let frames = self.debug_frames(thread);
         let frame = frames[index];
+        let hooks = if thread == self.thread {
+            &self.hooks
+        } else {
+            &self.threads[slot_index(thread.0)].hooks
+        };
+        let native_hook = hooks
+            .running
+            .filter(|_| hooks.host_owner == Some(index))
+            .and_then(|i| frames.get(usize::from(i)));
         match frame.function {
             FrameKind::Lua(id) => {
                 let closure = &self.functions[slot_index(id.0)];
@@ -316,7 +379,9 @@ impl Vm {
                 let hook = frames[index + 1..].iter().find(|f| {
                     matches!(f.function, FrameKind::Native(CONT_HOOK)) && f.vararg_start == index
                 });
-                let window = hooks::stack_top(proto, frame, frames.get(index + 1))
+                let window = native_hook
+                    .map(|f| f.vararg_start + f.argc())
+                    .or_else(|| hooks::stack_top(proto, frame, frames.get(index + 1)))
                     .unwrap_or(frame.base + proto.debug_registers())
                     .saturating_sub(frame.base);
                 let register = |r: usize| {
@@ -344,8 +409,8 @@ impl Vm {
                 }
                 // A Lua hook is called above the interrupted stack window and
                 // leaves its registry hook table just below the callback.
-                if let Some(hook) = hook {
-                    if n >= window {
+                if hook.is_some() || native_hook.is_some() {
+                    if let Some(hook) = hook.filter(|_| n >= window) {
                         return (n == window)
                             .then_some((LocalName::Temporary, LocalSlot::Register(hook.base)));
                     }
@@ -411,6 +476,30 @@ impl Vm {
                 None
             }
             FrameKind::Native(id) => {
+                let id = self.body_code(thread, index).unwrap_or(id);
+                if let Some(hook) = native_hook {
+                    return (n < hook.argc()).then_some((
+                        LocalName::Temporary,
+                        LocalSlot::Register(hook.vararg_start + n),
+                    ));
+                }
+                if frames
+                    .get(index + 1)
+                    .is_some_and(|f| matches!(f.function, FrameKind::Native(CONT_RETURN)))
+                {
+                    if n < frame.argc() {
+                        return Some((
+                            LocalName::Temporary,
+                            LocalSlot::Register(frame.vararg_start + n),
+                        ));
+                    }
+                    let hook = frames[index + 1..].iter().find(|f| {
+                        matches!(f.function, FrameKind::Native(CONT_HOOK))
+                            && f.vararg_start == index
+                    })?;
+                    return (n == frame.argc())
+                        .then_some((LocalName::Temporary, LocalSlot::Register(hook.base)));
+                }
                 let current = thread == self.thread && index + 1 == frames.len();
                 if thread != self.thread
                     && index + 1 == frames.len()
@@ -435,85 +524,77 @@ impl Vm {
                     })?;
                     return Some((LocalName::Temporary, LocalSlot::Register(hook.base)));
                 }
-                let position = match id {
-                    SET_LOCAL if current => {
-                        let arg = usize::from(matches!(
-                            self.debug_register(thread, frame.vararg_start),
-                            Some(Value::Thread(_))
-                        ));
-                        if n >= arg + 3 {
-                            return None;
-                        }
-                        frame.vararg_start + n
-                    }
-                    PCALL if !current && frame.pc == 1 => return None,
-                    XPCALL if !current && frame.pc == 1 => {
-                        if n != 0 {
-                            return None;
-                        }
-                        frame.vararg_start + 1
-                    }
-                    LOAD_READER if frame.pc != 0 => {
-                        if n >= 3 {
-                            return None;
-                        }
-                        frame.base + n
-                    }
-                    package::REQUIRE if matches!(frame.pc, 5 | 7) => {
-                        if n >= 5 {
-                            return None;
-                        }
-                        frame.base + n
-                    }
-                    package::MODULE if frame.pc == 12 => {
-                        if n >= frame.argc() + 3 {
-                            return None;
-                        }
-                        frame.base + n
-                    }
-                    TRACEBACK if frame.pc != 0 => {
-                        let jobs = if thread == self.thread {
-                            &self.tracebacks
-                        } else {
-                            &self.threads[slot_index(thread.0)].tracebacks
-                        };
-                        let job = jobs.iter().rev().find(|j| j.owner == index)?;
-                        if n >= job.arg + job.top {
-                            return None;
-                        }
-                        frame.base + n
-                    }
-                    TOSTRING if !current => {
-                        if n != 0 {
-                            return None;
-                        }
-                        frame.vararg_start
-                    }
-                    PRINT if !current && frame.pc >= 2 => {
-                        if n == frame.argc() {
-                            frame.base + 1
-                        } else if n < frame.argc() {
+                let position = if let Some(slot) = self.package_local_slot(id, frame, n) {
+                    slot?
+                } else {
+                    match id {
+                        SET_LOCAL if current => {
+                            let arg = usize::from(matches!(
+                                self.debug_register(thread, frame.vararg_start),
+                                Some(Value::Thread(_))
+                            ));
+                            if n >= arg + 3 {
+                                return None;
+                            }
                             frame.vararg_start + n
-                        } else {
-                            return None;
                         }
-                    }
-                    tables::TAB_FOREACH if !current && frame.pc == 1 => {
-                        if n == frame.argc() {
-                            frame.base + 1
-                        } else if n == frame.argc() + 1 {
-                            frame.base + 2
-                        } else if n < frame.argc() {
+                        PCALL if !current && frame.pc == 1 => return None,
+                        XPCALL if !current && frame.pc == 1 => {
+                            if n != 0 {
+                                return None;
+                            }
+                            frame.vararg_start + 1
+                        }
+                        LOAD_READER if frame.pc != 0 => {
+                            if n >= frame.argc() {
+                                return None;
+                            }
+                            frame.base + n
+                        }
+                        TRACEBACK if frame.pc != 0 => {
+                            let jobs = if thread == self.thread {
+                                &self.tracebacks
+                            } else {
+                                &self.threads[slot_index(thread.0)].tracebacks
+                            };
+                            let job = jobs.iter().rev().find(|j| j.owner == index)?;
+                            if n >= job.arg + job.top {
+                                return None;
+                            }
+                            frame.base + n
+                        }
+                        TOSTRING if !current => {
+                            if n != 0 {
+                                return None;
+                            }
+                            frame.vararg_start
+                        }
+                        PRINT if !current && frame.pc >= 2 => {
+                            if n == frame.argc() {
+                                frame.base + 1
+                            } else if n < frame.argc() {
+                                frame.vararg_start + n
+                            } else {
+                                return None;
+                            }
+                        }
+                        tables::TAB_FOREACH if !current && frame.pc == 1 => {
+                            if n == frame.argc() {
+                                frame.base + 1
+                            } else if n == frame.argc() + 1 {
+                                frame.base + 2
+                            } else if n < frame.argc() {
+                                frame.vararg_start + n
+                            } else {
+                                return None;
+                            }
+                        }
+                        _ => {
+                            if n >= frame.argc() {
+                                return None;
+                            }
                             frame.vararg_start + n
-                        } else {
-                            return None;
                         }
-                    }
-                    _ => {
-                        if n >= frame.argc() {
-                            return None;
-                        }
-                        frame.vararg_start + n
                     }
                 };
                 self.debug_register(thread, position)?;
@@ -540,6 +621,13 @@ impl Vm {
             self.number(self.argument(base, count, arg + 1))
                 .ok_or_else(|| self.argument_type_error(base, count, arg + 1, "number"))?,
         );
+        if id == SET_LOCAL
+            && let Some(index) = self.active_native
+        {
+            // A self-write can replace slot one with a thread. Preserve the
+            // original optional-thread prefix for the completed C window.
+            self.frames[index].pc = arg as u32;
+        }
         let slot = match entry {
             StackEntry::Frame(i) => {
                 let frames = self.debug_frames(thread);
@@ -569,21 +657,16 @@ impl Vm {
             self.registers[base] = Value::Nil;
             return Ok(1);
         };
-        let mut value = match slot {
-            LocalSlot::Register(r) => self
-                .debug_register(thread, r)
-                .expect("validated debug register"),
-            LocalSlot::Copy(v) => v,
-        };
+        let mut value = self
+            .debug_local_value(thread, &slot)
+            .expect("validated debug slot");
         if matches!(name, LocalName::Temporary) && !self.is_live_value(value) {
             // Precise roots can leave a reclaimed object's old bits in an
             // unused physical slot. Debug access must not revive that handle.
             value = Value::Nil;
         }
-        if id == SET_LOCAL
-            && let LocalSlot::Register(r) = slot
-        {
-            self.debug_set_register(thread, r, self.argument(base, count, arg + 2));
+        if id == SET_LOCAL {
+            self.debug_write_local(thread, &slot, self.argument(base, count, arg + 2));
         }
         let name = match name {
             LocalName::Named(program, prototype, local) => {

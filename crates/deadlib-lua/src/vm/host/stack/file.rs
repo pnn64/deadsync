@@ -28,7 +28,7 @@ impl NativeStack<'_, '_> {
         let index = self.top() + 1;
         // luaL_loadfile's initial string push checks GC outside lua_load's
         // protection, before the source-name slot or file handle exists.
-        self.call.run_action(Action::GcCheck, false)?;
+        self.check_gc()?;
         let value = self.intern(&name);
         self.push(value)?;
         let mut file = match self.call.vm.open_file_reader(path.as_deref()) {
@@ -83,7 +83,7 @@ impl NativeStack<'_, '_> {
     ) -> Result<NativeLoadStatus, Error> {
         // errfile formats its diagnostic after closing the file, outside the
         // protected parser. A failing collector callback must still escape.
-        self.call.run_action(Action::GcCheck, false)?;
+        self.check_gc()?;
         let name = self.to_bytes(index as isize)?.unwrap_or(original).to_vec();
         let value = self.call.vm.file_load_error(&name, what, code);
         self.push(value)?;

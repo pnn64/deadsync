@@ -45,7 +45,7 @@ def main():
     parser.add_argument('--rust-binary',type=Path,help='Prebuilt executable; this audit does not establish its source provenance')
     args=parser.parse_args()
     root=Path(__file__).resolve().parents[1]
-    sources=list((root/'crates/deadlib-lua').rglob('*.rs'))+[root/'crates/deadlib-lua/Cargo.toml',Path(__file__).resolve(),root/'scripts/build_lua_cli_reference.py']
+    sources=[p for p in (root/'crates/deadlib-lua').rglob('*')if p.suffix in {'.rs','.c','.h'}]+[root/'crates/deadlib-lua/Cargo.toml',Path(__file__).resolve(),root/'scripts/build_lua_cli_reference.py']
     sha=lambda path:hashlib.sha256(path.read_bytes()).hexdigest()
     hashes=lambda:{p.relative_to(root).as_posix():sha(p)for p in sorted(sources)}
     before=hashes()

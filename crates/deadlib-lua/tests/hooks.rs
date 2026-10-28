@@ -10,6 +10,83 @@ enum Scalar {
 }
 
 #[test]
+fn child_return_hook_errors_remain_inside_the_active_parent_protection() {
+    compare(br#"
+local out={};local token,handled={},{}
+local function pack(...)return {n=select('#',...),...}end
+for kind=1,3 do
+ for _,event in ipairs{'call','return'}do
+  for outer=1,2 do
+   local body=function()return 'return 17'end
+   local co=coroutine.create(function()
+    local function action()
+     debug.sethook(function(e)
+      if e==event and debug.getinfo(2,'f').func==body then
+       debug.sethook();collectgarbage();error(token,0)
+      end
+     end,'cr')
+     if kind==1 then return pcall(body)
+     elseif kind==2 then return xpcall(body,function(e)assert(e==token);return handled end)
+     else return load(body,'=protected-reader')end
+    end
+    if outer==1 then return pcall(action)end
+    return xpcall(action,function(e)assert(e==token);return handled end)
+   end)
+   local r=pack(coroutine.resume(co))
+   out[#out+1]=r.n..':'..tostring(r[1])..':'..tostring(r[2])..':'..tostring(r[3])..':'..tostring(r[4]==token)..':'..tostring(r[4]==handled)
+  end
+ end
+end
+return table.concat(out,'|')
+"#);
+}
+
+#[test]
+fn completed_protected_calls_and_loaders_do_not_catch_their_own_return_hook_errors() {
+    compare(br#"
+local out={};local token={};local handled={}
+local function pack(...)return {n=select('#',...),...}end
+local filename=os.tmpname();local file=assert(io.open(filename,'w'));file:write('return 17');file:close()
+local tests={
+ {pcall,function()return pcall(function()return 17 end)end},
+ {pcall,function()return pcall(function()error(token,0)end)end},
+ {xpcall,function()return xpcall(function()return 17 end,function()return handled end)end},
+ {xpcall,function()return xpcall(function()error(token,0)end,function()return handled end)end},
+ {load,function()local i=0;return load(function()i=i+1;if i==1 then return 'return 17'end end)end},
+ {load,function()return load(function()return 'return +'end)end},
+ {loadstring,function()return loadstring('return 17')end},
+ {loadstring,function()return loadstring('return +')end},
+ {loadfile,function()return loadfile(filename)end},
+ {dofile,function()return dofile(filename)end},
+}
+
+
+for _,case in ipairs(tests)do
+ for mode=1,3 do
+  local target,action=case[1],case[2];local hits=0;local handler_calls=0
+  debug.sethook(function(event)
+   if event=='return'and debug.getinfo(2,'f').func==target then
+    hits=hits+1;debug.sethook()
+    if mode==3 then
+     local ok,e=pcall(function()error(token,0)end);assert(not ok and e==token)
+     local fn,err=load(function()error(token,0)end);assert(fn==nil and err==handled)
+    end
+    collectgarbage();error(token,0)
+   end
+  end,'r')
+  local values
+  if mode==1 then values=pack(pcall(action))
+  else values=pack(xpcall(action,function(e)handler_calls=handler_calls+1;assert(e==token);return handled end))end
+  debug.sethook()
+  out[#out+1]=tostring(values.n)..':'..tostring(values[1])..':'..tostring(values[2]==token)..':'..tostring(values[2]==handled)..':'..hits..':'..handler_calls
+ end
+end
+assert(os.remove(filename))
+return table.concat(out,'|')
+"#);
+}
+
+#[test]
 fn native_dump_hooks_expose_the_live_registry_hook_table() {
     compare(br#"
       local seen,key;local hits=0;local function f()return 1 end
