@@ -95,14 +95,21 @@ impl<W: Write> PacketWriter<W> {
             if self.segments == 0 {
                 self.continued = self.packet_open;
             }
-            let len = (data.len() - position).min(255);
+            let len = (data.len() - position).min((255 - self.segments) * 255);
             reserve(&mut self.body, len)?;
             self.body.extend_from_slice(&data[position..position + len]);
-            self.lacing[self.segments] = len as u8;
-            self.segments += 1;
+            let mut tail = len;
+            if len >= 255 {
+                let full = len / 255;
+                self.lacing[self.segments..self.segments + full].fill(255);
+                self.segments += full;
+                tail -= full * 255;
+            }
             position += len;
-            self.packet_open = len == 255;
-            if len < 255 {
+            self.packet_open = self.segments == 255;
+            if !self.packet_open {
+                self.lacing[self.segments] = tail as u8;
+                self.segments += 1;
                 break;
             }
         }
