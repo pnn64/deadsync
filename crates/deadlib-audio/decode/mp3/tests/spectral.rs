@@ -3,6 +3,54 @@ use deadlib_audio_decode_mp3::{
 };
 
 #[test]
+fn zero_regions_consume_no_bits_between_coded_pairs() {
+    for rate in [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000] {
+        let bands = Bands::for_rate(rate).unwrap();
+        let first = bands.long()[8] as usize;
+        let second = bands.long()[16] as usize;
+        for books in [[0, 1, 0], [1, 0, 1], [0, 0, 0]] {
+            for pairs in [0, 1, first / 2, first / 2 + 1, second / 2, 288] {
+                let mut writer = bits::BitWriter::new();
+                let mut expected = [0; 576];
+                for line in (0..2 * pairs).step_by(2) {
+                    let book = if line < first {
+                        books[0]
+                    } else if line < second {
+                        books[1]
+                    } else {
+                        books[2]
+                    };
+                    if book == 1 {
+                        // Normative book-1 pair (1,0), positive sign: 01|0.
+                        writer.write(0b010, 3).unwrap();
+                        expected[line] = 1;
+                    }
+                }
+                let mut cursor =
+                    BitReader::bounded(writer.as_bytes(), 0, writer.len_bits()).unwrap();
+                let info = GranuleChannel {
+                    big_values: pairs as u16,
+                    region0_count: 7,
+                    region1_count: 7,
+                    table_select: books,
+                    ..Default::default()
+                };
+                let mut actual = [9; 576];
+                assert_eq!(
+                    spectral::quantized(&mut cursor, &info, bands, &mut actual),
+                    Ok(2 * pairs)
+                );
+                assert_eq!(
+                    actual, expected,
+                    "rate={rate} books={books:?} pairs={pairs}"
+                );
+                assert_eq!(cursor.position(), writer.len_bits());
+            }
+        }
+    }
+}
+
+#[test]
 fn scalefactor_band_boundaries_and_mixed_alignment() {
     for rate in [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000] {
         let b = Bands::for_rate(rate).unwrap();

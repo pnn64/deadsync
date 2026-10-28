@@ -59,11 +59,22 @@ pub fn quantized(
     let mut cursor = *bits;
     output.fill(0);
     let mut line = 0;
-    while line < (info.big_values as usize) * 2 {
-        let region = usize::from(line >= first) + usize::from(line >= second);
-        let pair = huffman::pair(&mut cursor, info.table_select[region])?;
-        output[line..line + 2].copy_from_slice(&pair);
-        line += 2;
+    let limit = (info.big_values as usize) * 2;
+    for (region, end) in [first.min(limit), second.min(limit), limit]
+        .into_iter()
+        .enumerate()
+    {
+        let book = info.table_select[region];
+        if book == 0 {
+            // The output is already zeroed; book zero consumes no bits.
+            line = end;
+            continue;
+        }
+        while line < end {
+            let pair = huffman::pair(&mut cursor, book)?;
+            output[line..line + 2].copy_from_slice(&pair);
+            line += 2;
+        }
     }
     while line + 4 <= 576 && cursor.remaining() != 0 {
         match huffman::quad(&mut cursor, info.count1_table) {
