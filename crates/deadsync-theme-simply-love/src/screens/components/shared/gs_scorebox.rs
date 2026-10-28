@@ -20,6 +20,10 @@ const SCOREBOX_GS_BLUE: [f32; 4] = deadlib_present::color::rgba_hex("#007b85");
 const SCOREBOX_SRPG_YELLOW: [f32; 4] = [1.0, 0.972, 0.792, 1.0];
 const SCOREBOX_ITL_PINK: [f32; 4] = [1.0, 0.2, 0.406, 1.0];
 const SCOREBOX_SELF: [f32; 4] = deadlib_present::color::rgba_hex("#A1FF94");
+/// Border for a pane that is not a board yet: loading, an error or no scores.
+/// Neutral on purpose, so a board's colour arrives with the board instead of
+/// a GrooveStats blue frame recolouring itself to golf or ITL.
+const SCOREBOX_STATUS_GREY: [f32; 4] = deadlib_present::color::rgba_hex("#5c5c5c");
 const SCOREBOX_RIVAL: [f32; 4] = deadlib_present::color::rgba_hex("#C29CFF");
 const SCOREBOX_MODE_ALPHA: f32 = 0.35;
 const SCOREBOX_GS_LOGO_ALPHA: f32 = 0.5;
@@ -96,7 +100,7 @@ impl GameplayScoreboxPlan {
         }
         Self {
             panes: snapshot.map_or_else(Vec::new, |snapshot| {
-                gameplay_panes_from_snapshot(snapshot, profile, filter, palette)
+                gameplay_panes_from_snapshot(snapshot, filter, palette)
             }),
         }
     }
@@ -538,22 +542,17 @@ fn empty_rows() -> [GameplayScoreboxRow; SCOREBOX_NUM_ENTRIES] {
     std::array::from_fn(|_| gameplay_empty_row())
 }
 
-fn gameplay_status_pane(show_ex_score: bool, text: &str, retained: bool) -> GameplayScoreboxPane {
+/// A status pane stands in for a board that is loading, failed or empty. It
+/// belongs to no service, so it carries no logo, mode text or service colour:
+/// `Other` with empty mode text draws nothing in the header.
+fn gameplay_status_pane(text: &str, retained: bool) -> GameplayScoreboxPane {
     let mut rows = empty_rows();
     rows[0] = gameplay_status_row(text, retained);
-    let kind = if show_ex_score {
-        PaneKind::Ex
-    } else {
-        PaneKind::Gs
-    };
     GameplayScoreboxPane {
-        kind,
+        kind: PaneKind::Other,
         is_arrowcloud: false,
-        mode_text: pane_text(
-            score_data::default_scorebox_mode_text(show_ex_score),
-            retained,
-        ),
-        border_color: SCOREBOX_GS_BLUE,
+        mode_text: pane_text("", retained),
+        border_color: SCOREBOX_STATUS_GREY,
         rows,
     }
 }
@@ -644,38 +643,21 @@ fn gameplay_pane_from_leaderboard(
 
 fn gameplay_panes_from_snapshot(
     snapshot: &score_data::CachedPlayerLeaderboardData,
-    profile_snapshot: &score_data::GameplayScoreboxProfileSnapshot,
     filter: score_data::SelectMusicScoreboxFilter,
     palette: JudgmentPalette,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
-        return vec![gameplay_status_pane(
-            profile_snapshot.show_ex_score,
-            "Loading ...",
-            true,
-        )];
+        return vec![gameplay_status_pane("Loading ...", true)];
     }
     if let Some(error) = snapshot.error.as_deref() {
         let text = error_text(error);
-        return vec![gameplay_status_pane(
-            profile_snapshot.show_ex_score,
-            text,
-            true,
-        )];
+        return vec![gameplay_status_pane(text, true)];
     }
     let Some(data) = snapshot.data.as_ref() else {
-        return vec![gameplay_status_pane(
-            profile_snapshot.show_ex_score,
-            "No Scores",
-            true,
-        )];
+        return vec![gameplay_status_pane("No Scores", true)];
     };
     if data.panes.is_empty() {
-        return vec![gameplay_status_pane(
-            profile_snapshot.show_ex_score,
-            "No Scores",
-            true,
-        )];
+        return vec![gameplay_status_pane("No Scores", true)];
     }
 
     if !score_data::select_music_scorebox_filter_has_any(filter) {
@@ -684,11 +666,7 @@ fn gameplay_panes_from_snapshot(
 
     let filtered = score_data::select_music_scorebox_pane_refs(data.panes.as_slice(), filter);
     if filtered.is_empty() {
-        return vec![gameplay_status_pane(
-            profile_snapshot.show_ex_score,
-            "No Scores",
-            true,
-        )];
+        return vec![gameplay_status_pane("No Scores", true)];
     }
 
     let mut panes = Vec::with_capacity(filtered.len());
@@ -708,22 +686,14 @@ fn select_music_panes_from_snapshot(
     runtime: &ScoreboxSideView,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
-        return vec![gameplay_status_pane(
-            runtime.show_ex_score,
-            "Loading ...",
-            false,
-        )];
+        return vec![gameplay_status_pane("Loading ...", false)];
     }
     if let Some(error) = snapshot.error.as_deref() {
         let text = error_text(error);
-        return vec![gameplay_status_pane(runtime.show_ex_score, text, false)];
+        return vec![gameplay_status_pane(text, false)];
     }
     let Some(data) = snapshot.data.as_ref() else {
-        return vec![gameplay_status_pane(
-            runtime.show_ex_score,
-            "No Scores",
-            false,
-        )];
+        return vec![gameplay_status_pane("No Scores", false)];
     };
     let filter = runtime.pane_filter;
     if !score_data::select_music_scorebox_filter_has_any(filter) {
@@ -732,11 +702,7 @@ fn select_music_panes_from_snapshot(
 
     let filtered = score_data::select_music_scorebox_pane_refs(data.panes.as_slice(), filter);
     if filtered.is_empty() {
-        return vec![gameplay_status_pane(
-            runtime.show_ex_score,
-            "No Scores",
-            false,
-        )];
+        return vec![gameplay_status_pane("No Scores", false)];
     }
     let mut panes = Vec::with_capacity(filtered.len());
     for pane in filtered {
@@ -1310,12 +1276,6 @@ mod tests {
         }
     }
 
-    fn scorebox_profile(show_ex_score: bool) -> score_data::GameplayScoreboxProfileSnapshot {
-        let mut snapshot = score_data::GameplayScoreboxProfileSnapshot::default();
-        snapshot.show_ex_score = show_ex_score;
-        snapshot
-    }
-
     #[test]
     fn non_hard_ex_scorebox_keeps_self_row() {
         let entries = vec![
@@ -1519,10 +1479,8 @@ mod tests {
             })),
         };
 
-        let profile_snapshot = scorebox_profile(false);
         let panes = gameplay_panes_from_snapshot(
             &snapshot,
-            &profile_snapshot,
             score_data::SelectMusicScoreboxFilter {
                 itg: false,
                 ex: false,
@@ -1536,6 +1494,49 @@ mod tests {
         assert_eq!(panes.len(), 1);
         assert_eq!(panes[0].kind, PaneKind::HardEx);
         assert_eq!(panes[0].mode_text.as_str(), "H.EX");
+    }
+
+    #[test]
+    fn status_panes_carry_no_service_branding() {
+        let runtime = ScoreboxSideView {
+            show_ex_score: true,
+            ..ScoreboxSideView::default()
+        };
+        let loading = score_data::CachedPlayerLeaderboardData::loading();
+        let panes = select_music_panes_from_snapshot(&loading, &runtime);
+        assert_eq!(panes.len(), 1);
+        let pane = &panes[0];
+        assert_eq!(pane.kind, PaneKind::Other);
+        assert!(!pane.is_arrowcloud);
+        assert!(pane.mode_text.as_str().is_empty());
+        assert_eq!(pane.border_color, SCOREBOX_STATUS_GREY);
+        assert_eq!(pane.rows[0].name.as_str(), "Loading ...");
+        assert!(!is_gs_logo(pane) && !is_ex_text(pane) && !is_arrowcloud_logo(pane));
+
+        let mut actors = Vec::new();
+        push_gameplay_scorebox_actors_from_panes(&mut actors, &panes, 100.0, 100.0, 1.0, 0.0);
+        assert!(
+            actors.iter().all(|actor| !matches!(
+                actor,
+                Actor::Sprite { source, .. } if source.texture_key().is_some()
+            )),
+            "a status pane draws no service logo"
+        );
+
+        let errored = score_data::CachedPlayerLeaderboardData {
+            loading: false,
+            error: Some(Arc::from("timed out")),
+            data: None,
+        };
+        let gameplay = gameplay_panes_from_snapshot(
+            &errored,
+            score_data::SelectMusicScoreboxFilter::default(),
+            crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
+        );
+        assert_eq!(gameplay.len(), 1);
+        assert_eq!(gameplay[0].kind, PaneKind::Other);
+        assert_eq!(gameplay[0].border_color, SCOREBOX_STATUS_GREY);
+        assert!(gameplay[0].mode_text.as_str().is_empty());
     }
 }
 

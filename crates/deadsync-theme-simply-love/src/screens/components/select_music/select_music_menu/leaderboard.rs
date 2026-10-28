@@ -34,6 +34,9 @@ const GS_LEADERBOARD_NO_SCORES_TEXT: &str = "No Scores";
 const GS_LEADERBOARD_LOADING_TEXT: &str = "Loading ...";
 const GS_LEADERBOARD_MACHINE_BEST: &str = "Machine's  Best";
 const GS_LEADERBOARD_MORE_TEXT: &str = "More Leaderboards";
+/// Header while no board is on screen yet. Boards are named after their
+/// service once they arrive; before that the pane belongs to no service.
+const GS_LEADERBOARD_STATUS_HEADER: &str = "Leaderboards";
 const GS_LEADERBOARD_CLOSE_HINT: &str = "Press &START; to dismiss.";
 const GS_LEADERBOARD_RIVAL_COLOR: [f32; 4] = deadlib_present::color::rgba_hex("#BD94FF");
 const GS_LEADERBOARD_SELF_COLOR: [f32; 4] = deadlib_present::color::rgba_hex("#A1FF94");
@@ -453,12 +456,9 @@ fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
         let display_entries = entries.as_ref().map(|entries| {
             score_data::prioritized_leaderboard_entry_refs(entries, GS_LEADERBOARD_NUM_ENTRIES)
         });
-        let header_text = if side.loading {
-            "GrooveStats".to_string()
-        } else if let Some(p) = pane {
-            p.name.replace("ITL Online", "ITL")
-        } else {
-            "GrooveStats".to_string()
+        let header_text = match pane {
+            Some(p) if !side.loading => p.name.replace("ITL Online", "ITL"),
+            _ => GS_LEADERBOARD_STATUS_HEADER.to_string(),
         };
         let is_golf = pane.is_some_and(|p| score_data::scorebox_pane_kind(p) == score_data::ScoreboxPaneKind::Golf);
         let show_ex = !side.loading
