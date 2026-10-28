@@ -50,7 +50,7 @@ fn animation_chunk(kind: &[u8; 4]) -> bool {
 /// A default fcTL preceding acTL is retained until acTL is verified, so the
 /// public `Animation` event always precedes its first `FrameControl` event.
 ///
-/// The image pipeline owns a 32 KiB DEFLATE window and a bounded number of rows.
+/// The image pipeline owns at most 32 KiB of DEFLATE history and a bounded number of rows.
 /// Metadata and suggested-palette names are bounded by the configured metadata
 /// budget. No complete image, frame, compressed payload or IDAT chunk is stored.
 /// `process` stops at each event and leaves bytes after IEND unconsumed. Every

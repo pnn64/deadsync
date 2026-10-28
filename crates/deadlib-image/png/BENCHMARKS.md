@@ -2115,3 +2115,125 @@ checks are in `selected-validation.json` and `library-validation.json`.
 `audit.py` verifies four frozen checkpoints, 32 pipeline processes, three paired
 callers, source/binary/log/summary hashes and the exact one-line shared-helper
 change; `audit.json` retains the report, evidence and test-support identities.
+
+## Fixed Huffman values, wider CRC blocks and final Stored history (2026-10-29)
+
+Three safe Rust changes remove repeated decoding work:
+
+1. Fixed literal/distance tables are evaluated at compile time. Runtime dynamic
+   trees use the same validated builder, with the original public error mapping.
+   The builder's const-compatible loops preserve histogram, completeness,
+   canonical symbol ordering and primary lookup construction. Fixed blocks
+   copy already validated immutable values instead of regenerating them.
+2. CRC updates reduce sixteen bytes per bulk iteration using two independent
+   word contributions. The original eight-byte kernel remains for short tails,
+   including common short PNG chunks. Constant offsets inline both word kernels;
+   no alignment assumptions, unsafe loads or hardware-specific intrinsics are used.
+3. A final Stored block advances total output without copying its payload into
+   private DEFLATE history. No later block can reference that history. Nonfinal
+   Stored blocks still populate it, and checksum, limit, suspension, prefix and
+   trailer accounting keep their original order. History allocation is unchanged.
+
+The main component comparisons alternate four complete processes per version.
+They include complete PNG APIs and separate untimed allocation probes:
+
+| Component and case | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Fixed values, RGBA16 1x1 Fast buffered | 13,049 | 2,259 | 5.78x |
+| Fixed values, RGBA16 1x1 Fast reader | 17,423 | 5,482 | 3.18x |
+| Fixed values, RGBA8 33x9 Fast buffered | 18,149 | 7,200 | 2.52x |
+| CRC with eight-byte tail, RGBA8 4097x257 Stored reader | 13,472,105 | 12,554,815 | 1.073x |
+| CRC with eight-byte tail, RGBA16 4097x257 Stored reader | 30,149,606 | 29,006,559 | 1.039x |
+
+The final Stored change has a smaller benefit. A focused paired caller links
+the frozen `crc-tail` source and selected source, isolating this streaming-only
+change from table setup and CRC work. All inputs assert a final Stored first
+block and reproduce complete native images. Three processes retain eleven
+alternating batches per variant after one warmup, with 128 iterations per batch:
+
+| Isolated final Stored reader case | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| RGBA8 64x64 plain | 55,921 | 54,345 | 1.029x |
+| RGBA8 128x32 plain | 47,138 | 45,147 | 1.044x |
+| RGBA16 64x64 plain | 104,544 | 100,889 | 1.036x |
+| RGBA16 128x32 plain | 91,147 | 88,170 | 1.034x |
+
+RGBA8 128x32 improves 3.4%/4.4%/3.4% in the individual process ratios;
+RGBA16 improves 3.4%/5.1%/3.7%. The RGBA16 64x64 buffered control is 1.001x.
+The broader separate-process Stored comparison varies more, including a slower
+tiny RGBA16 reader and approximately neutral large RGBA16; its larger small-case
+ratios are not substituted for the focused result. Removing the copy establishes
+a modest targeted gain, not a general large-image throughput claim.
+
+An additional caller links the immutable Git baseline and selected source,
+uses shared native image types and copied optimized/LTO bench settings, and
+black-boxes complete Png results. Three processes each retain eleven alternating
+batches per variant after one warmup. Its combined medians include:
+
+| Within-process combined case | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| RGBA16 1x1 Fast buffered | 10,552 | 1,852 | 5.70x |
+| RGBA16 1x1 Fast reader | 13,858 | 4,866 | 2.85x |
+| RGBA8 33x9 Fast buffered | 15,218 | 6,446 | 2.36x |
+| RGBA8 4097x257 Stored reader | 12,944,573 | 11,613,233 | 1.115x |
+| RGBA16 4097x257 Stored reader | 29,577,991 | 27,330,384 | 1.082x |
+| Reference dynamic RGBA16 513x257 level9 buffered | 3,879,443 | 3,775,327 | 1.028x |
+| Reference dynamic RGBA16 513x257 level9 reader | 2,290,849 | 2,283,239 | 1.003x |
+
+Heap allocation calls, reallocations and requested bytes are unchanged in every
+measured component and combined case. The storage tradeoff is immutable table
+data: CRC lookup definitions grow from 8 KiB to 16 KiB, alongside the two fixed
+Huffman values. This is not an allocation reduction. Some short/caller timings
+vary across datasets; all controls and raw process ranges remain visible, and
+the results do not establish uniform gains for every input or host.
+
+Across all six large reference-dynamic controls, the within-process buffered
+ratios span 0.967x-1.037x and reader ratios 0.937x-1.133x. One reader control is
+therefore about 6% slower. These controls and their process ranges remain part
+of the result; the fixed-table gains are not presented as dynamic-Huffman gains.
+
+`DEADLIB_PNG_BENCH_STAGE=deflate-tables` measures 212 case/operations. It retains
+188 Stored-noise/native-fixed-gradient cases and adds 24 independently framed
+reference-zlib controls at levels 1/9. Reference case names record their first
+block type, and all 513x257 reference streams assert dynamic Huffman type 2.
+Complete scalar-modeled filtered bytes, decoded samples and palettes are checked
+outside timing; fingerprints identify complete PNG inputs. Logical CPU 2,
+Windows thread cycles, Rust 1.99.1 and the optimized/LTO bench profile are used.
+There are three warmups and seven batches; requested iterations are three,
+readers up to 65,536 native bytes use at least 64, and other outputs below 4,096
+bytes at least 2,048. The combined caller uses 512 iterations for small cases,
+three for large ones. The focused Stored caller covers 144 API case/operations
+across twelve native formats, plain/Adam7 and 33x9/64x64/128x32 shapes. Our jobs
+are serialized; host workloads, frequency and preemption are uncontrolled.
+
+The source diff is 72 lines net (105 added, 33 removed), including a 25-line
+independent CRC unit oracle; runtime/documentation changes add 47 lines net.
+Runtime work removed includes per-fixed-block table validation/construction,
+half the CRC dependency iterations and unused final Stored payload copies.
+There is no new unsafe code, runtime dependency or public API. Integration
+tests, independent support generators and fixtures are unchanged.
+
+Evidence is in [`experiments/deflate-tables-20261028`](experiments/deflate-tables-20261028).
+`tables-paired-summary.tsv`, `crc-tail-paired-summary.tsv` and
+`stored-paired-summary.tsv` retain component measurements; `crc16-paired*`
+retains the intermediate CRC trial. `selected-paired-summary.tsv` and
+`in-process-summary.tsv` retain combined results. The isolated Stored caller
+is in `stored-in-process-lf*`, regenerated by `compare-stored.py` from Git and
+the verified `crc-tail.patch`, with every reconstructed source hash checked
+before compilation. `protocol.json` records setup notes and both measurement
+scopes; cumulative patches are relative to `0afe68812`.
+
+Selected source passes 71 release tests and 65 debug tests, including thirteen
+library oracles in both profiles, strict all-target Clippy and scoped formatting.
+All six optional C audits run in release and remain ignored in debug. The
+unchanged integration suites cover valid/malformed Huffman trees, complete
+histograms, symbol permutations, repeat runs across tables, every length and
+distance, reserved symbols, long codes, prefixes/truncations, mixed Stored/coded
+transitions, zlib headers/windows, PNG/APNG samples/palettes and I/O/resource
+boundaries. The new CRC oracle performs 81,920 comparisons across every byte
+value, 32 word offsets and ten update splits against independent bitwise CRC.
+`final-validation.json` and `library-validation.json` retain commands and logs.
+`audit.py` checks five frozen checkpoints, 40 pipeline processes, six linked
+caller processes, exact reconstructed source identities, unchanged independent
+test/support/fixture sources and recorded binary/log/summary hashes before
+commit. `audit.json` records source, report, support and evidence identities.

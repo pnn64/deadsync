@@ -14,11 +14,11 @@ const fn crc_table() -> [u32; 256] {
     table
 }
 const CRC_TABLE: [u32; 256] = crc_table();
-const fn crc_slices() -> [[u32; 256]; 8] {
-    let mut tables = [[0; 256]; 8];
+const fn crc_slices() -> [[u32; 256]; 16] {
+    let mut tables = [[0; 256]; 16];
     tables[0] = CRC_TABLE;
     let mut n = 1;
-    while n < 8 {
+    while n < 16 {
         let mut i = 0;
         while i < 256 {
             let value = tables[n - 1][i];
@@ -29,7 +29,19 @@ const fn crc_slices() -> [[u32; 256]; 8] {
     }
     tables
 }
-const CRC_SLICES: [[u32; 256]; 8] = crc_slices();
+const CRC_SLICES: [[u32; 256]; 16] = crc_slices();
+
+#[inline]
+fn crc_word<const OFFSET: usize>(value: u64) -> u32 {
+    CRC_SLICES[OFFSET + 7][(value & 255) as usize]
+        ^ CRC_SLICES[OFFSET + 6][((value >> 8) & 255) as usize]
+        ^ CRC_SLICES[OFFSET + 5][((value >> 16) & 255) as usize]
+        ^ CRC_SLICES[OFFSET + 4][((value >> 24) & 255) as usize]
+        ^ CRC_SLICES[OFFSET + 3][((value >> 32) & 255) as usize]
+        ^ CRC_SLICES[OFFSET + 2][((value >> 40) & 255) as usize]
+        ^ CRC_SLICES[OFFSET + 1][((value >> 48) & 255) as usize]
+        ^ CRC_SLICES[OFFSET][(value >> 56) as usize]
+}
 
 pub(crate) fn crc32(parts: &[&[u8]]) -> u32 {
     let mut checksum = Crc32::new();
@@ -48,18 +60,18 @@ impl Crc32 {
     }
     pub(crate) fn update(&mut self, bytes: &[u8]) {
         let mut crc = self.state;
-        let (groups, tail) = bytes.as_chunks::<8>();
+        let (groups, tail) = bytes.as_chunks::<16>();
         for &bytes in groups {
-            let value = u64::from_le_bytes(bytes) ^ u64::from(crc);
-            crc = CRC_SLICES[7][(value & 255) as usize]
-                ^ CRC_SLICES[6][((value >> 8) & 255) as usize]
-                ^ CRC_SLICES[5][((value >> 16) & 255) as usize]
-                ^ CRC_SLICES[4][((value >> 24) & 255) as usize]
-                ^ CRC_SLICES[3][((value >> 32) & 255) as usize]
-                ^ CRC_SLICES[2][((value >> 40) & 255) as usize]
-                ^ CRC_SLICES[1][((value >> 48) & 255) as usize]
-                ^ CRC_SLICES[0][(value >> 56) as usize];
+            let low = u64::from_le_bytes(bytes[..8].try_into().unwrap()) ^ u64::from(crc);
+            let high = u64::from_le_bytes(bytes[8..].try_into().unwrap());
+            crc = crc_word::<8>(low) ^ crc_word::<0>(high);
         }
+        let tail = if let Some((bytes, tail)) = tail.split_first_chunk::<8>() {
+            crc = crc_word::<0>(u64::from_le_bytes(*bytes) ^ u64::from(crc));
+            tail
+        } else {
+            tail
+        };
         for &byte in tail {
             crc = (crc >> 8) ^ CRC_TABLE[((crc as u8) ^ byte) as usize];
         }
@@ -162,6 +174,31 @@ mod tests {
             assert_eq!(crc32(&[input]), expected);
             for split in [0, len / 2, len] {
                 assert_eq!(crc32(&[&input[..split], &input[split..]]), expected);
+            }
+        }
+    }
+
+    #[test]
+    fn crc_every_byte_value_in_word_lanes_and_fragmented_tails() {
+        for offset in 0..32 {
+            for value in 0..=255 {
+                let mut data = [0; 40];
+                data[offset] = value;
+                let mut expected = !0u32;
+                for &byte in &data {
+                    expected ^= u32::from(byte);
+                    for _ in 0..8 {
+                        expected =
+                            (expected >> 1) ^ if expected & 1 != 0 { 0xedb8_8320 } else { 0 };
+                    }
+                }
+                for split in [0, 7, 8, 15, 16, 17, 31, 32, 39, 40] {
+                    assert_eq!(
+                        crc32(&[&data[..split], &data[split..]]),
+                        !expected,
+                        "offset={offset} value={value} split={split}"
+                    );
+                }
             }
         }
     }

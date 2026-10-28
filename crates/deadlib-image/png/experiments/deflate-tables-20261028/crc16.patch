@@ -1,0 +1,192 @@
+diff --git a/crates/deadlib-image/png/src/checksum.rs b/crates/deadlib-image/png/src/checksum.rs
+index e1f2b3fd2..4895648e6 100644
+--- a/crates/deadlib-image/png/src/checksum.rs
++++ b/crates/deadlib-image/png/src/checksum.rs
+@@ -14,11 +14,11 @@ const fn crc_table() -> [u32; 256] {
+     table
+ }
+ const CRC_TABLE: [u32; 256] = crc_table();
+-const fn crc_slices() -> [[u32; 256]; 8] {
+-    let mut tables = [[0; 256]; 8];
++const fn crc_slices() -> [[u32; 256]; 16] {
++    let mut tables = [[0; 256]; 16];
+     tables[0] = CRC_TABLE;
+     let mut n = 1;
+-    while n < 8 {
++    while n < 16 {
+         let mut i = 0;
+         while i < 256 {
+             let value = tables[n - 1][i];
+@@ -29,7 +29,7 @@ const fn crc_slices() -> [[u32; 256]; 8] {
+     }
+     tables
+ }
+-const CRC_SLICES: [[u32; 256]; 8] = crc_slices();
++const CRC_SLICES: [[u32; 256]; 16] = crc_slices();
+ 
+ pub(crate) fn crc32(parts: &[&[u8]]) -> u32 {
+     let mut checksum = Crc32::new();
+@@ -48,17 +48,26 @@ impl Crc32 {
+     }
+     pub(crate) fn update(&mut self, bytes: &[u8]) {
+         let mut crc = self.state;
+-        let (groups, tail) = bytes.as_chunks::<8>();
++        let (groups, tail) = bytes.as_chunks::<16>();
+         for &bytes in groups {
+-            let value = u64::from_le_bytes(bytes) ^ u64::from(crc);
+-            crc = CRC_SLICES[7][(value & 255) as usize]
+-                ^ CRC_SLICES[6][((value >> 8) & 255) as usize]
+-                ^ CRC_SLICES[5][((value >> 16) & 255) as usize]
+-                ^ CRC_SLICES[4][((value >> 24) & 255) as usize]
+-                ^ CRC_SLICES[3][((value >> 32) & 255) as usize]
+-                ^ CRC_SLICES[2][((value >> 40) & 255) as usize]
+-                ^ CRC_SLICES[1][((value >> 48) & 255) as usize]
+-                ^ CRC_SLICES[0][(value >> 56) as usize];
++            let low = u64::from_le_bytes(bytes[..8].try_into().unwrap()) ^ u64::from(crc);
++            let high = u64::from_le_bytes(bytes[8..].try_into().unwrap());
++            crc = CRC_SLICES[15][(low & 255) as usize]
++                ^ CRC_SLICES[14][((low >> 8) & 255) as usize]
++                ^ CRC_SLICES[13][((low >> 16) & 255) as usize]
++                ^ CRC_SLICES[12][((low >> 24) & 255) as usize]
++                ^ CRC_SLICES[11][((low >> 32) & 255) as usize]
++                ^ CRC_SLICES[10][((low >> 40) & 255) as usize]
++                ^ CRC_SLICES[9][((low >> 48) & 255) as usize]
++                ^ CRC_SLICES[8][(low >> 56) as usize]
++                ^ CRC_SLICES[7][(high & 255) as usize]
++                ^ CRC_SLICES[6][((high >> 8) & 255) as usize]
++                ^ CRC_SLICES[5][((high >> 16) & 255) as usize]
++                ^ CRC_SLICES[4][((high >> 24) & 255) as usize]
++                ^ CRC_SLICES[3][((high >> 32) & 255) as usize]
++                ^ CRC_SLICES[2][((high >> 40) & 255) as usize]
++                ^ CRC_SLICES[1][((high >> 48) & 255) as usize]
++                ^ CRC_SLICES[0][(high >> 56) as usize];
+         }
+         for &byte in tail {
+             crc = (crc >> 8) ^ CRC_TABLE[((crc as u8) ^ byte) as usize];
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index d71cfa56c..75a3b1edd 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -95,6 +95,13 @@ struct Huffman {
+ }
+ impl Huffman {
+     fn new(lengths: &[u8], complete: bool, allow_empty: bool) -> Result<Self, Error> {
++        Self::build(lengths, complete, allow_empty).map_err(Error::Invalid)
++    }
++    const fn build(
++        lengths: &[u8],
++        complete: bool,
++        allow_empty: bool,
++    ) -> Result<Self, &'static str> {
+         let mut h = Self {
+             fast: [0; 512],
+             counts: [0; 16],
+@@ -103,41 +110,51 @@ impl Huffman {
+             symbols: [0; 288],
+             max: 0,
+         };
+-        for &n in lengths {
++        let mut symbol = 0;
++        while symbol < lengths.len() {
++            let n = lengths[symbol];
+             if n > 15 {
+-                return Err(Error::Invalid("Huffman code length"));
++                return Err("Huffman code length");
+             }
+             if n != 0 {
+                 h.counts[n as usize] += 1;
+-                h.max = h.max.max(n);
++                if n > h.max {
++                    h.max = n;
++                }
+             }
++            symbol += 1;
+         }
+         if h.max == 0 {
+             return if allow_empty {
+                 Ok(h)
+             } else {
+-                Err(Error::Invalid("empty Huffman tree"))
++                Err("empty Huffman tree")
+             };
+         }
+         let mut left = 1i32;
+         let mut code = 0;
+         let mut offset = 0;
+-        for n in 1..16 {
+-            left = left * 2 - i32::from(h.counts[n]);
++        let mut n = 1;
++        while n < 16 {
++            left = left * 2 - h.counts[n] as i32;
+             if left < 0 {
+-                return Err(Error::Invalid("oversubscribed Huffman tree"));
++                return Err("oversubscribed Huffman tree");
+             }
+             code = (code + h.counts[n - 1]) << 1;
+             h.first[n] = code;
+             h.offsets[n] = offset;
+             offset += h.counts[n];
++            n += 1;
+         }
+         if left != 0 && (complete || h.max != 1) {
+-            return Err(Error::Invalid("incomplete Huffman tree"));
++            return Err("incomplete Huffman tree");
+         }
+         let mut next = h.first;
+-        for (symbol, &n) in lengths.iter().enumerate() {
++        let mut symbol = 0;
++        while symbol < lengths.len() {
++            let n = lengths[symbol];
+             if n == 0 {
++                symbol += 1;
+                 continue;
+             }
+             let n = n as usize;
+@@ -145,11 +162,14 @@ impl Huffman {
+             h.symbols[(h.offsets[n] + code - h.first[n]) as usize] = symbol as u16;
+             if n <= 9 {
+                 let rev = (code.reverse_bits() >> (16 - n)) as usize;
+-                for index in (rev..512).step_by(1 << n) {
++                let mut index = rev;
++                while index < 512 {
+                     h.fast[index] = ((symbol as u16) << 4) | n as u16;
++                    index += 1 << n;
+                 }
+             }
+             next[n] += 1;
++            symbol += 1;
+         }
+         Ok(h)
+     }
+@@ -193,13 +213,24 @@ impl Huffman {
+ }
+ 
+ fn fixed() -> (Huffman, Huffman) {
+-    let mut lengths = [8; 288];
+-    lengths[144..256].fill(9);
+-    lengths[256..280].fill(7);
+-    (
+-        Huffman::new(&lengths, false, false).unwrap(),
+-        Huffman::new(&[5; 32], false, false).unwrap(),
+-    )
++    const TABLES: (Huffman, Huffman) = {
++        let mut lengths = [8; 288];
++        let mut n = 144;
++        while n < 280 {
++            lengths[n] = if n < 256 { 9 } else { 7 };
++            n += 1;
++        }
++        let literals = match Huffman::build(&lengths, false, false) {
++            Ok(tree) => tree,
++            Err(_) => panic!("invalid fixed literal tree"),
++        };
++        let distances = match Huffman::build(&[5; 32], false, false) {
++            Ok(tree) => tree,
++            Err(_) => panic!("invalid fixed distance tree"),
++        };
++        (literals, distances)
++    };
++    TABLES
+ }
+ 
+ fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {

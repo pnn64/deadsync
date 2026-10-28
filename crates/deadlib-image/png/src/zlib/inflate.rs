@@ -301,7 +301,11 @@ impl Inflater {
                         bits.pos += n;
                         n
                     };
-                    self.remember(&output[written..written + n]);
+                    if self.final_block {
+                        self.total_out += n;
+                    } else {
+                        self.remember(&output[written..written + n]);
+                    }
                     written += n;
                     self.state = State::Stored(left - n);
                 }

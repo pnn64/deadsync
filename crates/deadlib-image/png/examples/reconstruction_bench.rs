@@ -148,6 +148,11 @@ fn main() {
         "case\toperation\titerations\tsample_bytes\tcycles_per_image\tns_per_image\tMiB_per_second\tallocations\treallocations\trequested_bytes\tfingerprint"
     );
     let stage = std::env::var("DEADLIB_PNG_BENCH_STAGE");
+    if stage.as_deref() == Ok("deflate-tables") {
+        reader_buffers();
+        reference_deflate();
+        return;
+    }
     if stage.as_deref() == Ok("reader-buffers") {
         reader_buffers();
         return;
@@ -737,6 +742,68 @@ fn reader_buffers() {
             measure(&case, "decode-reader", count, hash, || {
                 decode_reader(black_box(bytes.as_slice()), &Default::default()).unwrap()
             });
+        }
+    }
+}
+
+fn reference_deflate() {
+    use std::io::Write;
+    for (color, depth) in [
+        (ColorType::Grayscale, 8),
+        (ColorType::Rgba, 8),
+        (ColorType::Rgba, 16),
+    ] {
+        for (width, height) in [(33u32, 9u32), (513, 257)] {
+            let mut png = fixture(width, height, color, depth);
+            match &mut png.image.samples {
+                Samples::U8(v) => v
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(n, v)| *v = (n % 97) as u8),
+                Samples::U16(v) => v
+                    .iter_mut()
+                    .enumerate()
+                    .for_each(|(n, v)| *v = (n % 97) as u16),
+            }
+            let raw = apng_recovery::filtered_with(&png.image, false, Filter::None);
+            for level in [1, 9] {
+                let mut encoder =
+                    flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::new(level));
+                encoder.write_all(&raw).unwrap();
+                let compressed = encoder.finish().unwrap();
+                let block = (compressed[2] >> 1) & 3;
+                if width == 513 {
+                    assert_eq!(block, 2);
+                }
+                let mut header = width.to_be_bytes().to_vec();
+                header.extend(height.to_be_bytes());
+                header.extend([depth, color as u8, 0, 0, 0]);
+                let bytes = chunks::file(&[
+                    chunks::chunk(*b"IHDR", &header),
+                    chunks::chunk(*b"IDAT", &compressed),
+                    chunks::chunk(*b"IEND", &[]),
+                ]);
+                assert_eq!(apng_recovery::inflate_idat(&bytes), raw);
+                assert_eq!(decode(&bytes).unwrap().image, png.image);
+                assert_eq!(
+                    decode_reader(bytes.as_slice(), &Default::default())
+                        .unwrap()
+                        .image,
+                    png.image
+                );
+                let case = format!(
+                    "reference-c{}-d{depth}-{width}x{height}-l{level}-b{block}",
+                    color as u8
+                );
+                let hash = fingerprint(&Samples::U8(bytes.clone()));
+                let count = png.image.samples.len() * if depth == 16 { 2 } else { 1 };
+                measure(&case, "decode", count, hash, || {
+                    decode(black_box(&bytes)).unwrap()
+                });
+                measure(&case, "decode-reader", count, hash, || {
+                    decode_reader(black_box(bytes.as_slice()), &Default::default()).unwrap()
+                });
+            }
         }
     }
 }
