@@ -76,11 +76,30 @@ fn idct_mode(block: &[i16; 64], quant: &[u16; 64], precision: Option<u8>) -> [u1
 /// pass directly, avoiding an extra rounding to integer DCT coefficients.
 pub(crate) fn fdct(samples: &[u16; 64], quant: &[u16; 64], precision: u8) -> [i16; 64] {
     let center = 1i64 << (precision - 1);
+    fdct_inner(samples, quant, |v| i64::from(v) - center).map(|v| v as i16)
+}
+
+/// Annex J's signed spatial differences undergo no forward level shift.
+/// Reject coefficients outside the JPEG signed-16-bit model rather than wrap.
+pub(crate) fn fdct_differential(
+    samples: &[u16; 64],
+    quant: &[u16; 64],
+) -> crate::Result<[i16; 64]> {
+    let wide = fdct_inner(samples, quant, |v| i64::from(v as i16));
+    let mut result = [0; 64];
+    for (to, value) in result.iter_mut().zip(wide) {
+        *to = i16::try_from(value)
+            .map_err(|_| crate::Error::Invalid("differential DCT coefficient range"))?;
+    }
+    Ok(result)
+}
+
+fn fdct_inner(samples: &[u16; 64], quant: &[u16; 64], read: impl Fn(u16) -> i64) -> [i64; 64] {
     if samples.iter().all(|&v| v == samples[0]) {
-        let dc = (i64::from(samples[0]) - center) * 8;
+        let dc = read(samples[0]) * 8;
         let q = i64::from(quant[0]);
-        let mut out = [0; 64];
-        out[0] = (dc.signum() * ((dc.abs() + q / 2) / q)) as i16;
+        let mut out = [0i64; 64];
+        out[0] = dc.signum() * ((dc.abs() + q / 2) / q);
         return out;
     }
     let mut tmp = [[0i64; 8]; 8];
@@ -88,12 +107,12 @@ pub(crate) fn fdct(samples: &[u16; 64], quant: &[u16; 64], precision: u8) -> [i1
         for u in 0..8 {
             let mut sum = 0;
             for x in 0..8 {
-                sum += (i64::from(samples[y * 8 + x]) - center) * BASIS[x][u];
+                sum += read(samples[y * 8 + x]) * BASIS[x][u];
             }
             tmp[y][u] = (sum + (1 << 15)) >> 16;
         }
     }
-    let mut out = [0i16; 64];
+    let mut out = [0i64; 64];
     for v in 0..8 {
         for u in 0..8 {
             let mut sum = 0;
@@ -101,7 +120,7 @@ pub(crate) fn fdct(samples: &[u16; 64], quant: &[u16; 64], precision: u8) -> [i1
                 sum += tmp[y][u] * BASIS[y][v];
             }
             let divisor = i64::from(quant[v * 8 + u]) << 24;
-            out[v * 8 + u] = (sum.signum() * ((sum.abs() + divisor / 2) / divisor)) as i16;
+            out[v * 8 + u] = sum.signum() * ((sum.abs() + divisor / 2) / divisor);
         }
     }
     out
@@ -110,6 +129,54 @@ pub(crate) fn fdct(samples: &[u16; 64], quant: &[u16; 64], precision: u8) -> [i1
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn signed_forward_dct_has_no_level_shift_and_checks_its_model() {
+        assert_eq!(fdct_differential(&[0; 64], &[1; 64]).unwrap(), [0; 64]);
+        let mut want = [0; 64];
+        want[0] = -80;
+        assert_eq!(
+            fdct_differential(&[(-10i16) as u16; 64], &[1; 64]).unwrap(),
+            want
+        );
+        assert!(fdct_differential(&[i16::MIN as u16; 64], &[1; 64]).is_err());
+        let mut state = 0x12345678u32;
+        for _ in 0..100 {
+            let mut samples = [0; 64];
+            let mut quant = [0; 64];
+            for i in 0..64 {
+                state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+                samples[i] = (((state >> 16) % 8191) as i16 - 4095) as u16;
+                quant[i] = ((state >> 24) % 31 + 1) as u16;
+            }
+            let actual = fdct_differential(&samples, &quant).unwrap();
+            for v in 0..8 {
+                for u in 0..8 {
+                    let mut ideal = 0.0;
+                    for y in 0..8 {
+                        for x in 0..8 {
+                            ideal += f64::from(samples[y * 8 + x] as i16)
+                                * ((2 * x + 1) as f64 * u as f64 * std::f64::consts::PI / 16.0)
+                                    .cos()
+                                * ((2 * y + 1) as f64 * v as f64 * std::f64::consts::PI / 16.0)
+                                    .cos();
+                        }
+                    }
+                    let cu = if u == 0 {
+                        std::f64::consts::FRAC_1_SQRT_2
+                    } else {
+                        1.0
+                    };
+                    let cv = if v == 0 {
+                        std::f64::consts::FRAC_1_SQRT_2
+                    } else {
+                        1.0
+                    };
+                    ideal = ideal * cu * cv / 4.0 / f64::from(quant[v * 8 + u]);
+                    assert!((f64::from(actual[v * 8 + u]) - ideal.round()).abs() <= 1.0);
+                }
+            }
+        }
+    }
     #[test]
     fn impulse_blocks_match_mathematical_idct() {
         for precision in [8, 12] {

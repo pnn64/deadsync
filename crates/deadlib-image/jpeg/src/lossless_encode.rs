@@ -264,12 +264,6 @@ pub(crate) enum Source<'a> {
     },
 }
 impl Source<'_> {
-    fn shape(self, i: usize) -> (usize, usize) {
-        match self {
-            Self::Planes(p) => (p[i].width, p[i].height),
-            Self::Interleaved { width, height, .. } => (width, height),
-        }
-    }
     fn at(self, i: usize, x: usize, y: usize) -> i32 {
         match self {
             Self::Planes(p) => {
@@ -305,11 +299,7 @@ struct Plan<'a> {
     count: usize,
 }
 impl<'a> Plan<'a> {
-    fn new(
-        frame: &'a FrameHeader,
-        options: LosslessOptions<'a>,
-        source: Source<'_>,
-    ) -> Result<Self> {
+    fn new(frame: &'a FrameHeader, options: LosslessOptions<'a>) -> Result<Self> {
         let mut plan = Self {
             frame,
             options,
@@ -353,7 +343,7 @@ impl<'a> Plan<'a> {
             if scan.count > 1 && samples > 10 {
                 return Err(Error::Invalid("lossless encoder MCU exceeds ten samples"));
             }
-            geometry(frame, source, scan)?;
+            geometry(frame, scan)?;
         }
         if seen[..frame.components.len()].iter().any(|&v| !v) {
             return Err(Error::Invalid("lossless encoder script misses a component"));
@@ -417,10 +407,14 @@ impl<'a> Plan<'a> {
     }
 }
 
-fn geometry(frame: &FrameHeader, source: Source<'_>, scan: Scan) -> Result<(usize, usize, u16)> {
+fn geometry(frame: &FrameHeader, scan: Scan) -> Result<(usize, usize, u16)> {
     let (max_h, max_v) = sampling(frame);
     let (cols, rows) = if scan.count == 1 {
-        source.shape(scan.indices[0])
+        let spec = frame.components[scan.indices[0]];
+        (
+            (frame.width as usize * spec.horizontal_sampling as usize).div_ceil(max_h),
+            (frame.height as usize * spec.vertical_sampling as usize).div_ceil(max_v),
+        )
     } else {
         (
             (frame.width as usize).div_ceil(max_h),
@@ -452,7 +446,7 @@ fn walk(
     scan: Scan,
     emit: &mut impl FnMut(Token) -> Result<()>,
 ) -> Result<()> {
-    let (cols, rows, interval) = geometry(frame, source, scan)?;
+    let (cols, rows, interval) = geometry(frame, scan)?;
     let initial = 1i32 << (frame.precision - scan.point - 1);
     let mut first_row = 0;
     let mut restart = 0;
@@ -530,7 +524,7 @@ fn encode_native(
         return Err(Error::LimitExceeded("lossless encoder storage"));
     }
     validate_metadata(segments, options.limits, metadata)?;
-    let (_, history_bytes) = frame_requirements(frame, source, options)?;
+    let (_, history_bytes) = frame_requirements(frame, options)?;
     let available = options.limits.max_memory_bytes - stored;
     if history_bytes > available {
         return Err(Error::LimitExceeded("lossless arithmetic history"));
@@ -556,10 +550,9 @@ fn encode_native(
 
 pub(crate) fn frame_requirements(
     frame: &FrameHeader,
-    source: Source<'_>,
     options: LosslessOptions<'_>,
 ) -> Result<(usize, usize)> {
-    let plan = Plan::new(frame, options, source)?;
+    let plan = Plan::new(frame, options)?;
     let mut history_bytes = 0;
     if options.entropy_coding == EntropyCoding::Arithmetic {
         let conditioning = options.arithmetic_conditioning;
@@ -568,12 +561,31 @@ pub(crate) fn frame_requirements(
         }
         for s in 0..plan.count {
             let scan = plan.get(s)?;
-            history_bytes = history_bytes.max(History::bytes(
-                &history_shapes(frame, source, scan)?[..scan.count],
-            )?);
+            history_bytes =
+                history_bytes.max(History::bytes(&history_shapes(frame, scan)?[..scan.count])?);
         }
     }
     Ok((plan.count, history_bytes))
+}
+
+/// Resolved per-component predictors and point transforms, before allocating
+/// pyramid samples. Geometry depends only on the validated frame header.
+pub(crate) fn frame_coding(
+    frame: &FrameHeader,
+    options: LosslessOptions<'_>,
+) -> Result<([crate::LosslessCoding; 255], usize)> {
+    let plan = Plan::new(frame, options)?;
+    let mut coding = [crate::LosslessCoding::default(); 255];
+    for s in 0..plan.count {
+        let scan = plan.get(s)?;
+        for &i in &scan.indices[..scan.count] {
+            coding[i] = crate::LosslessCoding {
+                predictor: scan.predictor,
+                point_transform: scan.point,
+            };
+        }
+    }
+    Ok((coding, plan.count))
 }
 
 /// Emit one predictive frame directly into the caller's bounded JPEG output.
@@ -585,8 +597,8 @@ pub(crate) fn encode_frame(
     reset_restart: bool,
     before_scan: &mut impl FnMut(&mut Output, usize) -> Result<()>,
 ) -> Result<usize> {
-    let plan = Plan::new(frame, options, source)?;
-    let (_, history_bytes) = frame_requirements(frame, source, options)?;
+    let plan = Plan::new(frame, options)?;
+    let (_, history_bytes) = frame_requirements(frame, options)?;
     let arithmetic = options.entropy_coding == EntropyCoding::Arithmetic;
     let conditioning = options.arithmetic_conditioning;
     let mut histograms = [[0u64; 256]; 2];
@@ -652,7 +664,7 @@ pub(crate) fn encode_frame(
     for s in 0..plan.count {
         before_scan(out, s)?;
         let scan = plan.get(s)?;
-        let (_, _, interval) = geometry(frame, source, scan)?;
+        let (_, _, interval) = geometry(frame, scan)?;
         if Some(interval) != previous_interval {
             out.segment(0xdd, &interval.to_be_bytes())?;
             previous_interval = Some(interval);
@@ -693,10 +705,8 @@ pub(crate) fn encode_frame(
             })?;
             out.pad()?;
         } else {
-            let mut history = History::new(
-                &history_shapes(frame, source, scan)?[..scan.count],
-                history_bytes,
-            )?;
+            let mut history =
+                History::new(&history_shapes(frame, scan)?[..scan.count], history_bytes)?;
             let mut statistics = Statistics::default();
             let mut coder = Coder::new(out);
             walk(frame, source, scan, &mut |token| match token {
@@ -734,17 +744,17 @@ pub(crate) fn encode_frame(
     Ok(plan.count)
 }
 
-fn history_shapes(
-    frame: &FrameHeader,
-    source: Source<'_>,
-    scan: Scan,
-) -> Result<[(usize, usize); 4]> {
-    let (cols, _, _) = geometry(frame, source, scan)?;
+fn history_shapes(frame: &FrameHeader, scan: Scan) -> Result<[(usize, usize); 4]> {
+    let (cols, _, _) = geometry(frame, scan)?;
     let mut shapes = [(0, 0); 4];
     for (j, &i) in scan.indices[..scan.count].iter().enumerate() {
         let c = frame.components[i];
         shapes[j] = if scan.count == 1 {
-            (source.shape(i).0, 1)
+            let (max_h, _) = sampling(frame);
+            (
+                (frame.width as usize * c.horizontal_sampling as usize).div_ceil(max_h),
+                1,
+            )
         } else {
             (
                 cols * c.horizontal_sampling as usize,

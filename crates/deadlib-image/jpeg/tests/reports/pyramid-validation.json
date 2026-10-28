@@ -1,0 +1,21 @@
+{
+  "scope": "Automatic source-pyramid milestone; correctness and independence, no performance/conformance-completion claim.",
+  "package": "deadlib-image-jpeg",
+  "production_dependencies": [
+    "deadlib-image"
+  ],
+  "release_tests": 122,
+  "isolated_debug_tests": 122,
+  "format": "cargo fmt -p deadlib-image-jpeg --check",
+  "clippy": "cargo clippy -p deadlib-image-jpeg --all-targets -- -D warnings",
+  "rustdoc": "RUSTDOCFLAGS=-D warnings cargo doc -p deadlib-image-jpeg --no-deps",
+  "new_fixture_cases": 12,
+  "new_truncated_prefixes": 30164,
+  "new_bounded_mutations": 1200,
+  "source_pyramid_cases": 560,
+  "existing_unchanged_encoder_outputs": 10612,
+  "reports": {
+    "pyramid-jpegxt.json": "d9449cefcaa14f5319c21dd87fbdf84f1393cce2d023ba1e8fa62ad93a16c7ed",
+    "pyramid-refactor-regressions.json": "cc132e244893950c6124fded36e8739784d8ee34d34024e8857593b9e4bb1213"
+  }
+}

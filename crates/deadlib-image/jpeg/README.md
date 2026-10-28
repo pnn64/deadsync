@@ -71,9 +71,29 @@ family and sequential/progressive choice. Per-frame `HierarchicalFrameOptions`
 select Huffman/arithmetic, fixed/optimized tables, generated/custom scans,
 refinement, signed residual Pt and restarts. Metadata/ICC controls use
 `encode_with_metadata`. DCT frames currently accept 1..4 components; lossless
-frames support 255. Automatic raster-pyramid construction remains pending.
+frames support 255.
 Exact independent frame-data gates and the reference's raster limitations are
 documented in HIERARCHICAL-VALIDATION.md.
+
+`build_hierarchical_planes` and `build_hierarchical_samples` construct source
+pyramids with matching reconstructed references. `PyramidOptions::new(&levels)`
+borrows per-frame `PyramidLevel::dct(expansion, quality, coding)` or
+`PyramidLevel::lossless(expansion, coding)` descriptors. Supply final source
+dimensions; preceding dimensions follow the expansion flags backwards. The
+first frame has no expansion. Repeated resolutions and independent horizontal
+or vertical expansion are supported. DCT stages may end with a same-resolution
+lossless correction; Pt=0 reproduces the sampled source exactly with this
+codec's matching IDCT. Pure lossless Pt=0 preserves source integers directly.
+
+The `encode_hierarchical_planes`, `encode_hierarchical_samples` and shared
+`encode_hierarchical_image` conveniences use the same bounded frame writer;
+their metadata variants add APPn/COM and preserve/remove/replace ICC profiles.
+`PyramidRasterOptions::default()` keeps source precision, color space and
+component integers with 4:4:4 sampling. Precision scaling, RGB-to-YCbCr,
+CMYK-to-YCCK and subsampling require explicit selection. Unchanged CMYK values
+retain the declared polarity. No hierarchical output is labeled as JFIF.
+See HIERARCHICAL-VALIDATION.md for the chosen reduction filter, progressive/Pt
+reference handling, memory behavior and independent source-encoding evidence.
 
 `encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
 without another lossy transform. It preserves quantizer values, visible blocks,
@@ -143,7 +163,7 @@ Limits bound pixels, coefficient/sample storage, metadata (including segment
 record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark; allocation instrumentation remains planned.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
-unsupported errors. Hierarchy,
+unsupported errors. Full DCT component-count coverage,
 DNL, streaming, additional encoder scan strategies, and the broader validation
 and performance work remain required.
 

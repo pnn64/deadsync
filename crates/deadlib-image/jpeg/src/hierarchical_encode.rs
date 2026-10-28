@@ -101,13 +101,31 @@ pub fn encode_hierarchical_with_metadata(
     options: HierarchicalOptions<'_>,
     metadata: MetadataOptions<'_>,
 ) -> Result<Vec<u8>> {
-    let stored = image.validate()?.max(image.memory_bytes);
     if !options.frame_options.is_empty() && options.frame_options.len() != image.frames.len() {
         return Err(Error::Invalid("hierarchical frame option count"));
     }
-    let mut limits = intersect(image.limits, options.limits);
-    for option in options.frame_options {
-        if let HierarchicalFrameOptions::Lossless(option) = option {
+    write_hierarchy(
+        image,
+        options.limits,
+        options.max_output_bytes,
+        metadata,
+        |index, frame| selected(options, index, frame),
+    )
+}
+
+/// Resolve prepared frame controls lazily so raster pyramid emission need not
+/// copy an array of descriptors or encode/concatenate individual JPEG frames.
+pub(crate) fn write_hierarchy<'a>(
+    image: &HierarchicalImage<'_>,
+    limits: Limits,
+    max_output_bytes: usize,
+    metadata: MetadataOptions<'_>,
+    mut controls: impl FnMut(usize, &HierarchicalFrame) -> Result<HierarchicalFrameOptions<'a>>,
+) -> Result<Vec<u8>> {
+    let stored = image.validate()?.max(image.memory_bytes);
+    let mut limits = intersect(image.limits, limits);
+    for (index, frame) in image.frames.iter().enumerate() {
+        if let HierarchicalFrameOptions::Lossless(option) = controls(index, frame)? {
             limits = intersect(limits, option.limits);
         }
     }
@@ -118,7 +136,7 @@ pub fn encode_hierarchical_with_metadata(
     let mut scans = 0usize;
     let mut scratch = 0usize;
     for (index, frame) in image.frames.iter().enumerate() {
-        let (process, count, memory) = match (selected(options, index, frame)?, &frame.data) {
+        let (process, count, memory) = match (controls(index, frame)?, &frame.data) {
             (HierarchicalFrameOptions::Dct(option), HierarchicalData::Dct(components)) => {
                 let source = DctFrame {
                     frame: &frame.frame,
@@ -142,16 +160,10 @@ pub fn encode_hierarchical_with_metadata(
                     },
                 )
             }
-            (
-                HierarchicalFrameOptions::Lossless(mut option),
-                HierarchicalData::Lossless { components, .. },
-            ) => {
+            (HierarchicalFrameOptions::Lossless(mut option), HierarchicalData::Lossless { .. }) => {
                 option.limits = limits;
-                let (count, history) = crate::lossless_encode::frame_requirements(
-                    &frame.frame,
-                    Source::Planes(components),
-                    option,
-                )?;
+                let (count, history) =
+                    crate::lossless_encode::frame_requirements(&frame.frame, option)?;
                 (
                     predictive_process(frame, option),
                     count,
@@ -181,7 +193,7 @@ pub fn encode_hierarchical_with_metadata(
         .and_then(|n| n.checked_sub(additional))
         .and_then(|n| n.checked_sub(scratch))
         .ok_or(Error::LimitExceeded("hierarchical encoder storage"))?;
-    let mut out = Output::new(options.max_output_bytes.min(available));
+    let mut out = Output::new(max_output_bytes.min(available));
     out.marker(0xd8)?;
     let mut metadata_index = 0;
     emit_metadata(
@@ -230,7 +242,7 @@ pub fn encode_hierarchical_with_metadata(
                 metadata.icc,
             )
         };
-        match (selected(options, index, frame)?, &frame.data) {
+        match (controls(index, frame)?, &frame.data) {
             (HierarchicalFrameOptions::Dct(option), HierarchicalData::Dct(components)) => {
                 out.bounded(option.max_output_bytes, |out| {
                     crate::encode::encode_frame(

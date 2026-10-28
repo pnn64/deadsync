@@ -119,6 +119,22 @@ impl<'a> Plan<'a> {
             1
         }
     }
+    /// Realized band precision after the requested script. A pyramid must use
+    /// these transmitted values, including unseen bands, as its next reference.
+    pub fn precision(&self) -> Result<[[i8; 64]; 4]> {
+        let mut precision = [[-1; 64]; 4];
+        for index in 0..self.len() {
+            let scan = self.get(index)?;
+            for &i in &scan.indices[..scan.count] {
+                if let Some(progression) = scan.progression {
+                    progression.advance(&mut precision[i])?;
+                } else {
+                    precision[i].fill(0);
+                }
+            }
+        }
+        Ok(precision)
+    }
     pub fn get(&self, index: usize) -> Result<Scan> {
         if !self.script.is_empty() {
             let spec = self.script[index];

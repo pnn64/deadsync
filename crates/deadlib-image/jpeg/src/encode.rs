@@ -162,24 +162,35 @@ pub(crate) struct DctFrame<'a> {
 }
 
 pub(crate) fn frame_process(image: DctFrame<'_>, options: CodingOptions<'_>) -> Process {
+    frame_process_for(
+        image.frame.precision,
+        image.frame.process.is_differential(),
+        image
+            .components
+            .iter()
+            .any(|c| c.quantization.iter().any(|&q| q > 255)),
+        options,
+    )
+}
+pub(crate) fn frame_process_for(
+    precision: u8,
+    differential: bool,
+    wide: bool,
+    options: CodingOptions<'_>,
+) -> Process {
     let ordinary = match (options.entropy_coding, options.progressive) {
         (EntropyCoding::Arithmetic, true) => Process::ArithmeticProgressive,
         (EntropyCoding::Arithmetic, false) => Process::ArithmeticSequential,
         (EntropyCoding::Huffman, true) => Process::Progressive,
         (EntropyCoding::Huffman, false) => {
-            if image.frame.precision == 8
-                && image
-                    .components
-                    .iter()
-                    .all(|c| c.quantization.iter().all(|&q| q <= 255))
-            {
+            if precision == 8 && !wide {
                 Process::Baseline
             } else {
                 Process::ExtendedSequential
             }
         }
     };
-    if !image.frame.process.is_differential() {
+    if !differential {
         return ordinary;
     }
     match ordinary {

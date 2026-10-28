@@ -22,6 +22,7 @@ mod model;
 mod output;
 mod pixel_encode;
 mod progressive;
+mod pyramid;
 mod reconstruct;
 mod scan_encode;
 mod transform;
@@ -52,6 +53,12 @@ pub use metadata::{
 pub use pixel_encode::{
     EncodeInput, EncodeOptions, SampleData, Subsampling, encode, encode_samples,
     encode_samples_with_metadata, encode_with_metadata, quantize,
+};
+pub use pyramid::{
+    PyramidLevel, PyramidOptions, PyramidRasterOptions, build_hierarchical_planes,
+    build_hierarchical_samples, encode_hierarchical_image, encode_hierarchical_image_with_metadata,
+    encode_hierarchical_planes, encode_hierarchical_planes_with_metadata,
+    encode_hierarchical_samples, encode_hierarchical_samples_with_metadata,
 };
 pub use reconstruct::{
     CmykImage, CmykPolarity, ColorSpace, ComponentPlane, PlanarImage, Upsampling,

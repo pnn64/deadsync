@@ -291,7 +291,7 @@ Verified milestones:
   coverage-guided fuzzing and all measured performance/optimization work remain
   required. The full user goal stays open.
 
-- Direct hierarchical frame encoder milestone: native DHP/EXP and all six
+- `2156c8918`: direct hierarchical frame encoder milestone: native DHP/EXP and all six
   differential processes in one bounded output buffer, borrowed coefficient
   and sample views, source-model construction without a decoder, fixed/optimized
   Huffman or arithmetic, direct DC/PSV0, signed integer Pt, generated/custom
@@ -323,3 +323,31 @@ Verified milestones:
   abbreviated streams, incremental I/O, broader reference/conformance and rare
   scan/Pt coverage, coverage-guided fuzzing and all measured performance and
   optimization work remain required. The full user goal stays active.
+
+- Automatic source-pyramid encoder milestone: native/shared source APIs with
+  explicit color/precision/sampling controls, backwards global/component grids,
+  unique coarse targets, replicated-edge K.5 reduction and matching reconstructed
+  references. Signed differential FDCT has no level shift and checks coefficient
+  range. Partial progressive band precision and per-component predictive Pt
+  are realized before the next residual. Final unscaled spatial corrections
+  reuse the reference buffer in place; coarse targets and unscaled updates also
+  reuse storage. The common bounded writer accepts borrowed frame controls.
+  All 560 source-pyramid cases pass exact independent C frame observations:
+  10,512 DCT blocks and 425,916 predictive samples/residuals, zero warnings.
+  Independent rational sampling/filter/signed-Pt and float-FDCT checks pass;
+  full-precision coefficient error is <=1 and partial DC masks use +/-1
+  candidates. All 400 final-Pt0 cases match sampled source grids exactly.
+  Reports distinguish 280 original-header C comparisons from 120 base-Pt and
+  160 omitted-EXP C-input workarounds; no C raster tolerance substitutes for
+  entropy/source evidence. Twelve source encodes and pre-entropy expectations
+  are pinned, with all 30,164 truncated prefixes and 1,200 bounded mutations
+  tested. These fixtures are encoder regressions, not an independent standards
+  conformance corpus. All 10,612 prior output hashes remain unchanged;
+  964 are also re-decoded in C. All 122 tests pass in release and isolated
+  debug builds; rustfmt, Clippy and rustdoc with warnings denied pass.
+  See HIERARCHICAL-VALIDATION.md, tests/reports/pyramid-jpegxt.json and
+  tests/reports/pyramid-refactor-regressions.json. Full DCT component counts,
+  broader rare scan/Pt combinations, DNL/abbreviated streams, incremental I/O,
+  independent conformance and additional reference corpora, coverage-guided
+  fuzzing and measured performance/optimization remain required. The full
+  user goal remains active and the crate is not integrated into DeadSync.

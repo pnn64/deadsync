@@ -1,0 +1,86 @@
+{
+  "scope": "Source-pyramid implementation regression audit. All output hashes equal previously retained reports. C runs are distinguished from byte-identity reuse of previous C evidence. Full candidate reports are reproducible with the documented drivers. No performance claim.",
+  "cases": 10612,
+  "C_decoding_rerun_cases": 964,
+  "results": [
+    {
+      "matrix": "hierarchy-native",
+      "cases": 3100,
+      "unchanged_output_sha256": true,
+      "baseline_report": "hierarchical-encode-native-jpegxt.json",
+      "baseline_report_sha256": "fbcff13336967f9bed3b120197b7144b14f12fa02bd818148037989ad9767555",
+      "candidate_report_sha256": "5489389c1f4b39dd7dbafa3488354bbc5c7f9cb69e72f6dd693f767425528b8e",
+      "C_decoding_rerun": false,
+      "tools": {
+        "native": "eba69f0263da8a48f3fe371ee6df8c95f626ef282b99efc1296ec99ddc3114f2",
+        "inspect": "c00719278c1f063dbc9cf96807864e2d01ad7d8fce8cc29b3269e23e5c070f24",
+        "reference": "01c2e75257ed4b217b5539909c34c388764319900b6caf281e0e737b3dbcb902"
+      }
+    },
+    {
+      "matrix": "hierarchy-rewrite",
+      "cases": 2100,
+      "unchanged_output_sha256": true,
+      "baseline_report": "hierarchical-encode-rewrite-jpegxt.json",
+      "baseline_report_sha256": "5b8f29d8c8beed5c4da74dda7276ae7f9a6e678dd0d5dff973a86e3d543aa823",
+      "candidate_report_sha256": "981d681640bf24b6eea0cc1f3df07de8dc5ff30e99b0604c6bb147dc61414e32",
+      "C_decoding_rerun": false,
+      "tools": {
+        "native": "eba69f0263da8a48f3fe371ee6df8c95f626ef282b99efc1296ec99ddc3114f2",
+        "inspect": "c00719278c1f063dbc9cf96807864e2d01ad7d8fce8cc29b3269e23e5c070f24",
+        "reference": "01c2e75257ed4b217b5539909c34c388764319900b6caf281e0e737b3dbcb902"
+      }
+    },
+    {
+      "matrix": "lossless",
+      "cases": 4448,
+      "unchanged_output_sha256": true,
+      "baseline_report": "lossless-encode-turbo.json",
+      "baseline_report_sha256": "08168f0ea89fd1dbc8aa2c072766efd4eb2f2295193bff6a3b958bb110709320",
+      "candidate_report_sha256": "fbc25ac64f5093cf0764a1398bbf862810a95dc703b4b4bd8ef53193f5379b5e",
+      "C_decoding_rerun": false,
+      "tools": {
+        "native": "e7ea3f6e1c7d78e6cb41563d9d107e9bbd87999231ad6976e89ed5fbccd73f09",
+        "inspect": "5f569c6ed4cee0a35b6543e1da6db4f94ece4d056f98f1e6f00dc966c117a488",
+        "oracle": "042fa0a522e9b28c03f2886b21c47ec91ed7885de656ab7fac938ad0b0d07399"
+      }
+    },
+    {
+      "matrix": "pixels",
+      "cases": 172,
+      "unchanged_output_sha256": true,
+      "baseline_report": "pixel-turbo.json",
+      "baseline_report_sha256": "21c5236040283749085bede372e43df697ac29be7e010592585e9dd20598bbbe",
+      "candidate_report_sha256": "21c5236040283749085bede372e43df697ac29be7e010592585e9dd20598bbbe",
+      "C_decoding_rerun": true,
+      "float_encoder_comparisons": 132
+    },
+    {
+      "matrix": "cmyk",
+      "cases": 192,
+      "unchanged_output_sha256": true,
+      "baseline_report": "cmyk-encode-turbo.json",
+      "baseline_report_sha256": "e1ca74fcf8f8b95d4d72c1066d5aa1ebbab06dee303d443ad5e5b32201ac14c9",
+      "candidate_report_sha256": "e1ca74fcf8f8b95d4d72c1066d5aa1ebbab06dee303d443ad5e5b32201ac14c9",
+      "C_decoding_rerun": true,
+      "float_encoder_comparisons": 192
+    },
+    {
+      "matrix": "coefficient-rewrite",
+      "cases": 600,
+      "unchanged_output_sha256": true,
+      "baseline_report": "rewrite-hierarchical-refactor-turbo.json",
+      "baseline_report_sha256": "5702e97496be2f2883a0a391668c4b64881d7af7056a46ea5415661091db07a3",
+      "candidate_report_sha256": "f3b8b69776de82be5049a4c9fa34cd11cb1dd946b897e3646e93a145bbf86f6f",
+      "C_decoding_rerun": true
+    }
+  ],
+  "tool_sha256": {
+    "pixel-generator": "0c90947b24f40c15652b9b7bb90261744125de9028fe48e81910b676a8190a22",
+    "cmyk-generator": "26cd24086dca81bce21e411099cdfc904e1fb20b9d7beb392b65f947dd41c532",
+    "rewrite": "59b1c1ce59c87443a8abbc90521767a41e7e62ca9d02d671cec47906251dc985",
+    "turbo-oracle": "77d29072f4d30abc5386c5886a4147adb0c273fd4665bbb7d12fc96bd72041fc",
+    "cjpeg": "9385ed92fa827b938d2ac058caeea438a133e3cff0f72fbf645d30f685320a32",
+    "cmyk-reference-encoder": "cd69b874650fe9e4555f724e20f799c13225e2fb9b51a81522ba078458054432"
+  }
+}

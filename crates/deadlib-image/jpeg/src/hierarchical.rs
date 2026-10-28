@@ -189,38 +189,9 @@ impl<'a> HierarchicalImage<'a> {
                         0
                     }
                 };
-                match &frame.data {
-                    HierarchicalData::Lossless { components, .. } => {
-                        for (position, &v) in components[local].samples.iter().enumerate() {
-                            samples[position] =
-                                v.wrapping_add(reference(position % width, position / width));
-                        }
-                    }
-                    HierarchicalData::Dct(components) => {
-                        let c = &components[local];
-                        for by in 0..height.div_ceil(8) {
-                            for bx in 0..width.div_ceil(8) {
-                                let block = &c.blocks[by * c.blocks_wide + bx];
-                                let values = if frame.frame.process.is_differential() {
-                                    crate::transform::idct_differential(block, &c.quantization)
-                                } else {
-                                    crate::transform::idct(
-                                        block,
-                                        &c.quantization,
-                                        frame.frame.precision,
-                                    )
-                                };
-                                for y in 0..(height - by * 8).min(8) {
-                                    for x in 0..(width - bx * 8).min(8) {
-                                        let (px, py) = (bx * 8 + x, by * 8 + y);
-                                        samples[py * width + px] =
-                                            values[y * 8 + x].wrapping_add(reference(px, py));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                visit_component(frame, local, |x, y, value| {
+                    samples[y * width + x] = value.wrapping_add(reference(x, y));
+                });
                 live += bytes;
                 if let Some(old) = planes[index].take() {
                     live -= old.samples.capacity() * 2;
@@ -641,7 +612,42 @@ fn storage(
     Ok(bytes)
 }
 
-fn expanded(c: &ComponentPlane, x: usize, y: usize, expansion: Expansion) -> u16 {
+/// Visit realized frame samples/differences without allocating another plane.
+/// Callers validate the native grids before entering this shared transform path.
+pub(crate) fn visit_component(
+    frame: &HierarchicalFrame,
+    local: usize,
+    mut emit: impl FnMut(usize, usize, u16),
+) {
+    match &frame.data {
+        HierarchicalData::Lossless { components, .. } => {
+            let c = &components[local];
+            for (position, &value) in c.samples.iter().enumerate() {
+                emit(position % c.width, position / c.width, value);
+            }
+        }
+        HierarchicalData::Dct(components) => {
+            let c = &components[local];
+            for by in 0..c.height.div_ceil(8) {
+                for bx in 0..c.width.div_ceil(8) {
+                    let block = &c.blocks[by * c.blocks_wide + bx];
+                    let values = if frame.frame.process.is_differential() {
+                        crate::transform::idct_differential(block, &c.quantization)
+                    } else {
+                        crate::transform::idct(block, &c.quantization, frame.frame.precision)
+                    };
+                    for y in 0..(c.height - by * 8).min(8) {
+                        for x in 0..(c.width - bx * 8).min(8) {
+                            emit(bx * 8 + x, by * 8 + y, values[y * 8 + x]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub(crate) fn expanded(c: &ComponentPlane, x: usize, y: usize, expansion: Expansion) -> u16 {
     let sx = if expansion.horizontal { x / 2 } else { x };
     let sy = if expansion.vertical { y / 2 } else { y };
     let get = |xx: usize, yy: usize| {

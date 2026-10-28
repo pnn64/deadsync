@@ -146,8 +146,8 @@ The C reference's raster is not an exact lossless-hierarchy oracle:
   decoder cases do not establish that the reference encoder is lossless.
 
 These observations do not establish correctness for every hierarchical stream.
-Independent conformance corpora, broader DCT numerical checks, automatic raster
-pyramids, DNL/abbreviated streams, incremental I/O, coverage-guided fuzzing and
+Independent conformance corpora, broader DCT numerical checks,
+DNL/abbreviated streams, incremental I/O, coverage-guided fuzzing and
 all measured performance work remain required.
 
 ## Native frame encoding
@@ -246,8 +246,9 @@ Native tests cover authored frames, signed/Pt/wrap goldens, full fixed tables,
 explicit/reversed scripts, mixed component Pt, partial DCT precision, inherited
 restart clearing, metadata/ICC, budget errors and 255-component authoring.
 All **112 tests** pass in release and isolated debug builds; rustfmt, Clippy and
-rustdoc with warnings denied pass. Raster-pyramid construction, broader rare
-scan/Pt combinations and independent conformance/performance work remain open.
+rustdoc with warnings denied pass. The source-pyramid milestone below extends
+that work; broader rare scan/Pt combinations and independent
+conformance/performance work remain open.
 
 ```text
 cargo build -p deadlib-image-jpeg --release --examples --jobs 1 --target-dir crates/deadlib-image/jpeg/experiments/arithmetic-encode-target
@@ -274,3 +275,116 @@ python crates/deadlib-image/jpeg/tests/reference_hierarchical.py --native crates
 An interrupted gate resumes with `--resume` using verified executable snapshots
 and source hashes. A process still running must be observed rather than
 restarted. The checked-in report is `tests/reports/hierarchical-jpegxt.json`.
+
+## Automatic source pyramids
+
+`build_hierarchical_planes` accepts a final DHP header and borrowed native
+component planes, including fractional grids and up to 255 predictive
+components. `build_hierarchical_samples` accepts interleaved U8/U16 samples in
+all five native color spaces. `encode_hierarchical_planes`,
+`encode_hierarchical_samples`, and `encode_hierarchical_image` prepare and write
+the hierarchy; each has a metadata variant. DCT stages currently require
+P=8/12 and 1..4 components. Predictive stages permit P=2..16 and 255 components.
+Raster defaults retain original precision, color space and CMYK integers with
+4:4:4 sampling. Explicit options select precision scaling, rational component
+sampling, RGB-to-YCbCr or CMYK-to-YCCK. Color matrix intermediates use i64 so
+explicit 16-bit transforms cannot overflow. Adobe hints express the chosen
+interpretation; no JFIF marker is generated for hierarchical output.
+
+`PyramidOptions` borrows a sequence of `PyramidLevel` descriptors. The first
+has no expansion. Later horizontal/vertical flags determine earlier global
+dimensions backwards by ceil division from the source dimensions. Per-component
+grids follow the frame's sampling factors independently, with edge replication.
+Unscaled refinements and repeated singleton resolutions are supported. Each
+level selects DCT quality/quantizer width or predictive options plus entropy,
+scripts, restarts and progressive precision through the existing controls.
+The Annex J frame-family rules still apply; for example, entropy families
+cannot be mixed arbitrarily and a spatial correction ends a DCT component's
+hierarchy.
+
+The chosen source reduction is the K.5 1-2-1 neighborhood in each expanded
+axis. Product weights are accumulated in integer arithmetic and rounded once
+after the two-dimensional sum; a single-axis reduction rounds after its sum.
+This is an encoder choice, separate from the normative ordered EXP decoder
+filter. Native target grids are computed backwards only for unique coarser
+resolutions. No converted full-resolution target raster is allocated. Coarse
+target buffers are reused as references after their last use, unscaled
+reference updates occur in place, and a final unscaled spatial correction
+consumes the reference buffer in place. Retained frame data, temporary grids,
+metadata, scans and output are bounded; these implementation choices have not
+yet been measured with allocator or throughput benchmarks.
+
+Each residual uses the actual reconstructed previous reference. Predictive
+base Pt discards unsigned low bits; differential Pt divides signed residuals
+toward zero. DCT residuals use a signed FDCT without a level shift and reject
+quantized coefficients that do not fit the model's i16 storage. Custom
+progressive scripts mask unseen coefficients and apply the actual final
+DC/AC precision before reconstructing the next reference. No intermediate
+JPEG encode/decode is needed. A prepared model contains the realized frame
+values; the source-encoding convenience reuses the supplied controls when
+writing it. A final Pt=0 correction reproduces the sampled source component
+grids exactly with the matching native IDCT. Different decoder IDCTs can give
+different mixed DCT/lossless output, as discussed in K.7.2.1. Explicit chroma
+subsampling itself discards source spatial detail.
+
+### Source-encoding gate
+
+`tests/reference_pyramid.py` snapshots its executables and checks **560 source
+pyramids**: 240 predictive and 320 DCT, all P=2..16 for predictive coding,
+P=8/12 for DCT, both entropy coders, sequential/progressive output, fixed and
+optimized Huffman tables, restarts, base/middle Pt, partial DC-only progressive
+bases, final spatial corrections, all five color spaces, and 4:4:4/4:2:0/4:2:2
+sampling. Sources include flat, ramp, noise and alternating-extrema patterns.
+The independent Python source model integrates component footprints, reduces
+the source grids with the stated filter, checks every predictive residual,
+and computes a floating-point FDCT from source targets and preceding native
+reference planes. Full-precision FDCT coefficients differ by at most **one
+quantized level**; partial DC masks are checked against the masked candidates
+at floating-point coefficient +/-1, and unseen AC must be zero.
+
+All **10,512 DCT blocks** and **425,916 visible predictive samples/residuals**
+match the independent C frame observer exactly. All 425,916 predictive values
+also match the independent source-residual model. All **400** cases that end
+in a Pt=0 predictive frame match the sampled source grids exactly. Runtime C
+warnings are zero. The report is `tests/reports/pyramid-jpegxt.json`.
+
+The report separates **280 original-header C comparisons** from **280 C-input
+copies with explicit workarounds**. In 120 predictive cases, base Pt is cleared
+in the C-input copy to bypass its already documented initial-prediction defect;
+base observations are shifted accordingly, and all differential entropy bytes
+and expectations remain unchanged. In 160 DCT cases, the C decoder incorrectly
+retains old EXP flags when a same-resolution final correction omits EXP. The
+C-input copy inserts EXP00 before that correction to clear the stale state.
+The original native output omits this redundant marker and is checked
+unchanged by the native decoder. No C final-raster tolerance is used as proof
+of either source fidelity or entropy correctness.
+
+Twelve representative native encodes, their original source integers,
+pre-entropy frame expectations, exact target planes and file/tool hashes are
+retained under `tests/fixtures/pyramid-native`. These are independently checked
+encoder regressions, not an independent standards conformance corpus. Tests
+also cover single-axis and fractional grids, 255-component repeated singleton
+resolutions, explicit 16-bit color conversion, shared images, ICC chunking,
+metadata and exact resource boundaries.
+All **122 tests** pass in release and isolated debug builds. The twelve new
+fixtures check all **30,164 truncated prefixes** and **1,200 bounded mutations**;
+rustfmt, Clippy and rustdoc with warnings denied pass.
+
+Common transform/scan refactoring retains all **5,200 hierarchy**, **4,448
+Huffman lossless**, **600 coefficient rewrite**, **172 pixel** and **192 CMYK/YCCK** encoder output hashes.
+The 600 rewrites, 172 pixel and 192 CMYK files were decoded again by libjpeg-turbo with exact
+coefficient/table matches and their existing float-FDCT bounds. Byte-identity
+regression reports explicitly reuse previous C evidence rather than claim
+another C decoding run. The consolidated audit is
+`tests/reports/pyramid-refactor-regressions.json`; it records baseline/candidate
+report hashes, exact counts and tool hashes without duplicating 10,612 old
+per-case records.
+
+```text
+cargo build -p deadlib-image-jpeg --release --example pyramid_encode --example hierarchical_inspect --jobs 1 --target-dir crates/deadlib-image/jpeg/experiments/pyramid-target
+python crates/deadlib-image/jpeg/tests/reference_pyramid.py --native crates/deadlib-image/jpeg/experiments/pyramid-target/release/examples/pyramid_encode.exe --inspect crates/deadlib-image/jpeg/experiments/pyramid-target/release/examples/hierarchical_inspect.exe --reference crates/deadlib-image/jpeg/experiments/jpegxt-reference/vs15.0/jpeg/Release/jpeg.exe --out crates/deadlib-image/jpeg/experiments/pyramid-final-gate --fixtures crates/deadlib-image/jpeg/tests/fixtures/pyramid-native
+```
+
+Broader rare scan/Pt combinations, DNL/abbreviated streams, incremental I/O,
+independent standards-conformance and additional reference corpora,
+coverage-guided fuzzing, and measured optimization remain required.

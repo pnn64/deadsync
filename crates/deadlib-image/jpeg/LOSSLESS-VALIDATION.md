@@ -236,7 +236,8 @@ Differential/hierarchical lossless decoding is now implemented through
 `decode_hierarchical`; see HIERARCHICAL-VALIDATION.md for Annex J rules and the
 separate reference gate. Direct hierarchical frame encoding is also available
 through `HierarchicalImage::encode`, including signed differential Pt and both
-entropy coders. Automatic raster pyramids, DNL and incremental input/output
-remain required. Independent conformance corpora,
+entropy coders. Automatic source pyramids are available through the native and
+shared raster APIs; their separate source/filter/C-frame gates are documented
+there. DNL and incremental input/output remain required. Independent conformance corpora,
 IJG/mozjpeg checks, coverage-guided fuzzing and measured lossless performance
 also remain open. No complete-conformance or throughput claim is made.

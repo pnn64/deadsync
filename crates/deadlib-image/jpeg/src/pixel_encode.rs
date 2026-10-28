@@ -39,7 +39,7 @@ pub enum Subsampling {
 }
 
 impl Subsampling {
-    fn factors(self) -> [(u8, u8); 4] {
+    pub(crate) fn factors(self) -> [(u8, u8); 4] {
         let first = match self {
             Self::S444 => (1, 1),
             Self::S422 => (2, 1),
@@ -161,37 +161,10 @@ pub fn quantize(
     input: &EncodeInput<'_>,
     options: EncodeOptions,
 ) -> Result<CoefficientImage<'static>> {
-    let channels = match input.color_space {
-        ColorSpace::Grayscale => 1,
-        ColorSpace::Rgb | ColorSpace::YCbCr => 3,
-        ColorSpace::Cmyk | ColorSpace::Ycck => 4,
-        _ => return Err(Error::Unsupported("encoder input color space")),
-    };
-    if input.width == 0
-        || input.height == 0
-        || !(1..=16).contains(&input.precision)
-        || !matches!(options.precision, 8 | 12)
-        || !(1..=100).contains(&options.quality)
-    {
+    if !matches!(options.precision, 8 | 12) || !(1..=100).contains(&options.quality) {
         return Err(Error::Invalid("encoder dimensions, quality or precision"));
     }
-    let pixels = input.width as usize * input.height as usize;
-    if pixels > options.limits.max_pixels {
-        return Err(Error::LimitExceeded("encoder pixels"));
-    }
-    let count = pixels
-        .checked_mul(channels)
-        .ok_or(Error::LimitExceeded("encoder source samples"))?;
-    let maximum = (1u32 << input.precision) - 1;
-    let valid = match input.samples {
-        SampleData::U8(v) => {
-            input.precision <= 8 && v.len() == count && v.iter().all(|&s| u32::from(s) <= maximum)
-        }
-        SampleData::U16(v) => v.len() == count && v.iter().all(|&s| u32::from(s) <= maximum),
-    };
-    if !valid {
-        return Err(Error::Invalid("encoder source sample count or range"));
-    }
+    let channels = validate_raster(input, options.precision, options.limits)?;
     let output_space = if input.color_space == ColorSpace::Rgb && options.rgb_to_ycbcr {
         ColorSpace::YCbCr
     } else if input.color_space == ColorSpace::Cmyk && options.cmyk_to_ycck {
@@ -268,20 +241,7 @@ pub fn quantize(
             ..options.limits
         },
     )?;
-    let scale = if options.quality < 50 {
-        5000 / u32::from(options.quality)
-    } else {
-        200 - 2 * u32::from(options.quality)
-    };
-    let cap = if options.baseline_quantization {
-        255
-    } else {
-        65535
-    };
-    let tables = [
-        LUMA.map(|v| ((u32::from(v) * scale + 50) / 100).clamp(1, cap) as u16),
-        CHROMA.map(|v| ((u32::from(v) * scale + 50) / 100).clamp(1, cap) as u16),
-    ];
+    let tables = quantization_tables(options.quality, options.baseline_quantization)?;
     if options.precision == 8 && tables.iter().any(|q| q.iter().any(|&v| v > 255)) {
         frame.process = Process::ExtendedSequential;
     }
@@ -349,11 +309,65 @@ pub fn quantize(
     })
 }
 
-#[derive(Clone, Copy)]
-struct ColorTransform {
+pub(crate) fn validate_raster(
+    input: &EncodeInput<'_>,
     precision: u8,
-    space: ColorSpace,
-    cmyk_polarity: CmykPolarity,
+    limits: Limits,
+) -> Result<usize> {
+    let channels = match input.color_space {
+        ColorSpace::Grayscale => 1,
+        ColorSpace::Rgb | ColorSpace::YCbCr => 3,
+        ColorSpace::Cmyk | ColorSpace::Ycck => 4,
+        _ => return Err(Error::Unsupported("encoder input color space")),
+    };
+    if input.width == 0
+        || input.height == 0
+        || !(1..=16).contains(&input.precision)
+        || !(1..=16).contains(&precision)
+    {
+        return Err(Error::Invalid("encoder dimensions or precision"));
+    }
+    let pixels = input.width as usize * input.height as usize;
+    if pixels > limits.max_pixels {
+        return Err(Error::LimitExceeded("encoder pixels"));
+    }
+    let count = pixels
+        .checked_mul(channels)
+        .ok_or(Error::LimitExceeded("encoder source samples"))?;
+    let maximum = (1u32 << input.precision) - 1;
+    let valid = match input.samples {
+        SampleData::U8(v) => {
+            input.precision <= 8 && v.len() == count && v.iter().all(|&s| u32::from(s) <= maximum)
+        }
+        SampleData::U16(v) => v.len() == count && v.iter().all(|&s| u32::from(s) <= maximum),
+    };
+    if !valid {
+        return Err(Error::Invalid("encoder source sample count or range"));
+    }
+    Ok(channels)
+}
+
+pub(crate) fn quantization_tables(quality: u8, baseline: bool) -> Result<[[u16; 64]; 2]> {
+    if !(1..=100).contains(&quality) {
+        return Err(Error::Invalid("encoder quality"));
+    }
+    let scale = if quality < 50 {
+        5000 / u32::from(quality)
+    } else {
+        200 - 2 * u32::from(quality)
+    };
+    let cap = if baseline { 255 } else { 65535 };
+    Ok([
+        LUMA.map(|v| ((u32::from(v) * scale + 50) / 100).clamp(1, cap) as u16),
+        CHROMA.map(|v| ((u32::from(v) * scale + 50) / 100).clamp(1, cap) as u16),
+    ])
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct ColorTransform {
+    pub precision: u8,
+    pub space: ColorSpace,
+    pub cmyk_polarity: CmykPolarity,
 }
 
 impl ColorTransform {
@@ -368,7 +382,7 @@ impl ColorTransform {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn resample(
+pub(crate) fn resample(
     input: &EncodeInput<'_>,
     transform: ColorTransform,
     component: usize,
@@ -385,7 +399,7 @@ fn resample(
         space,
         cmyk_polarity,
     } = transform;
-    let maximum = (1i32 << precision) - 1;
+    let maximum = (1i64 << precision) - 1;
     // Integrate the rectangular source footprint using integer overlap weights.
     // This also handles legal fractional sampling ratios such as H=3 and H=2.
     let (left, right, top, bottom) = (x * max_h, (x + 1) * max_h, y * max_v, (y + 1) * max_v);
@@ -403,7 +417,7 @@ fn resample(
                     SampleData::U16(v) => u32::from(v[index + channel]),
                 };
                 let source_max = (1u32 << input.precision) - 1;
-                ((value * ((1u32 << precision) - 1) + source_max / 2) / source_max) as i32
+                ((value * ((1u32 << precision) - 1) + source_max / 2) / source_max) as i64
             };
             let to_ycc = (input.color_space == ColorSpace::Rgb && space == ColorSpace::YCbCr)
                 || (input.color_space == ColorSpace::Cmyk
@@ -419,7 +433,7 @@ fn resample(
                     rgb = rgb.map(|v| maximum - v);
                 }
                 let [r, g, b] = rgb;
-                let center = 1i32 << (precision - 1);
+                let center = 1i64 << (precision - 1);
                 let value = match component {
                     0 => (19595 * r + 38470 * g + 7471 * b + 32768) >> 16,
                     1 => ((-11059 * r - 21709 * g + 32768 * b + 32768) >> 16) + center,

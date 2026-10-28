@@ -122,4 +122,16 @@ pre-entropy expectations and checking native lossless composition separately.
 `examples/hierarchy_fixtures.rs` authors the additional native corpus without
 decoding its encoded bytes; explicit signed-Pt and target-plane expectations
 are retained alongside each JPEG. Reports distinguish repeated configurations
-from distinct output hashes. Automatic raster-pyramid encoding remains pending.
+from distinct output hashes. `--expected-hashes <earlier-report>` verifies
+byte identity and explicitly reuses the earlier C decoding evidence.
+
+`reference_pyramid.py` checks automatic native/shared source-pyramid encoding.
+It compares pre-entropy frame data with this C observer and independently
+computes rational source sampling, the chosen K.5 reduction, signed residual Pt
+and a floating-point FDCT. Original-header comparisons are separated from
+C-input copies that clear defective base Pt prediction or insert EXP00 for
+stale reference expansion state. These copies change no differential entropy.
+Final mixed DCT/lossless source fidelity uses matching native IDCT references;
+no C raster tolerance substitutes for exact frame data. The report, twelve
+pinned source encodes and full limitations are documented in
+../../HIERARCHICAL-VALIDATION.md. No production code links a reference codec.
