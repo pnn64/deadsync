@@ -311,3 +311,27 @@ normal codec RSS. Listed campaign inputs remain unchanged. All 89 tests, Clippy,
 216 independent fixtures/2592 borrowed-file-range checks, 204 prior real-file
 ADPCM ranges and the 708-case native byte/sample replay pass. WAVL.md and
 PERFORMANCE.md retain the error/cache/memory contract and measured regressions.
+
+Forward segmented ADPCM adds a twenty-first family, adpcm_wavl_forward, with the
+same 700 independent seeds. The bounded sequential prefix model now checks all
+three implementations. The Read-only adapter uses short/Interrupted I/O, matches
+requested sample bits/error acceptance and finishes the unread suffix to check
+geometry, fact and child boundaries. Prefix expansion remains capped at 1024
+samples, with the existing 8192-sample scratch/4096-byte block/256-channel limits.
+Forward constructor acceptance alone does not certify unseen child geometry;
+deferred failures and intentionally unread block-header behavior have direct tests.
+
+`validation/adpcm-wavl-forward-mutation-{x64,i686}.*` each pass one million checked
+mutations, with 102562/102648 successful forward-family entries. All 1857 earlier
+archived corpus inputs pass (`adpcm-wavl-forward-prior-replay.*`), including 243
+entries into the three segmented ADPCM families. `adpcm-wavl-forward-asan.*`
+passes 100000 executions in 150.48 seconds, adds 1908 units and produces no
+failure artifact. Its final 1839-file corpus is retained in
+`adpcm-wavl-forward-asan-corpus.zip`, SHA-256
+`01f9c01f6e6e783438465bc449a6fdef071cc6b43dd8a5053c169b7cc1878d85`,
+with the verified archive/report sidecar. The 264 MiB instrumented peak is not
+normal codec RSS. All listed campaign inputs remain unchanged. All 92 tests,
+Clippy, 216 independent fixture gates/3024 three-API checks, 432 earlier real-file
+forward outputs and the 708-case native byte/sample replay pass. WAVL.md records
+the known-duration and finalization contract; PERFORMANCE.md records state growth,
+unchanged block-buffer allocation and narrow timing scope.

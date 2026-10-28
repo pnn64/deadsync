@@ -14,7 +14,7 @@ const LIMITS: Limits = Limits {
     size_table_entries: 16,
     format_bytes: 4096,
 };
-pub const PATHS: [&str; 20] = [
+pub const PATHS: [&str; 21] = [
     "container",
     "pcm",
     "adpcm_file",
@@ -35,6 +35,7 @@ pub const PATHS: [&str; 20] = [
     "wavl_mux",
     "adpcm_wavl",
     "adpcm_wavl_reader",
+    "adpcm_wavl_forward",
 ];
 
 /// Returns a bit for each successfully entered family, not a code-coverage count.
@@ -284,6 +285,8 @@ fn adpcm_wavl(wave: &Wave<'_>) -> u64 {
     let (Ok(audio), Ok(mut file)) = (audio, file) else {
         return 0;
     };
+    let raw = ForwardReader::with_limits(ShortReads::new(wave.as_bytes()), LIMITS).unwrap();
+    let mut forward = AdpcmForwardReader::from_reader_with_frames(raw, audio.frames()).unwrap();
     assert_eq!(audio.frames(), file.frames());
     assert_eq!(
         wave.wavl_chunks().unwrap().count(),
@@ -330,6 +333,13 @@ fn adpcm_wavl(wave: &Wave<'_>) -> u64 {
     let actual = audio.read_frames(0, &mut out[..frames * channels], &mut scratch);
     let mut file_out = [0x1234; 1025];
     let file_result = file.read_i16(&mut file_out[..frames * channels]);
+    let mut forward_out = [0x1234; 1025];
+    let forward_result = forward.read_i16(&mut forward_out[..frames * channels]);
+    assert_eq!(
+        actual.is_ok(),
+        forward_result.is_ok(),
+        "compressed wavl forward prefix acceptance"
+    );
     assert_eq!(
         actual.is_ok(),
         file_result.is_ok(),
@@ -341,6 +351,9 @@ fn adpcm_wavl(wave: &Wave<'_>) -> u64 {
         "compressed wavl prefix acceptance"
     );
     if let Ok(n) = actual {
+        assert_eq!(forward_result.unwrap(), n);
+        assert_eq!(&forward_out[..n], &out[..n]);
+        forward.finish().unwrap();
         assert_eq!(file_result.unwrap(), n);
         assert_eq!(&file_out[..n], &out[..n]);
         assert_eq!(n, expected.len());
@@ -367,7 +380,7 @@ fn adpcm_wavl(wave: &Wave<'_>) -> u64 {
     assert!(file.seek_frame(audio.frames() + 1).is_err());
     file.seek_frame(audio.frames()).unwrap();
     assert_eq!(file.read_i16(&mut file_out).unwrap(), 0);
-    (1 << 18) | (1 << 19)
+    (1 << 18) | (1 << 19) | (1 << 20)
 }
 
 fn pcm_ranges(pcm: Pcm<'_>, reader: &mut Reader<ShortReads<'_>>) {

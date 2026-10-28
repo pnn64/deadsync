@@ -1,5 +1,6 @@
 use deadlib_audio_decode_wav::{
-    AdpcmData, AdpcmReader, AdpcmWavl, Muxer, Reader, Wave, WavlMuxer, WriteOptions,
+    AdpcmData, AdpcmForwardReader, AdpcmReader, AdpcmWavl, ForwardReader, Muxer, Reader, Wave,
+    WavlMuxer, WriteOptions,
 };
 use std::{
     alloc::{GlobalAlloc, Layout, System},
@@ -104,6 +105,21 @@ fn borrowed_sequence_index_is_compact_reads_allocate_nothing_and_flat_state_is_u
     println!(
         "owning wavl wrapper: reused index, 2 requested allocations/52 bytes for block buffers; reads 0; object bytes reader={}",
         std::mem::size_of::<AdpcmReader<Cursor<&[u8]>>>()
+    );
+    let raw = ForwardReader::new(Cursor::new(wave.as_bytes())).unwrap();
+    let (mut forward, calls, bytes) = measure(|| AdpcmForwardReader::from_reader(raw).unwrap());
+    assert_eq!((calls, bytes), (2, 52));
+    let ((), calls, bytes) = measure(|| {
+        let mut out = [1234; 25];
+        assert_eq!(forward.read_i16(&mut out).unwrap(), 24);
+        assert!(out[..24].iter().all(|&n| n == 0));
+        assert_eq!(out[24], 1234);
+        forward.finish().unwrap();
+    });
+    assert_eq!((calls, bytes), (0, 0));
+    println!(
+        "forward wavl wrapper: 2 requested allocations/52 bytes for block buffers; reads/finish 0; object bytes forward={}",
+        std::mem::size_of::<AdpcmForwardReader<Cursor<&[u8]>>>()
     );
     let mut mux = Muxer::new(
         Cursor::new(Vec::new()),

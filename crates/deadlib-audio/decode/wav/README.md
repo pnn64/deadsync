@@ -85,8 +85,9 @@ geometry and metadata descriptors. Metadata access preserves the logical audio
 position. I/O or decode errors require a successful seek before reading again.
 AdpcmReader also handles compressed wavl children and held-frame seeks, reusing
 the container's inventory and the same one-block cache. Its wavl_chunks method
-exposes child descriptors for metadata reads. AdpcmForwardReader currently
-requires flat compressed data; forward segmented routing remains open.
+exposes child descriptors for metadata reads. AdpcmForwardReader handles both
+flat and segmented compressed data using two reusable block buffers and a known
+duration; metadata callbacks can inspect children while decoding or finishing.
 
 `Muxer<W: Write + Seek>` accepts a raw format descriptor, encoded bytes and
 decoded frame counts. It preserves the descriptor without codec dispatch and

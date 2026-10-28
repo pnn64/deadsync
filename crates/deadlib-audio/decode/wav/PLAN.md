@@ -175,7 +175,7 @@ and the rejected inlining experiment. The native object size and requested heap
 counts remain unchanged, but the final paired runs show slower construction and
 segmented output. This regression is an explicit optimization target. Generic
 encoded serialization does not complete compressed wavl decoding/seeking/forward
-routing; those paths, broader profiles and comparative performance/RSS remain open.
+routing; at that milestone those paths, broader profiles and comparative performance/RSS remained open.
 
 Borrowed compressed wavl decoding is now implemented as AdpcmWavl. It borrows
 Wave's checked inventory, adds compact 16-byte bounds and reads exact ranges with
@@ -212,6 +212,26 @@ Standalone before/current source archives and paired flat/resident wavl timings
 are recorded in PERFORMANCE.md. MS stereo full-read and several 3-bit flat rows
 show regressions and remain optimization targets; overall speed parity is not
 claimed. A validation-driver shared executable race was corrected with private
-binary snapshots and the interrupted corpus retained. Forward segmented ADPCM,
+binary snapshots and the interrupted corpus retained. At that milestone forward segmented ADPCM,
 broader profiles/fuzzing, competitive broad-format performance/RSS and both the
 reader and earlier native-writer regression candidates remain unfinished.
+
+Forward compressed wavl now works through AdpcmForwardReader. A codec-neutral
+private child iterator supplies raw extents/silence counts; the wrapper validates
+block geometry, accumulates capacity, holds its previous decoded frame and uses
+the existing known-duration/trailing-fact contract. Metadata callbacks inspect
+interleaved children, and finish drains unread physical data while skipping
+virtual silence without expansion. Unrequested block headers remain undecoded;
+bad geometry and inconsistent duration still fail finalization. No extra index
+or held-frame allocation is added; inline x64 state grows 24 bytes and the block
+allocation probe remains two calls/52 requested bytes for its stereo geometry.
+
+All 92 tests pass x64 debug/release and i686 debug with Clippy. The independent
+216-case matrix passes 3024 borrowed/file/forward/range checks, and all 432 earlier
+real-file forward outputs retain their hashes. Two million checked mutations,
+1857 prior corpus inputs, 100000 ASan executions and the 708-case native replay
+pass. PERFORMANCE.md records archived standalone paired flat controls and current
+segmented streaming/finish measurements, including run variance and no overall
+speed claim. The remaining work is the full requirement audit, broader comparative
+performance/RSS and profile/format coverage, and measured optimization targets;
+this milestone does not prove completion of the requested WAV implementation.

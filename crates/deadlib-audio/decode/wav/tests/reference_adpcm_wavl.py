@@ -25,14 +25,14 @@ def main():
     output.parent.mkdir(parents=True,exist_ok=True);corpus=Path(str(output)+'-corpus');corpus.mkdir()
     sys.path.insert(0,str(workspace/'target/wav/python'));import soundfile as sf
     dr,dr_meta=build_dr_wav(workspace,root);sym,sym_meta=build_symphonia(workspace,root);ffmpeg=shutil.which('ffmpeg');assert ffmpeg
-    paths=sorted((root/'src').rglob('*.rs'))+[root/'examples/adpcm_wavl.rs',root/'examples/adpcm_file.rs',Path(__file__),root/'tests/adpcm_wavl_fixtures.py',root/'tests/ima_extensible_fixtures.py',root/'tests/ima3_fixtures.py',root/'tests/reference_pcm.py',root/'tests/pcm_fixtures.py',root/'tests/reference_support.py',root/'tests/oracle/dr_wav.c',root/'Cargo.toml']
+    paths=sorted((root/'src').rglob('*.rs'))+[root/'examples/adpcm_wavl.rs',root/'examples/adpcm_file.rs',root/'examples/adpcm_forward.rs',Path(__file__),root/'tests/adpcm_wavl_fixtures.py',root/'tests/ima_extensible_fixtures.py',root/'tests/ima3_fixtures.py',root/'tests/reference_pcm.py',root/'tests/pcm_fixtures.py',root/'tests/reference_support.py',root/'tests/oracle/dr_wav.c',root/'Cargo.toml']
     before={p.relative_to(root).as_posix():sha(p.read_bytes()) for p in paths}
-    command=['cargo','build','--locked','-p','deadlib-audio-decode-wav','--example','adpcm_wavl','--example','adpcm_file','--target-dir','target/wav']
+    command=['cargo','build','--locked','-p','deadlib-audio-decode-wav','--example','adpcm_wavl','--example','adpcm_file','--example','adpcm_forward','--target-dir','target/wav']
     p=subprocess.run(command,cwd=workspace,capture_output=True);Path(str(output)+'.build.log').write_bytes(p.stdout+p.stderr)
     if p.returncode:raise RuntimeError('build failed; see preserved log')
     suffix='.exe' if sys.platform=='win32' else ''
     binaries=Path(str(output)+'-bin');binaries.mkdir()
-    for name in ('adpcm_wavl','adpcm_file'):
+    for name in ('adpcm_wavl','adpcm_file','adpcm_forward'):
         shutil.copyfile(workspace/('target/wav/debug/examples/'+name+suffix),binaries/(name+suffix))
     binary=binaries/('adpcm_wavl'+suffix);file_binary=binaries/('adpcm_file'+suffix);results=[];manifest={}
     with zipfile.ZipFile(str(output)+'.corpus.zip','x',compression=zipfile.ZIP_DEFLATED,compresslevel=9) as archive:
@@ -56,6 +56,9 @@ def main():
             path=save(info['name'],payload);ours={};frames=info['frames'];channels=info['channels']
             p=subprocess.run([str(binary),str(path)],capture_output=True);ours['full']=compare(p.stdout,truth,2,p.returncode,p.stderr)
             p=subprocess.run([str(file_binary),str(path)],capture_output=True);ours['reader_full']=compare(p.stdout,truth,2,p.returncode,p.stderr)
+            for buffer,width in ((7,1),(127,17)):
+                p=subprocess.run([str(binaries/('adpcm_forward'+suffix)),str(path),str(buffer),str(width),str(frames)],capture_output=True)
+                ours[f'forward_{buffer}_{width}']=compare(p.stdout,truth,2,p.returncode,p.stderr)
             starts={0,min(1,frames),min(2,frames),frames,max(0,frames-2),min(frames,info['boundaries'][2]),min(frames,info['boundaries'][7]+1)}
             for start in sorted(starts):
                 count=min(19,frames-start);p=subprocess.run([str(binary),str(path),str(start),str(count)],capture_output=True)
@@ -73,8 +76,8 @@ def main():
             results.append(dict(**info,fixture_sha256=sha(payload),truth_sha256=sha(truth),combined_truth_sha256=sha(combined),ours=ours,references=refs,paired_gate=gate,paired=paired,passed=passed))
             if len(results)%36==0:print(f'{len(results)} fixtures; failures={sum(not r["passed"] for r in results)}',flush=True)
     after={p.relative_to(root).as_posix():sha(p.read_bytes()) for p in paths}
-    report=dict(timestamp_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),platform=platform.platform(),rustc=subprocess.check_output(['rustc','-Vv'],text=True),sources=before,inputs_unchanged=before==after,binary_sha256=sha(binary.read_bytes()),reader_binary_sha256=sha(file_binary.read_bytes()),dr_wav=dr_meta,symphonia=sym_meta,libsndfile=sf.__libsndfile_version__,soundfile=sf.__version__,ffmpeg=subprocess.check_output([ffmpeg,'-version'],text=True).splitlines()[0],ffmpeg_binary_sha256=sha(Path(ffmpeg).read_bytes()),corpus_sha256=sha(Path(str(output)+'.corpus.zip').read_bytes()),fixtures=manifest,total=len(results),passed=sum(r['passed'] for r in results),own_checks=sum(len(r['ours']) for r in results),paired_cases=sum(bool(r['paired_gate']) for r in results),cases=results)
-    output.write_text(json.dumps(report,indent=2)+'\n');print(f"{report['passed']}/{report['total']} fixtures; {report['own_checks']} borrowed/range checks; {report['paired_cases']} paired component gates",flush=True)
+    report=dict(timestamp_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),platform=platform.platform(),rustc=subprocess.check_output(['rustc','-Vv'],text=True),sources=before,inputs_unchanged=before==after,binary_sha256=sha(binary.read_bytes()),reader_binary_sha256=sha(file_binary.read_bytes()),forward_binary_sha256=sha((binaries/('adpcm_forward'+suffix)).read_bytes()),dr_wav=dr_meta,symphonia=sym_meta,libsndfile=sf.__libsndfile_version__,soundfile=sf.__version__,ffmpeg=subprocess.check_output([ffmpeg,'-version'],text=True).splitlines()[0],ffmpeg_binary_sha256=sha(Path(ffmpeg).read_bytes()),corpus_sha256=sha(Path(str(output)+'.corpus.zip').read_bytes()),fixtures=manifest,total=len(results),passed=sum(r['passed'] for r in results),own_checks=sum(len(r['ours']) for r in results),paired_cases=sum(bool(r['paired_gate']) for r in results),cases=results)
+    output.write_text(json.dumps(report,indent=2)+'\n');print(f"{report['passed']}/{report['total']} fixtures; {report['own_checks']} borrowed/file/forward/range checks; {report['paired_cases']} paired component gates",flush=True)
     if report['passed']!=report['total'] or before!=after:raise SystemExit(1)
 
 

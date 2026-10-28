@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -12,7 +13,7 @@ def sha(data):return hashlib.sha256(data).hexdigest()
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--output',type=Path,required=True);args=ap.parse_args()
-    if args.output.exists():ap.error('preserve prior evidence; choose a new output')
+    if args.output.exists() or Path(str(args.output)+'-bin').exists():ap.error('preserve prior evidence; choose a new output')
     root=Path(__file__).resolve().parents[1];workspace=root.parents[3]
     reference=root/'validation/adpcm-encoding-references.json';truth=json.loads(reference.read_text())
     sources=sorted((root/'src').rglob('*.rs'))+[root/'examples/adpcm_forward.rs',Path(__file__)]
@@ -20,7 +21,9 @@ def main():
     build=subprocess.run(['cargo','build','--locked','-p','deadlib-audio-decode-wav','--example','adpcm_forward','--target-dir','target/wav'],cwd=workspace,capture_output=True)
     args.output.parent.mkdir(parents=True,exist_ok=True);Path(str(args.output)+'.build.log').write_bytes(build.stdout+build.stderr)
     if build.returncode:raise RuntimeError('build failed; inspect preserved log')
-    binary=workspace/('target/wav/debug/examples/adpcm_forward'+('.exe' if sys.platform=='win32' else ''))
+    name='adpcm_forward'+('.exe' if sys.platform=='win32' else '')
+    binaries=Path(str(args.output)+'-bin');binaries.mkdir()
+    binary=binaries/name;shutil.copyfile(workspace/('target/wav/debug/examples/'+name),binary)
     cases=[]
     for case in truth['cases']:
         path=workspace/'target/wav/encoded-adpcm'/f"{case['name']}.wav"

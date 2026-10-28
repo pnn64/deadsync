@@ -6,7 +6,8 @@ multiple data/slnt chunks. Borrowed `Wave`/`Pcm`, seekable `Reader`, Read-only
 path remains available and does not allocate a segment index.
 Borrowed Microsoft/3-bit/4-bit IMA sequences also work through `AdpcmWavl`.
 AdpcmReader also handles compressed children with its reusable block cache.
-Forward ADPCM convenience still requires flat data.
+AdpcmForwardReader handles the compressed sequence with two block buffers and
+no segment inventory, when its decoded duration is known before reading samples.
 
 The [IBM/Microsoft WAVE specification, sections 3-26–3-28](https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Docs/riffmci.pdf)
 defines wavl, silence, its mandatory fact count and compressed-data cue addressing.
@@ -144,7 +145,7 @@ the reference drivers do not directly support wavl here.
 
 Generic encoded serialization is implemented; borrowed compressed decoding is
 described below. Segment-aware cached file seeking is now implemented too;
-forward ADPCM routing remains open. The measured
+forward ADPCM routing is described below as well. The measured
 native writer slowdown is retained as an outstanding optimization issue in
 PERFORMANCE.md. This milestone does not claim completion of those requirements.
 
@@ -194,8 +195,8 @@ cargo test --locked -p deadlib-audio-decode-wav --tests --target-dir target/wav
 python crates/deadlib-audio/decode/wav/tests/reference_wavl.py --output target/wav/new-wavl.json
 ```
 
-The forward ADPCM wrapper still rejects segmented data; borrowed and file-backed
-implementations below decode it. Broader extensible compressed
+Borrowed, file-backed and forward ADPCM implementations below decode segmented
+data. Broader extensible compressed
 mappings, reference support, comparative segmented
 throughput/RSS and application-profile/metadata semantic certification remain open.
 
@@ -331,5 +332,70 @@ replaced a shared executable path. Its partial archive/build log are retained.
 The final campaign uses private binary snapshots, and the flat regression tool
 now builds only its two required examples and snapshots them too. Validation
 uses CARGO_INCREMENTAL=0 where recorded to avoid the earlier compiler cache
-issue. Forward-only segmented ADPCM, further codec/profile coverage, competitive
+issue. At the file-backed milestone, forward-only support was still pending; it
+is implemented in the next section. Further codec/profile coverage, competitive
 broad-format/RSS evidence and the measured native output slowdown remain open.
+
+## Forward-only compressed sequences
+
+AdpcmForwardReader now decodes the same Microsoft/legacy/extensible 3/4-bit IMA
+children from a Read-only source. It retains two reusable block buffers and
+inline data/silence/end counters, with no segment inventory, metadata retention
+or additional held-frame allocation. A private codec-neutral ForwardReader
+iterator exposes data-byte extents and slnt counts; block interpretation and
+decoded-capacity accounting stay in the explicit ADPCM wrapper. Child reads stop
+at the current payload and never consume its pad or the next header as audio.
+
+Every data header validates its full/short-block geometry and adds decoded
+capacity, while slnt adds its u32 count with checked u64 accumulation. The global
+fact limit trims the same natural-order timeline as the borrowed/file APIs.
+Initial silence is zero; later silence uses the final interleaved frame still
+resident in the previous decoded block. Empty data, zero slnt and unknown
+children preserve that frame. Reads expand only the caller's complete frames;
+partial caller frames remain untouched. Codec/I/O/callback errors poison the
+stream and can leave a decoded prefix in caller storage.
+
+As for flat forward ADPCM, exact output requires a known duration: a leading fact,
+an explicit count passed to from_reader_with_frames, or a provisional RF64 ds64
+hint. A trailing ordinary fact can contradict that hint, so finish must verify
+the final encountered count. BW64 dummy words never supply a duration. wavl
+still requires fact even when a caller supplies the count externally. Leading
+fact disagreement rejects the explicit constructor; fact above the complete
+sequence capacity rejects a read reaching its end or finish. Construction cannot
+validate unseen child sizes, so malformed future geometry is reported later.
+
+read_i16_with_metadata visits ancillary children encountered during decoding.
+Leading callbacks use ForwardReader::with_metadata; finish_with_metadata visits
+remaining children and top-level footers. ChunkPayload prevents reads crossing a
+payload boundary; unread metadata and pads are drained. As before, finish consumes
+only this RIFF form. It drains unread physical encoded bytes, validates every
+remaining child geometry and aggregate duration, and skips virtual silence in
+O(children). It does not decode deliberately unread compressed block headers.
+Finishing can therefore accept an unread bad step/predictor whose requested
+samples would fail decoding; it still rejects bad geometry or inconsistent fact.
+
+The added inline state grows the x64 wrapper from 360 to 384 bytes; i686 measures
+280 bytes. With a preopened eight-child stereo source, wrapper construction still
+requests two allocations/52 bytes for block buffers, then reads and finish request
+zero. This excludes the underlying format/ds64 storage and caller buffers, and
+does not measure process RSS. PERFORMANCE.md records paired flat timings and the
+narrow current segmented benchmark without claiming an overall speed change.
+
+Three new tests bring the suite to 92, passing x64 debug/release and i686 debug
+with Clippy. The fixed scalar matrix now checks all three APIs, both byte orders,
+all container spellings, applicable 1/2/6/33 channels, exact fact limits and short
+tails. Direct forward tests cover short/Interrupted I/O, leading/interleaved/
+trailing metadata, callback/I/O poisoning, form-boundary preservation, unknown or
+contradictory duration, deferred geometry failures and intentionally unread bad
+headers. Tiny RF64/BW64 files declare up to 8589934591 silence/data frames and
+finish after fewer than 512 physical bytes, without materializing that duration.
+
+`validation/adpcm-wavl-forward-references.*` passes 216 independent fixture gates
+and 3024 borrowed/file/forward/range checks. The two forward adapters use frame
+buffers 7/127 and physical widths 1/17, with explicit counts for trailing fact.
+The existing ten flat component gates and direct four-reader rejections retain
+their scope. All 432 earlier real-file forward ADPCM cases and the 708 native
+fixture gates/1912 writer outputs retain their expected hashes. FUZZING.md
+records two million checked mutations, 1857 prior corpus inputs and the fresh
+ASan campaign. The whole requested WAV goal remains unproven pending broader
+performance/RSS, profile/format audits and the recorded optimization work.

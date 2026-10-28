@@ -8,13 +8,14 @@ any remainder and padding. A caller can supply its own codec and metadata policy
 `AdpcmForwardReader<R: Read>` adds Microsoft and 3/4-bit IMA frame decoding. Seekable
 Reader and AdpcmReader provide arbitrary exact seeks.
 AdpcmReader and borrowed AdpcmWavl support compressed wavl sequences with exact
-range access and held-frame seeks; see WAVL.md. AdpcmForwardReader currently
-requires flat compressed data. Forward segmented ADPCM routing remains open.
+range access and held-frame seeks; see WAVL.md. AdpcmForwardReader now decodes
+compressed wavl too, without a segment inventory, using its known duration and
+the last decoded frame for silence. WAVL.md records metadata and final validation.
 
 ## Forward-only frame reading
 
 Opening a ForwardReader consumes only headers through the first data header, or
-through the LIST/wavl type for segmented native audio. It
+through the LIST/wavl type for segmented audio. It
 retains bounded format bytes and no per-chunk inventory or audio allocation.
 Native calls fill complete interleaved frames in caller buffers: raw bytes,
 native i16/i32/f32/f64, or explicit integer expansion via read_integers. The

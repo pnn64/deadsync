@@ -1,4 +1,7 @@
-use deadlib_audio_decode_wav::{Adpcm, AdpcmReader, AdpcmWavl, Container, Endian, Format, Wave};
+use deadlib_audio_decode_wav::{
+    Adpcm, AdpcmForwardReader, AdpcmReader, AdpcmWavl, Container, Endian, Format, ForwardReader,
+    Wave,
+};
 use std::io::Cursor;
 
 fn w(n: u16, e: Endian) -> [u8; 2] {
@@ -278,6 +281,26 @@ fn independent_compressed_children_short_blocks_holds_and_exact_ranges() {
                         assert_eq!(file.frames(), frames as u64);
                         assert_eq!(audio.frames(), frames as u64);
                         let mut scratch = vec![0; audio.codec().scratch_samples()];
+                        for batch in [channels, 7 * channels + 1, truth.len() + 1] {
+                            let raw = ForwardReader::new(Cursor::new(&bytes)).unwrap();
+                            let mut forward =
+                                AdpcmForwardReader::from_reader_with_frames(raw, frames as u64)
+                                    .unwrap();
+                            let mut position = 0;
+                            let mut out = vec![0x1234; batch];
+                            loop {
+                                let n = forward.read_i16(&mut out).unwrap();
+                                assert_eq!(&out[..n], &truth[position..position + n]);
+                                assert!(out[n..].iter().all(|&n| n == 0x1234));
+                                if n == 0 {
+                                    break;
+                                }
+                                position += n;
+                                out.fill(0x1234);
+                            }
+                            assert_eq!(position, frames * channels);
+                            forward.finish().unwrap();
+                        }
                         for start in 0..=frames {
                             for size in [
                                 0,

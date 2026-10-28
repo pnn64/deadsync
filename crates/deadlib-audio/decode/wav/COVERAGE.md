@@ -209,7 +209,7 @@ native fixture gates, 4484 descriptor/read/range checks and 1912 full writer
 comparisons under the existing BW64 rule. Two million checked mutations, 1580
 prior corpus inputs and 100000 fresh ASan executions pass. WAVL.md records the
 raw-format/count contract. PERFORMANCE.md retains measured native-output
-regressions; encoded convenience decoding/seeking/forward routing remains open.
+regressions; at that milestone encoded convenience decoding/seeking/forward routing remained open.
 
 Borrowed compressed wavl now works through AdpcmWavl, with exact ranges and
 held-frame seeks, complete short blocks, global fact trimming and a compact
@@ -238,7 +238,19 @@ and 100000 ASan executions pass, with the new 1857-file archive retained. WAVL.m
 distinguishes virtual offset evidence from physical files. PERFORMANCE.md records
 paired flat slowdown candidates as open work rather than claiming parity.
 
-Remaining work: metadata profile/semantic validation, compressed wavl forward routing,
+Forward-only segmented ADPCM now handles the same codec/layout matrix without
+an inventory or extra held-frame allocation. Three tests bring the total to 92,
+passing x64 debug/release and i686 debug with Clippy. They directly cover bounded
+callbacks, physical/read/output splits, short blocks, deferred geometry/count
+validation, intentionally unread bad headers, poisoning and u64 virtual silence.
+The independent campaign passes 216 gates/3024 borrowed-file-forward-range checks,
+and 432 earlier real-file forward outputs retain their hashes. Two million
+checked mutations, 1857 prior corpus inputs and 100000 ASan executions pass.
+The two block-buffer allocations are unchanged; inline x64 state grows 24 bytes.
+WAVL.md records exact duration/finalization rules; PERFORMANCE.md retains both
+flat paired runs and narrow segmented measurements without an overall speed claim.
+
+Remaining work: metadata profile/semantic validation,
 broader fuzzing and representative comparative performance/RSS coverage
 (the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); additional
 extensible compressed mappings. BW64 shares 64-bit container mechanics; ADM profile

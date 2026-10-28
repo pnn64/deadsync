@@ -61,6 +61,11 @@ struct WavlForward {
     position: u64,
     state: WavlState,
 }
+/// Private codec-neutral child events; encoded block geometry stays in wrappers.
+pub(crate) enum EncodedSegment {
+    Data(u64),
+    Silence(u64),
+}
 
 /// Opening reads through the first data header, without buffering audio. fmt
 /// must precede data. Call finish to validate the remaining form and padding;
@@ -235,6 +240,68 @@ impl<R: Read> ForwardReader<R> {
         }
         let n = self.stream.read_chunk(out)?;
         self.bytes_read += n as u64;
+        Ok(n)
+    }
+    pub(crate) fn next_encoded_segment(
+        &mut self,
+        mut visit: impl FnMut(ChunkInfo, &mut ChunkPayload<'_, R>) -> Result<(), Error>,
+    ) -> Result<Option<EncodedSegment>, Error> {
+        if self.failed {
+            return Err(Error::Invalid("forward reader unusable after error"));
+        }
+        let w = self
+            .wavl
+            .as_mut()
+            .ok_or(Error::Unsupported("encoded child traversal requires wavl"))?;
+        if !w.hold.is_empty() {
+            return Err(Error::Unsupported(
+                "encoded child traversal requires an encoded format",
+            ));
+        }
+        if matches!(w.state, WavlState::End) {
+            return Ok(None);
+        }
+        self.failed = true;
+        let result = (|| {
+            loop {
+                let Some(c) = self.stream.next_chunk()? else {
+                    self.stream.leave_list_payload()?;
+                    w.state = WavlState::End;
+                    return Ok(None);
+                };
+                if let Some((silence, frames)) = wavl_entry(&mut self.stream, c, None)? {
+                    if silence {
+                        w.state = WavlState::Silence(frames);
+                        return Ok(Some(EncodedSegment::Silence(frames)));
+                    }
+                    w.state = WavlState::Data(c.size);
+                    return Ok(Some(EncodedSegment::Data(c.size)));
+                }
+                visit(c, &mut ChunkPayload::new(&mut self.stream, c.size, None))?;
+            }
+        })();
+        if result.is_ok() {
+            self.failed = false;
+        }
+        result
+    }
+    /// Read only the selected encoded child, never its padding or the next header.
+    pub(crate) fn read_encoded_child(&mut self, out: &mut [u8]) -> Result<usize, Error> {
+        if self.failed {
+            return Err(Error::Invalid("forward reader unusable after error"));
+        }
+        let w = self
+            .wavl
+            .as_mut()
+            .ok_or(Error::Unsupported("encoded child traversal requires wavl"))?;
+        let WavlState::Data(left) = w.state else {
+            return Err(Error::Invalid("not in encoded data child"));
+        };
+        self.failed = true;
+        let n = self.stream.read_chunk(out)?;
+        self.bytes_read += n as u64;
+        w.state = WavlState::Data(left - n as u64);
+        self.failed = false;
         Ok(n)
     }
     pub fn read_frames(&mut self, out: &mut [u8]) -> Result<usize, Error> {

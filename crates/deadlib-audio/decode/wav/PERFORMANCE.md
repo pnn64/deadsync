@@ -361,7 +361,7 @@ not establish comparative performance. Full-read throughput counts decoded i16
 bytes, including held silence. The implementation decodes a final block again
 when entering silence, even after the preceding range decoded it; caller scratch
 does not retain a cross-call cache. The file-backed cache is now described below;
-forward segmented reading remains future work. The earlier measured native wavl output regression also
+forward segmented reading is now measured below. The earlier measured native wavl output regression also
 remains unresolved; this new benchmark does not address it.
 
 The dedicated allocator test separates allocation from timing. View construction
@@ -462,8 +462,81 @@ independent campaign passes 2592 borrowed/file/range checks; 204 prior real-file
 flat ranges and all 708 native gates/1912 writer outputs retain their hashes.
 Two million checked mutations, 1827 previous corpus inputs and 100000 ASan
 executions pass. WAVL.md records global trimming, error recovery, u64 virtual
-offset scope and the remaining forward-only implementation.
+offset scope and the then-remaining forward-only implementation.
 
 ```sh
 python crates/deadlib-audio/decode/wav/benches/compare_adpcm_file.py --output target/wav/new-adpcm-file-bench
+```
+
+## Forward-only segmented ADPCM
+
+`benches/adpcm_forward.rs` uses a Read-only wrapper around resident input, the
+same four block geometries and independently checked zero/alternating-0/1
+reconstructions as the preceding benchmarks. It opens through the audio header,
+then measures full output or 127-frame streaming including open and finish.
+`unread_finish` drains physical bytes and validates geometry/structure without
+decoding samples. Flat input contains 2048 blocks; wavl has 512 four-block data
+children with three held frames after each. Caller output already exists.
+
+`validation/adpcm-wavl-forward-bench.*` retains standalone baseline `631dd1bbe`
+and current source archives, identical explicit profiles/harnesses, two alternating
+flat pairs and a final current run including wavl. The setup, static MSVC runtime,
+three warmed trials, source/binary/CPU/compiler hashes and lack of affinity or
+frequency control match the file comparison. Open rows run 100000 iterations,
+full/stream rows 16 and unread finish 1000. This is narrow low-entropy resident
+input, not disk/network throughput, external performance comparison or RSS.
+
+Flat median ns/op:
+
+| Row | Baseline 1 | Current 1 | Baseline 2 | Current 2 |
+| --- | ---: | ---: | ---: | ---: |
+| MS mono open | 568.293 | 521.102 | 630.801 | 621.160 |
+| MS mono full | 5658306.250 | 5481225.000 | 5996681.250 | 6022187.500 |
+| MS mono stream 127 | 5648450.000 | 5464962.500 | 5600837.500 | 5936000.000 |
+| MS mono unread finish | 17555.800 | 17548.800 | 17234.100 | 17302.200 |
+| MS stereo open | 535.647 | 528.525 | 624.139 | 513.351 |
+| MS stereo full | 5180900.000 | 5271068.750 | 5807037.500 | 5185643.750 |
+| MS stereo stream 127 | 5506737.500 | 5289768.750 | 5951518.750 | 5231825.000 |
+| MS stereo unread finish | 17289.800 | 16809.200 | 17523.700 | 16526.000 |
+| IMA 4-bit open | 519.345 | 496.190 | 528.706 | 503.852 |
+| IMA 4-bit full | 5888112.500 | 5720556.250 | 6850618.750 | 5676281.250 |
+| IMA 4-bit stream 127 | 6067075.000 | 6231956.250 | 6640500.000 | 5642781.250 |
+| IMA 4-bit unread finish | 17356.100 | 16467.800 | 18488.600 | 16801.300 |
+| IMA 3-bit open | 540.654 | 503.338 | 602.700 | 545.208 |
+| IMA 3-bit full | 7220037.500 | 7253550.000 | 7905950.000 | 7298418.750 |
+| IMA 3-bit stream 127 | 7452806.250 | 8257900.000 | 8764425.000 | 7229843.750 |
+| IMA 3-bit unread finish | 15994.400 | 18075.800 | 18359.200 | 16166.500 |
+
+Opening medians are lower for all four formats in both pairs; several decode,
+streaming and finish rows reverse direction, with substantial trial/run variance.
+These observations do not establish an overall speed improvement, parity or a
+platform-wide regression. No claim here resolves the earlier native writer and
+file-reader regression candidates, which remain explicit optimization work.
+
+Current wavl medians (decoded throughput includes held frames):
+
+| Case | Open us | Full open/read/finish MiB/s | Stream 127 MiB/s | Unread finish us |
+| --- | ---: | ---: | ---: | ---: |
+| Microsoft mono | 0.572 | 327.375 | 342.337 | 81.385 |
+| Microsoft stereo | 0.551 | 369.303 | 337.382 | 80.340 |
+| IMA 4-bit stereo | 0.528 | 341.111 | 332.257 | 79.697 |
+| IMA 3-bit stereo | 0.545 | 346.105 | 317.708 | 82.189 |
+
+The new data/silence/capacity state grows AdpcmForwardReader from 360 to 384 bytes
+on x64; current i686 state is 280. Both layouts retain only two block buffers and
+no chunk inventory or held-frame buffer. A preopened eight-child stereo probe
+still requests two allocations/52 bytes for encoded/decoded buffers, then zero
+for reads and finish. Underlying format/ds64 storage and caller buffers are
+excluded, and no process-memory claim is made. Tiny files declaring over eight
+billion logical frames finish after bounded child traversal without expanding
+silence, as directly tested in WAVL.md.
+
+All 92 tests pass x64 debug/release and i686 debug with Clippy. All 216 independent
+fixture gates/3024 borrowed-file-forward-range checks and 432 earlier real-file
+forward outputs pass. Two million checked mutations, 1857 prior corpus inputs,
+100000 ASan executions and the retained native sample/byte replay pass. Wider
+comparative formats/workloads, process RSS and optimization remain unfinished.
+
+```sh
+python crates/deadlib-audio/decode/wav/benches/compare_adpcm_forward.py --output target/wav/new-adpcm-forward-bench
 ```

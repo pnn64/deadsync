@@ -2,6 +2,14 @@
 use crate::{Adpcm, ChunkPayload, Container, Error, Format, ForwardReader, Limits, reserve};
 use std::io::Read;
 
+enum AudioState {
+    Flat,
+    Next,
+    Data(u64),
+    Silence(u64),
+    End,
+}
+
 pub struct AdpcmForwardReader<R> {
     reader: ForwardReader<R>,
     encoded: Vec<u8>,
@@ -11,6 +19,8 @@ pub struct AdpcmForwardReader<R> {
     position: u64,
     cache_frames: usize,
     cache_position: usize,
+    state: AudioState,
+    capacity: u64,
     failed: bool,
 }
 impl<R: Read> AdpcmForwardReader<R> {
@@ -49,13 +59,12 @@ impl<R: Read> AdpcmForwardReader<R> {
             return Err(Error::Invalid("forward ADPCM duration mismatch"));
         }
         let codec = Adpcm::from_format(reader.format())?;
-        codec.validate_frame_count(
-            reader
-                .data_chunk()
-                .ok_or(Error::Unsupported("segmented ADPCM data"))?
-                .size,
-            frames,
-        )?;
+        let state = if let Some(data) = reader.data_chunk() {
+            codec.validate_frame_count(data.size, frames)?;
+            AudioState::Flat
+        } else {
+            AudioState::Next
+        };
         let mut encoded = Vec::new();
         reserve(&mut encoded, codec.block_bytes())?;
         encoded.resize(codec.block_bytes(), 0);
@@ -72,6 +81,8 @@ impl<R: Read> AdpcmForwardReader<R> {
             position: 0,
             cache_frames: 0,
             cache_position: 0,
+            state,
+            capacity: 0,
             failed: false,
         })
     }
@@ -93,6 +104,15 @@ impl<R: Read> AdpcmForwardReader<R> {
     /// Fill complete interleaved frames, returning sample count. A codec/I/O
     /// error poisons this forward stream; output may contain a decoded prefix.
     pub fn read_i16(&mut self, out: &mut [i16]) -> Result<usize, Error> {
+        self.read_i16_with_metadata(out, |_, _| Ok(()))
+    }
+    /// Visit ancillary children encountered between compressed wavl segments.
+    /// Metadata callback failures poison this forward reader like codec/I/O errors.
+    pub fn read_i16_with_metadata(
+        &mut self,
+        out: &mut [i16],
+        mut visit: impl FnMut(crate::ChunkInfo, &mut ChunkPayload<'_, R>) -> Result<(), Error>,
+    ) -> Result<usize, Error> {
         if self.failed {
             return Err(Error::Invalid("forward ADPCM reader unusable after error"));
         }
@@ -101,10 +121,45 @@ impl<R: Read> AdpcmForwardReader<R> {
         self.failed = true;
         while done < frames {
             if self.cache_position == self.cache_frames {
-                let n = self.reader.read_data(&mut self.encoded)?;
-                let codec = Adpcm::from_format(self.reader.format())?;
-                self.cache_frames = codec.decode_block(&self.encoded[..n], &mut self.decoded)?;
-                self.cache_position = 0;
+                match self.state {
+                    AudioState::Flat => {
+                        let n = self.reader.read_data(&mut self.encoded)?;
+                        self.decode(n)?;
+                    }
+                    AudioState::Data(left) if left != 0 => {
+                        let n = left.min(self.encoded.len() as u64) as usize;
+                        let n = self.reader.read_encoded_child(&mut self.encoded[..n])?;
+                        if n == 0 {
+                            return Err(Error::Truncated);
+                        }
+                        self.state = AudioState::Data(left - n as u64);
+                        self.decode(n)?;
+                    }
+                    AudioState::Silence(left) if left != 0 => {
+                        let n = left.min((frames - done) as u64) as usize;
+                        let dst = &mut out[done * self.channels..(done + n) * self.channels];
+                        if self.cache_frames == 0 {
+                            dst.fill(0);
+                        } else {
+                            let start = (self.cache_frames - 1) * self.channels;
+                            crate::timeline::repeat(
+                                dst,
+                                &self.decoded[start..start + self.channels],
+                            );
+                        }
+                        self.state = AudioState::Silence(left - n as u64);
+                        self.position += n as u64;
+                        done += n;
+                        continue;
+                    }
+                    AudioState::End => {
+                        return Err(Error::Invalid("ADPCM fact exceeds wavl capacity"));
+                    }
+                    _ => {
+                        self.next_segment(&mut visit)?;
+                        continue;
+                    }
+                }
             }
             let n = (self.cache_frames - self.cache_position).min(frames - done);
             if n == 0 {
@@ -121,15 +176,50 @@ impl<R: Read> AdpcmForwardReader<R> {
         self.failed = false;
         Ok(done * self.channels)
     }
+    fn decode(&mut self, n: usize) -> Result<(), Error> {
+        let codec = Adpcm::from_format(self.reader.format())?;
+        self.cache_frames = codec.decode_block(&self.encoded[..n], &mut self.decoded)?;
+        self.cache_position = 0;
+        Ok(())
+    }
+    fn next_segment(
+        &mut self,
+        visit: impl FnMut(crate::ChunkInfo, &mut ChunkPayload<'_, R>) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        let (state, frames) = match self.reader.next_encoded_segment(visit)? {
+            Some(crate::forward::EncodedSegment::Data(bytes)) => (
+                AudioState::Data(bytes),
+                Adpcm::from_format(self.reader.format())?.data_frames(bytes)?,
+            ),
+            Some(crate::forward::EncodedSegment::Silence(frames)) => {
+                (AudioState::Silence(frames), frames)
+            }
+            None => (AudioState::End, 0),
+        };
+        self.capacity = self
+            .capacity
+            .checked_add(frames)
+            .ok_or(Error::Limit("ADPCM wavl frame count overflow"))?;
+        self.state = state;
+        Ok(())
+    }
     pub fn finish(self) -> Result<R, Error> {
         self.finish_with_metadata(|_, _| Ok(()))
     }
     pub fn finish_with_metadata(
-        self,
-        visit: impl FnMut(crate::ChunkInfo, &mut ChunkPayload<'_, R>) -> Result<(), Error>,
+        mut self,
+        mut visit: impl FnMut(crate::ChunkInfo, &mut ChunkPayload<'_, R>) -> Result<(), Error>,
     ) -> Result<R, Error> {
         if self.failed {
             return Err(Error::Invalid("forward ADPCM reader unusable after error"));
+        }
+        if !matches!(self.state, AudioState::Flat) {
+            while !matches!(self.state, AudioState::End) {
+                self.next_segment(&mut visit)?;
+            }
+            if self.frames > self.capacity {
+                return Err(Error::Invalid("ADPCM fact exceeds wavl capacity"));
+            }
         }
         self.reader.finish_checked(Some(self.frames), visit)
     }

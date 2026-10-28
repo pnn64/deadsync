@@ -34,3 +34,7 @@ harness = false
 [[bench]]
 name = "adpcm_file"
 harness = false
+
+[[bench]]
+name = "adpcm_forward"
+harness = false

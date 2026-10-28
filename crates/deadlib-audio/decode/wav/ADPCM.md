@@ -17,8 +17,9 @@ range reads, including direct seeks into held silence. `Adpcm::data_frames`
 reports a payload's decoded capacity without reading its block headers. Per-child
 padding, the global fact limit and evidence are documented in [WAVL.md](WAVL.md).
 AdpcmReader also supports segmented data and held-frame seeks with its one-block
-cache. AdpcmForwardReader still requires flat data; its segmented routing remains
-unfinished.
+cache. AdpcmForwardReader handles both layouts without an index, using a known
+duration and bounded metadata callbacks. Its finish operation checks all child
+geometry/counts while leaving intentionally unread block headers undecoded.
 Extensible IMA now uses its GUID and samples-per-block union through every block
 and file API. `AdpcmSpec::format_extensible` serializes speaker masks, and IMA
 writers honor force_extensible. [IMA_EXTENSIBLE.md](IMA_EXTENSIBLE.md) records the
