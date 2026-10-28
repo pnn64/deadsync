@@ -452,6 +452,38 @@ fn borrowed_packets_do_not_copy_and_finish_emits_nil_eos() {
 }
 
 #[test]
+fn full_terminated_lacing_waits_for_the_next_packet_or_flush() {
+    for lace in [0, 1, 17, 254] {
+        let mut writer = PacketWriter::with_options(
+            Vec::new(),
+            42,
+            WriteOptions {
+                target_page_body: usize::MAX,
+            },
+        );
+        writer.write_packet(b"header", 0, false).unwrap();
+        let bos_length = writer.get_ref().len();
+        let data = vec![37; lace as usize];
+        for i in 0..255 {
+            writer.write_packet(&data, i, false).unwrap();
+        }
+        assert_eq!(writer.get_ref().len(), bos_length);
+        writer.write_packet(&[], 255, false).unwrap();
+        let (full, length) = Page::parse(&writer.get_ref()[bos_length..]).unwrap();
+        assert_eq!(full.lacing(), &[lace; 255]);
+        assert_eq!(full.body(), data.repeat(255));
+        assert_eq!(full.header().granule_position, 254);
+        assert_eq!(full.header().flags, 0);
+        assert_eq!(writer.get_ref().len(), bos_length + length);
+        writer.finish().unwrap();
+        let (eos, _) = Page::parse(&writer.get_ref()[bos_length + length..]).unwrap();
+        assert_eq!(eos.lacing(), &[0]);
+        assert_eq!(eos.header().flags, EOS);
+        assert_eq!(eos.header().granule_position, 255);
+    }
+}
+
+#[test]
 fn deterministic_random_packets_differential() {
     let mut seed = 0x9428_7381u32;
     let mut writer = PacketWriter::with_options(
