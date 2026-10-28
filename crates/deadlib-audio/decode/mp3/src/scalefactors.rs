@@ -143,10 +143,8 @@ pub fn read(
         }
         if factors.short_block {
             if factors.mixed_block && widths[0] != 0 {
-                for band in 0..8 {
-                    factors.long[band] = cursor.read(widths[0] as u32)? as u8;
-                    factors.long_width[band] = widths[0];
-                }
+                read_values(&mut cursor, widths[0], &mut factors.long[..8])?;
+                factors.long_width[..8].fill(widths[0]);
             }
             let first = if factors.mixed_block { 3 } else { 0 };
             for (first, last, width) in [(first, 6, widths[0]), (6, 12, widths[1])] {
@@ -182,10 +180,8 @@ pub fn read(
                     if width == 0 {
                         continue;
                     }
-                    for band in first..last {
-                        factors.long[band] = cursor.read(width as u32)? as u8;
-                        factors.long_width[band] = width;
-                    }
+                    read_values(&mut cursor, width, &mut factors.long[first..last])?;
+                    factors.long_width[first..last].fill(width);
                 }
             }
         }
@@ -243,4 +239,17 @@ pub fn read(
     }
     *bits = cursor;
     Ok(factors)
+}
+
+/// Reads an equal-width span whose combined field fits in a u32.
+#[inline]
+fn read_values(bits: &mut BitReader<'_>, width: u8, output: &mut [u8]) -> Result<(), Error> {
+    let width = u32::from(width);
+    let mut packed = bits.read(output.len() as u32 * width)?;
+    let mask = (1 << width) - 1;
+    for value in output.iter_mut().rev() {
+        *value = (packed & mask) as u8;
+        packed >>= width;
+    }
+    Ok(())
 }
