@@ -136,18 +136,28 @@ pub fn read(
         let widths = *SLEN
             .get(info.scalefac_compress as usize)
             .ok_or(Error::Invalid("MPEG-1 scalefactor compression"))?;
+        if widths == [0; 2]
+            && (factors.short_block || granule == 0 || side.scfsi[channel] == [false; 4])
+        {
+            return Ok(factors);
+        }
         if factors.short_block {
-            if factors.mixed_block {
+            if factors.mixed_block && widths[0] != 0 {
                 for band in 0..8 {
                     factors.long[band] = cursor.read(widths[0] as u32)? as u8;
                     factors.long_width[band] = widths[0];
                 }
             }
-            for band in if factors.mixed_block { 3 } else { 0 }..12 {
-                let width = widths[usize::from(band >= 6)];
-                for window in 0..3 {
-                    factors.short[band][window] = cursor.read(width as u32)? as u8;
-                    factors.short_width[band][window] = width;
+            let first = if factors.mixed_block { 3 } else { 0 };
+            for (first, last, width) in [(first, 6, widths[0]), (6, 12, widths[1])] {
+                if width == 0 {
+                    continue;
+                }
+                for band in first..last {
+                    for window in 0..3 {
+                        factors.short[band][window] = cursor.read(width as u32)? as u8;
+                        factors.short_width[band][window] = width;
+                    }
                 }
             }
         } else {
@@ -164,6 +174,9 @@ pub fn read(
                     factors.long_width[first..last].copy_from_slice(&prev.long_width[first..last]);
                 } else {
                     let width = widths[usize::from(group >= 2)];
+                    if width == 0 {
+                        continue;
+                    }
                     for band in first..last {
                         factors.long[band] = cursor.read(width as u32)? as u8;
                         factors.long_width[band] = width;

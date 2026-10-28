@@ -146,40 +146,81 @@ fn mpeg1_widths_and_all_scfsi_masks() {
             )
             .unwrap();
             assert_eq!(factors.encoded_bits, bits);
+            assert_eq!(reader.position(), bits);
+            for band in 0..22 {
+                let width = match shape {
+                    0 if band < 21 => {
+                        if band < 11 {
+                            a
+                        } else {
+                            b
+                        }
+                    }
+                    2 if band < 8 => a,
+                    _ => 0,
+                };
+                assert_eq!(factors.long[band], ((1u16 << width) - 1) as u8);
+                assert_eq!(factors.long_width[band], width as u8);
+            }
+            for band in 0..13 {
+                let first = if shape == 2 { 3 } else { 0 };
+                let width = if shape == 0 || band < first || band == 12 {
+                    0
+                } else if band < 6 {
+                    a
+                } else {
+                    b
+                };
+                assert_eq!(factors.short[band], [((1u16 << width) - 1) as u8; 3]);
+                assert_eq!(factors.short_width[band], [width as u8; 3]);
+            }
         }
     }
     let mut prev = ScaleFactors::default();
     for (i, f) in prev.long.iter_mut().enumerate() {
         *f = (i % 8) as u8;
+        prev.long_width[i] = (i % 5) as u8;
     }
-    for mask in 0..16 {
-        let mut side = side(15, 0);
-        for i in 0..4 {
-            side.scfsi[0][i] = mask & (1 << i) != 0;
-        }
-        let data = [0xff; 32];
-        let mut bits = BitReader::new(&data);
-        let result = read(&mut bits, header(3, false), &side, 1, 0, Some(&prev)).unwrap();
-        let mut consumed = 0;
-        for (i, (first, last, width)) in [(0, 6, 4), (6, 11, 4), (11, 16, 3), (16, 21, 3)]
-            .into_iter()
-            .enumerate()
-        {
-            for band in first..last {
-                assert_eq!(
-                    result.long[band],
-                    if mask & (1 << i) != 0 {
-                        prev.long[band]
-                    } else {
-                        (1 << width) - 1
-                    }
-                );
+    for compress in [0, 4, 15] {
+        let [a, b] = widths[compress];
+        for mask in 0..16 {
+            let mut side = side(compress as u16, 0);
+            for i in 0..4 {
+                side.scfsi[0][i] = mask & (1 << i) != 0;
             }
-            if mask & (1 << i) == 0 {
-                consumed += (last - first) * width;
+            let data = [0xff; 32];
+            let mut bits = BitReader::new(&data);
+            let result = read(&mut bits, header(3, false), &side, 1, 0, Some(&prev)).unwrap();
+            let mut consumed = 0;
+            for (i, (first, last, width)) in [(0, 6, a), (6, 11, a), (11, 16, b), (16, 21, b)]
+                .into_iter()
+                .enumerate()
+            {
+                for band in first..last {
+                    assert_eq!(
+                        result.long[band],
+                        if mask & (1 << i) != 0 {
+                            prev.long[band]
+                        } else {
+                            ((1u16 << width) - 1) as u8
+                        }
+                    );
+                    assert_eq!(
+                        result.long_width[band],
+                        if mask & (1 << i) != 0 {
+                            prev.long_width[band]
+                        } else {
+                            width as u8
+                        }
+                    );
+                }
+                if mask & (1 << i) == 0 {
+                    consumed += (last - first) * width;
+                }
             }
+            assert_eq!(result.encoded_bits, consumed);
+            assert_eq!(bits.position(), consumed);
         }
-        assert_eq!(result.encoded_bits, consumed);
     }
 }
 
@@ -209,12 +250,20 @@ fn scalefactor_boundaries_are_atomic() {
             }
         }
     }
-    let mut s = side(15, 0);
-    s.scfsi[0] = [true; 4];
-    let data = [0u8; 32];
-    let mut bits = BitReader::new(&data);
-    assert!(read(&mut bits, header(3, false), &s, 1, 0, None).is_err());
-    assert_eq!(bits.position(), 0);
-    assert!(read(&mut bits, header(2, false), &s, 1, 0, None).is_err());
-    assert!(read(&mut bits, header(2, false), &s, 0, 2, None).is_err());
+    for compress in [0, 15] {
+        let mut s = side(compress, 0);
+        s.scfsi[0] = [true; 4];
+        let data = [0u8; 32];
+        let mut bits = BitReader::new(&data);
+        assert!(read(&mut bits, header(3, false), &s, 1, 0, None).is_err());
+        assert_eq!(bits.position(), 0);
+        let previous = ScaleFactors {
+            short_block: true,
+            ..Default::default()
+        };
+        assert!(read(&mut bits, header(3, false), &s, 1, 0, Some(&previous)).is_err());
+        assert_eq!(bits.position(), 0);
+        assert!(read(&mut bits, header(2, false), &s, 1, 0, None).is_err());
+        assert!(read(&mut bits, header(2, false), &s, 0, 2, None).is_err());
+    }
 }
