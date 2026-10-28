@@ -79,7 +79,14 @@ range cases match retained oracle evidence. All 31 integration tests pass on
 Windows x86_64 debug/release and i686 debug, and Clippy passes. Normal Cargo edges
 still show no production dependencies. See ADPCM.md for commands and limitations.
 
-Remaining work: forward-only audio convenience, structured metadata,
+Explicit metadata views and caller-buffer serializers now cover LIST/INFO/adtl,
+cue, smpl, BEXT v0/v1/v2, RF64 markers and BW64 CHNA/XML envelopes. Ten tests add
+independent layouts, malformed/truncated counts and zero-heap allocation probes;
+all 41 debug tests and Clippy pass. The metadata oracle matches independent field
+truth for all 12 fixtures and dr_wav for nine, with trailing-RF64 differences
+retained. See [METADATA.md](METADATA.md) for precise scope and limitations.
+
+Remaining work: forward-only audio convenience, metadata profile/semantic validation,
 wavl/slnt and multiple-data handling, oracle comparisons, fuzzing, sparse >4 GiB
 evidence and broad performance coverage (the first PCM16 baseline is in
 [PERFORMANCE.md](PERFORMANCE.md)); forward-only audio convenience APIs,

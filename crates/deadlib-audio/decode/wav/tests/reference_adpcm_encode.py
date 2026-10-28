@@ -89,7 +89,7 @@ def main():
                             decoded_sha256=sha(decoded),references=compared,spec_arithmetic_gate=gate,passed=passed,
                             rmse=math.sqrt(error/len(samples)),snr_db=10*math.log10(power/error) if error and power else None,
                             max_abs_error=max(abs(a-b) for a,b in zip(samples,values)),exact_source=decoded==struct.pack('<'+'h'*len(samples),*samples)))
-    paths=sorted((root/'src').glob('*.rs'))+[root/'Cargo.toml',root/'examples/encode_adpcm.rs',root/'examples/adpcm.rs',Path(__file__),root/'tests/reference_support.py']
+    paths=sorted((root/'src').rglob('*.rs'))+[root/'Cargo.toml',root/'examples/encode_adpcm.rs',root/'examples/adpcm.rs',Path(__file__),root/'tests/reference_support.py']
     report=dict(rustc=run(['rustc','-V']).stdout.decode().strip(),ffmpeg=run([ffmpeg,'-version']).stdout.decode().splitlines()[0],
         libsndfile=sf.__libsndfile_version__,soundfile=sf.__version__,dr_wav=dr_meta,symphonia=sym_meta,
         encoder_sha256=sha(encoder.read_bytes()),decoder_sha256=sha(decoder.read_bytes()),sources={p.relative_to(root).as_posix():sha(p.read_bytes()) for p in paths},

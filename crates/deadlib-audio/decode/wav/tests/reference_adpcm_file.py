@@ -43,7 +43,7 @@ def main():
             process=subprocess.run([str(binary),str(path),str(start),str(count)],capture_output=True,check=True)
             wanted=expected[start*channels*2:(start+count)*channels*2]
             results.append(dict(name=case['name'],start=start,frames=count,output_sha256=sha(process.stdout),passed=process.stdout==wanted))
-    sources=sorted((root/'src').glob('*.rs'))+[root/'examples/adpcm_file.rs',Path(__file__)]
+    sources=sorted((root/'src').rglob('*.rs'))+[root/'examples/adpcm_file.rs',Path(__file__)]
     evidence=dict(reference_sha256=sha(reference.read_bytes()),binary_sha256=sha(binary.read_bytes()),
                   sources={p.relative_to(root).as_posix():sha(p.read_bytes()) for p in sources},
                   passed=sum(c['passed'] for c in results),total=len(results),cases=results)

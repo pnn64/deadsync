@@ -20,7 +20,7 @@ def main():
     root = Path(__file__).resolve().parents[1]
     workspace = root.parents[3]
     stem = args.output.resolve()
-    paths = sorted((root/'src').glob('*.rs')) + [root/'Cargo.toml', root/'benches/pcm.rs', Path(__file__),
+    paths = sorted((root/'src').rglob('*.rs')) + [root/'Cargo.toml', root/'benches/pcm.rs', Path(__file__),
               workspace/'Cargo.toml', workspace/'Cargo.lock', workspace/'.cargo/config.toml']
     for suffix in ('.tsv', '.json', '.build.log', '.stderr'):
         if Path(str(stem)+suffix).exists():

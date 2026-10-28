@@ -118,7 +118,7 @@ def main():
     report = dict(ffmpeg=run([ffmpeg, '-version']).stdout.decode().splitlines()[0],
                   dr_wav=dr_provenance, libsndfile=sf.__libsndfile_version__, soundfile=sf.__version__,
                   rustc=run(['rustc', '-V']).stdout.decode().strip(), binary_sha256=sha(binary.read_bytes()),
-                  sources={p.relative_to(root).as_posix(): sha(p.read_bytes()) for p in sorted((root/'src').glob('*.rs'))},
+                  sources={p.relative_to(root).as_posix(): sha(p.read_bytes()) for p in sorted((root/'src').rglob('*.rs'))},
                   validation_sources={p.relative_to(root).as_posix(): sha(p.read_bytes()) for p in [root/'Cargo.toml', root/'examples/adpcm.rs', Path(__file__), root/'tests/reference_support.py', root/'tests/oracle/dr_wav.c']},
                   cases=results, passed=sum(r['passed'] for r in results), total=len(results))
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -60,6 +60,13 @@ PCM/float counts are checked against block alignment. The native `Writer` uses
 this same muxer. RF64 promotion also accounts for decoded counts above 32 bits,
 even when compressed data is small.
 
+`metadata` provides borrowed LIST/INFO/adtl, cue, sampler, broadcast extension,
+RF64 marker and BW64 CHNA/XML envelope views. Matching helpers serialize into
+caller buffers. `Chunk::metadata` performs explicit bounded parsing; raw payloads
+and unknown chunks remain available unchanged. See [METADATA.md](METADATA.md) for
+the validation evidence and the boundary between container data and ADM/XML
+interpretation.
+
 Build and test by package name:
 
 ```sh

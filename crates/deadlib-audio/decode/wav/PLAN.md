@@ -21,6 +21,9 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    without coupling container parsing to codecs; shared Muxer supports that boundary.
 4. Rich metadata views and preservation: INFO, BEXT, cue/adtl, smpl, RF64 markers,
    ADM XML/CHNA, unknown chunks. Unusual ordering, large/sparse files and multichannel.
+   Borrowed views and caller-buffer serialization are implemented (41 total tests,
+   allocator probe and external metadata fixtures); see METADATA.md. Full broadcast
+   profile/ADM semantics, XML compression and broad metadata benchmarks remain open.
 5. Differential validation against libsndfile, dr_wav, Symphonia; independent
    fixtures, malformed corpus, streaming split matrix and bounded fuzz campaigns.
 6. Reproducible comparative benchmarks: open/metadata/full read/stream/seek/encode,
@@ -52,4 +55,6 @@ File-backed cached ADPCM reading is now implemented and validated against the
 retained corpus. All 31 integration tests pass on x86_64 (debug/release) and i686
 (debug); all 204 real-file sequential/range cases pass. Forward-only convenience,
 known-length nonseekable output, metadata, 3-bit/extensible ADPCM, PCM differential
-coverage, fuzzing and broad performance/RSS evidence remain required.
+coverage, fuzzing and broad performance/RSS evidence remain required. Structured
+metadata was implemented next as recorded in METADATA.md; profile/semantic
+validation remains open.

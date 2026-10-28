@@ -8,6 +8,7 @@ pub mod adpcm_reader;
 pub mod container;
 pub mod encode;
 pub mod format;
+pub mod metadata;
 pub mod mux;
 pub mod pcm;
 pub mod reader;

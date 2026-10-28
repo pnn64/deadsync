@@ -25,7 +25,7 @@ def build_symphonia(workspace, root):
                        binary_sha256=hashlib.sha256(output.read_bytes()).hexdigest())
 
 
-def build_dr_wav(workspace, root):
+def build_dr_wav(workspace, root, driver='dr_wav'):
     cache = workspace / 'target/wav/oracle'
     cache.mkdir(parents=True, exist_ok=True)
     header = cache / 'dr_wav.h'
@@ -34,8 +34,8 @@ def build_dr_wav(workspace, root):
     if hashlib.sha256(data).hexdigest() != DR_SHA256:
         raise RuntimeError('dr_wav source hash mismatch')
     header.write_bytes(data)
-    source = root / 'tests/oracle/dr_wav.c'
-    output = cache / ('dr_wav.exe' if os.name == 'nt' else 'dr_wav')
+    source = root / f'tests/oracle/{driver}.c'
+    output = cache / (driver+'.exe' if os.name == 'nt' else driver)
     if os.name == 'nt':
         vswhere = Path(os.environ.get('ProgramFiles(x86)', r'C:\Program Files (x86)')) / 'Microsoft Visual Studio/Installer/vswhere.exe'
         setup = subprocess.check_output([str(vswhere), '-latest', '-products', '*', '-find', 'VC/Auxiliary/Build/vcvars64.bat'], text=True).strip().splitlines()[0]
@@ -48,8 +48,8 @@ def build_dr_wav(workspace, root):
     else:
         command = [shutil.which('cc') or 'cc', '-O2', '-I'+str(cache), str(source), '-lm', '-o', str(output)]
     result = subprocess.run(command, cwd=cache, capture_output=True)
-    (cache/'build.log').write_bytes(result.stdout+result.stderr)
+    (cache/(driver+'.build.log')).write_bytes(result.stdout+result.stderr)
     if result.returncode:
-        raise RuntimeError('dr_wav build failed; see '+str(cache/'build.log'))
+        raise RuntimeError('dr_wav build failed; see '+str(cache/(driver+'.build.log')))
     return output, dict(commit=DR_COMMIT, header_sha256=DR_SHA256, binary_sha256=hashlib.sha256(output.read_bytes()).hexdigest(),
                         driver_sha256=hashlib.sha256(source.read_bytes()).hexdigest())
