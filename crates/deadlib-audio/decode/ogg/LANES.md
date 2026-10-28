@@ -219,3 +219,7 @@ rustc commands, library hashes and source paths. The audit verifies that the
 retained commits match their measured source snapshots and the rejected patch
 matches its separate snapshot. Timings describe these builds and fixtures on
 this host, not portable performance guarantees.
+
+The subsequent [incremental-body and empty-poll pass](DECODER_BODY.md) removes
+planning from known partial-body chunks, redundant work from empty pushes and
+one normal-path state branch, with exact comparisons and measured tradeoffs.

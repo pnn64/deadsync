@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [packet-count lane and short-tail measurements](LANES.md) cover
+The latest [incremental-body and empty-poll measurements](DECODER_BODY.md)
+cover direct partial-body appends, empty decoder polls and combined state
+checks, with paired CPU/heap evidence, exact state comparisons and control costs.
+
+The earlier [packet-count lane and short-tail measurements](LANES.md) cover
 once-per-page horizontal folding and direct short fallback scans, with paired
 CPU/heap evidence and an investigation of earlier control regressions.
 
