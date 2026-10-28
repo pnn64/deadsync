@@ -210,11 +210,13 @@ pub fn read(
                 n += count as usize;
                 continue;
             }
-            for _ in 0..count {
-                flat[n] = cursor.read(width as u32)? as u8;
-                widths[n] = width;
-                n += 1;
+            let end = n + count as usize;
+            // Six maximum-width (five-bit) factors fit in one field.
+            for values in flat[n..end].chunks_mut(6) {
+                read_values(&mut cursor, width, values)?;
             }
+            widths[n..end].fill(width);
+            n = end;
         }
         if factors.short_block {
             let long = if factors.mixed_block { 6 } else { 0 };
