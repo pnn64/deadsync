@@ -144,7 +144,7 @@ impl<R: Read> PageReader<R> {
     fn scan_capture(&mut self) -> Result<(), Error> {
         loop {
             let available = &self.buffer[self.start..];
-            if let Some(skip) = available.windows(4).position(|bytes| bytes == b"OggS") {
+            if let Some(skip) = capture_pattern(available) {
                 self.discard(skip);
                 self.discarded += skip as u64;
                 return Ok(());
@@ -198,6 +198,40 @@ impl<R: Read> PageReader<R> {
         }))
     }
 }
+
+fn capture_pattern(bytes: &[u8]) -> Option<usize> {
+    let (words, _) = bytes[..bytes.len().saturating_sub(3)].as_chunks::<8>();
+    for (i, word) in words.iter().enumerate() {
+        let word = u64::from_le_bytes(*word);
+        let o = word ^ 0x4f4f_4f4f_4f4f_4f4f;
+        let g = word ^ 0x6767_6767_6767_6767;
+        let o = o.wrapping_sub(0x0101_0101_0101_0101) & !o & 0x8080_8080_8080_8080;
+        let g = g.wrapping_sub(0x0101_0101_0101_0101) & !g & 0x8080_8080_8080_8080;
+        // Filter on Og; the last byte may pair with g in the next word.
+        // Borrow propagation can add candidates, so verify the complete capture.
+        let candidates = o & ((g >> 8) | 0x8000_0000_0000_0000);
+        // Dense false prefixes favor the original scalar search.
+        if candidates & candidates.wrapping_sub(1) != 0 {
+            let offset = i * 8;
+            return bytes[offset..]
+                .windows(4)
+                .position(|bytes| bytes == b"OggS")
+                .map(|i| offset + i);
+        }
+        if candidates != 0 {
+            let offset = i * 8 + candidates.trailing_zeros() as usize / 8;
+            if bytes[offset..].starts_with(b"OggS") {
+                return Some(offset);
+            }
+        }
+    }
+    let offset = words.len() * 8;
+    bytes[offset..]
+        .windows(4)
+        .position(|bytes| bytes == b"OggS")
+        .map(|i| offset + i)
+}
+
 impl<R: Read + Seek> PageReader<R> {
     /// Reset transport state at an absolute offset. Use recovery mode when
     /// the offset is not a known page boundary. Codec overlap is caller-owned.
@@ -308,6 +342,44 @@ impl PageDecoder {
             if self.length != 0 {
                 page::check_crc(&self.buffer)?;
                 return Ok((consumed, true));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::capture_pattern;
+
+    #[test]
+    fn capture_search_matches_scalar_with_every_byte_and_word_boundary() {
+        for fill in 0..=255 {
+            for length in 0..80 {
+                let bytes = vec![fill; length];
+                assert_eq!(
+                    capture_pattern(&bytes),
+                    bytes.windows(4).position(|b| b == b"OggS")
+                );
+                for offset in 0..length.saturating_sub(3) {
+                    let mut bytes = bytes.clone();
+                    bytes[offset..offset + 4].copy_from_slice(b"OggS");
+                    assert_eq!(
+                        capture_pattern(&bytes),
+                        bytes.windows(4).position(|b| b == b"OggS")
+                    );
+                }
+            }
+        }
+        for pattern in [b"OgOg".as_slice(), b"OggOg", b"OggSOggS", b"NOfgOgg"] {
+            let bytes = pattern.repeat(50);
+            for start in 0..16 {
+                for end in start..bytes.len() {
+                    let bytes = &bytes[start..end];
+                    assert_eq!(
+                        capture_pattern(bytes),
+                        bytes.windows(4).position(|b| b == b"OggS")
+                    );
+                }
             }
         }
     }
