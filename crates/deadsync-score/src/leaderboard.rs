@@ -557,7 +557,13 @@ pub enum ArrowCloudPaneKind {
     Itg,
     Ex,
     HardEx,
+    /// The golf event's hole board, served with the core boards on golf holes.
+    Golf,
 }
+
+/// Pane name of the golf event board. The scorebox and overlay key golf
+/// rendering (strokes instead of percents) off this name.
+pub const GOLF_LEADERBOARD_PANE_NAME: &str = "Golf (ArrowCloud)";
 
 #[must_use]
 pub fn arrowcloud_pane_kind_from_type(lb_type: &str) -> Option<ArrowCloudPaneKind> {
@@ -576,6 +582,7 @@ pub fn arrowcloud_pane_kind_from_type(lb_type: &str) -> Option<ArrowCloudPaneKin
         b"itg" => Some(ArrowCloudPaneKind::Itg),
         b"ex" => Some(ArrowCloudPaneKind::Ex),
         b"hardex" | b"hex" => Some(ArrowCloudPaneKind::HardEx),
+        b"golf" => Some(ArrowCloudPaneKind::Golf),
         _ => None,
     }
 }
@@ -652,6 +659,37 @@ pub fn arrowcloud_leaderboard_entry(
     }
 }
 
+/// Raw strokes per displayed stroke. `ArrowCloud` sends displayed strokes
+/// (`"3.82"`); golf rows store raw strokes so the scorebox formats them the
+/// same way as the native counter.
+const GOLF_RAW_STROKES_PER_STROKE: f64 = 1000.0;
+
+#[must_use]
+pub fn arrowcloud_golf_leaderboard_entry(
+    rank: u32,
+    alias: String,
+    strokes: f64,
+    date: String,
+    is_self: bool,
+    is_rival: bool,
+) -> LeaderboardEntry {
+    let score = if strokes.is_finite() {
+        (strokes * GOLF_RAW_STROKES_PER_STROKE).round().max(0.0)
+    } else {
+        0.0
+    };
+    LeaderboardEntry {
+        rank,
+        name: alias,
+        machine_tag: None,
+        score,
+        date,
+        is_rival,
+        is_self,
+        is_fail: false,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct LeaderboardPane {
     pub name: String,
@@ -674,7 +712,7 @@ impl LeaderboardPane {
     pub fn is_arrowcloud(&self) -> bool {
         self.arrowcloud_kind.is_some()
             || self.name.eq_ignore_ascii_case("ArrowCloud")
-            || self.name == "Golf (ArrowCloud)"
+            || self.name == GOLF_LEADERBOARD_PANE_NAME
     }
 
     #[inline(always)]
@@ -796,7 +834,8 @@ pub fn scorebox_pane_kind(pane: &LeaderboardPane) -> ScoreboxPaneKind {
 }
 
 fn known_scorebox_pane_kind(pane: &LeaderboardPane) -> Option<ScoreboxPaneKind> {
-    if pane.name == "Golf (ArrowCloud)" {
+    if pane.arrowcloud_kind == Some(ArrowCloudPaneKind::Golf) || pane.name == GOLF_LEADERBOARD_PANE_NAME
+    {
         return Some(ScoreboxPaneKind::Golf);
     }
     if pane.is_arrowcloud() {
@@ -858,6 +897,15 @@ pub fn preferred_primary_scorebox_pane<'a>(
     } else {
         ScoreboxPaneKind::Gs
     };
+    // A golf board only exists for a golf hole, and on a hole golf is the
+    // score that matters, so it leads whatever scoring mode the player uses.
+    if let Some(golf) = panes
+        .iter()
+        .copied()
+        .find(|pane| scorebox_pane_kind(pane) == ScoreboxPaneKind::Golf)
+    {
+        return Some(golf);
+    }
     let mut first_gs = None;
     let mut first_ex = None;
     for &pane in panes {
@@ -872,6 +920,13 @@ pub fn preferred_primary_scorebox_pane<'a>(
         }
     }
     first_gs.or(first_ex).or_else(|| panes.first().copied())
+}
+
+/// Move golf boards ahead of every other pane, keeping each group's order.
+/// A golf board is only returned for a chart that is a golf hole, so on golf
+/// packs the leaderboard overlay and scorebox cycle open on golf.
+pub fn prioritize_golf_panes(panes: &mut [LeaderboardPane]) {
+    panes.sort_by_key(|pane| scorebox_pane_kind(pane) != ScoreboxPaneKind::Golf);
 }
 
 #[must_use]
@@ -899,8 +954,13 @@ pub fn arrowcloud_leaderboard_pane(
     entries: Vec<LeaderboardEntry>,
     personalized: bool,
 ) -> LeaderboardPane {
+    let name = if kind == ArrowCloudPaneKind::Golf {
+        GOLF_LEADERBOARD_PANE_NAME
+    } else {
+        "ArrowCloud"
+    };
     LeaderboardPane {
-        name: "ArrowCloud".to_string(),
+        name: name.to_string(),
         entries,
         is_ex: kind == ArrowCloudPaneKind::Ex,
         disabled: false,
@@ -2070,6 +2130,44 @@ mod tests {
     }
 
     #[test]
+    fn golf_board_leads_the_scorebox_whenever_a_hole_has_one() {
+        let gs = pane("GrooveStats", false, None);
+        let ex = pane("GrooveStats", true, None);
+        let golf = pane("Golf (ArrowCloud)", false, None);
+        let with_golf = [&gs, &ex, &golf];
+        for show_ex in [false, true] {
+            assert_eq!(
+                preferred_primary_scorebox_pane(&with_golf, show_ex).map(scorebox_pane_kind),
+                Some(ScoreboxPaneKind::Golf)
+            );
+        }
+    }
+
+    #[test]
+    fn prioritize_golf_panes_moves_golf_first_and_keeps_the_rest_in_order() {
+        let mut panes = vec![
+            pane("GrooveStats", false, None),
+            pane("ArrowCloud", false, Some(ArrowCloudPaneKind::HardEx)),
+            pane("Golf (ArrowCloud)", false, None),
+            pane("GrooveStats", true, None),
+        ];
+        prioritize_golf_panes(&mut panes);
+        let kinds: Vec<_> = panes.iter().map(scorebox_pane_kind).collect();
+        assert_eq!(
+            kinds,
+            [
+                ScoreboxPaneKind::Golf,
+                ScoreboxPaneKind::Gs,
+                ScoreboxPaneKind::HardEx,
+                ScoreboxPaneKind::Ex,
+            ]
+        );
+        let mut without_golf = vec![pane("GrooveStats", true, None), pane("GrooveStats", false, None)];
+        prioritize_golf_panes(&mut without_golf);
+        assert!(without_golf[0].is_ex && !without_golf[1].is_ex);
+    }
+
+    #[test]
     fn player_leaderboard_cache_reuses_success_until_more_rows_are_needed() {
         let now = Instant::now();
         let ready = PlayerLeaderboardCacheEntry {
@@ -2464,19 +2562,31 @@ mod tests {
 #[path = "leaderboard_request_perf.rs"]
 mod request_perf;
 
-/// Refresh cached and in-flight boards when the optional golf pane changes.
-pub fn runtime_invalidate_golf_leaderboards() {
-    let mut cache = RUNTIME_PLAYER_LEADERBOARD_CACHE.lock().unwrap();
-    let keys: HashSet<_> = cache.by_key.keys().chain(cache.in_flight.keys())
-        .map(|key| (key.api_key.clone(), key.chart_hash.clone())).collect();
-    let now = Instant::now();
-    for (api_key, chart_hash) in keys { cache.invalidate_chart_for_api(&api_key, &chart_hash, now); }
-    mark_runtime_player_leaderboards_changed();
-}
-
 #[cfg(test)]
 mod golf_tests {
     use super::*;
+
+    #[test]
+    fn golf_board_type_maps_to_the_golf_pane() {
+        assert_eq!(arrowcloud_pane_kind_from_type("Golf"), Some(ArrowCloudPaneKind::Golf));
+        let pane = arrowcloud_leaderboard_pane(ArrowCloudPaneKind::Golf, Vec::new(), true);
+        assert_eq!(pane.name, GOLF_LEADERBOARD_PANE_NAME);
+        assert!(pane.is_arrowcloud());
+        assert!(!pane.is_ex);
+        assert!(!pane.is_hard_ex());
+        assert_eq!(scorebox_pane_kind(&pane), ScoreboxPaneKind::Golf);
+    }
+
+    #[test]
+    fn golf_entries_store_raw_strokes_instead_of_percents() {
+        let entry = arrowcloud_golf_leaderboard_entry(1, "ACE".into(), 3.82, String::new(), true, false);
+        assert_eq!(entry.score, 3820.0, "displayed strokes become raw strokes, never a clamped percent");
+        assert!(entry.is_self);
+        let invalid = arrowcloud_golf_leaderboard_entry(2, "NaN".into(), f64::NAN, String::new(), false, false);
+        assert_eq!(invalid.score, 0.0);
+        let negative = arrowcloud_golf_leaderboard_entry(3, "Neg".into(), -1.0, String::new(), false, false);
+        assert_eq!(negative.score, 0.0);
+    }
     #[test]
     fn golf_board_requires_explicit_filter_selection() {
         let panes = [LeaderboardPane { name: "Golf (ArrowCloud)".into(), entries: Vec::new(), is_ex: false, disabled: false, personalized: false, arrowcloud_kind: None }];

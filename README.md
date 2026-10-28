@@ -299,7 +299,11 @@ player and Select Music choices.
   Turning the master switch on also turns this on, so pars appear right away;
   switch it off here if you would rather not see them.
 - **Options > Select Music Options > GS Box Leaderboards > Golf (ArrowCloud)**
-  enables the online event board alongside the other selectable leaderboards.
+  shows the online event board alongside the other selectable leaderboards.
+  ArrowCloud sends it with the chart's other boards in the same request, so
+  turning it on or off takes effect immediately. On golf holes it is listed
+  first, so the scorebox and leaderboard overlay open on golf before cycling
+  to the other boards.
 
 The native display uses the supplied `GolfScoring.lua` curved formula: errors
 below 5 ms are free, hits are rounded to whole raw strokes individually, and

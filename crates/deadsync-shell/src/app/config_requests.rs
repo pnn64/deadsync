@@ -412,7 +412,6 @@ pub(super) fn execute_online(request: SimplyLoveOnlineConfigRequest) {
                     // alone, since the master switch already hides every golf display.
                     config::runtime_update::update_select_music_show_golf_pars(true);
                 }
-                deadsync_score::runtime_invalidate_golf_leaderboards();
             }
         }
         Request::SubmitArrowCloudFails(enabled) => {
@@ -542,9 +541,6 @@ pub(super) fn execute_select_music(request: SimplyLoveSelectMusicConfigRequest) 
             config::runtime_update::update_select_music_scorebox_placement(mode)
         }
         Request::ScoreboxCycleMask(mask) => {
-            if config::runtime::get().select_music_scorebox_cycle_golf != (mask & (1 << 4) != 0) {
-                deadsync_score::runtime_invalidate_golf_leaderboards();
-            }
             config::runtime_update::update_select_music_scorebox_cycle_golf(mask & (1 << 4) != 0);
             config::runtime_update::update_select_music_scorebox_cycle_itg(mask & (1 << 0) != 0);
             config::runtime_update::update_select_music_scorebox_cycle_ex(mask & (1 << 1) != 0);
