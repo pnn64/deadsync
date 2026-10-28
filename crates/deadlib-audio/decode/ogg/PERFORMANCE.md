@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [direct streaming measurements](DIRECT_STREAMING.md) cover borrowed
+The latest [lacing-result measurements](LACING.md) cover count reuse,
+constant-time packet-origin tracking and cached synchronization lengths, with
+CPU/heap comparisons and independent reference validation.
+
+The earlier [direct streaming measurements](DIRECT_STREAMING.md) cover borrowed
 packet writes, recent-stream searches and cached incremental page lengths.
 They resolve the earlier large-writer CPU regression and include exact IO and
 decoder-state comparisons, CPU cycles and heap counters.

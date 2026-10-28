@@ -1,5 +1,8 @@
 # Direct writing, recent streams and incremental input, 2026-10-28
 
+The subsequent [lacing-result pass](LACING.md) adds packet-count reuse,
+constant-time index origin tracking and synchronization length caching.
+
 This pass retains three measured optimizations after the
 [first kernel pass](KERNELS.md). All production code remains safe Rust with no
 new dependency or static table.
