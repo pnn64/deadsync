@@ -145,3 +145,16 @@ in 66.83 seconds with 1757 added units and no failure artifact. Reports are
 `fuzz-forward-asan-100k-corpus.zip`. These checks also cover the known-length muxer
 and writers introduced immediately before the forward readers. All 56 crate
 tests and Clippy pass as described in STREAMING.md.
+
+Three-bit WAV IMA adds 60 independently packed seeds (222 total): four container
+spellings, both header byte orders, 1/2/3/5 channels, interleaved bit/word crossings,
+short blocks and valid encoder geometries. The shared block/reader/writer properties
+now exercise 3-bit decoding and encoding too. One million checked mutations each
+on x64/i686 pass, as do all 1474 earlier corpus files. The fresh 100000-execution
+ASan run passes in 64.98 seconds, adds 1938 units and leaves no failure artifact.
+Reports and raw logs are `validation/ima3-{mutation-x64,mutation-i686,prior-replay,asan}.*`;
+the complete 1211-file corpus is retained in `ima3-asan-corpus.zip` with a verified
+archive/report sidecar. All report source inputs remained unchanged during runs.
+The ASan peak of 261 MiB includes instrumentation and runtime overhead, and does
+not measure normal codec RSS. ADPCM.md records independent sample truth and the
+four-reference comparison; all 60 tests and Clippy pass.

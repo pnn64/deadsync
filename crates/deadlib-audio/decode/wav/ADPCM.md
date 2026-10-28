@@ -4,7 +4,7 @@
 `decode_block` fills caller-owned interleaved i16 storage and returns frames.
 Microsoft ADPCM supports mono/stereo, all seven standard predictors, additional
 coefficient pairs, high-nibble-first interleaving and block padding. IMA supports
-4-bit WAV word groups with arbitrary channel counts within block-field limits.
+3-bit and 4-bit WAV word groups with arbitrary channel counts within block-field limits.
 Each block restarts from its header. Neither block decoder allocates.
 
 `AdpcmData::new(&wave)` borrows encoded data and uses fact/ds64 sample counts to
@@ -139,8 +139,75 @@ This establishes correctness and bounded I/O, not competitive compressed
 throughput. Real files currently seek explicitly when loading each uncached block;
 avoiding redundant sequential seeks is a remaining performance target.
 
-Remaining: forward-only compressed audio convenience, 3-bit DVI, extensible
-compressed mappings, RIFX external validation, exhaustive Symphonia decode
+Forward-only compressed reading is implemented; see STREAMING.md. Remaining:
+extensible compressed mappings, RIFX external validation, exhaustive Symphonia decode
 comparison and longer fuzz campaigns. Negative Microsoft header deltas are
 rejected. Unbounded delta growth errors safely rather than overflowing. The
 initial implementation prioritizes correctness; no ADPCM throughput claim yet.
+
+## Three-bit WAV IMA
+
+`AdpcmKind::Ima3` selects standard 3-bit WAV IMA encoding. Existing `Ima` remains
+4-bit. `Adpcm::bits_per_sample()` exposes the validated width. The borrowed,
+seekable, forward-only and known-length output APIs share the same block codec.
+No production dependency or whole-file buffer is introduced.
+
+The format and packing follow
+[Microsoft RIFFNEW, pages 30–37](https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Docs/RIFFNEW.pdf):
+block bytes are `(4 + 12*N)*channels`, with `1 + 32*N` frames. The header retains
+the initial sample and step index. Each channel's 12 encoded bytes span three
+32-bit words; physical words alternate channels. Codes can cross a word boundary
+and must skip other channels' words. Short final blocks must contain complete
+three-word channel groups. Bad step indices, partial groups, oversized blocks and
+insufficient caller storage fail safely. Header-only blocks are supported.
+
+Reconstruction uses independently rounded step, half-step and quarter-step terms
+from the primary algorithm. The pinned
+[FFmpeg 7.1 decoder](https://github.com/FFmpeg/FFmpeg/blob/n7.1/libavcodec/adpcm.c#L459)
+combines these terms before rounding. The independent Python oracle records both
+arithmetic variants so packing agreement can be checked without changing the
+production arithmetic or concealing sample-bit differences.
+
+```sh
+python crates/deadlib-audio/decode/wav/tests/reference_ima3.py --output target/wav/new-ima3.json
+```
+
+`validation/ima3-references.{json,build.log,corpus.zip}` retains 122 passing cases:
+48 container/channel/block geometries, two exhaustive initial-index/codeword/
+signed-extrema sets, and 72 native encoder cases. RIFF/RIFX/RF64/BW64, 1/2/6/33
+channels, header-only blocks, interleaved word crossings, short final blocks and
+fact trimming are covered. All 732 borrowed, file, forward short-read/interruption
+and exact range checks match independent spec arithmetic. Four Rust tests add a
+fixed packed-byte/sample gold vector, every initial table entry/codeword/extreme,
+malformed geometry, output sentinels and both writer finalization modes.
+
+| Pinned reference | Successful decodes / 122 | Exact spec-arithmetic prefixes | Exact combined-arithmetic prefixes |
+| --- | ---: | ---: | ---: |
+| FFmpeg 7.1 | 56 | 30 | 56 |
+| dr_wav a466dbe88fe2576d46c43877d602f3d66b8561a7 | 52 | 14 | 14 |
+| libsndfile 1.2.2 | 0 | 0 | 0 |
+| Symphonia 0.6.1 | 0 | 0 | 0 |
+
+The predeclared 44 mono/stereo RIFF packing/combined-arithmetic gates all pass.
+The other 12 successful FFmpeg cases are mono/stereo RF64/BW64. FFmpeg rejects
+54 wider-channel cases and 12 RIFX cases in this driver. Symphonia and libsndfile
+explicitly reject the 3-bit width. dr_wav's matching prefixes are header-only or
+single-frame coincidences; its remaining successful outputs disagree. This is
+not evidence of general 3-bit support in dr_wav. The report records every exit,
+full output length/hash, fact-limited prefix, first mismatch and stderr. Prefix
+trimming is explicit because references may emit the encoded block padding.
+No external reader in this run validates 3-bit RIFX or more than two channels;
+those paths are supported by primary-spec fixtures and the independent oracle.
+
+Encoding remains a bounded greedy lossy quantizer. Recorded constant-signal
+errors are at most one i16 unit; large discontinuities/noise can be much worse
+(maximum errors 60512/46865 in the ramp/noise cases). Successful encoded-file
+decoding does not imply high perceptual quality, and no compressed-throughput
+superiority is claimed.
+
+All 60 crate tests pass on Windows x64 debug/release and i686 debug; Clippy with
+denied warnings passes. All 204 retained Microsoft/4-bit IMA real-file/range
+checks still match their earlier reference hashes (`ima3-prior-adpcm.json`). Two
+one-million checked mutation campaigns, all 1474 earlier corpus files and 100000
+fresh libFuzzer/ASan executions pass. FUZZING.md records sources, bounds, raw logs
+and the complete archived coverage-generated corpus.

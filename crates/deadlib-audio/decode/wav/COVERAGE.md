@@ -131,9 +131,18 @@ independent Python marker checks and whole-process working-set evidence accompan
 the source/binary hashes. See [LARGE_FILES.md](LARGE_FILES.md) for geometry,
 reproduction, memory scope and remaining disk/platform limitations.
 
+Standard 3-bit WAV IMA encoding/decoding now works through every block, borrowed,
+seekable, forward and known-length writer API. All 122 independent fixture/encoder
+gates and 732 decode/range checks pass; 44 predeclared FFmpeg packing checks agree
+under its distinct reconstruction rounding. The full 60-test suite passes on
+x64 debug/release and i686 debug, along with Clippy, two million checked mutations,
+1474 earlier corpus inputs and 100000 fresh ASan executions. All 204 earlier
+Microsoft/4-bit IMA file/range cases retain their decoded hashes. See ADPCM.md
+for reference errors, exact scope and lossy encoder quality limitations.
+
 Remaining work: metadata profile/semantic validation, wavl/slnt and multiple-data
 handling, broader fuzzing and representative comparative performance/RSS coverage
-(the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); 3-bit IMA and
-extensible compressed formats. BW64 shares 64-bit container mechanics; ADM profile
+(the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); extensible
+compressed formats. BW64 shares 64-bit container mechanics; ADM profile
 conformance is not yet claimed. These fixture results do not certify every
 standard variant or workload.

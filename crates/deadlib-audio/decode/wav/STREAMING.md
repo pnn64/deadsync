@@ -5,7 +5,7 @@ form/chunk extents, RF64/BW64 size tables, limits and odd padding without buffer
 audio. Its `read_chunk` never crosses the current payload; `next_chunk` drains
 any remainder and padding. A caller can supply its own codec and metadata policy.
 `ForwardReader<R: Read>` adds native frame reads and raw encoded-data access;
-`AdpcmForwardReader<R: Read>` adds Microsoft/4-bit IMA frame decoding. Seekable
+`AdpcmForwardReader<R: Read>` adds Microsoft and 3/4-bit IMA frame decoding. Seekable
 Reader and AdpcmReader provide arbitrary exact seeks.
 
 ## Forward-only frame reading

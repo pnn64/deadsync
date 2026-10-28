@@ -608,10 +608,10 @@ fn encode(data: &[u8]) -> u64 {
     let mut paths = (1 << 13) | container(&bytes);
     // Independently generated block parameters expose both encoder geometry checks and sample packing.
     let block_spec = AdpcmSpec {
-        kind: if data[3] & 1 == 0 {
-            AdpcmKind::Ima
-        } else {
-            AdpcmKind::Microsoft
+        kind: match data[3] % 3 {
+            0 => AdpcmKind::Ima,
+            1 => AdpcmKind::Microsoft,
+            _ => AdpcmKind::Ima3,
         },
         channels,
         sample_rate: spec.sample_rate,

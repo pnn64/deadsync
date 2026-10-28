@@ -11,16 +11,16 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    extensible format, native integers/floats, unknown chunk retention, boundaries.
 2. Read/seek, chunk streaming and native PCM/float encoding implemented (14 total
    integration tests, debug/release and Clippy; see COVERAGE.md). Forward-only
-   audio convenience is now implemented for native formats and 4-bit ADPCM.
+   audio convenience is now implemented for native formats and supported ADPCM.
    Known-length nonseekable output is now implemented
    for generic encoded data, native samples and ADPCM; see STREAMING.md. RIFF and
    64-bit output, extensible valid bits/masks, metadata and exact roundtrips.
-3. Microsoft and 4-bit WAV IMA ADPCM block encoding/decoding, incremental encoding,
+3. Microsoft and 3/4-bit WAV IMA ADPCM block encoding/decoding, incremental encoding,
    borrowed range access and file-backed cached seeking are implemented. See
    ADPCM.md for 40 decode, 144 encoder and 204 file/range cases, including explicit
    reference rounding disagreements. Forward-only reading is implemented with exact
-   known-duration trimming; see STREAMING.md for trailing-fact handling. 3-bit IMA and
-   extensible mappings remain. Additional encoded formats must remain possible
+   known-duration trimming; see STREAMING.md for trailing-fact handling. Extensible
+   compressed mappings remain. Additional encoded formats must remain possible
    without coupling container parsing to codecs; shared Muxer supports that boundary.
 4. Rich metadata views and preservation: INFO, BEXT, cue/adtl, smpl, RF64 markers,
    ADM XML/CHNA, unknown chunks. Unusual ordering, large/sparse files and multichannel.
@@ -84,7 +84,14 @@ Physical sparse files over 16 GiB and 2^32 decoded frames pass all 24 x64/i686
 checks, including actual byte/frame boundary markers and bounded process working
 sets. LARGE_FILES.md records the exact scope; no comparative RSS claim is made.
 
-Required work still includes 3-bit/extensible ADPCM, wavl/slnt and multiple-data
+Three-bit WAV IMA now shares all block, reader and writer APIs. Its 122 independent
+fixture/encoder gates and 732 decoder/range checks pass, as do 44 predeclared
+independent FFmpeg packing checks under its different reconstruction rounding.
+ADPCM.md retains every reference outcome and lossy quality limits. All 60 tests,
+Clippy, two million checked mutations, earlier corpus replay and 100000 fresh
+ASan executions pass. The 204 earlier Microsoft/4-bit IMA range checks also pass.
+
+Required work still includes extensible ADPCM, wavl/slnt and multiple-data
 handling, representative comparative benchmarks, comparative RSS and sequential
 disk evidence, and broader native/reference fixtures. Metadata profile/semantic certification
 and broader fuzz coverage remain unproven. Forward PCM16 streaming currently

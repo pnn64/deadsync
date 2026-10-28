@@ -15,6 +15,7 @@ pub(crate) const ADAPT: [i64; 16] = [
     230, 230, 230, 230, 307, 409, 512, 614, 768, 614, 512, 409, 307, 230, 230, 230,
 ];
 pub(crate) const INDEX: [i32; 8] = [-1, -1, -1, -1, 2, 4, 6, 8];
+pub(crate) const INDEX3: [i32; 4] = [-1, -1, 1, 2];
 pub(crate) const STEP: [i32; 89] = [
     7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66,
     73, 80, 88, 97, 107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449,
@@ -31,6 +32,7 @@ pub struct Adpcm<'a> {
     pub(crate) channels: usize,
     pub(crate) block_bytes: usize,
     pub(crate) frames_per_block: usize,
+    pub(crate) bits: u16,
     pub(crate) coefficients: &'a [u8],
 }
 impl<'a> Adpcm<'a> {
@@ -39,7 +41,7 @@ impl<'a> Adpcm<'a> {
         if f.tag == 0xfffe {
             return Err(Error::Unsupported("extensible ADPCM mapping"));
         }
-        if f.bits_per_sample != 4 {
+        if f.bits_per_sample != 4 && !(f.encoding == Encoding::ImaAdpcm && f.bits_per_sample == 3) {
             return Err(Error::Unsupported("ADPCM bit depth"));
         }
         if f.extra.len() < 2 {
@@ -51,9 +53,12 @@ impl<'a> Adpcm<'a> {
         let mut coefficients = &[][..];
         match f.encoding {
             Encoding::ImaAdpcm => {
+                let group = channels * if f.bits_per_sample == 3 { 12 } else { 4 };
                 if block < 4 * channels
-                    || !block.is_multiple_of(4 * channels)
-                    || frames != 1 + (block - 4 * channels) * 2 / channels
+                    || !(block - 4 * channels).is_multiple_of(group)
+                    || frames
+                        != 1 + (block - 4 * channels) * 8
+                            / (channels * usize::from(f.bits_per_sample))
                 {
                     return Err(Error::Invalid("IMA block geometry"));
                 }
@@ -90,6 +95,7 @@ impl<'a> Adpcm<'a> {
             channels,
             block_bytes: block,
             frames_per_block: frames,
+            bits: f.bits_per_sample,
             coefficients,
         })
     }
@@ -101,6 +107,9 @@ impl<'a> Adpcm<'a> {
     }
     pub fn frames_per_block(self) -> usize {
         self.frames_per_block
+    }
+    pub fn bits_per_sample(self) -> u16 {
+        self.bits
     }
     pub fn scratch_samples(self) -> usize {
         self.frames_per_block * self.channels
@@ -131,10 +140,11 @@ impl<'a> Adpcm<'a> {
             return Err(Error::Invalid("ADPCM block too large"));
         }
         let frames = if self.encoding == Encoding::ImaAdpcm {
-            if bytes < 4 * self.channels || !bytes.is_multiple_of(4 * self.channels) {
+            let group = self.channels * if self.bits == 3 { 12 } else { 4 };
+            if bytes < 4 * self.channels || !(bytes - 4 * self.channels).is_multiple_of(group) {
                 return Err(Error::Invalid("partial IMA channel group"));
             }
-            1 + (bytes - 4 * self.channels) * 2 / self.channels
+            1 + (bytes - 4 * self.channels) * 8 / (self.channels * usize::from(self.bits))
         } else {
             if bytes < 7 * self.channels {
                 return Err(Error::Truncated);
@@ -151,11 +161,54 @@ impl<'a> Adpcm<'a> {
             return Err(Error::Limit("ADPCM output capacity"));
         }
         if self.encoding == Encoding::ImaAdpcm {
-            self.ima(b, out, frames)?;
+            if self.bits == 3 {
+                self.ima3(b, out, frames)?;
+            } else {
+                self.ima(b, out, frames)?;
+            }
         } else {
             self.microsoft(b, out, frames)?;
         }
         Ok(frames)
+    }
+    /// Locate a byte in one channel's logical 3-bit stream. Physical 32-bit words
+    /// alternate channels, including when a code crosses the word boundary.
+    pub(crate) fn ima3_byte(self, byte: usize, channel: usize) -> usize {
+        4 * self.channels + (byte / 4 * self.channels + channel) * 4 + byte % 4
+    }
+    fn ima3(self, b: &[u8], out: &mut [i16], frames: usize) -> Result<(), Error> {
+        for c in 0..self.channels {
+            let header = &b[c * 4..c * 4 + 4];
+            let mut predictor = i32::from(self.endian.u16(header) as i16);
+            let mut index = i32::from(header[2]);
+            if index > 88 {
+                return Err(Error::Invalid("IMA step index"));
+            }
+            out[c] = predictor as i16;
+            for frame in 1..frames {
+                let bit = (frame - 1) * 3;
+                let shift = bit % 8;
+                let mut code = b[self.ima3_byte(bit / 8, c)] >> shift;
+                if shift > 5 {
+                    code |= b[self.ima3_byte(bit / 8 + 1, c)] << (8 - shift);
+                }
+                code &= 7;
+                let step = STEP[index as usize];
+                // RIFFNEW's three independent terms, not a combined multiply.
+                let mut delta = step >> 2;
+                if code & 2 != 0 {
+                    delta += step;
+                }
+                if code & 1 != 0 {
+                    delta += step >> 1;
+                }
+                predictor =
+                    (predictor + if code & 4 == 0 { delta } else { -delta }).clamp(-32768, 32767);
+                index = (index + INDEX3[(code & 3) as usize]).clamp(0, 88);
+                out[frame * self.channels + c] = predictor as i16;
+            }
+        }
+        Ok(())
     }
     fn ima(self, b: &[u8], out: &mut [i16], frames: usize) -> Result<(), Error> {
         for c in 0..self.channels {

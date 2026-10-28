@@ -45,7 +45,8 @@ block scratch. See [ADPCM.md](ADPCM.md) for coverage and reference disagreements
 the last real frame is repeated as padding. `AdpcmSpec` emits standard descriptors.
 `AdpcmWriter` accepts arbitrary batches of whole i16 frames, retains one pending
 block, and records the unpadded frame count on finish. Both Microsoft and 4-bit
-IMA encoding are native Rust; encoding does not promise lossless source recovery.
+IMA encoding are native Rust; `AdpcmKind::Ima3` adds standard 3-bit WAV IMA.
+Encoding does not promise lossless source recovery.
 
 `AdpcmReader<R: Read + Seek>` scans through the shared container reader and caches
 one decoded block. It reads interleaved i16 into caller storage and supports exact

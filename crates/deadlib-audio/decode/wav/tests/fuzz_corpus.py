@@ -68,6 +68,30 @@ def corpus():
                 result[name]=b'\0'+form(b'RIFF' if e=='<' else b'RIFX',fmt,encoded*2,channels,frames*2-1,fact=True,trailing=True)
                 result[name+'-block']=b'\2'+bytes([e=='>'])+struct.pack('<H',len(fmt))+fmt+encoded
 
+    # Three-bit IMA codes cross byte/word boundaries. Channel words, rather than
+    # whole 12-byte channel payloads, alternate physically (RIFFNEW pp.31-33).
+    for kind in (b'RIFF',b'RIFX',b'RF64',b'BW64'):
+        e='>' if kind==b'RIFX' else '<'
+        for channels in (1,2,3,5):
+            block=40*channels;frames=97
+            fmt=struct.pack(e+'HHIIHHHH',17,channels,8000,8000*block//frames,block,3,2,frames)
+            encoded=bytearray(block)
+            for c in range(channels):
+                struct.pack_into(e+'hBB',encoded,c*4,-32000+c*1234,20+c,0)
+                for i in range(96):
+                    code=(i*5+c*3)%8
+                    for bit_in_code in range(3):
+                        bit=i*3+bit_in_code
+                        offset=4*channels+(bit//32*channels+c)*4+bit%32//8
+                        encoded[offset]|=((code>>bit_in_code)&1)<<(bit%8)
+            short=encoded[:16*channels]
+            name=f'{kind.decode()}-ima3-{channels}'
+            result[name]=b'\0'+form(kind,fmt,encoded*2+short,channels,frames*2+32,fact=True)
+            result[name+'-block']=b'\2'+bytes([e=='>'])+struct.pack('<H',len(fmt))+fmt+encoded
+            result[name+'-short']=b'\2'+bytes([e=='>'])+struct.pack('<H',len(fmt))+fmt+short
+        for channels in (1,2,6):
+            result[f'encode-ima3-{kind.decode()}-{channels}']=b'\3'+bytes([(b'RIFF',b'RIFX',b'RF64',b'BW64').index(kind),3,channels-1,2])+struct.pack('<I',7999)+bytes([2*channels-2,3])+bytes(range(256))
+
     metadata=[]
     for e in ('<','>'):
         metadata.extend([

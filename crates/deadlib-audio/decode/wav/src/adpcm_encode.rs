@@ -1,7 +1,7 @@
 //! Native lossy Microsoft and WAV IMA ADPCM encoding. Block calls allocate nothing.
 use crate::{
     Adpcm, Encoding, Endian, Error, Format, Muxer, RawChunk, WriteOptions,
-    adpcm::{ADAPT, COEFFICIENTS, INDEX, STEP},
+    adpcm::{ADAPT, COEFFICIENTS, INDEX, INDEX3, STEP},
     mux::{put16, put32},
     reserve,
 };
@@ -10,7 +10,10 @@ use std::io::{Seek, Write};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AdpcmKind {
     Microsoft,
+    /// Standard 4-bit WAV IMA ADPCM.
     Ima,
+    /// Standard 3-bit WAV IMA ADPCM, with 12-byte channel groups.
+    Ima3,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -24,7 +27,9 @@ impl AdpcmSpec {
     /// Emit a standard descriptor. Custom MS padding/coefficient tables can instead
     /// be supplied to Format/Adpcm directly and passed to Muxer unchanged.
     pub fn format(self, endian: Endian, out: &mut [u8]) -> Result<usize, Error> {
-        let n = if self.kind == AdpcmKind::Ima { 20 } else { 50 };
+        let ima = self.kind != AdpcmKind::Microsoft;
+        let bits = if self.kind == AdpcmKind::Ima3 { 3 } else { 4 };
+        let n = if ima { 20 } else { 50 };
         if out.len() < n {
             return Err(Error::Limit("ADPCM format output capacity"));
         }
@@ -33,12 +38,11 @@ impl AdpcmSpec {
         if channels == 0 || self.sample_rate == 0 {
             return Err(Error::Invalid("ADPCM channels or sample rate"));
         }
-        let header = channels * if self.kind == AdpcmKind::Ima { 4 } else { 7 };
+        let header = channels * if ima { 4 } else { 7 };
         if block < header {
             return Err(Error::Invalid("ADPCM block smaller than header"));
         }
-        let frames =
-            if self.kind == AdpcmKind::Ima { 1 } else { 2 } + (block - header) * 2 / channels;
+        let frames = if ima { 1 } else { 2 } + (block - header) * 8 / (channels * bits);
         let frames = u16::try_from(frames)
             .map_err(|_| Error::Invalid("ADPCM samples per block overflow"))?;
         let rate =
@@ -46,12 +50,12 @@ impl AdpcmSpec {
                 .map_err(|_| Error::Invalid("ADPCM byte rate overflow"))?;
         let b = &mut out[..n];
         b.fill(0);
-        put16(b, if self.kind == AdpcmKind::Ima { 17 } else { 2 }, endian);
+        put16(b, if ima { 17 } else { 2 }, endian);
         put16(&mut b[2..], self.channels, endian);
         put32(&mut b[4..], self.sample_rate, endian);
         put32(&mut b[8..], rate, endian);
         put16(&mut b[12..], self.block_bytes, endian);
-        put16(&mut b[14..], 4, endian);
+        put16(&mut b[14..], bits as u16, endian);
         put16(&mut b[16..], (n - 18) as u16, endian);
         put16(&mut b[18..], frames, endian);
         if self.kind == AdpcmKind::Microsoft {
@@ -90,6 +94,10 @@ impl Adpcm<'_> {
                 let mut index = STEP.partition_point(|&s| s < mean).min(88);
                 put16(&mut out[c * 4..], samples[c] as u16, self.endian);
                 out[c * 4 + 2] = index as u8;
+                if self.bits == 3 {
+                    self.encode_ima3_channel(samples, out, c, frames, predictor, index);
+                    continue;
+                }
                 for frame in 1..self.frames_per_block {
                     let target = i32::from(samples[frame.min(frames - 1) * self.channels + c]);
                     let difference = target - predictor;
@@ -181,6 +189,41 @@ impl Adpcm<'_> {
             }
         }
         Ok(self.block_bytes)
+    }
+    fn encode_ima3_channel(
+        self,
+        samples: &[i16],
+        out: &mut [u8],
+        c: usize,
+        frames: usize,
+        mut predictor: i32,
+        mut index: usize,
+    ) {
+        for frame in 1..self.frames_per_block {
+            let target = i32::from(samples[frame.min(frames - 1) * self.channels + c]);
+            let difference = target - predictor;
+            let mut remaining = difference.abs();
+            let mut code = if difference < 0 { 4u8 } else { 0 };
+            let step = STEP[index];
+            let mut delta = step >> 2;
+            for (mask, shift) in [(2, 0), (1, 1)] {
+                let part = step >> shift;
+                if remaining >= part {
+                    code |= mask;
+                    remaining -= part;
+                    delta += part;
+                }
+            }
+            predictor =
+                (predictor + if code & 4 == 0 { delta } else { -delta }).clamp(-32768, 32767);
+            index = (index as i32 + INDEX3[(code & 3) as usize]).clamp(0, 88) as usize;
+            let bit = (frame - 1) * 3;
+            let shift = bit % 8;
+            out[self.ima3_byte(bit / 8, c)] |= code << shift;
+            if shift > 5 {
+                out[self.ima3_byte(bit / 8 + 1, c)] |= code >> (8 - shift);
+            }
+        }
     }
 }
 fn mean_difference(samples: &[i16], channels: usize, channel: usize) -> i32 {
