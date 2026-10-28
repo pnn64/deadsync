@@ -9,7 +9,9 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
 1. Container and native PCM foundation (implemented, seven integration tests;
    see COVERAGE.md): RIFF/RIFX, RF64/BW64 sizes and tables,
    extensible format, native integers/floats, unknown chunk retention, boundaries.
-2. Read/seek and forward-only streaming; native PCM/float encoding, RIFF and
+2. Read/seek, chunk streaming and native PCM/float encoding implemented (14 total
+   integration tests, debug/release and Clippy; see COVERAGE.md). Forward-only
+   audio convenience and known-length nonseekable output remain. RIFF and
    64-bit output, extensible valid bits/masks, metadata and exact roundtrips.
 3. Independent Microsoft ADPCM and WAV IMA ADPCM block codecs, encoded-format
    dispatch, fact trimming, block boundaries and exact seeking. Additional encoded

@@ -3,12 +3,18 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
 pub mod container;
+pub mod encode;
 pub mod format;
 pub mod pcm;
+pub mod reader;
+pub mod stream;
 
 pub use container::{Chunk, Chunks, Container, Ds64, Wave};
+pub use encode::{RawChunk, Spec, WriteOptions, Writer};
 pub use format::{Encoding, Endian, Format, SampleFormat};
 pub use pcm::Pcm;
+pub use reader::Reader;
+pub use stream::{ChunkInfo, Stream};
 
 #[derive(Debug)]
 pub enum Error {

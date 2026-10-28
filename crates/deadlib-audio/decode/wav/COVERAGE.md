@@ -31,8 +31,31 @@ resource limits, frame ranges, whole-frame caller buffers and direct-pointer
 identity across alignment offsets. `cargo clippy -p deadlib-audio-decode-wav
 --all-targets --target-dir target/wav -- -D warnings` passes.
 
-Remaining work: encoding, streaming/read+seek APIs, ADPCM, structured metadata,
+## Native I/O and encoding milestone
+
+`Stream` implements forward-only chunk payload reads, bounded size tables and
+strict chunk boundaries. `Reader` scans seekable inputs without reading audio,
+exposes metadata descriptors and sample-accurate native PCM/float seeks, and reads
+directly into caller bytes or numeric storage. Packed integer expansion reuses
+the output allocation. Writer supports native raw/typed samples and explicit
+integer packing, metadata payloads, extensible formats, RIFX, explicit RF64/BW64,
+and automatic RIFF-to-RF64 promotion. Finalization patches ds64/data/fact/RIFF
+sizes. Low unused valid-bit padding is retained rather than canonicalized.
+
+Validation 2026-10-28: 14 integration tests pass in debug and release profiles
+on Windows x86_64; Clippy with `-D warnings` also passes. Commands are the foundation
+commands above plus `cargo test -p deadlib-audio-decode-wav --release --target-dir
+target/wav`. New tests cover all container/integer combinations, exact float bits,
+typed I/O, odd data/metadata pads, writing at a nonzero base offset, 4000-channel
+frames larger than stack scratch, full truncation matrices, short and interrupted
+reads (maximum read sizes 1 through 32), short writes, I/O failure recovery/poisoning,
+and a sparse virtual source crossing 4 GiB with a nonzero final sample. That last
+test proves 64-bit arithmetic and seeking without large memory/disk use; it does
+not establish real-filesystem or physical large-file throughput.
+
+Remaining work: ADPCM, structured metadata,
 wavl/slnt and multiple-data handling, oracle comparisons, fuzzing, sparse >4 GiB
-evidence and all performance measurements. BW64 currently shares 64-bit container
+evidence and all performance measurements; forward-only audio convenience APIs,
+known-length nonseekable encoding, and extensible compressed formats. BW64 shares 64-bit container
 mechanics; ADM profile conformance is not yet claimed. RIFX extensible GUID byte
 order follows the container but needs external-reference validation.
