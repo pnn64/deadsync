@@ -1,0 +1,95 @@
+{
+  "reports": [
+    {
+      "report": "ms-narrow-final-full.json",
+      "report_sha256": "33ee6ff1412dcc9013648125ad77cf6d781971f47568e3d902f8fb92dcc7f448",
+      "resident": 89,
+      "memory": 48,
+      "disk": 32,
+      "exact_file_hashes_and_storage": 105,
+      "prior_report": "adpcm-cursor-full.json",
+      "all_fixture_hashes_and_gates_unchanged": true,
+      "archives_all_entries_verified": true,
+      "microsoft_stereo": {
+        "native/full": {
+          "median_ns": 6138937.5,
+          "trials_ns": [
+            6191700.0,
+            6136637.5,
+            6138937.5
+          ]
+        },
+        "native/stream4096": {
+          "median_ns": 6121300.0,
+          "trials_ns": [
+            6074650.0,
+            6121300.0,
+            6148787.5
+          ]
+        },
+        "symphonia/full": {
+          "median_ns": 5830887.5,
+          "trials_ns": [
+            5832612.5,
+            5789162.5,
+            5830887.5
+          ]
+        },
+        "symphonia/stream4096": {
+          "median_ns": 5497387.5,
+          "trials_ns": [
+            5497212.5,
+            5683525.0,
+            5497387.5
+          ]
+        }
+      }
+    },
+    {
+      "report": "ms-narrow-final-i686.json",
+      "report_sha256": "b6095588037c98dc58788ab86af667b801d0cca7f9eca8a5d017a82f2884ecdf",
+      "resident": 10,
+      "memory": 24,
+      "disk": 16,
+      "exact_file_hashes_and_storage": 18,
+      "prior_report": "adpcm-cursor-i686.json",
+      "all_fixture_hashes_and_gates_unchanged": true,
+      "archives_all_entries_verified": true,
+      "microsoft_stereo": {
+        "native/full": {
+          "median_ns": 9459200.0,
+          "trials_ns": [
+            9459200.0,
+            9445987.5,
+            9585550.0
+          ]
+        },
+        "native/stream4096": {
+          "median_ns": 9605762.5,
+          "trials_ns": [
+            9605762.5,
+            9624725.0,
+            9385725.0
+          ]
+        },
+        "symphonia/full": {
+          "median_ns": 8414862.5,
+          "trials_ns": [
+            8040337.5,
+            11139562.5,
+            8414862.5
+          ]
+        },
+        "symphonia/stream4096": {
+          "median_ns": 7853075.0,
+          "trials_ns": [
+            8014287.5,
+            7679912.5,
+            7853075.0
+          ]
+        }
+      }
+    }
+  ],
+  "scope": "unpaired full/source validation; use paired-reference report for causal timing comparison"
+}

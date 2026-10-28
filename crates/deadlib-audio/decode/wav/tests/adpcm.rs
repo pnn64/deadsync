@@ -1,4 +1,4 @@
-use deadlib_audio_decode_wav::{Adpcm, AdpcmData, Endian, Format, Wave};
+use deadlib_audio_decode_wav::{Adpcm, AdpcmData, Endian, Error, Format, Wave};
 
 fn format(ima: bool, channels: u16, block: u16, frames: u16) -> Vec<u8> {
     let mut b = Vec::new();
@@ -111,6 +111,172 @@ fn custom_microsoft_coefficients_and_negative_fraction_rounding() {
             .decode_block(&[0, 0, 0x80, 0, 0, 0, 0, 0], &mut out)
             .is_err()
     );
+}
+
+// An intentionally wide scalar reference: no narrow path or threshold switch.
+// Adaptation is bounded to the existing public decoder's checked i64 domain;
+// all sample calculations themselves use i128.
+fn microsoft_wide_oracle(
+    parameters: &[[i16; 5]],
+    codes: &[u8],
+    frames: usize,
+    out: &mut [i16],
+) -> Result<(), &'static str> {
+    const ADAPT: [i128; 16] = [
+        230, 230, 230, 230, 307, 409, 512, 614, 768, 614, 512, 409, 307, 230, 230, 230,
+    ];
+    let channels = parameters.len();
+    for (c, &[delta, one, two, a, d]) in parameters.iter().enumerate() {
+        let (mut delta, mut one, mut two, a, d) = (
+            i128::from(delta),
+            i128::from(one),
+            i128::from(two),
+            i128::from(a),
+            i128::from(d),
+        );
+        out[c] = two as i16;
+        out[channels + c] = one as i16;
+        for frame in 2..frames {
+            let code = codes[(frame - 2) * channels + c];
+            let signed = if code < 8 {
+                i128::from(code)
+            } else {
+                i128::from(code) - 16
+            };
+            let prediction = (one * a + two * d) / 256;
+            let correction = delta * signed;
+            assert!(i64::try_from(correction).is_ok());
+            assert!(i64::try_from(prediction + correction).is_ok());
+            let value = (prediction + correction).clamp(-32768, 32767);
+            let adaptation = delta * ADAPT[usize::from(code)];
+            if adaptation > i128::from(i64::MAX) {
+                return Err("Microsoft adaptation overflow");
+            }
+            delta = (adaptation / 256).max(16);
+            two = one;
+            one = value;
+            out[frame * channels + c] = value as i16;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn microsoft_arithmetic_matches_i128_at_extremes_growth_and_overflow() {
+    let mut successes = 0;
+    let mut overflows = 0;
+    for custom in [
+        (1i16, 0i16),
+        (192, 64),
+        (512, -256),
+        (-7, 3),
+        (511, -257),
+        (i16::MIN, i16::MIN),
+        (i16::MIN, i16::MIN + 1),
+        (i16::MAX, i16::MAX),
+        (i16::MAX, i16::MIN),
+    ] {
+        for channels in [1usize, 2] {
+            let frames = 500;
+            for endian in [Endian::Little, Endian::Big] {
+                let mut f = format(
+                    false,
+                    channels as u16,
+                    (channels * 256) as u16,
+                    frames as u16,
+                );
+                f[16..18].copy_from_slice(&36u16.to_le_bytes());
+                f[20..22].copy_from_slice(&8u16.to_le_bytes());
+                f.extend(custom.0.to_le_bytes());
+                f.extend(custom.1.to_le_bytes());
+                if endian == Endian::Big {
+                    for range in [0..4, 12..f.len()] {
+                        for word in f[range].as_chunks_mut::<2>().0 {
+                            word.reverse();
+                        }
+                    }
+                    f[4..8].reverse();
+                    f[8..12].reverse();
+                }
+                let codec = Adpcm::from_format(Format::parse(&f, endian).unwrap()).unwrap();
+                let word = |v: i16| {
+                    if endian == Endian::Little {
+                        v.to_le_bytes()
+                    } else {
+                        v.to_be_bytes()
+                    }
+                };
+                for delta in [0i16, 1, 16, i16::MAX] {
+                    for (one, two) in [
+                        (i16::MIN, i16::MIN),
+                        (i16::MAX, i16::MAX),
+                        (i16::MIN, i16::MAX),
+                        (-1, 0),
+                    ] {
+                        for pattern in 0..4 {
+                            let mut parameters = vec![[delta, one, two, custom.0, custom.1]];
+                            if channels == 2 {
+                                parameters.push([delta, two, one, 192, 64]);
+                            }
+                            let mut state = 0x4d53414450434d_u64;
+                            let codes: Vec<_> = (0..(frames - 2) * channels)
+                                .map(|i| {
+                                    state ^= state << 13;
+                                    state ^= state >> 7;
+                                    state ^= state << 17;
+                                    match pattern {
+                                        0 => [0, 1, 15, 3][i % 4],
+                                        1 => 8,
+                                        2 => {
+                                            if i / channels < 8 {
+                                                8
+                                            } else {
+                                                0
+                                            }
+                                        }
+                                        _ => state as u8 & 15,
+                                    }
+                                })
+                                .collect();
+                            let mut data = vec![7];
+                            if channels == 2 {
+                                data.push(3);
+                            }
+                            for field in 0..3 {
+                                for values in &parameters {
+                                    data.extend(word(values[field]));
+                                }
+                            }
+                            for &[a, b] in codes.as_chunks::<2>().0 {
+                                data.push(a << 4 | b);
+                            }
+                            assert_eq!(data.len(), channels * 256);
+                            let mut expected = vec![12345; frames * channels + 3];
+                            let result =
+                                microsoft_wide_oracle(&parameters, &codes, frames, &mut expected);
+                            let mut actual = vec![12345; expected.len()];
+                            match (codec.decode_block(&data, &mut actual), result) {
+                                (Ok(n), Ok(())) => {
+                                    assert_eq!(n, frames);
+                                    successes += 1;
+                                }
+                                (Err(Error::Invalid(a)), Err(b)) => {
+                                    assert_eq!(a, b);
+                                    overflows += 1;
+                                }
+                                (a, b) => panic!("different result: {a:?} versus {b:?}"),
+                            }
+                            assert_eq!(
+                                actual, expected,
+                                "{custom:?} {endian:?} channels={channels} delta={delta} histories={one},{two} pattern={pattern}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(successes > 0 && overflows > 0);
 }
 
 #[test]

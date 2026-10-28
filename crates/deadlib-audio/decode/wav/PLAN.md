@@ -313,3 +313,21 @@ improve 2.57/2.26 times. All 94 tests, Clippy, 216 compressed gates/3024 checks,
 is archived. Next work is measured compressed arithmetic optimization (especially
 i686 Microsoft), assessment of native wavl file I/O, and the final requirements
 audit. This milestone does not establish overall compressed-codec superiority.
+
+
+The i686 Microsoft arithmetic bottleneck now has a bounded i32 loop with checked
+i64 fallback. A separate i128 oracle preserves sample values, division, errors
+and partial output across 2304 blocks. Paired low-entropy complete reads improve
+3.08/3.11 times (mono/stereo); paired random stereo improves 2.65 times, with
+2.62-times streaming improvement. The wide loop remains on x64, where the
+all-target candidate showed no useful Microsoft gain. Rejected/intermediate
+experiments and all control results remain archived.
+
+All 95 tests and both-target Clippy pass. Full 89/48/32 and i686 10/24/16
+resident/memory/file campaigns retain all fixture/gate outcomes; 105/18 files
+pass complete hash/storage checks. All 216 compressed gates/3024 checks, 708
+native gates/1912 writer outputs, two million checked mutations, 1846 prior
+inputs and 100000 ASan executions pass. The verified new corpus has 1868 files.
+MS_ARITHMETIC.md records details and the random-reference IMA control slowdown.
+Next: assess IMA arithmetic including that control regression, assess native
+wavl file I/O, and finish the original requirements audit.

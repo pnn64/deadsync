@@ -1,0 +1,24 @@
+import csv,hashlib,json,statistics
+from pathlib import Path
+base=Path('target/wav');reports={}
+for prefix in ['ms-narrow-paired-i686','ms-narrow-paired-x64','ms-narrow-32-paired-i686','ms-narrow-32-paired-x64','ms-narrow-final-paired-i686','ms-narrow-final-paired-x64']:
+ path=base/(prefix+'.json');r=json.loads(path.read_text());assert r['inputs_unchanged'] and all(x['exit_code']==0 for x in r['runs']);groups={}
+ for run in r['runs']:
+  raw=base/(prefix+'-'+run['label']+'.tsv');data=raw.read_bytes();assert hashlib.sha256(data).hexdigest()==run['output_sha256']
+  for row in csv.DictReader((line for line in data.decode().splitlines() if not line.startswith('#')),delimiter='\t'):
+   key=row['operation'];version=run['version'];groups.setdefault(key,{}).setdefault(version,[]).append(row)
+ rows=[]
+ for name,versions in groups.items():
+  row={'operation':name}
+  for version,data in versions.items():
+   row[version]={}
+   for metric in ['ns_per_op','thread_cycles_per_op']:
+    values=[float(x[metric]) for x in data];assert len(values)==6
+    row[version][metric]={'median':statistics.median(values),'min':min(values),'max':max(values),'trials':values}
+  row['baseline_over_current_time']=row['baseline']['ns_per_op']['median']/row['current']['ns_per_op']['median'];rows.append(row)
+ reports[prefix]={'report_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'target':r['target'],'current_adpcm_sha256':r['builds']['current']['sources']['src/adpcm.rs'],'rows':rows}
+Path(str(base/'ms-narrow-summary')+'.json').write_text(json.dumps({'scope':'six trials from two alternating warmed process pairs; low-entropy flat resident Cursor blocks; fixed thread affinity, uncontrolled frequency; no IMA algorithm change; experiments retained, only final-prefixed measurements represent retained source','comparisons':reports},indent=2)+'\n')
+for name,r in reports.items():
+ if 'final' in name:
+  print(name)
+  for row in r['rows']:print(row['operation'],round(row['baseline_over_current_time'],3))

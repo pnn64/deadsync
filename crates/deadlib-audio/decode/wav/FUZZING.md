@@ -398,3 +398,27 @@ pass x64 debug/release and i686 debug with Clippy. The 216 compressed fixture
 gates/3024 three-API checks and 708 retained native gates/1912 writer outputs
 retain their expected results; PERFORMANCE.md records the File counter and
 source-pinned performance evidence.
+
+
+The Microsoft decoder now uses bounded i32 arithmetic on 32-bit targets and
+retains checked i64 fallback. The independent i128 oracle checks 2304 complete
+blocks, including extreme coefficients, both byte orders, growing/decaying
+deltas, overflow results and exact output prefixes/sentinels. All 95 tests pass
+x64 debug/release and i686 debug; denied-warning Clippy passes both targets.
+
+`validation/ms-narrow-mutation-{x64,i686}.*` each pass one million checked
+mutations, entering each compressed wavl family 102484/102375 times.
+`ms-narrow-prior-replay.*` passes all 1846 preceding archived corpus inputs;
+`ms-narrow-prior-corpus.json` records verified prior archive/report provenance.
+`ms-narrow-asan.*` passes 100000 executions in 124.06 seconds, adds 1934 units
+and produces no failure artifact. Its 268 MiB instrumented peak is not normal
+codec RSS. These correctness campaigns ran concurrently; their elapsed times
+are not comparative throughput results. ASan is x64 and exercises wide arithmetic;
+the narrow branch is covered by the checked i686 tests/mutations.
+
+The final 1868-file corpus is retained in `ms-narrow-asan-corpus.zip`, SHA-256
+`a90cc0190ebd586c7bff85ee0b108a42bfee4aed2370b469c2255f1142ff0512`,
+with a verified archive/report sidecar. All inputs remain unchanged. All 216
+compressed fixture gates/3024 checks and 708 retained native gates/1912 writer
+outputs pass. MS_ARITHMETIC.md records the proof, source-pinned performance gains
+and the observed IMA control regression requiring follow-up.

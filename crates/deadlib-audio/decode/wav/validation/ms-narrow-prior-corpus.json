@@ -1,0 +1,9 @@
+{
+  "archive": "adpcm-cursor-asan-corpus.zip",
+  "archive_sha256": "c15ac09ca10a0bab8087860d6d4c1ac0c449ff1d7e53e9dfed9e4a8d5ae68517",
+  "sidecar_sha256": "8618eff43b3d534a9d1d7057731e3947f81ec58cfc4846f858175a4a4f9772e4",
+  "source_report_sha256": "5f23e2171ba8211b11f5fb89f411086af6e2835d87a068028070446b8971b621",
+  "entries": 1846,
+  "expanded_bytes": 707743,
+  "extraction": "flat portable filenames only; every extracted input checked against source report SHA-256"
+}

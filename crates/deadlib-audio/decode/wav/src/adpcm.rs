@@ -248,22 +248,68 @@ impl<'a> Adpcm<'a> {
         Ok(())
     }
     fn microsoft(self, b: &[u8], out: &mut [i16], frames: usize) -> Result<(), Error> {
+        #[cfg(target_pointer_width = "32")]
+        type Predictor = i32;
+        #[cfg(not(target_pointer_width = "32"))]
+        type Predictor = i64;
         for c in 0..self.channels {
             let row = self
                 .coefficients
                 .get(usize::from(b[c]) * 4..usize::from(b[c]) * 4 + 4)
                 .ok_or(Error::Invalid("Microsoft predictor index"))?;
-            let a = i64::from(self.endian.u16(row) as i16);
-            let d = i64::from(self.endian.u16(&row[2..]) as i16);
-            let mut delta = i64::from(self.endian.u16(&b[self.channels + c * 2..]) as i16);
+            let a = Predictor::from(self.endian.u16(row) as i16);
+            let d = Predictor::from(self.endian.u16(&row[2..]) as i16);
+            let mut delta = Predictor::from(self.endian.u16(&b[self.channels + c * 2..]) as i16);
             if delta < 0 {
                 return Err(Error::Invalid("negative Microsoft ADPCM delta"));
             }
-            let mut one = i64::from(self.endian.u16(&b[self.channels * 3 + c * 2..]) as i16);
-            let mut two = i64::from(self.endian.u16(&b[self.channels * 5 + c * 2..]) as i16);
+            let mut one = Predictor::from(self.endian.u16(&b[self.channels * 3 + c * 2..]) as i16);
+            let mut two = Predictor::from(self.endian.u16(&b[self.channels * 5 + c * 2..]) as i16);
             out[c] = two as i16;
             out[self.channels + c] = one as i16;
-            for frame in 2..frames {
+            let frame = 2;
+            // Wide checked arithmetic is costly on measured 32-bit targets.
+            // Keep the existing loop on 64-bit targets, where narrowing did
+            // not improve Microsoft decoding in the paired measurements.
+            #[cfg(target_pointer_width = "32")]
+            let frame = {
+                let mut frame = frame;
+                // Except for the (-32768, -32768) coefficient pair, the sum of
+                // absolute coefficients is at most 65535. Clamped i16 histories
+                // therefore have a signed i32 dot product. With delta <= MAX/768,
+                // adaptation also fits i32, and prediction plus correction is
+                // less than 31 million in magnitude. Keep division toward zero.
+                if a != i32::from(i16::MIN) || d != i32::from(i16::MIN) {
+                    while frame < frames && delta <= i32::MAX / 768 {
+                        let i = (frame - 2) * self.channels + c;
+                        let code = (b[self.channels * 7 + i / 2] >> (4 - (i & 1) * 4)) & 15;
+                        let signed = if code < 8 {
+                            i32::from(code)
+                        } else {
+                            i32::from(code) - 16
+                        };
+                        let predicted = (one * a + two * d) / 256;
+                        let value = (predicted + delta * signed).clamp(-32768, 32767);
+                        two = one;
+                        one = value;
+                        delta = (delta * ADAPT[code as usize] as i32 / 256).max(16);
+                        out[frame * self.channels + c] = value as i16;
+                        frame += 1;
+                    }
+                }
+                frame
+            };
+            // Unusual coefficients or growing adaptation retain the original
+            // checked wide arithmetic, including its error and output prefix.
+            #[cfg(target_pointer_width = "32")]
+            let (a, d, mut one, mut two, mut delta) = (
+                i64::from(a),
+                i64::from(d),
+                i64::from(one),
+                i64::from(two),
+                i64::from(delta),
+            );
+            for frame in frame..frames {
                 let i = (frame - 2) * self.channels + c;
                 let code = (b[self.channels * 7 + i / 2] >> (4 - (i & 1) * 4)) & 15;
                 let signed = if code < 8 {

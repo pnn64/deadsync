@@ -305,3 +305,15 @@ amplification on the large files, replacing 127.94; allocations stay unchanged.
 All 216 compressed gates/3024 checks, 708 native gates/1912 outputs, two million
 checked mutations, 1837 prior corpus inputs and 100000 ASan executions pass.
 PERFORMANCE.md distinguishes these file gains from remaining arithmetic work.
+
+
+The bounded 32-bit Microsoft path has an independent i128 oracle covering
+2304 mono/stereo blocks, both byte orders, extreme coefficients, bounded/random
+codes, growing/decaying deltas and overflow prefixes. All 95 tests pass x64
+debug/release and i686 debug with Clippy on both targets. The 89/48/32 full and
+10/24/16 i686 performance/reference campaigns retain all fixture/gate outcomes.
+All 216 compressed gates/3024 checks, 708 native gates/1912 writer outputs,
+two million checked mutations, 1846 prior corpus inputs and 100000 x64 ASan
+executions pass. The verified final corpus contains 1868 inputs. The narrow
+branch is checked on i686; x64 ASan covers wide arithmetic. MS_ARITHMETIC.md
+records measured gains, the i32 bound proof and the IMA control performance issue.

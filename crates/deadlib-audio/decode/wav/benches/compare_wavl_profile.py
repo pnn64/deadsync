@@ -14,7 +14,7 @@ def sha(b):return hashlib.sha256(b).hexdigest()
 
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--output',type=Path,required=True);ap.add_argument('--baseline',default='1ffaa3190');ap.add_argument('--bench', choices=('wavl_profile','adpcm_file'), default='wavl_profile');args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--output',type=Path,required=True);ap.add_argument('--baseline',default='1ffaa3190');ap.add_argument('--bench', choices=('wavl_profile','adpcm_file'), default='wavl_profile');ap.add_argument('--target');args=ap.parse_args()
     root=Path(__file__).resolve().parents[1];workspace=root.parents[3];stem=args.output.resolve();directory=Path(str(stem)+'-sources');directory.mkdir(parents=True,exist_ok=False)
     manifest='''[package]
 name = "deadlib-audio-decode-wav"
@@ -51,6 +51,7 @@ debug = 1
                 zi=zipfile.ZipInfo(name,date_time=(1980,1,1,0,0,0));zi.create_system=3;zi.external_attr=0o600<<16;archive.writestr(zi,data)
         p=subprocess.run(['cargo','generate-lockfile','--offline'],cwd=project,capture_output=True);assert p.returncode==0,p.stderr.decode(errors='replace')
         command=['cargo','bench','--locked','--bench',args.bench,'--no-run','--message-format=json']
+        if args.target:command+=['--target',args.target]
         p=subprocess.run(command,cwd=project,capture_output=True,text=True);Path(str(stem)+'-'+version+'.build.log').write_text(p.stdout+p.stderr);assert p.returncode==0,p.stderr
         artifacts=[json.loads(line) for line in p.stdout.splitlines() if line.startswith('{')];binary=Path(next(a['executable'] for a in artifacts if a.get('executable') and a.get('target',{}).get('name')==args.bench))
         builds[version]=dict(binary=str(binary),binary_sha256=sha(binary.read_bytes()),sources={name:sha(data) for name,data in files.items()},lock_sha256=sha((project/'Cargo.lock').read_bytes()),archive_sha256=sha(Path(str(stem)+'-'+version+'.zip').read_bytes()),command=command)
@@ -61,7 +62,7 @@ debug = 1
     unchanged=current=={p.relative_to(workspace).as_posix():sha(p.read_bytes()) for p in inputs}
     cpu=platform.processor()
     if os.name=='nt':cpu=subprocess.check_output(['powershell','-NoProfile','-Command','Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors | ConvertTo-Json -Compress'],text=True).strip()
-    report=dict(timestamp_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),baseline_revision=args.baseline,benchmark=args.bench,platform=platform.platform(),cpu=cpu,rustc=subprocess.check_output(['rustc','-Vv'],text=True),sources=current,inputs_unchanged=unchanged,builds=builds,runs=runs,scope='three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; main benchmark thread pinned to highest allowed CPU; frequency uncontrolled; process RSS excluded; standalone copies use identical explicit bench profiles; '+('scoped heap counts included' if args.bench=='wavl_profile' else 'heap counts excluded'))
+    report=dict(timestamp_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),baseline_revision=args.baseline,benchmark=args.bench,target=args.target,platform=platform.platform(),cpu=cpu,rustc=subprocess.check_output(['rustc','-Vv'],text=True),sources=current,inputs_unchanged=unchanged,builds=builds,runs=runs,scope='three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; main benchmark thread pinned to highest allowed CPU; frequency uncontrolled; process RSS excluded; standalone copies use identical explicit bench profiles; '+('scoped heap counts included' if args.bench=='wavl_profile' else 'heap counts excluded'))
     Path(str(stem)+'.json').write_text(json.dumps(report,indent=2)+'\n');assert unchanged
 
 

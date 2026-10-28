@@ -273,3 +273,12 @@ retain their existing meaning. Generic container byte-span checks remain active
 on every read. No allocation is added, and block-buffer size remains independent
 of file length. PERFORMANCE.md records the physical-file counter and timing
 results, the eight-byte inline-state tradeoff and the new 94-test validation.
+
+## Bounded 32-bit Microsoft arithmetic
+
+On 32-bit targets the Microsoft decoder uses i32 only while coefficient and
+delta bounds prove all intermediate arithmetic fits. Extreme custom coefficient
+pairs and growing deltas use the original checked i64 loop. Signed prediction
+division, overflow errors and partially written output retain their contracts.
+64-bit targets retain wide arithmetic. [MS_ARITHMETIC.md](MS_ARITHMETIC.md)
+contains the proof, independent i128 oracle and source-pinned measurements.

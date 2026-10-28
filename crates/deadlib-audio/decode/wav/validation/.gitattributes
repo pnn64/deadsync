@@ -8,3 +8,4 @@ adpcm-segmented-pinned-* -text
 adpcm-cache-* -text
 symphonia-widths-* -text
 adpcm-cursor-* -text
+ms-narrow-* -text

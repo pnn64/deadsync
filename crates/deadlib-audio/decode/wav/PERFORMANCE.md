@@ -750,3 +750,15 @@ All 94 tests pass x64 debug/release and i686 debug with Clippy. All 216 compress
 fixture gates/3024 three-API checks, 708 retained native gates/4484 checks/1912
 writer outputs, two million checked mutations, 1837 prior corpus files and 100000
 ASan executions pass. FUZZING.md records the new verified 1846-file corpus.
+
+
+## Bounded Microsoft arithmetic on 32-bit targets
+
+The follow-up in [MS_ARITHMETIC.md](MS_ARITHMETIC.md) addresses the measured
+i686 arithmetic cost. Checked i64 operations remain the fallback for extreme
+coefficients or growing deltas. Explicit bounds permit a narrow loop for normal
+blocks; the independent i128 oracle also checks overflow and the caller's output
+prefix. The final paired i686 full-read medians improve 3.08/3.11 times for
+mono/stereo; 127-sample streaming improves 2.91/3.05 times. No x64 decoding gain
+is claimed, and its wide loop remains. All raw controls and rejected experiments
+are retained with the proof and benchmark scope in that document.
