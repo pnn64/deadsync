@@ -49,5 +49,6 @@ MPEG-2.5 is an explicitly separate compatibility extension: header version bits
 Layer III granule and side-information syntax. Reserved version bits `01` are
 rejected. Ordinary LAME-generated files pass PCM comparisons at all nine rates.
 The 8 kHz mixed-block profile uses four long subbands and 72 long lines, following
-the 1997 Layer3 syntax document. Synthetic mixed-block output at this rate still
-disagrees with the reference decoders; see RAW_PCM.md before using this case.
+the 1997 Layer3 syntax document. An independent all-frequency equation oracle
+confirms this profile. Reference decoders differ on constructed mixed blocks;
+see [MPEG25.md](MPEG25.md) for the exact evidence and compatibility scope.
