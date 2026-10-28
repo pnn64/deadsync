@@ -21,7 +21,8 @@ use deadsync_score::{
     ScoreImportEndpoint, ScoreImportProgress, SubmitRetryState,
     arrowcloud_autosubmit_after_payload_decision, arrowcloud_autosubmit_player_decision,
     arrowcloud_autosubmit_session_decision, arrowcloud_entry_flags, arrowcloud_leaderboard_entry,
-    arrowcloud_leaderboard_pane, arrowcloud_pane_kind_from_type, arrowcloud_score_from_retrieve_fields,
+    arrowcloud_golf_leaderboard_entry, arrowcloud_leaderboard_pane, arrowcloud_pane_kind_from_type,
+    arrowcloud_score_from_retrieve_fields,
     arrowcloud_submit_stats_from_live_or_results, arrowcloud_submit_ui_status,
     arrowcloud_user_id, gameplay_run_failed,
     log_arrowcloud_bulk_import_event, run_arrowcloud_bulk_import_pack_groups,
@@ -1721,12 +1722,25 @@ pub fn fetch_user_context(
         .map(|response| response.map(|response| user_context_from_api(response.user)))
 }
 
+/// Core boards carry a percent (`"98.31"`); the golf board carries displayed
+/// strokes (`"3.82"`), which the scorebox renders without percent scaling.
 #[must_use]
 pub fn leaderboard_entry_from_api(
+    kind: ArrowCloudPaneKind,
     entry: ArrowCloudLeaderboardEntry,
     is_self: bool,
     is_rival: bool,
 ) -> LeaderboardEntry {
+    if kind == ArrowCloudPaneKind::Golf {
+        return arrowcloud_golf_leaderboard_entry(
+            entry.rank,
+            entry.alias,
+            entry.score,
+            entry.date,
+            is_self,
+            is_rival,
+        );
+    }
     arrowcloud_leaderboard_entry(
         entry.rank,
         entry.alias,
@@ -1739,8 +1753,9 @@ pub fn leaderboard_entry_from_api(
 
 /// Split one leaderboards response into its known boards in the server's
 /// order. The server has already applied the signed-in player's board
-/// preferences, so the client shows exactly what comes back. Unknown board
-/// types are dropped.
+/// preferences and appended any event boards for the chart (the golf hole
+/// board), so the client shows exactly what comes back. Unknown board types
+/// are dropped.
 #[must_use]
 pub fn panes_from_response(
     decoded: ArrowCloudLeaderboardsApiResponse,
@@ -1804,7 +1819,7 @@ pub fn pane_from_pages(
         if (is_self || is_rival) && user_id.is_some() {
             appended_user_ids.insert(take_trimmed_user_id(&mut entry.user_id));
         }
-        entries.push(leaderboard_entry_from_api(entry, is_self, is_rival));
+        entries.push(leaderboard_entry_from_api(kind, entry, is_self, is_rival));
     }
 
     for page in extra_pages {
@@ -1821,7 +1836,7 @@ pub fn pane_from_pages(
                 }
                 appended_user_ids.insert(take_trimmed_user_id(&mut entry.user_id));
             }
-            entries.push(leaderboard_entry_from_api(entry, is_self, is_rival));
+            entries.push(leaderboard_entry_from_api(kind, entry, is_self, is_rival));
         }
     }
     let personalized = entries.iter().any(|entry| entry.is_self || entry.is_rival);
@@ -1843,7 +1858,8 @@ fn empty_fallback_panes() -> Vec<LeaderboardPane> {
 /// Fetch the boards `ArrowCloud` chose for the signed-in player, in the
 /// server's order. The v1 route already picks the rows worth showing on each
 /// board (top entries, the player and their neighbours, their rivals) and
-/// flags them, so one request per chart is all the scorebox needs.
+/// flags them, and on golf holes it appends the golf event's hole board, so
+/// one request per chart is all the scorebox needs.
 pub fn fetch_leaderboard_panes(
     chart_hash: &str,
     api_key: &str,
@@ -3389,6 +3405,13 @@ mod tests {
                     has_next: false,
                     total_pages: 1,
                 },
+                ArrowCloudLeaderboardPane {
+                    r#type: "Golf".to_string(),
+                    scores: Vec::new(),
+                    page: 1,
+                    has_next: false,
+                    total_pages: 1,
+                },
             ],
         });
 
@@ -3399,8 +3422,9 @@ mod tests {
                 ArrowCloudPaneKind::Ex,
                 ArrowCloudPaneKind::HardEx,
                 ArrowCloudPaneKind::Itg,
+                ArrowCloudPaneKind::Golf,
             ],
-            "the server's preference order is kept and unknown boards vanish"
+            "the server's preference order is kept, the event's golf board stays, unknown boards vanish"
         );
         let hard_ex = &panes[1].1;
         assert_eq!(hard_ex.r#type, "HardEX");
@@ -3411,10 +3435,11 @@ mod tests {
 
     #[test]
     fn pane_from_pages_marks_each_board_kind() {
-        for (kind, is_ex, is_hard_ex) in [
-            (ArrowCloudPaneKind::Itg, false, false),
-            (ArrowCloudPaneKind::Ex, true, false),
-            (ArrowCloudPaneKind::HardEx, false, true),
+        for (kind, name, is_ex, is_hard_ex) in [
+            (ArrowCloudPaneKind::Itg, "ArrowCloud", false, false),
+            (ArrowCloudPaneKind::Ex, "ArrowCloud", true, false),
+            (ArrowCloudPaneKind::HardEx, "ArrowCloud", false, true),
+            (ArrowCloudPaneKind::Golf, "Golf (ArrowCloud)", false, false),
         ] {
             let pane = pane_from_pages(
                 kind,
@@ -3428,12 +3453,33 @@ mod tests {
                 Vec::new(),
                 None,
             );
-            assert_eq!(pane.name, "ArrowCloud");
+            assert_eq!(pane.name, name);
             assert_eq!(pane.arrowcloud_kind, Some(kind));
             assert_eq!(pane.is_ex, is_ex);
             assert_eq!(pane.is_hard_ex(), is_hard_ex);
             assert!(!pane.personalized);
         }
+    }
+
+    #[test]
+    fn pane_from_pages_keeps_golf_strokes_and_server_flags() {
+        let raw = r#"{"hash":"abc","leaderboards":[{"type":"Golf","scores":[
+            {"rank":"1","score":"3.82","alias":"ACE","userId":"self","date":"2026-10-27T00:00:00.000Z","playId":12,"isSelf":true,"isRival":false},
+            {"rank":"2","score":"4.10","alias":"RIVAL","userId":"rival","date":"2026-10-26T00:00:00.000Z","isSelf":false,"isRival":true}
+        ],"page":1,"perPage":7,"hasNext":false,"total":2,"totalPages":1}]}"#;
+        let decoded: ArrowCloudLeaderboardsApiResponse =
+            serde_json::from_str(raw).expect("deserialize");
+        let mut panes = panes_from_response(decoded);
+        assert_eq!(panes.len(), 1);
+        let (kind, page) = panes.remove(0);
+        assert_eq!(kind, ArrowCloudPaneKind::Golf);
+        let pane = pane_from_pages(kind, page, Vec::new(), None);
+        assert_eq!(pane.name, "Golf (ArrowCloud)");
+        assert!(pane.personalized, "the server already flagged the player's own row");
+        assert_eq!(pane.entries[0].score, 3820.0, "strokes stay strokes, never a clamped percent");
+        assert!(pane.entries[0].is_self);
+        assert_eq!(pane.entries[1].score, 4100.0);
+        assert!(pane.entries[1].is_rival);
     }
 
     #[test]
