@@ -1,0 +1,39 @@
+
+running 3 tests
+test bw64_fact_limits_fail_before_io_and_pcm_keeps_u64_frame_counts ... FAILED
+test every_bw64_writer_zeros_dummy_words_in_both_finalization_paths ... FAILED
+test bw64_dummy_words_are_retained_raw_but_never_determine_adpcm_duration ... FAILED
+
+failures:
+
+---- bw64_fact_limits_fail_before_io_and_pcm_keeps_u64_frame_counts stdout ----
+
+thread 'bw64_fact_limits_fail_before_io_and_pcm_keeps_u64_frame_counts' (43684) panicked at crates\deadlib-audio\decode\wav\tests\bw64.rs:192:5:
+assertion failed: Muxer::with_lengths(sink.clone(), &opaque, options(), &[],
+        DataLength { bytes: 0, frames: count }).is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- every_bw64_writer_zeros_dummy_words_in_both_finalization_paths stdout ----
+
+thread 'every_bw64_writer_zeros_dummy_words_in_both_finalization_paths' (56884) panicked at crates\deadlib-audio\decode\wav\tests\bw64.rs:116:5:
+assertion `left == right` failed
+  left: [1, 0, 0, 0, 0, 0, 0, 0]
+ right: [0, 0, 0, 0, 0, 0, 0, 0]
+
+---- bw64_dummy_words_are_retained_raw_but_never_determine_adpcm_duration stdout ----
+
+thread 'bw64_dummy_words_are_retained_raw_but_never_determine_adpcm_duration' (54288) panicked at crates\deadlib-audio\decode\wav\tests\bw64.rs:83:21:
+assertion failed: AdpcmData::new(&wave).is_err()
+
+
+failures:
+    bw64_dummy_words_are_retained_raw_but_never_determine_adpcm_duration
+    bw64_fact_limits_fail_before_io_and_pcm_keeps_u64_frame_counts
+    every_bw64_writer_zeros_dummy_words_in_both_finalization_paths
+
+test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling deadlib-audio-decode-wav v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\wav)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.91s
+     Running tests\bw64.rs (target/wav\debug\deps\bw64-ef1df05294376f2b.exe)
+error: test failed, to rerun pass `-p deadlib-audio-decode-wav --test bw64`

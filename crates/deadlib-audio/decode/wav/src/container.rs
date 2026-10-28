@@ -17,12 +17,20 @@ impl Container {
     pub const fn is_64(self) -> bool {
         matches!(self, Self::Rf64 | Self::Bw64)
     }
+    pub(crate) fn fact_frames(self, count: u32, raw_ds64: Option<u64>) -> u64 {
+        if self == Self::Rf64 && count == u32::MAX {
+            raw_ds64.unwrap_or(u64::from(count))
+        } else {
+            u64::from(count)
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Ds64<'a> {
     pub riff_size: u64,
     pub data_size: u64,
+    /// RF64 sampleCount, or the raw ignored dummy words for BW64.
     pub sample_count: u64,
     pub table: &'a [u8],
 }
@@ -282,11 +290,7 @@ impl<'a> Wave<'a> {
                         return Err(Error::Truncated);
                     }
                     let n = e.u32(c.data);
-                    fact = Some(if n == u32::MAX {
-                        ds64.map_or(u64::from(n), |d| d.sample_count)
-                    } else {
-                        u64::from(n)
-                    });
+                    fact = Some(container.fact_frames(n, ds64.map(|d| d.sample_count)));
                 }
                 b"ds64" if !container.is_64() || c.offset != 20 => {
                     return Err(Error::Invalid("unexpected ds64"));

@@ -615,6 +615,9 @@ fn encode(data: &[u8]) -> u64 {
     let bytes = writer.finish().unwrap().into_inner();
     let wave = Wave::parse(&bytes).unwrap();
     assert_eq!(wave.data().unwrap(), payload);
+    if options.container == Container::Bw64 {
+        assert_eq!(wave.ds64.unwrap().sample_count, 0);
+    }
     assert_eq!(wave.format.valid_bits, spec.valid_bits);
     let mut known = Writer::with_frames(Vec::new(), spec, options, &[], frames as u64).unwrap();
     known.write_frames(&payload[..split]).unwrap();
@@ -647,6 +650,10 @@ fn encode(data: &[u8]) -> u64 {
     let known = known.finish_stream().unwrap();
     let a = Wave::parse(&indexed).unwrap();
     let b = Wave::parse(&known).unwrap();
+    if options.container == Container::Bw64 {
+        assert_eq!(a.ds64.unwrap().sample_count, 0);
+        assert_eq!(b.ds64.unwrap().sample_count, 0);
+    }
     assert_eq!(a.audio_chunk().data, b.audio_chunk().data);
     assert_eq!(a.fact, b.fact);
     paths |= container(&indexed);

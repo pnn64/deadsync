@@ -1,8 +1,9 @@
 # Physical large-file and process-memory evidence
 
-`validation/physical-sparse.json` records eight real NTFS sparse files and 24
+`validation/bw64-dummy-sparse.json` records eight real NTFS sparse files and 24
 successful fresh-process checks on Windows 11, rustc 1.99.1. RF64 and BW64 are each
-tested with native mono i32 and IMA ADPCM, at 65573 and 4294967333 decoded frames.
+tested with native mono i32 and IMA ADPCM, at 65573 and 4294967333 decoded frames,
+except large BW64 IMA uses 4294967295, the largest literal u32 fact count.
 Each file is created/checked by an x64 release process, reopened by a separate x64
 process, and reopened by an i686 process. Python independently checks marker
 bytes, a zero hole, physical EOF and header hashes. Source and executable hashes,
@@ -13,15 +14,23 @@ compiler/build commands and build logs accompany the report.
 | Small native PCM | 262396 | 131072 |
 | Small IMA | 262388 | 131072 |
 | Large native PCM | 17179869436 | 262144 |
-| Large IMA | 17179869428 | 262144 |
+| Large RF64 IMA | 17179869428 | 262144 |
+| Large BW64 IMA | 17179869276 | 262144 |
 
-Both containers produce the same lengths for each geometry. The large files
-exceed 16 GiB, and their frame counts exceed u32. Markers straddle the physical
-4 GiB byte boundary and the 2^32 frame boundary, with additional start/end and
+The large files all exceed 16 GiB. RF64 and native PCM frame counts exceed u32;
+BW64 IMA ends at its literal fact limit. Markers straddle the physical
+4 GiB byte boundary and, where representable, the 2^32 frame boundary, with start/end and
 near-boundary samples. Marker values mix the high frame bits so truncating an
 offset to 32 bits cannot return a matching sample. Exact EOF seeks and reads,
 out-of-range rejection without changing position, and an unwritten zero hole
 are checked through `Reader` and `AdpcmReader`.
+
+All BW64 headers now independently check for zero dummy words. The original
+`physical-sparse.json` remains as historical evidence: its large BW64 IMA file
+used an RF64-style count extension in those words and is now rejected. The
+updated case preserves a real >16 GiB physical-file check without that extension.
+BW64 IMA and extensible native output here are compatibility cases rather than
+normative BW64 profile evidence; see [BW64.md](BW64.md).
 
 This fixture builder uses known-length writer headers and then creates sparse
 extents with the filesystem, so it does not claim that a writer accepted missing
@@ -43,8 +52,8 @@ private/peak commit are retained in the JSON.
 
 | Verify process | Small-file peak working set, MiB | Large-file peak working set, MiB |
 | --- | ---: | ---: |
-| x64 | 3.41–3.42 | 3.41–3.42 |
-| i686 | 4.57–4.95 | 4.57–4.59 |
+| x64 | 3.42–3.43 | 3.42–3.43 |
+| i686 | 4.58–4.59 | 4.58–4.59 |
 
 The measurements show bounded whole-process memory for these open/random-seek
 probes as logical audio grows from about 256 KiB to over 16 GiB. They include the

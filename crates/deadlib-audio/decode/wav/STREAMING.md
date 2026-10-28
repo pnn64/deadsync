@@ -83,12 +83,12 @@ For native wavl, frames() returns a leading fact (including an RF64-resolved
 sentinel), or the observed sequence length after its boundary is reached. It
 returns Unsupported before either is known, including RF64 input. Reading native
 frames does not need that upfront duration; finish validates the required fact.
-The equivalent BW64 tests exercise the crate's existing RF64-style compatibility
-extensions. BW64 profile conformance is not established by those cases:
-[ITU-R BS.2088-2, Annex 1 section 4.2](https://www.itu.int/dms_pubrec/itu-r/rec/bs/R-REC-BS.2088-2-202511-I!!PDF-E.pdf)
-treats the corresponding ds64 words as ignored dummy fields and does
-not use fact in its current profile. Correct BW64 dummy-field output and profile
-validation remain separate work.
+The BW64 compatibility paths now ignore its ds64 dummy words and emit them as
+zero. They cannot provide a forward ADPCM duration, even when a fact field has
+the value 0xFFFFFFFF. An ordinary leading fact or explicit count with final fact
+validation is needed. Writers using fact cannot extend its count beyond u32::MAX
+in BW64. See [BW64.md](BW64.md) for the corrected primitive, preserved raw fields,
+compatibility scope and remaining profile validation.
 
 ## Known-length Write-only output
 

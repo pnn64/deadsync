@@ -123,3 +123,10 @@ matrix. All 2748 descriptor/decode/range checks, 920 ordinary typed writer cases
 and 24 four-reference core gates still pass, with the same reference exact counts.
 The corpus hash matches the existing `pcm-canonical.corpus.zip`; no duplicate
 archive is needed. WAVL.md records the separate segmented fixtures and writers.
+
+The BW64 dummy-field correction replays the immutable 460 flat fixtures plus
+248 segmented fixtures. All 4484 combined descriptor/read/range checks retain
+their expected hashes. All 1912 combined writer outputs match the prior bytes
+after exactly eight BW64 dummy bytes are independently replaced with zero;
+other containers remain byte-identical. BW64.md records the 476-output prior
+archive, predeclared transformation and compatibility/profile limitations.

@@ -210,3 +210,20 @@ All campaign source inputs remain unchanged. All 71 tests pass on x64
 debug/release and i686 debug; Clippy, all 708 retained native gates and all 432
 retained forward ADPCM outputs also pass. STREAMING.md records the duration API
 contract and distinguishes RF64 rules from BW64 compatibility extensions.
+
+The BW64 correction adds 18 independent dummy-field seeds (376 total), covering
+PCM/IMA, absent/ordinary/0xFFFFFFFF fact and raw zero/one/u64::MAX dummy words.
+Existing BW64 sentinel seeds now cover rejection of an RF64-only extension.
+Generated native flat/wavl output is checked for zero dummy words in addition
+to sample and count parity. Reader properties retain raw input fields unchanged.
+
+`validation/bw64-dummy-mutation-{x64,i686}.*` each pass one million checked
+mutations. All 1414 inputs from the preceding archived corpus replay successfully
+(`bw64-dummy-prior-replay.*`). `bw64-dummy-asan.*` passes 100000 executions in
+113.17 seconds, adds 1936 units and produces no failure artifact. Its complete
+1490-file corpus is retained in `bw64-dummy-asan-corpus.zip` with a verified
+archive/report sidecar. The 261 MiB instrumented peak is not normal codec RSS.
+All recorded source inputs remain unchanged. All 74 tests pass on x64
+debug/release and i686 debug, with Clippy, the native replay, 432 forward ADPCM
+outputs and 24 physical sparse-file probes. BW64.md records the changed count
+policy and the precise eight-byte writer-output comparison rule.

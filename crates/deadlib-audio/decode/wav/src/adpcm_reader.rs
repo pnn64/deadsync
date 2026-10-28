@@ -26,7 +26,9 @@ impl<R: Read + Seek> AdpcmReader<R> {
         let codec = Adpcm::from_format(reader.format())?;
         let total_frames = reader
             .fact()
-            .or(reader.ds64_sample_count())
+            .or(reader
+                .ds64_sample_count()
+                .filter(|_| reader.container() == Container::Rf64))
             .ok_or(Error::Invalid("ADPCM requires fact sample count"))?;
         codec.validate_frame_count(
             reader

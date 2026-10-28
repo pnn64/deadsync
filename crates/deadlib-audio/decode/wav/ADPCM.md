@@ -7,10 +7,13 @@ coefficient pairs, high-nibble-first interleaving and block padding. IMA support
 3-bit and 4-bit WAV word groups with arbitrary channel counts within block-field limits.
 Each block restarts from its header. Neither block decoder allocates.
 
-`AdpcmData::new(&wave)` borrows encoded data and uses fact/ds64 sample counts to
+`AdpcmData::new(&wave)` borrows encoded data and uses fact/RF64 sample counts to
 trim padding. `read_frames(start, output, scratch)` gives sample-accurate random
 access with caller-owned block scratch, returning interleaved samples. The
 container retains unrecognized encoded formats without invoking either codec.
+BW64 dummy words never supply a duration; its ADPCM compatibility path requires
+fact and supports literal counts through u32::MAX. Writers reject larger BW64
+fact counts. RF64 retains its 64-bit count extension. See [BW64.md](BW64.md).
 
 Primary algorithm references:
 

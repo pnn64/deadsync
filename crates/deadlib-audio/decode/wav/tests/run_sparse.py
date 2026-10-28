@@ -47,6 +47,10 @@ def main():
     for container in ('rf64','bw64'):
         for codec in ('pcm','ima'):
             for size,frames in (('small',2**16+37),('large',2**32+37)):
+                if container=='bw64' and codec=='ima' and size=='large':
+                    # BW64 has no RF64 64-bit fact extension. The largest literal
+                    # fact count still puts this header-only-block file above 16 GiB.
+                    frames=2**32-1
                 path=directory/f'{container}-{codec}-{size}.wav'
                 for label,exe,mode in [('x64-create',binary,'create'),('x64-verify',binary,'verify'),('i686-verify',binary32,'verify')]:
                     process=subprocess.run([str(exe),mode,str(path),container,codec,str(frames)],capture_output=True)
@@ -62,8 +66,9 @@ def main():
                             checks.append(dict(frame=frame,offset=row['data_offset']+frame*4,bytes=actual.hex(),passed=actual==expected))
                         source.seek(row['data_offset']+42*4);hole=source.read(4)
                         source.seek(0,2);physical_length=source.tell()
-                    passed=physical_length==row['file_bytes'] and row['allocated_bytes']<2**20 and row['frames']==frames and row['marker_samples']==len(checks) and all(c['passed'] for c in checks) and hole==b'\0'*4
-                    results.append(dict(container=container,codec=codec,size=size,run=label,exit_code=process.returncode,passed=passed,header_sha256=header_sha,marker_checks=checks,zero_hole=hole.hex(),**row))
+                    dummy_zero=container!='bw64' or header[36:44]==b'\0'*8
+                    passed=physical_length==row['file_bytes'] and row['allocated_bytes']<2**20 and row['frames']==frames and row['marker_samples']==len(checks) and all(c['passed'] for c in checks) and hole==b'\0'*4 and dummy_zero
+                    results.append(dict(container=container,codec=codec,size=size,run=label,exit_code=process.returncode,passed=passed,header_sha256=header_sha,dummy_zero=dummy_zero,marker_checks=checks,zero_hole=hole.hex(),**row))
                 fixtures.append(dict(path=str(path),container=container,codec=codec,size=size,frames=frames,file_bytes=path.stat().st_size if path.exists() else None))
     after={p.relative_to(workspace).as_posix():sha(p.read_bytes()) for p in sources}
     volume=subprocess.check_output(['powershell','-NoProfile','-Command','Get-Volume -DriveLetter C | Select-Object FileSystem,AllocationUnitSize,Size,SizeRemaining | ConvertTo-Json -Compress'],text=True).strip()

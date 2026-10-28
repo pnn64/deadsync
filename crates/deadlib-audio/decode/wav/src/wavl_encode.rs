@@ -1,7 +1,7 @@
 //! Incremental native wavl output. Data and silence are separate bounded records.
 use crate::{
     Container, DataLength, Endian, Error, RawChunk, SampleFormat, Spec, WriteOptions,
-    mux::{chunk, container_id, put16, put32, validate_chunk, write32},
+    mux::{chunk, container_id, put16, put32, validate_chunk, validate_fact_count, write32},
 };
 use std::io::{Seek, SeekFrom, Write};
 
@@ -84,7 +84,7 @@ impl<W: Write + Seek> WavlWriter<W> {
             chunk(
                 &mut self.inner,
                 b"ds64",
-                &ds64(size, self.bytes, self.frames),
+                &ds64(container, size, self.bytes, self.frames),
                 e,
             )?;
         }
@@ -115,6 +115,7 @@ impl<W: Write> WavlWriter<W> {
         metadata: &[RawChunk<'_>],
         length: DataLength,
     ) -> Result<Self, Error> {
+        validate_fact_count(options.container, length.frames)?;
         if length.bytes < 4 || !length.bytes.is_multiple_of(2) {
             return Err(Error::Invalid("wavl declared byte length"));
         }
@@ -368,6 +369,7 @@ impl<W: Write> WavlWriter<W> {
             .frames
             .checked_add(frames)
             .ok_or(Error::Limit("wavl frame count overflow"))?;
+        validate_fact_count(self.options.container, frames)?;
         if self
             .length
             .is_some_and(|v| bytes > v.bytes || frames > v.frames)
@@ -398,10 +400,12 @@ impl<W: Write> WavlWriter<W> {
 fn large(size: u64, list: u64, frames: u64) -> bool {
     size >= u64::from(u32::MAX) || list >= u64::from(u32::MAX) || frames >= u64::from(u32::MAX)
 }
-fn ds64(size: u64, list: u64, frames: u64) -> [u8; 40] {
+fn ds64(container: Container, size: u64, list: u64, frames: u64) -> [u8; 40] {
     let mut b = [0; 40];
     b[..8].copy_from_slice(&size.to_le_bytes());
-    b[16..24].copy_from_slice(&frames.to_le_bytes());
+    if container == Container::Rf64 {
+        b[16..24].copy_from_slice(&frames.to_le_bytes());
+    }
     b[24..28].copy_from_slice(&1u32.to_le_bytes());
     b[28..32].copy_from_slice(b"LIST");
     b[32..].copy_from_slice(&list.to_le_bytes());
@@ -475,8 +479,8 @@ impl Header {
                 if is64 { b"ds64" } else { b"JUNK" },
                 &if is64 {
                     length.map_or_else(
-                        || ds64(0, 0, 0),
-                        |v| ds64(self.list_header + v.bytes, v.bytes, v.frames),
+                        || ds64(container, 0, 0, 0),
+                        |v| ds64(container, self.list_header + v.bytes, v.bytes, v.frames),
                     )
                 } else {
                     [0; 40]

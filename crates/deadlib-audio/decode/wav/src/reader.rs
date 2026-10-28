@@ -102,11 +102,7 @@ impl<R: Read + Seek> Reader<R> {
                     let mut b = [0; 4];
                     s.read_chunk(&mut b)?;
                     let n = endian.u32(&b);
-                    fact = Some(if n == u32::MAX {
-                        s.ds64().map_or(u64::from(n), |d| d.sample_count)
-                    } else {
-                        u64::from(n)
-                    });
+                    fact = Some(s.container().fact_frames(n, ds64_sample_count));
                 }
                 _ => {}
             }

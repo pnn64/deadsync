@@ -187,8 +187,8 @@ impl<R: Read> ForwardReader<R> {
     pub fn fact(&self) -> Option<u64> {
         self.fact
     }
-    /// Raw ds64 field. An ordinary fact count overrides it; only the fact
-    /// sentinel selects this value as the authoritative sample count.
+    /// Raw ds64 field. Only an RF64 fact sentinel selects this sample count.
+    /// BW64 uses ignored dummy words here, preserved for inspection only.
     pub fn ds64_sample_count(&self) -> Option<u64> {
         self.stream.ds64().map(|d| d.sample_count)
     }
@@ -420,7 +420,9 @@ impl<R: Read> ForwardReader<R> {
         if let Some(frames) = frames {
             let actual = self
                 .fact
-                .or(self.ds64_sample_count())
+                .or(self
+                    .ds64_sample_count()
+                    .filter(|_| self.container() == Container::Rf64))
                 .ok_or(Error::Invalid("ADPCM requires fact sample count"))?;
             if actual != frames {
                 return Err(Error::Invalid("forward ADPCM duration mismatch"));
@@ -462,9 +464,7 @@ fn read_fact<R: Read>(stream: &mut Stream<R>, chunk: ChunkInfo) -> Result<u64, E
     let mut bytes = [0; 4];
     stream.read_chunk(&mut bytes)?;
     let frames = stream.container().endian().u32(&bytes);
-    Ok(if frames == u32::MAX {
-        stream.ds64().map_or(u64::from(frames), |d| d.sample_count)
-    } else {
-        u64::from(frames)
-    })
+    Ok(stream
+        .container()
+        .fact_frames(frames, stream.ds64().map(|d| d.sample_count)))
 }

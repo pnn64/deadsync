@@ -92,7 +92,7 @@ impl<W: Write + Seek> Muxer<W> {
         )?;
         if is64 {
             self.inner.seek(SeekFrom::Start(self.base + 12))?;
-            let d = size64(size, self.bytes, self.frames);
+            let d = size64(container, size, self.bytes, self.frames);
             chunk(&mut self.inner, b"ds64", &d, Endian::Little)?;
         }
         if let Some(pos) = self.fact_offset {
@@ -127,6 +127,9 @@ impl<W: Write> Muxer<W> {
         length: DataLength,
     ) -> Result<Self, Error> {
         let mut plan = HeaderPlan::new(format, options, metadata, options.container.is_64())?;
+        if plan.fact_offset.is_some() {
+            validate_fact_count(options.container, length.frames)?;
+        }
         if let Some(align) = plan.native_align
             && length.frames.checked_mul(u64::from(align)) != Some(length.bytes)
         {
@@ -214,6 +217,9 @@ impl<W: Write> Muxer<W> {
             .frames
             .checked_add(frames)
             .ok_or(Error::Limit("sample count overflow"))?;
+        if self.fact_offset.is_some() {
+            validate_fact_count(self.options.container, frames)?;
+        }
         if let Some(length) = self.length
             && (count > length.bytes || frames > length.frames)
         {
@@ -332,11 +338,19 @@ fn is_large(size: u64, bytes: u64, frames: u64, fact: bool) -> bool {
         || bytes >= u64::from(u32::MAX)
         || (fact && frames >= u64::from(u32::MAX))
 }
-fn size64(size: u64, bytes: u64, frames: u64) -> [u8; 28] {
+pub(crate) fn validate_fact_count(container: Container, frames: u64) -> Result<(), Error> {
+    if container == Container::Bw64 && frames > u64::from(u32::MAX) {
+        return Err(Error::Limit("BW64 fact count exceeds 32 bits"));
+    }
+    Ok(())
+}
+fn size64(container: Container, size: u64, bytes: u64, frames: u64) -> [u8; 28] {
     let mut d = [0; 28];
     d[..8].copy_from_slice(&size.to_le_bytes());
     d[8..16].copy_from_slice(&bytes.to_le_bytes());
-    d[16..24].copy_from_slice(&frames.to_le_bytes());
+    if container == Container::Rf64 {
+        d[16..24].copy_from_slice(&frames.to_le_bytes());
+    }
     d
 }
 fn write_header(
@@ -362,7 +376,7 @@ fn write_header(
     inner.write_all(b"WAVE")?;
     if plan.reserve_64 {
         let d = known.filter(|_| is64).map_or([0; 28], |(length, size)| {
-            size64(size, length.bytes, length.frames)
+            size64(options.container, size, length.bytes, length.frames)
         });
         chunk(inner, if is64 { b"ds64" } else { b"JUNK" }, &d, e)?;
     }

@@ -459,10 +459,11 @@ fn rf64_wavl_duration_uses_fact_or_observed_frames_not_unused_ds64() {
                 reader.finish().unwrap();
                 // The same ds64 field is authoritative when fact uses its sentinel.
                 bytes[fact_at..fact_at + 4].fill(255);
-                assert_eq!(Wave::parse(&bytes).is_ok(), ds_count == 20);
+                let valid = container == Container::Rf64 && ds_count == 20;
+                assert_eq!(Wave::parse(&bytes).is_ok(), valid);
                 let result =
                     ForwardReader::new(Short::new(&bytes, 3)).and_then(ForwardReader::finish);
-                assert_eq!(result.is_ok(), ds_count == 20);
+                assert_eq!(result.is_ok(), valid);
             }
         }
     }
@@ -482,6 +483,18 @@ fn large_virtual_silence_seeks_remain_u64_and_forward_finish_does_not_expand_it(
             (*b"data", vec![2, 3]),
         ];
         let bytes = form(container, &format, &children, count * 2 + 2, false, true);
+        if container == Container::Bw64 {
+            // The RF64-only 64-bit fact extension cannot use BW64 dummy words.
+            assert!(Wave::parse(&bytes).is_err());
+            assert!(Reader::new(Cursor::new(&bytes)).is_err());
+            assert!(
+                ForwardReader::new(Short::new(&bytes, 1))
+                    .unwrap()
+                    .finish()
+                    .is_err()
+            );
+            continue;
+        }
         let wave = Wave::parse(&bytes).unwrap();
         let pcm = wave.pcm().unwrap();
         assert_eq!(pcm.frames(), count * 2 + 2);

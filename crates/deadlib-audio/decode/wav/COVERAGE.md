@@ -173,6 +173,19 @@ Two million checked mutations over 358 seeds, 1443 earlier corpus files and
 matrix retain the existing RF64-style compatibility behavior; PLAN.md records
 the separately identified normative BW64 dummy-field gap.
 
+BW64 dummy words now remain raw inspection data and never supply decoded counts;
+all writers emit zero there. Three regressions fail on `158ea60ea` and pass now.
+The 476 archived prior BW64 outputs match immutable earlier hashes before the
+independent eight-byte zeroing rule is applied. All 1912 complete writer outputs,
+708 native fixture gates and 4484 descriptor/read/range checks pass under that
+rule, with every other byte/container unchanged. All 74 tests pass on x64
+debug/release and i686 debug, with Clippy, 432 forward ADPCM outputs, two million
+checked mutations, 1414 prior corpus files and 100000 fresh ASan executions.
+All 24 updated physical sparse-file probes pass with zero BW64 dummy words;
+the BW64 IMA large probe uses literal u32::MAX fact rather than the former
+RF64-only count extension. See BW64.md for exact compatibility/profile scope
+and `validation/bw64-dummy-*` for hashes, reports and raw logs.
+
 Remaining work: metadata profile/semantic validation, compressed wavl routing,
 broader fuzzing and representative comparative performance/RSS coverage
 (the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); extensible

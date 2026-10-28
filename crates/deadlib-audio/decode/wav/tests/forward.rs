@@ -373,6 +373,9 @@ fn rf64_explicit_adpcm_duration_ignores_unused_ds64_until_fact_is_known() {
                 (65, u64::MAX),
                 (u32::MAX, 65),
             ] {
+                if container == Container::Bw64 && fact == u32::MAX {
+                    continue; // BW64 dummy words cannot extend a fact count.
+                }
                 let riff = compressed(Some(fact), trailing);
                 let mut bytes = if container == Container::Rf64 {
                     b"RF64".to_vec()
@@ -410,7 +413,7 @@ fn rf64_explicit_adpcm_duration_ignores_unused_ds64_until_fact_is_known() {
                 // Without an explicit count, leading fact takes precedence;
                 // a raw ds64 hint alone is checked against the trailing fact.
                 let inferred = AdpcmForwardReader::new(Input::new(&bytes, 3));
-                if !trailing || ds_count == 65 {
+                if !trailing || (container == Container::Rf64 && ds_count == 65) {
                     assert_eq!(inferred.as_ref().unwrap().frames(), 65);
                     inferred.unwrap().finish().unwrap();
                 } else {

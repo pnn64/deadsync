@@ -128,10 +128,14 @@ fixture gates and 432 retained forward ADPCM outputs pass. Two million checked
 mutations, 1443 prior corpus inputs and 100000 fresh ASan executions pass; the
 1414-file generated corpus and all hashes/logs are preserved in validation.
 
-A fresh standards check identified a concrete BW64 gap: ITU-R BS.2088-2 (2025),
-Annex 1 section 4.2, requires the RF64 sampleCount-equivalent ds64 words to be
-ignored on read and zero on write. The current generic RF64-style BW64 output
-still writes decoded counts there. Current fact/compressed/wavl BW64 cases are
-compatibility extensions, not normative BW64 profile evidence. Correct this
-primitive and audit affected fixtures/writers before claiming BW64 conformance.
-Source: https://www.itu.int/dms_pubrec/itu-r/rec/bs/R-REC-BS.2088-2-202511-I!!PDF-E.pdf
+The BW64 dummy-field correction is now implemented across readers and writers.
+Raw words remain inspectable, but never determine decoded duration. All output
+zeros them; compatibility fact counts above u32::MAX are rejected, while native
+contiguous PCM keeps u64 frame counts. BW64.md records the standard distinction,
+remaining profile requirements and historical compatibility boundaries. Three
+regressions fail on the previous commit and pass now; all 74 tests pass on x64
+debug/release and i686 debug with Clippy. All 708 native gates, 4484 descriptor/
+read/range checks, 1912 writer outputs under the exact dummy-byte transformation,
+432 retained forward ADPCM outputs and 24 updated physical sparse-file probes
+pass. Two million checked mutations, 1414 prior corpus files and 100000 fresh
+ASan executions pass. Normative BW64 profile/ADM validation remains open.

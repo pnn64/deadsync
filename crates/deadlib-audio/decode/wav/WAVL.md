@@ -81,6 +81,9 @@ promotion. RF64/BW64 mechanics use a ds64 LIST size-table entry and a zero prima
 dataSize because the audio is in a LIST. Children retain ordinary 32-bit lengths;
 ds64 replacements apply to top-level chunks in this implementation. These
 mechanics do not certify a broadcast/ADM application profile.
+BW64 output now zeros the ds64 dummy words. Its wavl compatibility path uses a
+literal 32-bit fact count and rejects larger counts before output; use RF64 for
+larger virtual sequences. See [BW64.md](BW64.md) for the corrected distinction.
 
 ## Evidence and limits
 

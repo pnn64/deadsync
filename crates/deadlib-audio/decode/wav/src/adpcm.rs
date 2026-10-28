@@ -305,7 +305,10 @@ impl<'a> AdpcmData<'a> {
             .ok_or(Error::Unsupported("segmented ADPCM data"))?;
         let frames = wave
             .fact
-            .or(wave.ds64.map(|d| d.sample_count))
+            .or(wave
+                .ds64
+                .filter(|_| wave.container == crate::Container::Rf64)
+                .map(|d| d.sample_count))
             .ok_or(Error::Invalid("ADPCM requires fact sample count"))?;
         codec.validate_frame_count(bytes.len() as u64, frames)?;
         Ok(Self {

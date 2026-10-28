@@ -116,6 +116,17 @@ def corpus():
                     ds=ck(b'ds64',struct.pack('<QQQI',4+36+len(body),0xffffffffffffffff,count,0))
                     result[f'duration-{kind.decode()}-{wavl}-{trailing}-{count}-{sentinel}']=b'\0'+kind+b'\xff'*4+b'WAVE'+ds+body
 
+    # BW64 dummy words remain raw metadata even with absent/sentinel fact.
+    for tag in (1,17):
+        fmt=(struct.pack('<HHIIHH',1,2,8000,32000,4,16) if tag==1 else
+             struct.pack('<HHIIHHHH',17,1,8000,32000,4,4,2,1))
+        for fact_count in (None,1,0xffffffff):
+            for dummy in (0,1,0xffffffffffffffff):
+                fact=b'' if fact_count is None else ck(b'fact',struct.pack('<I',fact_count))
+                body=ck(b'fmt ',fmt)+fact+ck(b'data',struct.pack('<hBB',12345,0,0))
+                ds=ck(b'ds64',struct.pack('<QQQI',40+len(body),4,dummy,0))
+                result[f'bw64-dummy-{tag}-{fact_count}-{dummy}']=b'\0BW64'+b'\xff'*4+b'WAVE'+ds+body
+
     metadata=[]
     for e in ('<','>'):
         metadata.extend([
