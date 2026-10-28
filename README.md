@@ -299,7 +299,8 @@ player and Select Music choices.
   Turning the master switch on also turns this on, so pars appear right away;
   switch it off here if you would rather not see them.
 - **Options > Select Music Options > GS Box Leaderboards > Golf (ArrowCloud)**
-  shows the online event board alongside the other selectable leaderboards.
+  shows the online event board alongside the other selectable leaderboards,
+  framed in fairway green over the In The Golf course pattern.
   ArrowCloud sends it with the chart's other boards in the same request, so
   turning it on or off takes effect immediately.
 - **Options > Select Music Options > Lead With Event Boards** (on by default)

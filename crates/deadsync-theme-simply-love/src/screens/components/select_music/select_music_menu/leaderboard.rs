@@ -2,7 +2,9 @@ use crate::act;
 use crate::color;
 use crate::fonts::machine_font_key;
 use crate::screens::components::select_music::push_retained_overlay;
-use crate::screens::components::shared::gs_scorebox::entries_with_local_self_state;
+use crate::screens::components::shared::gs_scorebox::{
+    GolfPanePattern, SCOREBOX_GOLF_GREEN, entries_with_local_self_state, push_golf_pane_pattern,
+};
 use crate::views::{
     ScoreboxSideView, SelectMusicLeaderboardRequest, SelectMusicLeaderboardSideView,
     SelectMusicLeaderboardView,
@@ -19,6 +21,10 @@ use std::sync::Arc;
 const GS_LEADERBOARD_NUM_ENTRIES: usize = 13;
 const GS_LEADERBOARD_ROW_HEIGHT: f32 = 24.0;
 const GS_LEADERBOARD_PANE_HEIGHT: f32 = 360.0;
+/// Overlay tiles are this many pane heights tall; the pane is big enough to
+/// show the course at close to its drawn size.
+const GOLF_OVERLAY_PATTERN_TILE_HEIGHTS: f32 = 1.2;
+const GOLF_OVERLAY_PATTERN_ALPHA: f32 = 0.18;
 const GS_LEADERBOARD_PANE_WIDTH_SINGLE: f32 = 330.0;
 const GS_LEADERBOARD_PANE_WIDTH_MULTI: f32 = 230.0;
 const GS_LEADERBOARD_PANE_SIDE_OFFSET: f32 = 160.0;
@@ -476,11 +482,17 @@ fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
             && pane.is_some_and(|p| p.is_hard_ex() && !p.disabled);
         let is_disabled = !side.loading && pane.is_some_and(|p| p.disabled);
 
+        // The golf board frames itself in fairway green over the course pattern.
+        let border = if is_golf {
+            SCOREBOX_GOLF_GREEN
+        } else {
+            [1.0, 1.0, 1.0, 1.0]
+        };
         actors.push(act!(quad:
             align(0.5, 0.5):
             xy(center_x, pane_cy):
             zoomto(pane_width + 2.0, GS_LEADERBOARD_PANE_HEIGHT + 2.0):
-            diffuse(1.0, 1.0, 1.0, 1.0):
+            diffuse(border[0], border[1], border[2], border[3]):
             z(GS_LEADERBOARD_Z + 2)
         ));
         actors.push(act!(quad:
@@ -490,6 +502,19 @@ fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
             diffuse(0.0, 0.0, 0.0, 1.0):
             z(GS_LEADERBOARD_Z + 3)
         ));
+        if is_golf {
+            push_golf_pane_pattern(
+                actors,
+                GolfPanePattern {
+                    center: [center_x, pane_cy],
+                    size: [pane_width, GS_LEADERBOARD_PANE_HEIGHT],
+                    tile_h: GS_LEADERBOARD_PANE_HEIGHT * GOLF_OVERLAY_PATTERN_TILE_HEIGHTS,
+                    alpha: GOLF_OVERLAY_PATTERN_ALPHA,
+                    z: GS_LEADERBOARD_Z + 3,
+                },
+                crate::screens::components::shared::visual_style_bg::global_elapsed_s() as f32,
+            );
+        }
 
         let header_y = GS_LEADERBOARD_ROW_HEIGHT
             .mul_add(0.5, GS_LEADERBOARD_PANE_HEIGHT.mul_add(-0.5, pane_cy));

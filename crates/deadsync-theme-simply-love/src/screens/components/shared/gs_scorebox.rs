@@ -66,6 +66,62 @@ struct GameplayScoreboxRow {
     score_color: [f32; 4],
 }
 
+/// Fairway green for the golf pane's border: deep enough to frame the pattern
+/// behind it without glowing next to the blue and pink boards.
+pub(crate) const SCOREBOX_GOLF_GREEN: [f32; 4] = [0.16, 0.48, 0.22, 1.0];
+/// Pattern tint and alpha over the pane's black fill, in the spirit of the
+/// event's result cards: visible texture, never competing with the rows.
+const GOLF_PANE_PATTERN_RGB: [f32; 3] = [0.85, 1.0, 0.85];
+const GOLF_PANE_PATTERN_ALPHA: f32 = 0.22;
+/// Drift in tiles per second.
+const GOLF_PANE_PATTERN_UV_VEL: [f32; 2] = [0.02, 0.012];
+/// Scorebox tiles are this many pane heights tall so the flags stay legible at
+/// scorebox size.
+const SCOREBOX_GOLF_PATTERN_TILE_HEIGHTS: f32 = 3.0;
+
+/// Where the course pattern is drawn and how large one tile is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct GolfPanePattern {
+    pub(crate) center: [f32; 2],
+    /// The pane's fill size; the texture repeats to cover it.
+    pub(crate) size: [f32; 2],
+    /// One pattern tile's height in pixels. Its width follows the texture.
+    pub(crate) tile_h: f32,
+    pub(crate) alpha: f32,
+    pub(crate) z: i16,
+}
+
+/// Tile the course pattern across a pane, drifting with `elapsed_seconds`.
+/// Pushed right after the pane's fill at the same z.
+pub(crate) fn push_golf_pane_pattern(
+    actors: &mut Vec<Actor>,
+    pattern: GolfPanePattern,
+    elapsed_seconds: f32,
+) {
+    let GolfPanePattern {
+        center: [center_x, center_y],
+        size: [w, h],
+        tile_h,
+        alpha,
+        z,
+    } = pattern;
+    if alpha <= 0.0 || tile_h <= 0.0 {
+        return;
+    }
+    let [tex_w, tex_h] = crate::resources::GOLF_PANE_PATTERN_TEXTURE_SIZE;
+    let tile_w = tile_h * (tex_w as f32 / tex_h as f32);
+    let u0 = (GOLF_PANE_PATTERN_UV_VEL[0] * elapsed_seconds).rem_euclid(1.0);
+    let v0 = (GOLF_PANE_PATTERN_UV_VEL[1] * elapsed_seconds).rem_euclid(1.0);
+    actors.push(act!(sprite_static(crate::resources::GOLF_PANE_PATTERN_TEXTURE):
+        align(0.5, 0.5):
+        xy(center_x, center_y):
+        setsize(w, h):
+        customtexturerect(u0, v0, u0 + w / tile_w, v0 + h / tile_h):
+        diffuse(GOLF_PANE_PATTERN_RGB[0], GOLF_PANE_PATTERN_RGB[1], GOLF_PANE_PATTERN_RGB[2], alpha):
+        z(z)
+    ));
+}
+
 #[derive(Clone, Debug)]
 struct GameplayScoreboxPane {
     kind: PaneKind,
@@ -239,7 +295,7 @@ fn pane_color(kind: PaneKind) -> [f32; 4] {
                 .mul_add(SCOREBOX_HARD_EX_BORDER_TINT, SCOREBOX_GS_BLUE[2]),
             1.0,
         ],
-        PaneKind::Golf => [0.2, 0.8, 0.2, 1.0],
+        PaneKind::Golf => SCOREBOX_GOLF_GREEN,
         PaneKind::Srpg => SCOREBOX_SRPG_YELLOW,
         PaneKind::Itl => SCOREBOX_ITL_PINK,
     }
@@ -1245,6 +1301,26 @@ fn push_gameplay_scorebox_actors_from_panes(
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(z_base + 1)
     ));
+    // The golf pane carries the course pattern; it fades with the pane as the
+    // cycle crosses into or out of it.
+    let mut golf_mix = 0.0;
+    if cur.kind == PaneKind::Golf {
+        golf_mix += cycle.cur_alpha;
+    }
+    if cycle.next_idx != cycle.cur_idx && next.kind == PaneKind::Golf {
+        golf_mix += cycle.next_alpha;
+    }
+    push_golf_pane_pattern(
+        actors,
+        GolfPanePattern {
+            center: [center_x, center_y],
+            size: [w, h],
+            tile_h: h * SCOREBOX_GOLF_PATTERN_TILE_HEIGHTS,
+            alpha: GOLF_PANE_PATTERN_ALPHA * golf_mix.min(1.0),
+            z: z_base + 1,
+        },
+        elapsed_seconds,
+    );
     push_header_overlays(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
 
     push_rows(
@@ -1623,6 +1699,45 @@ mod cycle_clock_tests {
 #[cfg(test)]
 mod golf_tests {
     use super::*;
+
+    #[test]
+    fn golf_pane_pattern_tiles_and_drifts_inside_the_pane() {
+        let pattern = GolfPanePattern {
+            center: [100.0, 50.0],
+            size: [162.0, 80.0],
+            tile_h: 240.0,
+            alpha: 0.22,
+            z: 72,
+        };
+        let mut actors = Vec::new();
+        push_golf_pane_pattern(&mut actors, pattern, 10.0);
+        let Some(Actor::Sprite { source, uv_rect, tint, .. }) = actors.first() else {
+            panic!("the pattern is one sprite");
+        };
+        assert_eq!(source.texture_key(), Some(crate::resources::GOLF_PANE_PATTERN_TEXTURE));
+        let uv = uv_rect.expect("the pattern repeats through a custom texture rect");
+        assert!((uv[2] - uv[0] - 162.0 / 300.0).abs() < 1e-4, "u span is pane width over tile width");
+        assert!((uv[3] - uv[1] - 80.0 / 240.0).abs() < 1e-4, "v span is pane height over tile height");
+        assert!((tint[3] - 0.22).abs() < 1e-6);
+
+        let mut later = Vec::new();
+        push_golf_pane_pattern(&mut later, pattern, 20.0);
+        let Some(Actor::Sprite { uv_rect: later_uv, .. }) = later.first() else { panic!() };
+        assert_ne!(later_uv, uv_rect, "the pattern drifts");
+
+        let mut none = Vec::new();
+        push_golf_pane_pattern(&mut none, GolfPanePattern { alpha: 0.0, ..pattern }, 0.0);
+        assert!(none.is_empty(), "a fully faded pattern pushes nothing");
+    }
+
+    #[test]
+    fn golf_pane_border_is_a_muted_green() {
+        let [r, g, b, a] = pane_color(PaneKind::Golf);
+        assert!(g > r && g > b, "still reads as green");
+        assert!(g < 0.6, "but no longer glows");
+        assert_eq!(a, 1.0);
+    }
+
     #[test]
     fn golf_rows_format_raw_strokes_without_percent_clamping() {
         let entry = score_data::LeaderboardEntry { rank: 1, name: "Golf Player".into(), machine_tag: None, score: 123456.0, date: String::new(), is_rival: false, is_self: false, is_fail: false };

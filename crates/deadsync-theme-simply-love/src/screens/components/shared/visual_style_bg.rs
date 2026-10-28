@@ -286,7 +286,7 @@ pub fn tick_global(dt: f32) {
 }
 
 #[inline]
-fn global_elapsed_s() -> f64 {
+pub(crate) fn global_elapsed_s() -> f64 {
     GLOBAL_ELAPSED.with(Cell::get)
 }
 

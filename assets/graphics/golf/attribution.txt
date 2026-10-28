@@ -1,0 +1,6 @@
+arrowpattern.png is the In The Golf course pattern, created by Sam Oldenburg
+for the ArrowCloud golf event (arrow-cloud/api/assets/golf/arrowpattern.png).
+It is tiled behind the golf leaderboard pane.
+
+The pattern is owned by Sam Oldenburg and is distributed with DeadSync under
+the repository's GPL-3.0 license with permission.
