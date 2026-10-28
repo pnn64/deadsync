@@ -226,6 +226,8 @@ impl<'a> Iterator for Fragments<'a> {
             && fourth < 255
         {
             (4, 3 * 255 + fourth as usize, true)
+        } else if self.lacing.len() <= 4 {
+            (self.lacing.len(), self.lacing.len() * 255, false)
         } else {
             let count = fragment_segment_count(self.lacing);
             let last = self.lacing[count - 1];
