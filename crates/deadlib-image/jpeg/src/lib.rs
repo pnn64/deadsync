@@ -5,14 +5,18 @@
 #![forbid(unsafe_code)]
 
 mod decode;
+mod encode;
 mod entropy;
+mod huffman_encode;
 mod marker;
 mod model;
+mod output;
 mod progressive;
 mod reconstruct;
 mod transform;
 
 pub use decode::{CoefficientComponent, CoefficientImage, decode_coefficients};
+pub use encode::{CodingOptions, encode_coefficients};
 pub use reconstruct::{ColorSpace, ComponentPlane, PlanarImage, Upsampling};
 
 pub use marker::{Event, MarkerReader};

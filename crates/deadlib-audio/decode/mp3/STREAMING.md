@@ -25,7 +25,8 @@ Ok(())
 Raw coordinates include Info/Xing frames, encoder and decoder delay, and final
 padding. They count per-channel sample instants even if the channel count or
 sampling rate changes; they are not time durations or gapless coordinates.
-Gapless trimming and sample-accurate seeking are subsequent required work.
+For seekable sources, `IndexedDecoder` adds gapless trimming and sample-accurate
+seeking; see [SEEKING.md](SEEKING.md). This raw streaming API retains all samples.
 
 `PacketReader<R>` exposes complete physical packets without decoding PCM.
 Packets include their original header, byte offset, free-format size and skipped
@@ -116,6 +117,6 @@ additional evidence for buffering, metadata and state composition, not a claim
 of complete ISO conformance. Reports, command logs, binary hashes and source
 hashes are retained in tests/validation/2026-10-28-streaming.
 
-No streaming performance claim is made yet. Gapless mapping, sample-accurate
-seeking, the documented 8 kHz mixed-block disagreement, extended malformed/fuzz
+No streaming performance claim is made yet. The documented 8 kHz mixed-block
+disagreement, extended malformed/fuzz
 campaigns, native encoding and measured optimization remain required.

@@ -13,6 +13,7 @@ def main():
     p=argparse.ArgumentParser()
     for name in ['native','corpus','output']:p.add_argument('--'+name,type=Path,required=True)
     p.add_argument('--stream-chunk',type=int,help='use the streaming CLI with explicit recovery and final-frame discard')
+    p.add_argument('--indexed',action='store_true',help='use the indexed raw CLI and audit every-frame and random seeks')
     args=p.parse_args();args.output.mkdir(parents=True,exist_ok=False)
     limits={'rms':2**-15/math.sqrt(3),'max':2**-14}
     full_rms=2**-15/math.sqrt(12)
@@ -23,12 +24,17 @@ def main():
         if not reference_path.exists():continue
         target=args.output/(source.stem+'.bin')
         command=[str(args.native.resolve()),'native',str(source.resolve()),str(target.resolve())] if args.stream_chunk is None else [str(args.native.resolve()),str(source.resolve()),str(target.resolve()),str(args.stream_chunk),'recover','discard']
+        if args.indexed:command=[str(args.native.resolve()),str(source.resolve()),str(target.resolve()),'raw','audit','recover','discard']
         run=subprocess.run(command,capture_output=True,text=True)
         record={'case':source.name,'command':command,'exit_code':run.returncode,'stderr':run.stderr,
                 'input_sha256':hashlib.sha256(source.read_bytes()).hexdigest(),
                 'reference_sha256':hashlib.sha256(reference_path.read_bytes()).hexdigest()}
         if not run.returncode:
-            decoded=frames(target);actual=[s for _,pcm in decoded for s in pcm]
+            if args.indexed:
+                from reference_file import chunks
+                decoded=chunks(target)
+            else:decoded=frames(target)
+            actual=[s for _,pcm in decoded for s in pcm]
             data=reference_path.read_bytes();reference=struct.unpack('<'+'h'*(len(data)//2),data)
             # This vector's supplied reference omits exactly two lead-in frames.
             skip=2*1152*decoded[0][0][1] if source.name=='l3-sin1k0db.bit' else 0

@@ -36,3 +36,8 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    standards coverage or competitive performance.
 
 Record commands, source provenance and results with each implementation milestone.
+
+Codec-independent encoded output muxing is implemented; native Writer shares the
+same path. Opaque descriptors, 64-bit decoded counts and bounded size accounting
+have dedicated coverage; 23 tests and a repeated PCM benchmark pass. ADPCM
+encoding and compressed readers remain the next implementation work.

@@ -15,6 +15,15 @@ Progressive decoding includes spectral selection, DC/AC successive
 approximation, EOB runs, restart boundaries, and scan-order validation. Partial
 progressions retain the precision available for each band.
 
+`encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
+without another lossy transform. It preserves quantizer values, visible blocks,
+and APPn/COM payloads. Controls select sequential or spectral progressive
+output, optimized or fixed Huffman tables, restart intervals, and an output
+byte budget. The initial writer accepts one to four components. Metadata keeps
+its relative order; segments beyond the new last scan are emitted before EOI.
+Progressive encoding currently uses full-precision DC and AC bands; successive
+approximation scan generation and pixel/quality encoding remain planned.
+
 ```rust
 use deadlib_image_jpeg::{decode_coefficients, Limits, Upsampling};
 # fn example(jpeg: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
@@ -40,7 +49,7 @@ record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark; allocation instrumentation remains planned.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
 unsupported errors. Arithmetic, predictive lossless, hierarchy,
-DNL, streaming, and encoding remain required work.
+DNL, streaming, and pixel encoding remain required work.
 
 Run `cargo test -p deadlib-image-jpeg` and
 `cargo clippy -p deadlib-image-jpeg --all-targets -- -D warnings`.
