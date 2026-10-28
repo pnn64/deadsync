@@ -70,7 +70,7 @@ Verified milestones:
   rustdoc with warnings denied pass. The external report is retained under
   tests/reports/rewrite-turbo.json.
   Pixel/quality encoding and all remaining plan items are still required.
-- Pixel encoder milestone: native integer FDCT/quantization, quality scaling,
+- `4723ff45b`: native integer FDCT/quantization, quality scaling,
   8/12-bit output, shared grayscale/RGB and native U8/U16 source APIs, common
   and fractional chroma sampling, explicit precision scaling, JFIF/Adobe tags,
   encoded CMYK/YCCK preservation, and coefficient inspection. The pinned C
@@ -83,3 +83,15 @@ Verified milestones:
   Clippy and rustdoc with warnings denied pass. After restricting fixed
   Huffman tables to each process/precision's legal symbols, both external
   gates were rerun: 600 rewrites plus 172 pixel encodes still pass exactly.
+- Metadata/profile milestone: borrowed typed JFIF/JFXX/Adobe/Exif views,
+  bounded TIFF IFD/value and orientation/thumbnail access, ordered zero-copy
+  ICC chunks, header inspection, explicit copy budgets, and metadata/ICC
+  encoding controls. The independent libjpeg metadata API agrees on all 114
+  valid cases and rejects the same six malformed ICC sequences. Pillow verifies
+  both Exif byte orders after rewriting and accepts the transported real sRGB
+  profile. Maximum 255-chunk profiles and 5,000 malformed Exif mutations pass.
+  See METADATA-VALIDATION.md and tests/reports/metadata-turbo.json. Full remaining
+  codec, streaming, conformance and performance work stays open.
+  Final gates: all 37 tests pass in release and isolated debug builds; rustfmt,
+  Clippy and rustdoc with warnings denied pass. Source metadata and existing
+  PNG/GIF code remain untouched by the new package APIs.

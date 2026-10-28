@@ -18,7 +18,7 @@ claim is made. The complete user scope is retained in PLAN.md.
 | Full component-count range | Encoder currently accepts 1–4 components; complete sequential component-count coverage pending |
 | Restart intervals and sequence validation | Sequential/progressive implemented; external 8/12-bit fixtures, corruption and EOB boundary tests |
 | Original coefficients, tables, metadata | Coefficients and quantizers retained; APPn/COM bytes borrowed with scan positions |
-| JFIF/JFXX, Exif, Adobe, ICC assembly | Basic JFIF/Adobe output and color inference; typed fields, JFXX, Exif interpretation and ICC assembly pending |
+| JFIF/JFXX, Exif, Adobe, ICC assembly | Typed bounded views, Exif orientation/IFDs/thumbnails, zero-copy ICC assembly and profile writing through 255 chunks; 114 external matches plus 6 malformed ICC cases; caller uses original profile for color management |
 | IDCT, chroma upsampling, color numerics | Q20 integer IDCT: error <=1 vs reference float on 50 cases; centered linear/nearest; broader numerical and color gates pending |
 | Native configurable encoder | Native pixel/quality/precision/sampling controls and integer FDCT/quantization; 172 external coefficient matches; 132 float-FDCT/size/quality comparisons; broader validation/performance pending |
 | Optimized Huffman, progressive encoding | Annex K length-limited Huffman tables and spectral progressive output implemented; successive approximation encoder pending |

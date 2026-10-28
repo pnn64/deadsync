@@ -50,8 +50,14 @@ MCU blocks remain available. Each component snapshots its quantizer at scan
 time. Component planes preserve their original integer precision and sampling
 grid. CMYK/YCCK planes retain their encoded values, including Adobe inversion;
 shared RGB conversion for these spaces is still pending. Shared-model output
-scales 12-bit samples to the full 16-bit range. ICC application is pending;
-metadata bytes are preserved without modification.
+scales 12-bit samples to the full 16-bit range. ICC profiles can be borrowed,
+assembled or replaced; their original bytes are exposed for caller color
+management. Metadata bytes are preserved without modification by default.
+
+Typed `jfif`, `adobe`, `exif`, `icc_profile` and segment-level `jfxx` views are
+available. The `encode_*_with_metadata` functions accept borrowed APPn/COM
+additions and ICC preserve/remove/replace controls. Profiles up to 255 chunks
+are supported. See METADATA-VALIDATION.md for APIs, bounds and reference gates.
 
 Malformed tables, runs, scan layouts, padding and restart sequences are errors.
 Limits bound pixels, coefficient/sample storage, metadata (including segment

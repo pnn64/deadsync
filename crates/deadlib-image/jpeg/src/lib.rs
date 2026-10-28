@@ -7,8 +7,10 @@
 mod decode;
 mod encode;
 mod entropy;
+mod exif;
 mod huffman_encode;
 mod marker;
+mod metadata;
 mod model;
 mod output;
 mod pixel_encode;
@@ -17,9 +19,17 @@ mod reconstruct;
 mod transform;
 
 pub use decode::{CoefficientComponent, CoefficientImage, decode_coefficients};
-pub use encode::{CodingOptions, encode_coefficients};
+pub use encode::{
+    CodingOptions, IccWrite, MetadataOptions, encode_coefficients,
+    encode_coefficients_with_metadata,
+};
+pub use exif::{ByteOrder, Exif, ExifEntry, ExifIfd};
+pub use metadata::{
+    Adobe, DensityUnit, ICC_CHUNK_BYTES, IccChunk, IccHeader, IccProfile, Jfif, Jfxx, MAX_ICC_BYTES,
+};
 pub use pixel_encode::{
-    EncodeInput, EncodeOptions, SampleData, Subsampling, encode, encode_samples, quantize,
+    EncodeInput, EncodeOptions, SampleData, Subsampling, encode, encode_samples,
+    encode_samples_with_metadata, encode_with_metadata, quantize,
 };
 pub use reconstruct::{ColorSpace, ComponentPlane, PlanarImage, Upsampling};
 

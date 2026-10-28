@@ -45,19 +45,21 @@ impl CoefficientImage<'_> {
     /// Interpret only well-known JFIF, Adobe and RGB component conventions.
     /// An untagged three-component JPEG conventionally uses YCbCr.
     pub fn color_space(&self) -> ColorSpace {
-        let adobe = self.metadata.iter().rev().find_map(|s| {
-            if s.marker == 0xee && s.data.starts_with(b"Adobe") && s.data.len() == 12 {
-                Some(s.data[11])
-            } else {
-                None
-            }
-        });
-        let jfif = self
+        let adobe = self
             .metadata
             .iter()
-            .any(|s| s.marker == 0xe0 && s.data.starts_with(b"JFIF\0"));
+            .rev()
+            .filter(|s| s.preceding_scans == 0)
+            .find_map(|s| s.adobe().ok().flatten().map(|a| a.transform));
+        let jfif = self.metadata.iter().any(|s| {
+            s.preceding_scans == 0
+                && s.marker == 0xe0
+                && s.data.len() >= 14
+                && s.data.starts_with(b"JFIF\0")
+        });
         match (self.components.len(), adobe) {
             (1, _) => ColorSpace::Grayscale,
+            (3, _) if jfif => ColorSpace::YCbCr,
             (3, Some(0)) => ColorSpace::Rgb,
             (3, Some(1)) => ColorSpace::YCbCr,
             (3, None) if !jfif && self.components.iter().map(|c| c.spec.id).eq(*b"RGB") => {

@@ -77,6 +77,22 @@ impl Output {
         Ok(())
     }
 
+    /// Write borrowed payload pieces without an intermediate segment buffer.
+    pub fn segment_parts(&mut self, marker: u8, parts: &[&[u8]]) -> Result<()> {
+        let length = parts
+            .iter()
+            .try_fold(2usize, |n, p| n.checked_add(p.len()))
+            .and_then(|n| u16::try_from(n).ok())
+            .ok_or(Error::Invalid("encoder segment length"))?;
+        self.reserve(length as usize + 2)?;
+        self.marker(marker)?;
+        self.raw(&length.to_be_bytes())?;
+        for part in parts {
+            self.raw(part)?;
+        }
+        Ok(())
+    }
+
     pub fn pad(&mut self) -> Result<()> {
         if self.bits > 0 {
             let n = 8 - self.bits;

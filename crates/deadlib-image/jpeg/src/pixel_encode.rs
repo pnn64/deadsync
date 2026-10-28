@@ -2,7 +2,7 @@ use crate::decode::allocate_components;
 use crate::transform::fdct;
 use crate::{
     CodingOptions, CoefficientImage, ColorSpace, ComponentSpec, Error, FrameHeader, Limits,
-    MetadataSegment, Process, Result, encode_coefficients,
+    MetadataOptions, MetadataSegment, Process, Result, encode_coefficients_with_metadata,
 };
 use deadlib_image::{ColorType, Image, Samples};
 
@@ -100,6 +100,14 @@ const ADOBE2: &[u8] = b"Adobe\0\x64\0\0\0\0\x02";
 /// require an explicit conversion by the caller. 16-bit sources are scaled to
 /// the selected 8/12-bit JPEG precision; no temporary widened source is made.
 pub fn encode(image: &Image, options: EncodeOptions) -> Result<Vec<u8>> {
+    encode_with_metadata(image, options, MetadataOptions::default())
+}
+
+pub fn encode_with_metadata(
+    image: &Image,
+    options: EncodeOptions,
+    metadata: MetadataOptions<'_>,
+) -> Result<Vec<u8>> {
     image
         .validate()
         .map_err(|_| Error::Invalid("encoder shared image"))?;
@@ -120,14 +128,22 @@ pub fn encode(image: &Image, options: EncodeOptions) -> Result<Vec<u8>> {
             Samples::U16(v) => SampleData::U16(v),
         },
     };
-    encode_samples(&input, options)
+    encode_samples_with_metadata(&input, options, metadata)
 }
 
 /// Native interleaved sample encoding. CMYK/YCCK inputs are the encoded JPEG
 /// component values (including Adobe polarity), preserved without ICC changes.
 pub fn encode_samples(input: &EncodeInput<'_>, options: EncodeOptions) -> Result<Vec<u8>> {
+    encode_samples_with_metadata(input, options, MetadataOptions::default())
+}
+
+pub fn encode_samples_with_metadata(
+    input: &EncodeInput<'_>,
+    options: EncodeOptions,
+    metadata: MetadataOptions<'_>,
+) -> Result<Vec<u8>> {
     let coefficients = quantize(input, options)?;
-    encode_coefficients(&coefficients, options.coding)
+    encode_coefficients_with_metadata(&coefficients, options.coding, metadata)
 }
 
 /// Produce native quantized coefficients without emitting a JPEG. This permits

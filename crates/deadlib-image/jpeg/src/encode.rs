@@ -1,6 +1,26 @@
 use crate::huffman_encode::Codebook;
+use crate::metadata::{ICC_IDENTIFIER, is_icc};
 use crate::output::Output;
-use crate::{CoefficientImage, Error, Process, Result, ZIGZAG};
+use crate::{
+    CoefficientImage, Error, ICC_CHUNK_BYTES, MAX_ICC_BYTES, MetadataSegment, Process, Result,
+    ZIGZAG,
+};
+
+#[derive(Clone, Copy, Debug, Default)]
+pub enum IccWrite<'a> {
+    #[default]
+    Preserve,
+    Remove,
+    Replace(&'a [u8]),
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MetadataOptions<'a> {
+    /// Extra borrowed APPn/COM segments before the first scan. Set each
+    /// segment's preceding_scans to zero. Existing payloads remain unchanged.
+    pub additional_segments: &'a [MetadataSegment<'a>],
+    pub icc: IccWrite<'a>,
+}
 
 /// Entropy coding controls shared by pixel encoding and coefficient rewriting.
 #[derive(Clone, Copy, Debug)]
@@ -47,7 +67,18 @@ pub fn encode_coefficients(
     image: &CoefficientImage<'_>,
     options: CodingOptions,
 ) -> Result<Vec<u8>> {
+    encode_coefficients_with_metadata(image, options, MetadataOptions::default())
+}
+
+/// Rewrite coefficients with metadata additions and ICC preserve/remove/replace.
+/// Replacement profiles are split into APP2 chunks before the first SOS.
+pub fn encode_coefficients_with_metadata(
+    image: &CoefficientImage<'_>,
+    options: CodingOptions,
+    metadata: MetadataOptions<'_>,
+) -> Result<Vec<u8>> {
     validate(image)?;
+    validate_metadata(image, metadata)?;
     let n = image.components.len();
     let scan_count = if options.progressive { n + 1 } else { 1 };
     if scan_count > image.limits.max_scans {
@@ -105,7 +136,18 @@ pub fn encode_coefficients(
     let mut out = Output::new(options.max_output_bytes);
     out.marker(0xd8)?;
     let mut metadata_index = 0;
-    emit_metadata(&mut out, image, &mut metadata_index, 0)?;
+    emit_metadata(&mut out, image, &mut metadata_index, 0, metadata.icc)?;
+    for segment in metadata.additional_segments {
+        if matches!(metadata.icc, IccWrite::Preserve) || !is_icc(segment) {
+            out.segment(segment.marker, segment.data)?;
+        }
+    }
+    if let IccWrite::Replace(profile) = metadata.icc {
+        let count = profile.len().div_ceil(ICC_CHUNK_BYTES) as u8;
+        for (i, chunk) in profile.chunks(ICC_CHUNK_BYTES).enumerate() {
+            out.segment_parts(0xe2, &[ICC_IDENTIFIER, &[i as u8 + 1, count], chunk])?;
+        }
+    }
     for (i, q) in quantizers.iter().enumerate() {
         let wide = q.iter().any(|&v| v > 255);
         let mut data = [0u8; 129];
@@ -143,7 +185,7 @@ pub fn encode_coefficients(
     }
     for s in 0..scan_count {
         if s > 0 {
-            emit_metadata(&mut out, image, &mut metadata_index, s)?;
+            emit_metadata(&mut out, image, &mut metadata_index, s, metadata.icc)?;
         }
         let scan = scan_at(s);
         let mut sos = [0u8; 12];
@@ -189,7 +231,13 @@ pub fn encode_coefficients(
         )?;
         out.pad()?;
     }
-    emit_metadata(&mut out, image, &mut metadata_index, usize::MAX)?;
+    emit_metadata(
+        &mut out,
+        image,
+        &mut metadata_index,
+        usize::MAX,
+        metadata.icc,
+    )?;
     out.marker(0xd9)?;
     Ok(out.bytes)
 }
@@ -199,12 +247,15 @@ fn emit_metadata(
     image: &CoefficientImage<'_>,
     index: &mut usize,
     scan: usize,
+    icc: IccWrite<'_>,
 ) -> Result<()> {
     while let Some(s) = image.metadata.get(*index) {
         if s.preceding_scans > scan {
             break;
         }
-        out.segment(s.marker, s.data)?;
+        if matches!(icc, IccWrite::Preserve) || !is_icc(s) {
+            out.segment(s.marker, s.data)?;
+        }
         *index += 1;
     }
     Ok(())
@@ -265,7 +316,6 @@ fn validate(image: &CoefficientImage<'_>) -> Result<()> {
             return Err(Error::Invalid("encoder coefficient grid"));
         }
     }
-    let mut bytes = 0usize;
     let mut scan = 0;
     for s in &image.metadata {
         if !matches!(s.marker, 0xe0..=0xef | 0xfe)
@@ -275,12 +325,46 @@ fn validate(image: &CoefficientImage<'_>) -> Result<()> {
             return Err(Error::Invalid("encoder metadata"));
         }
         scan = s.preceding_scans;
-        bytes = bytes
-            .checked_add(s.data.len().saturating_add(core::mem::size_of_val(s)))
-            .ok_or(Error::LimitExceeded("encoder metadata"))?;
-        if bytes > image.limits.max_metadata_bytes {
-            return Err(Error::LimitExceeded("encoder metadata"));
+    }
+    Ok(())
+}
+
+fn validate_metadata(image: &CoefficientImage<'_>, options: MetadataOptions<'_>) -> Result<()> {
+    let mut bytes = 0usize;
+    for (additional, segments) in [
+        (false, image.metadata.as_slice()),
+        (true, options.additional_segments),
+    ] {
+        for s in segments {
+            if !matches!(s.marker, 0xe0..=0xef | 0xfe)
+                || s.data.len() > 65533
+                || (additional && s.preceding_scans != 0)
+            {
+                return Err(Error::Invalid("encoder metadata addition"));
+            }
+            if !matches!(options.icc, IccWrite::Preserve) && is_icc(s) {
+                continue;
+            }
+            bytes = bytes
+                .checked_add(s.data.len().saturating_add(core::mem::size_of_val(s)))
+                .ok_or(Error::LimitExceeded("encoder metadata"))?;
         }
+    }
+    if let IccWrite::Replace(profile) = options.icc {
+        if profile.is_empty() {
+            return Err(Error::Invalid("empty ICC profile"));
+        }
+        if profile.len() > MAX_ICC_BYTES {
+            return Err(Error::LimitExceeded("ICC profile bytes"));
+        }
+        let count = profile.len().div_ceil(ICC_CHUNK_BYTES);
+        bytes = bytes
+            .checked_add(profile.len())
+            .and_then(|n| n.checked_add(count * (14 + core::mem::size_of::<MetadataSegment<'_>>())))
+            .ok_or(Error::LimitExceeded("encoder metadata"))?;
+    }
+    if bytes > image.limits.max_metadata_bytes {
+        return Err(Error::LimitExceeded("encoder metadata"));
     }
     Ok(())
 }
