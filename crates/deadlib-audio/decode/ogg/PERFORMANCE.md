@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [index-construction and short-page measurements](INDEX_BUILD.md)
+The latest [packet-metadata and continuation measurements](SUMMARY_REUSE.md)
+cover reused demux metadata, direct short-fragment results and whole-body
+preflight bounds, with CPU/heap comparisons and exact state checks.
+
+The earlier [index-construction and short-page measurements](INDEX_BUILD.md)
 cover stable page grouping, reused demux stream positions and direct short
 lacing sums, with rotating CPU/heap trials and exact protocol comparisons.
 

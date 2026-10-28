@@ -189,3 +189,6 @@ paired observation and source/executable hash.
 
 Saved workers and complete traces remain under ignored
 `target/ogg-index-build-20261028/`.
+
+The subsequent [packet-metadata and continuation measurements](SUMMARY_REUSE.md)
+cover reused demux metadata, short unfinished fragments and preflight bounds.

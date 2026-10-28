@@ -72,6 +72,121 @@ fn main() {
         }
         return;
     }
+    for span in [1, 4, 64] {
+        let mut bytes = encode_page(
+            PageHeader {
+                flags: BOS,
+                granule_position: 100,
+                serial: 42,
+                sequence: 0,
+            },
+            &[1],
+            &[37],
+        )
+        .unwrap();
+        let mut sequence = 1;
+        for packet in 1..=64 {
+            for part in 0..span {
+                bytes.extend(
+                    encode_page(
+                        PageHeader {
+                            flags: if part == 0 { 0 } else { CONTINUED },
+                            granule_position: UNKNOWN_GRANULE_POSITION,
+                            serial: 42,
+                            sequence,
+                        },
+                        &[255],
+                        &[37; 255],
+                    )
+                    .unwrap(),
+                );
+                sequence += 1;
+            }
+            bytes.extend(
+                encode_page(
+                    PageHeader {
+                        flags: CONTINUED | if packet == 64 { EOS } else { 0 },
+                        granule_position: 100 + packet * 100,
+                        serial: 42,
+                        sequence,
+                    },
+                    &[0],
+                    &[],
+                )
+                .unwrap(),
+            );
+            sequence += 1;
+        }
+        let index = OggIndex::read(bytes.as_slice(), IndexOptions::default()).unwrap();
+        let mut pages = Vec::new();
+        let mut offset = 0;
+        while offset < bytes.len() {
+            let (page, length) = Page::parse(&bytes[offset..]).unwrap();
+            pages.push((page, offset as u64));
+            offset += length;
+        }
+        probe(&format!("span-demux/{span}"), 32, || {
+            let mut demux = Demuxer::default();
+            for &(page, offset) in black_box(&pages) {
+                demux
+                    .push_page(page, offset, |packet| {
+                        black_box(packet);
+                    })
+                    .unwrap();
+            }
+            demux.finish().unwrap();
+        });
+        let mut cursor = 0;
+        probe(&format!("span-query/{span}/granule"), 10_000, || {
+            cursor = (cursor + 17) & 8191;
+            black_box(index.granule_at_or_before(black_box(42), black_box(cursor)));
+        });
+        let mut cursor = 0;
+        let mask = bytes.len().next_power_of_two() as u64 - 1;
+        probe(&format!("span-query/{span}/offset"), 10_000, || {
+            cursor = (cursor + 31337) & mask;
+            black_box(index.page_at_or_before(black_box(42), black_box(cursor)));
+        });
+        let mut cursor = 0;
+        probe(&format!("span-query/{span}/packet"), 10_000, || {
+            cursor = (cursor + 17) & 63;
+            black_box(index.packet_start_page(black_box(42), black_box(cursor)));
+        });
+    }
+    for segments in [1, 2, 3, 4, 5, 8, 17, 255] {
+        for terminated in [false, true] {
+            let mut lacing = vec![255; segments];
+            if terminated {
+                lacing[segments - 1] = 17;
+            }
+            let body = vec![37; lacing.iter().map(|&n| n as usize).sum()];
+            let frame = encode_page(
+                PageHeader {
+                    flags: CONTINUED,
+                    granule_position: if terminated {
+                        0
+                    } else {
+                        UNKNOWN_GRANULE_POSITION
+                    },
+                    serial: 42,
+                    sequence: 0,
+                },
+                &lacing,
+                &body,
+            )
+            .unwrap();
+            let page = Page::parse(&frame).unwrap().0;
+            probe(
+                &format!("fragment-prefix/{segments}/{terminated}"),
+                10_000,
+                || {
+                    for fragment in black_box(page).fragments() {
+                        black_box(fragment);
+                    }
+                },
+            );
+        }
+    }
     for segments in [1, 17, 128, 255] {
         let frame = encode_page(
             PageHeader {
