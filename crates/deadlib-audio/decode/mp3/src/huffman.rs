@@ -68,6 +68,7 @@ pub fn pair(bits: &mut BitReader<'_>, book: u8) -> Result<[i16; 2], Error> {
 
 /// Decodes a count1 quadruple and its nonzero signs. An incomplete final symbol
 /// leaves the cursor untouched so the granule parser can discard stuffing bits.
+#[inline(always)]
 pub fn quad(bits: &mut BitReader<'_>, table_b: bool) -> Result<[i16; 4], Error> {
     let mut cursor = *bits;
     let value = if table_b {
