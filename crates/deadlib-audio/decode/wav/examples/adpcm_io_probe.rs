@@ -36,10 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let truth = std::fs::read(Path::new(&path).with_extension("period"))?;
     let (words, tail) = truth.as_chunks::<2>();
     assert!(tail.is_empty());
-    let truth: Vec<_> = words
-        .iter()
-        .map(|b| i16::from_le_bytes(*b))
-        .collect();
+    let truth: Vec<_> = words.iter().map(|b| i16::from_le_bytes(*b)).collect();
     let counts = Rc::new(Counts::default());
     let source = Source {
         file: File::open(&path)?,

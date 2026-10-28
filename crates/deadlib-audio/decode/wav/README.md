@@ -82,7 +82,8 @@ I/O. See [IMA_EXTENSIBLE.md](IMA_EXTENSIBLE.md) for precise scope and evidence.
 one decoded block. It reads interleaved i16 into caller storage and supports exact
 frame seeks, including RF64 positions above 4 GiB. Its memory depends on block
 geometry and metadata descriptors. Validated block parameters are cached without
-reparsing the owned format for each decoded block. Metadata access preserves the logical audio
+reparsing the owned format for each decoded block. Adjacent blocks preserve a
+caller-supplied buffered source without redundant seeks. Metadata access preserves the logical audio
 position. I/O or decode errors require a successful seek before reading again.
 AdpcmReader also handles compressed wavl children and held-frame seeks, reusing
 the container's inventory and the same one-block cache. Its wavl_chunks method
@@ -129,7 +130,7 @@ Performance history and remaining targets are in [PERFORMANCE.md](PERFORMANCE.md
 same-output Hound comparisons, dense real-file streaming, process memory and the
 measured PCM32 integer-path optimization. [REFERENCE_PERFORMANCE.md](REFERENCE_PERFORMANCE.md)
 extends the comparison to Symphonia, ADPCM and both Windows architectures,
-including the remaining compressed-file I/O bottleneck. [AUDIT.md](AUDIT.md) tracks the full goal.
+including the measured buffered-read fix and remaining compressed arithmetic costs. [AUDIT.md](AUDIT.md) tracks the full goal.
 Native PCM/float sample and encoder comparisons against four references are in
 [PCM.md](PCM.md). Real NTFS files over 16 GiB, 32/64-bit seek checks and scoped
 whole-process memory measurements are in [LARGE_FILES.md](LARGE_FILES.md).

@@ -1,0 +1,14 @@
+import hashlib,json,os,re,subprocess,time
+from pathlib import Path
+root=Path('crates/deadlib-audio/decode/wav');stem=Path('crates/deadlib-audio/decode/wav/validation/adpcm-cursor-checks')
+paths=sorted((root/'src').rglob('*.rs'))+sorted((root/'tests').glob('*.rs'))+sorted((root/'benches').rglob('*.rs'))+[root/'Cargo.toml',Path('Cargo.toml'),Path('Cargo.lock'),Path('.cargo/config.toml')]
+sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+before={p.as_posix():sha(p) for p in paths};env=os.environ.copy();env['CARGO_INCREMENTAL']='0'
+commands=[['cargo','test','--locked','-p','deadlib-audio-decode-wav','--target-dir','target/wav'],['cargo','test','--locked','--release','-p','deadlib-audio-decode-wav','--target-dir','target/wav'],['cargo','test','--locked','--target','i686-pc-windows-msvc','-p','deadlib-audio-decode-wav','--target-dir','target/wav'],['cargo','clippy','--locked','-p','deadlib-audio-decode-wav','--all-targets','--target-dir','target/wav','--','-D','warnings'],['cargo','test','--locked','-p','deadlib-audio-decode-wav','--bench','native','--target-dir','target/wav']]
+runs=[]
+for i,command in enumerate(commands):
+ p=subprocess.run(command,env=env,capture_output=True);data=p.stdout+p.stderr;Path(str(stem)+f'-{i}.log').write_bytes(data);runs.append(dict(command=command,exit_code=p.returncode,passed_tests=sum(map(int,re.findall(rb'test result: ok. (\d+) passed',data))),log_sha256=hashlib.sha256(data).hexdigest()));print(i,p.returncode,runs[-1]['passed_tests'],flush=True)
+ if p.returncode:break
+report=dict(timestamp_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),environment_overrides={'CARGO_INCREMENTAL':'0'},sources=before,inputs_unchanged=before=={p.as_posix():sha(p) for p in paths},rustc=subprocess.check_output(['rustc','-Vv'],text=True),runs=runs)
+Path(str(stem)+'.json').write_text(json.dumps(report,indent=2)+'\n')
+assert len(runs)==len(commands) and all(r['exit_code']==0 for r in runs) and report['inputs_unchanged']

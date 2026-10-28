@@ -376,3 +376,25 @@ pass x64 debug/release and i686 debug with Clippy; all 216 compressed fixture
 gates/3024 three-API checks and 708 retained native gates/1912 writer outputs
 pass. Native replay now uses a separate build tree and private executable after
 an initial shared-example race; failed build/interruption evidence is retained.
+
+
+The compressed reader now caches the next known source byte to preserve buffered
+read-ahead. It clears that knowledge before fallible reads/seeks and on metadata
+failure; explicit seeks and successful complete reads reestablish it. Complete
+byte bounds remain checked even when a seek is skipped. A direct buffered-source
+test checks read-ahead, cached rewinds, metadata restoration and partial I/O
+failure/recovery for flat and segmented audio with a nonzero source base.
+
+`validation/adpcm-cursor-mutation-{x64,i686}.*` each pass one million checked
+mutations, entering the segmented reader families 102636/102972 times.
+`adpcm-cursor-prior-replay.*` passes all 1837 previous archived corpus inputs.
+`adpcm-cursor-asan.*` passes 100000 executions in 128.93 seconds, adds 1935 units
+and produces no failure artifact. The 260 MiB instrumented peak is not normal
+codec RSS. The final 1846-file corpus is retained in
+`adpcm-cursor-asan-corpus.zip`, SHA-256
+`c15ac09ca10a0bab8087860d6d4c1ac0c449ff1d7e53e9dfed9e4a8d5ae68517`,
+with a verified archive/report sidecar. Inputs remain unchanged. All 94 tests
+pass x64 debug/release and i686 debug with Clippy. The 216 compressed fixture
+gates/3024 three-API checks and 708 retained native gates/1912 writer outputs
+retain their expected results; PERFORMANCE.md records the File counter and
+source-pinned performance evidence.

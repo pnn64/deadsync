@@ -161,8 +161,9 @@ plus 60 exact ranges around beginnings, block boundaries and EOF. All 204 pass;
 evidence is in validation/adpcm-file-ranges.json. Total crate tests: 31, passing
 Windows x86_64 debug/release and i686 debug; Clippy with warnings denied passes.
 This establishes correctness and bounded I/O, not competitive compressed
-throughput. Real files currently seek explicitly when loading each uncached block;
-avoiding redundant sequential seeks is a remaining performance target.
+throughput. At that milestone real files seek explicitly for each uncached block;
+the later buffered-source cursor optimization below removes redundant sequential
+seeks.
 
 Forward-only compressed reading is implemented; see STREAMING.md. Remaining:
 extensible compressed mappings, RIFX external validation, exhaustive Symphonia decode
@@ -257,3 +258,18 @@ all 1869 preceding fuzz inputs, two million checked mutations and 100000 fresh
 ASan executions pass. PERFORMANCE.md records source-pinned before/after results:
 Microsoft flat reads improve 5-9%, while x64 reader state decreases eight bytes.
 This is an internal optimization; no new compressed-library speed claim is made.
+
+
+## Buffered seekable sources
+
+AdpcmReader preserves read-ahead supplied by a BufReader: successful encoded
+reads establish the next known byte position, so adjacent blocks do not seek
+again. A successful explicit seek positions the next uncached block directly.
+Cached PCM reads do not advance the physical cursor. Metadata success restores
+that cursor; metadata errors and physical read/seek failures require a
+successful explicit audio seek before decoding resumes. Codec errors retain the
+same logical poisoning contract. Nonzero source bases and wavl child boundaries
+retain their existing meaning. Generic container byte-span checks remain active
+on every read. No allocation is added, and block-buffer size remains independent
+of file length. PERFORMANCE.md records the physical-file counter and timing
+results, the eight-byte inline-state tradeoff and the new 94-test validation.

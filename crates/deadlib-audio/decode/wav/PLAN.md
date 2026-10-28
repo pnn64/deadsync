@@ -295,3 +295,21 @@ uncached block discards BufReader read-ahead. A counter below that buffer record
 127.94-times reads on 64 MiB encoded files. Next work is to preserve known source
 position for sequential compressed reads, then address the measured i686
 Microsoft arithmetic and IMA decoding costs and finish the requirements audit.
+
+
+The buffered compressed-file bottleneck is now fixed. AdpcmReader tracks a known
+form-relative source cursor, invalidates it before fallible audio I/O, and
+retains it only after successful reads/seeks or restored metadata access. Cache hits never
+pretend to consume bytes. The generic container checks full read bounds on the
+positioned path too. The extra u64 restores observed x64 state 336 to 344 bytes;
+block allocations and the generic Reader layout are unchanged.
+
+The exact File probe drops 64 MiB audio reads from 8585774834 bytes/131072 seeks
+to 67108864 bytes/one seek. Full reference/performance and i686-smoke reruns
+retain every fixture/gate outcome; cached Microsoft and matching IMA4 files
+improve 2.57/2.26 times. All 94 tests, Clippy, 216 compressed gates/3024 checks,
+708 retained native gates/1912 writer outputs, two million checked mutations,
+1837 prior corpus files and 100000 ASan executions pass. The new 1846-file corpus
+is archived. Next work is measured compressed arithmetic optimization (especially
+i686 Microsoft), assessment of native wavl file I/O, and the final requirements
+audit. This milestone does not establish overall compressed-codec superiority.

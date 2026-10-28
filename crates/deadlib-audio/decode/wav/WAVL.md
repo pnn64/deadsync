@@ -303,9 +303,11 @@ The wrapper still adds only two fallible allocations for one encoded and one
 decoded block. An eight-child stereo probe consumes a preopened Reader, requests
 two allocations/52 bytes (16 encoded bytes plus 18 i16 samples), and records zero
 allocation for subsequent reads/seeks. Container format/inventory allocation and
-caller buffers are excluded. The wrapper object is 344 bytes on x64 and 248 on
-i686; its field layout is unchanged, and the standalone x64 baseline also reports
-344. This is object/requested-allocation evidence, not codec RSS.
+caller buffers are excluded. At that milestone the wrapper object is 344 bytes
+on x64 and 248 on i686, with unchanged layout. Later compact geometry reduces
+x64 state to 336 bytes; the buffered-source cursor subsequently adds eight bytes
+back, measuring 344/248 bytes on x64/i686. Requested block allocations remain
+unchanged. This is object/requested-allocation evidence, not codec RSS.
 
 The fixed scalar test matrix now checks both borrowed and file-backed output at
 every frame position and caller split, including embedded sources, all container

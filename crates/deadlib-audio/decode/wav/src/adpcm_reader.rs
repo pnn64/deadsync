@@ -19,6 +19,9 @@ pub struct AdpcmReader<R> {
     position: u64,
     cache_offset: Option<u64>,
     cache_frames: usize,
+    // Next physical byte, relative to the form; zero means unknown. Audio
+    // payload offsets are always nonzero. This preserves buffered read-ahead.
+    source_offset: u64,
     failed: bool,
 }
 impl<R: Read + Seek> AdpcmReader<R> {
@@ -92,6 +95,7 @@ impl<R: Read + Seek> AdpcmReader<R> {
             position: 0,
             cache_offset: None,
             cache_frames: 0,
+            source_offset: 0,
             failed: false,
         })
     }
@@ -145,7 +149,9 @@ impl<R: Read + Seek> AdpcmReader<R> {
             audio.offset + relative.min(audio.size)
         };
         self.failed = true;
+        self.source_offset = 0;
         self.reader.seek_audio(offset)?;
+        self.source_offset = offset;
         self.position = frame;
         self.failed = false;
         Ok(())
@@ -220,7 +226,12 @@ impl<R: Read + Seek> AdpcmReader<R> {
             self.cache_offset = None;
             let available = chunk.size - (offset - chunk.offset);
             let n = available.min(self.encoded.len() as u64) as usize;
-            self.reader.read_audio(offset, &mut self.encoded[..n])?;
+            let positioned = self.source_offset == offset;
+            self.source_offset = 0;
+            self.reader
+                .read_audio(offset, &mut self.encoded[..n], positioned)?;
+            // read_audio checked the complete byte extent before I/O.
+            self.source_offset = offset + n as u64;
             // Construction validated the immutable descriptor. Microsoft tables
             // follow the legacy 18-byte WAVEFORMATEX header, samples-per-block
             // and coefficient count; extensible Microsoft descriptors reject.
@@ -274,9 +285,11 @@ impl<R: Read + Seek> AdpcmReader<R> {
     }
     pub fn read_metadata(&mut self, c: ChunkInfo, out: &mut [u8]) -> Result<usize, Error> {
         // Metadata changes the underlying cursor, but never the cached PCM or
-        // logical compressed position. Every uncached block read seeks explicitly.
+        // logical compressed position. Success restores the known byte cursor;
+        // any failure invalidates it until an explicit successful audio seek.
         let result = self.reader.read_metadata(c, out);
         if result.is_err() {
+            self.source_offset = 0;
             self.failed = true;
         }
         result

@@ -293,3 +293,15 @@ also passes 48 fresh-process memory probes, 32 cached-file runs and 105 complete
 file/storage checks. The i686 subset passes 10/24/16 resident/memory/file runs.
 REFERENCE_PERFORMANCE.md documents the contracts, artifacts and the new buffered
 ADPCM I/O amplification and 32-bit arithmetic optimization requirements.
+
+
+Known-cursor compressed reading now has a buffered-source regression covering
+flat/wavl, distinct predictor blocks, a short tail, nonzero base, read-ahead
+bounds, explicit seek/cache interactions, metadata restoration, partial read
+failure and recovery. All 94 tests pass x64 debug/release and i686 debug with
+Clippy. The 89/48/32 full reference/performance matrix and 10/24/16 i686 subset
+retain all fixture/gate outcomes. Actual File counters show 1.0 audio read
+amplification on the large files, replacing 127.94; allocations stay unchanged.
+All 216 compressed gates/3024 checks, 708 native gates/1912 outputs, two million
+checked mutations, 1837 prior corpus inputs and 100000 ASan executions pass.
+PERFORMANCE.md distinguishes these file gains from remaining arithmetic work.

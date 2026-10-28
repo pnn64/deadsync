@@ -7,3 +7,4 @@ adpcm-flat-pinned-* -text
 adpcm-segmented-pinned-* -text
 adpcm-cache-* -text
 symphonia-widths-* -text
+adpcm-cursor-* -text

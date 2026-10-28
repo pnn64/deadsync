@@ -342,14 +342,27 @@ impl<R: Read + Seek> Reader<R> {
         Ok(())
     }
     // Private callers select a retained child and clamp the span to its payload.
-    pub(crate) fn read_audio(&mut self, offset: u64, out: &mut [u8]) -> Result<(), Error> {
+    // positioned means the caller tracked successful reads/seeks and knows the
+    // cursor already equals offset. Bounds remain checked on both paths.
+    pub(crate) fn read_audio(
+        &mut self,
+        offset: u64,
+        out: &mut [u8],
+        positioned: bool,
+    ) -> Result<(), Error> {
         if offset
             .checked_add(out.len() as u64)
             .is_none_or(|end| end > self.data.offset + self.data.size)
         {
             return Err(Error::Invalid("audio byte extent"));
         }
-        self.seek_audio(offset)?;
+        if offset < self.data.offset {
+            return Err(Error::Invalid("audio byte offset"));
+        }
+        self.failed = true;
+        if !positioned {
+            self.seek_audio(offset)?;
+        }
         self.inner.read_exact(out)?;
         Ok(())
     }

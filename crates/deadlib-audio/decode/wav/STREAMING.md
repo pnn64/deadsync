@@ -200,3 +200,16 @@ properties; all 1474 earlier archived corpus files replay. A fresh 100000-execut
 ASan campaign also passes and its complete 1108-file corpus is archived. See
 FUZZING.md for budgets, source hashes, commands and raw evidence. These checks
 remain bounded evidence rather than exhaustive conformance or malformed-input proof.
+
+
+## Buffered seekable ADPCM
+
+AdpcmReader tracks successful physical byte reads separately from decoded frame
+position and its cached block. Adjacent encoded blocks preserve the caller's
+BufReader read-ahead, including blocks within wavl data children. Metadata reads
+restore physical position; errors invalidate the known cursor and poison audio
+until a successful explicit seek. Cached samples do not imply any physical byte
+consumption after a rewind. The byte reader checks the complete outer audio
+extent even when no seek is needed. This uses one additional u64, no allocation,
+and unchanged block buffers. PERFORMANCE.md records exact read/seek counters,
+real cached-file gains and error/recovery tests.

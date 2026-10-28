@@ -677,3 +677,76 @@ physical ADPCM throughput exposes 127.94-times buffered read amplification.
 An underlying-File counter probe verifies the per-block seek cause. The i686
 Microsoft arithmetic path also remains slower. These are measured optimization
 requirements; broad compressed-file superiority is not claimed.
+
+
+## Preserve buffered read-ahead for compressed sources
+
+The file probe above measured 127.94-times ADPCM read amplification: each
+uncached 512-byte block issued an absolute seek, causing a 64 KiB BufReader to
+discard read-ahead. AdpcmReader now tracks the next known form-relative source
+byte. Physical audio reads/seeks clear cursor knowledge before I/O, and establish it
+only after success. Metadata access retains it only when the original cursor is
+restored; any metadata error invalidates it. A cache hit does not pretend to consume encoded bytes.
+An uncached block seeks only when its offset differs from the known cursor.
+
+The codec-independent Reader still checks the whole byte span on both paths,
+including its lower bound. Its private byte read accepts the caller's proven
+position, with no codec dispatch, unsafe operation or public bypass. Explicit
+seek_frame still performs a seek, including recovery after errors. Construction
+from an existing Reader conservatively starts with unknown source position.
+The new field adds eight inline bytes: the measured Cursor-backed AdpcmReader
+is 344 bytes on x64 (previously 336), and 248 on i686. No heap allocation or
+second index is added. The eight-child allocation probe still requests exactly
+two calls/52 bytes for its encoded/decoded geometry, and zero for reads/seeks.
+
+`validation/adpcm-cursor-io.json` repeats the exact below-buffer File probe on
+the same independently packed payloads. Both 64 MiB compressed streams now use
+1024 underlying reads, one initial seek and exactly 67108864 audio read bytes,
+versus 131072 reads/seeks and 8585774834 bytes before. Read amplification is now
+1.0. The small 8192-byte payloads use one read/seek and 8206 bytes, including
+14 bytes of prefetch beyond audio, versus 8.53-times amplification before.
+Opening/scanning work is counted separately and is unchanged. This counter
+result does not depend on a throughput timing interpretation.
+
+`adpcm-cursor-full.*` repeats all 89 resident cases, 48 fresh-process memory
+probes and 32 cached-file runs using isolated source copies and the same
+profile/reference features. Every fixture hash and all exact/error/mismatch
+gate outcomes match the earlier symphonia-widths-full run. All 105 distinct files
+pass complete SHA-256 and dense/noncompressed/nonsparse storage verification.
+The new run also checks all 496 published files of 21 reference dependencies
+against lock-pinned crate archives before and after measurement.
+
+Large cached-file wire MiB/s (same bytes; three trials per operation):
+
+| Format | Native before | Native after | Ratio | Symphonia before | Symphonia after |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Microsoft stereo | 33.179 | 85.409 | 2.57x | 85.919 | 89.006 |
+| IMA4 sign-only stereo | 31.185 | 70.397 | 2.26x | 93.910 | 93.018 |
+
+The reference controls move about +3.6%/-1.0%. Frequency and other processes
+remain uncontrolled, and this is OS-cache-warm file streaming, not cold-device
+bandwidth. The counter probe independently demonstrates why the native workload
+changed. These timings apply to the two matching flat compressed files; the new
+buffered wavl test proves read-ahead preservation, not a measured wavl-file
+throughput ratio. Compressed arithmetic remains an optimization target,
+especially the previously recorded i686 Microsoft cost.
+
+The i686 smoke also passes ten resident cases, 24 memory probes and 16 cached-file
+runs. Its fixture hashes and gate outcomes match the earlier i686 campaign.
+Exact source/fixture/raw ZIPs, entry hashes, binary hashes and all individual
+trials are retained for both architectures. Caller buffer, allocation and RSS
+scopes remain those in REFERENCE_PERFORMANCE.md. No broad CPU speed claim is made
+for this change's much smaller resident-read differences.
+
+A new buffered-source regression checks distinct independently packed IMA
+predictors through 1024 full blocks plus a short final header, flat/wavl and a
+nonzero source base. It bounds physical reads and requires one seek per data
+child during complete reading. It also checks an explicitly positioned uncached
+block, cache hits after rewinds, metadata restoration, a partial encoded read
+failure, poisoning and recovery. This prevents cursor bookkeeping from turning
+an eliminated seek into a wrong read.
+
+All 94 tests pass x64 debug/release and i686 debug with Clippy. All 216 compressed
+fixture gates/3024 three-API checks, 708 retained native gates/4484 checks/1912
+writer outputs, two million checked mutations, 1837 prior corpus files and 100000
+ASan executions pass. FUZZING.md records the new verified 1846-file corpus.

@@ -1,0 +1,246 @@
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+test custom_microsoft_coefficients_and_negative_fraction_rounding ... ok
+test independent_microsoft_vector_initial_sample_order_and_padding ... ok
+test microsoft_stereo_interleaving_short_blocks_and_fact_bounds ... ok
+test microsoft_specified_division_is_not_an_arithmetic_shift ... ok
+test ima_multichannel_word_groups_and_arbitrary_seek_ranges ... ok
+test independent_ima_vector_rounding_and_nibble_order ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test buffered_blocks_preserve_read_ahead_and_cursor_state_through_seeks_and_errors ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+test constant_vectors_and_header_only_blocks_are_exact ... ok
+test invalid_encoder_arguments_do_not_modify_output_or_pending_samples ... ok
+test arbitrary_ima_channel_counts_and_microsoft_custom_predictors ... ok
+test streaming_block_splits_are_deterministic_and_fact_trims_last_block ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 5 tests
+test compressed_seeks_cross_four_gib_and_use_ds64_without_reading_audio ... ok
+test block_cache_reuses_pcm_and_io_errors_require_explicit_recovery ... ok
+test data_before_format_trailing_fact_short_last_blocks_and_bad_headers ... ok
+test custom_microsoft_predictor_survives_cached_file_and_wavl_seeks ... ok
+test file_backed_sequential_and_random_ranges_match_borrowed_audio ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 3 tests
+test multiword_virtual_silence_empty_forms_and_literal_bw64_fact ... ok
+test malformed_geometry_lazy_block_headers_and_independent_random_access ... ok
+test independent_compressed_children_short_blocks_holds_and_exact_ranges ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.19s
+
+
+running 1 test
+test borrowed_sequence_index_is_compact_reads_allocate_nothing_and_flat_state_is_unchanged ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test virtual_silence_over_u32_finishes_without_expanding_its_duration ... ok
+test forward_finish_checks_geometry_capacity_and_fact_but_skips_unread_block_headers ... ok
+test forward_segment_callbacks_short_reads_and_partial_finish_preserve_form_boundary ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test cache_uses_physical_block_identity_and_metadata_restores_position_or_poisons ... ok
+test child_offsets_above_four_gib_and_u64_held_silence_use_bounded_io ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+test explicit_metadata_dispatch_keeps_unknown_chunk_bytes_and_padding ... ok
+test bxml_and_sxml_envelopes_preserve_packed_odd_payloads_and_64bit_alignment ... ok
+test chna_matches_itu_examples_and_keeps_unused_slots_and_shared_tracks ... ok
+test rf64_marker_rows_have_no_count_prefix_and_retain_all_words ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+test bw64_fact_limits_fail_before_io_and_pcm_keeps_u64_frame_counts ... ok
+test every_bw64_writer_zeros_dummy_words_in_both_finalization_paths ... ok
+test bw64_dummy_words_are_retained_raw_but_never_determine_adpcm_duration ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 8 tests
+test forward_large_counts_remain_u64_and_physical_io_failures_poison_state ... ok
+test metadata_callbacks_are_bounded_before_format_and_can_abort ... ok
+test raw_packet_access_frame_alignment_limits_and_errors_are_explicit ... ok
+test incomplete_forms_and_deferred_structural_errors_fail_during_finish ... ok
+test trailing_fact_requires_explicit_duration_and_is_checked_at_finish ... ok
+test rf64_explicit_adpcm_duration_ignores_unused_ds64_until_fact_is_known ... ok
+test forward_adpcm_buffers_partial_reads_and_trims_final_padding ... ok
+test forward_native_frames_preserve_bits_metadata_and_form_boundaries ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.77s
+
+
+running 7 tests
+test aligned_direct_access_and_unaligned_fallback ... ok
+test extensible_valid_bits_masks_and_many_channels ... ok
+test integer_edges_in_both_byte_orders ... ok
+test rf64_bw64_tables_and_64bit_checks ... ok
+test float_bits_are_never_normalized ... ok
+test malformed_structural_fields_fail_without_panicking ... ok
+test unusual_order_unknown_payloads_exact_padding_and_riff_boundary ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+test three_bit_geometry_short_blocks_and_bad_headers_are_checked ... ok
+test word_boundary_crossings_do_not_read_the_next_channel ... ok
+test independent_three_bit_gold_vector_and_every_initial_state ... ok
+test three_bit_writers_and_all_frame_readers_preserve_block_and_fact_contracts ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 4 tests
+test malformed_union_guid_geometry_and_unknown_ms_mapping_are_explicit ... ok
+test extensible_descriptor_serializer_is_exact_and_errors_preserve_output ... ok
+test independent_extensible_ima_samples_union_and_mask_reach_every_reader ... ok
+test forced_ima_writers_preserve_encoded_blocks_and_both_finalization_paths ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 7 tests
+test invalid_specs_chunks_and_io_errors_are_reported ... ok
+test io_failures_poison_writers_and_readers_require_recovery_seek ... ok
+test typed_streams_preserve_float_payloads_and_native_integers ... ok
+test native_integer_roundtrip_all_containers_and_packing ... ok
+test rf64_promotion_and_seeks_above_four_gib_without_large_allocation ... ok
+test forward_only_stream_boundaries_and_complete_truncation_matrix ... ok
+test extensible_high_channel_frames_exceed_stack_scratch ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 5 tests
+test declared_limits_reject_overfill_before_io_and_underfill_before_finalization ... ok
+test known_header_arithmetic_promotes_before_io_and_keeps_u64_counts ... ok
+test short_write_and_flush_failures_are_reported_and_poison_the_writer ... ok
+test write_only_native_output_matches_independent_bits_and_seekable_output ... ok
+test known_adpcm_counts_include_final_block_padding_and_trim_exactly ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 5 tests
+test ancillary_chunks_roundtrip_through_native_writer_without_pcm_changes ... ok
+test bext_v0_v1_v2_layout_precision_and_reserved_retention ... ok
+test cue_and_sampler_gold_layouts_survive_both_byte_orders ... ok
+test list_code_pages_padding_and_associated_text_are_borrowed ... ok
+test metadata_serialization_errors_leave_caller_storage_untouched ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 1 test
+test caller_owned_metadata_and_wavl_muxing_allocate_no_heap ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+test zero_scan_matches_scalar_for_all_byte_pairs_at_word_boundaries ... ok
+test zero_scan_respects_every_short_tail_and_unaligned_long_field ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.09s
+
+
+running 1 test
+test malformed_container_mutations_preserve_reader_and_stream_agreement ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 3 tests
+test decoded_count_alone_can_promote_rf64_and_overflow_is_rejected ... ok
+test native_muxer_checks_producer_frame_counts_before_writing ... ok
+test opaque_codec_muxing_preserves_format_unknown_chunks_and_padding ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 10 tests
+test wavl_index_and_held_frame_seeks_cross_physical_four_gib_offsets ... ok
+test wavl_io_failures_poison_streams_and_seek_recovers_held_frames ... ok
+test wavl_silence_count_promotion_and_declared_limits_are_checked_before_io ... ok
+test large_virtual_silence_seeks_remain_u64_and_forward_finish_does_not_expand_it ... ok
+test trailing_fact_is_validated_without_requiring_a_forward_duration_up_front ... ok
+test malformed_wavl_counts_boundaries_padding_and_limits_agree ... ok
+test rf64_wavl_duration_uses_fact_or_observed_frames_not_unused_ds64 ... ok
+test incremental_and_write_only_wavl_writers_preserve_native_frames_and_segments ... ok
+test borrowed_seekable_and_forward_wavl_match_independent_native_bytes ... ok
+test typed_wavl_writes_preserve_float_bits_and_pack_frames_larger_than_stack_scratch ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+
+running 5 tests
+test format_reserved_id_declared_length_and_partial_io_errors_are_bounded ... ok
+test encoded_u64_counts_promote_rf64_and_bw64_keeps_literal_fact_limits ... ok
+test native_data_counts_are_checked_and_the_wrapper_produces_identical_bytes ... ok
+test opaque_formats_children_pads_and_embedded_forms_match_independent_bytes ... ok
+test preencoded_adpcm_and_extensible_ima_descriptors_need_no_muxer_codec_dispatch ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling deadlib-audio-decode-wav v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\wav)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.98s
+     Running unittests src\lib.rs (target/wav\debug\deps\deadlib_audio_decode_wav-52bb481b08b31fb2.exe)
+     Running tests\adpcm.rs (target/wav\debug\deps\adpcm-e8dcaf4311505333.exe)
+     Running tests\adpcm_buffered.rs (target/wav\debug\deps\adpcm_buffered-4fa6736f901d7131.exe)
+     Running tests\adpcm_encode.rs (target/wav\debug\deps\adpcm_encode-9c2df9a8e28e4a54.exe)
+     Running tests\adpcm_reader.rs (target/wav\debug\deps\adpcm_reader-de3e7eb16483ca7d.exe)
+     Running tests\adpcm_wavl.rs (target/wav\debug\deps\adpcm_wavl-14bd2f3e98dd959c.exe)
+     Running tests\adpcm_wavl_allocations.rs (target/wav\debug\deps\adpcm_wavl_allocations-b3c0ecfd4e11bb1d.exe)
+     Running tests\adpcm_wavl_forward.rs (target/wav\debug\deps\adpcm_wavl_forward-52531d64302e456f.exe)
+     Running tests\adpcm_wavl_reader.rs (target/wav\debug\deps\adpcm_wavl_reader-f5e3c90aa7cb4541.exe)
+     Running tests\broadcast_metadata.rs (target/wav\debug\deps\broadcast_metadata-02ac2f25a1431778.exe)
+     Running tests\bw64.rs (target/wav\debug\deps\bw64-9ebd06c93acb73a2.exe)
+     Running tests\forward.rs (target/wav\debug\deps\forward-a845c7353b175057.exe)
+     Running tests\foundation.rs (target/wav\debug\deps\foundation-275c72088cb73b1f.exe)
+     Running tests\ima3.rs (target/wav\debug\deps\ima3-dd1b9315ad3c94d9.exe)
+     Running tests\ima_extensible.rs (target/wav\debug\deps\ima_extensible-106fa2554b4f94cc.exe)
+     Running tests\io.rs (target/wav\debug\deps\io-42fde2adacf136ee.exe)
+     Running tests\known_length.rs (target/wav\debug\deps\known_length-9998c4502c633525.exe)
+     Running tests\metadata.rs (target/wav\debug\deps\metadata-4b7d0f39bd5b068f.exe)
+     Running tests\metadata_allocations.rs (target/wav\debug\deps\metadata_allocations-405dd9b276dd1c43.exe)
+     Running tests\metadata_strings.rs (target/wav\debug\deps\metadata_strings-f86237ae248ebebb.exe)
+     Running tests\mutation.rs (target/wav\debug\deps\mutation-2d28df414ff34441.exe)
+     Running tests\mux.rs (target/wav\debug\deps\mux-4c0efddf3a1ee178.exe)
+     Running tests\wavl.rs (target/wav\debug\deps\wavl-a9f01b7536c09a81.exe)
+     Running tests\wavl_mux.rs (target/wav\debug\deps\wavl_mux-8d18ad5fa28ec704.exe)
+   Doc-tests deadlib_audio_decode_wav

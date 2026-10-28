@@ -2,7 +2,8 @@
 
 This campaign extends the Hound/native results in NATIVE_PERFORMANCE.md to a
 second Rust implementation and Microsoft/IMA ADPCM. It does not claim every
-codec or platform is faster. It identifies a required buffered-file improvement.
+codec or platform is faster. The initial campaign below identified the buffered-
+file improvement subsequently measured in PERFORMANCE.md.
 
 ## Inputs and comparison contract
 
@@ -138,8 +139,9 @@ files it records 131072 reads, 131072 seeks and 8585774834 read bytes for
 67108864 encoded bytes: **127.94-times read amplification**. Small 8192-byte
 payloads amplify 8.53 times. The reader seeks before each uncached 512-byte
 block, discarding buffered read-ahead. This verifies a substantial buffered-file
-bottleneck, despite bounded memory and competitive resident decoding. Removing
-those unnecessary sequential seeks is required optimization work.
+bottleneck, despite bounded memory and competitive resident decoding. The
+follow-up in PERFORMANCE.md removes those unnecessary sequential seeks and
+retains these original baseline results.
 
 ## Profile checks and artifacts
 
