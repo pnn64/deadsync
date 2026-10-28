@@ -189,6 +189,14 @@ fn main() {
             }
         });
     }
+    for table_b in [false, true] {
+        probe(&format!("huffman/count1/{table_b}"), 1000, || {
+            let mut bits = BitReader::new(black_box(&bytes));
+            for _ in 0..256 {
+                black_box(huffman::quad(&mut bits, table_b).unwrap());
+            }
+        });
+    }
     for (kind, mixed) in [(0, false), (2, false), (2, true)] {
         for wide in [false, true] {
             let input = std::array::from_fn(|n| {

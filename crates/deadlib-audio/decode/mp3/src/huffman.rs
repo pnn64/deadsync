@@ -51,7 +51,11 @@ pub fn pair(bits: &mut BitReader<'_>, book: u8) -> Result<[i16; 2], Error> {
 /// leaves the cursor untouched so the granule parser can discard stuffing bits.
 pub fn quad(bits: &mut BitReader<'_>, table_b: bool) -> Result<[i16; 4], Error> {
     let mut cursor = *bits;
-    let value = symbol(&mut cursor, tables::ROOTS[32 + usize::from(table_b)])?;
+    let value = if table_b {
+        15 ^ cursor.read(4)? as u8
+    } else {
+        symbol(&mut cursor, tables::ROOTS[32])?
+    };
     let mut output = [0; 4];
     for (n, sample) in output.iter_mut().enumerate() {
         *sample = signed(&mut cursor, ((value >> (3 - n)) & 1) as u16)?;

@@ -7,10 +7,11 @@ Failed pair/quad reads leave the bit cursor unchanged, including an incomplete
 count1 symbol at the part2_3 boundary. The later granule parser must distinguish
 this count1 stuffing condition from an invalid/truncated big-values region.
 
-The implementation is a native flat prefix tree: 1,393 two-child nodes with a
-high-bit leaf tag, plus root and linbits arrays. These immutable tables occupy
-5,672 bytes of elements and need no runtime construction, allocation or pointer
-chasing through heap nodes. No throughput claim is made before full PCM parity.
+Pair books and count1 table A use a native flat prefix tree: 1,378 two-child
+nodes with a high-bit leaf tag, plus root and linbits arrays. Count1 table B
+reads its fixed four-bit code directly and complements it. Its unused tree and
+root are omitted. The immutable tables occupy 5,610 bytes of elements and need
+no runtime construction, allocation or pointer chasing through heap nodes.
 
 ## Numeric data provenance
 
