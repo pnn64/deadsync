@@ -32,6 +32,12 @@ pub fn pair(bits: &mut BitReader<'_>, book: u8) -> Result<[i16; 2], Error> {
         return Err(Error::Invalid("Layer III pair codebook"));
     }
     let mut cursor = *bits;
+    if book == 1 {
+        let entry = tables::PAIR1[cursor.peek5()];
+        cursor.skip((entry >> 16) as usize)?;
+        *bits = cursor;
+        return Ok([entry as u8 as i8 as i16, (entry >> 8) as u8 as i8 as i16]);
+    }
     let value = if book >= 24 {
         let width = cursor.remaining().min(5) as u32;
         let mut lookahead = cursor;

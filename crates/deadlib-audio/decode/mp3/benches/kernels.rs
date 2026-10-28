@@ -172,6 +172,62 @@ fn verify(paths: &[String]) {
             }
         }
     }
+    for pattern in [0, 1] {
+        let data: [u8; 32] = std::array::from_fn(|n| {
+            if pattern == 0 {
+                0xff
+            } else {
+                (n * 113 + 0x6c) as u8
+            }
+        });
+        for compress in 0..16 {
+            for (kind, mixed) in [(0, false), (2, false), (2, true)] {
+                for granule in 0..2 {
+                    for mask in [0, 4, 15] {
+                        for prior in 0..3 {
+                            let mut previous = ScaleFactors {
+                                short_block: prior == 2,
+                                intensity_scale: true,
+                                ..Default::default()
+                            };
+                            previous.long = std::array::from_fn(|n| (n % 8) as u8);
+                            previous.long_width = std::array::from_fn(|n| (n % 5) as u8);
+                            for available in [0, 1, 7, 8, 31, 63, 95, 111, 128] {
+                                for limit in [0, 4095] {
+                                    let mut side = SideInfo::default();
+                                    side.scfsi[0] = std::array::from_fn(|n| mask & (1 << n) != 0);
+                                    side.granules[granule][0] = GranuleChannel {
+                                        block_type: kind,
+                                        mixed_block: mixed,
+                                        scalefac_compress: compress,
+                                        part2_3_bits: limit,
+                                        preflag: true,
+                                        ..Default::default()
+                                    };
+                                    let mut bits = BitReader::bounded(&data, 5, available).unwrap();
+                                    let result = scalefactors::read(
+                                        &mut bits,
+                                        joint(44100, 0),
+                                        &side,
+                                        granule,
+                                        0,
+                                        if prior == 0 { None } else { Some(&previous) },
+                                    );
+                                    writeln!(
+                                        out,
+                                        "{result:?} {} {}",
+                                        bits.position(),
+                                        bits.remaining()
+                                    )
+                                    .unwrap();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     for crc in 0..=u16::MAX {
         for byte in 0..=u8::MAX {
             out.write_all(&checksum::bytes(crc, &[byte]).to_le_bytes())
@@ -463,7 +519,7 @@ fn main() {
             },
         );
     }
-    for width in [1, 4, 9, 16, 24, 32] {
+    for width in [0, 1, 2, 3, 4, 5, 7, 8, 9, 12, 13, 16, 24, 32] {
         probe(&format!("bits/{width}"), 1000, || {
             let mut bits = BitReader::new(black_box(&bytes));
             for _ in 0..512 {
@@ -603,6 +659,64 @@ fn main() {
                     },
                 );
             }
+        }
+    }
+    let mpeg1_header = joint(44100, 0);
+    for (kind, mixed) in [(0, false), (2, false), (2, true)] {
+        for compress in [0, 4, 15] {
+            let mut side = SideInfo::default();
+            side.granules[0][0] = GranuleChannel {
+                block_type: kind,
+                mixed_block: mixed,
+                scalefac_compress: compress,
+                part2_3_bits: 4095,
+                ..Default::default()
+            };
+            probe(
+                &format!("scalefactors/mpeg1/{kind}/{mixed}/0/{compress}/0"),
+                10_000,
+                || {
+                    let mut cursor = BitReader::new(black_box(&bytes));
+                    black_box(
+                        scalefactors::read(&mut cursor, mpeg1_header, black_box(&side), 0, 0, None)
+                            .unwrap(),
+                    );
+                },
+            );
+        }
+    }
+    let previous = ScaleFactors {
+        long: std::array::from_fn(|n| (n % 8) as u8),
+        long_width: std::array::from_fn(|n| (n % 5) as u8),
+        ..Default::default()
+    };
+    for compress in [0, 4, 15] {
+        for mask in [0, 5, 15] {
+            let mut side = SideInfo::default();
+            side.scfsi[0] = std::array::from_fn(|n| mask & (1 << n) != 0);
+            side.granules[1][0] = GranuleChannel {
+                scalefac_compress: compress,
+                part2_3_bits: 4095,
+                ..Default::default()
+            };
+            probe(
+                &format!("scalefactors/mpeg1/0/false/1/{compress}/{mask}"),
+                10_000,
+                || {
+                    let mut cursor = BitReader::new(black_box(&bytes));
+                    black_box(
+                        scalefactors::read(
+                            &mut cursor,
+                            mpeg1_header,
+                            black_box(&side),
+                            1,
+                            0,
+                            Some(black_box(&previous)),
+                        )
+                        .unwrap(),
+                    );
+                },
+            );
         }
     }
     for (region0_count, region1_count) in [(0, 0), (7, 7), (15, 7)] {

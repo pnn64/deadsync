@@ -32,6 +32,32 @@ impl<'a> BitReader<'a> {
     pub fn remaining(&self) -> usize {
         self.end - self.position
     }
+    /// Peeks a five-bit prefix, padding unavailable low bits with zero.
+    #[inline(always)]
+    pub(crate) fn peek5(&self) -> usize {
+        let available = self.remaining();
+        let start = self.position >> 3;
+        let offset = (self.position & 7) as u32;
+        if available >= 5 {
+            return if offset <= 3 {
+                usize::from(self.data[start] >> (3 - offset)) & 31
+            } else {
+                usize::from(
+                    u16::from_be_bytes([self.data[start], self.data[start + 1]]) >> (11 - offset),
+                ) & 31
+            };
+        }
+        if available == 0 {
+            return 0;
+        }
+        let available = available as u32;
+        let mut window = u16::from(self.data[start]) << 8;
+        if offset + available > 8 {
+            window |= u16::from(self.data[start + 1]);
+        }
+        let prefix = usize::from(window >> (11 - offset)) & 31;
+        prefix & (31 << (5 - available))
+    }
     pub fn read(&mut self, width: u32) -> Result<u32, Error> {
         if width > 32 {
             return Err(Error::Invalid("bit field width"));
@@ -109,5 +135,31 @@ impl BitWriter {
             self.bits += 1;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BitReader;
+
+    #[test]
+    fn padded_prefixes_preserve_every_two_byte_pattern_and_short_bound() {
+        assert_eq!(BitReader::new(&[]).peek5(), 0);
+        for word in 0..=u16::MAX {
+            let bytes = word.to_be_bytes();
+            for start in 0..=16 {
+                for available in 0..=5.min(16 - start) {
+                    let bits = BitReader::bounded(&bytes, start, available).unwrap();
+                    let mut expected = 0;
+                    for n in 0..available {
+                        let bit = start + n;
+                        expected |= usize::from((bytes[bit / 8] >> (7 - bit % 8)) & 1) << (4 - n);
+                    }
+                    assert_eq!(bits.peek5(), expected);
+                    assert_eq!(bits.position(), start);
+                    assert_eq!(bits.remaining(), available);
+                }
+            }
+        }
     }
 }
