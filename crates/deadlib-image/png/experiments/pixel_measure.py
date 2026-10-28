@@ -13,9 +13,11 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[4]
 PNG = ROOT / "crates/deadlib-image/png"
-WORK = ROOT / "target/png-pixels-20261028"
-EVIDENCE = PNG / "experiments/pixels-20261028"
-BASE = "22d57bf31"
+SERIES = os.environ.get("DEADLIB_PNG_PERF_SERIES", "pixels-20261028")
+assert SERIES.replace("-", "").isalnum()
+WORK = ROOT / "target" / ("png-" + SERIES)
+EVIDENCE = PNG / "experiments" / SERIES
+BASE = os.environ.get("DEADLIB_PNG_PERF_BASE", "22d57bf31")
 
 
 def sha(path):

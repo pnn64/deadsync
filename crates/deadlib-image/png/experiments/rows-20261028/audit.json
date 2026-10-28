@@ -1,0 +1,8 @@
+{
+    "measurement_processes":  86,
+    "verified_measurement_and_validation_logs":  92,
+    "final_source_hashes_match":  true,
+    "final_allocations_and_fingerprints_match_baseline":  true,
+    "selected_checkpoint":  "frame",
+    "source_base":  "e96e16343"
+}

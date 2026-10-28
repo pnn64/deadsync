@@ -125,6 +125,87 @@ fn opaque_white_blends_stay_white_at_every_source_alpha() {
 }
 
 #[test]
+fn native_rgba_source_rows_preserve_offsets_transparent_rgb_and_disposal() {
+    for depth in [8, 16] {
+        for width in [1, 3, 17, 257] {
+            let make = |w: u32, h: u32, salt: u16| {
+                let max = if depth == 16 { 65535 } else { 255 };
+                let values: Vec<u16> = (0..w as usize * h as usize * 4)
+                    .map(|n| {
+                        if n % 4 == 3 {
+                            [0, 1, max / 2, max][n / 4 % 4]
+                        } else {
+                            (n as u16).wrapping_mul(913) ^ salt
+                        }
+                    })
+                    .collect();
+                Image {
+                    width: w,
+                    height: h,
+                    color_type: ColorType::Rgba,
+                    bit_depth: depth,
+                    samples: if depth == 16 {
+                        Samples::U16(values)
+                    } else {
+                        Samples::U8(values.into_iter().map(|v| v as u8).collect())
+                    },
+                }
+            };
+            for dispose in [DisposeOp::None, DisposeOp::Background, DisposeOp::Previous] {
+                let mut png = Png::new(make(width + 4, 7, 19));
+                png.animation = Some(Animation {
+                    plays: 0,
+                    default_is_frame: true,
+                    frames: vec![
+                        Frame {
+                            control: control(width + 4, 7),
+                            image: None,
+                        },
+                        Frame {
+                            control: FrameControl {
+                                x_offset: 2,
+                                y_offset: 1,
+                                dispose,
+                                ..control(width, 3)
+                            },
+                            image: Some(make(width, 3, 71)),
+                        },
+                        Frame {
+                            control: FrameControl {
+                                x_offset: 1,
+                                y_offset: 4,
+                                dispose: DisposeOp::Previous,
+                                ..control(width, 2)
+                            },
+                            image: Some(make(width, 2, 137)),
+                        },
+                        Frame {
+                            control: FrameControl {
+                                x_offset: width + 3,
+                                y_offset: 6,
+                                ..control(1, 1)
+                            },
+                            image: Some(make(1, 1, 227)),
+                        },
+                    ],
+                });
+                let expected = oracle::render(&png);
+                let mut compositor = png.compositor(Limits::default()).unwrap();
+                for frame in &expected {
+                    assert_eq!(compositor.next_frame().unwrap().unwrap().samples, frame);
+                }
+                assert!(compositor.next_frame().unwrap().is_none());
+                compositor.reset();
+                assert_eq!(
+                    compositor.next_frame().unwrap().unwrap().samples,
+                    expected[0]
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn every_source_alpha_at_fifteen_destination_boundaries_matches_exact_fractions() {
     let mut checked = 0;
     for da in [

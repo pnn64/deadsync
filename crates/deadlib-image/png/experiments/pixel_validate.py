@@ -8,7 +8,9 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[4]
 PNG = ROOT / "crates/deadlib-image/png"
-EVIDENCE = PNG / "experiments/pixels-20261028"
+SERIES = os.environ.get("DEADLIB_PNG_PERF_SERIES", "pixels-20261028")
+assert SERIES.replace("-", "").isalnum()
+EVIDENCE = PNG / "experiments" / SERIES
 REFERENCE = Path("C:/GitHub/deadsync/target/png-encoder-reference/Release/deadlib_png_oracle.exe")
 
 
@@ -18,12 +20,12 @@ def sha(path):
 
 def main():
     label = sys.argv[1]
-    assert label in ["rgba", "palette", "opaque", "final", "selected"]
+    assert label.replace("-", "").isalnum()
     assert REFERENCE.is_file()
     env = dict(os.environ, CARGO_BUILD_JOBS="4", DEADLIB_LIBPNG_ORACLE=str(REFERENCE))
-    target = str(ROOT / "target/png-pixels-20261028/build")
-    tests = ["compositing", "compositor_precision"]
-    if label in ["final", "selected"]:
+    target = str(ROOT / "target" / ("png-" + SERIES) / "build")
+    tests = sys.argv[2:] or ["compositing", "compositor_precision"]
+    if label in ["final", "selected"] and len(sys.argv) == 2:
         tests += ["apng_rendered"]
     command = ["cargo", "test", "--offline", "-p", "deadlib-image-png", "--release", "--target-dir", target]
     for test in tests:
@@ -32,10 +34,15 @@ def main():
     commands = [(label + "-tests", command)]
     if label in ["final", "selected"]:
         prefix = "selected-" if label == "selected" else ""
+        debug = ["cargo", "test", "--offline", "-p", "deadlib-image-png", "--target-dir", target]
+        for test in tests:
+            if test != "apng_rendered":
+                debug += ["--test", test]
+        debug += ["--", "--nocapture"]
         commands += [
             (prefix + "clippy", ["cargo", "clippy", "--offline", "-p", "deadlib-image-png", "--all-targets", "--target-dir", target, "--", "-D", "warnings"]),
             (prefix + "fmt", ["cargo", "fmt", "-p", "deadlib-image-png", "--", "--check"]),
-            (prefix + "debug", ["cargo", "test", "--offline", "-p", "deadlib-image-png", "--target-dir", target, "--test", "compositing", "--test", "compositor_precision", "--", "--nocapture"]),
+            (prefix + "debug", debug),
         ]
     record = dict(source_sha256={p.relative_to(PNG).as_posix(): sha(p) for p in sorted((PNG / "src").rglob("*.rs"))},
                   tests_sha256={p: sha(PNG / "tests" / (p + ".rs")) for p in tests},

@@ -1,7 +1,7 @@
 //! CPU cycles and untimed allocation counts for decoding and RGBA expansion.
 use deadlib_image_png::{
     Animation, BlendOp, ColorType, DisposeOp, EncodeOptions, Filter, Frame, FrameControl, Image,
-    Limits, Png, Samples, Transparency, decode, encode,
+    Limits, Png, Samples, Transparency, decode, decode_reader, encode,
 };
 use std::{
     alloc::{GlobalAlloc, Layout, System},
@@ -323,6 +323,17 @@ fn main() {
         .unwrap();
         let decoded = decode(&bytes).unwrap();
         assert_eq!(decoded.image, png.image);
+        assert_eq!(
+            decode_reader(bytes.as_slice(), &Default::default()).unwrap(),
+            decoded
+        );
+        measure(
+            &format!("gray{depth}-large"),
+            "decode-reader",
+            png.image.samples.len() * if depth == 16 { 2 } else { 1 },
+            fingerprint(&decoded.image.samples),
+            || decode_reader(black_box(bytes.as_slice()), &Default::default()).unwrap(),
+        );
         measure(
             &format!("gray{depth}-large"),
             "decode",

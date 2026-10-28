@@ -142,14 +142,14 @@ impl ImageRows {
                         .map(|&b| u16::from_be_bytes(b)),
                 );
             } else if self.header.depth < 8 {
-                self.native8.clear();
-                reserve(&mut self.native8, count)?;
-                let depth = self.header.depth as usize;
-                for n in 0..count {
-                    self.native8.push(
-                        (self.row[1 + n * depth / 8] >> (8 - depth - n * depth % 8))
-                            & ((1 << depth) - 1),
-                    );
+                let additional = count.saturating_sub(self.native8.len());
+                reserve(&mut self.native8, additional)?;
+                self.native8.resize(count, 0);
+                match self.header.depth {
+                    1 => scanline::unpack::<1>(&self.row[1..], &mut self.native8),
+                    2 => scanline::unpack::<2>(&self.row[1..], &mut self.native8),
+                    4 => scanline::unpack::<4>(&self.row[1..], &mut self.native8),
+                    _ => unreachable!("validated packed PNG depth"),
                 }
             }
             if self.header.color == ColorType::Indexed && policy == crate::PalettePolicy::Strict {

@@ -12,17 +12,20 @@ from pixel_measure import EVIDENCE, ROOT, save, sha
 
 
 def main():
-    selected = len(sys.argv) > 1
-    selected_label = "inline" if selected else "opaque"
-    prefix = "selected-paired" if selected else "paired"
+    before_label, selected_label, prefix = (
+        sys.argv[1:4] if len(sys.argv) == 4 else
+        ("palette", "inline", "selected-paired") if len(sys.argv) > 1 else
+        ("palette", "opaque", "paired")
+    )
+    assert all(value.replace("-", "").isalnum() for value in [before_label, selected_label, prefix])
     manifest = EVIDENCE / f"{prefix}.json"
     assert not manifest.exists()
-    records = {label: json.loads((EVIDENCE / f"{label}.json").read_text()) for label in ["palette", selected_label]}
+    records = {label: json.loads((EVIDENCE / f"{label}.json").read_text()) for label in [before_label, selected_label]}
     evidence = dict(driver_sha256=sha(Path(__file__)), measurements=[])
     groups = {label: {} for label in records}
     env = dict(os.environ, DEADLIB_PNG_BENCH_ITERS="12")
     for round in range(4):
-        order = ["palette", selected_label] if round % 2 == 0 else [selected_label, "palette"]
+        order = [before_label, selected_label] if round % 2 == 0 else [selected_label, before_label]
         for label in order:
             record = records[label]
             binary = Path(record["executable"])
@@ -39,7 +42,7 @@ def main():
                 groups[label].setdefault((row["case"], row["operation"]), []).append(row)
             print(f"paired round {round + 1} {label} passed", flush=True)
     rows = []
-    for key, before_rows in groups["palette"].items():
+    for key, before_rows in groups[before_label].items():
         after_rows = groups[selected_label][key]
         assert {row["fingerprint"] for row in before_rows + after_rows} == {before_rows[0]["fingerprint"]}
         before = statistics.median(float(row["cycles_per_image"]) for row in before_rows)

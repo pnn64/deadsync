@@ -139,7 +139,7 @@ pub(crate) fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> R
     Ok(())
 }
 
-fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
+pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
     for (samples, &byte) in out.chunks_mut(8 / DEPTH as usize).zip(row) {
         for (n, sample) in samples.iter_mut().enumerate() {
             *sample = (byte >> (8 - DEPTH - n as u8 * DEPTH)) & ((1 << DEPTH) - 1);

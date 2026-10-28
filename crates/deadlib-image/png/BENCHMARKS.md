@@ -1355,3 +1355,99 @@ the PNG package. Run the current benchmark with:
 ```powershell
 cargo run --offline -p deadlib-image-png --profile bench --example reconstruction_bench
 ```
+
+## Owned pixels, packed streaming rows and SOURCE copies (2026-10-28)
+
+Three further changes remove work in expansion, streamed decoding and rendering:
+
+1. RGBA16 expansion builds complete `[u16; 4]` pixels in its output allocation,
+   then transfers that allocation to the flat sample vector with the safe
+   `Vec::into_flattened` API. Every output sample is initialized by its final
+   value, eliminating the preceding full-image zero fill. Exact reservation
+   preserves allocation sizes for tiny images. Compact indexed images use a
+   direct palette kernel; large indexed images retain their lookup table.
+2. Streaming 1/2/4-bit reconstruction reuses the buffered decoder's fixed-width
+   unpacker. The native row vector keeps its length within each pass and is
+   overwritten directly. This removes per-sample `push`, source division/modulo,
+   repeated dynamic shifts and repeated vector-length updates. Buffer growth
+   remains fallible and follows pass width; allocation counts/sizes are unchanged.
+3. RGBA SOURCE frames dispatch once per frame, widening native bytes or copying
+   native u16 rows directly into the destination rectangle. This removes generic
+   pixel interpretation, per-pixel destination slicing and blend selection from
+   those copies. The general renderer retains its previous loop and pixel kernel.
+   Compositor canvases still start transparent and reset by zeroing their samples.
+
+Production remains safe Rust under `forbid(unsafe_code)`. Pixel arrays and flat
+u16 samples share the same storage; flattening adds neither a copy nor a second
+allocation. The implementation uses standard-library layout/iteration operations
+and adds no dependency or public API.
+
+Final baseline/selected alternating comparison:
+
+| Operation / fixture | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| RGB8 expansion, 513x257 | 1,983,182 | 1,548,874 | 1.28x |
+| RGBA16 expansion, 513x257 | 1,146,988 | 916,925 | 1.25x |
+| Indexed8 expansion, 255x1, full palette | 3,165.98 | 1,740.89 | 1.82x |
+| Grayscale1 reader, 4097x257 | 6,711,633 | 2,758,630 | 2.43x |
+| Grayscale2 reader, 4097x257 | 7,030,283 | 3,041,246 | 2.31x |
+| Grayscale4 reader, 4097x257 | 8,035,749 | 4,093,016 | 1.96x |
+| RGBA8 SOURCE, 513x257 | 1,449,313 | 280,274 | 5.17x |
+| RGBA16 SOURCE, 513x257 | 1,505,852 | 313,291 | 4.81x |
+
+The packed-reader component comparison before the SOURCE change also measures
+6,685,238 to 2,635,143 cycles for grayscale1, 6,991,660 to 2,951,205 for
+grayscale2, and 7,912,838 to 3,898,814 for grayscale4 (six processes per position).
+The 8/16-bit reader controls are essentially unchanged in the final paired run.
+Large expansion still makes one 1,054,728-byte allocation; reused SOURCE rendering
+makes none. All measured allocation/reallocation requests match the baseline.
+
+Measured tradeoffs remain visible: RGB16 SOURCE is 1.42M to 1.54M cycles in the
+final paired run; a full-palette 256x1 conversion is 1,935 to 2,182 cycles, and
+its 1x1 counterpart is 262 to 288 cycles. RGBA8 static expansion's 1.21M to 1.20M
+difference is within run variance. These timings concern individual public API
+operations and this shared host; they do not establish an application-wide gain.
+
+Earlier output/renderer variants were superseded after broader comparisons.
+The first flat-u16 iterator lost short indexed-image throughput. Complete pixel
+construction plus direct indexed lookup removes that loss at 255 pixels. A
+common row loop and shared palette-call refactoring slowed generic SOURCE
+formats; the selected `frame` checkpoint restores the general loop/kernel while
+retaining direct RGBA copies. Grayscale and GA SOURCE are around baseline in
+the final alternating runs. Intermediate source patches and raw data are retained.
+
+Measurements use Windows thread cycles, logical CPU 2, the Xeon E5-2696 v4,
+Rust 1.99.1 and the existing optimized/LTO bench profile. Each process has three
+warmups and seven batches; large cases use twelve iterations, small outputs at
+least 2,048. Sequential checkpoints have three original and three reverse-order
+controls. Final alternating runs use four processes per version in balanced
+order. Allocation probes are untimed. Native reader outputs are compared with
+the generated native images; every conversion/render case also checks complete
+samples against the independent expansion/rational model before timing. All 51
+case fingerprints agree. Host frequency, preemption and external workloads remain
+uncontrolled; CPU cycles take precedence over wall throughput.
+
+The selected source passes 28 release checks with no skips and 24 debug checks.
+Debug's one optional regeneration check ran in release. Checks include the
+3,240-case native format/filter/Adam7 matrix, PNGSuite fragmented/interrupted
+reads, strict/recovered palette policies, exact resource budgets and all sixteen
+bits of compositing precision. The new SOURCE test covers odd and wide native
+RGBA rows, nonzero rectangle offsets, transparent RGB preservation, every
+disposal mode, completion and reset. Independent C/Python checks regenerate 35
+WPT and 240 precision animations. All-target Clippy with warnings denied and
+scoped formatting pass.
+
+The production diff is 48 lines net (103 added, 55 removed, including formatting
+of the general renderer). Removed execution includes zero fill, per-sample
+packed reconstruction bookkeeping and generic interpretation of RGBA SOURCE.
+The native conversion helpers and reused row kernel remain local to the crate.
+
+Evidence is in [`experiments/rows-20261028`](experiments/rows-20261028).
+`frame-paired-summary.tsv` contains the final comparison;
+`summary.tsv` contains the sequential six-process checkpoints. `owned`, `pixels`,
+`compact`, `indexed`, `mode`, `leaf`, `local` and `range` identify intermediate
+construction/dispatch trials; `frame` is the selected source. Cumulative patches
+and source/binary hashes are relative to `e96e16343`. `selected-validation.json`
+records the final source and verification commands. The existing measurement,
+pairing and validation scripts now accept `DEADLIB_PNG_PERF_SERIES` so independent
+series preserve separate evidence; `DEADLIB_PNG_PERF_BASE` selects the patch base.
