@@ -176,11 +176,7 @@ impl<R: Read> PageReader<R> {
         if !self.fill(header)? {
             return Err(Error::Truncated);
         }
-        let len = header
-            + self.buffer[self.start + 27..self.start + header]
-                .iter()
-                .map(|&n| n as usize)
-                .sum::<usize>();
+        let len = header + page::body_size(&self.buffer[self.start + 27..self.start + header]);
         if !self.fill(len)? {
             return Err(Error::Truncated);
         }
@@ -337,11 +333,7 @@ impl PageDecoder {
                 if self.buffer.len() < header {
                     header
                 } else {
-                    self.length = header
-                        + self.buffer[27..header]
-                            .iter()
-                            .map(|&n| n as usize)
-                            .sum::<usize>();
+                    self.length = header + page::body_size(&self.buffer[27..header]);
                     self.length
                 }
             };

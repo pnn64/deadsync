@@ -151,7 +151,20 @@ pub(crate) fn page_size(input: &[u8]) -> Result<usize, Error> {
     if input.len() < header {
         return Err(Error::Truncated);
     }
-    Ok(header + input[27..header].iter().map(|&n| n as usize).sum::<usize>())
+    Ok(header + body_size(&input[27..header]))
+}
+
+#[inline(never)]
+pub(crate) fn body_size(lacing: &[u8]) -> usize {
+    let (words, tail) = lacing.as_chunks::<8>();
+    let mut sums = 0;
+    for word in words {
+        let word = u64::from_le_bytes(*word);
+        sums += (word & 0x00ff_00ff_00ff_00ff) + ((word >> 8) & 0x00ff_00ff_00ff_00ff);
+    }
+    // A page has at most 255 laces, so even the full sum fits in 16 bits.
+    (sums.wrapping_mul(0x0001_0001_0001_0001) >> 48) as usize
+        + tail.iter().map(|&n| n as usize).sum::<usize>()
 }
 
 /// A packet or part of a packet; a zero-length terminated fragment is valid.
@@ -231,7 +244,7 @@ fn validate_page(fields: PageHeader, lacing: &[u8], body_length: usize) -> Resul
     if lacing.len() > 255 {
         return Err(Error::Invalid("more than 255 page segments"));
     }
-    if lacing.iter().map(|&n| n as usize).sum::<usize>() != body_length {
+    if body_size(lacing) != body_length {
         return Err(Error::Invalid("lacing/body size mismatch"));
     }
     Ok(())

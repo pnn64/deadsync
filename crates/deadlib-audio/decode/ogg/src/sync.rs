@@ -180,7 +180,7 @@ impl SyncBuffer {
                 if bytes.len() < header {
                     return Ok(Step::NeedMore);
                 }
-                self.length = header + bytes[27..header].iter().map(|&v| v as usize).sum::<usize>();
+                self.length = header + crate::page::body_size(&bytes[27..header]);
                 self.length
             };
             if bytes.len() < length {
