@@ -546,3 +546,122 @@ comparative formats/workloads, process RSS and optimization remain unfinished.
 ```sh
 python crates/deadlib-audio/decode/wav/benches/compare_adpcm_forward.py --output target/wav/new-adpcm-forward-bench
 ```
+
+## Pinned regression investigation and cached ADPCM geometry
+
+`benches/compare_wavl_profile.py` builds independent baseline/current source
+copies with identical opt-level 3/LTO/bench-debug-1 profiles and static MSVC
+runtime settings. `wavl_profile` repeats the original native writer workload;
+`adpcm_file --flat-only --pin-thread` repeats the four compressed layouts. Only
+the benchmark thread is pinned, to the highest allowed processor bit
+(0x80000000000 here). Windows affinity does not fix frequency or exclude other
+processes. Each comparison alternates baseline/current/baseline/current, with
+three warmed trials per operation in each process. The summary uses six-trial
+medians and retains ranges and CPU cycles; it supplies no confidence interval.
+The affinity helper follows the Windows
+[process-mask](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getprocessaffinitymask)
+and [thread-mask](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setthreadaffinitymask)
+contracts. It has no production role.
+
+`validation/wavl-writer-pinned-control.*` compares the original 1ffaa3190 writer
+with add30e338. Pinned medians, ns/op:
+
+| Operation | Original | Generic wrapper | Change |
+| --- | ---: | ---: | ---: |
+| Open/finalize empty | 125.874 | 132.196 | +5.0% |
+| Known-length empty | 101.921 | 110.546 | +8.5% |
+| Open/finalize, 16 metadata chunks | 338.202 | 345.605 | +2.2% |
+| Known-length, 16 metadata chunks | 317.991 | 330.908 | +4.1% |
+| Segmented 4 MiB PCM16 | 382138.282 | 386247.657 | +1.1% |
+| Known segmented 4 MiB PCM16 | 382155.468 | 384680.860 | +0.7% |
+| u64 silence/RF64 finalization | 198.127 | 208.013 | +5.0% |
+
+The full-stream trial ranges overlap. Short construction and silence operations
+still have a measurable roughly 6-10 ns cost in this comparison. Both writers
+retain 112 bytes of inline state and request zero heap allocations/bytes in every
+measured row. This refines the earlier unpinned observation; it does not erase it
+or establish parity on every machine. The codec-independent muxer remains the
+shared implementation, with this documented small-operation tradeoff.
+
+Three attempts against add30e338 are preserved and **reverted**. The typed-only
+attempt passes the already computed sample/frame count directly to the public
+muxer; segmented medians increase 2.1% and 1.9%. The counted attempt additionally
+moves the native byte/count relation check to the public raw muxer entrypoint;
+stream medians change +0.3%/-0.4%, while known empty construction increases 8.0%.
+Assembly inspection shows expanded metadata validation in the generic caller.
+Outlining that helper changes streams -0.8%/-0.5% and known metadata -6.1%, but
+empty construction increases 9.5%. None supports a useful general improvement.
+`wavl-writer-pinned-{typed,counted,outlined}.*` retain both full source archives,
+raw trials and build logs. `wavl-writer-pinned-codegen.*` retains the assembly and
+commands used for inspection. No writer production change is retained.
+
+The pinned flat-reader control against 491b3c88d confirms Microsoft full/stream
+regressions of about 6-8% before optimization. The prior 3-bit IMA opening issue
+does not repeat (-0.1% median with overlapping ranges). Inspection finds that
+every uncached block calls Reader::format and Adpcm::from_format, parsing the
+same immutable descriptor twice and validating its geometry/coefficient table
+again. AdpcmReader now records validated u16 channels, frames/block, Microsoft
+coefficient count, bit depth and byte order once. It reconstructs the block view
+from those scalars and the owned immutable coefficient bytes; block headers and
+sample arithmetic are still checked on every decode. No self-referential pointer,
+new unsafe code, extra allocation or container codec dispatch is introduced.
+The fields replace the old usize/u64 geometry pair: observed x64 reader state
+falls from 344 to 336 bytes.
+
+`adpcm-flat-pinned-cached.*` compares add30e338 with this retained change.
+Median times, microseconds (seek rows are one seek/read):
+
+| Layout/operation | Before | Cached | Change |
+| --- | ---: | ---: | ---: |
+| Microsoft mono/full | 6332.103 | 5906.175 | -6.7% |
+| Microsoft mono/stream127 | 6638.331 | 6206.134 | -6.5% |
+| Microsoft mono/seek | 3.110 | 2.883 | -7.3% |
+| Microsoft stereo/full | 6144.141 | 5821.034 | -5.3% |
+| Microsoft stereo/stream127 | 6562.406 | 5941.134 | -9.5% |
+| Microsoft stereo/seek | 3.138 | 2.852 | -9.1% |
+| IMA4/full | 6667.863 | 6504.088 | -2.5% |
+| IMA4/stream127 | 6838.447 | 6673.981 | -2.4% |
+| IMA3/full | 8324.041 | 7820.528 | -6.0% |
+| IMA3/stream127 | 8681.869 | 8074.550 | -7.0% |
+
+Opening remains variable (-3.2% to +2.1% in that pair). A fresh comparison with
+491b3c88d (`adpcm-flat-pinned-retained.*`) places Microsoft full/stream medians
+1.6-4.9% below the original flat implementation; IMA3 full/stream is 4.9-7.3%
+lower. IMA4 streaming is +0.3%; opening is +0.4-4.9%, with overlapping ranges.
+These observations address the recorded decode regression without claiming every
+short operation improved. They are resident low-entropy fixtures, not a broad
+compressed-library comparison.
+
+`adpcm-segmented-pinned-cached.*` runs the same private before/after binaries
+with both flat and segmented cases. Microsoft wavl full/stream improves 5.5-8.5%,
+uncached data seeks 7.7-8.1% and held seeks 6.0-6.8%. IMA3 full/stream improves
+5.8-7.8%; IMA4 improves about 0.3-1.1%. Repeated cached held-frame seeks change
+-1.4% to +2.1%; wavl opening changes -0.9% to +1.8%. The block allocations are
+unchanged. This harness excludes heap/RSS; native writer scoped heap fields are
+measured. The initial writer report inherited an incorrect "heap excluded" scope
+caption; its allocator columns and source are authoritative. The summary records
+this correction and the runner now emits the appropriate caption.
+
+`adpcm-cache-profile-summary.json` preserves medians/ranges, report hashes and all
+operations. Source ZIPs and raw TSV/stderr hashes were verified against each
+report, and benchmark binaries retained their recorded hashes. Driver snapshots
+and profile context are retained. All sources are archived even for rejected
+attempts; no timing claim relies on the current checkout reproducing an earlier
+compiler artifact.
+
+All 93 integration tests pass in x64 debug/release and i686 debug, plus denied-
+warning Clippy and the fixture-driven native benchmark's no-argument test entry.
+A new independent custom-predictor test exercises extra Microsoft coefficients,
+both byte orders, all four containers, flat/wavl, held frames and reverse seeks.
+The 216 compressed fixture gates/3024 three-API checks and all 708 retained native
+gates/4484 checks/1912 encoded outputs pass. Two million checked mutations,
+1869 preceding corpus inputs and 100000 ASan executions pass. FUZZING.md records
+the new archive. The first parallel native replay collided with a Cargo example
+rebuild and the first checks hit the corresponding executable lock; their logs
+are retained. Native replay now uses a separate build tree and private binary.
+The repeated checks and corrected replay pass with unchanged inputs.
+
+```sh
+python crates/deadlib-audio/decode/wav/benches/compare_wavl_profile.py --output target/wav/new-writer
+python crates/deadlib-audio/decode/wav/benches/compare_wavl_profile.py --bench adpcm_file --baseline 491b3c88d --output target/wav/new-adpcm
+```

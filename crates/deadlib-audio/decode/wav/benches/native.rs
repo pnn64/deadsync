@@ -530,6 +530,10 @@ fn disk<T: Numeric>(path: &Path, kind: &str, channels: usize, frames: u64, backe
 }
 fn main() {
     let a = std::env::args().collect::<Vec<_>>();
+    if a.len() == 1 || (a.len() == 2 && a[1] == "--test") {
+        eprintln!("native benchmark fixtures: run benches/run_native.py");
+        return;
+    }
     assert!(
         a.len() >= 7,
         "native bench|rss PATH KIND CHANNELS FRAMES MEMORY_OFFSET [BACKEND]"

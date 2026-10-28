@@ -2,3 +2,7 @@
 adpcm-wavl-reader-* -text
 adpcm-wavl-forward-* -text
 native-widths-* -text
+wavl-writer-pinned-* -text
+adpcm-flat-pinned-* -text
+adpcm-segmented-pinned-* -text
+adpcm-cache-* -text

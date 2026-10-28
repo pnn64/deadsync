@@ -42,3 +42,7 @@ harness = false
 [[bench]]
 name = "native"
 harness = false
+
+[[bench]]
+name = "wavl_profile"
+harness = false

@@ -1,0 +1,40 @@
+{
+  "runs": [
+    {
+      "version": "baseline",
+      "command": [
+        "cargo",
+        "rustc",
+        "--manifest-path",
+        "target\\wav\\wavl-writer-pinned-control-sources\\baseline\\Cargo.toml",
+        "--profile",
+        "bench",
+        "--bench",
+        "wavl_profile",
+        "--",
+        "--emit=asm"
+      ],
+      "assembly_sha256": "153ef0539c9f4ff3eb1c5da451d40ac4f5b4c4fc0d10dc8af0ec8c06897e924b",
+      "source_archive_sha256": "e7c1b30b82c9d29c8f29b1577b89b90768d6ebcd58a98f217c2f366e3187dba4"
+    },
+    {
+      "version": "current",
+      "command": [
+        "cargo",
+        "rustc",
+        "--manifest-path",
+        "target\\wav\\wavl-writer-pinned-control-sources\\current\\Cargo.toml",
+        "--profile",
+        "bench",
+        "--bench",
+        "wavl_profile",
+        "--",
+        "--emit=asm"
+      ],
+      "assembly_sha256": "9210b737a0915a8c0c3425f7a8f9aa666b7067ec55cef0fd6eff089988e8d7b1",
+      "source_archive_sha256": "0c33a0c337e4d3cbe20927f088617c389291832b18b9205ff0b9a76e2bfd1511"
+    }
+  ],
+  "archive_sha256": "7c628ba551c1361607a657f39e4a91c0a07838e7f3f9cda74479ae36ccb77b30",
+  "scope": "Assembly inspection only; performance claims use the separately hashed paired benchmark binaries. Extracted render functions are also retained; line counts include labels and directives."
+}

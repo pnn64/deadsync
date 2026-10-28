@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import platform
+import shutil
 import subprocess
 import sys
 import time
@@ -28,9 +29,14 @@ def main():
         with zipfile.ZipFile(args.bw64_legacy_writers) as archive:prior={name:archive.read(name) for name in archive.namelist()}
         assert {name:sha(data) for name,data in prior.items()}==metadata['files']
         prior_metadata=dict(archive_sha256=metadata['archive_sha256'],sidecar_sha256=sha(sidecar.read_bytes()),rule='only BW64 output bytes 36..44 replaced with zero; all other bytes unchanged')
-    build=subprocess.run(['cargo','build','--locked','-p','deadlib-audio-decode-wav','--example','pcm_reference','--target-dir','target/wav'],cwd=workspace,capture_output=True);Path(str(output)+'.build.log').write_bytes(build.stdout+build.stderr)
+    # Other package tests can rebuild/remove examples in the shared target tree
+    # after Cargo releases its lock. Build here, then run a private snapshot.
+    target=workspace/'target/wav-native-replay'
+    build=subprocess.run(['cargo','build','--locked','-p','deadlib-audio-decode-wav','--example','pcm_reference','--target-dir',str(target)],cwd=workspace,capture_output=True);Path(str(output)+'.build.log').write_bytes(build.stdout+build.stderr)
     if build.returncode:raise RuntimeError('native driver build failed')
-    binary=workspace/('target/wav/debug/examples/pcm_reference'+('.exe' if sys.platform=='win32' else ''))
+    suffix='.exe' if sys.platform=='win32' else ''
+    binary=workspace/('target/wav/'+output.stem+'-pcm_reference'+suffix)
+    shutil.copyfile(target/('debug/examples/pcm_reference'+suffix),binary)
     references=[];results=[]
     for bank,report_name,archive_name in [('flat','wavl-pcm-regression.json','pcm-canonical.corpus.zip'),('wavl','wavl-references.json','wavl-references.corpus.zip')]:
         report_path=root/'validation'/report_name;archive_path=root/'validation'/archive_name;reference=json.loads(report_path.read_text())

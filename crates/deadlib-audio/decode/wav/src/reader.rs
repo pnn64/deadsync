@@ -150,6 +150,9 @@ impl<R: Read + Seek> Reader<R> {
     pub fn container(&self) -> Container {
         self.container
     }
+    pub(crate) fn format_bytes(&self) -> &[u8] {
+        &self.format
+    }
     pub fn format(&self) -> Format<'_> {
         Format::parse(&self.format, self.container.endian()).unwrap()
     }

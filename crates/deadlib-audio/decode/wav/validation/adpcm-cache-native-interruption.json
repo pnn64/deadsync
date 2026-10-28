@@ -1,0 +1,15 @@
+{
+  "timestamp_utc": "2026-10-28T19:57:26Z",
+  "status": "interrupted; no passing gate claim",
+  "error": "FileNotFoundError: [WinError 2] The system cannot find the file specified",
+  "cause": "Concurrent package-test rebuild removed the shared target/wav/debug/examples/pcm_reference.exe between subprocess launches.",
+  "correction": "Native replay now builds in target/wav-native-replay and copies a private executable before decoding.",
+  "build_log_sha256": "b02c7969b756ecaf4c1e02abb93b11cc8e71cb3595f40dc146802ee79c373563",
+  "partial_inputs": {
+    "flat-riff-u8-1-0-v8.wav": "acd5777ad0230d7ad4623173c9dbf31369d928dcf79083568e551f2b71e96254",
+    "flat-riff-u8-1-17-v8.wav": "22c5c57f9257b0a74ef2c292f78646c4f8d2ed49276b39caaa00e14d3b30211e",
+    "flat-riff-u8-1-521-v8.wav": "d0069d841a9a48aab51f39840caa0d10b6cc9fbc3310ce1d72d0770235c90341",
+    "flat-riff-u8-2-0-v8.wav": "a694706d8ebf61832e72fd25ba48a9a088d506970e6cc4c65f5174a9ccf146e0",
+    "flat-riff-u8-2-17-v8.wav": "1f9b25bad0c224be0f9a807ea2bfdfcb24bad8ed1ee45364a03aca873a601867"
+  }
+}

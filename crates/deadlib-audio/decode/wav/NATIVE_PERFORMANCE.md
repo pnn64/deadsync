@@ -172,9 +172,9 @@ The 92-test suite passes x64 debug/release and i686 debug, with Clippy. The 708
 retained native gates, 4484 descriptor/read/range checks and 1912 writer outputs
 retain their expected hashes under the existing BW64 rule. Two million checked
 mutations, 1839 prior corpus inputs and 100000 ASan executions pass after the
-optimization; FUZZING.md records the new corpus. This measured change does not
-resolve the earlier wavl writer/ADPCM reader regression candidates. Wider Rust
-reference comparisons and platform/profile audit remain open in AUDIT.md.
+optimization; FUZZING.md records the new corpus. The later pinned investigation
+and ADPCM geometry optimization are in PERFORMANCE.md. Wider Rust reference
+comparisons and platform/profile audit remain open in AUDIT.md.
 
 ```sh
 python crates/deadlib-audio/decode/wav/benches/run_native.py --output target/wav/new-native

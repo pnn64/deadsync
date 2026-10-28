@@ -355,3 +355,24 @@ pass x64 debug/release and i686 debug with Clippy; all 708 retained native gates
 4484 descriptor/read/range checks and 1912 full writer outputs retain their hashes.
 NATIVE_PERFORMANCE.md records exact-output performance/heap/process-memory
 comparisons, reconstructed fixtures and source-pinned repeated control binaries.
+
+
+The cached ADPCM reader retains validated u16 geometry and a coefficient count
+instead of reparsing the immutable descriptor twice on each uncached block.
+All block header/arithmetic checks remain active. The custom-predictor regression
+covers an extra table row through flat/segmented reads and reverse seeks in
+both byte orders and all four containers.
+
+`validation/adpcm-cache-mutation-{x64,i686}.*` each pass one million checked
+mutations, entering the segmented reader families 102528/102923 times.
+`adpcm-cache-prior-replay.*` passes all 1869 preceding archived corpus inputs.
+`adpcm-cache-asan.*` passes 100000 executions in 133.05 seconds, adds 1930 units
+and produces no failure artifact. The 268 MiB instrumented peak is not normal
+codec RSS. Its final 1837-file corpus is retained in
+`adpcm-cache-asan-corpus.zip`, SHA-256
+`6410985f4e5f0e8facb1cc4039031479d9ab22ca9a4967cdeb5c26fb43b44bef`,
+with a verified archive/report sidecar. Inputs remain unchanged. All 93 tests
+pass x64 debug/release and i686 debug with Clippy; all 216 compressed fixture
+gates/3024 three-API checks and 708 retained native gates/1912 writer outputs
+pass. Native replay now uses a separate build tree and private executable after
+an initial shared-example race; failed build/interruption evidence is retained.

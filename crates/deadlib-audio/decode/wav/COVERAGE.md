@@ -268,3 +268,17 @@ broader fuzzing and representative comparative performance/RSS coverage
 extensible compressed mappings. BW64 shares 64-bit container mechanics; ADM profile
 conformance is not yet claimed. These fixture results do not certify every
 standard variant or workload.
+
+
+The cached ADPCM file-reader geometry now has independent custom-predictor
+coverage across all four containers, both byte orders, flat/wavl, held samples
+and reverse seeks. The 93-test suite passes x64 debug/release and i686 debug
+with Clippy. All 216 compressed gates/3024 three-API checks and 708 retained
+native gates/4484 checks/1912 writer outputs pass. Two million checked mutations,
+1869 prior corpus inputs and 100000 ASan executions pass, with a verified new
+1837-file corpus. PERFORMANCE.md records paired measured gains and rejected
+writer experiments; the constructor overhead remains an explicit tradeoff.
+The fixture-driven native benchmark now exits cleanly when Cargo invokes its
+test entry without fixture arguments. Native replay uses an isolated build tree
+and private binary to avoid concurrent example rebuilds. The interrupted attempt
+and executable-lock build log remain separate from successful repeated checks.

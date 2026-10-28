@@ -1,13 +1,20 @@
 //! File-backed flat/wavl ADPCM with one reusable encoded/decoded block.
-use crate::{Adpcm, ChunkInfo, Container, Error, Format, Limits, Reader, reserve};
+use crate::{
+    Adpcm, ChunkInfo, Container, Encoding, Endian, Error, Format, Limits, Reader, reserve,
+};
 use std::io::{Read, Seek};
 
 pub struct AdpcmReader<R> {
     reader: Reader<R>,
     encoded: Vec<u8>,
     decoded: Vec<i16>,
-    channels: usize,
-    block_frames: u64,
+    // Validated immutable block geometry, compact enough to replace the old
+    // usize/u64 pair. A nonzero coefficient count identifies Microsoft ADPCM.
+    channels: u16,
+    block_frames: u16,
+    coefficients: u16,
+    bits: u8,
+    endian: Endian,
     total_frames: u64,
     position: u64,
     cache_offset: Option<u64>,
@@ -30,7 +37,7 @@ impl<R: Read + Seek> AdpcmReader<R> {
                 .filter(|_| reader.container() == Container::Rf64))
             .ok_or(Error::Invalid("ADPCM requires fact sample count"))?;
         let data_size = reader.audio_chunk().size;
-        let (channels, block_frames, block_bytes, scratch_samples) = {
+        let (channels, block_frames, coefficients, bits, endian, block_bytes, scratch_samples) = {
             let (format, timeline) = reader.format_and_timeline();
             let codec = Adpcm::from_format(format)?;
             if let Some(index) = timeline {
@@ -57,8 +64,11 @@ impl<R: Read + Seek> AdpcmReader<R> {
                 codec.validate_frame_count(data_size, total_frames)?;
             }
             (
-                codec.channels(),
-                codec.frames_per_block() as u64,
+                codec.channels() as u16,
+                codec.frames_per_block() as u16,
+                (codec.coefficients.len() / 4) as u16,
+                codec.bits_per_sample() as u8,
+                codec.endian,
                 codec.block_bytes(),
                 codec.scratch_samples(),
             )
@@ -75,6 +85,9 @@ impl<R: Read + Seek> AdpcmReader<R> {
             decoded,
             channels,
             block_frames,
+            coefficients,
+            bits,
+            endian,
             total_frames,
             position: 0,
             cache_offset: None,
@@ -126,7 +139,7 @@ impl<R: Read + Seek> AdpcmReader<R> {
                 }
             }
         } else {
-            let relative = (frame / self.block_frames)
+            let relative = (frame / u64::from(self.block_frames))
                 .checked_mul(self.encoded.len() as u64)
                 .ok_or(Error::Invalid("encoded seek overflow"))?;
             audio.offset + relative.min(audio.size)
@@ -145,8 +158,8 @@ impl<R: Read + Seek> AdpcmReader<R> {
                 "ADPCM reader requires a successful seek after error",
             ));
         }
-        let frames =
-            (self.total_frames - self.position).min((out.len() / self.channels) as u64) as usize;
+        let frames = (self.total_frames - self.position)
+            .min((out.len() / usize::from(self.channels)) as u64) as usize;
         self.failed = true;
         let mut done = 0;
         while done < frames {
@@ -156,7 +169,8 @@ impl<R: Read + Seek> AdpcmReader<R> {
                     .ok_or(Error::Invalid("ADPCM wavl frame index"))?;
                 let n = (entry.start + entry.frames - self.position).min((frames - done) as u64)
                     as usize;
-                let dst = &mut out[done * self.channels..(done + n) * self.channels];
+                let dst = &mut out
+                    [done * usize::from(self.channels)..(done + n) * usize::from(self.channels)];
                 if entry.chunk.id == *b"data" {
                     self.read_data(entry.chunk, entry.start, dst)?;
                 } else {
@@ -166,10 +180,11 @@ impl<R: Read + Seek> AdpcmReader<R> {
                         let held = index.entries[(entry.hold - 1) as usize];
                         let last = held.frames - 1;
                         self.load_block(held.chunk, last)?;
-                        let skip = (last % self.block_frames) as usize;
+                        let skip = (last % u64::from(self.block_frames)) as usize;
                         crate::timeline::repeat(
                             dst,
-                            &self.decoded[skip * self.channels..(skip + 1) * self.channels],
+                            &self.decoded[skip * usize::from(self.channels)
+                                ..(skip + 1) * usize::from(self.channels)],
                         );
                     }
                     self.position += n as u64;
@@ -179,16 +194,16 @@ impl<R: Read + Seek> AdpcmReader<R> {
                 self.read_data(
                     self.reader.audio_chunk(),
                     0,
-                    &mut out[..frames * self.channels],
+                    &mut out[..frames * usize::from(self.channels)],
                 )?;
                 done = frames;
             }
         }
         self.failed = false;
-        Ok(done * self.channels)
+        Ok(done * usize::from(self.channels))
     }
     fn block_offset(&self, chunk: ChunkInfo, local: u64) -> Result<u64, Error> {
-        let relative = (local / self.block_frames)
+        let relative = (local / u64::from(self.block_frames))
             .checked_mul(self.encoded.len() as u64)
             .ok_or(Error::Invalid("encoded seek overflow"))?;
         if relative >= chunk.size {
@@ -206,18 +221,38 @@ impl<R: Read + Seek> AdpcmReader<R> {
             let available = chunk.size - (offset - chunk.offset);
             let n = available.min(self.encoded.len() as u64) as usize;
             self.reader.read_audio(offset, &mut self.encoded[..n])?;
-            let codec = Adpcm::from_format(self.reader.format())?;
+            // Construction validated the immutable descriptor. Microsoft tables
+            // follow the legacy 18-byte WAVEFORMATEX header, samples-per-block
+            // and coefficient count; extensible Microsoft descriptors reject.
+            let coefficients = if self.coefficients == 0 {
+                &[][..]
+            } else {
+                &self.reader.format_bytes()[22..22 + usize::from(self.coefficients) * 4]
+            };
+            let codec = Adpcm {
+                encoding: if self.coefficients == 0 {
+                    Encoding::ImaAdpcm
+                } else {
+                    Encoding::MsAdpcm
+                },
+                endian: self.endian,
+                channels: usize::from(self.channels),
+                block_bytes: self.encoded.len(),
+                frames_per_block: usize::from(self.block_frames),
+                bits: u16::from(self.bits),
+                coefficients,
+            };
             self.cache_frames = codec.decode_block(&self.encoded[..n], &mut self.decoded)?;
             self.cache_offset = Some(offset);
         }
         Ok(())
     }
     fn read_data(&mut self, chunk: ChunkInfo, start: u64, out: &mut [i16]) -> Result<(), Error> {
-        let frames = out.len() / self.channels;
+        let frames = out.len() / usize::from(self.channels);
         let mut done = 0;
         while done < frames {
             let local = self.position - start;
-            let skip = (local % self.block_frames) as usize;
+            let skip = (local % u64::from(self.block_frames)) as usize;
             self.load_block(chunk, local)?;
             let available = self
                 .cache_frames
@@ -227,8 +262,11 @@ impl<R: Read + Seek> AdpcmReader<R> {
             if n == 0 {
                 return Err(Error::Invalid("ADPCM block has no available frames"));
             }
-            out[done * self.channels..(done + n) * self.channels]
-                .copy_from_slice(&self.decoded[skip * self.channels..(skip + n) * self.channels]);
+            out[done * usize::from(self.channels)..(done + n) * usize::from(self.channels)]
+                .copy_from_slice(
+                    &self.decoded[skip * usize::from(self.channels)
+                        ..(skip + n) * usize::from(self.channels)],
+                );
             self.position += n as u64;
             done += n;
         }

@@ -236,3 +236,24 @@ checks still match their earlier reference hashes (`ima3-prior-adpcm.json`). Two
 one-million checked mutation campaigns, all 1474 earlier corpus files and 100000
 fresh libFuzzer/ASan executions pass. FUZZING.md records sources, bounds, raw logs
 and the complete archived coverage-generated corpus.
+
+
+## Cached file-reader parameters
+
+AdpcmReader validates its owned immutable descriptor during construction and
+caches compact block parameters. Loading later blocks borrows custom Microsoft
+coefficient bytes directly from that descriptor without parsing it again.
+Per-block header/sample checks, short tails, fact trimming, I/O poisoning and
+metadata restoration keep their previous contracts. Channels, frames/block and
+coefficient count retain the u16 limits of their validated on-wire fields.
+No self-referential storage or new allocation is needed. The public block codec
+still validates caller-supplied descriptors through Adpcm::from_format.
+
+The extra-predictor file test checks independently calculated samples using the
+eighth coefficient row, both endian orders, RIFF/RIFX/RF64/BW64, flat/wavl,
+held frames and reverse seeks. All 93 tests pass on x64 debug/release and i686
+debug with Clippy. The repeated 216-fixture campaign passes 3024 three-API checks;
+all 1869 preceding fuzz inputs, two million checked mutations and 100000 fresh
+ASan executions pass. PERFORMANCE.md records source-pinned before/after results:
+Microsoft flat reads improve 5-9%, while x64 reader state decreases eight bytes.
+This is an internal optimization; no new compressed-library speed claim is made.

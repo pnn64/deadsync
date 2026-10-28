@@ -1,12 +1,87 @@
 use deadlib_audio_decode_wav::{
-    AdpcmData, AdpcmKind, AdpcmReader, AdpcmSpec, AdpcmWriter, Container, Endian, RawChunk, Wave,
-    WriteOptions,
+    AdpcmData, AdpcmKind, AdpcmReader, AdpcmSpec, AdpcmWriter, Container, Endian, Muxer, RawChunk,
+    Wave, WavlMuxer, WriteOptions,
 };
 use std::{
     cell::Cell,
     io::{self, Cursor, Read, Seek, SeekFrom},
     rc::Rc,
 };
+
+#[test]
+fn custom_microsoft_predictor_survives_cached_file_and_wavl_seeks() {
+    for container in [
+        Container::Riff,
+        Container::Rifx,
+        Container::Rf64,
+        Container::Bw64,
+    ] {
+        let endian = if container == Container::Rifx {
+            Endian::Big
+        } else {
+            Endian::Little
+        };
+        let word = |n: u16| match endian {
+            Endian::Little => n.to_le_bytes(),
+            Endian::Big => n.to_be_bytes(),
+        };
+        let spec = AdpcmSpec {
+            kind: AdpcmKind::Microsoft,
+            channels: 1,
+            sample_rate: 8000,
+            block_bytes: 8,
+        };
+        let mut format = [0; 54];
+        assert_eq!(spec.format(endian, &mut format).unwrap(), 50);
+        format[16..18].copy_from_slice(&word(36));
+        format[20..22].copy_from_slice(&word(8));
+        format[50..52].copy_from_slice(&word(256));
+        // Predictor 7 uses the extra (256, 0) row, not a built-in table index.
+        let mut block = vec![7];
+        block.extend(word(16));
+        block.extend(word(2000));
+        block.extend(word((-1000i16) as u16));
+        block.push(0x1f);
+        let options = WriteOptions {
+            container,
+            ..WriteOptions::default()
+        };
+        for segmented in [false, true] {
+            let bytes = if segmented {
+                let mut mux =
+                    WavlMuxer::new(Cursor::new(Vec::new()), &format, options, &[]).unwrap();
+                for _ in 0..3 {
+                    mux.write_data(&block, 4).unwrap();
+                    mux.write_silence(2).unwrap();
+                }
+                mux.finish().unwrap().into_inner()
+            } else {
+                let mut mux = Muxer::new(Cursor::new(Vec::new()), &format, options, &[]).unwrap();
+                mux.write_data(&block.repeat(3), 12).unwrap();
+                mux.finish().unwrap().into_inner()
+            };
+            let group: &[i16] = if segmented {
+                &[-1000, 2000, 2016, 2000, 2000, 2000]
+            } else {
+                &[-1000, 2000, 2016, 2000]
+            };
+            let expected = group.repeat(3);
+            let mut reader = AdpcmReader::new(Cursor::new(bytes)).unwrap();
+            let mut out = vec![0; expected.len()];
+            assert_eq!(reader.read_i16(&mut out).unwrap(), expected.len());
+            assert_eq!(out, expected);
+            assert_eq!(reader.format().raw, format);
+            for frame in (0..=expected.len()).rev() {
+                reader.seek_frame(frame as u64).unwrap();
+                let mut short = [12345; 3];
+                let n = reader.read_i16(&mut short).unwrap();
+                assert_eq!(n, (expected.len() - frame).min(short.len()));
+                assert_eq!(&short[..n], &expected[frame..frame + n]);
+                assert!(short[n..].iter().all(|&n| n == 12345));
+            }
+        }
+    }
+}
 
 fn encoded(kind: AdpcmKind, container: Container, channels: u16) -> Vec<u8> {
     let spec = AdpcmSpec {

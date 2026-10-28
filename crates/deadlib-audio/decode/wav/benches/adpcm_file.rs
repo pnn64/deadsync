@@ -39,7 +39,14 @@ fn bench(name: &str, iters: usize, bytes: usize, mut work: impl FnMut()) {
         );
     }
 }
+#[path = "support/affinity.rs"]
+mod affinity;
+
 fn main() {
+    if std::env::args().any(|s| s == "--pin-thread") {
+        let affinity = affinity::pin_thread();
+        println!("# thread_affinity_mask={affinity:#x}; frequency is uncontrolled");
+    }
     let flat_only = std::env::args().any(|s| s == "--flat-only");
     println!(
         "# AdpcmReader state_bytes={}; resident Cursor input; four blocks per data group, 512 groups; optional three held frames per group; caller buffers",

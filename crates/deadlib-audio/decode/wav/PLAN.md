@@ -254,3 +254,28 @@ and 100000 ASan executions. NATIVE_PERFORMANCE.md retains Hound comparisons,
 process memory and opening/encoding tradeoffs. Remaining work includes the
 earlier regression candidates, wider reference/profile assessment and a final
 requirement-by-requirement completion audit.
+
+
+Pinned regression investigation now separates the native wavl wrapper's roughly
+6-10 ns short-operation overhead from the overlapping full-stream trials. Three
+attempts at reducing it have mixed costs and are reverted, with all sources and
+trials retained. The shared codec-independent writer remains, with its measured
+construction tradeoff documented rather than a parity claim.
+
+The flat ADPCM control confirms a Microsoft read regression. Caching the
+immutable validated block geometry removes two descriptor parses per uncached
+block, retains custom coefficient borrowing, and reduces observed x64 state
+344 to 336 bytes without new allocations/unsafe code. Paired flat/segmented
+measurements improve Microsoft full/stream reading 5-9%; a fresh historical
+control is also faster for these reads. Opening/cached-seek variance remains
+explicit. A custom-predictor test brings the suite to 93, passing x64
+debug/release and i686 debug with Clippy. All 216 compressed fixture gates/3024
+three-API checks, 708 native gates/1912 writer outputs, two million checked
+mutations, 1869 prior corpus inputs and 100000 ASan executions pass. The new
+1837-file corpus is archived. PERFORMANCE.md and FUZZING.md retain details,
+including the corrected native-replay executable race and failed build logs.
+
+Next: finish the reference/profile assessment and the final requirement audit.
+The measured writer construction cost is an explicit architectural tradeoff;
+it is not an untested throughput optimization candidate. No completion or
+platform-wide speed certification is claimed by this milestone.

@@ -81,7 +81,8 @@ I/O. See [IMA_EXTENSIBLE.md](IMA_EXTENSIBLE.md) for precise scope and evidence.
 `AdpcmReader<R: Read + Seek>` scans through the shared container reader and caches
 one decoded block. It reads interleaved i16 into caller storage and supports exact
 frame seeks, including RF64 positions above 4 GiB. Its memory depends on block
-geometry and metadata descriptors. Metadata access preserves the logical audio
+geometry and metadata descriptors. Validated block parameters are cached without
+reparsing the owned format for each decoded block. Metadata access preserves the logical audio
 position. I/O or decode errors require a successful seek before reading again.
 AdpcmReader also handles compressed wavl children and held-frame seeks, reusing
 the container's inventory and the same one-block cache. Its wavl_chunks method
