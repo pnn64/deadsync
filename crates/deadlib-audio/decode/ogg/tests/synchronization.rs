@@ -593,6 +593,66 @@ fn partial_capture_length_survives_compaction_and_rejection_but_not_reset() {
     assert_eq!(found.offset, 123);
     assert_eq!(found.page.bytes(), small);
 }
+
+#[test]
+fn rolling_pages_preserve_capacity_current_offsets_and_rejected_append_state() {
+    let frame = page(37);
+    let warm = frame.repeat(8);
+    let rejected = vec![0; warm.len() + 1];
+    let base = 1u64 << 40;
+    let mut sync = SyncBuffer::with_limit(warm.len());
+    sync.reset_at(base);
+    sync.push(&warm).unwrap();
+    let capacity = sync.storage_bytes();
+    for number in 0..4 {
+        let PageSeek::Page(found) = sync.page_seek().unwrap() else {
+            panic!("warm page missing");
+        };
+        assert_eq!(found.offset, base + number * frame.len() as u64);
+    }
+    for number in 4..36 {
+        {
+            let PageSeek::Page(found) = sync.page_seek().unwrap() else {
+                panic!("rolling page missing");
+            };
+            assert_eq!(found.offset, base + number * frame.len() as u64);
+            assert_eq!(found.page.bytes(), frame);
+        }
+        assert_eq!(
+            sync.push(&rejected),
+            Err(Error::LimitExceeded("sync buffer bytes"))
+        );
+        let current = sync.current_page().unwrap();
+        assert_eq!(current.offset, base + number * frame.len() as u64);
+        assert_eq!(current.page.bytes(), frame);
+        assert_eq!(sync.buffered_bytes(), frame.len() * 3);
+        sync.push(&frame).unwrap();
+        assert!(sync.current_page().is_none());
+        assert_eq!(sync.storage_bytes(), capacity);
+    }
+    for number in 36..40 {
+        let PageSeek::Page(found) = sync.page_seek().unwrap() else {
+            panic!("tail page missing");
+        };
+        assert_eq!(found.offset, base + number * frame.len() as u64);
+        assert_eq!(found.page.bytes(), frame);
+    }
+    assert!(matches!(sync.page_seek().unwrap(), PageSeek::NeedMore));
+    assert!(sync.current_page().is_none());
+    sync.reset_at(u64::MAX - frame.len() as u64);
+    sync.push(&frame).unwrap();
+    assert!(matches!(sync.page_seek().unwrap(), PageSeek::Page(_)));
+    assert_eq!(
+        sync.current_page().unwrap().offset,
+        u64::MAX - frame.len() as u64
+    );
+    assert_eq!(sync.position(), u64::MAX);
+    sync.push(&frame).unwrap();
+    assert!(sync.page_seek().is_err());
+    assert_eq!(sync.buffered_bytes(), frame.len());
+    assert!(sync.current_page().is_none());
+}
+
 fn golden_inputs() -> Vec<(u8, Vec<u8>)> {
     let s = streams();
     vec![

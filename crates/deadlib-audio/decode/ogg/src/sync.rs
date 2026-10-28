@@ -113,7 +113,7 @@ impl SyncBuffer {
         self.current = None;
         self.unsynced = false;
     }
-    /// Append bytes, compacting previously consumed storage. A rejected append
+    /// Append bytes, compacting consumed storage when needed. A rejected append
     /// leaves bytes, position, hole state and the last page unchanged.
     pub fn push(&mut self, bytes: &[u8]) -> Result<(), Error> {
         let length = self
@@ -133,7 +133,7 @@ impl SyncBuffer {
                 .try_reserve_exact(target - self.data.len())
                 .map_err(|_| Error::Allocation)?;
         }
-        if self.start != 0 {
+        if self.start != 0 && bytes.len() > self.data.capacity() - self.data.len() {
             self.data.copy_within(self.start.., 0);
             self.data.truncate(self.data.len() - self.start);
             self.start = 0;
