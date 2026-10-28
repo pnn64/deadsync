@@ -65,9 +65,10 @@ pub fn crc32(bytes: &[u8]) -> u32 {
 }
 
 pub(crate) fn page_crc(bytes: &[u8]) -> u32 {
-    let crc = update(0, &bytes[..22]);
-    let crc = update(crc, &[0; 4]);
-    update(crc, &bytes[26..])
+    // Keep the masked header contiguous so its last word uses the wide update.
+    let mut header = [0; 26];
+    header[..22].copy_from_slice(&bytes[..22]);
+    update(update(0, &header), &bytes[26..])
 }
 
 #[cfg(test)]
@@ -85,6 +86,25 @@ mod tests {
             }
         }
         state
+    }
+    #[test]
+    fn page_checksum_masks_only_the_checksum_field() {
+        let bytes: Vec<_> = (0usize..65323)
+            .map(|i| (i.wrapping_mul(37) ^ (i >> 3)) as u8)
+            .collect();
+        for offset in 0..16 {
+            for length in (27..=300).chain([4096, 65025, 65307]) {
+                let input = &bytes[offset..offset + length];
+                let mut masked = input.to_vec();
+                masked[22..26].fill(0);
+                let expected = bitwise(0, &masked);
+                assert_eq!(page_crc(input), expected);
+                for checksum in [0, u32::MAX, 0x0123_4567, 0xfedc_ba98] {
+                    masked[22..26].copy_from_slice(&checksum.to_le_bytes());
+                    assert_eq!(page_crc(&masked), expected);
+                }
+            }
+        }
     }
     #[test]
     fn every_byte_table_power_matches_the_bitwise_polynomial() {
