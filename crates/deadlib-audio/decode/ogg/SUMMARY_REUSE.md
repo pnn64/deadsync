@@ -224,3 +224,8 @@ as additional stages with `--source-revision`.
 The paired record includes complete compiler commands for its libraries and
 worker. Saved sources, workers, rejected experiments and complete protocol traces
 remain under ignored `target/ogg-demux-summary-20261028/`.
+
+The subsequent [empty-continuation and writer pass](FRAMING.md) investigates the
+public-demux regression with shared-process historical comparisons and records
+further reductions in preflight and packet-writing work, plus a rejected guard
+change.

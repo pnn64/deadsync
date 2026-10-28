@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [packet-metadata and continuation measurements](SUMMARY_REUSE.md)
+The latest [empty-continuation and packet-writer measurements](FRAMING.md)
+cover zero-body preflight, reused framing invariants and a rejected guard change,
+with paired CPU measurements and exact state/IO comparisons.
+
+The earlier [packet-metadata and continuation measurements](SUMMARY_REUSE.md)
 cover reused demux metadata, direct short-fragment results and whole-body
 preflight bounds, with CPU/heap comparisons and exact state checks.
 

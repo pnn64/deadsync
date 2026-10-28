@@ -64,6 +64,41 @@ fn wire(target: usize) -> Vec<u8> {
     writer.into_inner()
 }
 
+fn nil_continuations() -> Vec<u8> {
+    let mut bytes = Vec::new();
+    let mut sequence = 0;
+    let mut emit = |flags, granule_position, lacing: &[u8], body: &[u8]| {
+        bytes.extend(
+            encode_page(
+                PageHeader {
+                    flags,
+                    granule_position,
+                    serial: 42,
+                    sequence,
+                },
+                lacing,
+                body,
+            )
+            .unwrap(),
+        );
+        sequence += 1;
+    };
+    emit(BOS, 100, &[1], &[37]);
+    for packet in 1..=64 {
+        emit(0, UNKNOWN_GRANULE_POSITION, &[255], &[37; 255]);
+        for _ in 0..32 {
+            emit(CONTINUED, UNKNOWN_GRANULE_POSITION, &[], &[]);
+        }
+        emit(
+            CONTINUED | if packet == 64 { EOS } else { 0 },
+            100 + packet * 100,
+            &[0],
+            &[],
+        );
+    }
+    bytes
+}
+
 fn main() {
     if std::env::args().any(|arg| arg == "verify") {
         let mut output = io::stdout().lock();
@@ -72,6 +107,36 @@ fn main() {
         }
         return;
     }
+    let bytes = nil_continuations();
+    let mut pages = Vec::new();
+    let mut offset = 0;
+    while offset < bytes.len() {
+        let (page, length) = Page::parse(&bytes[offset..]).unwrap();
+        pages.push((page, offset as u64));
+        offset += length;
+    }
+    probe("nil-demux", 8, || {
+        let mut demux = Demuxer::default();
+        for &(page, offset) in black_box(&pages) {
+            demux
+                .push_page(page, offset, |packet| {
+                    black_box(packet);
+                })
+                .unwrap();
+        }
+        demux.finish().unwrap();
+    });
+    probe("nil-capture", 8, || {
+        let mut capture = PacketCapture::new(42, Limits::default());
+        for &(page, offset) in black_box(&pages) {
+            capture
+                .push_page(page, offset, |packet| {
+                    black_box(packet);
+                })
+                .unwrap();
+        }
+        capture.finish().unwrap();
+    });
     for span in [1, 4, 64] {
         let mut bytes = encode_page(
             PageHeader {
@@ -135,6 +200,17 @@ fn main() {
                     .unwrap();
             }
             demux.finish().unwrap();
+        });
+        probe(&format!("span-capture/{span}"), 32, || {
+            let mut capture = PacketCapture::new(42, Limits::default());
+            for &(page, offset) in black_box(&pages) {
+                capture
+                    .push_page(page, offset, |packet| {
+                        black_box(packet);
+                    })
+                    .unwrap();
+            }
+            capture.finish().unwrap();
         });
         let mut cursor = 0;
         probe(&format!("span-query/{span}/granule"), 10_000, || {
@@ -392,6 +468,12 @@ fn main() {
                 });
             }
         }
+    }
+    for n in [4, 5, 6, 7, 12, 13, 14, 15] {
+        let bytes: Vec<_> = (0..n).map(|i| (i * 37 + i / 255) as u8).collect();
+        probe(&format!("crc-tail/{n}"), 10_000, || {
+            black_box(crc32(black_box(&bytes)));
+        });
     }
     for n in [64, 256, 4096, 65025, 1048576] {
         let bytes: Vec<_> = (0..n).map(|i| (i * 37 + i / 255) as u8).collect();
