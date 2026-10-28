@@ -183,10 +183,19 @@ pub fn read(
         )?;
         factors.preflag = plan.preflag;
         factors.intensity_scale = plan.intensity_scale;
+        if plan.widths == [0; 4] {
+            // No bits are transmitted; the default values and widths already
+            // describe every band, and the supplied cursor stays untouched.
+            return Ok(factors);
+        }
         let mut flat = [0u8; 36];
         let mut widths = [0u8; 36];
         let mut n = 0;
         for (&count, &width) in plan.counts.iter().zip(&plan.widths) {
+            if width == 0 {
+                n += count as usize;
+                continue;
+            }
             for _ in 0..count {
                 flat[n] = cursor.read(width as u32)? as u8;
                 widths[n] = width;

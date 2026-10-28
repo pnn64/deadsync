@@ -38,42 +38,51 @@ fn every_lsf_compression_and_shape() {
                 assert_eq!(plan.counts.into_iter().sum::<u8>(), [21, 36, 33][shape]);
                 assert_eq!(plan.preflag, !intensity && compress >= 500);
                 assert_eq!(plan.intensity_scale, intensity && compress & 1 != 0);
-                let mut data = BitWriter::new();
-                let mut flat = Vec::new();
-                for (count, width) in plan.counts.into_iter().zip(plan.widths) {
-                    for _ in 0..count {
-                        let value = (1u32 << width) - 1;
-                        data.write(value, width as u32).unwrap();
-                        flat.push((value as u8, width));
-                    }
-                }
-                for version in [2, 0] {
-                    let h = header(version, intensity);
-                    let s = side(compress, shape);
-                    let mut bits = BitReader::new(data.as_bytes());
-                    let factors = read(&mut bits, h, &s, 0, 1, None).unwrap();
-                    assert_eq!(bits.position(), plan.bits());
-                    assert_eq!(factors.encoded_bits, plan.bits());
-                    let mut actual = Vec::new();
-                    if shape == 0 {
-                        actual.extend(factors.long[..21].iter().copied().zip(factors.long_width));
-                    } else {
-                        if shape == 2 {
-                            actual
-                                .extend(factors.long[..6].iter().copied().zip(factors.long_width));
+                for varied in [false, true] {
+                    let mut data = BitWriter::new();
+                    let mut flat = Vec::new();
+                    for (count, width) in plan.counts.into_iter().zip(plan.widths) {
+                        for _ in 0..count {
+                            let mask = (1u32 << width) - 1;
+                            let value = if varied {
+                                (flat.len() as u32 * 7 + u32::from(compress)) & mask
+                            } else {
+                                mask
+                            };
+                            data.write(value, width as u32).unwrap();
+                            flat.push((value as u8, width));
                         }
-                        for band in if shape == 2 { 3 } else { 0 }..12 {
-                            for window in 0..3 {
-                                actual.push((
-                                    factors.short[band][window],
-                                    factors.short_width[band][window],
-                                ));
+                    }
+                    for version in [2, 0] {
+                        let h = header(version, intensity);
+                        let s = side(compress, shape);
+                        let mut bits = BitReader::new(data.as_bytes());
+                        let factors = read(&mut bits, h, &s, 0, 1, None).unwrap();
+                        assert_eq!(bits.position(), plan.bits());
+                        assert_eq!(factors.encoded_bits, plan.bits());
+                        let mut actual = Vec::new();
+                        if shape == 0 {
+                            actual
+                                .extend(factors.long[..21].iter().copied().zip(factors.long_width));
+                        } else {
+                            if shape == 2 {
+                                actual.extend(
+                                    factors.long[..6].iter().copied().zip(factors.long_width),
+                                );
+                            }
+                            for band in if shape == 2 { 3 } else { 0 }..12 {
+                                for window in 0..3 {
+                                    actual.push((
+                                        factors.short[band][window],
+                                        factors.short_width[band][window],
+                                    ));
+                                }
                             }
                         }
+                        assert_eq!(actual, flat);
+                        assert_eq!(factors.long[21], 0);
+                        assert_eq!(factors.short[12], [0; 3]);
                     }
-                    assert_eq!(actual, flat);
-                    assert_eq!(factors.long[21], 0);
-                    assert_eq!(factors.short[12], [0; 3]);
                 }
             }
         }
