@@ -196,3 +196,15 @@ Hound still allocates zero in this PCM16 case. Broader native formats, forward
 ADPCM throughput, actual pipes/files and peak RSS remain unmeasured. The native
 conversion code is now shared by both reader APIs; the repeated baseline rows
 and sample-bit checks are retained in the same report.
+
+## Physical sparse-file memory probe
+
+[LARGE_FILES.md](LARGE_FILES.md) records 24 successful fresh-process checks against
+real NTFS RF64/BW64 files, with native PCM and header-only IMA blocks. Files with
+over 16 GiB logical length allocate 256 KiB on disk and support exact x64/i686
+boundary seeks. Verify-process peak working sets stay at 3.41–3.42 MiB on x64 and
+4.57–4.95 MiB on i686 across small/large probes. The raw report includes startup,
+before/after snapshots and private commit. This is bounded whole-process memory
+evidence for opening and random seeking, not isolated codec RSS, full-stream disk
+throughput or a reference-library memory comparison. Comparative process memory,
+representative sequential I/O and wider-format throughput remain unmeasured.

@@ -116,9 +116,24 @@ truth. Two million checked mutations, 1474 earlier corpus inputs and 100000 fres
 ASan executions pass with the new forward state properties. STREAMING.md and
 FUZZING.md document ordering/duration requirements, source hashes and evidence.
 
-Remaining work: metadata profile/semantic validation,
-wavl/slnt and multiple-data handling, oracle comparisons, broader fuzzing, sparse >4 GiB
-evidence and broad performance coverage (the first PCM16 baseline is in
-[PERFORMANCE.md](PERFORMANCE.md)); 3-bit IMA and extensible compressed formats. BW64 shares 64-bit container
-mechanics; ADM profile conformance is not yet claimed. RIFX extensible GUID byte
-order follows the container but needs external-reference validation.
+Native sample differential validation now passes 460 independent fixture gates
+across RIFF/RIFX/RF64/BW64, six native formats, 1/2/6/33 channels, valid-bit layouts,
+odd metadata and explicit compatibility cases. All 2748 descriptor/decode/range
+checks and 920 typed encoder cases pass. All four references agree on the 24
+predeclared basic nonempty RIFF gates; every wider disagreement is retained.
+libsndfile independently matches RIFX extensible sample bits and valid-bit layouts;
+FFmpeg adds 104 exact BW64 cases. See [PCM.md](PCM.md) for canonical padding,
+reference limitations, raw reports/corpora and the corrected optional-width adapter.
+
+Physical NTFS sparse RF64/BW64 files now exercise real offsets above 16 GiB and
+decoded counts above 2^32 on x64 and i686. All 24 fresh-process checks pass;
+independent Python marker checks and whole-process working-set evidence accompany
+the source/binary hashes. See [LARGE_FILES.md](LARGE_FILES.md) for geometry,
+reproduction, memory scope and remaining disk/platform limitations.
+
+Remaining work: metadata profile/semantic validation, wavl/slnt and multiple-data
+handling, broader fuzzing and representative comparative performance/RSS coverage
+(the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); 3-bit IMA and
+extensible compressed formats. BW64 shares 64-bit container mechanics; ADM profile
+conformance is not yet claimed. These fixture results do not certify every
+standard variant or workload.

@@ -45,7 +45,9 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    CPU cycles, allocations, peak memory; optimize measured bottlenecks with parity.
    Initial resident PCM16 Hound baseline and scoped heap/Windows cycle counts are
    implemented; see PERFORMANCE.md. Wider formats, references, RSS, disks and
-   platforms remain outstanding.
+   platforms remain outstanding. Physical NTFS RF64/BW64 files over 16 GiB now
+   pass x64/i686 random-seek checks with whole-process working-set snapshots;
+   see LARGE_FILES.md. Comparative RSS and sequential disk throughput remain open.
    Native borrowed byte-copy specialization retained after two measured runs and
    x86_64/i686 correctness checks; full PCM16 read time decreased 6.6–12.1% in
    the recorded runs. See PERFORMANCE.md for scope and raw results.
@@ -73,8 +75,17 @@ All 56 integration tests pass on x64 debug/release and i686 debug, and all 432
 forward real-file reference cases pass. The latest checked mutation and ASan
 campaigns also cover these new paths, with archived corpus bytes and hashes.
 
+Native PCM/float differential coverage now passes 460 independent fixture gates,
+2748 descriptor/decode/range checks and 920 typed encoder cases. The predeclared
+24 basic nonempty RIFF cases agree with dr_wav, libsndfile, Symphonia and FFmpeg.
+Canonical/compatibility profiles, reference errors and bit differences, and a
+corrected optional-metadata adapter are retained in PCM.md and raw archives.
+Physical sparse files over 16 GiB and 2^32 decoded frames pass all 24 x64/i686
+checks, including actual byte/frame boundary markers and bounded process working
+sets. LARGE_FILES.md records the exact scope; no comparative RSS claim is made.
+
 Required work still includes 3-bit/extensible ADPCM, wavl/slnt and multiple-data
-handling, broader PCM oracle coverage, physical large/sparse files, representative
-comparative benchmarks and RSS evidence. Metadata profile/semantic certification
+handling, representative comparative benchmarks, comparative RSS and sequential
+disk evidence, and broader native/reference fixtures. Metadata profile/semantic certification
 and broader fuzz coverage remain unproven. Forward PCM16 streaming currently
 allocates one 16-byte format buffer; the benchmark records that boundary.

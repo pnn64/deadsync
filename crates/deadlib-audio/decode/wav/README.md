@@ -89,3 +89,6 @@ Bounded mutation, coverage-guided fuzzing and sanitizer evidence is recorded in
 [FUZZING.md](FUZZING.md).
 The first resident PCM16 comparison and allocation/cycle evidence is recorded in
 [PERFORMANCE.md](PERFORMANCE.md); wider formats and platforms remain unmeasured.
+Native PCM/float sample and encoder comparisons against four references are in
+[PCM.md](PCM.md). Real NTFS files over 16 GiB, 32/64-bit seek checks and scoped
+whole-process memory measurements are in [LARGE_FILES.md](LARGE_FILES.md).
