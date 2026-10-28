@@ -117,7 +117,7 @@ Verified milestones:
   streaming breadth, other references, fuzzing and performance remain open.
   Final gates: all 47 tests pass in release and isolated debug builds; rustfmt,
   Clippy and rustdoc with warnings denied pass.
-- Sequential arithmetic decoder milestone: native Annex D probability coder,
+- `16294e732`: native Annex D probability coder,
   Table D.3 and exact K.4 golden sequence, Annex F DC/AC contexts, DAC/default
   conditioning, four destinations, restart resets and separate component scans.
   All 1,314 arithmetic coefficient checks from 219 unique sources and 2,628
@@ -128,3 +128,17 @@ Verified milestones:
   warnings denied pass. See ARITHMETIC-VALIDATION.md and the retained reports.
   Progressive arithmetic, arithmetic encoding, lossless/hierarchy, streaming,
   broader references/conformance, fuzzing and performance remain open.
+- Progressive arithmetic decoder milestone: SOF10 spectral selection, initial
+  point transforms, DC/AC refinement, per-block band history and scan validation.
+  All 1,314 progressive arithmetic files from 219 sources and 2,628 native
+  Huffman rewrites match C coefficients/quantizers exactly, with zero warnings.
+  Custom C scans refine from Al=13 (12-bit) or Al=10 (8-bit) through every bit,
+  reverse component/band scan order and exercise shared/four-destination tables.
+  Another 15 pinned fixtures, partial progressions, invalid ordering/quantizers,
+  unused selectors, every truncated prefix and 2,000 additional bounded mutations
+  run in Cargo tests. All 57 tests pass in release and isolated debug builds;
+  rustfmt, Clippy and rustdoc with warnings denied pass. Executable snapshots
+  and hashed resumable checkpoints isolate long external gates from Cargo builds.
+  See ARITHMETIC-VALIDATION.md and tests/reports/arithmetic-progressive-turbo.json.
+  Arithmetic encoding, lossless/hierarchy, streaming, broader references and
+  conformance, coverage-guided fuzzing and all performance work remain open.

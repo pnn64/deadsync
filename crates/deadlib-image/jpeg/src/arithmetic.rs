@@ -1,4 +1,5 @@
 //! Native JPEG binary arithmetic decoding, T.81 Annex D.
+use crate::progressive::ProgressiveScan;
 use crate::{Error, Result, ZIGZAG};
 
 #[derive(Clone, Copy)]
@@ -319,6 +320,76 @@ impl Statistics {
         conditioning: Conditioning,
         precision: u8,
     ) -> Result<()> {
+        self.dc_initial(
+            block,
+            coder,
+            dc,
+            previous_class,
+            predictor,
+            conditioning,
+            precision,
+        )?;
+        self.ac_initial(block, coder, ac, conditioning, precision, 1, 63, 0)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn progressive(
+        &mut self,
+        scan: ProgressiveScan,
+        block: &mut [i16; 64],
+        coder: &mut Arithmetic<'_>,
+        dc: usize,
+        ac: usize,
+        previous_class: &mut usize,
+        predictor: &mut i32,
+        conditioning: Conditioning,
+        precision: u8,
+    ) -> Result<()> {
+        if scan.ss == 0 {
+            if scan.ah == 0 {
+                self.dc_initial(
+                    block,
+                    coder,
+                    dc,
+                    previous_class,
+                    predictor,
+                    conditioning,
+                    precision,
+                )?;
+                block[0] = i16::try_from(*predictor << scan.al)
+                    .map_err(|_| Error::Invalid("arithmetic progressive DC range"))?;
+            } else {
+                // DC point transforms preserve two's-complement low bits.
+                block[0] |= i16::from(coder.fixed()?) << scan.al;
+            }
+        } else if scan.ah == 0 {
+            self.ac_initial(
+                block,
+                coder,
+                ac,
+                conditioning,
+                precision,
+                scan.ss,
+                scan.se,
+                scan.al,
+            )?;
+        } else {
+            self.ac_refine(block, coder, ac, scan)?;
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn dc_initial(
+        &mut self,
+        block: &mut [i16; 64],
+        coder: &mut Arithmetic<'_>,
+        dc: usize,
+        previous_class: &mut usize,
+        predictor: &mut i32,
+        conditioning: Conditioning,
+        precision: u8,
+    ) -> Result<()> {
         let state = &mut self.dc[dc];
         let context = *previous_class;
         if coder.decode(&mut state[context])? != 0 {
@@ -368,9 +439,24 @@ impl Statistics {
             return Err(Error::Invalid("arithmetic DC coefficient range"));
         }
         block[0] = *predictor as i16;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn ac_initial(
+        &mut self,
+        block: &mut [i16; 64],
+        coder: &mut Arithmetic<'_>,
+        ac: usize,
+        conditioning: Conditioning,
+        precision: u8,
+        ss: usize,
+        se: usize,
+        al: u8,
+    ) -> Result<()> {
         let state = &mut self.ac[ac];
-        let mut k = 1usize;
-        while k <= 63 {
+        let mut k = ss;
+        while k <= se {
             let mut base = 3 * (k - 1);
             if coder.decode(&mut state[base])? != 0 {
                 break;
@@ -378,7 +464,7 @@ impl Statistics {
             while coder.decode(&mut state[base + 1])? == 0 {
                 k += 1;
                 base += 3;
-                if k > 63 {
+                if k > se {
                     return Err(Error::Invalid("arithmetic AC zero run"));
                 }
             }
@@ -415,11 +501,58 @@ impl Statistics {
             if magnitude >= 1u32 << (precision + 2) {
                 return Err(Error::Invalid("arithmetic AC magnitude"));
             }
-            block[ZIGZAG[k]] = if sign == 0 {
-                magnitude as i16
+            let value = if sign == 0 {
+                magnitude as i32
             } else {
-                -(magnitude as i16)
+                -(magnitude as i32)
             };
+            block[ZIGZAG[k]] = i16::try_from(value << al)
+                .map_err(|_| Error::Invalid("arithmetic AC coefficient range"))?;
+            k += 1;
+        }
+        Ok(())
+    }
+
+    fn ac_refine(
+        &mut self,
+        block: &mut [i16; 64],
+        coder: &mut Arithmetic<'_>,
+        ac: usize,
+        scan: ProgressiveScan,
+    ) -> Result<()> {
+        let state = &mut self.ac[ac];
+        let bit = 1i16 << scan.al;
+        // G.1.3.3: before the previous end-of-band, EOB decisions are bypassed.
+        // History is local to this block/band, rather than an inter-block EOB run.
+        let eob_history = (scan.ss..=scan.se)
+            .rfind(|&k| block[ZIGZAG[k]] != 0)
+            .map_or(scan.ss, |k| k + 1);
+        let mut k = scan.ss;
+        while k <= scan.se {
+            let mut base = 3 * (k - 1);
+            if k >= eob_history && coder.decode(&mut state[base])? != 0 {
+                break;
+            }
+            loop {
+                let value = &mut block[ZIGZAG[k]];
+                if *value != 0 {
+                    if coder.decode(&mut state[base + 2])? != 0 {
+                        *value = value
+                            .checked_add(if *value > 0 { bit } else { -bit })
+                            .ok_or(Error::Invalid("arithmetic AC refinement range"))?;
+                    }
+                    break;
+                }
+                if coder.decode(&mut state[base + 1])? != 0 {
+                    *value = if coder.fixed()? == 0 { bit } else { -bit };
+                    break;
+                }
+                k += 1;
+                base += 3;
+                if k > scan.se {
+                    return Err(Error::Invalid("arithmetic refinement zero run"));
+                }
+            }
             k += 1;
         }
         Ok(())

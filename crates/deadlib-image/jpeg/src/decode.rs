@@ -101,7 +101,7 @@ pub(crate) fn allocate_components(
 }
 
 /// Decode without IDCT or color conversion. APPn/COM payloads borrow the input.
-/// Accepts sequential Huffman/arithmetic and progressive Huffman DCT frames; other processes are explicit
+/// Accepts sequential/progressive Huffman/arithmetic DCT frames; other processes are explicit
 /// errors while their native implementations are in progress.
 pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientImage<'_>> {
     let mut reader = MarkerReader::new(input)?;
@@ -177,6 +177,7 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
                     && header.process != Process::ExtendedSequential
                     && header.process != Process::Progressive
                     && header.process != Process::ArithmeticSequential
+                    && header.process != Process::ArithmeticProgressive
                 {
                     return Err(Error::Unsupported("this JPEG process"));
                 }
@@ -326,7 +327,7 @@ fn decode_scan(
     if !(1..=4).contains(&n) || header.len() != 4 + 2 * n {
         return Err(Error::Invalid("SOS components"));
     }
-    let progression = if frame.process == Process::Progressive {
+    let progression = if frame.process.is_progressive() {
         Some(ProgressiveScan::parse(&header[1 + 2 * n..], n)?)
     } else {
         None
@@ -447,16 +448,30 @@ fn decode_scan(
                     let by = mcu / cols * v + y;
                     let block = &mut c.blocks[by * c.blocks_wide + bx];
                     if let Some((coder, statistics, classes)) = &mut arithmetic {
-                        statistics.sequential(
-                            block,
-                            coder,
-                            dc,
-                            ac - 4,
-                            &mut classes[j],
-                            &mut predictors[j],
-                            conditioning,
-                            frame.precision,
-                        )?;
+                        if let Some(scan) = progression {
+                            statistics.progressive(
+                                scan,
+                                block,
+                                coder,
+                                dc,
+                                ac - 4,
+                                &mut classes[j],
+                                &mut predictors[j],
+                                conditioning,
+                                frame.precision,
+                            )?;
+                        } else {
+                            statistics.sequential(
+                                block,
+                                coder,
+                                dc,
+                                ac - 4,
+                                &mut classes[j],
+                                &mut predictors[j],
+                                conditioning,
+                                frame.precision,
+                            )?;
+                        }
                     } else if let Some(scan) = progression {
                         scan.decode(
                             block,

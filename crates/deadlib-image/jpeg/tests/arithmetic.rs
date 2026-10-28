@@ -4,14 +4,19 @@ use deadlib_image_jpeg::{
 };
 
 fn fixtures() -> Vec<std::path::PathBuf> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/arithmetic");
-    let mut paths: Vec<_> = std::fs::read_dir(root)
-        .unwrap()
-        .map(|p| p.unwrap().path())
-        .filter(|p| p.extension().is_some_and(|s| s == "jpg"))
-        .collect();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let mut paths = Vec::new();
+    for group in ["arithmetic", "arithmetic-progressive"] {
+        let group: Vec<_> = std::fs::read_dir(root.join(group))
+            .unwrap()
+            .map(|p| p.unwrap().path())
+            .filter(|p| p.extension().is_some_and(|s| s == "jpg"))
+            .collect();
+        assert_eq!(group.len(), 15);
+        paths.extend(group);
+    }
     paths.sort();
-    assert_eq!(paths.len(), 15);
+    assert_eq!(paths.len(), 30);
     paths
 }
 
@@ -79,7 +84,15 @@ fn pinned_arithmetic_coefficients_and_huffman_transcodes() {
         let bytes = std::fs::read(&path).unwrap();
         let expected = std::fs::read(path.with_extension("coef")).unwrap();
         let image = decode_coefficients(&bytes, Limits::default()).unwrap();
-        assert_eq!(image.frame.process, Process::ArithmeticSequential);
+        let progressive = path.parent().unwrap().ends_with("arithmetic-progressive");
+        assert_eq!(
+            image.frame.process,
+            if progressive {
+                Process::ArithmeticProgressive
+            } else {
+                Process::ArithmeticSequential
+            }
+        );
         assert_eq!(image.consumed, bytes.len());
         assert_eq!(coefficients(&image), expected, "{}", path.display());
         assert!(
@@ -214,6 +227,121 @@ fn bounded_arithmetic_mutation_smoke() {
             max_memory_bytes: 1 << 20,
             max_metadata_bytes: 65536,
             max_scans: 32,
+        };
+        if let Ok(image) = decode_coefficients(&bytes, limits) {
+            let _ = image.reconstruct();
+        }
+    }
+}
+
+fn scans(bytes: &[u8]) -> Vec<(usize, usize, usize)> {
+    MarkerReader::new(bytes)
+        .unwrap()
+        .filter_map(|e| match e.unwrap() {
+            Event::Scan {
+                header,
+                entropy,
+                offset,
+            } => Some((offset, header.len(), entropy.len())),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn arithmetic_progressive_history_precision_and_unused_selectors() {
+    let original = include_bytes!("fixtures/arithmetic-progressive/12-444.jpg");
+    let expected = include_bytes!("fixtures/arithmetic-progressive/12-444.coef");
+    let full = decode_coefficients(original, Limits::default()).unwrap();
+    assert_eq!(full.scans, 98); // DC plus two bands/component, at 14 precision levels.
+    assert!(
+        full.components
+            .iter()
+            .any(|c| c.blocks.iter().any(|b| b[0] < 0))
+    );
+    let (offset, length, entropy) = scans(original)[0];
+    let end = offset + 4 + length + entropy;
+    let mut partial = original[..end].to_vec();
+    partial.extend_from_slice(&[255, 217]);
+    let partial = decode_coefficients(&partial, Limits::default()).unwrap();
+    assert_eq!(partial.scans, 1);
+    for (a, b) in partial.components.iter().zip(&full.components) {
+        assert_eq!(a.successive_approximation[0], 13);
+        assert_eq!(&a.successive_approximation[1..], &[-1; 63]);
+        for (a, b) in a.blocks.iter().zip(&b.blocks) {
+            assert_eq!(a[0], (b[0] >> 13) << 13);
+            assert_eq!(&a[1..], &[0; 63]);
+        }
+    }
+    partial.reconstruct().unwrap();
+    let mut changed = original.to_vec();
+    for (offset, length, _) in scans(original) {
+        let header = &mut changed[offset + 4..offset + 4 + length];
+        let n = header[0] as usize;
+        let ss = header[1 + 2 * n];
+        let ah = header[3 + 2 * n] >> 4;
+        if ss == 0 && ah != 0 {
+            for j in 0..n {
+                header[2 + 2 * j] = 0x33;
+            }
+        } else if ss != 0 {
+            header[2] |= 0x30;
+        }
+    }
+    assert_eq!(
+        &coefficients(&decode_coefficients(&changed, Limits::default()).unwrap()),
+        expected
+    );
+}
+
+#[test]
+fn arithmetic_progressive_order_quantizers_and_bounded_mutations() {
+    let original = include_bytes!("fixtures/arithmetic-progressive/12-444.jpg");
+    let (offset, length, entropy) = scans(original)[0];
+    let mut changed = original.to_vec();
+    changed[offset + 4 + length - 1] = 0xed;
+    assert!(matches!(
+        decode_coefficients(&changed, Limits::default()),
+        Err(Error::Invalid("progressive scan parameters"))
+    ));
+    changed[offset + 4 + length - 1] = 0xdc;
+    assert!(matches!(
+        decode_coefficients(&changed, Limits::default()),
+        Err(Error::Invalid("progressive scan order"))
+    ));
+    let end = offset + 4 + length + entropy;
+    let mut changed = original[..end].to_vec();
+    changed.extend_from_slice(&original[offset..end]);
+    changed.extend_from_slice(&original[end..]);
+    assert!(matches!(
+        decode_coefficients(&changed, Limits::default()),
+        Err(Error::Invalid("progressive scan order"))
+    ));
+    let mut changed = original[..end].to_vec();
+    let mut dqt = vec![255, 219, 1, 6]; // 2 + four 65-byte quantizers.
+    for id in 0..4 {
+        dqt.push(id);
+        dqt.extend_from_slice(&[2; 64]);
+    }
+    changed.extend_from_slice(&dqt);
+    changed.extend_from_slice(&original[end..]);
+    assert!(matches!(
+        decode_coefficients(&changed, Limits::default()),
+        Err(Error::Invalid(
+            "quantizer changed between progressive scans"
+        ))
+    ));
+    let mut state = 0x5ee1_c003u32;
+    for _ in 0..2000 {
+        let mut bytes = original.to_vec();
+        state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+        let position = state as usize % bytes.len();
+        bytes[position] ^= (state >> 24) as u8;
+        let limits = Limits {
+            max_pixels: 4096,
+            max_memory_bytes: 1 << 20,
+            max_metadata_bytes: 65536,
+            max_scans: 256,
         };
         if let Ok(image) = decode_coefficients(&bytes, limits) {
             let _ = image.reconstruct();

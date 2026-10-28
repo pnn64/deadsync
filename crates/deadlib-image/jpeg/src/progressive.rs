@@ -4,9 +4,9 @@ use crate::{Error, Result, ZIGZAG};
 #[derive(Clone, Copy)]
 pub(crate) struct ProgressiveScan {
     pub ss: usize,
-    se: usize,
+    pub se: usize,
     pub ah: u8,
-    al: u8,
+    pub al: u8,
 }
 
 impl ProgressiveScan {

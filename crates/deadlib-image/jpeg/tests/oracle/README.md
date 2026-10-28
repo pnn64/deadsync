@@ -75,6 +75,7 @@ exposes conditioning L/U/Kx, four table destinations, restart intervals and
 separate component scans. Its CLI is `input.jpg output.jpg restart L U Kx
 table-layout scan-layout`. Table layout 0 shares destination 0; layouts 1-3
 rotate component DC/AC destinations. Scan layout 0 is interleaved sequential,
-1 uses the reference progressive scan script and 2 uses separate sequential
-component scans. APP markers are not copied by this coefficient-only client.
+1 uses the reference progressive scan script, 2 uses separate sequential
+component scans, and 3 refines every bit from Al=13 (12-bit) or Al=10 (8-bit)
+with reversed component/band scan order. APP markers are not copied by this coefficient-only client.
 See ../../ARITHMETIC-VALIDATION.md for reproduction, scope and retained evidence.
