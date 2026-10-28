@@ -129,6 +129,49 @@ fn zero_body_pages_preserve_or_finish_cached_packets_at_exact_limits() {
 }
 use std::io::{self, Cursor, Read, Write};
 
+#[test]
+fn packet_writer_terminal_errors_preserve_priority_and_state() {
+    struct Reject(usize);
+    impl Write for Reject {
+        fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+            self.0 += 1;
+            Err(io::ErrorKind::BrokenPipe.into())
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            panic!("PacketWriter must not flush its destination");
+        }
+    }
+    let mut failed = PacketWriter::new(Reject(0), 11);
+    assert!(matches!(
+        failed.write_packet(b"h", 0, false),
+        Err(Error::Io(_))
+    ));
+    assert_eq!(
+        failed.write_packet(&[], UNKNOWN_GRANULE_POSITION, false),
+        Err(Error::Failed)
+    );
+    assert_eq!(failed.get_ref().0, 1);
+    assert_eq!(failed.finish(), Err(Error::Failed));
+
+    let mut ended = PacketWriter::new(Vec::new(), 11);
+    ended.write_packet(b"h", 0, true).unwrap();
+    let bytes = ended.get_ref().clone();
+    assert_eq!(
+        ended.write_packet(&[], UNKNOWN_GRANULE_POSITION, false),
+        Err(Error::Invalid("packet after EOS"))
+    );
+    assert_eq!(ended.get_ref(), &bytes);
+    ended.finish().unwrap();
+
+    let mut fresh = PacketWriter::new(Vec::new(), 11);
+    assert_eq!(
+        fresh.write_packet(&vec![0; 65025], UNKNOWN_GRANULE_POSITION, false),
+        Err(Error::Invalid("packet requires a known granule"))
+    );
+    assert!(fresh.get_ref().is_empty());
+    fresh.write_packet(b"h", 0, true).unwrap();
+}
+
 fn page(
     flags: u8,
     granule: u64,

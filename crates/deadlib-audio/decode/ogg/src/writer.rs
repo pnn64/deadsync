@@ -65,14 +65,14 @@ impl<W: Write> PacketWriter<W> {
     }
 
     pub fn write_packet(&mut self, data: &[u8], granule: u64, eos: bool) -> Result<(), Error> {
-        if self.failed {
-            return Err(Error::Failed);
-        }
-        if self.ended {
-            return Err(Error::Invalid("packet after EOS"));
-        }
-        if granule == UNKNOWN_GRANULE_POSITION {
-            return Err(Error::Invalid("packet requires a known granule"));
+        if self.failed | self.ended | (granule == UNKNOWN_GRANULE_POSITION) {
+            return Err(if self.failed {
+                Error::Failed
+            } else if self.ended {
+                Error::Invalid("packet after EOS")
+            } else {
+                Error::Invalid("packet requires a known granule")
+            });
         }
         if !self.started && data.len() >= 255 * 255 {
             return Err(Error::Invalid("initial header must fit a single page"));
