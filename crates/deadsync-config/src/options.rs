@@ -1141,6 +1141,7 @@ pub struct SelectMusicOptions {
     pub scorebox_cycle_hard_ex: bool,
     pub scorebox_cycle_tournaments: bool,
     pub scorebox_cycle_golf: bool,
+    pub scorebox_events_first: bool,
     pub show_golf_pars: bool,
     pub chart_info_peak_nps: bool,
     pub chart_info_effective_bpm: bool,
@@ -1188,6 +1189,7 @@ impl Default for SelectMusicOptions {
             scorebox_cycle_hard_ex: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_HARD_EX,
             scorebox_cycle_tournaments: DEFAULT_SELECT_MUSIC_SCOREBOX_CYCLE_TOURNAMENTS,
             scorebox_cycle_golf: false,
+            scorebox_events_first: true,
             show_golf_pars: false,
             chart_info_peak_nps: DEFAULT_SELECT_MUSIC_CHART_INFO_PEAK_NPS,
             chart_info_effective_bpm: DEFAULT_SELECT_MUSIC_CHART_INFO_EFFECTIVE_BPM,
@@ -1365,6 +1367,10 @@ pub fn load_select_music_options(
             conf.get("Options", "SelectMusicScoreboxCycleGolf"),
             default.scorebox_cycle_golf,
         ),
+        scorebox_events_first: parse_u8_bool_or_default(
+            conf.get("Options", "SelectMusicScoreboxEventsFirst"),
+            default.scorebox_events_first,
+        ),
         show_golf_pars: parse_u8_bool_or_default(
             conf.get("Options", "SelectMusicShowGolfPars"),
             default.show_golf_pars,
@@ -1511,6 +1517,11 @@ pub fn push_select_music_option_lines(content: &mut String, options: SelectMusic
         content,
         "SelectMusicScoreboxCycleGolf",
         select.scorebox_cycle_golf,
+    );
+    push_bool(
+        content,
+        "SelectMusicScoreboxEventsFirst",
+        select.scorebox_events_first,
     );
     push_bool(content, "SelectMusicShowGolfPars", select.show_golf_pars);
     push_line(
@@ -2675,6 +2686,7 @@ mod tests {
             scorebox_cycle_hard_ex: false,
             scorebox_cycle_tournaments: false,
             scorebox_cycle_golf: false,
+            scorebox_events_first: true,
             show_golf_pars: false,
             chart_info_peak_nps: true,
             chart_info_effective_bpm: true,
@@ -3741,6 +3753,7 @@ mod tests {
                 "SelectMusicStepArtistBox=Default\n",
                 "SelectMusicScorebox=0\n",
                 "SelectMusicScoreboxCycleGolf=0\n",
+                "SelectMusicScoreboxEventsFirst=1\n",
                 "SelectMusicShowGolfPars=0\n",
                 "SelectMusicScoreboxPlacement=Auto\n",
                 "SelectMusicScoreboxCycleItg=1\n",

@@ -301,9 +301,12 @@ player and Select Music choices.
 - **Options > Select Music Options > GS Box Leaderboards > Golf (ArrowCloud)**
   shows the online event board alongside the other selectable leaderboards.
   ArrowCloud sends it with the chart's other boards in the same request, so
-  turning it on or off takes effect immediately. On golf holes it is listed
-  first, so the scorebox and leaderboard overlay open on golf before cycling
-  to the other boards.
+  turning it on or off takes effect immediately.
+- **Options > Select Music Options > Lead With Event Boards** (on by default)
+  lists event boards such as Golf, ITL and SRPG ahead of ITG/EX on charts that
+  are in the event, so the scorebox and leaderboard overlay open on the event
+  before cycling to the other boards. Boards keep the order their service
+  returned, so the service decides between events when a chart is in several.
 
 The native display uses the supplied `GolfScoring.lua` curved formula: errors
 below 5 ms are free, hits are rounded to whole raw strokes individually, and

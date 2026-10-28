@@ -756,6 +756,7 @@ const fn scorebox_pane_filter(
         hard_ex: config.select_music_scorebox_cycle_hard_ex,
         tournaments: config.select_music_scorebox_cycle_tournaments,
         golf: config.enable_golf && config.select_music_scorebox_cycle_golf,
+        events_first: config.select_music_scorebox_events_first,
     }
 }
 

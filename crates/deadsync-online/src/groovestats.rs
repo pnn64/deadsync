@@ -759,14 +759,14 @@ fn push_leaderboard_pane(
     }
 }
 
-/// `ArrowCloud` boards follow the two `GrooveStats` boards, except the golf
-/// event board, which leads on golf holes.
+/// `ArrowCloud` boards follow the two `GrooveStats` boards in the order the
+/// service returned them. Whether event boards lead is a display preference,
+/// so the scorebox and overlay reorder at draw time rather than the cache.
 fn insert_arrowcloud_panes(fetched: &mut FetchedPlayerLeaderboards, panes: Vec<LeaderboardPane>) {
     let insert_ix = 2.min(fetched.data.panes.len());
     for pane in panes.into_iter().rev() {
         fetched.data.panes.insert(insert_ix, pane);
     }
-    deadsync_score::prioritize_golf_panes(&mut fetched.data.panes);
 }
 
 #[must_use]
@@ -4859,7 +4859,7 @@ mod tests {
     }
 
     #[test]
-    fn insert_arrowcloud_panes_leads_with_the_golf_board_on_holes() {
+    fn insert_arrowcloud_panes_keeps_the_service_order() {
         let mut fetched = fetched_player_leaderboards_from_api(
             LeaderboardsApiResponse {
                 player1: Some(LeaderboardApiPlayer {
@@ -4893,8 +4893,8 @@ mod tests {
         let names: Vec<_> = fetched.data.panes.iter().map(|pane| pane.name.as_str()).collect();
         assert_eq!(
             names,
-            vec!["Golf (ArrowCloud)", "GrooveStats", "GrooveStats", "ArrowCloud"],
-            "golf leads; everything else keeps its order"
+            vec!["GrooveStats", "GrooveStats", "ArrowCloud", "Golf (ArrowCloud)"],
+            "ArrowCloud boards follow GrooveStats in the order the service returned them"
         );
     }
 

@@ -187,6 +187,7 @@ pub enum SubRowId {
     ShowGsBox,
     GsBoxPlacement,
     GsBoxLeaderboards,
+    GsBoxEventsFirst,
     // Course Options
     ShowRandomCourses,
     ShowMostPlayed,

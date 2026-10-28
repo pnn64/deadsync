@@ -476,7 +476,11 @@ fn build_select_music_scorebox_view(
     };
     let filtered_panes = score_data::select_music_scorebox_pane_refs(data.panes.as_slice(), filter);
     let Some(pane) =
-        score_data::preferred_primary_scorebox_pane(filtered_panes.as_slice(), show_ex)
+        score_data::preferred_primary_scorebox_pane(
+            filtered_panes.as_slice(),
+            show_ex,
+            filter.events_first,
+        )
     else {
         view.mode_label = owned_text("No Scores");
         return view;
@@ -1559,6 +1563,7 @@ mod tests {
                 hard_ex: true,
                 tournaments: false,
                 golf: false,
+                events_first: true,
             },
             crate::color::SIMPLY_LOVE_JUDGMENT_PALETTE,
         );

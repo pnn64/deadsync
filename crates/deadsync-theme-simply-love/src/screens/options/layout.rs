@@ -904,6 +904,7 @@ fn select_music_parent_row(rows: &[SubRow], actual_idx: usize) -> Option<usize> 
         SubRowId::LoopMusic => SubRowId::MusicPreviews,
         SubRowId::GsBoxPlacement => SubRowId::ShowGsBox,
         SubRowId::GsBoxLeaderboards => SubRowId::ShowGsBox,
+        SubRowId::GsBoxEventsFirst => SubRowId::ShowGsBox,
         _ => return None,
     };
     rows.iter().position(|r| r.id == parent_id)
