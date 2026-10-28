@@ -68,6 +68,9 @@ LSF intensity scale, right-channel bounds and uncoded top bands. It deliberately
 reports reference disagreement as a failing universal-parity survey, not as a
 passed all-decoder gate. These constructed sequences test reconstruction rules;
 they are not a complete conforming-encoder corpus.
+The subsequent independent equation audit in [STEREO.md](STEREO.md) passes all
+90 streams and 40.6 million sample values, while retaining those reference
+disagreements explicitly.
 
 The standard's tangent and LSF power equations drive the pan calculation.
 Zero-width LSF factors represent position zero. The uncoded top band inherits

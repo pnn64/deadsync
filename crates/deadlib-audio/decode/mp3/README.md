@@ -36,6 +36,8 @@ Native hybrid/IMDCT and polyphase synthesis kernels now pass independent
 all-frequency checks; [SYNTHESIS.md](SYNTHESIS.md) records their scope.
 Raw PCM comparisons, pinned legacy conformance vectors, stereo disagreements
 and current limitations are recorded in [RAW_PCM.md](RAW_PCM.md).
+The independent [stereo equation audit](STEREO.md) verifies all 90 constructed
+streams, including the intensity edge cases on which reference decoders differ.
 Additional Shine, Windows Media Foundation and FFmpeg/LAME comparisons are
 recorded in [ENCODER_COMPATIBILITY.md](ENCODER_COMPATIBILITY.md), including the
 short-padding gapless correction and unusable encoder configurations.
