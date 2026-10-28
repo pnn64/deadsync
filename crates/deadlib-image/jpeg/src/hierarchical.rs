@@ -47,7 +47,7 @@ impl HierarchyHeader {
             components: frame.components,
         })
     }
-    fn validate(&self, limits: Limits) -> Result<()> {
+    pub(crate) fn validate(&self, limits: Limits) -> Result<()> {
         if self.height == 0 {
             return Err(Error::Unsupported("DNL hierarchy height"));
         }
@@ -89,11 +89,49 @@ pub struct HierarchicalImage<'a> {
     pub metadata: Vec<MetadataSegment<'a>>,
     pub scans: usize,
     pub consumed: usize,
-    limits: Limits,
-    memory_bytes: usize,
+    pub(crate) limits: Limits,
+    pub(crate) memory_bytes: usize,
 }
 
 impl<'a> HierarchicalImage<'a> {
+    /// Construct a hierarchy from native frame data without parsing a JPEG.
+    /// Frame scan counts describe metadata positions; first_scan is assigned
+    /// cumulatively. Each frame must declare at least one nominal source scan.
+    pub fn from_frames(
+        header: HierarchyHeader,
+        mut frames: Vec<HierarchicalFrame>,
+        metadata: Vec<MetadataSegment<'a>>,
+        limits: Limits,
+    ) -> Result<Self> {
+        let mut scans = 0usize;
+        for frame in &mut frames {
+            frame.first_scan = scans;
+            scans = scans
+                .checked_add(frame.scans)
+                .ok_or(Error::LimitExceeded("scans"))?;
+        }
+        let mut image = Self {
+            header,
+            frames,
+            metadata,
+            scans,
+            consumed: 0,
+            limits,
+            memory_bytes: 0,
+        };
+        image.memory_bytes = image.validate()?;
+        Ok(image)
+    }
+    pub fn encode(&self, options: crate::HierarchicalOptions<'_>) -> Result<Vec<u8>> {
+        crate::hierarchical_encode::encode_hierarchical(self, options)
+    }
+    pub fn encode_with_metadata(
+        &self,
+        options: crate::HierarchicalOptions<'_>,
+        metadata: crate::MetadataOptions<'_>,
+    ) -> Result<Vec<u8>> {
+        crate::hierarchical_encode::encode_hierarchical_with_metadata(self, options, metadata)
+    }
     pub fn color_space(&self) -> ColorSpace {
         crate::reconstruct::infer_components(&self.header.components, &self.metadata)
     }
@@ -251,7 +289,7 @@ impl<'a> HierarchicalImage<'a> {
             memory_bytes,
         })
     }
-    fn validate(&self) -> Result<usize> {
+    pub(crate) fn validate(&self) -> Result<usize> {
         self.header.validate(self.limits)?;
         if self.frames.is_empty() {
             return Err(Error::Invalid("missing hierarchical frames"));
@@ -330,7 +368,7 @@ fn specs(components: &[ComponentSpec], lossless: bool) -> Result<()> {
     }
     Ok(())
 }
-struct Rules {
+pub(crate) struct Rules {
     width: u16,
     height: u16,
     precision: u8,
@@ -343,7 +381,7 @@ struct Rules {
     arithmetic: Option<bool>,
 }
 impl Rules {
-    fn new(header: &HierarchyHeader) -> Self {
+    pub(crate) fn new(header: &HierarchyHeader) -> Self {
         let mut indices = [255; 256];
         let mut final_sizes = [(0, 0); 255];
         let max_h = header
@@ -379,7 +417,15 @@ impl Rules {
         }
     }
     fn accept(&mut self, frame: &FrameHeader, expansion: Expansion) -> Result<()> {
-        specs(&frame.components, frame.process.is_lossless())?;
+        self.accept_process(frame, expansion, frame.process)
+    }
+    pub(crate) fn accept_process(
+        &mut self,
+        frame: &FrameHeader,
+        expansion: Expansion,
+        process: Process,
+    ) -> Result<()> {
+        specs(&frame.components, process.is_lossless())?;
         if frame.height == 0 {
             return Err(Error::Unsupported("DNL hierarchy height"));
         }
@@ -387,19 +433,19 @@ impl Rules {
             || frame.width > self.width
             || frame.height > self.height
             || frame.precision != self.precision
-            || (frame.process == Process::Baseline && frame.precision != 8)
-            || (!frame.process.is_lossless() && !matches!(frame.precision, 8 | 12))
-            || (frame.process.is_progressive() && frame.components.len() > 4)
+            || (process == Process::Baseline && frame.precision != 8)
+            || (!process.is_lossless() && !matches!(frame.precision, 8 | 12))
+            || (process.is_progressive() && frame.components.len() > 4)
         {
             return Err(Error::Invalid(
                 "hierarchical frame dimensions, precision or components",
             ));
         }
-        if expansion.any() && !frame.process.is_differential() {
+        if expansion.any() && !process.is_differential() {
             return Err(Error::Invalid("EXP before non-differential frame"));
         }
-        if frame.process != Process::Baseline {
-            let arithmetic = frame.process.is_arithmetic();
+        if process != Process::Baseline {
+            let arithmetic = process.is_arithmetic();
             if self.arithmetic.is_some_and(|a| a != arithmetic) {
                 return Err(Error::Invalid("mixed hierarchical entropy processes"));
             }
@@ -428,7 +474,7 @@ impl Rules {
                 return Err(Error::Invalid("frame component exceeds DHP dimensions"));
             }
             let previous = self.sizes[index];
-            if frame.process.is_differential() {
+            if process.is_differential() {
                 if previous.0 == 0 {
                     return Err(Error::Invalid("differential frame without reference"));
                 }
@@ -437,7 +483,7 @@ impl Rules {
                         "frame follows final lossless differential frame",
                     ));
                 }
-                if self.base_lossless == Some(true) && !frame.process.is_lossless() {
+                if self.base_lossless == Some(true) && !process.is_lossless() {
                     return Err(Error::Invalid("DCT differential frame after lossless base"));
                 }
                 let fits = |old: usize, new: usize, expand: bool| {
@@ -457,14 +503,14 @@ impl Rules {
                         "hierarchical reference expansion dimensions",
                     ));
                 }
-                if self.base_lossless == Some(false) && frame.process.is_lossless() {
+                if self.base_lossless == Some(false) && process.is_lossless() {
                     self.terminal[index] = true;
                 }
             } else {
                 if previous.0 != 0 {
                     return Err(Error::Invalid("repeated non-differential component"));
                 }
-                let lossless = frame.process.is_lossless();
+                let lossless = process.is_lossless();
                 if self.base_lossless.is_some_and(|l| l != lossless) {
                     return Err(Error::Invalid("mixed hierarchical initial coding families"));
                 }
@@ -474,7 +520,7 @@ impl Rules {
         }
         Ok(())
     }
-    fn finish(&self) -> Result<()> {
+    pub(crate) fn finish(&self) -> Result<()> {
         for i in 0..self.component_count {
             if self.sizes[i] != self.final_sizes[i] {
                 return Err(Error::Invalid(

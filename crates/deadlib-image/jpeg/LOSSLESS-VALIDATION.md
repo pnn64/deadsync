@@ -234,7 +234,9 @@ earlier Huffman lossless encoder byte hashes remain unchanged**; see
 
 Differential/hierarchical lossless decoding is now implemented through
 `decode_hierarchical`; see HIERARCHICAL-VALIDATION.md for Annex J rules and the
-separate reference gate. Hierarchical encoding, DNL and incremental input/output
+separate reference gate. Direct hierarchical frame encoding is also available
+through `HierarchicalImage::encode`, including signed differential Pt and both
+entropy coders. Automatic raster pyramids, DNL and incremental input/output
 remain required. Independent conformance corpora,
 IJG/mozjpeg checks, coverage-guided fuzzing and measured lossless performance
 also remain open. No complete-conformance or throughput claim is made.

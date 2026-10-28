@@ -1,4 +1,4 @@
-# Hierarchical JPEG decoding
+# Hierarchical JPEG frame coding
 
 `decode_hierarchical(input, limits)` implements T.81 Annex J, including DHP,
 EXP and differential SOF5/6/7/13/14/15. The first frame for a component uses
@@ -146,9 +146,119 @@ The C reference's raster is not an exact lossless-hierarchy oracle:
   decoder cases do not establish that the reference encoder is lossless.
 
 These observations do not establish correctness for every hierarchical stream.
-Independent conformance corpora, broader DCT numerical checks, hierarchical
-encoding, DNL/abbreviated streams, incremental I/O, coverage-guided fuzzing and
+Independent conformance corpora, broader DCT numerical checks, automatic raster
+pyramids, DNL/abbreviated streams, incremental I/O, coverage-guided fuzzing and
 all measured performance work remain required.
+
+## Native frame encoding
+
+`HierarchicalImage::from_frames(header, frames, metadata, limits)` constructs a
+native hierarchy without another decoder. It assigns each frame's `first_scan`
+from the supplied nominal source scan counts; metadata uses those positions.
+`image.encode(HierarchicalOptions::default())` writes DHP, EXP and all six
+differential frame families directly. Frame headers, sampling, visible DCT
+coefficients/quantizers and sample differences are read from borrowed views of
+the owned model. No frame is cloned or compressed into a second JPEG buffer.
+The shared ordinary writers emit each frame into the single bounded output.
+
+Defaults retain each source frame's entropy family and sequential/progressive
+choice, with full-precision generated scans and lossless Pt=0. Thus rewritten
+frame values remain exact even if the original file used a nonzero Pt. A
+`HierarchicalFrameOptions` descriptor per frame can select DCT `CodingOptions`
+or `LosslessOptions`. DCT controls include fixed/optimized Huffman or arithmetic,
+spectral/custom scans, successive approximation through Al=13 and MCU restarts.
+Predictive controls include component scripts, row restarts and Pt. Generated
+differential predictive scans force PSV=0; explicit scripts must select zero.
+Signed residual Pt uses integer division toward zero before rescaling, so -3
+at Pt=1 becomes -2 rather than -4. Lossless point transforms or partial DCT
+scripts intentionally change frame values and therefore subsequent references.
+
+Output processes are checked against the cross-frame Annex J rules before
+writing. Every frame clears or replaces inherited DRI, including an explicit
+zero when restarts are disabled. Differential DCT resets only the numerical DC
+predictor for each block; arithmetic DC conditioning retains its prior class.
+Fixed Huffman tables cover the additional AC category. For 12-bit progressive
+differential frames the complete 256-symbol fixed table uses 255 nine-bit codes
+and one ten-bit code, avoiding an impossible 256-code count in one DHT byte or
+an all-ones code. Tests exercise the ten-bit run/magnitude symbol itself.
+
+`encode_with_metadata` preserves APPn/COM order and frame-relative scan positions
+where possible, moving positions beyond a shortened frame to its end. Additional
+segments and replacement ICC chunks precede DHP. Removal/replacement uses the
+shared metadata writer. Global budgets charge retained source storage, additional
+metadata, output capacity, Huffman symbol storage and the largest arithmetic
+history. Nested lossless limits further constrain the hierarchy. Each nested
+output byte budget bounds its frame writer, and the global byte budget also
+covers DHP/EXP, leading metadata and relocated frame-end metadata. Allocator
+profiling remains open.
+
+DCT frame encoding currently supports one through four components; predictive
+frames support up to 255 with generated legal component scans. This API accepts
+prepared coefficients and signed difference planes. Automatic construction of
+resolution pyramids, source sampling and differential FDCT from shared/native
+raster inputs is the next hierarchy encoder stage, and remains required.
+Large DCT sampling layouts can require explicit component scripts to satisfy
+the ten-block interleaved MCU limit, as with ordinary coefficient encoding.
+
+### Encoder evidence
+
+Two pinned executable-snapshot matrices perform **5,200 exact C/native
+frame-data comparisons**, with zero C warnings:
+
+- 42 existing reference-derived hierarchies, each checked directly and rewritten
+  in 49 configurations: **2,100 comparisons**, 19,600 DCT blocks and 965,550
+  sample/residual values. See `tests/reports/hierarchical-encode-rewrite-jpegxt.json`.
+- 62 newly authored native hierarchies with expectations constructed **before
+  entropy encoding**, never recovered from JPEG bytes: **3,100 comparisons**,
+  1,200 DCT blocks and 1,962,000 sample/residual values. Thirty precisions/sampling
+  combinations use Pt=0 and thirty use differential Pt=1; two DCT cases exercise
+  both precision/category boundaries. See
+  `tests/reports/hierarchical-encode-native-jpegxt.json`.
+
+The 49 rewritten configurations span both entropy coders, fixed/optimized tables,
+sequential/progressive DCT, Al=0/3/13 and restart intervals 0/1/3. Controls irrelevant
+to a frame family can produce identical files: the reports explicitly count
+distinct output hashes (762 and 642 respectively). The totals include 104 direct
+source checks and 5,096 native rewrites; 62 source files are also native encodes.
+Pure-lossless composition matches the independent integer model in **3,900**
+comparisons. All 3,000 native-authored lossless comparisons additionally match
+prescribed target samples: original integers at Pt=0, and explicit signed
+division/rescaling targets at Pt=1. The authored source files use arithmetic
+coding, so the 30 original differential-Pt=1 streams are checked directly. Their
+restored residual values are then rewritten through both entropy coders at
+Pt=0. Huffman differential Pt=1 additionally has an independently specified
+entropy-bit golden. The ordinary lossless reference's initial-prediction
+workaround is not used for these frames.
+
+`examples/hierarchy_fixtures.rs` constructs gray and 4:2:0 sample hierarchies at
+every precision P=2..16 and DCT category-boundary cases at P=8/12. The 62 JPEGs,
+124 pre-entropy frame dumps and 60 exact target planes are retained under
+`tests/fixtures/hierarchical-native`, with hashes and provenance. These are
+independently C-checked native encoder regressions, not an independent standards
+conformance corpus. Existing literal Annex J tests remain separate.
+
+Common-writer refactoring leaves all **600 prior DCT** and **4,448 Huffman
+lossless** output hashes unchanged. The DCT matrix was also decoded again by
+libjpeg-turbo with exact coefficients and no warnings. Reports are
+`rewrite-hierarchical-refactor-turbo.json` and
+`lossless-hierarchical-refactor-huffman.json` under `tests/reports`.
+Native tests cover authored frames, signed/Pt/wrap goldens, full fixed tables,
+explicit/reversed scripts, mixed component Pt, partial DCT precision, inherited
+restart clearing, metadata/ICC, budget errors and 255-component authoring.
+All **112 tests** pass in release and isolated debug builds; rustfmt, Clippy and
+rustdoc with warnings denied pass. Raster-pyramid construction, broader rare
+scan/Pt combinations and independent conformance/performance work remain open.
+
+```text
+cargo build -p deadlib-image-jpeg --release --examples --jobs 1 --target-dir crates/deadlib-image/jpeg/experiments/arithmetic-encode-target
+crates/deadlib-image/jpeg/experiments/arithmetic-encode-target/release/examples/hierarchy_fixtures.exe crates/deadlib-image/jpeg/tests/fixtures/hierarchical-native
+python crates/deadlib-image/jpeg/tests/reference_hierarchical_encode.py --native crates/deadlib-image/jpeg/experiments/arithmetic-encode-target/release/examples/rewrite_hierarchy.exe --inspect crates/deadlib-image/jpeg/experiments/arithmetic-encode-target/release/examples/hierarchical_inspect.exe --reference crates/deadlib-image/jpeg/experiments/jpegxt-reference/vs15.0/jpeg/Release/jpeg.exe --sources crates/deadlib-image/jpeg/tests/fixtures/hierarchical-native --out crates/deadlib-image/jpeg/experiments/hierarchy-encode-native-gate
+```
+
+Omit `--sources` to check the 42 reference-derived fixtures. `--resume` verifies
+the saved executable and source/frame-data hashes. Decoder and encoder matrices
+share `tests/hierarchy_support.py`; its four extracted helper function bodies
+are unchanged from the decoder milestone.
 
 ## Reproduction
 

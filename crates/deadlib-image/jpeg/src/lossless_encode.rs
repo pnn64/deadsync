@@ -244,7 +244,7 @@ pub(crate) fn encode_planes(
         metadata,
     )
 }
-fn intersect(a: Limits, b: Limits) -> Limits {
+pub(crate) fn intersect(a: Limits, b: Limits) -> Limits {
     Limits {
         max_pixels: a.max_pixels.min(b.max_pixels),
         max_memory_bytes: a.max_memory_bytes.min(b.max_memory_bytes),
@@ -254,7 +254,7 @@ fn intersect(a: Limits, b: Limits) -> Limits {
 }
 
 #[derive(Clone, Copy)]
-enum Source<'a> {
+pub(crate) enum Source<'a> {
     Planes(&'a [ComponentPlane]),
     Interleaved {
         samples: SampleData<'a>,
@@ -328,7 +328,12 @@ impl<'a> Plan<'a> {
         let mut seen = [false; 255];
         for s in 0..plan.count {
             let scan = plan.get(s)?;
-            if !(1..=7).contains(&scan.predictor) || scan.point >= frame.precision {
+            if (if frame.process.is_differential() {
+                scan.predictor != 0
+            } else {
+                !(1..=7).contains(&scan.predictor)
+            }) || scan.point >= frame.precision
+            {
                 return Err(Error::Invalid(
                     "lossless encoder predictor or point transform",
                 ));
@@ -371,7 +376,11 @@ impl<'a> Plan<'a> {
         Scan {
             indices,
             count,
-            predictor: self.options.predictor,
+            predictor: if self.frame.process.is_differential() {
+                0
+            } else {
+                self.options.predictor
+            },
             point: self.options.point_transform,
             restart_rows: self.options.restart_rows,
         }
@@ -467,7 +476,14 @@ fn walk(
                 for xx in 0..h {
                     let x = mcu % cols * h + xx;
                     let y = mcu / cols * v + yy;
-                    let get = |x, y| source.at(i, x, y) >> scan.point;
+                    let get = |x, y| {
+                        let value = source.at(i, x, y);
+                        if frame.process.is_differential() {
+                            i32::from(value as i16) / (1i32 << scan.point)
+                        } else {
+                            value >> scan.point
+                        }
+                    };
                     let a = if x == 0 { 0 } else { get(x - 1, y) };
                     let b = if y == 0 { 0 } else { get(x, y - 1) };
                     let c = if x == 0 || y == 0 {
@@ -475,7 +491,9 @@ fn walk(
                     } else {
                         get(x - 1, y - 1)
                     };
-                    let prediction = if y == first_row * v {
+                    let prediction = if frame.process.is_differential() {
+                        0
+                    } else if y == first_row * v {
                         if x == 0 { initial } else { a }
                     } else if x == 0 {
                         b
@@ -512,11 +530,39 @@ fn encode_native(
         return Err(Error::LimitExceeded("lossless encoder storage"));
     }
     validate_metadata(segments, options.limits, metadata)?;
+    let (_, history_bytes) = frame_requirements(frame, source, options)?;
+    let available = options.limits.max_memory_bytes - stored;
+    if history_bytes > available {
+        return Err(Error::LimitExceeded("lossless arithmetic history"));
+    }
+    let mut out = Output::new(options.max_output_bytes.min(available - history_bytes));
+    out.marker(0xd8)?;
+    let mut metadata_index = 0;
+    emit_metadata(&mut out, segments, &mut metadata_index, 0, metadata.icc)?;
+    emit_additional(&mut out, metadata)?;
+    encode_frame(&mut out, frame, source, options, false, &mut |out, scan| {
+        emit_metadata(out, segments, &mut metadata_index, scan, metadata.icc)
+    })?;
+    emit_metadata(
+        &mut out,
+        segments,
+        &mut metadata_index,
+        usize::MAX,
+        metadata.icc,
+    )?;
+    out.marker(0xd9)?;
+    Ok(out.bytes)
+}
+
+pub(crate) fn frame_requirements(
+    frame: &FrameHeader,
+    source: Source<'_>,
+    options: LosslessOptions<'_>,
+) -> Result<(usize, usize)> {
     let plan = Plan::new(frame, options, source)?;
-    let arithmetic = options.entropy_coding == EntropyCoding::Arithmetic;
-    let conditioning = options.arithmetic_conditioning;
     let mut history_bytes = 0;
-    if arithmetic {
+    if options.entropy_coding == EntropyCoding::Arithmetic {
+        let conditioning = options.arithmetic_conditioning;
         if conditioning.dc_lower > conditioning.dc_upper || conditioning.dc_upper > 15 {
             return Err(Error::Invalid("lossless arithmetic conditioning"));
         }
@@ -527,10 +573,22 @@ fn encode_native(
             )?);
         }
     }
-    let available = options.limits.max_memory_bytes - stored;
-    if history_bytes > available {
-        return Err(Error::LimitExceeded("lossless arithmetic history"));
-    }
+    Ok((plan.count, history_bytes))
+}
+
+/// Emit one predictive frame directly into the caller's bounded JPEG output.
+pub(crate) fn encode_frame(
+    out: &mut Output,
+    frame: &FrameHeader,
+    source: Source<'_>,
+    options: LosslessOptions<'_>,
+    reset_restart: bool,
+    before_scan: &mut impl FnMut(&mut Output, usize) -> Result<()>,
+) -> Result<usize> {
+    let plan = Plan::new(frame, options, source)?;
+    let (_, history_bytes) = frame_requirements(frame, source, options)?;
+    let arithmetic = options.entropy_coding == EntropyCoding::Arithmetic;
+    let conditioning = options.arithmetic_conditioning;
     let mut histograms = [[0u64; 256]; 2];
     if !arithmetic && options.optimize_huffman {
         for s in 0..plan.count {
@@ -557,11 +615,6 @@ fn encode_native(
     } else {
         Some([make(0)?, make(1)?])
     };
-    let mut out = Output::new(options.max_output_bytes.min(available - history_bytes));
-    out.marker(0xd8)?;
-    let mut metadata_index = 0;
-    emit_metadata(&mut out, segments, &mut metadata_index, 0, metadata.icc)?;
-    emit_additional(&mut out, metadata)?;
     let mut header = [0; 771];
     header[0] = frame.precision;
     header[1..3].copy_from_slice(&frame.height.to_be_bytes());
@@ -572,13 +625,19 @@ fn encode_native(
         header[7 + 3 * i] = (c.horizontal_sampling << 4) | c.vertical_sampling;
     }
     out.segment(
-        if arithmetic { 0xcb } else { 0xc3 },
+        if frame.process.is_differential() {
+            if arithmetic { 0xcf } else { 0xc7 }
+        } else if arithmetic {
+            0xcb
+        } else {
+            0xc3
+        },
         &header[..6 + 3 * frame.components.len()],
     )?;
     if let Some(books) = &books {
-        books[0].emit(&mut out, 0, 0)?;
+        books[0].emit(out, 0, 0)?;
         if frame.components.len() > 1 {
-            books[1].emit(&mut out, 0, 1)?;
+            books[1].emit(out, 0, 1)?;
         }
     } else {
         let mut dac = [0; 4];
@@ -589,16 +648,14 @@ fn encode_native(
         }
         out.segment(0xcc, &dac[..2 * groups])?;
     }
-    let mut previous_interval = 0;
+    let mut previous_interval = if reset_restart { None } else { Some(0) };
     for s in 0..plan.count {
-        if s != 0 {
-            emit_metadata(&mut out, segments, &mut metadata_index, s, metadata.icc)?;
-        }
+        before_scan(out, s)?;
         let scan = plan.get(s)?;
         let (_, _, interval) = geometry(frame, source, scan)?;
-        if interval != previous_interval {
+        if Some(interval) != previous_interval {
             out.segment(0xdd, &interval.to_be_bytes())?;
-            previous_interval = interval;
+            previous_interval = Some(interval);
         }
         let mut sos = [0; 12];
         sos[0] = scan.count as u8;
@@ -621,7 +678,7 @@ fn encode_native(
                     size,
                     ..
                 } => {
-                    books[usize::from(component != 0)].write(&mut out, size)?;
+                    books[usize::from(component != 0)].write(out, size)?;
                     if size != 0 && size != 16 {
                         let amplitude = (if difference < 0 {
                             difference - 1
@@ -641,7 +698,7 @@ fn encode_native(
                 history_bytes,
             )?;
             let mut statistics = Statistics::default();
-            let mut coder = Coder::new(&mut out);
+            let mut coder = Coder::new(out);
             walk(frame, source, scan, &mut |token| match token {
                 Token::Restart(index) => {
                     coder.restart(index)?;
@@ -674,15 +731,7 @@ fn encode_native(
             coder.finish()?;
         }
     }
-    emit_metadata(
-        &mut out,
-        segments,
-        &mut metadata_index,
-        usize::MAX,
-        metadata.icc,
-    )?;
-    out.marker(0xd9)?;
-    Ok(out.bytes)
+    Ok(plan.count)
 }
 
 fn history_shapes(

@@ -99,15 +99,116 @@ pub fn encode_coefficients_with_metadata(
     options: CodingOptions,
     metadata: MetadataOptions<'_>,
 ) -> Result<Vec<u8>> {
-    validate(image)?;
+    if image.frame.process.is_differential() {
+        return Err(Error::Unsupported(
+            "differential frame requires a hierarchy",
+        ));
+    }
+    let source = DctFrame {
+        frame: &image.frame,
+        components: &image.components,
+    };
+    validate_frame(source, image.limits)?;
     validate_metadata(&image.metadata, image.limits, metadata)?;
+    let mut previous = 0;
+    for segment in &image.metadata {
+        if segment.preceding_scans < previous {
+            return Err(Error::Invalid("encoder metadata order"));
+        }
+        previous = segment.preceding_scans;
+    }
+    let mut out = Output::new(options.max_output_bytes);
+    out.marker(0xd8)?;
+    let mut metadata_index = 0;
+    emit_metadata(
+        &mut out,
+        &image.metadata,
+        &mut metadata_index,
+        0,
+        metadata.icc,
+    )?;
+    emit_additional(&mut out, metadata)?;
+    encode_frame(
+        &mut out,
+        source,
+        options,
+        image.limits,
+        false,
+        &mut |out, scan| {
+            emit_metadata(
+                out,
+                &image.metadata,
+                &mut metadata_index,
+                scan,
+                metadata.icc,
+            )
+        },
+    )?;
+    emit_metadata(
+        &mut out,
+        &image.metadata,
+        &mut metadata_index,
+        usize::MAX,
+        metadata.icc,
+    )?;
+    out.marker(0xd9)?;
+    Ok(out.bytes)
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct DctFrame<'a> {
+    pub frame: &'a crate::FrameHeader,
+    pub components: &'a [crate::CoefficientComponent],
+}
+
+pub(crate) fn frame_process(image: DctFrame<'_>, options: CodingOptions<'_>) -> Process {
+    let ordinary = match (options.entropy_coding, options.progressive) {
+        (EntropyCoding::Arithmetic, true) => Process::ArithmeticProgressive,
+        (EntropyCoding::Arithmetic, false) => Process::ArithmeticSequential,
+        (EntropyCoding::Huffman, true) => Process::Progressive,
+        (EntropyCoding::Huffman, false) => {
+            if image.frame.precision == 8
+                && image
+                    .components
+                    .iter()
+                    .all(|c| c.quantization.iter().all(|&q| q <= 255))
+            {
+                Process::Baseline
+            } else {
+                Process::ExtendedSequential
+            }
+        }
+    };
+    if !image.frame.process.is_differential() {
+        return ordinary;
+    }
+    match ordinary {
+        Process::Baseline | Process::ExtendedSequential => Process::DifferentialSequential,
+        Process::Progressive => Process::DifferentialProgressive,
+        Process::ArithmeticSequential => Process::ArithmeticDifferentialSequential,
+        Process::ArithmeticProgressive => Process::ArithmeticDifferentialProgressive,
+        _ => unreachable!(),
+    }
+}
+
+/// Write one frame directly into a shared JPEG output, with no SOI/EOI or
+/// metadata copy. A hierarchy resets the inherited DRI before its first scan.
+pub(crate) fn encode_frame(
+    out: &mut Output,
+    image: DctFrame<'_>,
+    options: CodingOptions<'_>,
+    limits: crate::Limits,
+    reset_restart: bool,
+    before_scan: &mut impl FnMut(&mut Output, usize) -> Result<()>,
+) -> Result<usize> {
+    validate_frame(image, limits)?;
     let n = image.components.len();
     let plan = Plan::new(
         &image.frame.components,
         options.progressive,
         options.successive_approximation,
         options.scan_script,
-        image.limits.max_scans,
+        limits.max_scans,
     )?;
     let scan_count = plan.len();
     let books = if options.entropy_coding == EntropyCoding::Huffman {
@@ -130,7 +231,12 @@ pub fn encode_coefficients_with_metadata(
             if options.optimize_huffman && histograms[i].iter().any(|&v| v != 0) {
                 Codebook::optimized(&histograms[i])
             } else {
-                Codebook::fixed(i >= 2, image.frame.precision, options.progressive)
+                Codebook::fixed(
+                    i >= 2,
+                    image.frame.precision,
+                    options.progressive,
+                    image.frame.process.is_differential(),
+                )
             }
         };
         Some([make(0)?, make(1)?, make(2)?, make(3)?])
@@ -138,46 +244,24 @@ pub fn encode_coefficients_with_metadata(
         options.arithmetic_conditioning.validate()?;
         None
     };
-    let mut quantizers = Vec::<[u16; 64]>::new();
-    quantizers
-        .try_reserve_exact(n)
-        .map_err(|_| Error::Allocation)?;
+    let mut quantizers = [[0u16; 64]; 4];
+    let mut quantizer_count = 0;
     let mut qslots = [0u8; 4];
     for (i, c) in image.components.iter().enumerate() {
-        let slot = if let Some(j) = quantizers.iter().position(|q| q == &c.quantization) {
+        let slot = if let Some(j) = quantizers[..quantizer_count]
+            .iter()
+            .position(|q| q == &c.quantization)
+        {
             j
         } else {
-            quantizers.push(c.quantization);
-            quantizers.len() - 1
+            quantizers[quantizer_count] = c.quantization;
+            quantizer_count += 1;
+            quantizer_count - 1
         };
         qslots[i] = slot as u8;
     }
-    let wide = quantizers.iter().any(|q| q.iter().any(|&v| v > 255));
-    let process = if options.entropy_coding == EntropyCoding::Arithmetic {
-        if options.progressive {
-            Process::ArithmeticProgressive
-        } else {
-            Process::ArithmeticSequential
-        }
-    } else if options.progressive {
-        Process::Progressive
-    } else if image.frame.precision == 8 && !wide {
-        Process::Baseline
-    } else {
-        Process::ExtendedSequential
-    };
-    let mut out = Output::new(options.max_output_bytes);
-    out.marker(0xd8)?;
-    let mut metadata_index = 0;
-    emit_metadata(
-        &mut out,
-        &image.metadata,
-        &mut metadata_index,
-        0,
-        metadata.icc,
-    )?;
-    emit_additional(&mut out, metadata)?;
-    for (i, q) in quantizers.iter().enumerate() {
+    let process = frame_process(image, options);
+    for (i, q) in quantizers[..quantizer_count].iter().enumerate() {
         let wide = q.iter().any(|&v| v > 255);
         let mut data = [0u8; 129];
         data[0] = (if wide { 16 } else { 0 }) | i as u8;
@@ -207,8 +291,8 @@ pub fn encode_coefficients_with_metadata(
     let groups = if n == 1 { 1 } else { 2 };
     if let Some(books) = &books {
         for i in 0..groups {
-            books[i].emit(&mut out, 0, i as u8)?;
-            books[2 + i].emit(&mut out, 1, i as u8)?;
+            books[i].emit(out, 0, i as u8)?;
+            books[2 + i].emit(out, 1, i as u8)?;
         }
     } else {
         let c = options.arithmetic_conditioning;
@@ -223,19 +307,11 @@ pub fn encode_coefficients_with_metadata(
         }
         out.segment(0xcc, &data[..4 * groups])?;
     }
-    if options.restart_interval != 0 {
+    if reset_restart || options.restart_interval != 0 {
         out.segment(0xdd, &options.restart_interval.to_be_bytes())?;
     }
     for s in 0..scan_count {
-        if s > 0 {
-            emit_metadata(
-                &mut out,
-                &image.metadata,
-                &mut metadata_index,
-                s,
-                metadata.icc,
-            )?;
-        }
+        before_scan(out, s)?;
         let scan = plan.get(s)?;
         let mut sos = [0u8; 12];
         sos[0] = scan.count as u8;
@@ -255,7 +331,7 @@ pub fn encode_coefficients_with_metadata(
                 scan,
                 options.restart_interval,
                 &mut |token| match token {
-                    Token::Symbol(table, symbol) => books[table].write(&mut out, symbol),
+                    Token::Symbol(table, symbol) => books[table].write(out, symbol),
                     Token::Bits(value, n) => out.write_bits(value, n),
                     Token::Restart(i) => {
                         out.pad()?;
@@ -265,7 +341,7 @@ pub fn encode_coefficients_with_metadata(
             )?;
             out.pad()?;
         } else {
-            let mut coder = Coder::new(&mut out);
+            let mut coder = Coder::new(out);
             let mut statistics = Statistics::default();
             let mut predictors = [0; 4];
             let mut classes = [0; 4];
@@ -279,6 +355,9 @@ pub fn encode_coefficients_with_metadata(
                     }
                     BlockToken::Block(i, block) => {
                         let group = usize::from(i != 0);
+                        if image.frame.process.is_differential() {
+                            predictors[i] = 0;
+                        }
                         if scan.has_dc() {
                             let al = scan.progression.map_or(0, |s| s.al);
                             if scan.progression.is_some_and(|s| s.ah != 0) {
@@ -316,15 +395,7 @@ pub fn encode_coefficients_with_metadata(
             coder.finish()?;
         }
     }
-    emit_metadata(
-        &mut out,
-        &image.metadata,
-        &mut metadata_index,
-        usize::MAX,
-        metadata.icc,
-    )?;
-    out.marker(0xd9)?;
-    Ok(out.bytes)
+    Ok(scan_count)
 }
 
 pub(crate) fn emit_metadata(
@@ -361,17 +432,10 @@ pub(crate) fn emit_additional(out: &mut Output, metadata: MetadataOptions<'_>) -
     Ok(())
 }
 
-fn validate(image: &CoefficientImage<'_>) -> Result<()> {
+pub(crate) fn validate_frame(image: DctFrame<'_>, limits: crate::Limits) -> Result<()> {
     let f = &image.frame;
     let n = image.components.len();
-    if !matches!(
-        f.process,
-        Process::Baseline
-            | Process::ExtendedSequential
-            | Process::Progressive
-            | Process::ArithmeticSequential
-            | Process::ArithmeticProgressive
-    ) {
+    if f.process.is_lossless() {
         return Err(Error::Unsupported(
             "coefficient encoding of non-DCT process",
         ));
@@ -384,7 +448,7 @@ fn validate(image: &CoefficientImage<'_>) -> Result<()> {
     if f.width == 0 || f.height == 0 || !matches!(f.precision, 8 | 12) || f.components.len() != n {
         return Err(Error::Invalid("encoder frame dimensions or precision"));
     }
-    if f.width as usize * f.height as usize > image.limits.max_pixels {
+    if f.width as usize * f.height as usize > limits.max_pixels {
         return Err(Error::LimitExceeded("encoder pixels"));
     }
     let mut max_h = 0;
@@ -405,7 +469,7 @@ fn validate(image: &CoefficientImage<'_>) -> Result<()> {
     }
     let cols = (f.width as usize).div_ceil(8 * max_h);
     let rows = (f.height as usize).div_ceil(8 * max_v);
-    for c in &image.components {
+    for c in image.components {
         if c.width != (f.width as usize * c.spec.horizontal_sampling as usize).div_ceil(max_h)
             || c.height != (f.height as usize * c.spec.vertical_sampling as usize).div_ceil(max_v)
             || c.blocks_wide < cols * c.spec.horizontal_sampling as usize
@@ -414,16 +478,6 @@ fn validate(image: &CoefficientImage<'_>) -> Result<()> {
         {
             return Err(Error::Invalid("encoder coefficient grid"));
         }
-    }
-    let mut scan = 0;
-    for s in &image.metadata {
-        if !matches!(s.marker, 0xe0..=0xef | 0xfe)
-            || s.data.len() > 65533
-            || s.preceding_scans < scan
-        {
-            return Err(Error::Invalid("encoder metadata"));
-        }
-        scan = s.preceding_scans;
     }
     Ok(())
 }
@@ -470,7 +524,7 @@ pub(crate) fn validate_metadata(
 }
 
 fn walk(
-    image: &CoefficientImage<'_>,
+    image: DctFrame<'_>,
     scan: Scan,
     interval: u16,
     emit: &mut impl FnMut(Token) -> Result<()>,
@@ -484,6 +538,9 @@ fn walk(
             }
             BlockToken::Block(i, block) => {
                 let group = usize::from(i != 0);
+                if image.frame.process.is_differential() {
+                    predictors[i] = 0;
+                }
                 if scan.has_dc() {
                     let al = scan.progression.map_or(0, |s| s.al);
                     if scan.progression.is_some_and(|s| s.ah != 0) {
@@ -511,7 +568,7 @@ fn walk(
                         emit_ac(
                             block,
                             group + 2,
-                            image.frame.precision,
+                            image.frame.precision + u8::from(image.frame.process.is_differential()),
                             scan.progression.map_or(1, |s| s.ss),
                             scan.progression.map_or(63, |s| s.se),
                             scan.progression.map_or(0, |s| s.al),
@@ -526,7 +583,7 @@ fn walk(
 }
 
 fn walk_blocks<'a>(
-    image: &'a CoefficientImage<'_>,
+    image: DctFrame<'a>,
     scan: Scan,
     interval: u16,
     emit: &mut impl FnMut(BlockToken<'a>) -> Result<()>,

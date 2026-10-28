@@ -114,3 +114,12 @@ match exactly. An independent integer row-expansion implementation checks pure
 lossless composition; final C raster differences are recorded separately.
 See ../../HIERARCHICAL-VALIDATION.md for syntax normalization, oracle output
 limitations, fixture meanings and full reproduction instructions.
+
+`reference_hierarchical_encode.py` uses the same frame observer for direct native
+frame encoding. It checks source files and 49 rewritten configurations per
+source, independently comparing ordered C coefficients/sample differences with
+pre-entropy expectations and checking native lossless composition separately.
+`examples/hierarchy_fixtures.rs` authors the additional native corpus without
+decoding its encoded bytes; explicit signed-Pt and target-plane expectations
+are retained alongside each JPEG. Reports distinguish repeated configurations
+from distinct output hashes. Automatic raster-pyramid encoding remains pending.

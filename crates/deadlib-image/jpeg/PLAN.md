@@ -260,7 +260,7 @@ Verified milestones:
   other reference/conformance corpora, coverage-guided fuzzing and all measured
   performance/optimization work remain required.
 
-- Hierarchical decoder milestone: native DHP/EXP and SOF5/6/7/13/14/15,
+- `0e5b64e7e`: native DHP/EXP and SOF5/6/7/13/14/15 decoding,
   with all supported ordinary initial frames, P=2..16 lossless/P=8,12 DCT,
   original per-frame coefficient/quantizer or sample-difference retention,
   direct DC/PSV0, ordered integer expansion, modulo-65536 composition and the
@@ -290,3 +290,36 @@ Verified milestones:
   streams, incremental I/O, other reference/conformance corpora,
   coverage-guided fuzzing and all measured performance/optimization work remain
   required. The full user goal stays open.
+
+- Direct hierarchical frame encoder milestone: native DHP/EXP and all six
+  differential processes in one bounded output buffer, borrowed coefficient
+  and sample views, source-model construction without a decoder, fixed/optimized
+  Huffman or arithmetic, direct DC/PSV0, signed integer Pt, generated/custom
+  scripts, progressive refinement through Al=13, DRI clearing and metadata/ICC.
+  Frame/process rules and global source/output/scratch limits are validated;
+  nested output byte budgets apply to individual frame writers. Quantizer
+  deduplication uses a fixed stack array. No frame is cloned or separately
+  compressed before concatenation. DCT frames support 1..4 components;
+  predictive frames support the full 255-component range with generated scans.
+  All 5,200 C/native frame-data comparisons pass with zero C warnings: 42
+  reference-derived and 62 native-authored inputs, 104 direct source checks and
+  5,096 rewrites. Original native inputs include thirty arithmetic differential
+  Pt=1 streams; rewrites preserve their restored values at Pt=0 through both
+  entropy coders. Huffman signed Pt has an independent entropy-bit golden.
+  The matrices cover 20,800 DCT blocks and 2,927,550 sample/residual values;
+  3,900 pure-lossless compositions match an independent integer implementation.
+  All 3,000 native-authored lossless comparisons also match prescribed targets.
+  Pre-entropy expectations and source target planes are retained with the 62
+  new fixtures; these are C-checked encoder regressions, not an independent
+  standards conformance corpus. Reports distinguish repeated configurations
+  from distinct output hashes. A 256-symbol fixed progressive differential
+  Huffman table is valid and exercises its ten-bit run/magnitude code.
+  All 600 earlier DCT and 4,448 Huffman lossless output hashes remain unchanged;
+  the DCT files are also rechecked against C coefficients. All 112 tests pass
+  in release and isolated debug builds; rustfmt, Clippy and rustdoc with
+  warnings denied pass. See HIERARCHICAL-VALIDATION.md and the retained
+  hierarchical-encode and hierarchical-refactor reports under tests/reports.
+  Automatic native/shared raster pyramids and differential FDCT, DNL and
+  abbreviated streams, incremental I/O, broader reference/conformance and rare
+  scan/Pt coverage, coverage-guided fuzzing and all measured performance and
+  optimization work remain required. The full user goal stays active.

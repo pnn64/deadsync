@@ -64,8 +64,16 @@ quantizers or native sample differences and global metadata/scan positions.
 `reconstruct_reference()` composes raw modulo-65536 component planes with the
 ordered Annex J expansion filter; `reconstruct()` provides the shared planar
 color interface. Initial frames may use any supported ordinary process.
-Hierarchical encoding remains pending. Exact independent frame-data gates and
-the reference's raster limitations are documented in HIERARCHICAL-VALIDATION.md.
+`HierarchicalImage::from_frames` constructs a validated native hierarchy without
+decoding a JPEG. `encode(HierarchicalOptions::default())` writes its frames into
+one bounded output buffer, preserving native values and each frame's entropy
+family and sequential/progressive choice. Per-frame `HierarchicalFrameOptions`
+select Huffman/arithmetic, fixed/optimized tables, generated/custom scans,
+refinement, signed residual Pt and restarts. Metadata/ICC controls use
+`encode_with_metadata`. DCT frames currently accept 1..4 components; lossless
+frames support 255. Automatic raster-pyramid construction remains pending.
+Exact independent frame-data gates and the reference's raster limitations are
+documented in HIERARCHICAL-VALIDATION.md.
 
 `encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
 without another lossy transform. It preserves quantizer values, visible blocks,

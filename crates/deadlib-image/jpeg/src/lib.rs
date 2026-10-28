@@ -11,6 +11,7 @@ mod encode;
 mod entropy;
 mod exif;
 mod hierarchical;
+mod hierarchical_encode;
 mod huffman_encode;
 mod lossless;
 mod lossless_arithmetic;
@@ -35,6 +36,10 @@ pub use exif::{ByteOrder, Exif, ExifEntry, ExifIfd};
 pub use hierarchical::{
     Expansion, HierarchicalData, HierarchicalFrame, HierarchicalImage, HierarchyHeader,
     decode_hierarchical,
+};
+pub use hierarchical_encode::{
+    HierarchicalFrameOptions, HierarchicalOptions, encode_hierarchical,
+    encode_hierarchical_with_metadata,
 };
 pub use lossless::{LosslessCoding, LosslessImage, decode_lossless};
 pub use lossless_encode::{

@@ -51,6 +51,19 @@ impl Output {
         self.raw(&[0xff, marker])
     }
 
+    /// Bound a frame appended to the shared output without another buffer.
+    pub fn bounded<T>(
+        &mut self,
+        additional: usize,
+        write: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let previous = self.limit;
+        self.limit = previous.min(self.bytes.len().saturating_add(additional));
+        let result = write(self);
+        self.limit = previous;
+        result
+    }
+
     pub fn segment(&mut self, marker: u8, data: &[u8]) -> Result<()> {
         let length = u16::try_from(data.len().saturating_add(2))
             .map_err(|_| Error::Invalid("encoder segment length"))?;

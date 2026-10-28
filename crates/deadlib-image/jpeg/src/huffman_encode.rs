@@ -134,19 +134,24 @@ impl Codebook {
 
     /// Valid fixed fallback tables covering all DCT magnitudes and run symbols,
     /// including 12-bit coefficients. Optimized tables are the default.
-    pub fn fixed(ac: bool, precision: u8, progressive: bool) -> Result<Self> {
+    pub fn fixed(ac: bool, precision: u8, progressive: bool, differential: bool) -> Result<Self> {
         let mut counts = [0; 16];
         if ac {
             let symbols: Vec<u8> = (0..=255)
                 .filter(|&symbol| {
                     let size = symbol & 15;
-                    (size > 0 && size <= precision + 2)
+                    (size > 0 && size <= precision + 2 + u8::from(differential))
                         || symbol == 0
                         || symbol == 0xf0
                         || (progressive && size == 0)
                 })
                 .collect();
-            counts[7] = symbols.len() as u8;
+            if symbols.len() == 256 {
+                counts[8] = 255;
+                counts[9] = 1;
+            } else {
+                counts[7] = symbols.len() as u8;
+            }
             Self::new(counts, symbols)
         } else {
             counts[if precision == 8 { 3 } else { 4 }] = precision + 4;
