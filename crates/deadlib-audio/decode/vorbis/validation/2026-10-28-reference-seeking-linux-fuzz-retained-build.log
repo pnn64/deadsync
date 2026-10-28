@@ -1,0 +1,9 @@
+wsl :    Compiling deadlib-audio-decode-vorbis v0.1.0 (/mnt/c/Github/deadsync/crates/deadlib-audio/decode/vorbis)
+At line:2 char:1
++ wsl -d Debian -- env PATH=/home/pnn64/.cargo/bin:/usr/local/sbin:/usr ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling de.../decode/vorbis):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+   Compiling deadlib-audio-decode-fuzz v0.0.0 (/mnt/c/Github/deadsync/crates/deadlib-audio/decode/fuzz)
+    Finished `release` profile [optimized + debuginfo] target(s) in 20.61s

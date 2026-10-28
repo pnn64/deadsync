@@ -991,6 +991,7 @@ pub fn vorbis_stream(input: &[u8]) {
     // the same error/PCM prefix and recover after another explicit seek.
     {
         let seek_options = vorbis::SeekOptions {
+            seek_behavior: vorbis::SeekBehavior::Retained,
             limits: options.limits,
             container_limits: container_limits(),
             allow_zero_span_granules: control & 1 != 0,
@@ -1009,6 +1010,9 @@ pub fn vorbis_stream(input: &[u8]) {
             max_index_memory: 8 << 20,
             max_stream_memory: 16 << 20,
         };
+        if control & 128 != 0 {
+            reference_seeks(data, seek_options, options.allow_nonfinite);
+        }
         if let Ok(mut seek) = vorbis::OggSeekReader::with_options(Cursor::new(data), seek_options) {
             let id = seek.selected().info.id;
             let end = seek.selected().end.frames;
@@ -1058,6 +1062,49 @@ pub fn vorbis_stream(input: &[u8]) {
                     previous = Some(outcome);
                 }
             }
+        }
+    }
+}
+
+// Reference restart deliberately retains history. Compare independent readers
+// with identical histories, never a restart against a fresh/previous schedule.
+fn reference_seeks(data: &[u8], mut options: vorbis::SeekOptions, ieee: bool) {
+    options.seek_behavior = vorbis::SeekBehavior::Libvorbis;
+    let mut pair = [
+        vorbis::OggSeekReader::with_options(Cursor::new(data), options),
+        vorbis::OggSeekReader::with_options(Cursor::new(data), options),
+    ];
+    assert_eq!(pair[0].as_ref().err(), pair[1].as_ref().err());
+    let [Ok(first), Ok(second)] = &mut pair else {
+        return;
+    };
+    let id = first.selected().info.id;
+    let end = first.selected().end.frames;
+    for target in [end, end / 2, 0, end.saturating_sub(1), 0] {
+        let mut previous = None;
+        for (mode, reader) in [&mut *first, &mut *second].into_iter().enumerate() {
+            let mut digest = Digest::with_nonfinite(ieee);
+            let result = (|| {
+                reader.seek(id, target)?;
+                let mut steps = 0;
+                loop {
+                    let more = if mode == 0 {
+                        reader.read_next(|e| digest.event(e))
+                    } else {
+                        reader.read_packet(|e| digest.event(e))
+                    }?;
+                    if !more {
+                        return Ok::<_, vorbis::Error>(());
+                    }
+                    steps += 1;
+                    assert!(steps <= MAX_PAGES * 256 + 2);
+                }
+            })();
+            let outcome = (result, reader.position(), digest);
+            if let Some(previous) = &previous {
+                assert_eq!(previous, &outcome);
+            }
+            previous = Some(outcome);
         }
     }
 }

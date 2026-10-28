@@ -1,5 +1,14 @@
 # Generated, redistributable fixtures
 
+`truncated-first-long-v1.ogg`, `.bin` and `.out` retain the procedural 33-mode,
+long-first residue-zero stream, 17 repeated seek requests and the unmodified
+libvorbisfile response for failed first-packet track-only preroll. They are
+generated tones, not third-party media. `reference_seeking.rs` regenerates the
+case and recaptures the C response when `DEADLIB_VORBIS_REFERENCE_SEEK_INPUTS`
+names an ignored scratch directory. Ordinary offline tests only read these
+fixtures. The milestone validation manifest records their hashes and the C
+oracle/source provenance; see [reference seeking](../../REFERENCE_SEEKING.md).
+
 These files contain locally generated tones/silence, not third-party music.
 The original four Ogg fixtures were generated with FFmpeg's libvorbis encoder. They exercise setup parsing and
 provide independently decodable fixtures for the PCM differential suite.
