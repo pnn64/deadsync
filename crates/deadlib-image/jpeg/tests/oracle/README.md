@@ -67,3 +67,14 @@ The pixel encoder gate and its commands are documented in
 files: native precision LE u16 full-resolution grayscale/RGB/CMYK output with
 float IDCT and nearest upsampling. Fractional ratios have coefficient/raw-plane
 checks and omit `.color` because the reference upsampler cannot handle them.
+
+## Arithmetic reference gate
+
+`arithmetic_transcode.c` copies coefficients through the public C API and
+exposes conditioning L/U/Kx, four table destinations, restart intervals and
+separate component scans. Its CLI is `input.jpg output.jpg restart L U Kx
+table-layout scan-layout`. Table layout 0 shares destination 0; layouts 1-3
+rotate component DC/AC destinations. Scan layout 0 is interleaved sequential,
+1 uses the reference progressive scan script and 2 uses separate sequential
+component scans. APP markers are not copied by this coefficient-only client.
+See ../../ARITHMETIC-VALIDATION.md for reproduction, scope and retained evidence.

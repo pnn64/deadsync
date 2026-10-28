@@ -107,7 +107,7 @@ Verified milestones:
   Final gates: all 43 tests pass in release and isolated debug builds; rustfmt,
   Clippy and rustdoc with warnings denied pass. The direct RGB memory-budget
   regression confirms conversion does not require a full CMYK intermediate.
-- CMYK source/encoder milestone: explicit source polarity, native CMYK-to-YCCK
+- `9a08f1a6e`: explicit source polarity, native CMYK-to-YCCK
   conversion during area sampling, Y/K resolution presets, native-raster
   encoding entry points and source precision scaling. All 192 C decoder gates
   preserve pre-entropy coefficients exactly. Equivalent source polarities
@@ -117,3 +117,14 @@ Verified milestones:
   streaming breadth, other references, fuzzing and performance remain open.
   Final gates: all 47 tests pass in release and isolated debug builds; rustfmt,
   Clippy and rustdoc with warnings denied pass.
+- Sequential arithmetic decoder milestone: native Annex D probability coder,
+  Table D.3 and exact K.4 golden sequence, Annex F DC/AC contexts, DAC/default
+  conditioning, four destinations, restart resets and separate component scans.
+  All 1,314 arithmetic coefficient checks from 219 unique sources and 2,628
+  native Huffman rewrites pass exactly in libjpeg-turbo, with zero warnings.
+  Fifteen pinned C fixtures, every truncated prefix, DAC/restart corruption,
+  resource limits and 5,000 bounded mutations run in Cargo tests. All 55 tests
+  pass in release and isolated debug builds; rustfmt, Clippy and rustdoc with
+  warnings denied pass. See ARITHMETIC-VALIDATION.md and the retained reports.
+  Progressive arithmetic, arithmetic encoding, lossless/hierarchy, streaming,
+  broader references/conformance, fuzzing and performance remain open.

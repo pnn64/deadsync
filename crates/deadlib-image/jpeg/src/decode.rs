@@ -1,3 +1,4 @@
+use crate::arithmetic::{Arithmetic, Conditioning, Statistics};
 use crate::entropy::{Bits, Huffman};
 use crate::progressive::ProgressiveScan;
 use crate::{
@@ -100,12 +101,13 @@ pub(crate) fn allocate_components(
 }
 
 /// Decode without IDCT or color conversion. APPn/COM payloads borrow the input.
-/// Currently accepts sequential/progressive Huffman DCT frames; other processes are explicit
+/// Accepts sequential Huffman/arithmetic and progressive Huffman DCT frames; other processes are explicit
 /// errors while their native implementations are in progress.
 pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientImage<'_>> {
     let mut reader = MarkerReader::new(input)?;
     let mut quant = [None; 4];
     let mut huffman: [Option<Huffman>; 8] = core::array::from_fn(|_| None);
+    let mut conditioning = Conditioning::default();
     let mut frame = None;
     let mut components = Vec::new();
     let mut seen = Vec::new();
@@ -127,6 +129,9 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
             Event::Segment {
                 marker: 0xc4, data, ..
             } => parse_huffman(data, &mut huffman)?,
+            Event::Segment {
+                marker: 0xcc, data, ..
+            } => conditioning.parse(data)?,
             Event::Segment {
                 marker: 0xdd, data, ..
             } => {
@@ -171,8 +176,9 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
                 if header.process != Process::Baseline
                     && header.process != Process::ExtendedSequential
                     && header.process != Process::Progressive
+                    && header.process != Process::ArithmeticSequential
                 {
-                    return Err(Error::Unsupported("non-Huffman DCT process"));
+                    return Err(Error::Unsupported("this JPEG process"));
                 }
                 if header.height == 0 {
                     return Err(Error::Unsupported("DNL height"));
@@ -208,6 +214,7 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
                     &quant,
                     &huffman,
                     interval,
+                    conditioning,
                 )?;
             }
             Event::Segment { marker: 0xdc, .. } => return Err(Error::Unsupported("DNL height")),
@@ -215,9 +222,6 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
                 marker: 0xde | 0xdf,
                 ..
             } => return Err(Error::Unsupported("hierarchical process")),
-            Event::Segment { marker: 0xcc, .. } => {
-                return Err(Error::Unsupported("arithmetic conditioning"));
-            }
             Event::Segment { .. } => return Err(Error::Invalid("reserved or unexpected marker")),
         }
         if memory_bytes
@@ -313,6 +317,7 @@ fn decode_scan(
     quant: &[Option<Quantization>; 4],
     tables: &[Option<Huffman>; 8],
     interval: usize,
+    conditioning: Conditioning,
 ) -> Result<()> {
     if header.len() < 4 {
         return Err(Error::Invalid("SOS length"));
@@ -348,10 +353,10 @@ fn decode_scan(
         let need_ac = progression.is_none_or(|s| s.ss != 0);
         if dc > max_table
             || ac > max_table
-            || (need_dc && tables[dc].is_none())
-            || (need_ac && tables[4 + ac].is_none())
+            || (!frame.process.is_arithmetic() && need_dc && tables[dc].is_none())
+            || (!frame.process.is_arithmetic() && need_ac && tables[4 + ac].is_none())
         {
-            return Err(Error::Invalid("missing or invalid Huffman table"));
+            return Err(Error::Invalid("missing or invalid entropy table"));
         }
         if (progression.is_none() && seen[i]) || selected[..j].iter().any(|v| v.0 == i) {
             return Err(Error::Invalid("duplicate sequential component"));
@@ -399,6 +404,15 @@ fn decode_scan(
         )
     };
     let mut bits = Bits::new(entropy);
+    let mut arithmetic = if frame.process.is_arithmetic() {
+        Some((
+            Arithmetic::new(entropy)?,
+            Statistics::default(),
+            [0usize; 4],
+        ))
+    } else {
+        None
+    };
     let mut predictors = [0i32; 4];
     let mut restart = 0;
     let mut eob_run = 0;
@@ -407,7 +421,13 @@ fn decode_scan(
             if eob_run != 0 {
                 return Err(Error::Invalid("EOB run crosses restart"));
             }
-            bits.restart(restart)?;
+            if let Some((coder, statistics, classes)) = &mut arithmetic {
+                coder.restart(restart)?;
+                statistics.reset();
+                classes.fill(0);
+            } else {
+                bits.restart(restart)?;
+            }
             restart = (restart + 1) & 7;
             predictors.fill(0);
         }
@@ -426,7 +446,18 @@ fn decode_scan(
                     let bx = mcu % cols * h + x;
                     let by = mcu / cols * v + y;
                     let block = &mut c.blocks[by * c.blocks_wide + bx];
-                    if let Some(scan) = progression {
+                    if let Some((coder, statistics, classes)) = &mut arithmetic {
+                        statistics.sequential(
+                            block,
+                            coder,
+                            dc,
+                            ac - 4,
+                            &mut classes[j],
+                            &mut predictors[j],
+                            conditioning,
+                            frame.precision,
+                        )?;
+                    } else if let Some(scan) = progression {
                         scan.decode(
                             block,
                             &mut bits,
@@ -453,7 +484,11 @@ fn decode_scan(
     if eob_run != 0 {
         return Err(Error::Invalid("EOB run exceeds scan"));
     }
-    bits.finish()?;
+    if let Some((coder, _, _)) = arithmetic {
+        coder.finish()?;
+    } else {
+        bits.finish()?;
+    }
     for &(i, _, _) in &selected[..n] {
         if progression.is_none_or(|s| s.ss == 0) {
             seen[i] = true;

@@ -14,6 +14,9 @@ grayscale/RGB/YCbCr interpretation and centered chroma interpolation.
 Progressive decoding includes spectral selection, DC/AC successive
 approximation, EOB runs, restart boundaries, and scan-order validation. Partial
 progressions retain the precision available for each band.
+Sequential arithmetic SOF9 decoding uses a native Annex D binary coder and
+Annex F DC/AC contexts, DAC conditioning tables and restart resets. Arithmetic
+input can be rewritten as Huffman JPEG without changing its coefficients.
 
 `encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
 without another lossy transform. It preserves quantizer values, visible blocks,
@@ -67,7 +70,7 @@ Limits bound pixels, coefficient/sample storage, metadata (including segment
 record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark; allocation instrumentation remains planned.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
-unsupported errors. Arithmetic, predictive lossless, hierarchy,
+unsupported errors. Progressive arithmetic, arithmetic encoding, predictive lossless, hierarchy,
 DNL, streaming, additional encoder scan strategies, and the broader validation
 and performance work remain required.
 
@@ -89,3 +92,4 @@ results, including their numerical bounds and limits.
 COLOR-VALIDATION.md describes CMYK/YCCK conversion, exact rational chroma
 siting, profile/polarity policies and the 486-case color reference gate.
 CMYK-ENCODER-VALIDATION.md covers source-polarity and CMYK-to-YCCK encoding.
+ARITHMETIC-VALIDATION.md covers sequential arithmetic decoding and reference gates.

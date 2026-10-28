@@ -62,7 +62,7 @@ enum Scan {
 /// Encode original quantized coefficients without an IDCT/FDCT or color
 /// conversion. Quantizer values and APPn/COM payloads are preserved. Metadata
 /// keeps its relative order; positions past the new last scan move before EOI.
-/// This initial writer accepts one to four components and Huffman DCT frames.
+/// Accepts one to four components from Huffman/arithmetic DCT frames and writes Huffman output.
 pub fn encode_coefficients(
     image: &CoefficientImage<'_>,
     options: CodingOptions,
@@ -266,7 +266,11 @@ fn validate(image: &CoefficientImage<'_>) -> Result<()> {
     let n = image.components.len();
     if !matches!(
         f.process,
-        Process::Baseline | Process::ExtendedSequential | Process::Progressive
+        Process::Baseline
+            | Process::ExtendedSequential
+            | Process::Progressive
+            | Process::ArithmeticSequential
+            | Process::ArithmeticProgressive
     ) {
         return Err(Error::Unsupported(
             "coefficient encoding of non-Huffman DCT process",

@@ -4,6 +4,7 @@
 //! the shared image model has no 12-bit, CMYK or subsampled representation.
 #![forbid(unsafe_code)]
 
+mod arithmetic;
 mod decode;
 mod encode;
 mod entropy;
