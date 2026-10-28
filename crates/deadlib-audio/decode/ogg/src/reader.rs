@@ -173,11 +173,15 @@ impl<R: Read> PageReader<R> {
         if !self.fill(header)? {
             return Err(Error::Truncated);
         }
-        let len = page::page_size(&self.buffer[self.start..])?;
+        let len = header
+            + self.buffer[self.start + 27..self.start + header]
+                .iter()
+                .map(|&n| n as usize)
+                .sum::<usize>();
         if !self.fill(len)? {
             return Err(Error::Truncated);
         }
-        Page::parse(&self.buffer[self.start..self.start + len])?;
+        page::check_crc(&self.buffer[self.start..self.start + len])?;
         Ok(Some(len))
     }
     pub fn next_page(&mut self) -> Result<Option<LocatedPage<'_>>, Error> {
@@ -285,7 +289,11 @@ impl PageDecoder {
                 if self.buffer.len() < header {
                     header
                 } else {
-                    self.length = page::page_size(&self.buffer)?;
+                    self.length = header
+                        + self.buffer[27..header]
+                            .iter()
+                            .map(|&n| n as usize)
+                            .sum::<usize>();
                     self.length
                 }
             };
@@ -298,7 +306,7 @@ impl PageDecoder {
                 return Ok((consumed, false));
             }
             if self.length != 0 {
-                Page::parse(&self.buffer)?;
+                page::check_crc(&self.buffer)?;
                 return Ok((consumed, true));
             }
         }

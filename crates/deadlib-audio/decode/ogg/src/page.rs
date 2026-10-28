@@ -37,11 +37,7 @@ impl<'a> Page<'a> {
             return Err(Error::Truncated);
         }
         let bytes = &input[..len];
-        let expected = u32::from_le_bytes(bytes[22..26].try_into().unwrap());
-        let actual = crc::page_crc(bytes);
-        if actual != expected {
-            return Err(Error::Checksum { expected, actual });
-        }
+        check_crc(bytes)?;
         Ok((Self::verified(bytes), len))
     }
     /// Only call on an exact slice with verified lacing length and CRC.
@@ -92,6 +88,16 @@ impl<'a> Page<'a> {
             },
         }
     }
+}
+
+// The exact page length and strict header rules must already be verified.
+pub(crate) fn check_crc(bytes: &[u8]) -> Result<(), Error> {
+    let expected = u32::from_le_bytes(bytes[22..26].try_into().unwrap());
+    let actual = crc::page_crc(bytes);
+    if actual != expected {
+        return Err(Error::Checksum { expected, actual });
+    }
+    Ok(())
 }
 
 pub(crate) fn header_size(input: &[u8]) -> Result<usize, Error> {
