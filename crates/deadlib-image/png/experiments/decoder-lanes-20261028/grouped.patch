@@ -1,0 +1,141 @@
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index dcca2dae9..df0407fb1 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -122,11 +122,14 @@ fn unfilter_neighbors<const PAETH: bool>(row: &mut [u8], prev: &[u8], bpp: usize
+ pub(crate) fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> Result<(), Error> {
+     match filter {
+         0 => (),
+-        1 => {
+-            for n in bpp..row.len() {
+-                row[n] = row[n].wrapping_add(row[n - bpp]);
++        1 => match bpp {
++            1 | 3 | 4 | 6 => unfilter_first_neighbors::<false>(row, bpp),
++            _ => {
++                for n in bpp..row.len() {
++                    row[n] = row[n].wrapping_add(row[n - bpp]);
++                }
+             }
+-        }
++        },
+         2 => {
+             for (v, &up) in row.iter_mut().zip(prev) {
+                 *v = v.wrapping_add(up);
+@@ -147,6 +150,26 @@ pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
+     }
+ }
+ 
++fn scatter8<const CHANNELS: usize>(row: &[u8], out: &mut [u8], step: usize) {
++    for (pixel, dst) in row
++        .as_chunks::<CHANNELS>()
++        .0
++        .iter()
++        .zip(out.chunks_mut(step * CHANNELS))
++    {
++        dst[..CHANNELS].copy_from_slice(pixel);
++    }
++}
++
++fn scatter_bits<const DEPTH: u8>(row: &[u8], out: &mut [u8], step: usize) {
++    let group = 8 / DEPTH as usize;
++    for (samples, &byte) in out.chunks_mut(group * step).zip(row) {
++        for (n, sample) in samples.iter_mut().step_by(step).enumerate() {
++            *sample = (byte >> (8 - DEPTH - n as u8 * DEPTH)) & ((1 << DEPTH) - 1);
++        }
++    }
++}
++
+ fn unfilter_first_pixels<const N: usize, const HALF: bool>(row: &mut [u8]) {
+     let (pixels, tail) = row.as_chunks_mut::<N>();
+     let mut left = [0; N];
+@@ -278,22 +301,39 @@ pub(crate) fn decode(
+                 position += stride + 1;
+                 continue;
+             }
+-            for pixel in 0..w {
+-                let dst = (dst_y * width as usize + x as usize + pixel * dx as usize) * channels;
+-                for channel in 0..channels {
+-                    let src = pixel * channels + channel;
+-                    match &mut samples {
+-                        Samples::U16(v) => {
+-                            v[dst + channel] = u16::from_be_bytes([row[src * 2], row[src * 2 + 1]])
+-                        }
+-                        Samples::U8(v) if depth == 8 => v[dst + channel] = row[src],
+-                        Samples::U8(v) => {
+-                            v[dst + channel] = (row[src * depth as usize / 8]
+-                                >> (8 - depth - (src * depth as usize % 8) as u8))
+-                                & ((1 << depth) - 1)
++            let dst = (dst_y * width as usize + x as usize) * channels;
++            match &mut samples {
++                Samples::U8(v) if depth == 8 => {
++                    let out = &mut v[dst..];
++                    match channels {
++                        1 => scatter8::<1>(row, out, dx as usize),
++                        2 => scatter8::<2>(row, out, dx as usize),
++                        3 => scatter8::<3>(row, out, dx as usize),
++                        _ => scatter8::<4>(row, out, dx as usize),
++                    }
++                }
++                Samples::U16(v) => {
++                    for (pixel, dst) in row
++                        .as_chunks::<2>()
++                        .0
++                        .chunks_exact(channels)
++                        .zip(v[dst..].chunks_mut(dx as usize * channels))
++                    {
++                        for (out, &bytes) in dst[..channels].iter_mut().zip(pixel) {
++                            *out = u16::from_be_bytes(bytes);
+                         }
+                     }
+                 }
++                Samples::U8(v) => {
++                    let step = dx as usize;
++                    let out = &mut v[dst..dst + (w - 1) * step + 1];
++                    match depth {
++                        1 => scatter_bits::<1>(row, out, step),
++                        2 => scatter_bits::<2>(row, out, step),
++                        4 => scatter_bits::<4>(row, out, step),
++                        _ => unreachable!("validated packed PNG depth"),
++                    }
++                }
+             }
+             position += stride + 1;
+         }
+diff --git a/crates/deadlib-image/png/src/stream/rows.rs b/crates/deadlib-image/png/src/stream/rows.rs
+index a75c7c19c..d6bcda503 100644
+--- a/crates/deadlib-image/png/src/stream/rows.rs
++++ b/crates/deadlib-image/png/src/stream/rows.rs
+@@ -84,12 +84,14 @@ impl ImageRows {
+                     let additional = bytes - self.row.len();
+                     reserve(&mut self.row, additional)?;
+                 }
+-                if bytes > self.previous.len() {
+-                    let additional = bytes - self.previous.len();
+-                    reserve(&mut self.previous, additional)?;
+-                }
+                 self.row.resize(bytes, 0);
+-                self.previous.resize(bytes, 0);
++                if self.height > 1 {
++                    if bytes > self.previous.len() {
++                        let additional = bytes - self.previous.len();
++                        reserve(&mut self.previous, additional)?;
++                    }
++                    self.previous.resize(bytes, 0);
++                }
+                 return Ok(());
+             }
+             self.pass += 1;
+@@ -101,11 +103,12 @@ impl ImageRows {
+         if self.ready {
+             self.ready = false;
+             self.have = 0;
+-            core::mem::swap(&mut self.row, &mut self.previous);
+             self.row_index += 1;
+             if self.row_index == self.height {
+                 self.pass += 1;
+                 self.start_pass()?;
++            } else {
++                core::mem::swap(&mut self.row, &mut self.previous);
+             }
+         }
+         Ok(())

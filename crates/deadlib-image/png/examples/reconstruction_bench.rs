@@ -148,6 +148,10 @@ fn main() {
         "case\toperation\titerations\tsample_bytes\tcycles_per_image\tns_per_image\tMiB_per_second\tallocations\treallocations\trequested_bytes\tfingerprint"
     );
     let stage = std::env::var("DEADLIB_PNG_BENCH_STAGE");
+    if stage.as_deref() == Ok("decoder-lanes") {
+        decoder_lanes();
+        return;
+    }
     if matches!(
         stage.as_deref(),
         Ok("encode" | "rows" | "bitwords" | "rowbuffers")
@@ -567,5 +571,74 @@ fn first_rows() {
             hash,
             || decode_reader(black_box(bytes.as_slice()), &Default::default()).unwrap(),
         );
+    }
+}
+
+fn decoder_lanes() {
+    let mut cases = Vec::new();
+    for color in [
+        ColorType::Grayscale,
+        ColorType::GrayscaleAlpha,
+        ColorType::Rgb,
+        ColorType::Rgba,
+    ] {
+        for depth in [8, 16] {
+            for filter in [Filter::None, Filter::Up] {
+                cases.push((4097, 1, color, depth, false, filter));
+            }
+            for (interlaced, filter) in [
+                (false, Filter::Sub),
+                (true, Filter::None),
+                (true, Filter::Paeth),
+            ] {
+                cases.push((513, 257, color, depth, interlaced, filter));
+            }
+        }
+    }
+    for depth in [1, 2, 4] {
+        cases.push((513, 257, ColorType::Grayscale, depth, true, Filter::None));
+    }
+    for depth in [8, 16] {
+        for filter in [Filter::None, Filter::Sub] {
+            cases.push((33, 9, ColorType::Rgba, depth, true, filter));
+        }
+    }
+    for (width, height, color, depth, interlaced, filter) in cases {
+        let png = fixture(width, height, color, depth);
+        let bytes = encode(
+            &png,
+            &EncodeOptions {
+                interlaced,
+                filter,
+                compression: deadlib_image_png::zlib::Compression::Stored,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            apng_recovery::inflate_idat(&bytes),
+            apng_recovery::filtered_with(&png.image, interlaced, filter)
+        );
+        assert_eq!(decode(&bytes).unwrap().image, png.image);
+        assert_eq!(
+            decode_reader(bytes.as_slice(), &Default::default())
+                .unwrap()
+                .image,
+            png.image
+        );
+        let case = format!(
+            "lanes-c{}-d{depth}-{width}x{height}-i{}-f{}",
+            color as u8,
+            u8::from(interlaced),
+            filter as u8
+        );
+        let hash = fingerprint(&Samples::U8(bytes.clone()));
+        let count = png.image.samples.len() * if depth == 16 { 2 } else { 1 };
+        measure(&case, "decode", count, hash, || {
+            decode(black_box(&bytes)).unwrap()
+        });
+        measure(&case, "decode-reader", count, hash, || {
+            decode_reader(black_box(bytes.as_slice()), &Default::default()).unwrap()
+        });
     }
 }

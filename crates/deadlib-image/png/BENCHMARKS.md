@@ -1892,3 +1892,109 @@ Evidence is in [`experiments/directrows-20261028`](experiments/directrows-202610
 directory; `compare.rs` contains the exact API comparisons. Cumulative patches
 are relative to `68a288d39`; final checks are in `final-validation.json` and
 `library-validation.json`. `protocol.json` records both measurement scopes.
+
+## Decoder pixel lanes and single-row predictors (2026-10-28)
+
+Three safe Rust changes remove work from native PNG decoding:
+
+1. Sub reconstruction reuses the existing fixed-pixel kernel for byte strides
+   1, 3, 4 and 6. The preceding pixel stays in a small register array instead of
+   indexing reconstructed row bytes for every channel. The original scalar
+   loop remains for strides 2 and 8, where the broad first trial regressed.
+2. Streaming passes with one row omit the previous-row allocation. Advancing
+   the terminal row no longer swaps buffers that the next pass cannot use.
+   Multi-row passes still retain their preceding row; first-row reconstruction,
+   row events, pass boundaries and checksum/error handling retain their order.
+3. Buffered 8-bit Adam7 scatter copies whole pixels with fixed channel widths.
+   Sample-variant/depth dispatch and channel indexing leave the per-channel
+   loop. Packed and 16-bit samples keep their original fallback loop after
+   broader typed/iterator rewrites regressed packed controls.
+
+The retained component comparisons alternate four complete processes per
+version. These are complete Stored-PNG decode APIs, including allocations:
+
+| Component and case | Before cycles | After cycles | CPU throughput | Allocation calls |
+| --- | ---: | ---: | ---: | ---: |
+| Sub gray8 513x257, reader | 1,041,637 | 655,720 | 1.59x | unchanged |
+| Sub RGB16 513x257, reader | 3,248,454 | 2,342,175 | 1.39x | unchanged |
+| One-row RGBA16 4097x1, reader | 121,444 | 110,894 | 1.10x | 6 -> 5 |
+| Adam7 RGBA8 513x257 None, buffered | 3,572,582 | 2,352,126 | 1.52x | unchanged |
+
+The one-row change's established benefit is its allocation/storage reduction;
+CPU effects depend on the caller and case. In the RGBA16 case it removes
+32,777 requested bytes: 163,887 -> 131,110, counting the full reader API. The
+buffer includes the filter byte. Gray8 and RGBA8 readers similarly drop five
+allocation calls to four. Neither pixel kernel introduces allocations.
+
+Supplemental comparisons link immutable Git baseline source and each candidate
+into one caller with shared native image types and the workspace's optimized
+LTO bench settings. Both APIs must reproduce every complete source image before
+timing. Three processes each retain eleven alternating batches per variant
+after one warmup batch. Final selected medians are:
+
+| Within-process combined comparison | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Sub gray8 513x257, buffered | 1,405,971 | 912,388 | 1.54x |
+| Sub gray8 513x257, reader | 1,270,685 | 757,129 | 1.68x |
+| Sub GA16 513x257, reader | 2,587,758 | 1,766,536 | 1.46x |
+| Sub RGB16 513x257, reader | 3,894,808 | 2,730,872 | 1.43x |
+| Sub RGBA8 513x257, reader | 2,377,624 | 1,564,011 | 1.52x |
+| Adam7 gray8 None 513x257, buffered | 1,278,880 | 1,067,794 | 1.20x |
+| Adam7 GA8 None 513x257, buffered | 1,353,437 | 1,068,087 | 1.27x |
+| Adam7 RGB8 None 513x257, buffered | 1,822,728 | 1,341,072 | 1.36x |
+| Adam7 RGBA8 None 513x257, buffered | 3,105,925 | 2,410,329 | 1.29x |
+
+Final within-process packed None controls range from 0.985x to 1.033x;
+16-bit Adam7 None buffered controls range from 0.979x to 1.049x. The unchanged
+two-/eight-byte Sub reader controls range from 0.996x to 1.045x. Those small
+differences are treated as caller/host variation. Earlier typed scatter trials
+reproduced a roughly 25% packed4 regression within one process and were rejected.
+Their logs and patches remain recorded, including unsuccessful indexed and
+grouped packed variants. Separate-process comparisons also contain control
+regressions, including GA8 Sub in the component experiment; final same-caller
+results and raw process ranges are retained rather than implying uniform gains.
+
+`DEADLIB_PNG_BENCH_STAGE=decoder-lanes` covers 47 deterministic images and both
+buffered/reader APIs: 94 case/operations per process. Inputs include eight native
+byte formats, None/Up one-row controls, plain Sub, Adam7 None/Paeth, packed depths
+1/2/4 and small Adam7 tails. Independently modeled complete filtered bytes and
+complete native decoded images are checked outside timing. Fingerprints identify
+the exact input PNG. Logical CPU 2, Windows thread cycles, Rust 1.99.1 and the
+existing optimized/LTO bench profile are used. Allocation probes are untimed.
+There are three warmups and seven batches; requested iterations are three,
+readers up to 65,536 native bytes use at least 64, and other outputs below 4,096
+bytes use at least 2,048. Within-process one-row cases use 64 iterations, small
+cases 1,024 and large cases three. Other host workloads/frequency are uncontrolled.
+The initial rejected Sub trial overlapped a preparatory build; subsequent jobs
+were serialized. No Fast-DEFLATE throughput claim follows from Stored inputs.
+
+The production diff adds 31 lines net (41 added, 10 removed). The two small
+pixel loops replace repeated runtime indexing/dispatch with fixed native lanes;
+single-row passes remove allocation, initialization and terminal swaps. There
+is no new unsafe code, runtime dependency or public API. Working-memory stats
+truthfully decrease with the omitted predictor buffer.
+
+Evidence is in [`experiments/decoder-lanes-20261028`](experiments/decoder-lanes-20261028).
+`sub-selected-paired-summary.tsv`, `predictor-paired-summary.tsv` and
+`bytes-paired-summary.tsv` retain the three components. `accepted-paired-summary.tsv`
+is the final whole-pipeline comparison; `in-process-bytes-summary.tsv` is the
+final paired caller. Other labels are intermediate/rejected trials, including
+the earlier `selected` labels. Cumulative patches are relative to `01e641a59`.
+`compare.py`/`compare.rs` retain the linked-caller experiment, `summary.py`
+recomputes its medians, and `protocol.json` identifies all measurement scopes.
+
+Selected-source verification passes 45 release tests and 43 debug tests,
+including all twelve library oracles in both profiles, strict all-target
+Clippy and scoped formatting. The two optional C reference tests run in release
+and remain ignored in debug. Checks include 3,240 native format/filter/Adam7
+matrix cases, 17,280 independently modeled encoded outputs, 3,000 independent
+APNG faults, 2,880 exact libpng native defaults, 576 exact libpng stored-sample
+files plus 576 sBIT recoveries, 4,680 resource/policy probes, 80,760 reader-fault
+checks and 468,096 IHDR parser/policy checks. Fragmented and interrupted reads,
+one-row/tall/small passes, malformed filters, truncation and checksum failures
+retain their native samples, acceptance/error behavior and event ordering.
+`final-validation.json` and `library-validation.json` retain commands, hashes
+and raw logs. `audit.py` verifies the selected source, ten frozen checkpoints,
+80 whole-pipeline processes, twelve supplemental paired callers, unchanged
+independent test sources and all recorded binary/log/summary identities before
+commit; `audit.json` records the audited report and evidence hashes.

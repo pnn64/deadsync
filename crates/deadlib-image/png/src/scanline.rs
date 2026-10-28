@@ -122,11 +122,14 @@ fn unfilter_neighbors<const PAETH: bool>(row: &mut [u8], prev: &[u8], bpp: usize
 pub(crate) fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> Result<(), Error> {
     match filter {
         0 => (),
-        1 => {
-            for n in bpp..row.len() {
-                row[n] = row[n].wrapping_add(row[n - bpp]);
+        1 => match bpp {
+            1 | 3 | 4 | 6 => unfilter_first_neighbors::<false>(row, bpp),
+            _ => {
+                for n in bpp..row.len() {
+                    row[n] = row[n].wrapping_add(row[n - bpp]);
+                }
             }
-        }
+        },
         2 => {
             for (v, &up) in row.iter_mut().zip(prev) {
                 *v = v.wrapping_add(up);
@@ -144,6 +147,17 @@ pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
         for (n, sample) in samples.iter_mut().enumerate() {
             *sample = (byte >> (8 - DEPTH - n as u8 * DEPTH)) & ((1 << DEPTH) - 1);
         }
+    }
+}
+
+fn scatter8<const CHANNELS: usize>(row: &[u8], out: &mut [u8], step: usize) {
+    for (pixel, dst) in row
+        .as_chunks::<CHANNELS>()
+        .0
+        .iter()
+        .zip(out.chunks_mut(step * CHANNELS))
+    {
+        dst[..CHANNELS].copy_from_slice(pixel);
     }
 }
 
@@ -273,6 +287,20 @@ pub(crate) fn decode(
                         {
                             *out = u16::from_be_bytes(bytes);
                         }
+                    }
+                }
+                position += stride + 1;
+                continue;
+            }
+            if depth == 8 {
+                if let Samples::U8(v) = &mut samples {
+                    let dst = (dst_y * width as usize + x as usize) * channels;
+                    let out = &mut v[dst..];
+                    match channels {
+                        1 => scatter8::<1>(row, out, dx as usize),
+                        2 => scatter8::<2>(row, out, dx as usize),
+                        3 => scatter8::<3>(row, out, dx as usize),
+                        _ => scatter8::<4>(row, out, dx as usize),
                     }
                 }
                 position += stride + 1;

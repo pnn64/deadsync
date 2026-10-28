@@ -84,12 +84,14 @@ impl ImageRows {
                     let additional = bytes - self.row.len();
                     reserve(&mut self.row, additional)?;
                 }
-                if bytes > self.previous.len() {
-                    let additional = bytes - self.previous.len();
-                    reserve(&mut self.previous, additional)?;
-                }
                 self.row.resize(bytes, 0);
-                self.previous.resize(bytes, 0);
+                if self.height > 1 {
+                    if bytes > self.previous.len() {
+                        let additional = bytes - self.previous.len();
+                        reserve(&mut self.previous, additional)?;
+                    }
+                    self.previous.resize(bytes, 0);
+                }
                 return Ok(());
             }
             self.pass += 1;
@@ -101,11 +103,12 @@ impl ImageRows {
         if self.ready {
             self.ready = false;
             self.have = 0;
-            core::mem::swap(&mut self.row, &mut self.previous);
             self.row_index += 1;
             if self.row_index == self.height {
                 self.pass += 1;
                 self.start_pass()?;
+            } else {
+                core::mem::swap(&mut self.row, &mut self.previous);
             }
         }
         Ok(())
