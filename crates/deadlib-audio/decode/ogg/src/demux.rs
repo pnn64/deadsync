@@ -238,8 +238,12 @@ impl Demuxer {
         let mut length = stream.partial.len();
         let mut pending = self.pending - length;
         let body = page.body().len();
-        // Without buffered packet bytes, the body size bounds every packet.
-        if length != 0
+        // An empty body cannot enlarge a previously validated cached packet.
+        if body == 0 {
+            if complete != 0 {
+                length = 0;
+            }
+        } else if length != 0
             || body > self.limits.max_packet_bytes
             || pending
                 .checked_add(body)

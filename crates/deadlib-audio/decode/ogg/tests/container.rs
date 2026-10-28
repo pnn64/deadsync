@@ -1,4 +1,132 @@
 use deadlib_audio_decode_ogg::*;
+
+#[test]
+fn zero_body_pages_preserve_or_finish_cached_packets_at_exact_limits() {
+    for nils in [0, 2, 32] {
+        for closes in [0, 1, 3, 255] {
+            let limits = Limits {
+                max_packet_bytes: 255,
+                max_pending_bytes: 255,
+                max_streams: 1,
+            };
+            let mut demux = Demuxer::new(limits);
+            let mut capture = PacketCapture::new(11, limits);
+            let mut demux_packets = Vec::new();
+            let mut capture_packets = Vec::new();
+            let mut frames = vec![
+                page(BOS, 0, 11, 0, &[1], &[37]),
+                page(0, UNKNOWN_GRANULE_POSITION, 11, 1, &[255], &[37; 255]),
+            ];
+            for sequence in 2..2 + nils {
+                frames.push(page(
+                    CONTINUED,
+                    UNKNOWN_GRANULE_POSITION,
+                    11,
+                    sequence,
+                    &[],
+                    &[],
+                ));
+            }
+            let mut offset = 0;
+            for frame in &frames {
+                let parsed = Page::parse(frame).unwrap().0;
+                demux
+                    .push_page(parsed, offset, |packet| {
+                        assert!(packet.data.iter().all(|&n| n == 37));
+                        assert_eq!(packet.info.first_in_stream, packet.info.number == 0);
+                        demux_packets.push((
+                            packet.info.number,
+                            packet.data.len(),
+                            packet.info.last_in_stream,
+                            packet.info.granule_position,
+                            packet.info.start_page_offset,
+                            packet.info.end_page_offset,
+                        ));
+                    })
+                    .unwrap();
+                capture
+                    .push_page(parsed, offset, |packet| {
+                        assert!(packet.data.iter().all(|&n| n == 37));
+                        assert_eq!(packet.info.first_in_stream, packet.info.number == Some(0));
+                        capture_packets.push((
+                            packet.info.number.unwrap(),
+                            packet.data.len(),
+                            packet.info.last_in_stream,
+                            packet.info.granule_position,
+                            packet.info.start_page_offset,
+                            packet.info.end_page_offset,
+                        ));
+                    })
+                    .unwrap();
+                offset += frame.len() as u64;
+            }
+            assert_eq!(demux.pending_bytes(), 255);
+            assert_eq!(capture.pending_bytes(), 255);
+            assert_eq!(demux_packets, vec![(0, 1, false, Some(0), 0, 0)]);
+            assert_eq!(capture_packets, demux_packets);
+            let ending = page(CONTINUED | EOS, 1, 11, 2 + nils, &vec![0; closes], &[]);
+            let ending = Page::parse(&ending).unwrap().0;
+            let demux_result = demux.push_page(ending, offset, |packet| {
+                assert!(packet.data.iter().all(|&n| n == 37));
+                demux_packets.push((
+                    packet.info.number,
+                    packet.data.len(),
+                    packet.info.last_in_stream,
+                    packet.info.granule_position,
+                    packet.info.start_page_offset,
+                    packet.info.end_page_offset,
+                ));
+            });
+            let capture_result = capture.push_page(ending, offset, |packet| {
+                assert!(packet.data.iter().all(|&n| n == 37));
+                capture_packets.push((
+                    packet.info.number.unwrap(),
+                    packet.data.len(),
+                    packet.info.last_in_stream,
+                    packet.info.granule_position,
+                    packet.info.start_page_offset,
+                    packet.info.end_page_offset,
+                ));
+            });
+            if closes == 0 {
+                assert_eq!(
+                    demux_result,
+                    Err(Error::Invalid("unfinished packet at EOS"))
+                );
+                assert_eq!(
+                    capture_result,
+                    Err(Error::Invalid("unfinished captured packet at EOS"))
+                );
+                assert_eq!(demux_packets.len(), 1);
+                assert_eq!(capture_packets, demux_packets);
+                assert_eq!(demux.pending_bytes(), 255);
+                assert_eq!(capture.pending_bytes(), 255);
+                assert_eq!(demux.finish(), Err(Error::Failed));
+                assert_eq!(capture.finish(), Err(Error::Failed));
+            } else {
+                demux_result.unwrap();
+                capture_result.unwrap();
+                let mut expected = vec![(0, 1, false, Some(0), 0, 0)];
+                for number in 1..=closes as u64 {
+                    expected.push((
+                        number,
+                        if number == 1 { 255 } else { 0 },
+                        number == closes as u64,
+                        (number == closes as u64).then_some(1),
+                        if number == 1 { 29 } else { offset },
+                        offset,
+                    ));
+                }
+                assert_eq!(demux_packets, expected);
+                assert_eq!(capture_packets, expected);
+                assert_eq!(demux.pending_bytes(), 0);
+                assert_eq!(capture.pending_bytes(), 0);
+                demux.finish().unwrap();
+                capture.finish().unwrap();
+            }
+        }
+    }
+}
 use std::io::{self, Cursor, Read, Write};
 
 fn page(
