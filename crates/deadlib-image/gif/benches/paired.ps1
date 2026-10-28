@@ -36,5 +36,12 @@ foreach ($case in $Cases) {
         }
         Write-Output ("{0} {1} {2}: {3:g} -> {4:g}" -f $case, $Operation, $metric, $values[0], $values[1])
     }
+    $ratios = foreach ($pair in 0..5) {
+        $matched = @($rows | Where-Object { $_.case -eq $case -and [int]$_.pair -eq $pair })
+        $old = [double]($matched | Where-Object variant -eq before).median_cycles
+        $new = [double]($matched | Where-Object variant -eq after).median_cycles
+        if ($new -gt 0) { $old / $new }
+    }
+    Write-Output ("{0} {1} median paired CPU throughput: {2:f3}x" -f $case, $Operation, (Median $ratios))
     $rows | Export-Csv -LiteralPath $Output -Delimiter "`t" -NoTypeInformation
 }

@@ -122,8 +122,10 @@ cargo bench -p deadlib-image-gif --bench pipeline --no-run
 Each comparison runs six pairs, alternates which variant runs first, and uses
 40 iterations x 7 samples per invocation (100x iterations for text). Tables
 report the upper median of the six invocation medians. The TSVs retain every
-invocation and its sample min/max. Throughput ratios below use before/after
-cycles; wall-clock throughput remains available in the raw data. The broad
+invocation and its sample min/max. Throughput is the upper median of the six
+paired before/after cycle ratios, reducing drift between invocations; this can
+differ from dividing the two independently selected cycle medians. Wall-clock
+throughput remains available in the raw data. The broad
 `00-baseline.tsv` and `01-validation.tsv` runs used 80 x 9; changing host load
 also moved unchanged operations, so only alternating comparisons support the
 individual optimization claims.
@@ -136,9 +138,9 @@ now scans the whole buffer before rejecting an invalid small-palette frame.
 | Workload / operation | Before cycles | After cycles | CPU throughput | Allocations |
 |---|---:|---:|---:|---:|
 | tiles16-palette / decode-retain | 1,407,561 | 935,109 | 1.51x | 4 -> 4 |
-| solid2-palette / decode-retain | 857,843 | 372,132 | 2.31x | 4 -> 4 |
-| tiles16-palette / composite | 1,029,242 | 744,411 | 1.38x | 2 -> 2 |
-| solid2-palette / composite | 1,628,508 | 1,185,984 | 1.37x | 2 -> 2 |
+| solid2-palette / decode-retain | 857,843 | 372,132 | 2.46x | 4 -> 4 |
+| tiles16-palette / composite | 1,029,242 | 744,411 | 1.47x | 2 -> 2 |
+| solid2-palette / composite | 1,628,508 | 1,185,984 | 1.47x | 2 -> 2 |
 
 Raw comparisons: `validation/2026-10-28/01-paired-{decode,composite}.tsv`.
 Production change: one validation predicate, removing the branch on each
@@ -160,3 +162,143 @@ external palette rendering.
 Raw comparison: `validation/2026-10-28/02-paired-text.tsv`, immediately after
 the validation change. Production change: delete the palette allocation/copy
 and temporary local-palette field (10 lines removed, 3 added).
+
+LZW decoding now handles literals directly, with the control-code tests and
+phrase lookup inside the nonliteral branch. This removes the intermediate
+`Option` for a phrase source and the later literal/phrase dispatch. Output
+limits, fallible growth, dictionary updates, clear/EOI handling, and KwKwK
+expansion are retained. There is no new allocation or unsafe code; the source
+change is 36 lines added / 32 removed, mostly rearranging the existing loop.
+
+| Workload / operation | Before cycles | After cycles | CPU throughput |
+|---|---:|---:|---:|
+| tiles16 / lzw-decode | 485,523 | 345,229 | 1.41x |
+| gradient256 / lzw-decode | 905,731 | 851,200 | 1.06x |
+| noise256 / lzw-decode (confirmation) | 2,228,716 | 1,782,301 | 1.25x |
+| interlaced-noise / lzw-decode (confirmation) | 2,369,127 | 1,778,631 | 1.33x |
+| noise256 / decode-retain | 2,432,019 | 1,991,762 | 1.22x |
+| interlaced-noise / decode-retain | 4,039,421 | 3,332,081 | 1.23x |
+| gradient256 / decode-retain | 945,003 | 889,419 | 1.07x |
+| animation32 / decode-retain | 1,435,231 | 1,349,252 | 1.07x |
+
+Solid decoding is effectively unchanged. Tiles16 full decode improves only
+about 3%, despite the larger contiguous-LZW gain: full decoding calls LZW on
+GIF sub-block fragments, so the two paths exercise different loop boundaries.
+Allocation counts/bytes are unchanged on every case. The first interlaced LZW
+run straddled a host-load change; individual pair ratios and the confirmation
+both support the improvement. No universal CPU or corpus speedup is claimed.
+Raw data: `03-before-lzw.tsv`, `03-paired-lzw.tsv`,
+`03-paired-lzw-confirm.tsv`, and `03-paired-decode.tsv` in the validation folder.
+
+Correctness: all 20 ordinary integration tests pass in release, including the
+upstream corpus and gif/gif-dispose differential checks. A standalone comparison
+against `18f241c4c` also verifies 336 exact encoded-byte cases and roundtrips,
+1,376,256 exhaustive two-byte decode output/error comparisons across minimum
+code sizes 2..=8 and output limits 0/1/8, and fragmented updates with a retained
+output prefix. Reproduce from the workspace root:
+
+```powershell
+$scratch = 'target/gif-perf-parity'
+New-Item -ItemType Directory -Force -Path $scratch | Out-Null
+git show '18f241c4c:crates/deadlib-image/gif/src/lzw.rs' | Set-Content "$scratch/original-lzw.rs"
+Copy-Item 'crates/deadlib-image/gif/src/lzw.rs' "$scratch/current-lzw.rs"
+Copy-Item 'crates/deadlib-image/gif/validation/2026-10-28/lzw-parity.rs' "$scratch/lzw-parity.rs"
+rustc --edition=2024 -O "$scratch/lzw-parity.rs" -o "$scratch/parity.exe"
+& "$scratch/parity.exe"
+```
+
+`03-lzw-parity.log` records the result. The optional native giflib test still
+requires an external oracle executable and was not run in this session.
+
+A separate packed encoder-table experiment reduced the table from 48 KiB to
+32 KiB but added key extraction to every probe. It preserved 336 exact encoded
+outputs, yet regressed noise/interlaced-noise encoding by roughly 50% in cycles
+and did not consistently improve the other fixtures. It was discarded; the
+original separate key/value arrays remain. `03-before-encode.tsv` and
+`03-packed-rejected.tsv` preserve that experiment's measurements.
+
+## Removing repeated work (2026-10-28, second batch)
+
+The same pinned-CPU alternating harness and environment described above apply.
+This batch starts from `17066c76d`; each subsequent comparison includes the
+earlier retained changes in both variants. Cycle columns remain independent
+upper medians; throughput is the median paired cycle ratio.
+
+Frame validation now accepts the existing external palette fallback, allowing
+decoding and compositing to validate the active palette once. This removes the
+second index scan/control check for local and global palettes, while preserving
+external palette validation and the original error order. The private helper
+is shared by the same three callers; no public API changes. Net production
+source change: 14 added / 16 removed lines.
+
+| Workload / operation | Before cycles | After cycles | CPU throughput | Allocations |
+|---|---:|---:|---:|---:|
+| solid2-palette / decode-retain | 194,848 | 181,622 | 1.08x | 4 -> 4 |
+| tiles16-palette / decode-retain | 510,694 | 354,498 | 1.44x | 4 -> 4 |
+| solid2-palette / composite | 710,845 | 693,874 | 1.03x | 2 -> 2 |
+| tiles16-palette / composite | 694,387 | 675,896 | effectively unchanged | 2 -> 2 |
+| noise256 / composite (control) | 678,150 | 692,434 | effectively unchanged | 2 -> 2 |
+
+Raw data: `04-before-decode.tsv`, `04-paired-decode.tsv`, and
+`04-paired-composite.tsv`. Allocation bytes are unchanged on every case.
+
+The compositor now stores pixels and saved rectangles as `Vec<[u8; 4]>` and
+borrows their bytes through safe slice flattening. Initialization resizes
+directly to the requested background, removing the prior zero-fill followed by
+an opaque fill. Rendering and disposal operate directly on pixels, removing
+repeated byte-stride multiplication and chunk conversion. The fixed-size
+canvas reserves its exact pixel count; public RGBA bytes and APIs are unchanged.
+Production diff: 30 added / 31 removed lines (including formatting the prior
+validation call).
+
+| Workload / operation | Before cycles | After cycles | CPU throughput | Allocations |
+|---|---:|---:|---:|---:|
+| solid / composite-init (logical background) | 594,627 | 480,549 | 1.27x | 2 -> 2 |
+| solid2-palette / composite-init | 593,818 | 476,851 | 1.25x | 2 -> 2 |
+| solid / composite | 680,230 | 597,327 | 1.14x | 2 -> 2 |
+| tiles16 / composite | 664,618 | 600,668 | 1.11x | 2 -> 2 |
+| noise256 / composite | 674,899 | 572,485 | 1.18x | 2 -> 2 |
+| animation32 / composite | 1,129,491 | 1,005,322 | 1.14x | 3 -> 3 |
+| tiles16-palette / composite | 1,072,702 | 996,580 | 1.13x | 2 -> 2 |
+
+Raw data: `05-before-init.tsv`, `05-paired-init.tsv`, and
+`05-paired-composite.tsv`. Allocation bytes are unchanged for these fixtures.
+The ordinary animation tests additionally check exact logical/transparent/custom
+backgrounds, palette fallback, clipped rectangles, disposal and repeated text
+rendering without allocation churn.
+
+The LZW writer now flushes little-endian 32-bit words instead of looping over
+individual bytes. A u64 holds at most 31 pending bits plus the next 12-bit code;
+one word flush leaves at most 11 bits. The final partial word writes exactly
+ceil(pending bits / 8) bytes. This removes the per-byte loop and amortizes
+fallible growth across codes. Production diff: 12 added / 7 removed lines;
+all writes remain safe Rust, and GIF sub-block framing is unchanged.
+
+| Workload / operation (confirmation) | Before cycles | After cycles | CPU throughput |
+|---|---:|---:|---:|
+| noise256 / encode | 6,764,971 | 6,270,193 | 1.14x paired; 1.08x ratio of medians |
+| interlaced-noise / encode | 11,810,665 | 10,889,106 | 1.09x paired; 1.08x ratio of medians |
+| tiles16-palette / encode | 6,011,249 | 5,971,115 | effectively unchanged |
+
+Use roughly 7-8% lower cycles on noise as the conservative local result. The
+initial tile comparison suggested a much larger improvement, but it crossed
+two host-performance regimes and did not reproduce, so no tile speedup is
+claimed. Solid/tiled/animation timings moved by roughly 1-2% and are treated as
+unchanged. Allocation/reallocation counts, requested bytes and compressed sizes
+are identical on all eight fixtures. Raw data: `06-before-encode.tsv`,
+`06-paired-encode.tsv`, and `06-paired-encode-confirm.tsv`.
+
+The standalone parity driver additionally checks every short length 0..=256
+at minimum code sizes 2..=8 using reused encoders and a three-byte output prefix,
+exercising word boundaries, partial-word padding and unaligned appends. Against
+`94d80f58a`, all 336 original encoded-byte/roundtrip cases, 1,799 short append
+cases and the 1,376,256 decode output/error comparisons pass. The command above
+can use `94d80f58a` for its original snapshot; `06-lzw-parity.log` records this
+run. The production encoder's bytes are unchanged in the existing independent
+gif decoder tests, including all palette sizes, interlacing and sub-block sizes
+1, 7 and 255.
+
+Final checks for the second batch: all 20 ordinary integration tests pass in
+debug and release; `cargo clippy -p deadlib-image-gif --all-targets -- -D warnings`
+and `cargo fmt -p deadlib-image-gif -- --check` pass. The optional external
+giflib oracle remains unexecuted in this session.

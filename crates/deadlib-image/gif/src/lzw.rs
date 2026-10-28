@@ -82,45 +82,49 @@ impl Decoder {
                 let code = (self.bits & ((1 << self.width) - 1)) as u16;
                 self.bits >>= self.width;
                 self.bit_count -= self.width;
-                if code == self.clear {
-                    self.clear_table();
-                    continue;
-                }
-                if code == self.clear + 1 {
-                    self.ended = true;
-                    break;
-                }
                 let start = output.len();
-                let (length, source, first) = if code < self.clear {
-                    (1, None, code as u8)
-                } else if code < self.next {
-                    let offset = self.offsets[code as usize];
-                    (
-                        self.lengths[code as usize] as usize,
-                        Some(offset),
-                        output[offset],
-                    )
-                } else if code == self.next && self.next < 4096 {
-                    let (offset, len) = self
-                        .previous
-                        .ok_or(Error::Invalid("LZW first code is not a literal"))?;
-                    (len + 1, Some(offset), output[offset])
+                let length = if code < self.clear {
+                    // Literals need neither control-code checks nor phrase lookup.
+                    if start >= limit {
+                        return Err(Error::Invalid("LZW output exceeds frame size"));
+                    }
+                    reserve(output, 1)?;
+                    output.push(code as u8);
+                    1
                 } else {
-                    return Err(Error::Invalid("undefined LZW code"));
-                };
-                if length > limit.saturating_sub(start) {
-                    return Err(Error::Invalid("LZW output exceeds frame size"));
-                }
-                reserve(output, length)?;
-                if let Some(offset) = source {
+                    if code == self.clear {
+                        self.clear_table();
+                        continue;
+                    }
+                    if code == self.clear + 1 {
+                        self.ended = true;
+                        break;
+                    }
+                    let (offset, length) = if code < self.next {
+                        (
+                            self.offsets[code as usize],
+                            self.lengths[code as usize] as usize,
+                        )
+                    } else if code == self.next && self.next < 4096 {
+                        let (offset, len) = self
+                            .previous
+                            .ok_or(Error::Invalid("LZW first code is not a literal"))?;
+                        (offset, len + 1)
+                    } else {
+                        return Err(Error::Invalid("undefined LZW code"));
+                    };
+                    if length > limit.saturating_sub(start) {
+                        return Err(Error::Invalid("LZW output exceeds frame size"));
+                    }
+                    reserve(output, length)?;
+                    let first = output[offset];
                     let count = length.min(start - offset);
                     output.extend_from_within(offset..offset + count);
                     if count < length {
                         output.push(first);
                     }
-                } else {
-                    output.push(first);
-                }
+                    length
+                };
                 if let Some((offset, previous_len)) = self.previous
                     && self.next < 4096
                 {
@@ -200,8 +204,10 @@ impl Encoder {
         }
         bits.code(clear + 1)?;
         if bits.count != 0 {
-            reserve(bits.output, 1)?;
-            bits.output.push(bits.bits as u8);
+            let count = bits.count.div_ceil(8) as usize;
+            reserve(bits.output, count)?;
+            bits.output
+                .extend_from_slice(&bits.bits.to_le_bytes()[..count]);
         }
         Ok(())
     }
@@ -220,11 +226,14 @@ impl BitWriter<'_> {
     fn code(&mut self, code: u16) -> Result<(), Error> {
         self.bits |= u64::from(code) << self.count;
         self.count += self.width;
-        reserve(self.output, 2)?;
-        while self.count >= 8 {
-            self.output.push(self.bits as u8);
-            self.bits >>= 8;
-            self.count -= 8;
+        // At most 31 buffered bits plus a 12-bit code fit in u64. Flush a
+        // whole word, amortizing fallible growth and writes across codes.
+        if self.count >= 32 {
+            reserve(self.output, 4)?;
+            self.output
+                .extend_from_slice(&(self.bits as u32).to_le_bytes());
+            self.bits >>= 32;
+            self.count -= 32;
         }
         let clear = 1 << self.minimum;
         if code == clear {
