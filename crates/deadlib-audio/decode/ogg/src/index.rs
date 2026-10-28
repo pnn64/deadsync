@@ -367,10 +367,11 @@ impl OggIndex {
     /// many pages. The returned page may begin with an earlier continuation;
     /// PacketCapture discards that fragment before returning complete packets.
     pub fn packet_start_page(&self, serial: u32, number: u64) -> Option<&IndexedPage> {
-        if number >= self.stream(serial)?.packets {
+        let stream = self.stream(serial)?;
+        if number >= stream.packets {
             return None;
         }
-        let pages = self.pages(serial)?;
+        let pages = &self.pages[stream.pages.clone()];
         let page = pages.get(
             pages
                 .partition_point(|p| p.first_packet <= number)
@@ -381,7 +382,14 @@ impl OggIndex {
         } else {
             page.offset
         };
-        let result = self.page_at_or_before(serial, offset)?;
+        if offset == page.offset {
+            return Some(page);
+        }
+        let result = pages.get(
+            pages
+                .partition_point(|page| page.offset <= offset)
+                .checked_sub(1)?,
+        )?;
         (result.offset == offset).then_some(result)
     }
 }
