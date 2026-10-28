@@ -187,3 +187,20 @@ hash, actual per-case executable identities, genuine IJG B.5 checks, Turbo SOS
 selector limitation, JPEG XT fractional-sampling limitation and explicit
 EXP00 C-input copies. Reports and retained inputs are under `tests/reports`
 and `tests/fixtures/components`. No C implementation enters production code.
+
+## mozjpeg reference gate
+
+`python tests/build_mozjpeg.py --work experiments/mozjpeg-reference` verifies
+the pinned official 4.1.1 archive and builds unmodified upstream 8/12-bit static
+libraries plus producers and separate `classic-oracle` clients. The portable
+client uses each build's JSAMPLE layout through public APIs and emits the same
+JCO1/LE-u16 plane/color formats. Upstream's 12-bit configuration disables
+arithmetic. SIMD is disabled; these are correctness builds.
+
+`reference_mozjpeg.py` checks native/mozjpeg/Turbo/IJG coefficients exactly,
+with separate float-IDCT and nearest-color limits, native writer inputs and
+explicit source/model exclusions. `reference_mozjpeg_limitation.py` separately
+records the scan-optimization/restart producer defect and empty DHT segments
+during explicit DC refinement. No runtime C warning is accepted by the main
+gate. See ../../MOZJPEG-VALIDATION.md for original/modified input distinctions,
+the unmodified source hash, numerical scope and reproduction commands.

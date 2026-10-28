@@ -1,0 +1,70 @@
+{
+  "reference": "mozjpeg 4.1.1",
+  "source": "https://codeload.github.com/mozilla/mozjpeg/tar.gz/refs/tags/v4.1.1",
+  "commit": "a2d2907ff023227e80c1e4efa809812410275a12",
+  "archive_sha256": "66b1b8d6b55d263f35f27f55acaaa3234df2a401232de99b6d099e2bb0a9d196",
+  "codec_source_changes": false,
+  "configuration_note": "Upstream WITH_12BIT disables arithmetic. SIMD off; correctness only.",
+  "builds": [
+    {
+      "precision": 8,
+      "cmake_options": [
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
+        "-DENABLE_SHARED=OFF",
+        "-DENABLE_STATIC=ON",
+        "-DWITH_SIMD=OFF",
+        "-DWITH_TURBOJPEG=OFF",
+        "-DPNG_SUPPORTED=OFF",
+        "-DWITH_CRT_DLL=OFF",
+        "-DWITH_12BIT=OFF",
+        "-DWITH_ARITH_ENC=ON",
+        "-DWITH_ARITH_DEC=ON"
+      ],
+      "arithmetic": true,
+      "tools": {
+        "cjpeg": {
+          "path": "build-8/Release/cjpeg-static.exe",
+          "sha256": "a25a1be170a876c9f9f65040f65fd9b36ad0f00abda2d3cb20de8080eb5700d6"
+        },
+        "jpegtran": {
+          "path": "build-8/Release/jpegtran-static.exe",
+          "sha256": "7dbac03adc82a68d92a751476433708e471d635422f0b1f280728a0e822bc982"
+        },
+        "oracle": {
+          "path": "client-8/Release/classic-oracle.exe",
+          "sha256": "85fba3d580c8dea6678d74ece9fff5995b80ff6a7b166411ee71f0e346a05bda"
+        }
+      }
+    },
+    {
+      "precision": 12,
+      "cmake_options": [
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5",
+        "-DENABLE_SHARED=OFF",
+        "-DENABLE_STATIC=ON",
+        "-DWITH_SIMD=OFF",
+        "-DWITH_TURBOJPEG=OFF",
+        "-DPNG_SUPPORTED=OFF",
+        "-DWITH_CRT_DLL=OFF",
+        "-DWITH_12BIT=ON",
+        "-DWITH_ARITH_ENC=ON",
+        "-DWITH_ARITH_DEC=ON"
+      ],
+      "arithmetic": false,
+      "tools": {
+        "cjpeg": {
+          "path": "build-12/Release/cjpeg-static.exe",
+          "sha256": "5cbf2ff638b41b3ddeafd49a43433a885d5c8eeabf612cfa4630e91db5d6cdc4"
+        },
+        "jpegtran": {
+          "path": "build-12/Release/jpegtran-static.exe",
+          "sha256": "4cd3d1130af8bed5eec24d50e3e6a7e8e163851c4936c6d7076a72dcae7a6f79"
+        },
+        "oracle": {
+          "path": "client-12/Release/classic-oracle.exe",
+          "sha256": "fe01075ad5ee18979854fe5b1f650b62e8522847e7c43b7e190d28cfe59ed11b"
+        }
+      }
+    }
+  ]
+}

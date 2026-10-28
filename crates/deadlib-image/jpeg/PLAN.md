@@ -406,7 +406,7 @@ Verified milestones:
   coverage-guided fuzzing and measured performance/optimization remain required.
   The full goal remains active; there is no application integration.
 
-- Generic component-count milestone: sequential DCT coefficient decoding,
+- `620ea620d`: generic component-count milestone: sequential DCT coefficient decoding,
   native construction, ordinary/abbreviated/direct hierarchical encoding and
   source pyramids support 1..255 components at P=8/12. Progressive DCT keeps
   the normative 1..4 range. Generated scans obey Ns/MCU bounds; predictors use
@@ -430,3 +430,24 @@ Verified milestones:
   combinations, independent conformance corpora, coverage-guided fuzzing and
   measured performance/optimization remain required. The full goal stays active;
   there is no application integration or added production codec dependency.
+
+- mozjpeg and three-C ordinary-process validation milestone: unmodified pinned
+  mozjpeg 4.1.1 8/12-bit builds and a public classic-API observer. All 759 inputs
+  match native/Turbo/IJG/mozjpeg visible coefficients and quantizers exactly:
+  612 mozjpeg source encodes, 78 native rewrites and 69 earlier regressions.
+  There are 758 raw/color comparisons, with observed errors at most one IDCT
+  and three nearest-color native sample units. One full-magnitude synthetic
+  arithmetic model keeps coefficient-only checks and records the C pixel
+  range-limit difference; no source-image tolerance is widened. Upstream's
+  12-bit arithmetic exclusion is recorded for 15 replays. Separate original
+  and passing inputs document the scan-optimization/restart producer defect
+  and empty DHTs during explicit DC refinement; native parser rules remain
+  unchanged. Thirty source images plus coefficient/float-plane expectations
+  pass 16,666 prefixes/boundaries and 3,000 bounded mutations.
+  All 148 tests pass in release and isolated debug builds; rustfmt, Clippy and
+  rustdoc with warnings denied pass. See
+  MOZJPEG-VALIDATION.md and mozjpeg reports in tests/reports. These are configured
+  interoperability regressions, not an independent standards-conformance corpus
+  or performance results. Incremental I/O, broader reference/conformance and
+  rare combinations, coverage-guided fuzzing and all measured optimization
+  remain required; the full goal stays active with no application integration.

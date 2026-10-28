@@ -1,0 +1,119 @@
+{
+  "scope": "Explicit reference-producer limitations; C warnings expected only for optimized-restarts. Empty DHTs are silently ignored by C; native rejects them. Explicit removal copy leaves entropy unchanged.",
+  "reference_commit": "a2d2907ff023227e80c1e4efa809812410275a12",
+  "archive_sha256": "66b1b8d6b55d263f35f27f55acaaa3234df2a401232de99b6d099e2bb0a9d196",
+  "tools": {
+    "cjpeg": "a25a1be170a876c9f9f65040f65fd9b36ad0f00abda2d3cb20de8080eb5700d6",
+    "oracle": "85fba3d580c8dea6678d74ece9fff5995b80ff6a7b166411ee71f0e346a05bda",
+    "native": "49928589292a632cd5e7aa93d6f2b5677b9f51993abd42ceedde7bd553ce1a66",
+    "turbo": "77d29072f4d30abc5386c5886a4147adb0c273fd4665bbb7d12fc96bd72041fc",
+    "ijg": "aaeb9b39be7ee5d9536fc973273a1c87572b17fd20cde139bc42a59303c73207"
+  },
+  "driver_sha256": "5e57f15c6c275fb40244eb7a8a4914729e63375468cb6afa38719d6b33b32146",
+  "results": [
+    {
+      "setting": "optimized-restarts",
+      "source_sha256": "a1c1f9795f3a7ec4395bc320bbe8e52bac8df96bb516d202b143916d54c3e8f0",
+      "image_sha256": "821b184193aa9fbdc80bb6aec915bef77c6c2338f4abdf092491ed33feb07393",
+      "decoders": {
+        "oracle": {
+          "returncode": 0,
+          "stderr": "Corrupt JPEG data: 7 extraneous bytes before marker 0xc4\r\nCorrupt JPEG data: 7 extraneous bytes before marker 0xc4\r\nCorrupt JPEG data: 7 extraneous bytes before marker 0xc4"
+        },
+        "turbo": {
+          "returncode": 0,
+          "stderr": "Corrupt JPEG data: 7 extraneous bytes before marker 0xc4\r\nCorrupt JPEG data: 7 extraneous bytes before marker 0xc4\r\nCorrupt JPEG data: 7 extraneous bytes before marker 0xc4"
+        },
+        "ijg": {
+          "returncode": 0,
+          "stderr": "Corrupt JPEG data: 2 extraneous bytes before marker 0xd0"
+        },
+        "native": {
+          "returncode": 1,
+          "stderr": "Error: Invalid(\"entropy padding\")"
+        }
+      }
+    },
+    {
+      "setting": "fastcrush-restarts",
+      "source_sha256": "a1c1f9795f3a7ec4395bc320bbe8e52bac8df96bb516d202b143916d54c3e8f0",
+      "image_sha256": "5cac31954229124bc0ff49a81bf419922df0d250f2dd24018c04cc2ecec4b402",
+      "decoders": {
+        "oracle": {
+          "returncode": 0,
+          "stderr": ""
+        },
+        "turbo": {
+          "returncode": 0,
+          "stderr": ""
+        },
+        "ijg": {
+          "returncode": 0,
+          "stderr": ""
+        },
+        "native": {
+          "returncode": 0,
+          "stderr": ""
+        }
+      },
+      "coefficients": "exact across native and all three C decoders"
+    },
+    {
+      "setting": "empty-dht",
+      "source_sha256": "1f79e6f4b4e5b70cd0ddeb2d652fbf204f6af17e37d723eacabe940063735224",
+      "image_sha256": "b5a311f10c911f206efefa6e23326f193e910209b8f81d9f966d92f493c965d8",
+      "decoders": {
+        "oracle": {
+          "returncode": 0,
+          "stderr": ""
+        },
+        "turbo": {
+          "returncode": 0,
+          "stderr": ""
+        },
+        "ijg": {
+          "returncode": 0,
+          "stderr": ""
+        },
+        "native": {
+          "returncode": 1,
+          "stderr": "Error: Invalid(\"empty DHT\")"
+        }
+      }
+    },
+    {
+      "setting": "without-empty-dht",
+      "source_sha256": "1f79e6f4b4e5b70cd0ddeb2d652fbf204f6af17e37d723eacabe940063735224",
+      "image_sha256": "29ff8a6e2ac3d36d976b839a8f1a87549ba9718ef0f36c4c57e03bc93c55c89c",
+      "decoders": {
+        "oracle": {
+          "returncode": 0,
+          "stderr": ""
+        },
+        "turbo": {
+          "returncode": 0,
+          "stderr": ""
+        },
+        "ijg": {
+          "returncode": 0,
+          "stderr": ""
+        },
+        "native": {
+          "returncode": 0,
+          "stderr": ""
+        }
+      },
+      "removed_empty_DHT_original_offsets": [
+        [
+          797,
+          801
+        ],
+        [
+          1374,
+          1378
+        ]
+      ],
+      "coefficients": "exact against all original C decodes; entropy unchanged"
+    }
+  ]
+}

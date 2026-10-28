@@ -156,6 +156,11 @@ the coefficient, abbreviated and hierarchical writers. Generic source-plane
 pyramids also support the full sequential range. COMPONENT-VALIDATION.md records
 the IJG/Turbo/JPEG XT gates, retained expectations and reference limitations.
 
+MOZJPEG-VALIDATION.md records the pinned mozjpeg source/rewrite comparisons
+against all three ordinary-process C references, exact coefficient checks,
+separate numerical tolerances and explicit reference-producer limitations.
+The C tools remain test-only; broader conformance and performance work is open.
+
 `encode(&shared_image, EncodeOptions::default())` encodes shared grayscale/RGB
 images. Quality, output precision (8/12), subsampling, RGB-to-YCbCr conversion,
 quantizer range and entropy coding are configurable. `encode_samples` accepts

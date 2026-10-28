@@ -1,0 +1,51 @@
+{
+  "scope": "Test-only mozjpeg/Turbo/IJG differential checks. Production codec unchanged; no conformance-corpus or performance claim.",
+  "tests": {
+    "release": {
+      "passed": 148,
+      "failed": 0,
+      "log_sha256": "2b77f48d4cf5201ddca0b460a7b27c7a671c7d26ac90984589824e26bfcaddee"
+    },
+    "isolated_debug": {
+      "passed": 148,
+      "failed": 0,
+      "log_sha256": "e62752384fd4c14632d94dd288d6a4cf1bd6219afb2b254bff3b013b5134a3ef"
+    }
+  },
+  "other_checks": {
+    "rustfmt": "pass",
+    "Clippy_all_targets_warnings_denied": "pass",
+    "rustdoc_warnings_denied": "pass",
+    "new_Python_drivers_py_compile": "pass"
+  },
+  "three_C_exact_coefficients": 759,
+  "raw_and_color_comparisons": 758,
+  "synthetic_coefficient_only_exclusions": 1,
+  "explicit_12_bit_arithmetic_skips": 15,
+  "maximum_native_float_IDCT_error": 1,
+  "maximum_native_nearest_color_error": 3,
+  "maximum_Turbo_mozjpeg_float_IDCT_difference": 0,
+  "pinned_source_images": 30,
+  "pinned_hashed_artifacts": 90,
+  "pinned_source_corpus_bytes": 313152,
+  "pinned_prefixes_and_boundaries": 16666,
+  "bounded_mutations": 3000,
+  "reference_producer_limitation_inputs": 4,
+  "unmodified_mozjpeg_archive_files_verified": 530,
+  "reports": {
+    "mozjpeg.json": "4ec995498269be47237995b3151dffc5bd14fd5ea96366ff7ef3c2c23d9c5ac4",
+    "mozjpeg-build.json": "15c6904f8927ea0cb2bc8604db73aedcebbc0714c0b4b9c955d9de987112ec7a",
+    "mozjpeg-limitations.json": "c676831489673d99327fad69d860872c3aa196ad5239e6227899224dabd21a6a"
+  },
+  "production_dependencies": [
+    "deadlib-image"
+  ],
+  "application_integration": false,
+  "remaining": [
+    "Independent conformance corpus",
+    "Incremental byte I/O",
+    "Broader rare-mode/reference checks",
+    "Coverage-guided fuzzing",
+    "Measured performance and optimization"
+  ]
+}

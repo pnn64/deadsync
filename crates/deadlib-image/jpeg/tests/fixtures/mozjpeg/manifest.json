@@ -1,0 +1,1419 @@
+{
+  "scope": "Configured coefficient/raw/color differential gate; SIMD off. No conformance-corpus or performance claim. mozjpeg and Turbo share implementation ancestry.",
+  "images": [
+    {
+      "case": "moz-p8-a0-v0-gray-q83-s1",
+      "origin": {
+        "kind": "mozjpeg source",
+        "options": [
+          "-quality",
+          "83",
+          "-baseline",
+          "-grayscale",
+          "-restart",
+          "1"
+        ]
+      },
+      "precision": 8,
+      "process": 192,
+      "sha256": "431195421da1dffbc6c9c23173a97e4bf8bb3c728fbf0b8221cf4ce0e16a97df",
+      "bytes": 306,
+      "coefficient_sha256": "1af8b7e37690b57853c3547dd11be11887bf5e30bd9d08aeec53bc9ca067e807",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.015479876160990712,
+        "samples": 323
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 323
+      },
+      "native_nearest_color": {
+        "max": 1,
+        "mean": 0.015479876160990712,
+        "samples": 323
+      },
+      "color_tolerance": 1,
+      "retained": [
+        {
+          "file": "moz-p8-a0-v0-gray-q83-s1.jpg",
+          "sha256": "431195421da1dffbc6c9c23173a97e4bf8bb3c728fbf0b8221cf4ce0e16a97df"
+        },
+        {
+          "file": "moz-p8-a0-v0-gray-q83-s1.coef",
+          "sha256": "1af8b7e37690b57853c3547dd11be11887bf5e30bd9d08aeec53bc9ca067e807"
+        },
+        {
+          "file": "moz-p8-a0-v0-gray-q83-s1.planes",
+          "sha256": "85d3c46cc53fecf4cb1c06c20d173cea423f9bedf776420a9961ff181375827d"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a0-v0-420-q83-s1",
+      "origin": {
+        "kind": "mozjpeg source",
+        "options": [
+          "-quality",
+          "83",
+          "-baseline",
+          "-sample",
+          "2x2,1x1,1x1",
+          "-restart",
+          "1"
+        ]
+      },
+      "precision": 8,
+      "process": 192,
+      "sha256": "cc790b6d88388683682167d827667b6ce071f0390b44320b2fdc1a63bf8a3010",
+      "bytes": 594,
+      "coefficient_sha256": "edc235bfb1a7b8a1709247eed35c16b166ccd678f8cbbd02567bec42c8486cbb",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.019880715705765408,
+        "samples": 503
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 503
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.05675954592363261,
+        "samples": 969
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a0-v0-420-q83-s1.jpg",
+          "sha256": "cc790b6d88388683682167d827667b6ce071f0390b44320b2fdc1a63bf8a3010"
+        },
+        {
+          "file": "moz-p8-a0-v0-420-q83-s1.coef",
+          "sha256": "edc235bfb1a7b8a1709247eed35c16b166ccd678f8cbbd02567bec42c8486cbb"
+        },
+        {
+          "file": "moz-p8-a0-v0-420-q83-s1.planes",
+          "sha256": "665a039650b740ad0a45dca754d49c5760f5ca705428024e1fe464a55d986076"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a0-v1-gray-q83-s1",
+      "origin": {
+        "kind": "mozjpeg source",
+        "options": [
+          "-quality",
+          "83",
+          "-progressive",
+          "-grayscale",
+          "-fastcrush",
+          "-restart",
+          "1"
+        ]
+      },
+      "precision": 8,
+      "process": 194,
+      "sha256": "6e3c6b8181b0d08b9df821096907546bbd00a17934c644a8635ddc14a75d96fd",
+      "bytes": 452,
+      "coefficient_sha256": "1af8b7e37690b57853c3547dd11be11887bf5e30bd9d08aeec53bc9ca067e807",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.015479876160990712,
+        "samples": 323
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 323
+      },
+      "native_nearest_color": {
+        "max": 1,
+        "mean": 0.015479876160990712,
+        "samples": 323
+      },
+      "color_tolerance": 1,
+      "retained": [
+        {
+          "file": "moz-p8-a0-v1-gray-q83-s1.jpg",
+          "sha256": "6e3c6b8181b0d08b9df821096907546bbd00a17934c644a8635ddc14a75d96fd"
+        },
+        {
+          "file": "moz-p8-a0-v1-gray-q83-s1.coef",
+          "sha256": "1af8b7e37690b57853c3547dd11be11887bf5e30bd9d08aeec53bc9ca067e807"
+        },
+        {
+          "file": "moz-p8-a0-v1-gray-q83-s1.planes",
+          "sha256": "85d3c46cc53fecf4cb1c06c20d173cea423f9bedf776420a9961ff181375827d"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a0-v1-420-q83-s1",
+      "origin": {
+        "kind": "mozjpeg source",
+        "options": [
+          "-quality",
+          "83",
+          "-progressive",
+          "-sample",
+          "2x2,1x1,1x1",
+          "-fastcrush",
+          "-restart",
+          "1"
+        ]
+      },
+      "precision": 8,
+      "process": 194,
+      "sha256": "788a15f15c141aaf6405ea5ae4ce761738f7496c491a25f726df42f6b1a9be3b",
+      "bytes": 906,
+      "coefficient_sha256": "f18e62b5589bcb972ef784ee9368b3b3b7ab79eed2eb0fd60c7a36ed7eb64cb8",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.019880715705765408,
+        "samples": 503
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 503
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.05675954592363261,
+        "samples": 969
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a0-v1-420-q83-s1.jpg",
+          "sha256": "788a15f15c141aaf6405ea5ae4ce761738f7496c491a25f726df42f6b1a9be3b"
+        },
+        {
+          "file": "moz-p8-a0-v1-420-q83-s1.coef",
+          "sha256": "f18e62b5589bcb972ef784ee9368b3b3b7ab79eed2eb0fd60c7a36ed7eb64cb8"
+        },
+        {
+          "file": "moz-p8-a0-v1-420-q83-s1.planes",
+          "sha256": "fb04630eb1423a2e80cc9b5ef91a72ae5459813b0bf579e909e7e2065a667ffc"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a1-v0-gray-q83-s1",
+      "origin": {
+        "kind": "mozjpeg source",
+        "options": [
+          "-quality",
+          "83",
+          "-baseline",
+          "-grayscale",
+          "-restart",
+          "1",
+          "-arithmetic"
+        ]
+      },
+      "precision": 8,
+      "process": 201,
+      "sha256": "c4485a3817dcd751507879657f867e0a639ebd8e8df64034bb37ca83da3cfde1",
+      "bytes": 265,
+      "coefficient_sha256": "f373496cdb11446b59c88756563ebc781d38f2577be211cb7b0a84efaa95cf4b",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.009287925696594427,
+        "samples": 323
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 323
+      },
+      "native_nearest_color": {
+        "max": 1,
+        "mean": 0.009287925696594427,
+        "samples": 323
+      },
+      "color_tolerance": 1,
+      "retained": [
+        {
+          "file": "moz-p8-a1-v0-gray-q83-s1.jpg",
+          "sha256": "c4485a3817dcd751507879657f867e0a639ebd8e8df64034bb37ca83da3cfde1"
+        },
+        {
+          "file": "moz-p8-a1-v0-gray-q83-s1.coef",
+          "sha256": "f373496cdb11446b59c88756563ebc781d38f2577be211cb7b0a84efaa95cf4b"
+        },
+        {
+          "file": "moz-p8-a1-v0-gray-q83-s1.planes",
+          "sha256": "3f7b02aa83f26c1a3fc974f10d5ee877c564d08109591c0246663b6776793a73"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a1-v0-420-q83-s1",
+      "origin": {
+        "kind": "mozjpeg source",
+        "options": [
+          "-quality",
+          "83",
+          "-baseline",
+          "-sample",
+          "2x2,1x1,1x1",
+          "-restart",
+          "1",
+          "-arithmetic"
+        ]
+      },
+      "precision": 8,
+      "process": 201,
+      "sha256": "4490a3d8b22215dcb8540172a2cb0897c2ba1c7211cacac2f387680315c87b56",
+      "bytes": 538,
+      "coefficient_sha256": "3f2dc1bdb7c20a0bce4dc869709fc7cd06b18a6ae48586380248e109906f3169",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.007952286282306162,
+        "samples": 503
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 503
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.015479876160990712,
+        "samples": 969
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a1-v0-420-q83-s1.jpg",
+          "sha256": "4490a3d8b22215dcb8540172a2cb0897c2ba1c7211cacac2f387680315c87b56"
+        },
+        {
+          "file": "moz-p8-a1-v0-420-q83-s1.coef",
+          "sha256": "3f2dc1bdb7c20a0bce4dc869709fc7cd06b18a6ae48586380248e109906f3169"
+        },
+        {
+          "file": "moz-p8-a1-v0-420-q83-s1.planes",
+          "sha256": "d9ffcce62d6098338fa39ece83bbd10e7dd3a9164879349586119db3179c9959"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a1-v1-gray-q83-s1",
+      "origin": {
+        "kind": "mozjpeg source",
+        "options": [
+          "-quality",
+          "83",
+          "-progressive",
+          "-grayscale",
+          "-fastcrush",
+          "-restart",
+          "1",
+          "-arithmetic"
+        ]
+      },
+      "precision": 8,
+      "process": 202,
+      "sha256": "430325e51106fb37cf80048c0faa1cdcf5e55be4517bc870fdc0fb8ef0b8f7f6",
+      "bytes": 348,
+      "coefficient_sha256": "f373496cdb11446b59c88756563ebc781d38f2577be211cb7b0a84efaa95cf4b",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.009287925696594427,
+        "samples": 323
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 323
+      },
+      "native_nearest_color": {
+        "max": 1,
+        "mean": 0.009287925696594427,
+        "samples": 323
+      },
+      "color_tolerance": 1,
+      "retained": [
+        {
+          "file": "moz-p8-a1-v1-gray-q83-s1.jpg",
+          "sha256": "430325e51106fb37cf80048c0faa1cdcf5e55be4517bc870fdc0fb8ef0b8f7f6"
+        },
+        {
+          "file": "moz-p8-a1-v1-gray-q83-s1.coef",
+          "sha256": "f373496cdb11446b59c88756563ebc781d38f2577be211cb7b0a84efaa95cf4b"
+        },
+        {
+          "file": "moz-p8-a1-v1-gray-q83-s1.planes",
+          "sha256": "3f7b02aa83f26c1a3fc974f10d5ee877c564d08109591c0246663b6776793a73"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a1-v1-420-q83-s1",
+      "origin": {
+        "kind": "mozjpeg source",
+        "options": [
+          "-quality",
+          "83",
+          "-progressive",
+          "-sample",
+          "2x2,1x1,1x1",
+          "-fastcrush",
+          "-restart",
+          "1",
+          "-arithmetic"
+        ]
+      },
+      "precision": 8,
+      "process": 202,
+      "sha256": "2ce811fa452b190b19f611b38445086b1194e8fe9950ffe874ed73cee854158d",
+      "bytes": 738,
+      "coefficient_sha256": "3f2dc1bdb7c20a0bce4dc869709fc7cd06b18a6ae48586380248e109906f3169",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.007952286282306162,
+        "samples": 503
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 503
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.015479876160990712,
+        "samples": 969
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a1-v1-420-q83-s1.jpg",
+          "sha256": "2ce811fa452b190b19f611b38445086b1194e8fe9950ffe874ed73cee854158d"
+        },
+        {
+          "file": "moz-p8-a1-v1-420-q83-s1.coef",
+          "sha256": "3f2dc1bdb7c20a0bce4dc869709fc7cd06b18a6ae48586380248e109906f3169"
+        },
+        {
+          "file": "moz-p8-a1-v1-420-q83-s1.planes",
+          "sha256": "d9ffcce62d6098338fa39ece83bbd10e7dd3a9164879349586119db3179c9959"
+        }
+      ]
+    },
+    {
+      "case": "moz-p12-a0-v0-gray-q83-s1",
+      "origin": {
+        "kind": "mozjpeg source",
+        "options": [
+          "-quality",
+          "83",
+          "-baseline",
+          "-grayscale",
+          "-restart",
+          "1"
+        ]
+      },
+      "precision": 12,
+      "process": 193,
+      "sha256": "81f573e5c42228d0af132ef1aed12fc1bd013afff36025fa29ffd9cac85fcb12",
+      "bytes": 412,
+      "coefficient_sha256": "1824aef78e688837630b8372348e9d78495e550db97638b90173982d26a3c462",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.01238390092879257,
+        "samples": 323
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 323
+      },
+      "native_nearest_color": {
+        "max": 1,
+        "mean": 0.01238390092879257,
+        "samples": 323
+      },
+      "color_tolerance": 1,
+      "retained": [
+        {
+          "file": "moz-p12-a0-v0-gray-q83-s1.jpg",
+          "sha256": "81f573e5c42228d0af132ef1aed12fc1bd013afff36025fa29ffd9cac85fcb12"
+        },
+        {
+          "file": "moz-p12-a0-v0-gray-q83-s1.coef",
+          "sha256": "1824aef78e688837630b8372348e9d78495e550db97638b90173982d26a3c462"
+        },
+        {
+          "file": "moz-p12-a0-v0-gray-q83-s1.planes",
+          "sha256": "9f8fa50e4743e8bbabf4e01816a7cb8ed0cdcc65cd5a027ddb27575318cd8da0"
+        }
+      ]
+    },
+    {
+      "case": "moz-p12-a0-v0-420-q83-s1",
+      "origin": {
+        "kind": "mozjpeg source",
+        "options": [
+          "-quality",
+          "83",
+          "-baseline",
+          "-sample",
+          "2x2,1x1,1x1",
+          "-restart",
+          "1"
+        ]
+      },
+      "precision": 12,
+      "process": 193,
+      "sha256": "28d1803e70ef9dd0ce2fbafe22c82288a4263b302878f4474335be6d860328c6",
+      "bytes": 817,
+      "coefficient_sha256": "f2a508b6f1516938bd4d0977f278e073c71c8380f6a191f07d2f9862650983cb",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.011928429423459244,
+        "samples": 503
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 503
+      },
+      "native_nearest_color": {
+        "max": 1,
+        "mean": 0.02063983488132095,
+        "samples": 969
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p12-a0-v0-420-q83-s1.jpg",
+          "sha256": "28d1803e70ef9dd0ce2fbafe22c82288a4263b302878f4474335be6d860328c6"
+        },
+        {
+          "file": "moz-p12-a0-v0-420-q83-s1.coef",
+          "sha256": "f2a508b6f1516938bd4d0977f278e073c71c8380f6a191f07d2f9862650983cb"
+        },
+        {
+          "file": "moz-p12-a0-v0-420-q83-s1.planes",
+          "sha256": "bc28f6e9127c1afab5c09a3e3066a5a960cc4c48adad6997a22b5507cd2b9c3c"
+        }
+      ]
+    },
+    {
+      "case": "moz-p12-a0-v1-gray-q83-s1",
+      "origin": {
+        "kind": "mozjpeg source",
+        "options": [
+          "-quality",
+          "83",
+          "-progressive",
+          "-grayscale",
+          "-fastcrush",
+          "-restart",
+          "1"
+        ]
+      },
+      "precision": 12,
+      "process": 194,
+      "sha256": "28cc424adc5b879db5854c4322fb41c16017afb680b51d4d71cc45c2433e2d98",
+      "bytes": 547,
+      "coefficient_sha256": "8bded6a0a13c64ad07a4d9b61d2aee38a42973718c925d8f28743264a9fe9e29",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.01238390092879257,
+        "samples": 323
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 323
+      },
+      "native_nearest_color": {
+        "max": 1,
+        "mean": 0.01238390092879257,
+        "samples": 323
+      },
+      "color_tolerance": 1,
+      "retained": [
+        {
+          "file": "moz-p12-a0-v1-gray-q83-s1.jpg",
+          "sha256": "28cc424adc5b879db5854c4322fb41c16017afb680b51d4d71cc45c2433e2d98"
+        },
+        {
+          "file": "moz-p12-a0-v1-gray-q83-s1.coef",
+          "sha256": "8bded6a0a13c64ad07a4d9b61d2aee38a42973718c925d8f28743264a9fe9e29"
+        },
+        {
+          "file": "moz-p12-a0-v1-gray-q83-s1.planes",
+          "sha256": "941131f76d23c5f9896293de0e7ec2db919709a77176c0d5bc2f88bdc33b7e64"
+        }
+      ]
+    },
+    {
+      "case": "moz-p12-a0-v1-420-q83-s1",
+      "origin": {
+        "kind": "mozjpeg source",
+        "options": [
+          "-quality",
+          "83",
+          "-progressive",
+          "-sample",
+          "2x2,1x1,1x1",
+          "-fastcrush",
+          "-restart",
+          "1"
+        ]
+      },
+      "precision": 12,
+      "process": 194,
+      "sha256": "97423c21e0edf480f1c9019fb0100ea4efd65159c9f23722afec78014204a7dd",
+      "bytes": 1100,
+      "coefficient_sha256": "dd2f30c0903b2da2bebc3e2b16a8d5f34ac79729ab169c9c980c6495b7ad191c",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.019880715705765408,
+        "samples": 503
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 503
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.04231166150670795,
+        "samples": 969
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p12-a0-v1-420-q83-s1.jpg",
+          "sha256": "97423c21e0edf480f1c9019fb0100ea4efd65159c9f23722afec78014204a7dd"
+        },
+        {
+          "file": "moz-p12-a0-v1-420-q83-s1.coef",
+          "sha256": "dd2f30c0903b2da2bebc3e2b16a8d5f34ac79729ab169c9c980c6495b7ad191c"
+        },
+        {
+          "file": "moz-p12-a0-v1-420-q83-s1.planes",
+          "sha256": "27539eafc166901d104f48fb78acf5a60c00fb11177eb3872813bd12c70ccacd"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a0-optimized-gray-q83",
+      "origin": {
+        "kind": "mozjpeg default optimized scans without restarts"
+      },
+      "precision": 8,
+      "process": 194,
+      "sha256": "85770e801439e812cb2064a35a12665498c7f7ef25d4996fb1c1cda916b593c0",
+      "bytes": 876,
+      "coefficient_sha256": "42d468b8a4b42257238037286ba58f824a1a24bccaec4fb2c6c796d85d5a8a54",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.014184397163120567,
+        "samples": 1551
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 1551
+      },
+      "native_nearest_color": {
+        "max": 1,
+        "mean": 0.014184397163120567,
+        "samples": 1551
+      },
+      "color_tolerance": 1,
+      "retained": [
+        {
+          "file": "moz-p8-a0-optimized-gray-q83.jpg",
+          "sha256": "85770e801439e812cb2064a35a12665498c7f7ef25d4996fb1c1cda916b593c0"
+        },
+        {
+          "file": "moz-p8-a0-optimized-gray-q83.coef",
+          "sha256": "42d468b8a4b42257238037286ba58f824a1a24bccaec4fb2c6c796d85d5a8a54"
+        },
+        {
+          "file": "moz-p8-a0-optimized-gray-q83.planes",
+          "sha256": "14793d426332588329fd6f72748e5ccc769cf4068ff5783314f9ec0ff214c15e"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a0-optimized-420-q83",
+      "origin": {
+        "kind": "mozjpeg default optimized scans without restarts"
+      },
+      "precision": 8,
+      "process": 194,
+      "sha256": "881d69b3c7c6ad562c03794e1a93ad35b75fdc541dc2fb77c217768318e96330",
+      "bytes": 1374,
+      "coefficient_sha256": "ac229fe5415216c9d0dafbbb7c25e6074fd729931f2f8142c97b5405c087f47a",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.01605407689057879,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.04642166344294004,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a0-optimized-420-q83.jpg",
+          "sha256": "881d69b3c7c6ad562c03794e1a93ad35b75fdc541dc2fb77c217768318e96330"
+        },
+        {
+          "file": "moz-p8-a0-optimized-420-q83.coef",
+          "sha256": "ac229fe5415216c9d0dafbbb7c25e6074fd729931f2f8142c97b5405c087f47a"
+        },
+        {
+          "file": "moz-p8-a0-optimized-420-q83.planes",
+          "sha256": "eec733ae41eaa379a61d89f5e1ad722df43f0fcf3d7d86b1bfbd53889c73685a"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a1-optimized-gray-q83",
+      "origin": {
+        "kind": "mozjpeg default optimized scans without restarts"
+      },
+      "precision": 8,
+      "process": 202,
+      "sha256": "c50ab41e02f630bef8f10e0c7765950592d14df99f6b69bbf3017dfcb6836a2c",
+      "bytes": 842,
+      "coefficient_sha256": "2d64b933a82c98910635ef6fe51f8e0f6888e9c5ca69cc0427652c571fab5730",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.01160541586073501,
+        "samples": 1551
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 1551
+      },
+      "native_nearest_color": {
+        "max": 1,
+        "mean": 0.01160541586073501,
+        "samples": 1551
+      },
+      "color_tolerance": 1,
+      "retained": [
+        {
+          "file": "moz-p8-a1-optimized-gray-q83.jpg",
+          "sha256": "c50ab41e02f630bef8f10e0c7765950592d14df99f6b69bbf3017dfcb6836a2c"
+        },
+        {
+          "file": "moz-p8-a1-optimized-gray-q83.coef",
+          "sha256": "2d64b933a82c98910635ef6fe51f8e0f6888e9c5ca69cc0427652c571fab5730"
+        },
+        {
+          "file": "moz-p8-a1-optimized-gray-q83.planes",
+          "sha256": "9fd9162be45f7574e326db33fca5622c63e4b8ff4f09df966942fa15179664be"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a1-optimized-420-q83",
+      "origin": {
+        "kind": "mozjpeg default optimized scans without restarts"
+      },
+      "precision": 8,
+      "process": 202,
+      "sha256": "6b508e775dc0b09e9465922ff88f0511ff81705457b597ec7209d5eff9c708a0",
+      "bytes": 1324,
+      "coefficient_sha256": "4cf451ffe041f00559508432fe9f7e1b2887b10d1ce60f356fe7261b42914563",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.011829319814110688,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 3,
+        "mean": 0.032452181388351604,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a1-optimized-420-q83.jpg",
+          "sha256": "6b508e775dc0b09e9465922ff88f0511ff81705457b597ec7209d5eff9c708a0"
+        },
+        {
+          "file": "moz-p8-a1-optimized-420-q83.coef",
+          "sha256": "4cf451ffe041f00559508432fe9f7e1b2887b10d1ce60f356fe7261b42914563"
+        },
+        {
+          "file": "moz-p8-a1-optimized-420-q83.planes",
+          "sha256": "b24cae2ea1c7b345577dfb8fe0faa58119fac1f97ae79f4a9d172c78d77a55e9"
+        }
+      ]
+    },
+    {
+      "case": "moz-p12-a0-optimized-gray-q83",
+      "origin": {
+        "kind": "mozjpeg default optimized scans without restarts"
+      },
+      "precision": 12,
+      "process": 194,
+      "sha256": "e1d80c40454b1e21641969052e81e692573b5f712f8545396fa54675e9300226",
+      "bytes": 1444,
+      "coefficient_sha256": "b443c5e662bd4fac66ccbbdf7609e043f2714ae0ef51be22ef1bde8dbd8c8adb",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.008381689232753063,
+        "samples": 1551
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 1551
+      },
+      "native_nearest_color": {
+        "max": 1,
+        "mean": 0.008381689232753063,
+        "samples": 1551
+      },
+      "color_tolerance": 1,
+      "retained": [
+        {
+          "file": "moz-p12-a0-optimized-gray-q83.jpg",
+          "sha256": "e1d80c40454b1e21641969052e81e692573b5f712f8545396fa54675e9300226"
+        },
+        {
+          "file": "moz-p12-a0-optimized-gray-q83.coef",
+          "sha256": "b443c5e662bd4fac66ccbbdf7609e043f2714ae0ef51be22ef1bde8dbd8c8adb"
+        },
+        {
+          "file": "moz-p12-a0-optimized-gray-q83.planes",
+          "sha256": "edc4909830feae77b62798b4dc2741b8d0f778ab2d8147978c03cdbbac9ddc72"
+        }
+      ]
+    },
+    {
+      "case": "moz-p12-a0-optimized-420-q83",
+      "origin": {
+        "kind": "mozjpeg default optimized scans without restarts"
+      },
+      "precision": 12,
+      "process": 194,
+      "sha256": "a1508921605bad33d5d47950cc039dd592ed61d35cb04659d351a0ed2e6a7b24",
+      "bytes": 2282,
+      "coefficient_sha256": "e8cba902efd93a0858536a7a96ded464d3f1fa1a0daeed8a31056d0c669652f7",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.010139416983523447,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.026219643240919837,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p12-a0-optimized-420-q83.jpg",
+          "sha256": "a1508921605bad33d5d47950cc039dd592ed61d35cb04659d351a0ed2e6a7b24"
+        },
+        {
+          "file": "moz-p12-a0-optimized-420-q83.coef",
+          "sha256": "e8cba902efd93a0858536a7a96ded464d3f1fa1a0daeed8a31056d0c669652f7"
+        },
+        {
+          "file": "moz-p12-a0-optimized-420-q83.planes",
+          "sha256": "16f3e0108f83170bfd16a5ad5573dd043d5cfdd1f1de05c99833be757b3b9844"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a0-separate",
+      "origin": {
+        "kind": "mozjpeg custom settings",
+        "style": "separate"
+      },
+      "precision": 8,
+      "process": 192,
+      "sha256": "7673389cbff0009cbbcb26e965a30b1946ef1d3c789eb7d3a2bebb47989f75b2",
+      "bytes": 1478,
+      "coefficient_sha256": "cf17d801ab1a7a3a5ded5b0438f61fdedffe585c856230ac3ebe557036b2d092",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.014786649767638362,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.030088115194498173,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a0-separate.jpg",
+          "sha256": "7673389cbff0009cbbcb26e965a30b1946ef1d3c789eb7d3a2bebb47989f75b2"
+        },
+        {
+          "file": "moz-p8-a0-separate.coef",
+          "sha256": "cf17d801ab1a7a3a5ded5b0438f61fdedffe585c856230ac3ebe557036b2d092"
+        },
+        {
+          "file": "moz-p8-a0-separate.planes",
+          "sha256": "8416d94678ac2245c1f2272eb576f410164c71a8d3fedcf9d6aec999a33eb29d"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a0-refine",
+      "origin": {
+        "kind": "mozjpeg custom settings",
+        "style": "refine"
+      },
+      "precision": 8,
+      "process": 194,
+      "sha256": "3a701c57e3cac3bdaeae7ebdacacb1ee55031a41b0012623181b917e1ffecbbd",
+      "bytes": 1945,
+      "coefficient_sha256": "ac229fe5415216c9d0dafbbb7c25e6074fd729931f2f8142c97b5405c087f47a",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.01605407689057879,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.04642166344294004,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a0-refine.jpg",
+          "sha256": "3a701c57e3cac3bdaeae7ebdacacb1ee55031a41b0012623181b917e1ffecbbd"
+        },
+        {
+          "file": "moz-p8-a0-refine.coef",
+          "sha256": "ac229fe5415216c9d0dafbbb7c25e6074fd729931f2f8142c97b5405c087f47a"
+        },
+        {
+          "file": "moz-p8-a0-refine.planes",
+          "sha256": "eec733ae41eaa379a61d89f5e1ad722df43f0fcf3d7d86b1bfbd53889c73685a"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a0-quant8",
+      "origin": {
+        "kind": "mozjpeg custom settings",
+        "style": "quant8"
+      },
+      "precision": 8,
+      "process": 194,
+      "sha256": "1971490b9b0e5706f8f0b647935c49427f6981b3bc9b0eafe2d160030cfcb10e",
+      "bytes": 2326,
+      "coefficient_sha256": "3d5141744458035ed622ea8508603eb1a8f5ddd4f1514795fdc4ac46147250bf",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.017743979721166033,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.04663657855147217,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a0-quant8.jpg",
+          "sha256": "1971490b9b0e5706f8f0b647935c49427f6981b3bc9b0eafe2d160030cfcb10e"
+        },
+        {
+          "file": "moz-p8-a0-quant8.coef",
+          "sha256": "3d5141744458035ed622ea8508603eb1a8f5ddd4f1514795fdc4ac46147250bf"
+        },
+        {
+          "file": "moz-p8-a0-quant8.planes",
+          "sha256": "028b358b59ecbe279a2b54479d90213e9d11b0cfa9f1c8b812575803a22a1f0c"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a0-tune-ssim",
+      "origin": {
+        "kind": "mozjpeg custom settings",
+        "style": "tune-ssim"
+      },
+      "precision": 8,
+      "process": 194,
+      "sha256": "bb4b980196c17434bf8a9fe68a7bafe315ab399fbb6567dc9f743c7364783b1e",
+      "bytes": 2539,
+      "coefficient_sha256": "3e330fb84606d03918c9fb5b851ee042a6ddca655fe184f960a264edd433e7a6",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.012674271229404309,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.03503116269073716,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a0-tune-ssim.jpg",
+          "sha256": "bb4b980196c17434bf8a9fe68a7bafe315ab399fbb6567dc9f743c7364783b1e"
+        },
+        {
+          "file": "moz-p8-a0-tune-ssim.coef",
+          "sha256": "3e330fb84606d03918c9fb5b851ee042a6ddca655fe184f960a264edd433e7a6"
+        },
+        {
+          "file": "moz-p8-a0-tune-ssim.planes",
+          "sha256": "0d18c04163a9dda0490fbc41287382b50ec25aa0432ce2f6b4b74e84b721fa22"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a1-separate",
+      "origin": {
+        "kind": "mozjpeg custom settings",
+        "style": "separate"
+      },
+      "precision": 8,
+      "process": 201,
+      "sha256": "5eebda1fad06655f288125622113dfc1cae3f8a9b854628b117e84325d3755e2",
+      "bytes": 1595,
+      "coefficient_sha256": "bd9c369cc5be6373c2d642aa5ade57c5fc7330b6cc9bf6d98524bbf66a7857bc",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.01689902830587241,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 3,
+        "mean": 0.04018912529550828,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a1-separate.jpg",
+          "sha256": "5eebda1fad06655f288125622113dfc1cae3f8a9b854628b117e84325d3755e2"
+        },
+        {
+          "file": "moz-p8-a1-separate.coef",
+          "sha256": "bd9c369cc5be6373c2d642aa5ade57c5fc7330b6cc9bf6d98524bbf66a7857bc"
+        },
+        {
+          "file": "moz-p8-a1-separate.planes",
+          "sha256": "1da01e6c890ad4178a928587b005e28c8a0bdbee996e51cecb9c0f593459ada1"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a1-refine",
+      "origin": {
+        "kind": "mozjpeg custom settings",
+        "style": "refine"
+      },
+      "precision": 8,
+      "process": 202,
+      "sha256": "f2a566407efce0bbe4937558e1b7a32f23dcda24102a5129b16e6e7044edafe1",
+      "bytes": 1771,
+      "coefficient_sha256": "af662bf5d75539633414565fbcee648cb72d0271470db3866ce01b6e59d7fac2",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.019011406844106463,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 3,
+        "mean": 0.04319793681495809,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a1-refine.jpg",
+          "sha256": "f2a566407efce0bbe4937558e1b7a32f23dcda24102a5129b16e6e7044edafe1"
+        },
+        {
+          "file": "moz-p8-a1-refine.coef",
+          "sha256": "af662bf5d75539633414565fbcee648cb72d0271470db3866ce01b6e59d7fac2"
+        },
+        {
+          "file": "moz-p8-a1-refine.planes",
+          "sha256": "4d1f62910ddc809a6d89f8623a003a570efc916ab9a2153339734920b67807e2"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a1-quant8",
+      "origin": {
+        "kind": "mozjpeg custom settings",
+        "style": "quant8"
+      },
+      "precision": 8,
+      "process": 202,
+      "sha256": "5b6b8e264c94aa8492ac8ef72c1a06542e03ac814fa4429f293486c1ff79bb16",
+      "bytes": 2251,
+      "coefficient_sha256": "cb7d500deb0ee513a6e1b8e5be8c4be7ffc52dbf64f746fbb62ec679ba789db3",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.017321504013519222,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.03825488931871911,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a1-quant8.jpg",
+          "sha256": "5b6b8e264c94aa8492ac8ef72c1a06542e03ac814fa4429f293486c1ff79bb16"
+        },
+        {
+          "file": "moz-p8-a1-quant8.coef",
+          "sha256": "cb7d500deb0ee513a6e1b8e5be8c4be7ffc52dbf64f746fbb62ec679ba789db3"
+        },
+        {
+          "file": "moz-p8-a1-quant8.planes",
+          "sha256": "e9fc62dcf690d1a9fa48de47d6d5e46612415dc0aebefce80bb269711e364aed"
+        }
+      ]
+    },
+    {
+      "case": "moz-p8-a1-tune-ssim",
+      "origin": {
+        "kind": "mozjpeg custom settings",
+        "style": "tune-ssim"
+      },
+      "precision": 8,
+      "process": 202,
+      "sha256": "30939b6f48430f11a7c4fb3f76dda9430a2ee3bc5de89229cfd684707afb424d",
+      "bytes": 2588,
+      "coefficient_sha256": "7dd63eb1f785a61f7e12b15ff3427e301646f7181ca0e94891f26f381f1f4b2b",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.01605407689057879,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.039544379969911884,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p8-a1-tune-ssim.jpg",
+          "sha256": "30939b6f48430f11a7c4fb3f76dda9430a2ee3bc5de89229cfd684707afb424d"
+        },
+        {
+          "file": "moz-p8-a1-tune-ssim.coef",
+          "sha256": "7dd63eb1f785a61f7e12b15ff3427e301646f7181ca0e94891f26f381f1f4b2b"
+        },
+        {
+          "file": "moz-p8-a1-tune-ssim.planes",
+          "sha256": "40a433321a9eb49e1f7f1d8978dc0cb70b764ba62aff17fbb151c994bf6eb35c"
+        }
+      ]
+    },
+    {
+      "case": "moz-p12-a0-separate",
+      "origin": {
+        "kind": "mozjpeg custom settings",
+        "style": "separate"
+      },
+      "precision": 12,
+      "process": 193,
+      "sha256": "1e189513d3f6d9865cb7490b1b2cf5a17875e2e2fe48eef1f7529e077d8cdb3d",
+      "bytes": 2425,
+      "coefficient_sha256": "ce950815758df7699706a8550c69eb885a22f3f676d4831960bff1ed8a3a43e0",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.0122517955217575,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.032237266279819474,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p12-a0-separate.jpg",
+          "sha256": "1e189513d3f6d9865cb7490b1b2cf5a17875e2e2fe48eef1f7529e077d8cdb3d"
+        },
+        {
+          "file": "moz-p12-a0-separate.coef",
+          "sha256": "ce950815758df7699706a8550c69eb885a22f3f676d4831960bff1ed8a3a43e0"
+        },
+        {
+          "file": "moz-p12-a0-separate.planes",
+          "sha256": "613563a4d5ecb1dd0287e82d0a944a4520b8f6fec8fee24bef126e8a888baedc"
+        }
+      ]
+    },
+    {
+      "case": "moz-p12-a0-refine",
+      "origin": {
+        "kind": "mozjpeg custom settings",
+        "style": "refine"
+      },
+      "precision": 12,
+      "process": 194,
+      "sha256": "154f2fcd4c13435de481db2de0a052ff8d8065f7cbafdcba2ddae397d2b7de2f",
+      "bytes": 2889,
+      "coefficient_sha256": "e8cba902efd93a0858536a7a96ded464d3f1fa1a0daeed8a31056d0c669652f7",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.010139416983523447,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.026219643240919837,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p12-a0-refine.jpg",
+          "sha256": "154f2fcd4c13435de481db2de0a052ff8d8065f7cbafdcba2ddae397d2b7de2f"
+        },
+        {
+          "file": "moz-p12-a0-refine.coef",
+          "sha256": "e8cba902efd93a0858536a7a96ded464d3f1fa1a0daeed8a31056d0c669652f7"
+        },
+        {
+          "file": "moz-p12-a0-refine.planes",
+          "sha256": "16f3e0108f83170bfd16a5ad5573dd043d5cfdd1f1de05c99833be757b3b9844"
+        }
+      ]
+    },
+    {
+      "case": "moz-p12-a0-quant8",
+      "origin": {
+        "kind": "mozjpeg custom settings",
+        "style": "quant8"
+      },
+      "precision": 12,
+      "process": 194,
+      "sha256": "acb579bae95c17e6f4886c8c69150e6a0bd53da5ff80305a5da88fa0a043424d",
+      "bytes": 3427,
+      "coefficient_sha256": "b93e220c3d71ee2bb643cc1a774fc984ee973887ad52e841b2fe1f68d481bd99",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.011829319814110688,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.029658284977433915,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p12-a0-quant8.jpg",
+          "sha256": "acb579bae95c17e6f4886c8c69150e6a0bd53da5ff80305a5da88fa0a043424d"
+        },
+        {
+          "file": "moz-p12-a0-quant8.coef",
+          "sha256": "b93e220c3d71ee2bb643cc1a774fc984ee973887ad52e841b2fe1f68d481bd99"
+        },
+        {
+          "file": "moz-p12-a0-quant8.planes",
+          "sha256": "e3dead782f4e111c84d4d3bf69ba01454eeec58c8d8f90e55c19857716488a67"
+        }
+      ]
+    },
+    {
+      "case": "moz-p12-a0-tune-ssim",
+      "origin": {
+        "kind": "mozjpeg custom settings",
+        "style": "tune-ssim"
+      },
+      "precision": 12,
+      "process": 194,
+      "sha256": "5f4d4103ac8f0170a24cee17874cd1a030617416f16eb1d4670b8359546b84ee",
+      "bytes": 3513,
+      "coefficient_sha256": "fe5b9b711a008d58813f4dc6c47f39e1b64ac780c4cdbf51c8c82c6979abb319",
+      "three_C_coefficients": "exact",
+      "native_float_IDCT": {
+        "max": 1,
+        "mean": 0.01605407689057879,
+        "samples": 2367
+      },
+      "raw_IDCT_checked": true,
+      "Turbo_mozjpeg_float_IDCT": {
+        "max": 0,
+        "mean": 0.0,
+        "samples": 2367
+      },
+      "native_nearest_color": {
+        "max": 2,
+        "mean": 0.03331184182248012,
+        "samples": 4653
+      },
+      "color_tolerance": 4,
+      "retained": [
+        {
+          "file": "moz-p12-a0-tune-ssim.jpg",
+          "sha256": "5f4d4103ac8f0170a24cee17874cd1a030617416f16eb1d4670b8359546b84ee"
+        },
+        {
+          "file": "moz-p12-a0-tune-ssim.coef",
+          "sha256": "fe5b9b711a008d58813f4dc6c47f39e1b64ac780c4cdbf51c8c82c6979abb319"
+        },
+        {
+          "file": "moz-p12-a0-tune-ssim.planes",
+          "sha256": "6ca52eab641cda6e1b627c8e2bf1223096dfd6ba6b8172bba494126096f2c736"
+        }
+      ]
+    }
+  ]
+}
