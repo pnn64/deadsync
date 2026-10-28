@@ -1,0 +1,173 @@
+diff --git a/crates/deadlib-image/png/src/checksum.rs b/crates/deadlib-image/png/src/checksum.rs
+index 3da57f033..da52f1a71 100644
+--- a/crates/deadlib-image/png/src/checksum.rs
++++ b/crates/deadlib-image/png/src/checksum.rs
+@@ -84,9 +84,12 @@ impl Adler32 {
+     pub(crate) fn new() -> Self {
+         Self { a: 1, b: 0 }
+     }
++    #[inline]
+     pub(crate) fn update(&mut self, input: &[u8]) {
+-        for block in input.chunks(5552) {
+-            for &byte in block {
++        if input.len() >= 64 {
++            self.update_bulk(input);
++        } else if !input.is_empty() {
++            for &byte in input {
+                 self.a += u32::from(byte);
+                 self.b += self.a;
+             }
+@@ -94,6 +97,7 @@ impl Adler32 {
+             self.b %= 65521;
+         }
+     }
++    #[inline(never)]
+     fn update_bulk(&mut self, input: &[u8]) {
+         for block in input.chunks(5552) {
+             let tail = if block.len() >= 64 {
+@@ -238,28 +242,16 @@ mod tests {
+                             a: initial.0,
+                             b: initial.1,
+                         };
+-                        let mut bulk = Adler32 {
+-                            a: initial.0,
+-                            b: initial.1,
+-                        };
+                         actual.update(&[]);
+-                        bulk.update_bulk(&[]);
+                         for part in bytes.chunks(fragment) {
+                             actual.update(part);
+                             actual.update(&[]);
+-                            bulk.update_bulk(part);
+-                            bulk.update_bulk(&[]);
+                         }
+                         assert_eq!(
+                             actual.finish(),
+                             expected,
+                             "len={len} pattern={pattern} initial={initial:?} fragment={fragment}"
+                         );
+-                        assert_eq!(
+-                            bulk.finish(),
+-                            expected,
+-                            "bulk len={len} pattern={pattern} initial={initial:?} fragment={fragment}"
+-                        );
+                     }
+                     if len <= 129 {
+                         for split in 0..=len {
+@@ -267,24 +259,13 @@ mod tests {
+                                 a: initial.0,
+                                 b: initial.1,
+                             };
+-                            let mut bulk = Adler32 {
+-                                a: initial.0,
+-                                b: initial.1,
+-                            };
+                             actual.update(&bytes[..split]);
+                             actual.update(&bytes[split..]);
+-                            bulk.update_bulk(&bytes[..split]);
+-                            bulk.update_bulk(&bytes[split..]);
+                             assert_eq!(
+                                 actual.finish(),
+                                 expected,
+                                 "len={len} pattern={pattern} split={split}"
+                             );
+-                            assert_eq!(
+-                                bulk.finish(),
+-                                expected,
+-                                "bulk len={len} pattern={pattern} split={split}"
+-                            );
+                         }
+                     }
+                 }
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index b27137057..0bc1622de 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -359,16 +359,68 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
+     score
+ }
+ 
++#[inline(never)]
+ fn pack_bits<const DEPTH: u8>(samples: &[u8], row: &mut [u8]) {
+-    for (out, values) in row.iter_mut().zip(samples.chunks(8 / DEPTH as usize)) {
++    if DEPTH == 4 {
++        for (out, values) in row.iter_mut().zip(samples.chunks(8 / DEPTH as usize)) {
++            let mut byte = 0;
++            for (n, &value) in values.iter().enumerate() {
++                byte |= value << (8 - DEPTH - n as u8 * DEPTH);
++            }
++            *out = byte;
++        }
++        return;
++    }
++    let group = 8 / DEPTH as usize;
++    let full = samples.len() / group;
++    let (words, tail) = row.split_at_mut(full);
++    // Validated low sample bits are gathered into the high word byte in PNG
++    // order. Each product bit has one contributor, so there are no carries.
++    match DEPTH {
++        1 => {
++            for (out, &bytes) in words.iter_mut().zip(samples.as_chunks::<8>().0) {
++                *out = (u64::from_le_bytes(bytes).wrapping_mul(0x8040_2010_0804_0201) >> 56) as u8;
++            }
++        }
++        2 => {
++            for (out, &bytes) in words.iter_mut().zip(samples.as_chunks::<4>().0) {
++                *out = (u32::from_le_bytes(bytes).wrapping_mul(0x4010_0401) >> 24) as u8;
++            }
++        }
++        _ => unreachable!("validated packed PNG depth"),
++    }
++    if let Some(out) = tail.first_mut() {
+         let mut byte = 0;
+-        for (n, &value) in values.iter().enumerate() {
++        for (n, &value) in samples[full * group..].iter().enumerate() {
+             byte |= value << (8 - DEPTH - n as u8 * DEPTH);
+         }
+         *out = byte;
+     }
+ }
+ 
++#[inline(never)]
++fn pack_step<const DEPTH: u8>(samples: &[u8], step: usize, width: usize, row: &mut [u8]) {
++    let group = 8 / DEPTH as usize;
++    let full = width / group;
++    let (words, tail) = row.split_at_mut(full);
++    for (index, out) in words.iter_mut().enumerate() {
++        let start = index * group * step;
++        let mut byte = 0;
++        for n in 0..group {
++            byte |= samples[start + n * step] << (8 - DEPTH - n as u8 * DEPTH);
++        }
++        *out = byte;
++    }
++    if let Some(out) = tail.first_mut() {
++        let start = full * group;
++        let mut byte = 0;
++        for n in 0..width - start {
++            byte |= samples[(start + n) * step] << (8 - DEPTH - n as u8 * DEPTH);
++        }
++        *out = byte;
++    }
++}
++
+ fn gather8<const CHANNELS: usize>(samples: &[u8], step: usize, row: &mut [u8]) {
+     for (out, pixel) in row
+         .as_chunks_mut::<CHANNELS>()
+@@ -441,10 +493,12 @@ pub(crate) fn pack_row(
+         }
+         Samples::U8(v) => v,
+     };
+-    row.fill(0);
+-    for pixel in 0..width {
+-        row[pixel * depth as usize / 8] |=
+-            samples[start + pixel * step] << (8 - depth - (pixel * depth as usize % 8) as u8);
++    let samples = &samples[start..];
++    match depth {
++        1 => pack_step::<1>(samples, step, width, row),
++        2 => pack_step::<2>(samples, step, width, row),
++        4 => pack_step::<4>(samples, step, width, row),
++        _ => unreachable!("validated packed PNG depth"),
+     }
+ }
+ 

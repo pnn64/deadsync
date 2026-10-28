@@ -1669,3 +1669,117 @@ the final checks and oracle identities. `protocol.json` identifies superseded
 trials and timing protocols; `exploratory-benchmark.rs` preserves the exact
 original short-batch harness. The validation driver accepts `*-final` labels
 to retain separate complete checks for refinements without overwriting logs.
+
+## Word gathers, stepped bit rows and streaming Adler-32 (2026-10-28)
+
+Three retained changes replace repeated scalar work:
+
+1. Gather eight validated 1-bit samples with a little-endian u64 multiply by
+   `0x8040201008040201`, taking the high byte. Four 2-bit samples use a u32
+   multiply by `0x40100401`. Within the validated sample ranges, product bit
+   positions have unique contributors, so carries cannot corrupt the result.
+   Partial groups retain scalar packing and zero padding. The unsuccessful
+   direct nibble-pair trial is rejected; contiguous 4-bit rows keep their
+   original grouping loop.
+2. Pack stepped Adam7 samples in constant groups per output byte, writing each
+   byte once. A separate partial group handles padding. This removes clearing
+   the packed row, repeated byte read/modify/write operations and dynamic bit
+   offsets from the per-sample loop.
+3. Route streaming Adler-32 updates of at least 64 bytes to the existing bulk
+   kernel. Short calls retain an inline scalar path, including an empty-input
+   no-op. The original all-bulk entry point regressed byte fragmentation and
+   is rejected. One-shot checksums keep their existing bulk path. Duplicate
+   direct/indirect checksum test passes are removed while retaining independent
+   per-byte modular oracles, fragmented calls and worst normalized states.
+
+Each component below has a separate alternating four-process comparison
+before and after its change. Cycle values are medians of process medians;
+component ratios must not be multiplied.
+
+| Component and complete Stored pipeline | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Word gather, 1-bit gray 4097x129 buffered encode | 1,852,031 | 1,507,819 | 1.23x |
+| Word gather, 2-bit gray 4097x129 buffered encode | 2,150,625 | 1,880,676 | 1.14x |
+| Stepped 1-bit gray 4097x129 Adam7 buffered encode | 2,478,045 | 1,890,627 | 1.31x |
+| Stepped 2-bit gray 4097x129 Adam7 buffered encode | 2,936,764 | 2,309,360 | 1.27x |
+| Stepped 4-bit gray 4097x129 Adam7 buffered encode | 3,745,438 | 3,021,637 | 1.24x |
+| Shared bulk checksum, gray8 4097x257 reader | 4,310,431 | 3,619,957 | 1.19x |
+| Shared bulk checksum, RGBA16 4097x257 reader | 38,673,267 | 32,050,769 | 1.21x |
+
+The final baseline comparison was repeated, giving eight processes per version
+in two balanced alternating replays. The selected source is `adaptive-nibble`:
+
+| Combined pipeline | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| 1-bit gray 4097x129 buffered encode | 1,935,405 | 1,525,635 | 1.27x |
+| 1-bit gray 4097x129 writer encode | 1,988,999 | 1,586,875 | 1.25x |
+| 2-bit gray 4097x129 buffered encode | 2,151,686 | 1,907,492 | 1.13x |
+| 2-bit gray 4097x129 Adam7 buffered encode | 2,906,985 | 2,245,119 | 1.29x |
+| 4-bit gray 4097x129 Adam7 buffered encode | 3,710,209 | 2,992,809 | 1.24x |
+| Gray8 4097x257 reader | 4,226,473 | 3,478,746 | 1.21x |
+| RGBA8 4097x257 reader | 16,668,684 | 13,919,885 | 1.20x |
+| RGBA16 4097x257 reader | 38,067,410 | 32,530,193 | 1.17x |
+
+There are measured control-path tradeoffs. Combined before/after medians for
+GA8 Adam7 buffered encoding are 2,355,528 / 2,740,128 cycles; GA16 Adam7 buffered
+encoding is 4,205,327 / 4,721,555; plain RGB16 writer encoding is
+5,644,296 / 6,201,058; and the small RGBA8 33x9 Adam7 writer case is
+29,667 / 35,455. These are throughput ratios of 0.86x, 0.89x, 0.91x and 0.84x.
+Outlining the larger kernels produced mixed results and was rejected; no
+blanket no-inline attributes are retained. Raw per-process ranges show material
+shared-host variation. These targeted gains are not a universal speedup claim.
+
+A separate checksum-only example compares the exact scalar baseline and
+candidate implementations in one executable, checking both against an
+independent u64 modular oracle before timing. Three processes each retain
+eleven alternating batches per variant after a warmup batch. For 8,192 bytes
+in 5,552-byte fragments, the selected path improves from 8,341 to 2,984 cycles
+(2.80x); seven-byte fragments improve from 17,574 to 15,790 (1.11x). One-byte
+fragmentation costs 65,967 / 68,717 cycles, a 4.2% increase. The rejected
+all-bulk entry point was substantially worse on tiny fragments. The probe's
+64-byte inputs use 1,024 iterations per batch and 8,192-byte inputs use 32.
+This is a checksum microbenchmark, not an end-to-end compression measurement.
+
+The whole-pipeline harness uses `DEADLIB_PNG_BENCH_STAGE=bitwords`: the previous
+99 row cases plus three large unfiltered reader inputs, all with Stored
+DEFLATE. It includes PNG framing, CRCs, allocations and reconstruction while
+excluding fixture generation and independent model checks from timing. Every
+process verifies complete filtered pass bytes and native decoded images;
+reader fingerprints identify exact input PNGs. Allocation calls, reallocations
+and requested bytes are unchanged in all 102 cases. No Fast-DEFLATE throughput
+or compression-ratio gain is inferred from these Stored measurements.
+
+Measurements use logical CPU 2, Windows thread cycles, Rust 1.99.1 and the
+existing optimized/LTO bench profile. Every whole-pipeline process has three
+warmups, a separate untimed allocation probe and seven batches. Short reader
+cases up to 65,536 native bytes use at least 64 iterations; other outputs below
+4,096 bytes use at least 2,048; remaining cases use three. Measurement jobs are
+serialized. Frequency, preemption and unrelated workloads remain uncontrolled.
+
+The exact selected source passes 33 release and 32 debug tests, strict
+all-target Clippy and scoped formatting. The optional C encoder check skipped
+in debug passed in release. Checks include all 43,008 packed-byte/tail/stride
+answers, 17,280 independently modeled encoded outputs, the 3,240-case native
+format/filter/interlace matrix, 1,620 C encoder references, streamed DEFLATE
+fragmentation and invalid streams, writer failures, every Paeth triplet and
+Adler modulus/block boundaries with initial states `(1, 0)` and
+`(65520, 65520)`. Empty calls, arbitrary split points and 5,551/5,552/5,553-byte
+fragments exercise both checksum paths. Production remains safe Rust, with no
+new runtime dependencies or public APIs.
+
+Production-source files change by 32 lines net (63 added, 31 removed), including
+deduplicated checksum tests. Removed execution includes group-shift loops for
+complete 1/2-bit bytes, stepped-row clearing and repeated writes, and the serial
+Adler dependency chain for large streaming chunks.
+
+Evidence is in [`experiments/bitwords-20261028`](experiments/bitwords-20261028).
+`words-final-paired-summary.tsv`, `steps-final-paired-summary.tsv` and
+`checksum-final-paired-summary.tsv` record the retained components.
+`accepted-combined-summary.tsv` pools the two final balanced comparisons;
+their individual data remains in `accepted-paired*` and `accepted-replay*`.
+`micro-summary.tsv` retains checksum-only results. `protocol.json` identifies
+rejected nibble, all-bulk and outlining trials. Cumulative patches are relative
+to `2414ec857`; immutable binaries, source/harness hashes and raw logs identify
+every checkpoint. Final checks are in `accepted-final-validation.json` and
+`accepted-library-validation.json`. The new checksum example retains its exact
+baseline source snapshot and oracle checks for reproducibility.

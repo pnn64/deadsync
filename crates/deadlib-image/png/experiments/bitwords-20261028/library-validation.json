@@ -1,0 +1,39 @@
+{
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--target-dir",
+        "target/png-bitwords-20261028/build",
+        "--release",
+        "--lib",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "library-release.log",
+      "sha256": "dcc38876d658e3034fc35daf3d49fddbeaaea90d238d3cd10acee01fc7dd7c26"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--offline",
+        "-p",
+        "deadlib-image-png",
+        "--target-dir",
+        "target/png-bitwords-20261028/build",
+        "--lib",
+        "--",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "library-debug.log",
+      "sha256": "e01110c0ad762c71534e379de0c3dc0b787a90321aea24ccdec452b55db479aa"
+    }
+  ]
+}

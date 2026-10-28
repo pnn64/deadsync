@@ -84,9 +84,12 @@ impl Adler32 {
     pub(crate) fn new() -> Self {
         Self { a: 1, b: 0 }
     }
+    #[inline]
     pub(crate) fn update(&mut self, input: &[u8]) {
-        for block in input.chunks(5552) {
-            for &byte in block {
+        if input.len() >= 64 {
+            self.update_bulk(input);
+        } else if !input.is_empty() {
+            for &byte in input {
                 self.a += u32::from(byte);
                 self.b += self.a;
             }
@@ -238,27 +241,15 @@ mod tests {
                             a: initial.0,
                             b: initial.1,
                         };
-                        let mut bulk = Adler32 {
-                            a: initial.0,
-                            b: initial.1,
-                        };
                         actual.update(&[]);
-                        bulk.update_bulk(&[]);
                         for part in bytes.chunks(fragment) {
                             actual.update(part);
                             actual.update(&[]);
-                            bulk.update_bulk(part);
-                            bulk.update_bulk(&[]);
                         }
                         assert_eq!(
                             actual.finish(),
                             expected,
                             "len={len} pattern={pattern} initial={initial:?} fragment={fragment}"
-                        );
-                        assert_eq!(
-                            bulk.finish(),
-                            expected,
-                            "bulk len={len} pattern={pattern} initial={initial:?} fragment={fragment}"
                         );
                     }
                     if len <= 129 {
@@ -267,23 +258,12 @@ mod tests {
                                 a: initial.0,
                                 b: initial.1,
                             };
-                            let mut bulk = Adler32 {
-                                a: initial.0,
-                                b: initial.1,
-                            };
                             actual.update(&bytes[..split]);
                             actual.update(&bytes[split..]);
-                            bulk.update_bulk(&bytes[..split]);
-                            bulk.update_bulk(&bytes[split..]);
                             assert_eq!(
                                 actual.finish(),
                                 expected,
                                 "len={len} pattern={pattern} split={split}"
-                            );
-                            assert_eq!(
-                                bulk.finish(),
-                                expected,
-                                "bulk len={len} pattern={pattern} split={split}"
                             );
                         }
                     }

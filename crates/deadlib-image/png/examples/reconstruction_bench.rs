@@ -148,8 +148,8 @@ fn main() {
         "case\toperation\titerations\tsample_bytes\tcycles_per_image\tns_per_image\tMiB_per_second\tallocations\treallocations\trequested_bytes\tfingerprint"
     );
     let stage = std::env::var("DEADLIB_PNG_BENCH_STAGE");
-    if matches!(stage.as_deref(), Ok("encode" | "rows")) {
-        encoding(stage.as_deref() == Ok("rows"));
+    if matches!(stage.as_deref(), Ok("encode" | "rows" | "bitwords")) {
+        encoding(stage.as_deref() != Ok("encode"));
         return;
     }
     for (name, color) in [
@@ -474,6 +474,15 @@ fn encoding(rows: bool) {
 
 fn first_rows() {
     let mut cases = Vec::new();
+    if std::env::var("DEADLIB_PNG_BENCH_STAGE").as_deref() == Ok("bitwords") {
+        for (color, depth) in [
+            (ColorType::Grayscale, 8),
+            (ColorType::Rgba, 8),
+            (ColorType::Rgba, 16),
+        ] {
+            cases.push((4097, 257, color, depth, false, Filter::None));
+        }
+    }
     for color in [
         ColorType::Grayscale,
         ColorType::GrayscaleAlpha,

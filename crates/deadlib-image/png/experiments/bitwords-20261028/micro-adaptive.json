@@ -1,0 +1,40 @@
+{
+  "command": [
+    "cargo",
+    "build",
+    "--offline",
+    "-p",
+    "deadlib-image-png",
+    "--profile",
+    "bench",
+    "--example",
+    "checksum_stream_bench",
+    "--target-dir",
+    "C:\\GitHub\\deadsync-png-pixels-20261028\\target\\png-bitwords-20261028\\build",
+    "--message-format",
+    "json"
+  ],
+  "source_sha256": {
+    "crates/deadlib-image/png/src/checksum.rs": "c7a46ee84737047eb30e6ce30f6bd2e02c08ec243434ba8f9bc040173b853048",
+    "crates/deadlib-image/png/examples/checksum_stream_bench.rs": "da3d024fdbf2b876ec4eb86fd2df2d94fb5a14ec71627fee0f97851745aed1a7",
+    "crates/deadlib-image/png/examples/support/cpu.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+    "crates/deadlib-image/png/experiments/bitwords-20261028/baseline-checksum.rs": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+  },
+  "executable": "C:\\GitHub\\deadsync-png-pixels-20261028\\target\\png-bitwords-20261028\\adaptive\\checksum_stream_bench.exe",
+  "executable_sha256": "883cadb8613cf3e4ce6a5395f4d7d462fb7f11baf5f84306fc5f5989d5a1fddd",
+  "build_log_sha256": "58e32437ee48c15cb4b23b40b57d5f7b58a9354f35570d54f0cd4d0e800c6a50",
+  "outputs": [
+    {
+      "path": "micro-adaptive-run1.log",
+      "sha256": "95cb76defba78a50b401f63ce7af977ae49150ef5aa615b1f45afb3d3bca26fd"
+    },
+    {
+      "path": "micro-adaptive-run2.log",
+      "sha256": "943aa0e8d350f76dcb1f9bedd83206df999352afbeaf1d75edcf2052da3a41b3"
+    },
+    {
+      "path": "micro-adaptive-run3.log",
+      "sha256": "f635397fbb4be8ce7be58fcc223d22a960dfa5e15c6437bc725b12ff00d0cd72"
+    }
+  ]
+}
