@@ -5,6 +5,7 @@ pub(crate) struct Output {
     limit: usize,
     buffer: u64,
     bits: u8,
+    external_bytes: usize,
 }
 
 impl Output {
@@ -14,6 +15,7 @@ impl Output {
             limit,
             buffer: 0,
             bits: 0,
+            external_bytes: 0,
         }
     }
 
@@ -58,10 +60,29 @@ impl Output {
         write: impl FnOnce(&mut Self) -> Result<T>,
     ) -> Result<T> {
         let previous = self.limit;
+        let external = self.external_bytes;
         self.limit = previous.min(self.bytes.len().saturating_add(additional));
         let result = write(self);
-        self.limit = previous;
+        self.limit = previous.saturating_sub(self.external_bytes - external);
         result
+    }
+
+    /// Account for bytes routed to a companion table stream. Preserve this
+    /// deduction when a nested frame budget restores its enclosing limit.
+    pub fn reserve_external(&mut self, n: usize) -> Result<()> {
+        let limit = self
+            .limit
+            .checked_sub(n)
+            .ok_or(Error::LimitExceeded("encoded bytes"))?;
+        if self.bytes.len() > limit {
+            return Err(Error::LimitExceeded("encoded bytes"));
+        }
+        self.limit = limit;
+        self.external_bytes = self
+            .external_bytes
+            .checked_add(n)
+            .ok_or(Error::LimitExceeded("encoded bytes"))?;
+        Ok(())
     }
 
     pub fn segment(&mut self, marker: u8, data: &[u8]) -> Result<()> {

@@ -1,7 +1,6 @@
 //! Hierarchical frame parsing and reference reconstruction, T.81 Annex J.
 use crate::arithmetic::Conditioning;
 use crate::decode::{allocate_components, decode_scan, parse_huffman, parse_quant};
-use crate::entropy::Huffman;
 use crate::{
     CoefficientComponent, ColorSpace, ComponentPlane, ComponentSpec, Error, Event, FrameHeader,
     IccProfile, Limits, LosslessCoding, MarkerReader, MetadataSegment, PlanarImage, Process,
@@ -719,14 +718,20 @@ fn finish(active: Option<Active>, frames: &mut Vec<HierarchicalFrame>) -> Result
 /// the input and retain global scan positions. Frame DNL declarations are
 /// resolved before allocation; a zero DHP height is inferred at completion.
 pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalImage<'_>> {
+    decode_with_tables(input, limits, &mut crate::Tables::new())
+}
+pub(crate) fn decode_with_tables<'a>(
+    input: &'a [u8],
+    limits: Limits,
+    tables: &mut crate::Tables,
+) -> Result<HierarchicalImage<'a>> {
     let mut reader = MarkerReader::new(input)?;
     let mut header = None;
     let mut rules = None;
     let mut frames = Vec::new();
     let mut metadata = Vec::new();
     let mut active = None::<Active>;
-    let mut quant = [None; 4];
-    let mut huffman: [Option<Huffman>; 8] = core::array::from_fn(|_| None);
+    let crate::Tables { quant, huffman } = tables;
     let mut conditioning = Conditioning::default();
     let mut interval = 0;
     let mut pending = None;
@@ -763,10 +768,10 @@ pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalI
             }
             Event::Segment {
                 marker: 0xdb, data, ..
-            } => parse_quant(data, &mut quant)?,
+            } => parse_quant(data, quant)?,
             Event::Segment {
                 marker: 0xc4, data, ..
-            } => parse_huffman(data, &mut huffman)?,
+            } => parse_huffman(data, huffman)?,
             Event::Segment {
                 marker: 0xcc, data, ..
             } => conditioning.parse(data)?,
@@ -900,8 +905,8 @@ pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalI
                         &current.frame.frame,
                         components,
                         &mut current.seen,
-                        &quant,
-                        &huffman,
+                        quant,
+                        huffman,
                         interval,
                         conditioning,
                     )?,
@@ -911,7 +916,7 @@ pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalI
                         &current.frame.frame,
                         components,
                         coding,
-                        &huffman,
+                        huffman,
                         interval,
                         conditioning,
                         available,

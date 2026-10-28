@@ -268,6 +268,13 @@ pub(crate) fn allocate(
 
 /// Decode SOF3/SOF11 predictive Huffman/arithmetic JPEG into native sample planes.
 pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>> {
+    decode_with_tables(input, limits, &mut crate::Tables::new())
+}
+pub(crate) fn decode_with_tables<'a>(
+    input: &'a [u8],
+    limits: Limits,
+    tables: &mut crate::Tables,
+) -> Result<LosslessImage<'a>> {
     let mut reader = MarkerReader::new(input)?;
     let mut frame = None;
     let mut components = Vec::new();
@@ -275,8 +282,10 @@ pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>
     let mut metadata = Vec::new();
     let mut memory_bytes = 0usize;
     let mut metadata_bytes = 0usize;
-    let mut tables: [Option<Huffman>; 8] = core::array::from_fn(|_| None);
-    let mut quant = [None; 4];
+    let crate::Tables {
+        huffman: tables,
+        quant,
+    } = tables;
     let mut conditioning = Conditioning::default();
     let mut interval = 0;
     let mut scans = 0;
@@ -289,10 +298,10 @@ pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>
             }
             Event::Segment {
                 marker: 0xc4, data, ..
-            } => parse_huffman(data, &mut tables)?,
+            } => parse_huffman(data, tables)?,
             Event::Segment {
                 marker: 0xdb, data, ..
-            } => parse_quant(data, &mut quant)?,
+            } => parse_quant(data, quant)?,
             Event::Segment {
                 marker: 0xcc, data, ..
             } => conditioning.parse(data)?,
@@ -363,7 +372,7 @@ pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>
                     frame,
                     &mut components,
                     &mut coding,
-                    &tables,
+                    tables,
                     interval,
                     conditioning,
                     limits

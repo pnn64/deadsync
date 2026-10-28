@@ -105,16 +105,30 @@ pub fn encode_hierarchical_with_metadata(
     options: HierarchicalOptions<'_>,
     metadata: MetadataOptions<'_>,
 ) -> Result<Vec<u8>> {
+    encode_with_table_writer(
+        image,
+        options,
+        metadata,
+        &mut crate::abbreviated::TableWriter::interchange(),
+    )
+}
+pub(crate) fn encode_with_table_writer(
+    image: &HierarchicalImage<'_>,
+    options: HierarchicalOptions<'_>,
+    metadata: MetadataOptions<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
+) -> Result<Vec<u8>> {
     if !options.frame_options.is_empty() && options.frame_options.len() != image.frames.len() {
         return Err(Error::Invalid("hierarchical frame option count"));
     }
-    write_hierarchy(
+    write_hierarchy_with_tables(
         image,
         options.limits,
         options.max_output_bytes,
         options.omit_dhp_height,
         metadata,
         |index, frame| selected(options, index, frame),
+        tables,
     )
 }
 
@@ -126,7 +140,26 @@ pub(crate) fn write_hierarchy<'a>(
     max_output_bytes: usize,
     omit_dhp_height: bool,
     metadata: MetadataOptions<'_>,
+    controls: impl FnMut(usize, &HierarchicalFrame) -> Result<HierarchicalFrameOptions<'a>>,
+) -> Result<Vec<u8>> {
+    write_hierarchy_with_tables(
+        image,
+        limits,
+        max_output_bytes,
+        omit_dhp_height,
+        metadata,
+        controls,
+        &mut crate::abbreviated::TableWriter::interchange(),
+    )
+}
+pub(crate) fn write_hierarchy_with_tables<'a>(
+    image: &HierarchicalImage<'_>,
+    limits: Limits,
+    max_output_bytes: usize,
+    omit_dhp_height: bool,
+    metadata: MetadataOptions<'_>,
     mut controls: impl FnMut(usize, &HierarchicalFrame) -> Result<HierarchicalFrameOptions<'a>>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
 ) -> Result<Vec<u8>> {
     let stored = image.validate()?.max(image.memory_bytes);
     let mut limits = intersect(image.limits, limits);
@@ -200,6 +233,7 @@ pub(crate) fn write_hierarchy<'a>(
         .and_then(|n| n.checked_sub(scratch))
         .ok_or(Error::LimitExceeded("hierarchical encoder storage"))?;
     let mut out = Output::new(max_output_bytes.min(available));
+    tables.prepare(&mut out)?;
     out.marker(0xd8)?;
     let mut metadata_index = 0;
     emit_metadata(
@@ -261,6 +295,7 @@ pub(crate) fn write_hierarchy<'a>(
                         limits,
                         true,
                         &mut before_scan,
+                        tables,
                     )
                 })?;
             }
@@ -277,6 +312,7 @@ pub(crate) fn write_hierarchy<'a>(
                         option,
                         true,
                         &mut before_scan,
+                        tables,
                     )
                 })?;
             }

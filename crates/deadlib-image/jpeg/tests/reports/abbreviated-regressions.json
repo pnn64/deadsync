@@ -1,0 +1,89 @@
+{
+  "scope": "Abbreviated-writer refactor default-output regression audit. Byte identity reuses prior C evidence where C_decoding_rerun is false; fresh C checks are explicit. No performance claim.",
+  "cases": 10612,
+  "C_decoding_rerun_cases": 964,
+  "results": [
+    {
+      "matrix": "hierarchy-native",
+      "cases": 3100,
+      "unchanged_output_sha256": true,
+      "baseline_report": "hierarchical-encode-native-jpegxt.json",
+      "baseline_report_sha256": "fbcff13336967f9bed3b120197b7144b14f12fa02bd818148037989ad9767555",
+      "candidate_report_sha256": "193f5a47e3b0d777b7c9d8289d7dbde788e08c3f1735a7565da6b95f2738e304",
+      "C_decoding_rerun": false,
+      "tools": {
+        "native": "fbc487a3263e19c4cc6a5ed5f4ca5683ffd445e457b5983ee2c9071bb52cec1a",
+        "inspect": "89485a60c5dccdc9a05cf4857c69922e216e675855b9d8283709347151c65e04",
+        "reference": "a911595c53a6a49f19a4ff57fddc53bb26798ad4d3b46f035e2cf2dcabe64813"
+      }
+    },
+    {
+      "matrix": "hierarchy-rewrite",
+      "cases": 2100,
+      "unchanged_output_sha256": true,
+      "baseline_report": "hierarchical-encode-rewrite-jpegxt.json",
+      "baseline_report_sha256": "5b8f29d8c8beed5c4da74dda7276ae7f9a6e678dd0d5dff973a86e3d543aa823",
+      "candidate_report_sha256": "a09d01e798d52ef197d3817249bfc891c1656e6397e8846c5825f2918e56c3f3",
+      "C_decoding_rerun": false,
+      "tools": {
+        "native": "fbc487a3263e19c4cc6a5ed5f4ca5683ffd445e457b5983ee2c9071bb52cec1a",
+        "inspect": "89485a60c5dccdc9a05cf4857c69922e216e675855b9d8283709347151c65e04",
+        "reference": "a911595c53a6a49f19a4ff57fddc53bb26798ad4d3b46f035e2cf2dcabe64813"
+      }
+    },
+    {
+      "matrix": "lossless",
+      "cases": 4448,
+      "unchanged_output_sha256": true,
+      "baseline_report": "lossless-encode-turbo.json",
+      "baseline_report_sha256": "08168f0ea89fd1dbc8aa2c072766efd4eb2f2295193bff6a3b958bb110709320",
+      "candidate_report_sha256": "683e26784e81c7a7ac210514e7c49fa0d6aa5b9df4971742e6614af1a72f4f19",
+      "C_decoding_rerun": false,
+      "tools": {
+        "native": "621e818acf63b9a9e875cf4739d6b010078177b996b089302c99f4c5d4565a3b",
+        "inspect": "f59aaf836f218834f6dc8070d18330cd0786cdd67f0f5b67130b62ddbf262475",
+        "oracle": "042fa0a522e9b28c03f2886b21c47ec91ed7885de656ab7fac938ad0b0d07399"
+      }
+    },
+    {
+      "matrix": "pixels",
+      "cases": 172,
+      "unchanged_output_sha256": true,
+      "baseline_report": "pixel-turbo.json",
+      "baseline_report_sha256": "21c5236040283749085bede372e43df697ac29be7e010592585e9dd20598bbbe",
+      "candidate_report_sha256": "21c5236040283749085bede372e43df697ac29be7e010592585e9dd20598bbbe",
+      "C_decoding_rerun": true,
+      "tools": {
+        "encode_fixtures": "fd508526d237ca3e38948c70b54d03408b48748aeb95f9b595c195f059e93664"
+      }
+    },
+    {
+      "matrix": "cmyk",
+      "cases": 192,
+      "unchanged_output_sha256": true,
+      "baseline_report": "cmyk-encode-turbo.json",
+      "baseline_report_sha256": "e1ca74fcf8f8b95d4d72c1066d5aa1ebbab06dee303d443ad5e5b32201ac14c9",
+      "candidate_report_sha256": "e1ca74fcf8f8b95d4d72c1066d5aa1ebbab06dee303d443ad5e5b32201ac14c9",
+      "C_decoding_rerun": true,
+      "tools": {
+        "cmyk_fixtures": "7a5eefac222d97c7894e0ebcffa1fdf3ebd51e31d774812f1c16fe32d23171f2"
+      }
+    },
+    {
+      "matrix": "rewrite",
+      "cases": 600,
+      "unchanged_output_sha256": true,
+      "baseline_report": "rewrite-hierarchical-refactor-turbo.json",
+      "baseline_report_sha256": "5702e97496be2f2883a0a391668c4b64881d7af7056a46ea5415661091db07a3",
+      "candidate_report_sha256": "f3b8b69776de82be5049a4c9fa34cd11cb1dd946b897e3646e93a145bbf86f6f",
+      "C_decoding_rerun": true,
+      "tools": {
+        "rewrite": "ab32f7b20390b418c08a1005f5d4313e89bf4be762cd2c67d9479ae9f9e672e5"
+      }
+    }
+  ],
+  "fresh_C_tools": {
+    "jpeg-oracle.exe": "77d29072f4d30abc5386c5886a4147adb0c273fd4665bbb7d12fc96bd72041fc",
+    "jpeg-cmyk-encode.exe": "cd69b874650fe9e4555f724e20f799c13225e2fb9b51a81522ba078458054432"
+  }
+}

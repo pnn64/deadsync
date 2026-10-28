@@ -4,6 +4,7 @@
 //! the shared image model has no 12-bit, CMYK or subsampled representation.
 #![forbid(unsafe_code)]
 
+mod abbreviated;
 mod arithmetic;
 mod arithmetic_encode;
 mod decode;
@@ -26,8 +27,10 @@ mod progressive;
 mod pyramid;
 mod reconstruct;
 mod scan_encode;
+mod tables;
 mod transform;
 
+pub use abbreviated::{AbbreviatedEncoder, AbbreviatedImage};
 pub use arithmetic_encode::ArithmeticConditioning;
 pub use decode::{CoefficientComponent, CoefficientImage, decode_coefficients};
 pub use dnl::HeightDeclaration;
@@ -66,6 +69,7 @@ pub use reconstruct::{
     CmykImage, CmykPolarity, ColorSpace, ComponentPlane, PlanarImage, Upsampling,
 };
 pub use scan_encode::ScanSpec;
+pub use tables::{HuffmanClass, HuffmanTable, QuantizationTable, TableStream, Tables};
 
 pub use marker::{Event, MarkerReader};
 pub use model::*;

@@ -352,7 +352,7 @@ Verified milestones:
   fuzzing and measured performance/optimization remain required. The full
   user goal remains active and the crate is not integrated into DeadSync.
 
-- DNL and unknown-height milestone: whole-input decoding/encoding for all
+- `4e72997a9`: DNL and unknown-height milestone: whole-input decoding/encoding for all
   thirteen JPEG-1 frame processes, resolving the first-scan height before
   sample/coefficient allocation. Zero, redundant and redefined SOF heights,
   extended DNL lengths, strict adjacency, malformed MCU rows, resource limits
@@ -375,3 +375,33 @@ Verified milestones:
   independent conformance and IJG/mozjpeg corpora, coverage-guided fuzzing and
   all measured performance/optimization work remain required. The full goal
   stays active; no application integration is made.
+
+- Abbreviated table/image milestone: caller-owned persistent DQT/DHT banks,
+  validated external definitions, table-only metadata/serialization and direct
+  table/image emission through all existing native/source encoders. All thirteen
+  frame processes reuse caches without cloning compiled tables per image.
+  SOI resets DAC/DRI; later table redefinitions stay at their image scan/frame.
+  Empty unused Huffman destinations are retained under B.2.4.2 and fail if used
+  to decode a symbol. Combined output/frame budgets include the table packet;
+  encoder write failures clear state to prevent omission of undelivered tables.
+  The genuine Turbo B.5 API gates pass 3,238 C-authored and 1,524 native image
+  cases, each in separate-file and concatenated delivery on one codec object.
+  All 1,932 native rare-process cases pass independent C frame-data checks of
+  equivalent interchange streams: 9,984 DCT blocks and 1,291,572 sample/residual
+  integers. Those are not counted as C B.5 parser successes; 96 explicit EXP00
+  C-input workarounds are retained. The C lossless YCbCr/YCCK client uses generic
+  native component input plus Adobe tags to avoid its default selector reset
+  mismatch; no production parser relaxation is made. The zero-Li check has a
+  separate C/native gate, including expected rejection of an empty used table.
+  Forty-four pinned sessions contain 64 images across all process markers;
+  34,201 image prefixes and 3,300 bounded mutations pass, alongside external
+  table prefix/mutation checks. These are encoder regressions, not an independent
+  conformance corpus. All 10,612 earlier default-writer hashes are unchanged,
+  with 964 fresh Turbo C decodes; the subsequent zero-Li parser exception has
+  targeted C evidence. All 139 tests pass in release and isolated debug builds;
+  rustfmt, Clippy and rustdoc with warnings denied pass.
+  See ABBREVIATED-VALIDATION.md and abbreviated reports in
+  tests/reports. Incremental byte I/O, full DCT component counts, broader rare
+  scan/Pt combinations, independent conformance/IJG/mozjpeg corpora,
+  coverage-guided fuzzing and measured performance/optimization remain required.
+  The full goal remains active; there is no application integration.

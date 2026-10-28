@@ -5,6 +5,8 @@ const LOOK_BITS: u8 = 9;
 /// Canonical JPEG Huffman decoder: a flat prefix lookup and bounded fallback.
 #[derive(Clone)]
 pub(crate) struct Huffman {
+    counts: [u8; 16],
+    symbol_count: u16,
     lookup: [u16; 1 << LOOK_BITS],
     max_code: [i32; 17],
     offsets: [i32; 17],
@@ -14,10 +16,14 @@ pub(crate) struct Huffman {
 impl Huffman {
     pub fn new(counts: &[u8; 16], symbols: &[u8]) -> Result<Self> {
         let count: usize = counts.iter().map(|&v| v as usize).sum();
-        if count == 0 || count > 256 || count != symbols.len() {
+        // B.2.4.2 permits all Li to be zero. Such a destination may remain
+        // unused; attempting to decode a symbol still fails as unassigned.
+        if count > 256 || count != symbols.len() {
             return Err(Error::Invalid("Huffman symbol count"));
         }
         let mut table = Self {
+            counts: *counts,
+            symbol_count: count as u16,
             lookup: [0; 1 << LOOK_BITS],
             max_code: [-1; 17],
             offsets: [0; 17],
@@ -48,6 +54,10 @@ impl Huffman {
             code = (code + n) << 1;
         }
         Ok(table)
+    }
+
+    pub(crate) fn definition(&self) -> (&[u8; 16], &[u8]) {
+        (&self.counts, &self.values[..self.symbol_count as usize])
     }
 
     #[inline]
@@ -192,7 +202,9 @@ mod tests {
             assert_eq!(table.decode(&mut bits).unwrap(), length - 1);
         }
         assert!(Huffman::new(&[2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], &[0, 1]).is_err());
-        assert!(Huffman::new(&[0; 16], &[]).is_err());
+        let empty = Huffman::new(&[0; 16], &[]).unwrap();
+        assert_eq!(empty.definition(), (&[0; 16], &[][..]));
+        assert!(empty.decode(&mut Bits::new(&[0, 0])).is_err());
     }
 
     #[test]

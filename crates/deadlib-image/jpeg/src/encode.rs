@@ -102,6 +102,19 @@ pub fn encode_coefficients_with_metadata(
     options: CodingOptions,
     metadata: MetadataOptions<'_>,
 ) -> Result<Vec<u8>> {
+    encode_with_table_writer(
+        image,
+        options,
+        metadata,
+        &mut crate::abbreviated::TableWriter::interchange(),
+    )
+}
+pub(crate) fn encode_with_table_writer(
+    image: &CoefficientImage<'_>,
+    options: CodingOptions<'_>,
+    metadata: MetadataOptions<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
+) -> Result<Vec<u8>> {
     if image.frame.process.is_differential() {
         return Err(Error::Unsupported(
             "differential frame requires a hierarchy",
@@ -121,6 +134,7 @@ pub fn encode_coefficients_with_metadata(
         previous = segment.preceding_scans;
     }
     let mut out = Output::new(options.max_output_bytes);
+    tables.prepare(&mut out)?;
     out.marker(0xd8)?;
     let mut metadata_index = 0;
     emit_metadata(
@@ -146,6 +160,7 @@ pub fn encode_coefficients_with_metadata(
                 metadata.icc,
             )
         },
+        tables,
     )?;
     emit_metadata(
         &mut out,
@@ -214,6 +229,7 @@ pub(crate) fn encode_frame(
     limits: crate::Limits,
     reset_restart: bool,
     before_scan: &mut impl FnMut(&mut Output, usize) -> Result<()>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
 ) -> Result<usize> {
     validate_frame(image, limits)?;
     let n = image.components.len();
@@ -277,19 +293,7 @@ pub(crate) fn encode_frame(
     let process = frame_process(image, options);
     for (i, q) in quantizers[..quantizer_count].iter().enumerate() {
         let wide = q.iter().any(|&v| v > 255);
-        let mut data = [0u8; 129];
-        data[0] = (if wide { 16 } else { 0 }) | i as u8;
-        let mut p = 1;
-        for &index in &ZIGZAG {
-            if wide {
-                data[p..p + 2].copy_from_slice(&q[index].to_be_bytes());
-                p += 2;
-            } else {
-                data[p] = q[index] as u8;
-                p += 1;
-            }
-        }
-        out.segment(0xdb, &data[..p])?;
+        tables.quantization(out, i as u8, q, wide)?;
     }
     let mut header = [0u8; 18];
     header[0] = image.frame.precision;
@@ -310,8 +314,20 @@ pub(crate) fn encode_frame(
     let groups = if n == 1 { 1 } else { 2 };
     if let Some(books) = &books {
         for i in 0..groups {
-            books[i].emit(out, 0, i as u8)?;
-            books[2 + i].emit(out, 1, i as u8)?;
+            tables.huffman(
+                out,
+                crate::HuffmanClass::Dc,
+                i as u8,
+                &books[i].counts,
+                &books[i].symbols,
+            )?;
+            tables.huffman(
+                out,
+                crate::HuffmanClass::Ac,
+                i as u8,
+                &books[2 + i].counts,
+                &books[2 + i].symbols,
+            )?;
         }
     } else {
         let c = options.arithmetic_conditioning;
@@ -331,6 +347,7 @@ pub(crate) fn encode_frame(
     }
     for s in 0..scan_count {
         before_scan(out, s)?;
+        tables.scan_started();
         let scan = plan.get(s)?;
         let mut sos = [0u8; 12];
         sos[0] = scan.count as u8;

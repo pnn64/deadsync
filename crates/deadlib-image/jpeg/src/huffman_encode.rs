@@ -178,14 +178,6 @@ impl Codebook {
         }
         out.write_bits(self.codes[symbol as usize] as u32, length)
     }
-
-    pub fn emit(&self, out: &mut Output, class: u8, id: u8) -> Result<()> {
-        let mut segment = [0u8; 273];
-        segment[0] = (class << 4) | id;
-        segment[1..17].copy_from_slice(&self.counts);
-        segment[17..17 + self.symbols.len()].copy_from_slice(&self.symbols);
-        out.segment(0xc4, &segment[..17 + self.symbols.len()])
-    }
 }
 
 #[cfg(test)]

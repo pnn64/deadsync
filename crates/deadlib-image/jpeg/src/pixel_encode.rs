@@ -117,6 +117,9 @@ pub fn encode_with_metadata(
     options: EncodeOptions,
     metadata: MetadataOptions<'_>,
 ) -> Result<Vec<u8>> {
+    encode_samples_with_metadata(&shared_input(image)?, options, metadata)
+}
+pub(crate) fn shared_input(image: &Image) -> Result<EncodeInput<'_>> {
     image
         .validate()
         .map_err(|_| Error::Invalid("encoder shared image"))?;
@@ -125,7 +128,7 @@ pub fn encode_with_metadata(
         ColorType::Rgb => ColorSpace::Rgb,
         _ => return Err(Error::Unsupported("encoder shared image color type")),
     };
-    let input = EncodeInput {
+    Ok(EncodeInput {
         width: u16::try_from(image.width)
             .map_err(|_| Error::Invalid("encoder width exceeds 65535"))?,
         height: u16::try_from(image.height)
@@ -136,8 +139,7 @@ pub fn encode_with_metadata(
             Samples::U8(v) => SampleData::U8(v),
             Samples::U16(v) => SampleData::U16(v),
         },
-    };
-    encode_samples_with_metadata(&input, options, metadata)
+    })
 }
 
 /// Native interleaved sample encoding. CMYK polarity and CMYK-to-YCCK are

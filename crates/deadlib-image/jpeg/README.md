@@ -105,6 +105,26 @@ controls share these options; `omit_dhp_height` selects zero-height DHP.
 Defaults retain ordinary SOF/DHP output. DNL-VALIDATION.md records all-process
 checks, independent C-authored inputs and explicit reference limitations.
 
+`Tables` owns persistent quantization and Huffman destinations for T.81 B.4/B.5
+abbreviated streams. Load a table-only stream with `tables.load(bytes, limits)`,
+then call its `decode_coefficients`, `decode_lossless` or `decode_hierarchical`
+methods for successive images. Definitions in images update the same cache.
+`consumed` stops at EOI, allowing concatenated streams. Arithmetic conditioning
+and restart intervals reset at every SOI. Table-stream APPn/COM metadata is
+returned separately and does not become metadata of later images.
+
+`AbbreviatedEncoder` supplies matching stateful encoding for coefficients,
+native/shared samples, predictive lossless frames, hierarchies and source
+pyramids. Its methods return `AbbreviatedImage { tables, image }`; deliver both
+vectors to the same receiver in that order for every successful call. Unchanged
+definitions are omitted. An empty table packet is the valid four-byte SOI/EOI
+stream. Later scan/frame redefinitions remain at their original image position.
+Both vectors count toward the output byte budget; `max_table_bytes` separately
+bounds the companion packet. Metadata and ICC remain in the image. Call `clear`
+when the receiver loses its cache or a successful pair is discarded. Write
+errors clear the encoder's table state. See ABBREVIATED-VALIDATION.md for state,
+error semantics, external checks and reproducible commands.
+
 `encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
 without another lossy transform. It preserves quantizer values, visible blocks,
 and APPn/COM payloads. Controls select sequential or progressive
@@ -174,7 +194,7 @@ record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark; allocation instrumentation remains planned.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
 unsupported errors. Full DCT component-count coverage,
-Abbreviated streams, incremental I/O, additional encoder scan strategies, and the broader validation
+Incremental I/O, additional encoder scan strategies, and the broader validation
 and performance work remain required.
 
 Run `cargo test -p deadlib-image-jpeg` and

@@ -143,3 +143,17 @@ new four-patch executable, independent `-n` input generation, original-header
 comparisons and explicitly separate known-header C-input workarounds. The
 structural Python helper now resolves DNL/DHP and accepts ordinary frames;
 coefficient/sample comparisons retain their existing exact semantics.
+
+`jpeg-abbreviated` uses public Turbo APIs with one persistent codec object:
+`jpeg_write_tables` plus `jpeg_start_compress(FALSE)` for real table/image
+streams and `jpeg_read_header(FALSE)` for table-only headers. It accepts
+separate stream files, concatenated streams and a newline path manifest.
+`reference_abbreviated.py` compares exact native coefficients/quantizers or
+lossless sample integers in both forms, including SOI DAC/DRI reset cases.
+For lossless YCbCr/YCCK sources, generic component input and explicit Adobe
+markers avoid Turbo's reset/default Huffman selector mismatch; Tq is set to
+zero after the start reset and before SOF emission. No sample algorithm or
+reference source is patched. The rare-process JPEG XT comparisons reconstruct
+an equivalent interchange stream from an independent raw table bank; they are
+not genuine C B.5 parser tests. See ../../ABBREVIATED-VALIDATION.md for provenance,
+limitations, pinned session compaction and reproduction commands.

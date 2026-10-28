@@ -133,6 +133,19 @@ pub fn encode_lossless_samples_with_metadata(
     options: LosslessOptions,
     metadata: MetadataOptions<'_>,
 ) -> Result<Vec<u8>> {
+    encode_samples_with_tables(
+        input,
+        options,
+        metadata,
+        &mut crate::abbreviated::TableWriter::interchange(),
+    )
+}
+pub(crate) fn encode_samples_with_tables(
+    input: &EncodeInput<'_>,
+    options: LosslessOptions<'_>,
+    metadata: MetadataOptions<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
+) -> Result<Vec<u8>> {
     let count = match input.color_space {
         ColorSpace::Grayscale => 1,
         ColorSpace::Rgb | ColorSpace::YCbCr => 3,
@@ -225,13 +238,27 @@ pub fn encode_lossless_samples_with_metadata(
         stored,
         options,
         metadata,
+        tables,
     )
 }
 
 pub(crate) fn encode_planes(
     image: &LosslessImage<'_>,
-    mut options: LosslessOptions,
+    options: LosslessOptions,
     metadata: MetadataOptions<'_>,
+) -> Result<Vec<u8>> {
+    encode_planes_with_tables(
+        image,
+        options,
+        metadata,
+        &mut crate::abbreviated::TableWriter::interchange(),
+    )
+}
+pub(crate) fn encode_planes_with_tables(
+    image: &LosslessImage<'_>,
+    mut options: LosslessOptions<'_>,
+    metadata: MetadataOptions<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
 ) -> Result<Vec<u8>> {
     let stored = image.validate()?.max(image.memory_bytes);
     options.limits = intersect(options.limits, image.limits);
@@ -245,6 +272,7 @@ pub(crate) fn encode_planes(
         stored,
         options,
         metadata,
+        tables,
     )
 }
 pub(crate) fn intersect(a: Limits, b: Limits) -> Limits {
@@ -515,6 +543,7 @@ fn walk(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn encode_native(
     frame: &FrameHeader,
     source: Source<'_>,
@@ -522,6 +551,7 @@ fn encode_native(
     stored: usize,
     options: LosslessOptions<'_>,
     metadata: MetadataOptions<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
 ) -> Result<Vec<u8>> {
     if stored > options.limits.max_memory_bytes {
         return Err(Error::LimitExceeded("lossless encoder storage"));
@@ -533,13 +563,20 @@ fn encode_native(
         return Err(Error::LimitExceeded("lossless arithmetic history"));
     }
     let mut out = Output::new(options.max_output_bytes.min(available - history_bytes));
+    tables.prepare(&mut out)?;
     out.marker(0xd8)?;
     let mut metadata_index = 0;
     emit_metadata(&mut out, segments, &mut metadata_index, 0, metadata.icc)?;
     emit_additional(&mut out, metadata)?;
-    encode_frame(&mut out, frame, source, options, false, &mut |out, scan| {
-        emit_metadata(out, segments, &mut metadata_index, scan, metadata.icc)
-    })?;
+    encode_frame(
+        &mut out,
+        frame,
+        source,
+        options,
+        false,
+        &mut |out, scan| emit_metadata(out, segments, &mut metadata_index, scan, metadata.icc),
+        tables,
+    )?;
     emit_metadata(
         &mut out,
         segments,
@@ -599,6 +636,7 @@ pub(crate) fn encode_frame(
     options: LosslessOptions<'_>,
     reset_restart: bool,
     before_scan: &mut impl FnMut(&mut Output, usize) -> Result<()>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
 ) -> Result<usize> {
     let plan = Plan::new(frame, options)?;
     let (_, history_bytes) = frame_requirements(frame, options)?;
@@ -655,9 +693,21 @@ pub(crate) fn encode_frame(
         &header[..6 + 3 * frame.components.len()],
     )?;
     if let Some(books) = &books {
-        books[0].emit(out, 0, 0)?;
+        tables.huffman(
+            out,
+            crate::HuffmanClass::Dc,
+            0,
+            &books[0].counts,
+            &books[0].symbols,
+        )?;
         if frame.components.len() > 1 {
-            books[1].emit(out, 0, 1)?;
+            tables.huffman(
+                out,
+                crate::HuffmanClass::Dc,
+                1,
+                &books[1].counts,
+                &books[1].symbols,
+            )?;
         }
     } else {
         let mut dac = [0; 4];
@@ -671,6 +721,7 @@ pub(crate) fn encode_frame(
     let mut previous_interval = if reset_restart { None } else { Some(0) };
     for s in 0..plan.count {
         before_scan(out, s)?;
+        tables.scan_started();
         let scan = plan.get(s)?;
         let (_, _, interval) = geometry(frame, scan)?;
         if Some(interval) != previous_interval {

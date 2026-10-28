@@ -6,11 +6,7 @@ use crate::{
     Result, ZIGZAG,
 };
 
-#[derive(Clone, Copy)]
-pub(crate) struct Quantization {
-    values: [u16; 64],
-    wide: bool,
-}
+use crate::tables::{QuantizationTable as Quantization, Tables};
 
 /// A component retains the padded MCU block grid and its original quantizer.
 #[derive(Clone, Debug)]
@@ -104,9 +100,15 @@ pub(crate) fn allocate_components(
 /// Accepts sequential/progressive Huffman/arithmetic DCT frames; other processes are explicit
 /// errors while their native implementations are in progress.
 pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientImage<'_>> {
+    decode_with_tables(input, limits, &mut Tables::new())
+}
+pub(crate) fn decode_with_tables<'a>(
+    input: &'a [u8],
+    limits: Limits,
+    tables: &mut Tables,
+) -> Result<CoefficientImage<'a>> {
     let mut reader = MarkerReader::new(input)?;
-    let mut quant = [None; 4];
-    let mut huffman: [Option<Huffman>; 8] = core::array::from_fn(|_| None);
+    let Tables { quant, huffman } = tables;
     let mut conditioning = Conditioning::default();
     let mut frame = None;
     let mut components = Vec::new();
@@ -125,10 +127,10 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
             }
             Event::Segment {
                 marker: 0xdb, data, ..
-            } => parse_quant(data, &mut quant)?,
+            } => parse_quant(data, quant)?,
             Event::Segment {
                 marker: 0xc4, data, ..
-            } => parse_huffman(data, &mut huffman)?,
+            } => parse_huffman(data, huffman)?,
             Event::Segment {
                 marker: 0xcc, data, ..
             } => conditioning.parse(data)?,
@@ -212,8 +214,8 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
                     frame,
                     &mut components,
                     &mut seen,
-                    &quant,
-                    &huffman,
+                    quant,
+                    huffman,
                     interval,
                     conditioning,
                 )?;
