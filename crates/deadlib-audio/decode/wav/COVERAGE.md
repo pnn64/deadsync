@@ -66,7 +66,13 @@ native byte/frame consistency. Total tests: 23; debug and Clippy pass. The retai
 and zero scoped heap allocation, within prior run variation. No encoding-speed
 improvement is claimed from this architecture change.
 
-Remaining work: ADPCM encoding and compressed I/O convenience, structured metadata,
+Microsoft and 4-bit IMA encoding now support allocation-free block calls and a
+bounded-buffer streaming writer. All 144 encoder differential fixture sets match
+the specified-arithmetic references and exact fact lengths; each other reference
+disagreement is retained. See ADPCM.md for scope and lossy quality limitations.
+Total crate integration tests: 27.
+
+Remaining work: compressed I/O convenience, structured metadata,
 wavl/slnt and multiple-data handling, oracle comparisons, fuzzing, sparse >4 GiB
 evidence and broad performance coverage (the first PCM16 baseline is in
 [PERFORMANCE.md](PERFORMANCE.md)); forward-only audio convenience APIs,

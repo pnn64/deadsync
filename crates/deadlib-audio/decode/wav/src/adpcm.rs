@@ -2,7 +2,7 @@
 //! Integer rounding follows Microsoft RIFFNEW (1994) and IMA revision 3 (1992).
 use crate::{Encoding, Endian, Error, Format, Wave};
 
-const COEFFICIENTS: [(i16, i16); 7] = [
+pub(crate) const COEFFICIENTS: [(i16, i16); 7] = [
     (256, 0),
     (512, -256),
     (0, 0),
@@ -11,11 +11,11 @@ const COEFFICIENTS: [(i16, i16); 7] = [
     (460, -208),
     (392, -232),
 ];
-const ADAPT: [i64; 16] = [
+pub(crate) const ADAPT: [i64; 16] = [
     230, 230, 230, 230, 307, 409, 512, 614, 768, 614, 512, 409, 307, 230, 230, 230,
 ];
-const INDEX: [i32; 8] = [-1, -1, -1, -1, 2, 4, 6, 8];
-const STEP: [i32; 89] = [
+pub(crate) const INDEX: [i32; 8] = [-1, -1, -1, -1, 2, 4, 6, 8];
+pub(crate) const STEP: [i32; 89] = [
     7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66,
     73, 80, 88, 97, 107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449,
     494, 544, 598, 658, 724, 796, 876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272,
@@ -26,12 +26,12 @@ const STEP: [i32; 89] = [
 /// Validated block parameters; borrows only the optional Microsoft coefficient table.
 #[derive(Clone, Copy, Debug)]
 pub struct Adpcm<'a> {
-    encoding: Encoding,
-    endian: Endian,
-    channels: usize,
-    block_bytes: usize,
-    frames_per_block: usize,
-    coefficients: &'a [u8],
+    pub(crate) encoding: Encoding,
+    pub(crate) endian: Endian,
+    pub(crate) channels: usize,
+    pub(crate) block_bytes: usize,
+    pub(crate) frames_per_block: usize,
+    pub(crate) coefficients: &'a [u8],
 }
 impl<'a> Adpcm<'a> {
     pub fn from_format(format: Format<'a>) -> Result<Self, Error> {

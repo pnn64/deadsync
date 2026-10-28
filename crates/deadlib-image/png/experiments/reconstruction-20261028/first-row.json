@@ -1,0 +1,69 @@
+{
+  "label": "first-row",
+  "command": [
+    "cargo",
+    "build",
+    "--offline",
+    "-p",
+    "deadlib-image-png",
+    "--profile",
+    "bench",
+    "--example",
+    "reconstruction_bench",
+    "--target-dir",
+    "C:\\GitHub\\deadsync\\target\\png-reconstruction-20261028\\build",
+    "--message-format",
+    "json"
+  ],
+  "commit": "cdc8e854de65e3642b16ee72b3075e2cd5564f9c",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+  "executable": "C:\\GitHub\\deadsync\\target\\png-reconstruction-20261028\\first-row\\reconstruction_bench.exe",
+  "executable_sha256": "da7b874ced09a449799a4ff829661d889efabfb8f3b86d5ef2dc61bbe7313cf1",
+  "source_sha256": {
+    "src/apng.rs": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21",
+    "src/checksum.rs": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14",
+    "src/codec.rs": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f",
+    "src/composite.rs": "3cb591692d88267e5c98c59e70f343bdb2844c7104199a85d37d0a4a859f9298",
+    "src/lib.rs": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9",
+    "src/metadata/language/registry.rs": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4",
+    "src/metadata/language.rs": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb",
+    "src/metadata/profile.rs": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b",
+    "src/metadata.rs": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b",
+    "src/reference.rs": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5",
+    "src/scanline.rs": "1de5636bfc89eda1953098e5a9f555804b2739d80e65f81f0a7d748ced5f6fc7",
+    "src/stream/decode.rs": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30",
+    "src/stream/encode_rows.rs": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447",
+    "src/stream/mod.rs": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b",
+    "src/stream/read.rs": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d",
+    "src/stream/rows.rs": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805",
+    "src/stream/write.rs": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463",
+    "src/zlib/deflate.rs": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4",
+    "src/zlib/inflate.rs": "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97",
+    "src/zlib/matcher.rs": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19",
+    "src/zlib.rs": "6f3f7d4a2f6406c7852f1b57a1f3d7c2983b2aa20da1a7c2fba5e37a18e2e315"
+  },
+  "benchmark_sha256": "678d136492531ed09c2198fc0ea51d966b7bccbd9388935e5c0ae060229fb1e7",
+  "cpu_helper_sha256": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+  "shared_image_sha256": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3",
+  "workspace_manifest_sha256": "65b586de3e57b853a4a428a0a137b62ba94666fa48f3eeabe99cd0eaeb06749f",
+  "workspace_lock_sha256": "42b67541469fe171f428888ae34f00a394bba3c604b24dd7b12b1808562bf0a0",
+  "driver_sha256": "1416a8b6de33ff6441031f7ece8553dcf2c861b24ae41d558abb0a1ff8312d39",
+  "scope": "7 batches per process, 3 warmups, current thread pinned to CPU 2; Windows QueryThreadCycleTime. Allocation counters enabled only in a separate untimed operation. Shared host and frequency uncontrolled.",
+  "outputs": [
+    {
+      "path": "first-row-run1.tsv",
+      "sha256": "85cfccd54883bcd3dc7eeeebe55f8e6a41df171baea2e648f348dea42f95bb7b",
+      "stderr": ""
+    },
+    {
+      "path": "first-row-run2.tsv",
+      "sha256": "7cb9a6ac3edc4fdbfe09881cb227167ae7e4c2c3cbd25d00b7f650f456e7fec9",
+      "stderr": ""
+    },
+    {
+      "path": "first-row-run3.tsv",
+      "sha256": "ac0096a128e9c88033686f644a8cb8e9a6974b7b4d4a8821553cff6e46afed5e",
+      "stderr": ""
+    }
+  ]
+}

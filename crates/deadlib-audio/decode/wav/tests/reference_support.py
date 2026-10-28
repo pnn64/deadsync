@@ -10,6 +10,21 @@ DR_COMMIT = 'a466dbe88fe2576d46c43877d602f3d66b8561a7'
 DR_SHA256 = '34109aa9605f657d35c02f853f283d1f231883d9397e6a24b6504cc05cc1cafd'
 
 
+def build_symphonia(workspace, root):
+    manifest = root / 'tests/oracle/symphonia/Cargo.toml'
+    result = subprocess.run(['cargo', 'build', '--locked', '--manifest-path', str(manifest),
+                             '--target-dir', str(workspace/'target/wav-symphonia')], capture_output=True)
+    cache = workspace/'target/wav-symphonia'
+    cache.mkdir(parents=True, exist_ok=True)
+    (cache/'build.log').write_bytes(result.stdout+result.stderr)
+    if result.returncode:
+        raise RuntimeError('Symphonia reference build failed; see '+str(cache/'build.log'))
+    output = cache/'debug'/('wav-symphonia-reference.exe' if os.name=='nt' else 'wav-symphonia-reference')
+    paths=[manifest,manifest.parent/'Cargo.lock',manifest.parent/'src/main.rs']
+    return output,dict(version='0.6.1',sources={p.relative_to(root).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in paths},
+                       binary_sha256=hashlib.sha256(output.read_bytes()).hexdigest())
+
+
 def build_dr_wav(workspace, root):
     cache = workspace / 'target/wav/oracle'
     cache.mkdir(parents=True, exist_ok=True)

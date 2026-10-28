@@ -41,3 +41,8 @@ Codec-independent encoded output muxing is implemented; native Writer shares the
 same path. Opaque descriptors, 64-bit decoded counts and bounded size accounting
 have dedicated coverage; 23 tests and a repeated PCM benchmark pass. ADPCM
 encoding and compressed readers remain the next implementation work.
+
+Microsoft and 4-bit IMA encoding are now implemented: block buffers, standard
+format generation and incremental writer with fact-trimmed final padding. Tests
+and the four-reference encoder campaign are recorded in ADPCM.md. Compressed
+readers, standard variants and remaining validation/performance work stay open.

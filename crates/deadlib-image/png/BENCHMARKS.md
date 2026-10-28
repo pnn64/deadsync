@@ -1175,3 +1175,86 @@ saved binaries, all eight timing groups and both recomputed summaries. The
 source-only parent templates contain no measurements; their scope text remains
 in the saved-run manifests alongside actual process measurements and parent
 lineage. The selected decoder's performance requirement remains open.
+## Reconstruction CPU cycles and allocations (2026-10-28)
+
+Three sequential changes simplify native sample reconstruction and explicit
+RGBA16 expansion. Production remains safe Rust under `forbid(unsafe_code)`.
+
+1. Compute the RGBA scale once per image/frame. Every legal sample mask divides
+   65535 exactly, so multiplication replaces division for each output component.
+   Palette expansion and transparency comparisons retain their existing rules.
+2. Unpack contiguous 1/2/4-bit rows in fixed groups per encoded byte. This removes
+   the general pixel/channel scatter loop and its runtime source-index arithmetic
+   from those rows, including Adam7's contiguous final pass. Other Adam7 passes
+   retain their existing scatter path; partial final bytes are bounded by the
+   destination sample count.
+3. Reconstruct each pass's first row directly: Up is identity, Paeth is Sub, and
+   Average adds half the reconstructed left byte. This removes one allocation,
+   zero fill and predictor-row read per nonempty pass. Invalid filters still
+   return the same error before modifying samples.
+
+Measurements use the Intel Xeon E5-2696 v4, Windows x86-64 and Rust 1.99.1,
+with the workspace bench profile (optimization level 3, LTO, debug info 1).
+The new `examples/reconstruction_bench.rs` uses Windows `QueryThreadCycleTime`
+and pins the current thread to logical CPU 2. Each checkpoint has three original
+processes and three saved-binary controls, replayed in reverse checkpoint order.
+Every process warms each operation three times, then takes the median of seven
+12-iteration batches. The table reports medians across all six processes per
+checkpoint. Allocations/reallocations and requested byte totals come from a
+separate untimed operation; counters are disabled during timed batches. Bytes
+are allocation requests, including full replacement sizes on reallocations,
+rather than live memory or RSS. Throughput counts native output sample bytes.
+
+| Change and operation | Before cycles/image | After cycles/image | CPU throughput | Before MiB/s | After MiB/s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Scale: RGBA8 to RGBA16, 513x257 | 6,716,828 | 2,742,890 | 2.45x | 327.9 | 802.0 |
+| Scale: RGBA16 to RGBA16, 513x257 | 6,893,809 | 2,658,182 | 2.59x | 319.2 | 827.2 |
+| Scale: RGBA8 APNG SOURCE, 513x257 | 6,196,110 | 1,816,984 | 3.41x | 355.3 | 1,211.8 |
+| Unpack: grayscale1 decode, 4097x257 | 6,663,023 | 2,827,983 | 2.36x | 331.1 | 775.5 |
+| Unpack: grayscale2 decode, 4097x257 | 7,198,064 | 3,408,890 | 2.11x | 306.5 | 644.3 |
+| Unpack: grayscale4 decode, 4097x257 | 8,409,905 | 4,684,587 | 1.80x | 261.3 | 469.2 |
+
+Scaling's RGBA16 expansion gain spans 1.38x to 2.59x across grayscale, GA, RGB
+and RGBA at 8/16 bits; APNG SOURCE spans 1.61x to 3.41x. These changes preserve
+allocation counts. Unpacking's inputs use identical fixed-seed samples and the
+None filter; timings include the entire native buffered decoder.
+
+| First-row change: buffered decode | Before allocations | After allocations | Before requested bytes | After requested bytes |
+| --- | ---: | ---: | ---: | ---: |
+| RGBA8 33x1, each of all five filters | 3 | 2 | 409 | 277 |
+| Grayscale1 4097x257 | 4 | 3 | 1,840,900 | 1,840,387 |
+| Grayscale8 4097x257 | 3 | 2 | 7,217,667 | 7,213,570 |
+| Grayscale16 4097x257 | 4 | 3 | 16,672,007 | 16,663,813 |
+
+First-row reallocations are unchanged. Short-image cycle medians improve
+14–30% in these measurements, but their very small batches and the shared host
+make exact timing percentages less reliable than the deterministic allocation
+reduction. Small changes in unrelated cases are not attributed to an
+optimization. Host frequency and competing workloads remain uncontrolled.
+
+Raw TSVs, source/binary/toolchain identities, original build logs, reverse-order
+controls, incremental patches and full summaries are in
+[`experiments/reconstruction-20261028`](experiments/reconstruction-20261028).
+`reconstruction_checkpoints.py` verifies every archived transition against every
+production source hash recorded at each build, accounting for checkout line
+endings. All 26 output fingerprints agree across all 24 measured processes.
+The decoder fixtures also compare complete native images with their generated
+sample vectors outside timing.
+
+`measured-benchmark.rs` preserves the exact harness used for those measurements.
+The current example resolves the identical CPU helper inside the PNG package,
+so standalone package builds also work. The helper's bytes and the measured
+production source are unchanged by that path relocation.
+
+The source diff adds 32 production lines net (48 added, 16 removed), plus ten
+lines extending independent filter and invalid-filter checks. The removed work
+is per-channel division, runtime packed-sample scatter arithmetic and per-pass
+predictor allocation/initialization. No public API or dependency changes.
+
+The complete release suite, including the optional C/reference checks, passes
+166 tests with zero failures or skips. Focused debug unit/static/compositing
+checks also pass, including the 3,240-case static matrix and every Paeth byte
+triplet. All-target Clippy with warnings denied and scoped formatting pass.
+Commands, source/reference binary hashes and output are retained in
+`validation.json`, `release.log`, `debug.log`, `clippy.log` and `fmt.log` in the
+evidence directory.

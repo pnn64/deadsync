@@ -41,6 +41,12 @@ position and are not truncated; callers replacing longer files must truncate the
 `AdpcmData` adds fact-trimmed borrowed audio and exact range access using reusable
 block scratch. See [ADPCM.md](ADPCM.md) for coverage and reference disagreements.
 
+`Adpcm::encode_block` writes a full lossy block into caller-owned encoded storage;
+the last real frame is repeated as padding. `AdpcmSpec` emits standard descriptors.
+`AdpcmWriter` accepts arbitrary batches of whole i16 frames, retains one pending
+block, and records the unpadded frame count on finish. Both Microsoft and 4-bit
+IMA encoding are native Rust; encoding does not promise lossless source recovery.
+
 `Muxer<W: Write + Seek>` accepts a raw format descriptor, encoded bytes and
 decoded frame counts. It preserves the descriptor without codec dispatch and
 handles fact/ds64/RIFF finalization. Producers own encoded block validation; native

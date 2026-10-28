@@ -1,0 +1,20 @@
+{
+  "baseline": {
+    "all_source_hashes_verified": true
+  },
+  "scale": {
+    "all_source_hashes_verified": true,
+    "patch_from_previous": "baseline-to-scale.patch",
+    "patch_sha256": "262b7376b4cf021567f281c0433fb102b2c487e7d6d485d14ccca2a9b695cc3f"
+  },
+  "packed": {
+    "all_source_hashes_verified": true,
+    "patch_from_previous": "scale-to-packed.patch",
+    "patch_sha256": "7364ce696a872a556fcfc637213a62b12d67b5746780953cd959e20c5bd546c2"
+  },
+  "first-row": {
+    "all_source_hashes_verified": true,
+    "patch_from_previous": "packed-to-first-row.patch",
+    "patch_sha256": "d102a45dcd4aaecf44df26aaf9974ed8da6148d645cbddcf1d4e66518b88e19a"
+  }
+}

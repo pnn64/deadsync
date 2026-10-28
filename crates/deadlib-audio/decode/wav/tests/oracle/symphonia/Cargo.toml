@@ -1,0 +1,11 @@
+[package]
+name = "wav-symphonia-reference"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+# Keep this reference build separate from the application workspace.
+symphonia = { version = "=0.6.1", default-features = false, features = ["wav", "pcm", "adpcm"] }

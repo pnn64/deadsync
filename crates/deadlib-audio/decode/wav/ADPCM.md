@@ -60,7 +60,56 @@ Twenty integration tests now pass. ADPCM-specific tests also cover custom
 coefficients, malformed header indices, negative deltas, stereo ordering, IMA
 1/2/6/32-channel layouts, short blocks, arbitrary cross-block ranges and fact bounds.
 
-Remaining: ADPCM encoding, file-backed compressed streaming/seek convenience,
+## Native encoding milestone
+
+`Adpcm::encode_block` now writes caller-owned block storage without allocating.
+It supports the same standard/custom Microsoft descriptors and 4-bit IMA word
+layouts as decoding. Partial final blocks repeat the last frame; fact records
+the original length. `AdpcmSpec` emits standard fmt payloads. `AdpcmWriter`
+buffers incomplete input, bypasses that copy for full blocks, and reuses two
+fallibly allocated buffers. Memory depends on block geometry, not file duration.
+Native PCM/float encoding remains bit preserving; ADPCM is explicitly lossy.
+
+Selection is deliberately bounded: IMA estimates the starting index from up to
+32 differences; Microsoft scores coefficient predictors on up to 32 real frames.
+The quantizer tracks reconstructed samples, rather than original sample history.
+This is a fast basic encoder, not a trellis or perceptually optimized encoder.
+Impulse quality is a known weakness; SNR/RMSE and maximum errors are retained in
+the report rather than inferred from successful decoding.
+
+Encoder validation:
+
+```sh
+python crates/deadlib-audio/decode/wav/tests/reference_adpcm_encode.py --output target/wav/my-encoding-validation.json
+```
+
+The Symphonia 0.6.1 reference lives in a separate test workspace with its own
+lockfile, so its dependencies do not affect the application workspace. The script
+builds this reference, dr_wav, and crate examples; generates PCM independently;
+encodes using this crate; and compares decoded bits through all four references.
+2026-10-28: 144 fixture sets, 75,096 original samples, all decoded lengths exact.
+Tests vary mono/stereo, three block sizes, lengths 1/17/1025, and constant/sine/
+noise/impulse signals. All 36 constant cases preserve the original samples.
+
+| Reference | Exact encoded-file decoding after fact trimming | Details |
+| --- | ---: | --- |
+| FFmpeg 7.1 | 108/144 | All 72 MS; 36/72 IMA (known rounding difference) |
+| Symphonia 0.6.1 | 108/144 | All 72 MS; 36/72 IMA (same rounding distinction) |
+| dr_wav pinned commit above | 132/144 | All 72 IMA; 60/72 MS |
+| libsndfile 1.2.2 | 113/144 | All 72 IMA; 41/72 MS |
+
+Microsoft output matches FFmpeg and Symphonia in every case; IMA matches both
+dr_wav and libsndfile in every case. Libsndfile rejects 24 MS fixtures because
+it requires at least seven samples per block; the fixtures contain six samples
+in valid nine-byte-per-channel blocks. Its log and all other disagreements are
+retained in `validation/adpcm-encoding-references.json`. No full parity with
+mutually disagreeing references is claimed.
+
+Four new encoder tests verify exact constant/header-only vectors, full/partial
+block batch invariance in all four containers, custom predictors, up to 4000 IMA
+channels, exact fact trimming and invalid-input atomicity. Total crate tests: 27.
+
+Remaining: file-backed compressed streaming/seek convenience,
 3-bit DVI, extensible compressed mappings, RIFX external validation, Symphonia
 comparison and longer fuzz campaigns. Negative Microsoft header deltas are
 rejected. Unbounded delta growth errors safely rather than overflowing. The

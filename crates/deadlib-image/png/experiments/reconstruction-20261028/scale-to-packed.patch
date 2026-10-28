@@ -1,0 +1,38 @@
+--- a/src/scanline.rs
++++ b/src/scanline.rs
+@@ -137,6 +137,14 @@
+         _ => return Err(Error::Invalid("scanline filter")),
+     }
+     Ok(())
++}
++
++fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
++    for (samples, &byte) in out.chunks_mut(8 / DEPTH as usize).zip(row) {
++        for (n, sample) in samples.iter_mut().enumerate() {
++            *sample = (byte >> (8 - DEPTH - n as u8 * DEPTH)) & ((1 << DEPTH) - 1);
++        }
++    }
+ }
+ 
+ pub(crate) fn decode(
+@@ -205,10 +213,18 @@
+                 continue;
+             }
+             let dst_y = y as usize + row_index * dy as usize;
+-            if dx == 1 && depth >= 8 {
++            if dx == 1 {
+                 let dst = (dst_y * width as usize + x as usize) * channels;
+                 match &mut samples {
+-                    Samples::U8(v) => v[dst..dst + row.len()].copy_from_slice(row),
++                    Samples::U8(v) => {
++                        let out = &mut v[dst..dst + w * channels];
++                        match depth {
++                            1 => unpack::<1>(row, out),
++                            2 => unpack::<2>(row, out),
++                            4 => unpack::<4>(row, out),
++                            _ => out.copy_from_slice(row),
++                        }
++                    }
+                     Samples::U16(v) => {
+                         for (out, &bytes) in v[dst..dst + w * channels]
+                             .iter_mut()
