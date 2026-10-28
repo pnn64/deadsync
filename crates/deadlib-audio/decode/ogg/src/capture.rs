@@ -205,14 +205,16 @@ impl PacketCapture {
             self.skipping = header.is_continued();
             self.continuing = self.skipping;
         }
-        let (granule, compatibility) = validation::granule(page, self.granule, self.validation)
-            .map_err(|error| {
-                if error == Error::Invalid("decreasing granule position") {
-                    Error::Invalid("decreasing captured granule")
-                } else {
-                    error
-                }
-            })?;
+        let (granule, compatibility) =
+            validation::granule(page, complete, self.granule, self.validation).map_err(
+                |error| {
+                    if error == Error::Invalid("decreasing granule position") {
+                        Error::Invalid("decreasing captured granule")
+                    } else {
+                        error
+                    }
+                },
+            )?;
         if granule.is_some() {
             self.granule = granule;
         }

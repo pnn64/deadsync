@@ -207,7 +207,8 @@ impl Demuxer {
             }
         };
         let stream = &mut self.streams[index];
-        let (granule, compatibility) = validation::granule(page, stream.granule, self.validation)?;
+        let (granule, compatibility) =
+            validation::granule(page, complete, stream.granule, self.validation)?;
         if granule.is_some() {
             stream.granule = granule;
         }
