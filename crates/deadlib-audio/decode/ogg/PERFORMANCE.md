@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [index-count and synchronization-state measurements](STATE_REUSE.md)
+The latest [page metadata and checksum measurements](PAGE_WORK.md) cover word
+packet counts, directly folded checksum zeros and shared word lacing sums,
+with isolated CPU/heap comparisons and exact state and index checks.
+
+The earlier [index-count and synchronization-state measurements](STATE_REUSE.md)
 cover reused packet counts, deferred buffer moves and cached waiting-page polls,
 with CPU/heap comparisons and exact state, capacity and index checks.
 

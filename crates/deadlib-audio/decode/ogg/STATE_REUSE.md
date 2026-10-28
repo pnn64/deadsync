@@ -1,5 +1,8 @@
 # Index counts and synchronization state, 2026-10-28
 
+The later [page metadata and checksum measurements](PAGE_WORK.md) cover word
+packet counts, direct checksum-zero folding and shared lacing sums.
+
 This pass follows [owned encoding and page views](ENCODING.md), using production
 source `f5abd29fa` as its baseline. Three commits remove repeated lacing scans,
 buffer moves and header checks. Production source grows by five lines; there

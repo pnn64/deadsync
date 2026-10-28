@@ -72,6 +72,28 @@ fn main() {
         }
         return;
     }
+    for segments in [8, 17, 128, 255] {
+        let frame = encode_page(
+            PageHeader {
+                flags: 0,
+                granule_position: UNKNOWN_GRANULE_POSITION,
+                serial: 42,
+                sequence: 0,
+            },
+            &vec![255; segments],
+            &vec![37; segments * 255],
+        )
+        .unwrap();
+        let header = &frame[..27 + segments];
+        let mut sync = SyncBuffer::with_limit(MAX_PAGE_SIZE);
+        sync.push(header).unwrap();
+        probe(&format!("lacing-header/{segments}"), 10_000, || {
+            sync.reset();
+            sync.push(black_box(header)).unwrap();
+            assert!(matches!(sync.page_seek().unwrap(), PageSeek::NeedMore));
+            black_box(sync.buffered_bytes());
+        });
+    }
     for n in [0, 17, 4096] {
         let mut lacing = vec![255; n / 255];
         lacing.push((n % 255) as u8);
@@ -463,6 +485,9 @@ fn main() {
         )
         .unwrap();
         let page = Page::parse(&bytes).unwrap().0;
+        probe(&format!("completed/{name}"), 10_000, || {
+            black_box(black_box(page).completed_packets());
+        });
         probe(&format!("fragments/{name}"), 10_000, || {
             let mut sum = 0;
             for f in black_box(page).fragments() {
