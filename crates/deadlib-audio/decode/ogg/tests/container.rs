@@ -484,6 +484,26 @@ fn full_terminated_lacing_waits_for_the_next_packet_or_flush() {
 }
 
 #[test]
+fn incremental_reset_and_reuse_discard_partial_page_lengths() {
+    let large = page(BOS | EOS, 0, 8, 0, &[255, 17], &[37; 272]);
+    let small = page(BOS | EOS, 0, 9, 0, &[0], &[]);
+    let mut decoder = PageDecoder::new();
+    for prefix in [27, 28, 29, 30, large.len() - 1] {
+        decoder.reset();
+        assert!(decoder.push(&large[..prefix]).unwrap().page.is_none());
+        assert!(decoder.push(&[]).unwrap().page.is_none());
+        assert_eq!(decoder.finish(), Err(Error::Truncated));
+        assert!(matches!(decoder.push(&small), Err(Error::Failed)));
+        decoder.reset();
+        assert_eq!(decoder.push(&small).unwrap().page.unwrap().bytes(), small);
+        assert_eq!(decoder.push(&large).unwrap().page.unwrap().bytes(), large);
+        assert!(decoder.push(&[]).unwrap().page.is_none());
+        assert_eq!(decoder.push(&small).unwrap().page.unwrap().bytes(), small);
+        decoder.finish().unwrap();
+    }
+}
+
+#[test]
 fn deterministic_random_packets_differential() {
     let mut seed = 0x9428_7381u32;
     let mut writer = PacketWriter::with_options(

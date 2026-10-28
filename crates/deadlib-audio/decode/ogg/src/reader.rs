@@ -221,6 +221,7 @@ pub struct PageProgress<'a> {
 #[derive(Default)]
 pub struct PageDecoder {
     buffer: Vec<u8>,
+    length: usize,
     ready: bool,
     failed: bool,
 }
@@ -230,6 +231,7 @@ impl PageDecoder {
     }
     pub fn reset(&mut self) {
         self.buffer.clear();
+        self.length = 0;
         self.ready = false;
         self.failed = false;
     }
@@ -249,6 +251,7 @@ impl PageDecoder {
         }
         if self.ready {
             self.buffer.clear();
+            self.length = 0;
             self.ready = false;
         }
         let result = self.fill_page(input);
@@ -273,14 +276,17 @@ impl PageDecoder {
     fn fill_page(&mut self, input: &[u8]) -> Result<(usize, bool), Error> {
         let mut consumed = 0;
         loop {
-            let target = if self.buffer.len() < 27 {
+            let target = if self.length != 0 {
+                self.length
+            } else if self.buffer.len() < 27 {
                 27
             } else {
                 let header = page::header_size(&self.buffer)?;
                 if self.buffer.len() < header {
                     header
                 } else {
-                    page::page_size(&self.buffer)?
+                    self.length = page::page_size(&self.buffer)?;
+                    self.length
                 }
             };
             let take = (target - self.buffer.len()).min(input.len() - consumed);
@@ -291,17 +297,9 @@ impl PageDecoder {
             if self.buffer.len() < target {
                 return Ok((consumed, false));
             }
-            if self.buffer.len() >= 27 {
-                let header = page::header_size(&self.buffer)?;
-                if self.buffer.len() >= header
-                    && self.buffer.len() == page::page_size(&self.buffer)?
-                {
-                    Page::parse(&self.buffer)?;
-                    return Ok((consumed, true));
-                }
-            }
-            if consumed == input.len() {
-                return Ok((consumed, false));
+            if self.length != 0 {
+                Page::parse(&self.buffer)?;
+                return Ok((consumed, true));
             }
         }
     }
