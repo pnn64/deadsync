@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [lacing-result measurements](LACING.md) cover count reuse,
+The latest [word-loop measurements](WORD_LOOPS.md) cover wide fragment scans,
+sixteen-byte CRC updates and page-level packet bounds, including isolated and
+combined CPU/heap results, slower controls and exact policy comparisons.
+
+The earlier [lacing-result measurements](LACING.md) cover count reuse,
 constant-time packet-origin tracking and cached synchronization lengths, with
 CPU/heap comparisons and independent reference validation.
 

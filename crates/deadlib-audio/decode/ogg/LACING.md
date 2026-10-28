@@ -1,5 +1,8 @@
 # Reusing lacing results, 2026-10-28
 
+The later [word-loop pass](WORD_LOOPS.md) measures wide fragment scans,
+sixteen-byte CRC updates and page-level packet bounds against this baseline.
+
 This pass follows [direct writing and incremental input](DIRECT_STREAMING.md).
 It retains three optimizations with separate measurements before and after each
 change, plus a balanced comparison against production source `8668ce2dd`.

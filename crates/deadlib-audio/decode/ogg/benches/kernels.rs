@@ -61,6 +61,16 @@ fn main() {
         }
         return;
     }
+    for n in [64, 256, 4096, 65025, 1048576] {
+        let bytes: Vec<_> = (0..n).map(|i| (i * 37 + i / 255) as u8).collect();
+        probe(
+            &format!("crc/{n}"),
+            if n >= 65025 { 1 } else { 1000 },
+            || {
+                black_box(crc32(black_box(&bytes)));
+            },
+        );
+    }
     for n in [0, 36, 228, 4096, 65025] {
         let mut lacing = vec![255; n / 255];
         if lacing.len() < 255 {
@@ -279,6 +289,13 @@ fn main() {
             0,
         ),
         ("255", [255, 0].repeat(127), 0),
+        ("three", [255, 255, 0].repeat(85), 0),
+        ("four", [255, 255, 255, 0].repeat(63), 0),
+        (
+            "eight",
+            [255, 255, 255, 255, 255, 255, 255, 0].repeat(31),
+            0,
+        ),
         ("bulk", [vec![255; 128], vec![128]].concat(), 0),
         ("continued", vec![255; 255], CONTINUED),
     ] {
