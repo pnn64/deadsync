@@ -90,7 +90,6 @@ impl ImageRows {
                 }
                 self.row.resize(bytes, 0);
                 self.previous.resize(bytes, 0);
-                self.previous.fill(0);
                 return Ok(());
             }
             self.pass += 1;
@@ -129,7 +128,11 @@ impl ImageRows {
         if !self.complete && self.have == self.row.len() {
             let bpp = (self.header.color.channels() * self.header.depth as usize).div_ceil(8);
             let filter = self.row[0];
-            scanline::unfilter(&mut self.row[1..], &self.previous[1..], bpp, filter)?;
+            if self.row_index == 0 {
+                scanline::unfilter_first(&mut self.row[1..], bpp, filter)?;
+            } else {
+                scanline::unfilter(&mut self.row[1..], &self.previous[1..], bpp, filter)?;
+            }
             let count = self.width * self.header.color.channels();
             if self.header.depth == 16 {
                 self.native16.clear();

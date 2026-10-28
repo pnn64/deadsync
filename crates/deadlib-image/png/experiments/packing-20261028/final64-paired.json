@@ -1,0 +1,71 @@
+{
+  "driver_sha256": "381bf859dabe8bdedbf85ab46284de1b9dca497baa4dd33fb33942c2ba2e8716",
+  "iterations": 3,
+  "benchmark_stage": "rows",
+  "measurements": [
+    {
+      "round": 1,
+      "label": "baseline64",
+      "path": "final64-paired-1-baseline64.tsv",
+      "sha256": "9348df3a79d4bdbb05b99c0fdb0bb2bebf1db1ad8e2e3e81738025e17839a5e7",
+      "source_manifest_sha256": "fda59df1da85f00f88e047103be32bfb93ebf7a40800f02b80e5fadd18f8f5a6",
+      "executable_sha256": "b31a77b45a24fe2869870968bd9f79175ae871d25664785f4010b5c4838035c3"
+    },
+    {
+      "round": 1,
+      "label": "lanes",
+      "path": "final64-paired-1-lanes.tsv",
+      "sha256": "d3d9fe359e942ef5451a31c40563439fe70bbf7b6a39a9678f6815c531891479",
+      "source_manifest_sha256": "0fa5dd0b3b468236ea720f4a7bf1455a6b7c4fa3b6e56e5bd6ed27b060b0c097",
+      "executable_sha256": "fc29d41e8d0ed5e5fce76b624bd8551bde4496f7b2be78c0fc22c319656f0a3a"
+    },
+    {
+      "round": 2,
+      "label": "lanes",
+      "path": "final64-paired-2-lanes.tsv",
+      "sha256": "eb9a044d5b1001571855661c30d6620c31c467a502100874fdeebdab4260e9bd",
+      "source_manifest_sha256": "0fa5dd0b3b468236ea720f4a7bf1455a6b7c4fa3b6e56e5bd6ed27b060b0c097",
+      "executable_sha256": "fc29d41e8d0ed5e5fce76b624bd8551bde4496f7b2be78c0fc22c319656f0a3a"
+    },
+    {
+      "round": 2,
+      "label": "baseline64",
+      "path": "final64-paired-2-baseline64.tsv",
+      "sha256": "a389cc4e891cc5ed767a00c9dafdb4c152393f2cec25d4e9792566ddfa869a77",
+      "source_manifest_sha256": "fda59df1da85f00f88e047103be32bfb93ebf7a40800f02b80e5fadd18f8f5a6",
+      "executable_sha256": "b31a77b45a24fe2869870968bd9f79175ae871d25664785f4010b5c4838035c3"
+    },
+    {
+      "round": 3,
+      "label": "baseline64",
+      "path": "final64-paired-3-baseline64.tsv",
+      "sha256": "104efdfc98a485272aae81add32783c3e7d948b94c0160c1e34102688e8b4178",
+      "source_manifest_sha256": "fda59df1da85f00f88e047103be32bfb93ebf7a40800f02b80e5fadd18f8f5a6",
+      "executable_sha256": "b31a77b45a24fe2869870968bd9f79175ae871d25664785f4010b5c4838035c3"
+    },
+    {
+      "round": 3,
+      "label": "lanes",
+      "path": "final64-paired-3-lanes.tsv",
+      "sha256": "c0ff67076a9e56c8141a7a18e2200ee53d6dcfddaa57acef9a7792b7822ab9c9",
+      "source_manifest_sha256": "0fa5dd0b3b468236ea720f4a7bf1455a6b7c4fa3b6e56e5bd6ed27b060b0c097",
+      "executable_sha256": "fc29d41e8d0ed5e5fce76b624bd8551bde4496f7b2be78c0fc22c319656f0a3a"
+    },
+    {
+      "round": 4,
+      "label": "lanes",
+      "path": "final64-paired-4-lanes.tsv",
+      "sha256": "7652867a83c1425b466c89a247004ed2a4323a17680c270a0b141a240b989114",
+      "source_manifest_sha256": "0fa5dd0b3b468236ea720f4a7bf1455a6b7c4fa3b6e56e5bd6ed27b060b0c097",
+      "executable_sha256": "fc29d41e8d0ed5e5fce76b624bd8551bde4496f7b2be78c0fc22c319656f0a3a"
+    },
+    {
+      "round": 4,
+      "label": "baseline64",
+      "path": "final64-paired-4-baseline64.tsv",
+      "sha256": "c7323979e46a26197b3f6c76d66eb72a8419b24db34ec2d76d1203bd5935c540",
+      "source_manifest_sha256": "fda59df1da85f00f88e047103be32bfb93ebf7a40800f02b80e5fadd18f8f5a6",
+      "executable_sha256": "b31a77b45a24fe2869870968bd9f79175ae871d25664785f4010b5c4838035c3"
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "driver_sha256": "381bf859dabe8bdedbf85ab46284de1b9dca497baa4dd33fb33942c2ba2e8716",
+  "iterations": 3,
+  "benchmark_stage": "rows",
+  "measurements": [
+    {
+      "round": 1,
+      "label": "gather8",
+      "path": "scalar2-paired-1-gather8.tsv",
+      "sha256": "7a9aca3be04177ebc0762a5081cf916701078d6d5aec1cdadeb8fb7bb7c576f6",
+      "source_manifest_sha256": "8cc93262263a6a7f7dab1bd44d233ebcf09f8eb792c65e3beeb1dfe9ef579845",
+      "executable_sha256": "819c0a7f6b33327d0f6f39352bed3db7afc6a645a56f6f95938ea645bbb93670"
+    },
+    {
+      "round": 1,
+      "label": "scalar2",
+      "path": "scalar2-paired-1-scalar2.tsv",
+      "sha256": "494b21cd8d2a1cfda0023f7113af9fda7d32d4ceaae7c160e6138b7c5b6383a3",
+      "source_manifest_sha256": "74dcffc5d6a7ef3185ba08cff64c8f7a90d84288475cfa9e577f0c07b2d098d7",
+      "executable_sha256": "b78bca4f22ec741d1aef66625bc053ef40a0cf63f92c528aea6a6dba93bcf707"
+    },
+    {
+      "round": 2,
+      "label": "scalar2",
+      "path": "scalar2-paired-2-scalar2.tsv",
+      "sha256": "59b47fa4af58e97b78393eae9c4ed8ea09d20e0aa86df1dc41a383badca28d90",
+      "source_manifest_sha256": "74dcffc5d6a7ef3185ba08cff64c8f7a90d84288475cfa9e577f0c07b2d098d7",
+      "executable_sha256": "b78bca4f22ec741d1aef66625bc053ef40a0cf63f92c528aea6a6dba93bcf707"
+    },
+    {
+      "round": 2,
+      "label": "gather8",
+      "path": "scalar2-paired-2-gather8.tsv",
+      "sha256": "b252f3118206eee6d41973bc3a4c59cf5547a9798ca5deb081d45c0f23c34763",
+      "source_manifest_sha256": "8cc93262263a6a7f7dab1bd44d233ebcf09f8eb792c65e3beeb1dfe9ef579845",
+      "executable_sha256": "819c0a7f6b33327d0f6f39352bed3db7afc6a645a56f6f95938ea645bbb93670"
+    },
+    {
+      "round": 3,
+      "label": "gather8",
+      "path": "scalar2-paired-3-gather8.tsv",
+      "sha256": "5e64ab8b1cecb33811678575c6693d8427bca146e3f60b44d26c1db61128db63",
+      "source_manifest_sha256": "8cc93262263a6a7f7dab1bd44d233ebcf09f8eb792c65e3beeb1dfe9ef579845",
+      "executable_sha256": "819c0a7f6b33327d0f6f39352bed3db7afc6a645a56f6f95938ea645bbb93670"
+    },
+    {
+      "round": 3,
+      "label": "scalar2",
+      "path": "scalar2-paired-3-scalar2.tsv",
+      "sha256": "d34ebb463b7382aeb96bba549a78f4540730903589bce00c7c318ddd54cb5663",
+      "source_manifest_sha256": "74dcffc5d6a7ef3185ba08cff64c8f7a90d84288475cfa9e577f0c07b2d098d7",
+      "executable_sha256": "b78bca4f22ec741d1aef66625bc053ef40a0cf63f92c528aea6a6dba93bcf707"
+    },
+    {
+      "round": 4,
+      "label": "scalar2",
+      "path": "scalar2-paired-4-scalar2.tsv",
+      "sha256": "81f2c8a64aefd5949921a19cc6dde43629a8dd932114c50d2597ca73df891248",
+      "source_manifest_sha256": "74dcffc5d6a7ef3185ba08cff64c8f7a90d84288475cfa9e577f0c07b2d098d7",
+      "executable_sha256": "b78bca4f22ec741d1aef66625bc053ef40a0cf63f92c528aea6a6dba93bcf707"
+    },
+    {
+      "round": 4,
+      "label": "gather8",
+      "path": "scalar2-paired-4-gather8.tsv",
+      "sha256": "d5f6e9a84bfcfb927642424205bbcf2f0841ac9c286d05665f2473937dafc47d",
+      "source_manifest_sha256": "8cc93262263a6a7f7dab1bd44d233ebcf09f8eb792c65e3beeb1dfe9ef579845",
+      "executable_sha256": "819c0a7f6b33327d0f6f39352bed3db7afc6a645a56f6f95938ea645bbb93670"
+    }
+  ]
+}

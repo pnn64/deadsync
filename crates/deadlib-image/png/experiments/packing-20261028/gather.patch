@@ -1,0 +1,116 @@
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index 246d84738..922ce2938 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -331,6 +331,40 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
+     score
+ }
+ 
++fn pack_bits<const DEPTH: u8>(samples: &[u8], row: &mut [u8]) {
++    for (out, values) in row.iter_mut().zip(samples.chunks(8 / DEPTH as usize)) {
++        let mut byte = 0;
++        for (n, &value) in values.iter().enumerate() {
++            byte |= value << (8 - DEPTH - n as u8 * DEPTH);
++        }
++        *out = byte;
++    }
++}
++
++fn gather8<const CHANNELS: usize>(samples: &[u8], step: usize, row: &mut [u8]) {
++    for (out, pixel) in row
++        .as_chunks_mut::<CHANNELS>()
++        .0
++        .iter_mut()
++        .zip(samples.chunks(step * CHANNELS))
++    {
++        out.copy_from_slice(&pixel[..CHANNELS]);
++    }
++}
++
++fn gather16<const BYTES: usize>(samples: &[u16], step: usize, row: &mut [u8]) {
++    for (out, pixel) in row
++        .as_chunks_mut::<BYTES>()
++        .0
++        .iter_mut()
++        .zip(samples.chunks(step * (BYTES / 2)))
++    {
++        for (out, value) in out.as_chunks_mut::<2>().0.iter_mut().zip(pixel) {
++            *out = value.to_be_bytes();
++        }
++    }
++}
++
+ pub(crate) fn pack_row(
+     image: &Image,
+     y: usize,
+@@ -346,7 +380,6 @@ pub(crate) fn pack_row(
+         match &image.samples {
+             Samples::U8(v) if depth == 8 => {
+                 row.copy_from_slice(&v[start..start + width * channels]);
+-                return;
+             }
+             Samples::U16(v) => {
+                 for (out, value) in row
+@@ -357,27 +390,46 @@ pub(crate) fn pack_row(
+                 {
+                     *out = value.to_be_bytes();
+                 }
+-                return;
+             }
+-            _ => (),
++            Samples::U8(v) => {
++                let samples = &v[start..start + width * channels];
++                match depth {
++                    1 => pack_bits::<1>(samples, row),
++                    2 => pack_bits::<2>(samples, row),
++                    4 => pack_bits::<4>(samples, row),
++                    _ => unreachable!("validated packed PNG depth"),
++                }
++            }
+         }
++        return;
+     }
+-    row.fill(0);
+-    for pixel in 0..width {
+-        let src = start + pixel * step * channels;
+-        for channel in 0..channels {
+-            let dst = pixel * channels + channel;
+-            match &image.samples {
+-                Samples::U16(v) => {
+-                    row[dst * 2..dst * 2 + 2].copy_from_slice(&v[src + channel].to_be_bytes())
+-                }
+-                Samples::U8(v) if depth == 8 => row[dst] = v[src + channel],
+-                Samples::U8(v) => {
+-                    row[dst * depth as usize / 8] |=
+-                        v[src + channel] << (8 - depth - (dst * depth as usize % 8) as u8)
+-                }
++    let samples = match &image.samples {
++        Samples::U8(v) if depth == 8 => {
++            let samples = &v[start..];
++            match channels {
++                1 => gather8::<1>(samples, step, row),
++                2 => gather8::<2>(samples, step, row),
++                3 => gather8::<3>(samples, step, row),
++                _ => gather8::<4>(samples, step, row),
+             }
++            return;
+         }
++        Samples::U16(v) => {
++            let samples = &v[start..];
++            match channels {
++                1 => gather16::<2>(samples, step, row),
++                2 => gather16::<4>(samples, step, row),
++                3 => gather16::<6>(samples, step, row),
++                _ => gather16::<8>(samples, step, row),
++            }
++            return;
++        }
++        Samples::U8(v) => v,
++    };
++    row.fill(0);
++    for pixel in 0..width {
++        row[pixel * depth as usize / 8] |=
++            samples[start + pixel * step] << (8 - depth - (pixel * depth as usize % 8) as u8);
+     }
+ }
+ 

@@ -1559,3 +1559,113 @@ driver's `freeze` mode separates builds from timing; use
 `DEADLIB_PNG_PERF_SERIES=encoding-20261028`,
 `DEADLIB_PNG_BENCH_STAGE=encode`, and `DEADLIB_PNG_PAIR_ITERS=3` to replay this
 protocol without running competing measurement jobs.
+
+## Packed rows, Adam7 gathers and first-row lanes (2026-10-28)
+
+Three retained safe Rust changes remove reconstruction work:
+
+1. Pack contiguous 1/2/4-bit samples in constant groups per output byte. Each
+   byte is written once, with zero padding in its partial tail. This removes
+   the initial row clear, dynamic bit-offset calculations and repeated byte
+   read/modify/write operations.
+2. Gather 8-bit Adam7 pixels as fixed channel arrays. Representation and channel
+   dispatch happen once per row, rather than inside a per-channel loop. Complete
+   byte-aligned output is overwritten directly without an initial zero fill.
+   The unsuccessful generic 16-bit gather kernels are removed; 16-bit samples
+   retain direct per-channel big-endian writes.
+3. Share first-row reconstruction with the streaming decoder, removing unused
+   zero-predictor clearing and reading. Paeth reduces to Sub and Average uses
+   half of the left byte. Constant shifts and register-carried pixel lanes
+   handle these cases, with the measured scalar recurrence retained for
+   two-byte strides. Explicit Sub filters reuse the existing reconstruction
+   loop. The same first-row helper also serves buffered decoding.
+
+Isolated alternating comparisons use four processes before and four after
+each component change; these ratios must not be multiplied:
+
+| Component and complete Stored pipeline | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Grouped 1-bit gray, 4097x129 buffered encode | 3,239,601 | 1,665,164 | 1.95x |
+| Grouped 2-bit gray, 4097x129 buffered encode | 3,236,930 | 1,905,077 | 1.70x |
+| Grouped 4-bit gray, 4097x129 buffered encode | 3,941,159 | 2,836,416 | 1.39x |
+| 8-bit RGB Adam7 gather, 513x257 buffered encode | 3,719,208 | 3,467,039 | 1.07x |
+| 8-bit RGBA Adam7 gather, 513x257 buffered encode | 4,209,132 | 3,939,842 | 1.07x |
+| First-row Average gray8, 4097x1 reader decode | 34,530 | 30,058 | 1.15x |
+| First-row Paeth RGBA16, 4097x1 reader decode | 297,110 | 238,744 | 1.24x |
+
+The selected implementation (`scalar2`) was also compared directly against the
+original source with the same balanced four-process protocol:
+
+| Combined pipeline | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| 1-bit gray, 4097x129 buffered encode | 3,642,675 | 1,888,688 | 1.93x |
+| 2-bit gray, 4097x129 buffered encode | 3,959,670 | 2,089,677 | 1.89x |
+| 4-bit gray, 4097x129 writer encode | 5,054,280 | 3,303,292 | 1.53x |
+| RGB8 Adam7, 513x257 writer encode | 3,801,008 | 3,318,584 | 1.15x |
+| RGBA8 Adam7, 513x257 buffered encode | 4,360,989 | 4,056,397 | 1.08x |
+| Average gray8, 4097x1 reader decode | 36,447 | 28,655 | 1.27x |
+| Paeth RGBA8, 4097x1 reader decode | 109,047 | 69,813 | 1.56x |
+| Paeth RGBA16, 4097x1 reader decode | 303,016 | 227,114 | 1.33x |
+| Paeth RGBA8, 513x257 reader control | 3,156,812 | 3,172,507 | 1.00x |
+| Paeth RGBA16, 513x257 reader control | 9,346,603 | 9,368,114 | 1.00x |
+
+First-row improvements are startup/pass-boundary improvements, not a promise
+of equivalent gains on tall images. Allocation counts, reallocations and
+requested bytes are identical before/after in all 99 final cases. Tradeoffs
+remain: gray16 Adam7 buffered encoding rises from 2,306,140 to 2,462,132 cycles,
+plain RGB8 buffered encoding from 3,472,746 to 3,693,490, and first-row Sub
+gray16 reading from 60,160 to 63,398. These are approximately 6.8%, 6.4% and
+5.4% more cycles. Other small changes should be read alongside the raw
+shared-host variation rather than treated as established gains.
+
+The first trials exposed regressions rather than being retained unchanged.
+Generic 16-bit gathers did not establish a benefit. Reusing the previous scalar
+first-row helper slowed Average; register lanes fixed most strides, while
+two-byte lanes and explicit Sub required their scalar/existing loops. Initial
+short reader timings used only three iterations per batch. All four retained
+checkpoints were rebuilt with the same longer short-reader protocol before
+the final comparisons. The original harness and all intermediate measurements
+are retained separately.
+
+Measurements use logical CPU 2, Windows thread cycles, Rust 1.99.1 and the
+existing optimized/LTO bench profile. Each process has three warmups, a separate
+untimed allocation probe, and seven batches. Reader cases up to 65,536 native
+bytes use at least 64 iterations per batch; other outputs below 4,096 bytes use
+at least 2,048; remaining cases use three. Reported values are medians of four
+process medians in alternating A/B, B/A order. Measurement jobs run sequentially.
+Host frequency, preemption and unrelated workloads remain uncontrolled.
+
+`DEADLIB_PNG_BENCH_STAGE=rows` supplies 50 buffered/writer encoding cases and
+49 reader cases: all six native byte strides, packed depths, plain/Adam7
+layout, all first-row filters, short images and tall-image controls. Stored
+DEFLATE emphasizes packing/reconstruction while retaining PNG framing,
+checksums and allocation. These measurements do not predict Fast DEFLATE
+compression throughput. Every process checks complete filtered bytes against
+the independent normative model and complete decoded native images against
+the generated source. Reader fingerprints identify the exact input PNG, so
+changed fixture encoding cannot silently change a comparison.
+
+The selected source passes 29 release and 27 debug tests, strict all-target
+Clippy and scoped formatting. Debug's two optional C checks passed in release.
+The new unit test checks all 256 packed byte values, every partial tail, four
+strides and three offsets: 43,008 cases, with poisoned output and unused source
+samples. Existing checks include 17,280 independently modeled encoded outputs,
+every Paeth triplet, all first-row/short-filter boundaries, the 3,240-case native
+format/filter/interlace matrix, 1,620 C encoder references, 3,000 modeled APNG
+faults, exact resource thresholds, palette policies and fragmented/I/O failures.
+
+The source diff is 104 lines net (130 added, 26 removed, including the new
+exhaustive unit test). The additional local constant-width kernels remove
+executed work; they add no allocation, unsafe code, runtime dependency or public
+API. Data layout and low-level specialization replace repeated interpretation.
+
+Evidence is in [`experiments/packing-20261028`](experiments/packing-20261028).
+`packed64-paired-summary.tsv`, `gather8-paired-summary.tsv` and
+`scalar2-paired-summary.tsv` are the retained component comparisons;
+`accepted-paired-summary.tsv` is the selected baseline comparison. Cumulative
+patches and source/binary/harness hashes are relative to `ae44814be`.
+`accepted-final-validation.json` and `accepted-scanline-validation.json` record
+the final checks and oracle identities. `protocol.json` identifies superseded
+trials and timing protocols; `exploratory-benchmark.rs` preserves the exact
+original short-batch harness. The validation driver accepts `*-final` labels
+to retain separate complete checks for refinements without overwriting logs.

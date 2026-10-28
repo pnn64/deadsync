@@ -101,7 +101,13 @@ fn measure<T>(case: &str, operation: &str, bytes: usize, hash: u64, mut run: imp
         .parse()
         .unwrap();
     assert!(iterations > 0);
-    let iterations = iterations.max(if bytes < 4096 { 2048 } else { 1 });
+    let iterations = iterations.max(if operation == "decode-reader" && bytes <= 65536 {
+        64
+    } else if bytes < 4096 {
+        2048
+    } else {
+        1
+    });
     for _ in 0..3 {
         black_box(run());
     }
@@ -141,8 +147,9 @@ fn main() {
     println!(
         "case\toperation\titerations\tsample_bytes\tcycles_per_image\tns_per_image\tMiB_per_second\tallocations\treallocations\trequested_bytes\tfingerprint"
     );
-    if std::env::var("DEADLIB_PNG_BENCH_STAGE").as_deref() == Ok("encode") {
-        encoding();
+    let stage = std::env::var("DEADLIB_PNG_BENCH_STAGE");
+    if matches!(stage.as_deref(), Ok("encode" | "rows")) {
+        encoding(stage.as_deref() == Ok("rows"));
         return;
     }
     for (name, color) in [
@@ -373,8 +380,20 @@ fn main() {
     }
 }
 
-fn encoding() {
+fn encoding(rows: bool) {
     let mut cases = Vec::new();
+    let filters = if rows {
+        &[Filter::None][..]
+    } else {
+        &[
+            Filter::None,
+            Filter::Sub,
+            Filter::Up,
+            Filter::Average,
+            Filter::Paeth,
+            Filter::Adaptive,
+        ][..]
+    };
     for color in [
         ColorType::Grayscale,
         ColorType::GrayscaleAlpha,
@@ -382,28 +401,34 @@ fn encoding() {
         ColorType::Rgba,
     ] {
         for depth in [8, 16] {
-            for filter in [
-                Filter::None,
-                Filter::Sub,
-                Filter::Up,
-                Filter::Average,
-                Filter::Paeth,
-                Filter::Adaptive,
-            ] {
+            for &filter in filters {
                 cases.push((513, 257, color, depth, false, filter));
             }
-            cases.push((513, 257, color, depth, true, Filter::Adaptive));
+            cases.push((
+                513,
+                257,
+                color,
+                depth,
+                true,
+                if rows { Filter::None } else { Filter::Adaptive },
+            ));
         }
     }
     for depth in [1, 2, 4] {
         for interlaced in [false, true] {
             for filter in [Filter::None, Filter::Adaptive] {
+                if rows && filter != Filter::None {
+                    continue;
+                }
                 cases.push((4097, 129, ColorType::Grayscale, depth, interlaced, filter));
             }
         }
     }
     for width in [1, 9, 33] {
         for filter in [Filter::None, Filter::Adaptive] {
+            if rows && filter != Filter::None {
+                continue;
+            }
             cases.push((width, 9, ColorType::Rgba, 8, true, filter));
         }
     }
@@ -441,5 +466,73 @@ fn encoding() {
                 output
             });
         }
+    }
+    if rows {
+        first_rows();
+    }
+}
+
+fn first_rows() {
+    let mut cases = Vec::new();
+    for color in [
+        ColorType::Grayscale,
+        ColorType::GrayscaleAlpha,
+        ColorType::Rgb,
+        ColorType::Rgba,
+    ] {
+        for depth in [8, 16] {
+            for filter in [
+                Filter::None,
+                Filter::Sub,
+                Filter::Up,
+                Filter::Average,
+                Filter::Paeth,
+            ] {
+                cases.push((4097, 1, color, depth, false, filter));
+            }
+        }
+    }
+    for depth in [8, 16] {
+        cases.push((513, 257, ColorType::Rgba, depth, false, Filter::Paeth));
+        for filter in [Filter::Average, Filter::Paeth] {
+            cases.push((513, 9, ColorType::Rgba, depth, true, filter));
+        }
+    }
+    for depth in [1, 2, 4] {
+        cases.push((4097, 1, ColorType::Grayscale, depth, false, Filter::Paeth));
+    }
+    for (width, height, color, depth, interlaced, filter) in cases {
+        let png = fixture(width, height, color, depth);
+        let options = EncodeOptions {
+            interlaced,
+            filter,
+            compression: deadlib_image_png::zlib::Compression::Stored,
+            ..Default::default()
+        };
+        let bytes = encode(&png, &options).unwrap();
+        assert_eq!(
+            apng_recovery::inflate_idat(&bytes),
+            apng_recovery::filtered_with(&png.image, interlaced, filter)
+        );
+        assert_eq!(
+            decode_reader(bytes.as_slice(), &Default::default())
+                .unwrap()
+                .image,
+            png.image
+        );
+        let hash = fingerprint(&Samples::U8(bytes.clone()));
+        let case = format!(
+            "first-c{}-d{depth}-{width}x{height}-i{}-f{}",
+            color as u8,
+            u8::from(interlaced),
+            filter as u8
+        );
+        measure(
+            &case,
+            "decode-reader",
+            png.image.samples.len() * if depth == 16 { 2 } else { 1 },
+            hash,
+            || decode_reader(black_box(bytes.as_slice()), &Default::default()).unwrap(),
+        );
     }
 }

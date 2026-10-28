@@ -36,8 +36,8 @@ def main():
         command += ["--test", test]
     command += ["--", "--include-ignored", "--nocapture"]
     commands = [(label + "-tests", command)]
-    if label in ["final", "selected"]:
-        prefix = "selected-" if label == "selected" else ""
+    if label in ["final", "selected"] or label.endswith("-final"):
+        prefix = "selected-" if label == "selected" else "" if label == "final" else label + "-"
         debug = ["cargo", "test", "--offline", "-p", "deadlib-image-png", "--target-dir", target]
         for test in tests:
             if test != "apng_rendered":
