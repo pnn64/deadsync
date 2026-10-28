@@ -61,6 +61,62 @@ fn main() {
         }
         return;
     }
+    for n in [4096, 1048576] {
+        for stride in [0, 31, 1, 2, 3] {
+            let mut bytes = vec![37; n];
+            if stride == 2 || stride == 3 {
+                for (i, byte) in bytes.iter_mut().enumerate() {
+                    *byte = if i % stride == 0 { b'O' } else { b'g' };
+                }
+            } else if stride != 0 {
+                for i in (0..n).step_by(stride) {
+                    bytes[i] = b'O';
+                }
+            }
+            let valid = wire(8192);
+            let mut expected = 0;
+            let mut remaining = valid.as_slice();
+            while !remaining.is_empty() {
+                let (_, length) = Page::parse(remaining).unwrap();
+                remaining = &remaining[length..];
+                expected += 1;
+            }
+            bytes.extend(valid);
+            for recover in [false, true] {
+                let label = format!(
+                    "noise-{}/{n}/{stride}",
+                    if recover { "reader" } else { "sync" }
+                );
+                probe(&label, if n >= 1048576 { 8 } else { 64 }, || {
+                    let mut pages = 0;
+                    if recover {
+                        let mut reader =
+                            PageReader::with_mode(black_box(bytes.as_slice()), SyncMode::Recover);
+                        while let Some(page) = reader.next_page().unwrap() {
+                            black_box(page);
+                            pages += 1;
+                        }
+                        assert_eq!(reader.discarded_bytes(), n as u64);
+                    } else {
+                        let mut sync = SyncBuffer::with_limit(bytes.len());
+                        sync.push(black_box(&bytes)).unwrap();
+                        loop {
+                            match sync.page_out().unwrap() {
+                                PageOut::NeedMore => break,
+                                PageOut::Hole => (),
+                                PageOut::Page(page) => {
+                                    black_box(page);
+                                    pages += 1;
+                                }
+                            }
+                        }
+                        assert_eq!(sync.buffered_bytes(), 0);
+                    }
+                    assert_eq!(pages, expected);
+                });
+            }
+        }
+    }
     for n in [64, 256, 4096, 65025, 1048576] {
         let bytes: Vec<_> = (0..n).map(|i| (i * 37 + i / 255) as u8).collect();
         probe(

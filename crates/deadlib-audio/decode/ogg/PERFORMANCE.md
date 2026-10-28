@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [word-loop measurements](WORD_LOOPS.md) cover wide fragment scans,
+The latest [buffered verification and recovery measurements](RECOVERY.md) cover
+reused page validation and word scans for synchronization and pull recovery,
+with exact parser/IO comparisons and isolated CPU/heap measurements.
+
+The earlier [word-loop measurements](WORD_LOOPS.md) cover wide fragment scans,
 sixteen-byte CRC updates and page-level packet bounds, including isolated and
 combined CPU/heap results, slower controls and exact policy comparisons.
 

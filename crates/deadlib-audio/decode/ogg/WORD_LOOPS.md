@@ -1,5 +1,8 @@
 # Word scans and page bounds, 2026-10-28
 
+The later [buffered verification and recovery pass](RECOVERY.md) measures reused
+page validation and word scans for transport recovery against this baseline.
+
 This pass follows [lacing-result reuse](LACING.md). Three separate production
 commits reduce fragment scanning, CRC dependency chains and packet preflight
 work. Each has an isolated comparison; a fourth comparison measures their
