@@ -7,11 +7,13 @@ use normal windows below the caller's long-subband boundary. `Synthesis` maps
 each set into 32 PCM samples using the MPEG cosine matrix, U-vector/window
 mapping and a sixteen-block ring history. Both states reset without allocation.
 
-The initial kernels use f64 arithmetic and flat arrays. They are correctness
-baselines; optimized transforms, precision/storage tradeoffs and full decode
-performance remain later measured work. Immutable cosine/window tables are
-generated from the MPEG mathematical equations, rather than translated from a
-reference implementation. No runtime trigonometric initialization is required.
+The kernels use f64 arithmetic and fixed arrays. Long IMDCT coefficients are
+stored as three tiles of eighteen rows and twelve output lanes. Each tile
+accumulates twelve outputs while retaining each output's original eighteen-term
+order. This reduces the live accumulator set without changing coefficient bits,
+arithmetic order or table storage. Immutable cosine/window tables are generated
+from the MPEG mathematical equations. No runtime trigonometric initialization
+is required.
 
 `scripts/generate_dsp.py` reads only the numeric `dewindow` table from the ISO
 simulation distribution described in HUFFMAN.md. That member is

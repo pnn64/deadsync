@@ -13,7 +13,7 @@ def main():
     rows=re.findall(r'D\[\s*(\d+)\s*\]\s*=\s*([-+0-9.]+)',a.dewindow.read_text(encoding='ascii'))
     assert [int(n) for n,_ in rows]==list(range(512))
     window=[float(v) for _,v in rows]
-    long=[[math.cos(math.pi/72*(2*n+19)*(2*k+1)) for n in range(36)] for k in range(18)]
+    long=[[[math.cos(math.pi/72*(2*(12*block+n)+19)*(2*k+1)) for n in range(12)] for k in range(18)] for block in range(3)]
     short=[[math.cos(math.pi/24*(2*n+7)*(2*k+1)) for k in range(6)] for n in range(12)]
     synth=[[math.cos(math.pi/64*(16+n)*(2*k+1)) for n in range(64)] for k in range(32)]
     windows=[]
@@ -38,7 +38,11 @@ def main():
            '// The synthesis-window input is numeric ISO table data only.',
            '// Preserve evaluated cosine coefficients rather than substitute constants.',
            '#![allow(clippy::approx_constant)]']
-    for name,data in [('IMDCT_LONG',long),('IMDCT_SHORT',short),('SYNTHESIS',synth),('WINDOW_LONG',windows)]:
+    lines+=['#[rustfmt::skip]','pub(super) static IMDCT_LONG: [[[f64; 12]; 18]; 3] = [']
+    for block in long:
+        lines+=['    [']+['        ['+', '.join(map(literal,row))+'],' for row in block]+['    ],']
+    lines+= ['];']
+    for name,data in [('IMDCT_SHORT',short),('SYNTHESIS',synth),('WINDOW_LONG',windows)]:
         lines+=['#[rustfmt::skip]',f'pub(super) static {name}: [[f64; {len(data[0])}]; {len(data)}] = [']
         lines+=['    ['+', '.join(map(literal,row))+'],' for row in data];lines+= ['];']
     for name,data in [('WINDOW_SHORT',[math.sin(math.pi/12*(n+.5)) for n in range(12)]),('ALIAS_CS',cs),('ALIAS_CA',ca),('DEWINDOW',window)]:

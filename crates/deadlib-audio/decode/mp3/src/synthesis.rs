@@ -71,10 +71,19 @@ impl Hybrid {
                     } else {
                         block_type as usize
                     };
-                    for (&sample, coefficients) in samples.iter().zip(&tables::IMDCT_LONG) {
-                        for (value, &coefficient) in transformed.iter_mut().zip(coefficients) {
-                            *value += sample * coefficient;
+                    for (target, coefficients) in transformed
+                        .as_chunks_mut::<12>()
+                        .0
+                        .iter_mut()
+                        .zip(&tables::IMDCT_LONG)
+                    {
+                        let mut values = [0.0; 12];
+                        for (&sample, row) in samples.iter().zip(coefficients) {
+                            for (value, &coefficient) in values.iter_mut().zip(row) {
+                                *value += sample * coefficient;
+                            }
                         }
+                        target.copy_from_slice(&values);
                     }
                     for (value, &weight) in transformed.iter_mut().zip(&tables::WINDOW_LONG[window])
                     {
