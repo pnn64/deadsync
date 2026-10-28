@@ -820,3 +820,122 @@ Evidence: [single-buffer trials](benches/validation/2026-10-28-bitwriter/direct-
 Build manifests, compiler logs, complete check results and the initial protocol
 diagnostics are preserved in the same directory. These results measure synthetic
 resident-frame encoding; they do not establish decoder or playback throughput.
+
+## Decoder predictors and header reads, 2026-10-28
+
+This pass starts at `887dcb628` and changes decoder execution only:
+
+1. Fixed predictors of orders 2–4 integrate successive differences. Their hot
+   loops use additions instead of repeated weighted sample sums. Every sample
+   is still range checked before storage or reuse, with i64 arithmetic retaining
+   the full 33-bit side-channel range.
+2. Scalar LPC orders 1 and 2 keep preceding samples in registers, eliminating
+   indexed feedback loads from the output buffer. Coefficients, shifts, rounding
+   and per-sample checks are unchanged. Higher-order dispatch is unchanged.
+3. The fixed frame-header prefix uses three grouped reads (16/8/8 bits) instead
+   of seven individual field reads. Direct shifts/masks extract the same fields
+   while keeping the original validation order and errors.
+
+Each retained change was measured against its predecessor. Representative raw
+frame results, including header/footer CRC checks:
+
+| Change and case | Before cycles/frame | After cycles/frame | CPU throughput | PCM Msamples/s, before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Fixed order 3, mono 16-bit, block 4096 | 34,217 | 26,462 | 1.293x | 224.85 → 290.85 |
+| LPC order 2, mono 16-bit, block 4096 | 49,698 | 34,553 | 1.438x | 154.82 → 222.71 |
+| Grouped header, fixed order 4, block 32 | 551.4 | 536.5 | 1.028x | 108.94 → 110.77 |
+
+The first fixed-predictor comparison improves orders 2/3/4 by 1.095x/1.293x/
+1.154x and the 33-bit side-channel case by 1.191x. The first short-LPC comparison
+improves orders 1/2 by 1.454x/1.438x. An early header comparison measured 1.213x
+using an earlier harness; the table uses the final identical-harness comparison.
+
+Final comparison against the starting decoder:
+
+| Synthetic case | Before cycles/frame | After cycles/frame | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Fixed order 2 | 46,749 | 43,163 | 1.083x |
+| Fixed order 3 | 57,225 | 44,414 | 1.288x |
+| Fixed order 4 | 56,413 | 48,255 | 1.169x |
+| Fixed order 4, 33-bit side | 77,481 | 64,289 | 1.205x |
+| Fixed order 4, block 32 | 566.6 | 524.0 | 1.081x |
+| LPC order 1 | 78,155 | 55,332 | 1.412x |
+| LPC order 2 | 83,128 | 59,111 | 1.406x |
+| LPC order 12 control | 79,287 | 80,067 | 0.990x |
+| Left/side control | 10,280 | 10,469 | 0.982x |
+| Right/side control | 9,847 | 9,463 | 1.041x |
+| Mid/side control | 14,510 | 13,854 | 1.047x |
+| Mid/side 33-bit control | 15,556 | 15,583 | 0.998x |
+| Verbatim 24-bit control | 7,005 | 6,950 | 1.008x |
+| Verbatim 32-bit control | 5,768 | 5,767 | 1.000x |
+
+Synthetic blocks contain 4096 samples/channel except the short case. Fixed/LPC
+signals use deterministic wave/noise input and explicit subframes, independent
+of encoder mode selection. Stereo controls use constant planes to isolate
+decorrelation. All synthetic and music cases have unchanged cold heap counts
+and zero allocations/reallocations after warmup. No production unsafe code was
+added. The encoder and stereo reconstruction implementations are unchanged.
+
+A resident 49,843,225-byte, stereo 24-bit/44.1 kHz music file verifies its stored
+PCM MD5 `61b98d1894401920953dfd5a2af52e12` before timing. It contains 10,343,813
+samples/channel. Raw-frame CPU counts are 507,887,622 → 506,551,402 per complete
+file (1.003x), and throughput is 76.35 → 76.33 Msamples/s. This is essentially
+unchanged; the synthetic low-order gains do not establish faster general music
+decoding. File I/O, native reader buffering and whole-stream MD5 are untimed.
+
+Host/compiler/profile match the preceding pass: Intel i7-1250U, Windows x86-64
+MSVC, rustc 1.97.1, static CRT, existing bench profile, pinned logical CPU 2.
+Windows `QueryThreadCycleTime` is the primary metric and `Instant` supplies PCM
+throughput. Both processes receive identical iteration counts after a 200 ms
+untimed warmup. Per-change trials use 11 rounds at roughly 100–150 ms per variant;
+the final synthetic comparison uses 11 rounds at 150 ms and music uses seven
+rounds at 300 ms. Values are medians; CPU-cycle and elapsed-time medians are
+independent. An unchanged-binary control stayed within 0.3%. The host has variable
+frequency and other activity, so absolute counts differ across sessions. Compare
+paired variants within each report and retain the raw distributions.
+
+Stereo range batching was also evaluated and completely discarded. It improved
+left/side and right/side cases, but mid/side regressions remained across full-frame,
+per-pair and separated-control-flow variants. `stereo()` matches the starting
+revision exactly. Reports for the rejected variants are retained for review.
+
+Correctness checks:
+
+- All 1,279 explicit wire cases match independently generated integer PCM and
+  verify their original MD5. Every byte prefix produces identical PCM/error
+  output: 280,908 records, 4,250,075 bytes, compared directly with the baseline.
+- Another 174,080 header results compare sync/block/rate/descriptor combinations,
+  with and without STREAMINFO, at every generated byte prefix. Accepted headers
+  and error precedence match exactly across 4,909,667 snapshot bytes.
+- A new closed-form oracle checks fixed reconstruction at all widths 1–33:
+  297 valid configurations and 792 overflow configurations, including the
+  samples written before the first error. Existing LPC scalar/dispatch tests
+  cover every order and width, coefficient extremes and reconstructed overflow.
+- All 15 unit tests, 36 integration tests and three doctests pass in debug and
+  release. Clippy and formatting pass. Eight external corpus/oracle gates remain
+  ignored and were not rerun.
+
+Build and preserve both variants with the same benchmark source/profile:
+
+```powershell
+python crates/deadlib-audio/decode/flac/benches/build_native.py --bench decoding --target-dir target --output target/decoder-current.exe
+python crates/deadlib-audio/decode/flac/benches/encoding_perf.py --before target/decoder-before.exe --after target/decoder-current.exe --case fixed3 --case lpc2 --case short-fixed4 --rounds 11 --milliseconds 150 --output target/decoder-comparison.json
+target/decoder-current.exe matrix target/decoder-pcm-errors.bin
+target/decoder-current.exe headers target/decoder-header-errors.bin
+```
+
+For a baseline build, use decoder sources from `887dcb628` in an isolated
+checkout with the current `decoding` bench registration, benchmark source,
+shared test support and build helper. A file path supplied through `--case`
+selects resident raw-frame decoding of that file. Windows is required for the
+cycle-comparison driver. Binaries and snapshots remain in `target/flac-decode-pass`.
+
+Evidence: [fixed differences](benches/validation/2026-10-28-decoder-reconstruction/fixed-differences.json),
+[short LPC registers](benches/validation/2026-10-28-decoder-reconstruction/lpc-registers.json),
+[grouped header reads](benches/validation/2026-10-28-decoder-reconstruction/header-groups.json),
+[final synthetic trials](benches/validation/2026-10-28-decoder-reconstruction/final.json),
+[music control](benches/validation/2026-10-28-decoder-reconstruction/music.json),
+[validation and input hashes](benches/validation/2026-10-28-decoder-reconstruction/validation.json).
+The same directory preserves compiler/build manifests, complete check logs and
+rejected stereo measurements. These are decoder measurements on one host, not
+playback or cross-platform performance claims.

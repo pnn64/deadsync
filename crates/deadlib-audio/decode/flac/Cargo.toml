@@ -23,3 +23,7 @@ harness = false
 [[bench]]
 name = "encoding"
 harness = false
+
+[[bench]]
+name = "decoding"
+harness = false

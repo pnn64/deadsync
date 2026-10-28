@@ -38,6 +38,19 @@ fn short_scalar<T: Sample, const N: usize>(
     width: u32,
 ) -> Result<(), Error> {
     let coeff: &[i64; N] = coeff.try_into().unwrap();
+    if N <= 2 {
+        let c0 = coeff[0];
+        let c1 = if N == 2 { coeff[1] } else { 0 };
+        let (mut a, mut b) = (output[N - 1].wide(), output[0].wide());
+        for sample in &mut output[N..] {
+            let sum = c0 * a + if N == 2 { c1 * b } else { 0 };
+            let value = sample.wide() + (sum >> shift);
+            check_sample(value, width)?;
+            *sample = T::store(value);
+            (a, b) = (value, a);
+        }
+        return Ok(());
+    }
     for i in N..output.len() {
         let mut sum = 0i64;
         for j in 0..N {

@@ -18,7 +18,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--target-dir', type=Path, required=True)
-    parser.add_argument('--bench', choices=['decode', 'encoding'], default='decode')
+    parser.add_argument('--bench', choices=['decode', 'encoding', 'decoding'], default='decode')
     args = parser.parse_args()
     output = args.output.resolve()
     if output.exists() or Path(str(output)+'.json').exists():
@@ -27,8 +27,10 @@ def main():
     repo = root.parents[3]
     paths = [repo/'Cargo.toml', repo/'Cargo.lock', root/'Cargo.toml', root/'README.md', root/f'benches/{args.bench}.rs',
              root.parent/'ogg/Cargo.toml']
-    if args.bench == 'encoding':
+    if args.bench in ['encoding', 'decoding']:
         paths += [repo/'tests/support'/name for name in ['kernel_bench.rs', 'perf.rs']]
+    if args.bench == 'decoding':
+        paths.append(root/'tests/support/decoder_vectors.rs')
     paths += sorted((root/'src').glob('*.rs')) + sorted((root.parent/'ogg/src').rglob('*.rs'))
     paths += [p for p in (repo/'.cargo').glob('config*') if p.is_file()]
     paths += [repo/name for name in ['rust-toolchain', 'rust-toolchain.toml'] if (repo/name).is_file()]

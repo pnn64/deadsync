@@ -1,4 +1,4 @@
-"""Interleave preserved encoding binaries; report CPU cycles and PCM throughput."""
+"""Interleave resident codec binaries; report CPU cycles and PCM throughput."""
 import argparse
 import hashlib
 import json
@@ -31,7 +31,7 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--rounds', type=int, default=11)
     parser.add_argument('--milliseconds', type=int, default=60)
-    parser.add_argument('--case', choices=CASES, action='append')
+    parser.add_argument('--case', action='append', help='case supported by both benchmark binaries')
     args = parser.parse_args()
     if os.name != 'nt':
         parser.error('CPU-cycle comparisons require Windows QueryThreadCycleTime')
