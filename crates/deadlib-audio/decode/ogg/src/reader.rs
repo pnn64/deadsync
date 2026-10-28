@@ -283,10 +283,10 @@ impl PageDecoder {
         Ok(())
     }
     pub fn push(&mut self, input: &[u8]) -> Result<PageProgress<'_>, Error> {
-        if self.failed {
-            return Err(Error::Failed);
-        }
-        if self.ready {
+        if self.failed | self.ready {
+            if self.failed {
+                return Err(Error::Failed);
+            }
             self.buffer.clear();
             self.length = 0;
             self.ready = false;
