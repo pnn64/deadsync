@@ -60,7 +60,8 @@ encoding or all standard variants.
 
 Remaining work: ADPCM encoding and compressed I/O convenience, structured metadata,
 wavl/slnt and multiple-data handling, oracle comparisons, fuzzing, sparse >4 GiB
-evidence and all performance measurements; forward-only audio convenience APIs,
+evidence and broad performance coverage (the first PCM16 baseline is in
+[PERFORMANCE.md](PERFORMANCE.md)); forward-only audio convenience APIs,
 known-length nonseekable encoding, and extensible compressed formats. BW64 shares 64-bit container
 mechanics; ADM profile conformance is not yet claimed. RIFX extensible GUID byte
 order follows the container but needs external-reference validation.

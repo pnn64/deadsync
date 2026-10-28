@@ -25,6 +25,9 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    fixtures, malformed corpus, streaming split matrix and bounded fuzz campaigns.
 6. Reproducible comparative benchmarks: open/metadata/full read/stream/seek/encode,
    CPU cycles, allocations, peak memory; optimize measured bottlenecks with parity.
+   Initial resident PCM16 Hound baseline and scoped heap/Windows cycle counts are
+   implemented; see PERFORMANCE.md. Wider formats, references, RSS, disks and
+   platforms remain outstanding.
 7. Completion audit against every requirement, standards coverage, performance
    results and explicit remaining limitations. Green unit tests alone do not prove
    standards coverage or competitive performance.
