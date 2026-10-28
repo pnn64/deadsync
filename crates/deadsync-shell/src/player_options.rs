@@ -60,8 +60,12 @@ pub(crate) fn gameplay_profiles(
     play_style: profile_data::PlayStyle,
 ) -> [profile_data::Profile; MAX_PLAYERS] {
     let golf_enabled = deadsync_config::runtime::get().enable_golf;
+    let master_options = &options[0];
     std::array::from_fn(|idx| {
         let mut options = options[idx].clone();
+        if idx != 0 {
+            apply_routine_master_policy(&mut options, master_options, play_style);
+        }
         apply_tournament_policy(&mut options, tournament, play_style);
         apply_golf_policy(&mut options, golf_enabled);
         gameplay_profile(
@@ -71,6 +75,32 @@ pub(crate) fn gameplay_profiles(
             heart_rate_device_ids[idx].clone(),
         )
     })
+}
+
+/// Simply Love's gameplay underlay gives both Routine participants the master
+/// player's speed mod and Mini, so their overlapping fields scroll and scale
+/// together. Only the gameplay copy changes; saved preferences stay.
+fn apply_routine_master_policy(
+    options: &mut profile_data::PlayerOptionsData,
+    master: &profile_data::PlayerOptionsData,
+    play_style: profile_data::PlayStyle,
+) {
+    if play_style.is_routine() {
+        options.scroll_speed = master.scroll_speed;
+        options.mini_percent = master.mini_percent;
+    }
+}
+
+/// The scroll speeds of [`gameplay_profiles`]: Routine plays both fields at
+/// the master player's speed.
+pub(crate) fn routine_master_scroll_speeds(
+    mut scroll_speeds: [deadsync_rules::scroll::ScrollSpeedSetting; MAX_PLAYERS],
+    play_style: profile_data::PlayStyle,
+) -> [deadsync_rules::scroll::ScrollSpeedSetting; MAX_PLAYERS] {
+    if play_style.is_routine() {
+        scroll_speeds[1] = scroll_speeds[0];
+    }
+    scroll_speeds
 }
 
 fn apply_golf_policy(options: &mut profile_data::PlayerOptionsData, enabled: bool) {
@@ -145,6 +175,63 @@ mod tests {
         assert_eq!(merged.current_player_options(), options);
         assert_eq!(merged.judgment_palette_id.as_deref(), Some("palette-1"));
         assert_eq!(merged.heart_rate_device_id.as_deref(), Some("hrm-1"));
+    }
+
+    #[test]
+    fn routine_starts_both_fields_with_the_master_speed_and_mini() {
+        use deadsync_rules::scroll::ScrollSpeedSetting;
+
+        let options = [
+            profile_data::PlayerOptionsData {
+                scroll_speed: ScrollSpeedSetting::CMod(650.0),
+                mini_percent: 20,
+                reverse_scroll: true,
+                ..Default::default()
+            },
+            profile_data::PlayerOptionsData {
+                scroll_speed: ScrollSpeedSetting::XMod(2.5),
+                mini_percent: -40,
+                ..Default::default()
+            },
+        ];
+        let speeds = options.each_ref().map(|options| options.scroll_speed);
+        let profiles = |play_style| {
+            gameplay_profiles(
+                &options,
+                &[None, None],
+                &[None, None],
+                deadsync_config::theme::TournamentModeOptions::default(),
+                play_style,
+            )
+        };
+
+        for play_style in [
+            profile_data::PlayStyle::Routine,
+            profile_data::PlayStyle::PumpRoutine,
+        ] {
+            let routine = profiles(play_style);
+            assert_eq!(
+                routine_master_scroll_speeds(speeds, play_style),
+                [speeds[0]; 2]
+            );
+            for profile in &routine {
+                assert_eq!(profile.scroll_speed, ScrollSpeedSetting::CMod(650.0));
+                assert_eq!(profile.mini_percent, 20);
+            }
+            // Other options stay with each participant.
+            assert!(routine[0].reverse_scroll && !routine[1].reverse_scroll);
+        }
+        // The saved preferences are untouched.
+        assert_eq!(options[1].scroll_speed, ScrollSpeedSetting::XMod(2.5));
+        assert_eq!(options[1].mini_percent, -40);
+
+        let versus = profiles(profile_data::PlayStyle::Versus);
+        assert_eq!(
+            routine_master_scroll_speeds(speeds, profile_data::PlayStyle::Versus),
+            speeds
+        );
+        assert_eq!(versus[1].scroll_speed, ScrollSpeedSetting::XMod(2.5));
+        assert_eq!(versus[1].mini_percent, -40);
     }
 
     #[test]

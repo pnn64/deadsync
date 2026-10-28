@@ -799,6 +799,7 @@ fn simply_love_visual_policy(config: &config::app_config::Config) -> SimplyLoveV
 
 fn build_course_summary_eval_state(
     stage: &stage_stats::StageSummary,
+    routine_shared_score_percent: Option<f64>,
     course_graph_stages: &[Vec<deadsync_theme_simply_love::views::CourseGraphStage>; MAX_PLAYERS],
     active_color_index: i32,
     session_elapsed: f32,
@@ -818,6 +819,7 @@ fn build_course_summary_eval_state(
     );
     let mut state = evaluation::init_from_score_info(
         score_info,
+        routine_shared_score_percent,
         stage.duration_seconds,
         evaluation_context_view(
             evaluation_views::EvaluationFramePolicy::from_config(config).context(),
@@ -2798,6 +2800,8 @@ impl App {
             cfg.tournament,
             play_style,
         );
+        let scroll_speeds =
+            crate::player_options::routine_master_scroll_speeds(scroll_speeds, play_style);
         let mut requested_chart_ixs = plan.chart_indices.to_vec();
         if let Some(light_plan) = cabinet_light_plan(song.as_ref(), plan.chart_indices[0]) {
             requested_chart_ixs.extend(light_plan.request_chart_ixs());
@@ -7227,6 +7231,7 @@ impl App {
         config: &config::app_config::Config,
         failed: bool,
         completed_course: Option<(CourseRunState, stage_stats::StageSummary)>,
+        course_routine_shared_score_percent: Option<f64>,
     ) {
         if let Some(backend) = self.backend.as_mut() {
             self.dynamic_media
@@ -7263,6 +7268,7 @@ impl App {
             let screen_elapsed = self.state.screens.evaluation_state.screen_elapsed;
             let mut course_page = build_course_summary_eval_state(
                 &course_stage,
+                course_routine_shared_score_percent,
                 &course_graph_stages,
                 color_idx,
                 session_elapsed,
@@ -9666,6 +9672,8 @@ impl App {
                     cfg.tournament,
                     play_style,
                 );
+                let scroll_speeds =
+                    crate::player_options::routine_master_scroll_speeds(scroll_speeds, play_style);
 
                 let mut gameplay_session = gameplay_session();
                 let mut gameplay_init_view = crate::gameplay_runtime::init_view(
@@ -10160,6 +10168,8 @@ impl App {
                     cfg.tournament,
                     play_style,
                 );
+                let scroll_speeds =
+                    crate::player_options::routine_master_scroll_speeds(scroll_speeds, play_style);
                 let mut gameplay_session = gameplay_session();
                 let mut gameplay_init_view = crate::gameplay_runtime::init_view(
                     &cfg,
@@ -10308,6 +10318,10 @@ impl App {
                 Self::execute_evaluation_score_runtime(gameplay);
             }
             let in_course_run = self.state.session.course_run.is_some();
+            // The course summary shows the Routine score of the whole course.
+            let course_routine_shared_score_percent = gameplay_results
+                .as_ref()
+                .and_then(|gameplay| gameplay.routine_shared_itg_score_percent());
             let (init_view, failed, completed_course) = if let Some(gameplay) =
                 gameplay_results.as_ref()
             {
@@ -10343,7 +10357,12 @@ impl App {
                     .course_stage_eval_pages
                     .push(self.state.screens.evaluation_state.clone());
             }
-            self.finalize_entered_evaluation(&config, failed, completed_course);
+            self.finalize_entered_evaluation(
+                &config,
+                failed,
+                completed_course,
+                course_routine_shared_score_percent,
+            );
             self.evaluation_policy = evaluation_views::EvaluationFramePolicy::from_config(&config);
             self.mark_evaluation_runtime_dirty();
             self.sync_evaluation_runtime_view(self.evaluation_policy, Instant::now());
@@ -11838,6 +11857,7 @@ mod tests {
             });
             let mut state = evaluation::init_from_score_info(
                 [Some(score), second],
+                None,
                 100.0,
                 EvaluationContextView {
                     play_style: style,

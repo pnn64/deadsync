@@ -1777,7 +1777,21 @@ where
         )
     }
 
+    /// The ITG score the gameplay HUD shows. Routine participants share one
+    /// score, so both of their displays show it.
     pub fn display_itg_score_inputs(&self, player_idx: usize) -> Option<ItgScoreInputs> {
+        if player_idx >= self.setup.num_players {
+            return None;
+        }
+        self.routine_shared_itg_score_inputs()
+            .or_else(|| self.participant_display_itg_score_inputs(player_idx))
+    }
+
+    /// One participant's own ITG score, including course carry-over.
+    pub fn participant_display_itg_score_inputs(
+        &self,
+        player_idx: usize,
+    ) -> Option<ItgScoreInputs> {
         if player_idx >= self.setup.num_players {
             return None;
         }
@@ -1799,8 +1813,20 @@ where
         ))
     }
 
-    /// The Routine score both participants earn together.
+    /// The Routine score both participants earn together, including both
+    /// participants' earlier course songs and full-course totals.
     pub fn routine_shared_itg_score_inputs(&self) -> Option<ItgScoreInputs> {
+        if !self.setup.session.play_style.is_routine() {
+            return None;
+        }
+        Some(shared_itg_score_inputs(
+            self.participant_display_itg_score_inputs(0)?,
+            self.participant_display_itg_score_inputs(1)?,
+        ))
+    }
+
+    /// The Routine score both participants earn in the current song only.
+    pub fn routine_shared_stage_itg_score_inputs(&self) -> Option<ItgScoreInputs> {
         if !self.setup.session.play_style.is_routine() {
             return None;
         }
@@ -1812,6 +1838,11 @@ where
 
     pub fn routine_shared_itg_score_percent(&self) -> Option<f64> {
         self.routine_shared_itg_score_inputs()
+            .map(itg_score_percent_from_inputs)
+    }
+
+    pub fn routine_shared_stage_itg_score_percent(&self) -> Option<f64> {
+        self.routine_shared_stage_itg_score_inputs()
             .map(itg_score_percent_from_inputs)
     }
 

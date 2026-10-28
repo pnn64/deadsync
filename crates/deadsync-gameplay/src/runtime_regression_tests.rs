@@ -5974,6 +5974,98 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn routine_hud_shows_the_shared_score_for_both_participants() {
+        let mut state = routine_state();
+        let p1_first = routine_note(&state, 0);
+        let p1_second = routine_note(&state, 1);
+        let first_time_ns = state.chart_runtime.note_time_cache_ns[p1_first];
+        // P1 is exact while P2 is late, so their own scores differ.
+        routine_step(&mut state, &[Lane::Left], first_time_ns);
+        routine_step(
+            &mut state,
+            &[Lane::P2Right],
+            first_time_ns.saturating_add(song_time_ns_from_seconds(0.12)),
+        );
+        let second_time_ns = state.chart_runtime.note_time_cache_ns[p1_second];
+        routine_step(&mut state, &[Lane::Down], second_time_ns);
+
+        let shared = state.routine_shared_itg_score_inputs().unwrap();
+        let own = |player| state.participant_display_itg_score_inputs(player).unwrap();
+        assert!(itg_score_percent_from_inputs(own(0)) > itg_score_percent_from_inputs(shared));
+        assert!(itg_score_percent_from_inputs(own(1)) < itg_score_percent_from_inputs(shared));
+        // Simply Love's Score.lua shows the shared score in both HUD modes.
+        for player in 0..2 {
+            for mode in [
+                GameplayScoreDisplayMode::Normal,
+                GameplayScoreDisplayMode::Predictive,
+            ] {
+                assert_eq!(
+                    state.display_gameplay_itg_score_percent(player, mode),
+                    display_itg_score_percent_for_mode(shared, mode),
+                );
+            }
+            assert_eq!(
+                state.display_predictive_itg_score_percent(player),
+                predictive_itg_score_percent_from_inputs(shared),
+            );
+        }
+        assert_ne!(
+            predictive_itg_score_percent_from_inputs(own(0)),
+            predictive_itg_score_percent_from_inputs(shared),
+        );
+        // Judgments and EX scores stay with each participant.
+        assert_ne!(
+            state.display_ex_score_percent(0, state.player_blue_window_ms(0)),
+            state.display_ex_score_percent(1, state.player_blue_window_ms(1)),
+        );
+        assert_ne!(
+            state.players_runtime.players[0].judgment_counts,
+            state.players_runtime.players[1].judgment_counts,
+        );
+    }
+
+    #[test]
+    fn routine_shared_course_score_keeps_earlier_songs() {
+        let mut state = routine_state();
+        let stage_points = [
+            state.stage_totals_for_player(0).possible_grade_points,
+            state.stage_totals_for_player(1).possible_grade_points,
+        ];
+        let stage_steps = [
+            state.stage_totals_for_player(0).total_steps,
+            state.stage_totals_for_player(1).total_steps,
+        ];
+        // The previous song was all Greats, the current one all Fantastics.
+        let carry = |player: usize| CourseDisplayCarry {
+            scoring_counts: [0, 0, stage_steps[player], 0, 0, 0],
+            ..CourseDisplayCarry::default()
+        };
+        let totals = |player: usize| CourseDisplayTotals {
+            possible_grade_points: 2 * stage_points[player],
+            total_steps: 2 * stage_steps[player],
+            ..CourseDisplayTotals::default()
+        };
+        state.progress.course_display = GameplayCourseDisplayState::new(
+            Some([carry(0), carry(1)]),
+            Some([totals(0), totals(1)]),
+            None,
+        );
+        for player in 0..2 {
+            state.players_runtime.players[player].scoring_counts =
+                [stage_steps[player], 0, 0, 0, 0, 0];
+        }
+
+        // Individual-song saves keep the current song only.
+        assert_eq!(state.routine_shared_stage_itg_score_percent(), Some(1.0));
+        // Course display and evaluation score Greats (2) and Fantastics (5)
+        // over the whole course of both participants.
+        let course = state.routine_shared_itg_score_percent().unwrap();
+        assert!((course - 0.7).abs() < 1e-12, "{course}");
+        let hud = state.display_gameplay_itg_score_percent(1, GameplayScoreDisplayMode::Normal);
+        assert!((hud - 70.0).abs() < 1e-9, "{hud}");
+    }
+
+    #[test]
     fn routine_failing_one_participant_fails_both() {
         let mut state = routine_state();
         assert!(state.force_fail_player(1));

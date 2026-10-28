@@ -2842,6 +2842,55 @@ pub const fn elapsed_times(state: &State) -> (f32, f32) {
     (state.session_elapsed, state.gameplay_elapsed)
 }
 
+// Simply Love's Routine panes show the shared percent and grade, with each
+// participant's own percent beside its judgments.
+fn routine_shared_grade(
+    score_info: &[Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
+) -> Option<score_data::Grade> {
+    routine_shared_score_percent.map(|percent| {
+        let failed = score_info
+            .iter()
+            .flatten()
+            .any(|si| si.grade == score_data::Grade::Failed);
+        if failed {
+            score_data::Grade::Failed
+        } else {
+            score_data::score_to_grade(percent * 10000.0)
+        }
+    })
+}
+
+fn percentage_texts(
+    score_info: &[Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
+) -> [Option<eval_panes::PercentageText>; MAX_PLAYERS] {
+    std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(|si| match routine_shared_score_percent {
+                Some(percent) => eval_panes::PercentageText::routine(si, percent),
+                None => eval_panes::PercentageText::new(si),
+            })
+    })
+}
+
+fn stats_presentations(
+    score_info: &[Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
+) -> [Option<eval_panes::StatsPanePresentation>; MAX_PLAYERS] {
+    std::array::from_fn(|index| {
+        score_info[index].as_ref().map(|si| {
+            let presentation = eval_panes::StatsPanePresentation::new(si);
+            if routine_shared_score_percent.is_some() {
+                presentation.routine(si)
+            } else {
+                presentation
+            }
+        })
+    })
+}
+
 pub fn init(init_view: EvaluationInitView) -> State {
     let EvaluationInitView {
         score_info,
@@ -3140,25 +3189,8 @@ pub fn init(init_view: EvaluationInitView) -> State {
             .as_ref()
             .map_or_else(ResultText::empty, ResultText::from_score)
     });
-    // Simply Love's Routine panes show the shared percent and grade, with
-    // each participant's own percent beside its judgments.
-    let routine_shared_grade = routine_shared_score_percent.map(|percent| {
-        let failed = score_info
-            .iter()
-            .flatten()
-            .any(|si| si.grade == score_data::Grade::Failed);
-        if failed {
-            score_data::Grade::Failed
-        } else {
-            score_data::score_to_grade(percent * 10000.0)
-        }
-    });
-    let percentage_text = std::array::from_fn(|index| {
-        score_info[index].as_ref().map(|si| match routine_shared_score_percent {
-            Some(percent) => eval_panes::PercentageText::routine(si, percent),
-            None => eval_panes::PercentageText::new(si),
-        })
-    });
+    let routine_shared_grade = routine_shared_grade(&score_info, routine_shared_score_percent);
+    let percentage_text = percentage_texts(&score_info, routine_shared_score_percent);
     let modifiers_presentation = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3169,16 +3201,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
             .as_ref()
             .map(eval_panes::ColumnPanePresentation::new)
     });
-    let stats_presentation = std::array::from_fn(|index| {
-        score_info[index].as_ref().map(|si| {
-            let presentation = eval_panes::StatsPanePresentation::new(si);
-            if routine_shared_score_percent.is_some() {
-                presentation.routine(si)
-            } else {
-                presentation
-            }
-        })
-    });
+    let stats_presentation = stats_presentations(&score_info, routine_shared_score_percent);
     let timing_pane_text = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3295,6 +3318,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
 #[must_use]
 pub fn init_from_score_info(
     score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
     stage_duration_seconds: f32,
     context: EvaluationContextView,
 ) -> State {
@@ -3482,11 +3506,8 @@ pub fn init_from_score_info(
             .as_ref()
             .map_or_else(ResultText::empty, ResultText::from_score)
     });
-    let percentage_text = std::array::from_fn(|index| {
-        score_info[index]
-            .as_ref()
-            .map(eval_panes::PercentageText::new)
-    });
+    let routine_shared_grade = routine_shared_grade(&score_info, routine_shared_score_percent);
+    let percentage_text = percentage_texts(&score_info, routine_shared_score_percent);
     let modifiers_presentation = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3497,11 +3518,7 @@ pub fn init_from_score_info(
             .as_ref()
             .map(eval_panes::ColumnPanePresentation::new)
     });
-    let stats_presentation = std::array::from_fn(|index| {
-        score_info[index]
-            .as_ref()
-            .map(eval_panes::StatsPanePresentation::new)
-    });
+    let stats_presentation = stats_presentations(&score_info, routine_shared_score_percent);
     let timing_pane_text = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3542,7 +3559,7 @@ pub fn init_from_score_info(
         heart_rate_generation: None,
         stage_duration_seconds,
         score_info,
-        routine_shared_grade: None,
+        routine_shared_grade,
         nice_scores,
         result_text,
         percentage_text,

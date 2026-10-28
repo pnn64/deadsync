@@ -30,7 +30,7 @@ pub(crate) fn evaluation_view(
         };
         let prof = &gs.profiles()[player_idx];
         // Routine saves one shared score, for the master player only.
-        let routine_shared = gs.routine_shared_itg_score_percent();
+        let routine_shared = gs.routine_shared_stage_itg_score_percent();
         let score_percent = routine_shared.unwrap_or(player.score_percent);
         // The shared score needs both participants' scores to be valid.
         let saves_score =
@@ -162,7 +162,7 @@ pub(crate) fn evaluation_view(
     }
     EvaluationInitView {
         score_info,
-        routine_shared_score_percent: gs.routine_shared_itg_score_percent(),
+        routine_shared_score_percent: gs.routine_shared_stage_itg_score_percent(),
         fail_stream_progress,
         context,
         stage_duration_seconds: stage.duration_seconds,
