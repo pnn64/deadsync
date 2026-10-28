@@ -858,6 +858,15 @@ pub fn preferred_primary_scorebox_pane<'a>(
     } else {
         ScoreboxPaneKind::Gs
     };
+    // A golf board only exists for a golf hole, and on a hole golf is the
+    // score that matters, so it leads whatever scoring mode the player uses.
+    if let Some(golf) = panes
+        .iter()
+        .copied()
+        .find(|pane| scorebox_pane_kind(pane) == ScoreboxPaneKind::Golf)
+    {
+        return Some(golf);
+    }
     let mut first_gs = None;
     let mut first_ex = None;
     for &pane in panes {
@@ -872,6 +881,13 @@ pub fn preferred_primary_scorebox_pane<'a>(
         }
     }
     first_gs.or(first_ex).or_else(|| panes.first().copied())
+}
+
+/// Move golf boards ahead of every other pane, keeping each group's order.
+/// A golf board is only returned for a chart that is a golf hole, so on golf
+/// packs the leaderboard overlay and scorebox cycle open on golf.
+pub fn prioritize_golf_panes(panes: &mut [LeaderboardPane]) {
+    panes.sort_by_key(|pane| scorebox_pane_kind(pane) != ScoreboxPaneKind::Golf);
 }
 
 #[must_use]
@@ -2067,6 +2083,44 @@ mod tests {
             Some(ScoreboxPaneKind::Itl)
         );
         assert!(preferred_primary_scorebox_pane(&[], true).is_none());
+    }
+
+    #[test]
+    fn golf_board_leads_the_scorebox_whenever_a_hole_has_one() {
+        let gs = pane("GrooveStats", false, None);
+        let ex = pane("GrooveStats", true, None);
+        let golf = pane("Golf (ArrowCloud)", false, None);
+        let with_golf = [&gs, &ex, &golf];
+        for show_ex in [false, true] {
+            assert_eq!(
+                preferred_primary_scorebox_pane(&with_golf, show_ex).map(scorebox_pane_kind),
+                Some(ScoreboxPaneKind::Golf)
+            );
+        }
+    }
+
+    #[test]
+    fn prioritize_golf_panes_moves_golf_first_and_keeps_the_rest_in_order() {
+        let mut panes = vec![
+            pane("GrooveStats", false, None),
+            pane("ArrowCloud", false, Some(ArrowCloudPaneKind::HardEx)),
+            pane("Golf (ArrowCloud)", false, None),
+            pane("GrooveStats", true, None),
+        ];
+        prioritize_golf_panes(&mut panes);
+        let kinds: Vec<_> = panes.iter().map(scorebox_pane_kind).collect();
+        assert_eq!(
+            kinds,
+            [
+                ScoreboxPaneKind::Golf,
+                ScoreboxPaneKind::Gs,
+                ScoreboxPaneKind::HardEx,
+                ScoreboxPaneKind::Ex,
+            ]
+        );
+        let mut without_golf = vec![pane("GrooveStats", true, None), pane("GrooveStats", false, None)];
+        prioritize_golf_panes(&mut without_golf);
+        assert!(without_golf[0].is_ex && !without_golf[1].is_ex);
     }
 
     #[test]

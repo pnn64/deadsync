@@ -300,6 +300,8 @@ player and Select Music choices.
   switch it off here if you would rather not see them.
 - **Options > Select Music Options > GS Box Leaderboards > Golf (ArrowCloud)**
   enables the online event board alongside the other selectable leaderboards.
+  On golf holes it is listed first, so the scorebox and leaderboard overlay
+  open on golf before cycling to the other boards.
 
 The native display uses the supplied `GolfScoring.lua` curved formula: errors
 below 5 ms are free, hits are rounded to whole raw strokes individually, and

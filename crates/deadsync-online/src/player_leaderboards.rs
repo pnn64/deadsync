@@ -47,7 +47,10 @@ pub fn fetch_player_leaderboards(
     if config.enable_golf && config.select_music_scorebox_cycle_golf {
         if let Some(key) = arrowcloud_api_key.filter(|key| !key.is_empty()) {
             match crate::golf::fetch_pane(chart_hash, key, max_entries) {
-                Ok(Some(pane)) => combined.fetched.data.panes.push(pane),
+                Ok(Some(pane)) => {
+                    combined.fetched.data.panes.push(pane);
+                    deadsync_score::prioritize_golf_panes(&mut combined.fetched.data.panes);
+                }
                 Ok(None) => {}
                 Err(error) => {
                     warn!("Golf leaderboard fetch failed for chart {chart_hash}: {error}")
