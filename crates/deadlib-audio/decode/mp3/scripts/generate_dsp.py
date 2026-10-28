@@ -43,8 +43,13 @@ def main():
         lines+=['    [']+['        ['+', '.join(map(literal,row))+'],' for row in block]+['    ],']
     lines+= ['];']
     for name,data in [('IMDCT_SHORT',short),('SYNTHESIS',synth),('WINDOW_LONG',windows)]:
-        lines+=['#[rustfmt::skip]',f'pub(super) static {name}: [[f64; {len(data[0])}]; {len(data)}] = [']
-        lines+=['    ['+', '.join(map(literal,row))+'],' for row in data];lines+= ['];']
+        if name=='SYNTHESIS':
+            lines+=['#[repr(C, align(64))]','pub(super) struct SynthesisMatrix(pub(super) [[f64; 64]; 32]);',
+                    '#[rustfmt::skip]','pub(super) static SYNTHESIS: SynthesisMatrix = SynthesisMatrix([']
+        else:
+            lines+=['#[rustfmt::skip]',f'pub(super) static {name}: [[f64; {len(data[0])}]; {len(data)}] = [']
+        lines+=['    ['+', '.join(map(literal,row))+'],' for row in data]
+        lines+= [']);' if name=='SYNTHESIS' else '];']
     for name,data in [('WINDOW_SHORT',[math.sin(math.pi/12*(n+.5)) for n in range(12)]),('ALIAS_CS',cs),('ALIAS_CA',ca),('DEWINDOW',window)]:
         lines+=['#[rustfmt::skip]',f'pub(super) static {name}: [f64; {len(data)}] = [']
         lines+=['    '+', '.join(map(literal,data[n:n+8]))+',' for n in range(0,len(data),8)];lines+= ['];']

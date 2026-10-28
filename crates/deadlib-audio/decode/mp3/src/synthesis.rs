@@ -137,7 +137,7 @@ impl Synthesis {
         values.fill(0.0);
         // Contiguous output lanes let the compiler vectorize without changing
         // the accumulation order of any sample.
-        for (&sample, coefficients) in subbands.iter().zip(&tables::SYNTHESIS) {
+        for (&sample, coefficients) in subbands.iter().zip(&tables::SYNTHESIS.0) {
             for (value, &coefficient) in values.iter_mut().zip(coefficients) {
                 *value += sample * coefficient;
             }
