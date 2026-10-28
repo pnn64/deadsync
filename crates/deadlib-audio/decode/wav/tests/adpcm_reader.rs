@@ -180,7 +180,7 @@ fn data_before_format_trailing_fact_short_last_blocks_and_bad_headers() {
         let bytes = encoded(kind, Container::Riff, 1);
         let w = Wave::parse(&bytes).unwrap();
         let reordered = form(&[
-            (*b"data", w.data()),
+            (*b"data", w.data().unwrap()),
             (*b"odd!", &[42]),
             (*b"fmt ", w.format.raw),
             (*b"fact", &173u32.to_le_bytes()),
@@ -189,7 +189,7 @@ fn data_before_format_trailing_fact_short_last_blocks_and_bad_headers() {
         let mut out = [0; 173];
         assert_eq!(r.read_i16(&mut out).unwrap(), 173);
         let mut invalid = bytes.clone();
-        let offset = w.data_offset() as usize;
+        let offset = w.data_offset().unwrap() as usize;
         invalid[offset + if kind == AdpcmKind::Ima { 2 } else { 0 }] = 255;
         let mut r = AdpcmReader::new(Cursor::new(invalid)).unwrap();
         assert!(r.read_i16(&mut out).is_err());

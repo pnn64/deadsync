@@ -167,7 +167,7 @@ fn write_only_native_output_matches_independent_bits_and_seekable_output() {
                         sample.reverse();
                     }
                 }
-                assert_eq!(wave.data(), expected);
+                assert_eq!(wave.data().unwrap(), expected);
                 assert_eq!(wave.format.valid_bits, spec.valid_bits);
                 let mut target = Cursor::new(vec![9, 8, 7]);
                 target.set_position(3);
@@ -237,7 +237,7 @@ fn known_adpcm_counts_include_final_block_padding_and_trim_exactly() {
                     let wave = Wave::parse(&bytes).unwrap();
                     assert_eq!(wave.fact, Some(frames as u64));
                     assert_eq!(
-                        wave.data().len(),
+                        wave.data().unwrap().len(),
                         frames.div_ceil(codec.frames_per_block()) * codec.block_bytes()
                     );
                     assert_eq!(

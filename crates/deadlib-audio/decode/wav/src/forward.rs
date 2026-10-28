@@ -9,14 +9,35 @@ use std::io::{self, Read};
 pub struct ChunkPayload<'a, R> {
     stream: &'a mut Stream<R>,
     remaining: u64,
+    prefix: [u8; 4],
+    prefix_position: usize,
+    prefix_len: usize,
 }
 impl<R> ChunkPayload<'_, R> {
     pub fn remaining(&self) -> u64 {
         self.remaining
     }
 }
+impl<'a, R> ChunkPayload<'a, R> {
+    fn new(stream: &'a mut Stream<R>, remaining: u64, prefix: Option<[u8; 4]>) -> Self {
+        Self {
+            stream,
+            remaining,
+            prefix: prefix.unwrap_or_default(),
+            prefix_position: 0,
+            prefix_len: if prefix.is_some() { 4 } else { 0 },
+        }
+    }
+}
 impl<R: Read> Read for ChunkPayload<'_, R> {
     fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
+        if self.prefix_position < self.prefix_len {
+            let n = out.len().min(self.prefix_len - self.prefix_position);
+            out[..n].copy_from_slice(&self.prefix[self.prefix_position..self.prefix_position + n]);
+            self.prefix_position += n;
+            self.remaining -= n as u64;
+            return Ok(n);
+        }
         let n = self.stream.read_chunk(out).map_err(|e| match e {
             Error::Io(e) => e,
             Error::Truncated => io::ErrorKind::UnexpectedEof.into(),
@@ -25,6 +46,20 @@ impl<R: Read> Read for ChunkPayload<'_, R> {
         self.remaining -= n as u64;
         Ok(n)
     }
+}
+
+#[derive(Clone, Copy)]
+enum WavlState {
+    Next,
+    Data(u64),
+    Silence(u64),
+    End,
+}
+struct WavlForward {
+    hold: Vec<u8>,
+    seen: u64,
+    position: u64,
+    state: WavlState,
 }
 
 /// Opening reads through the first data header, without buffering audio. fmt
@@ -36,6 +71,8 @@ pub struct ForwardReader<R> {
     data: ChunkInfo,
     fact: Option<u64>,
     bytes_read: u64,
+    wavl: Option<WavlForward>,
+    failed: bool,
 }
 impl<R: Read> ForwardReader<R> {
     pub fn new(inner: R) -> Result<Self, Error> {
@@ -55,7 +92,7 @@ impl<R: Read> ForwardReader<R> {
         let mut stream = Stream::with_limits(inner, limits)?;
         let mut format = Vec::new();
         let mut fact = None;
-        let data = loop {
+        let (data, wavl) = loop {
             let chunk = stream
                 .next_chunk()?
                 .ok_or(Error::Invalid("missing data chunk"))?;
@@ -82,19 +119,50 @@ impl<R: Read> ForwardReader<R> {
                     if format.is_empty() {
                         return Err(Error::Unsupported("forward-only data before format"));
                     }
-                    break chunk;
+                    break (chunk, None);
                 }
-                _ => visit(
-                    chunk,
-                    &mut ChunkPayload {
-                        stream: &mut stream,
-                        remaining: chunk.size,
-                    },
-                )?,
+                b"LIST" if chunk.size >= 4 => {
+                    let mut kind = [0; 4];
+                    stream.read_chunk(&mut kind)?;
+                    if kind == *b"wavl" {
+                        if format.is_empty() {
+                            return Err(Error::Unsupported("forward-only data before format"));
+                        }
+                        let f = Format::parse(&format, stream.container().endian())?;
+                        let mut hold = Vec::new();
+                        if matches!(f.encoding, Encoding::Pcm | Encoding::Float) {
+                            reserve(&mut hold, usize::from(f.block_align))?;
+                            hold.resize(
+                                usize::from(f.block_align),
+                                if f.sample_format()? == crate::SampleFormat::U8 {
+                                    128
+                                } else {
+                                    0
+                                },
+                            );
+                        }
+                        stream.enter_list_payload(chunk)?;
+                        break (
+                            chunk,
+                            Some(WavlForward {
+                                hold,
+                                seen: 0,
+                                position: 0,
+                                state: WavlState::Next,
+                            }),
+                        );
+                    }
+                    visit(
+                        chunk,
+                        &mut ChunkPayload::new(&mut stream, chunk.size, Some(kind)),
+                    )?;
+                }
+                _ => visit(chunk, &mut ChunkPayload::new(&mut stream, chunk.size, None))?,
             }
         };
         let f = Format::parse(&format, stream.container().endian())?;
-        if matches!(f.encoding, Encoding::Pcm | Encoding::Float)
+        if wavl.is_none()
+            && matches!(f.encoding, Encoding::Pcm | Encoding::Float)
             && !data.size.is_multiple_of(u64::from(f.block_align))
         {
             return Err(Error::Invalid("partial PCM frame"));
@@ -105,6 +173,8 @@ impl<R: Read> ForwardReader<R> {
             data,
             fact,
             bytes_read: 0,
+            wavl,
+            failed: false,
         })
     }
     pub fn container(&self) -> Container {
@@ -120,7 +190,10 @@ impl<R: Read> ForwardReader<R> {
     pub fn ds64_sample_count(&self) -> Option<u64> {
         self.stream.ds64().map(|d| d.sample_count)
     }
-    pub fn data_chunk(&self) -> ChunkInfo {
+    pub fn data_chunk(&self) -> Option<ChunkInfo> {
+        self.wavl.is_none().then_some(self.data)
+    }
+    pub fn audio_chunk(&self) -> ChunkInfo {
         self.data
     }
     pub fn data_bytes_read(&self) -> u64 {
@@ -129,11 +202,23 @@ impl<R: Read> ForwardReader<R> {
     pub fn frames(&self) -> Result<u64, Error> {
         let f = self.format();
         f.sample_format()?;
+        if let Some(w) = &self.wavl {
+            return self
+                .fact
+                .or(self.ds64_sample_count())
+                .or_else(|| matches!(w.state, WavlState::End).then_some(w.seen))
+                .ok_or(Error::Unsupported(
+                    "wavl duration is unknown before trailing fact or end",
+                ));
+        }
         Ok(self.data.size / u64::from(f.block_align))
     }
     pub fn position(&self) -> Result<u64, Error> {
         let f = self.format();
         f.sample_format()?;
+        if let Some(w) = &self.wavl {
+            return Ok(w.position);
+        }
         if !self.bytes_read.is_multiple_of(u64::from(f.block_align)) {
             return Err(Error::Invalid(
                 "native stream position is not frame aligned",
@@ -144,16 +229,103 @@ impl<R: Read> ForwardReader<R> {
     /// Raw encoded bytes for any supported or opaque descriptor. Mixing raw
     /// reads with native frame calls requires a frame-aligned current position.
     pub fn read_data(&mut self, out: &mut [u8]) -> Result<usize, Error> {
+        if self.wavl.is_some() {
+            return Err(Error::Unsupported("wavl data is not contiguous"));
+        }
         let n = self.stream.read_chunk(out)?;
         self.bytes_read += n as u64;
         Ok(n)
     }
     pub fn read_frames(&mut self, out: &mut [u8]) -> Result<usize, Error> {
+        if self.wavl.is_some() {
+            return self.read_frames_with_metadata(out, |_, _| Ok(()));
+        }
         let frames = self.frames()?;
         let pos = self.position()?;
         let align = usize::from(self.format().block_align);
         let n = (frames - pos).min((out.len() / align) as u64) as usize;
         Ok(self.read_data(&mut out[..n * align])? / align)
+    }
+    /// Visit ancillary chunks encountered between wavl audio segments. Ordinary
+    /// contiguous data reads have no interleaved metadata to visit.
+    pub fn read_frames_with_metadata(
+        &mut self,
+        out: &mut [u8],
+        mut visit: impl FnMut(ChunkInfo, &mut ChunkPayload<'_, R>) -> Result<(), Error>,
+    ) -> Result<usize, Error> {
+        if self.wavl.is_none() {
+            return self.read_frames(out);
+        }
+        if self.failed {
+            return Err(Error::Invalid("forward reader unusable after error"));
+        }
+        self.format().sample_format()?;
+        let align = usize::from(self.format().block_align);
+        let capacity = out.len() / align;
+        self.failed = true;
+        let result = (|| {
+            let w = self.wavl.as_mut().unwrap();
+            let mut done = 0;
+            while done < capacity {
+                match w.state {
+                    WavlState::End => break,
+                    WavlState::Data(0) | WavlState::Silence(0) => w.state = WavlState::Next,
+                    WavlState::Next => {
+                        let Some(c) = self.stream.next_chunk()? else {
+                            self.stream.leave_list_payload()?;
+                            w.state = WavlState::End;
+                            if self.fact.is_some_and(|n| n != w.seen) {
+                                return Err(Error::Invalid("wavl fact sample count mismatch"));
+                            }
+                            break;
+                        };
+                        if let Some((silence, frames)) =
+                            wavl_entry(&mut self.stream, c, Some(align))?
+                        {
+                            w.seen = w
+                                .seen
+                                .checked_add(frames)
+                                .ok_or(Error::Limit("wavl frame count overflow"))?;
+                            if self.fact.is_some_and(|n| w.seen > n) {
+                                return Err(Error::Invalid("wavl fact sample count mismatch"));
+                            }
+                            w.state = if silence {
+                                WavlState::Silence(frames)
+                            } else {
+                                WavlState::Data(frames)
+                            };
+                        } else {
+                            visit(c, &mut ChunkPayload::new(&mut self.stream, c.size, None))?;
+                        }
+                    }
+                    WavlState::Data(left) => {
+                        let n = left.min((capacity - done) as u64) as usize;
+                        let dst = &mut out[done * align..(done + n) * align];
+                        self.stream.read_chunk(dst)?;
+                        w.hold.copy_from_slice(&dst[dst.len() - align..]);
+                        self.bytes_read += dst.len() as u64;
+                        w.position += n as u64;
+                        done += n;
+                        w.state = WavlState::Data(left - n as u64);
+                    }
+                    WavlState::Silence(left) => {
+                        let n = left.min((capacity - done) as u64) as usize;
+                        crate::timeline::repeat(
+                            &mut out[done * align..(done + n) * align],
+                            &w.hold,
+                        );
+                        w.position += n as u64;
+                        done += n;
+                        w.state = WavlState::Silence(left - n as u64);
+                    }
+                }
+            }
+            Ok(done)
+        })();
+        if result.is_ok() {
+            self.failed = false;
+        }
+        result
     }
     pub fn read_i16(&mut self, out: &mut [i16]) -> Result<usize, Error> {
         NativeIo::new(self.format())?.read_i16(out, |b| self.read_frames(b))
@@ -189,6 +361,26 @@ impl<R: Read> ForwardReader<R> {
         frames: Option<u64>,
         mut visit: impl FnMut(ChunkInfo, &mut ChunkPayload<'_, R>) -> Result<(), Error>,
     ) -> Result<R, Error> {
+        if self.failed {
+            return Err(Error::Invalid("forward reader unusable after error"));
+        }
+        if let Some(w) = &mut self.wavl
+            && !matches!(w.state, WavlState::End)
+        {
+            let align = (!w.hold.is_empty()).then_some(w.hold.len());
+            while let Some(c) = self.stream.next_chunk()? {
+                if let Some((_, frames)) = wavl_entry(&mut self.stream, c, align)? {
+                    w.seen = w
+                        .seen
+                        .checked_add(frames)
+                        .ok_or(Error::Limit("wavl frame count overflow"))?;
+                } else {
+                    visit(c, &mut ChunkPayload::new(&mut self.stream, c.size, None))?;
+                }
+            }
+            self.stream.leave_list_payload()?;
+            w.state = WavlState::End;
+        }
         while let Some(chunk) = self.stream.next_chunk()? {
             match &chunk.id {
                 b"fmt " => return Err(Error::Invalid("duplicate format chunk")),
@@ -199,13 +391,29 @@ impl<R: Read> ForwardReader<R> {
                     }
                     self.fact = Some(read_fact(&mut self.stream, chunk)?);
                 }
+                b"LIST" if chunk.size >= 4 => {
+                    let mut kind = [0; 4];
+                    self.stream.read_chunk(&mut kind)?;
+                    if kind == *b"wavl" {
+                        return Err(Error::Invalid("multiple WAVE data sections"));
+                    }
+                    visit(
+                        chunk,
+                        &mut ChunkPayload::new(&mut self.stream, chunk.size, Some(kind)),
+                    )?;
+                }
                 _ => visit(
                     chunk,
-                    &mut ChunkPayload {
-                        stream: &mut self.stream,
-                        remaining: chunk.size,
-                    },
+                    &mut ChunkPayload::new(&mut self.stream, chunk.size, None),
                 )?,
+            }
+        }
+        if let Some(w) = &self.wavl {
+            let fact = self
+                .fact
+                .ok_or(Error::Invalid("wavl requires fact sample count"))?;
+            if !w.hold.is_empty() && fact != w.seen {
+                return Err(Error::Invalid("wavl fact sample count mismatch"));
             }
         }
         if let Some(frames) = frames {
@@ -218,6 +426,32 @@ impl<R: Read> ForwardReader<R> {
             }
         }
         Ok(self.stream.into_inner())
+    }
+}
+fn wavl_entry<R: Read>(
+    stream: &mut Stream<R>,
+    c: ChunkInfo,
+    align: Option<usize>,
+) -> Result<Option<(bool, u64)>, Error> {
+    match &c.id {
+        b"data" => {
+            if let Some(align) = align {
+                if !c.size.is_multiple_of(align as u64) {
+                    return Err(Error::Invalid("partial PCM frame"));
+                }
+                return Ok(Some((false, c.size / align as u64)));
+            }
+            Ok(Some((false, 0)))
+        }
+        b"slnt" => {
+            if c.size != 4 {
+                return Err(Error::Invalid("slnt payload size"));
+            }
+            let mut b = [0; 4];
+            stream.read_chunk(&mut b)?;
+            Ok(Some((true, u64::from(stream.container().endian().u32(&b)))))
+        }
+        _ => Ok(None),
     }
 }
 fn read_fact<R: Read>(stream: &mut Stream<R>, chunk: ChunkInfo) -> Result<u64, Error> {

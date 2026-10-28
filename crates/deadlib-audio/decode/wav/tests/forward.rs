@@ -438,7 +438,7 @@ fn raw_packet_access_frame_alignment_limits_and_errors_are_explicit() {
         .is_err()
     );
     let mut bad = compressed(Some(65), false);
-    let offset = Wave::parse(&bad).unwrap().data_offset() as usize;
+    let offset = Wave::parse(&bad).unwrap().data_offset().unwrap() as usize;
     bad[offset + 2] = 255;
     let mut reader = AdpcmForwardReader::new(Input::new(&bad, 7)).unwrap();
     assert!(reader.read_i16(&mut [0; 8]).is_err());

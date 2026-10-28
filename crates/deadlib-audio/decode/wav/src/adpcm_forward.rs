@@ -42,7 +42,13 @@ impl<R: Read> AdpcmForwardReader<R> {
             return Err(Error::Invalid("forward ADPCM duration mismatch"));
         }
         let codec = Adpcm::from_format(reader.format())?;
-        codec.validate_frame_count(reader.data_chunk().size, frames)?;
+        codec.validate_frame_count(
+            reader
+                .data_chunk()
+                .ok_or(Error::Unsupported("segmented ADPCM data"))?
+                .size,
+            frames,
+        )?;
         let mut encoded = Vec::new();
         reserve(&mut encoded, codec.block_bytes())?;
         encoded.resize(codec.block_bytes(), 0);

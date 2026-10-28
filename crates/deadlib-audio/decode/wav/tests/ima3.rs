@@ -259,7 +259,7 @@ fn three_bit_writers_and_all_frame_readers_preserve_block_and_fact_contracts() {
             let wave = Wave::parse(&bytes).unwrap();
             assert_eq!(wave.fact, Some(149));
             let mut expected = Vec::new();
-            for block in wave.data().chunks(usize::from(spec.block_bytes)) {
+            for block in wave.data().unwrap().chunks(usize::from(spec.block_bytes)) {
                 expected.extend(reference(block, usize::from(channels), container.endian()));
             }
             expected.truncate(input.len());

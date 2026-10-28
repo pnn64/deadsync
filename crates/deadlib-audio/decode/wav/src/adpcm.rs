@@ -300,7 +300,9 @@ pub struct AdpcmData<'a> {
 impl<'a> AdpcmData<'a> {
     pub fn new(wave: &Wave<'a>) -> Result<Self, Error> {
         let codec = Adpcm::from_format(wave.format)?;
-        let bytes = wave.data();
+        let bytes = wave
+            .data()
+            .ok_or(Error::Unsupported("segmented ADPCM data"))?;
         let frames = wave
             .fact
             .or(wave.ds64.map(|d| d.sample_count))

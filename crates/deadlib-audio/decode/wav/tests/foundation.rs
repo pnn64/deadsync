@@ -96,7 +96,7 @@ fn integer_edges_in_both_byte_orders() {
             assert_eq!(&short[..2], &values[2..4]);
             assert_eq!(short[2], 1234);
             assert_eq!(
-                pcm.frame_range(1, 2).unwrap().as_bytes(),
+                pcm.frame_range(1, 2).unwrap().as_bytes().unwrap(),
                 &data[2 * bits as usize / 8..]
             );
             assert!(pcm.frame_range(u64::MAX, 2).is_err());
@@ -204,7 +204,10 @@ fn unusual_order_unknown_payloads_exact_padding_and_riff_boundary() {
     assert_eq!(chunks[0].padding, &[0xcd]);
     assert_eq!(chunks[4].data, &[5, 4, 3]);
     assert_eq!(w.as_bytes(), &b[..end]);
-    assert_eq!(w.data().as_ptr(), b[w.data_offset() as usize..].as_ptr());
+    assert_eq!(
+        w.data().unwrap().as_ptr(),
+        b[w.data_offset().unwrap() as usize..].as_ptr()
+    );
     for n in 0..end {
         assert!(Wave::parse(&b[..n]).is_err(), "prefix {n}");
     }
@@ -345,11 +348,11 @@ fn aligned_direct_access_and_unaligned_fallback() {
         let p = w.pcm().unwrap();
         if let Some(s) = p.as_i32() {
             assert_eq!(s, [i32::MIN, -1, 0, i32::MAX]);
-            assert_eq!(s.as_ptr().cast::<u8>(), p.as_bytes().as_ptr());
+            assert_eq!(s.as_ptr().cast::<u8>(), p.as_bytes().unwrap().as_ptr());
         }
         assert_eq!(
             p.as_i32().is_some(),
-            cfg!(target_endian = "little") && p.as_bytes().as_ptr().align_offset(4) == 0
+            cfg!(target_endian = "little") && p.as_bytes().unwrap().as_ptr().align_offset(4) == 0
         );
         let mut out = [0; 4];
         p.read_i32(0, &mut out).unwrap();

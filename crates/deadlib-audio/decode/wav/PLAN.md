@@ -15,6 +15,8 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    Known-length nonseekable output is now implemented
    for generic encoded data, native samples and ADPCM; see STREAMING.md. RIFF and
    64-bit output, extensible valid bits/masks, metadata and exact roundtrips.
+   Native wavl/slnt sequences now work through borrowed, seekable and forward
+   frame APIs plus incremental/known-length WavlWriter; see WAVL.md.
 3. Microsoft and 3/4-bit WAV IMA ADPCM block encoding/decoding, incremental encoding,
    borrowed range access and file-backed cached seeking are implemented. See
    ADPCM.md for 40 decode, 144 encoder and 204 file/range cases, including explicit
@@ -91,8 +93,17 @@ ADPCM.md retains every reference outcome and lossy quality limits. All 60 tests,
 Clippy, two million checked mutations, earlier corpus replay and 100000 fresh
 ASan executions pass. The 204 earlier Microsoft/4-bit IMA range checks also pass.
 
-Required work still includes extensible ADPCM, wavl/slnt and multiple-data
-handling, representative comparative benchmarks, comparative RSS and sequential
+Native wavl/slnt and multiple data children now pass 248 independent fixture/layout
+gates, 1736 descriptor/decode/range checks and 992 writer cases. All four reference
+drivers reject the segmented corpus directly; 24 paired flat RIFF gates match
+all four, and every direct failure is retained. All 69 tests pass on x64
+debug/release and i686 debug; Clippy, two million checked mutations, 100000 fresh
+ASan executions and 2507 unique retained corpus files pass. The earlier 460 native
+and 204 ADPCM file/range regressions also pass. WAVL.md records u64 silence/physical
+offset evidence, the Option-based contiguous accessors, metadata and limits.
+
+Required work still includes extensible ADPCM, compressed wavl routing,
+representative comparative benchmarks, comparative RSS and sequential
 disk evidence, and broader native/reference fixtures. Metadata profile/semantic certification
 and broader fuzz coverage remain unproven. Forward PCM16 streaming currently
 allocates one 16-byte format buffer; the benchmark records that boundary.

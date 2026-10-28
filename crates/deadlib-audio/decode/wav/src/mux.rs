@@ -300,6 +300,7 @@ impl HeaderPlan {
                 *b"fmt ", *b"data", *b"fact", *b"ds64", *b"RIFF", *b"RF64", *b"BW64", *b"RIFX",
             ]
             .contains(&c.id)
+                || (c.id == *b"LIST" && c.data.starts_with(b"wavl"))
             {
                 return Err(Error::Invalid("reserved metadata chunk ID"));
             }

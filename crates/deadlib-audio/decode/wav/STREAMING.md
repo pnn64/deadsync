@@ -10,14 +10,20 @@ Reader and AdpcmReader provide arbitrary exact seeks.
 
 ## Forward-only frame reading
 
-Opening a ForwardReader consumes only headers through the first data header. It
+Opening a ForwardReader consumes only headers through the first data header, or
+through the LIST/wavl type for segmented native audio. It
 retains bounded format bytes and no per-chunk inventory or audio allocation.
 Native calls fill complete interleaved frames in caller buffers: raw bytes,
 native i16/i32/f32/f64, or explicit integer expansion via read_integers. The
 conversion implementation is shared with Reader, with integer container scale,
 valid-bit padding and exact float payload bits unchanged. A raw read_data call
 also supports opaque encoded formats; subsequent native calls require the current
-byte position to be frame aligned.
+byte position to be frame aligned. Segmented native reads hold one previous
+frame for slnt and do not expose a contiguous read_data byte stream. Metadata
+between segments can be visited with read_frames_with_metadata. A trailing fact
+works without an upfront native wavl duration; finish checks its actual frame
+count. See [WAVL.md](WAVL.md) for duration queries, Option-based contiguous
+accessors, large virtual silence and bounded final validation.
 
 ```rust
 use deadlib_audio_decode_wav::{Error, ForwardReader};
@@ -65,6 +71,11 @@ whole encoded stream or emit untrimmed speculative samples. Its initial and fina
 duration checks do not decode intentionally unread compressed blocks.
 
 ## Known-length Write-only output
+
+`WavlWriter::with_lengths` extends Write-only output to native data/slnt sequences.
+Its byte count includes the wavl type and every nested header/payload/pad; its
+frame count includes silence. `WavlWriter::new` provides unknown-length seekable
+finalization. See WAVL.md for RF64 LIST tables and individual child-size limits.
 
 `Muxer::with_lengths` accepts `DataLength { bytes, frames }`, a raw format
 descriptor, container options and ancillary chunks. It needs only `Write`. It

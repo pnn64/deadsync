@@ -43,7 +43,7 @@ fn opaque_codec_muxing_preserves_format_unknown_chunks_and_padding() {
         assert_eq!(w.format.encoding, Encoding::Other(0x1234));
         assert_eq!(w.format.raw, f);
         assert_eq!(w.fact, Some(4333));
-        assert_eq!(w.data(), [9, 8, 7, 6, 5]);
+        assert_eq!(w.data().unwrap(), [9, 8, 7, 6, 5]);
         assert_eq!(
             w.chunks()
                 .unwrap()
@@ -106,6 +106,6 @@ fn native_muxer_checks_producer_frame_counts_before_writing() {
     m.write_data(&[123, 0], 1).unwrap();
     let bytes = m.finish().unwrap().into_inner();
     let w = Wave::parse(&bytes).unwrap();
-    assert_eq!(w.data(), [123, 0]);
+    assert_eq!(w.data().unwrap(), [123, 0]);
     assert_eq!(w.fact, None);
 }

@@ -116,3 +116,10 @@ parity within the matrix; BWF/BW64 application-profile certification, complete
 metadata semantics and representative performance remain outside its scope.
 Physical large-file and working-set evidence is recorded separately in
 [LARGE_FILES.md](LARGE_FILES.md).
+
+After native wavl/slnt support and the explicit Option-based contiguous accessors,
+`validation/wavl-pcm-regression.{json,build.log}` repeats the full 460-fixture
+matrix. All 2748 descriptor/decode/range checks, 920 ordinary typed writer cases
+and 24 four-reference core gates still pass, with the same reference exact counts.
+The corpus hash matches the existing `pcm-canonical.corpus.zip`; no duplicate
+archive is needed. WAVL.md records the separate segmented fixtures and writers.

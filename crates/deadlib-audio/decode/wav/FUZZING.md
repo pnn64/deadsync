@@ -158,3 +158,25 @@ archive/report sidecar. All report source inputs remained unchanged during runs.
 The ASan peak of 261 MiB includes instrumentation and runtime overhead, and does
 not measure normal codec RSS. ADPCM.md records independent sample truth and the
 four-reference comparison; all 60 tests and Clippy pass.
+
+Native wavl/slnt adds 96 independently packed seeds (318 total), a seventeenth
+reported family, segment/count/metadata boundaries and parity between incremental
+and known-length wavl writers. Native range comparisons now read physical frames
+through the view instead of assuming a contiguous byte slice. Forward comparison
+uses a bounded decoded prefix and final validation, so huge virtual silence in a
+small mutated input cannot cause unbounded PCM expansion in the harness.
+
+`validation/wavl-mutation-{x64,i686}.*` records one million checked mutations per
+architecture. Both pass, including over 191000 successful wavl-family entries in
+each run. `wavl-asan.*` records 100000 fresh executions in 150.87 seconds, 1902
+added units and no failure artifact. The complete 1413-file generated corpus is
+preserved in `wavl-asan-corpus.zip` with verified hashes. Its 260 MiB ASan peak
+includes instrumentation/runtime overhead and is not normal codec RSS.
+
+The earlier two-million-run and three-bit-IMA corpus archives are verified and
+combined by content hash: all 2507 unique inputs replay successfully with the
+new properties. `wavl-prior-corpus-provenance.json` records both archive hashes;
+`wavl-prior-replay.*` records every replayed input hash and result. All listed
+source inputs remained unchanged during these campaigns. The full 69-test suite,
+Clippy, the 248-case wavl oracle, 460-case flat native regression and 204-case
+earlier ADPCM range regression also pass. WAVL.md records exact API/format scope.

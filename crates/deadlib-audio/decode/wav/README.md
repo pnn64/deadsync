@@ -7,12 +7,20 @@ Cargo workspace member. License follows the repository (GPL-3.0).
 `Wave::parse(&bytes)` validates a complete form while borrowing every payload.
 `wave.chunks()` exposes unknown chunks and original padding without copying;
 `wave.as_bytes()` retains the exact form. Bytes after the RIFF boundary are excluded.
+Native LIST/wavl audio also supports multiple data chunks and slnt held-frame
+silence. `wave.wavl_chunks()` exposes those children; `wave.pcm()` reads across
+them without materializing the whole sequence. See [WAVL.md](WAVL.md) for exact
+silence, metadata, fact and seeking behavior. Keep the Wave binding alive while
+using a Pcm view, which can borrow its segment index.
 `wave.pcm()` provides interleaved U8/I16/I24/I32/F32/F64 access. Native typed slices
 are available when byte order and alignment permit. Caller-buffer reads work for
 unaligned or swapped input and return whole frames, counted in interleaved samples.
 Integer values keep their container scale (valid bits are left justified); U8 to
 i32 explicitly removes the 128 bias. Float reads preserve bit patterns including
 NaN payloads, signed zero, and subnormals. No implicit float normalization occurs.
+`Wave::data()`/`data_offset()`, reader `data_chunk()` and `Pcm::as_bytes()` return
+Some only for contiguous data; segmented audio returns None. `Pcm::read_frames`
+copies raw whole frames, and `Pcm::samples()` returns the logical count as u128.
 
 `Reader<R: Read + Seek>` scans chunk headers, retains format and metadata offsets,
 and seeks over audio. `seek_frame` addresses native PCM/float frames exactly with
@@ -36,6 +44,11 @@ all bits. Typed writes require their native format; `write_integers` explicitly
 packs integer containers after checking range. Failed writes poison the writer.
 Dropping a writer does not finalize a file. Sinks are used from their current
 position and are not truncated; callers replacing longer files must truncate them.
+
+`WavlWriter` emits native data/slnt/ancillary child chunks incrementally, with
+seekable finalization or declared byte/frame lengths on a Write-only sink.
+It splits long silence counts without allocating PCM. See WAVL.md for count
+accounting, size limits and RF64/BW64 LIST mechanics.
 
 `Adpcm` provides independent Microsoft/IMA block decoding into i16 caller buffers.
 `AdpcmData` adds fact-trimmed borrowed audio and exact range access using reusable

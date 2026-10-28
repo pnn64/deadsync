@@ -22,6 +22,7 @@ pub struct Stream<R> {
     data_seen: bool,
     chunks_left: usize,
     failed: bool,
+    list: Option<(u64, bool)>,
 }
 impl<R: Read> Stream<R> {
     pub fn new(inner: R) -> Result<Self, Error> {
@@ -57,6 +58,7 @@ impl<R: Read> Stream<R> {
             data_seen: false,
             chunks_left: limits.chunks,
             failed: false,
+            list: None,
         };
         if container.is_64() {
             if s.chunks_left == 0 {
@@ -163,8 +165,41 @@ impl<R: Read> Stream<R> {
     }
     /// Validate and consume everything through the form boundary.
     pub fn finish(mut self) -> Result<R, Error> {
-        while self.next_chunk()?.is_some() {}
+        loop {
+            while self.next_chunk()?.is_some() {}
+            if self.list.is_none() {
+                break;
+            }
+            self.leave_list_payload()?;
+        }
         Ok(self.inner)
+    }
+    // Audio readers have already consumed the four-byte LIST type. Nested
+    // headers use their own 32-bit lengths, bounded by the enclosing payload;
+    // RF64 ds64 replacements continue to describe top-level chunks.
+    pub(crate) fn enter_list_payload(&mut self, chunk: ChunkInfo) -> Result<(), Error> {
+        self.check()?;
+        if self.list.is_some()
+            || chunk.id != *b"LIST"
+            || chunk.size < 4
+            || self.pos != chunk.offset + 4
+            || self.remaining != chunk.size - 4
+        {
+            return Err(Error::Invalid("LIST entry position"));
+        }
+        self.list = Some((chunk.offset + chunk.size, self.pad));
+        self.remaining = 0;
+        self.pad = false;
+        Ok(())
+    }
+    pub(crate) fn leave_list_payload(&mut self) -> Result<(), Error> {
+        let (end, pad) = self.list.ok_or(Error::Invalid("not in LIST"))?;
+        if self.pos != end || self.remaining != 0 || self.pad {
+            return Err(Error::Invalid("incomplete LIST"));
+        }
+        self.list = None;
+        self.pad = pad;
+        Ok(())
     }
     fn check(&self) -> Result<(), Error> {
         if self.failed {
@@ -191,10 +226,11 @@ impl<R: Read> Stream<R> {
         Ok(())
     }
     fn header(&mut self) -> Result<Option<ChunkInfo>, Error> {
-        if self.pos == self.end {
+        let boundary = self.list.map_or(self.end, |v| v.0);
+        if self.pos == boundary {
             return Ok(None);
         }
-        if self.end - self.pos < 8 {
+        if boundary - self.pos < 8 {
             return Err(Error::Truncated);
         }
         if self.chunks_left == 0 {
@@ -206,7 +242,7 @@ impl<R: Read> Stream<R> {
         self.pos += 8;
         let id: [u8; 4] = h[..4].try_into().unwrap();
         let n = self.container.endian().u32(&h[4..]);
-        let size = if n == u32::MAX && !self.ds64.is_empty() {
+        let size = if n == u32::MAX && !self.ds64.is_empty() && self.list.is_none() {
             let d = self.ds64().unwrap();
             if id == *b"data" && !self.data_seen {
                 d.data_size
@@ -226,7 +262,7 @@ impl<R: Read> Stream<R> {
         } else {
             u64::from(n)
         };
-        if id == *b"ds64" {
+        if id == *b"ds64" && self.list.is_none() {
             return Err(Error::Invalid("unexpected ds64"));
         }
         let end = self
@@ -234,10 +270,10 @@ impl<R: Read> Stream<R> {
             .checked_add(size)
             .and_then(|n| n.checked_add(size & 1))
             .ok_or(Error::Invalid("chunk size overflow"))?;
-        if end > self.end {
+        if end > boundary {
             return Err(Error::Truncated);
         }
-        if id == *b"data" {
+        if id == *b"data" && self.list.is_none() {
             self.data_seen = true;
         }
         self.remaining = size;

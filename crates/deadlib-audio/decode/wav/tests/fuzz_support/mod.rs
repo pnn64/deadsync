@@ -1,9 +1,9 @@
 //! Shared property checks for deterministic mutation tests and libFuzzer.
 //! Input and codec scratch are capped here, independently of production limits.
 use deadlib_audio_decode_wav::{
-    Adpcm, AdpcmData, AdpcmForwardReader, AdpcmKind, AdpcmReader, AdpcmSpec, Container, Endian,
-    Format, ForwardReader, Limits, Pcm, RawChunk, Reader, SampleFormat, Spec, Stream, Wave,
-    WriteOptions, Writer,
+    Adpcm, AdpcmData, AdpcmForwardReader, AdpcmKind, AdpcmReader, AdpcmSpec, Container, DataLength,
+    Endian, Format, ForwardReader, Limits, Pcm, RawChunk, Reader, SampleFormat, Spec, Stream, Wave,
+    WavlWriter, WriteOptions, Writer,
     metadata::{self, Metadata},
 };
 use std::io::{self, Cursor, Read, Seek, SeekFrom};
@@ -14,7 +14,7 @@ const LIMITS: Limits = Limits {
     size_table_entries: 16,
     format_bytes: 4096,
 };
-pub const PATHS: [&str; 16] = [
+pub const PATHS: [&str; 17] = [
     "container",
     "pcm",
     "adpcm_file",
@@ -31,6 +31,7 @@ pub const PATHS: [&str; 16] = [
     "native_encoded",
     "raw_metadata",
     "forward",
+    "wavl",
 ];
 
 /// Returns a bit for each successfully entered family, not a code-coverage count.
@@ -112,12 +113,19 @@ fn container(data: &[u8]) -> u64 {
         wave.ds64.map(|d| d.sample_count),
         reader.ds64_sample_count()
     );
-    assert_eq!(wave.data_offset(), reader.data_chunk().offset);
-    assert_eq!(wave.data().len() as u64, reader.data_chunk().size);
+    assert_eq!(wave.audio_chunk().offset, reader.audio_chunk().offset);
+    assert_eq!(
+        wave.audio_chunk().data.len() as u64,
+        reader.audio_chunk().size
+    );
+    assert_eq!(wave.data().is_some(), reader.data_chunk().is_some());
     let mut paths = 1;
+    if wave.data().is_none() {
+        paths |= 1 << 16;
+    }
     if wave.chunks().unwrap().any(|c| {
         let c = c.unwrap();
-        c.id == *b"fmt " && c.offset < wave.data_offset()
+        c.id == *b"fmt " && c.offset < wave.audio_chunk().offset
     }) {
         let mut forward = ForwardReader::with_limits(ShortReads::new(data), LIMITS).unwrap();
         if let Ok(pcm) = wave.pcm() {
@@ -126,17 +134,22 @@ fn container(data: &[u8]) -> u64 {
             if align <= out.len() {
                 let mut start = 0;
                 loop {
+                    if start >= 8192 {
+                        break;
+                    }
                     let n = forward.read_frames(&mut out).unwrap();
                     if n == 0 {
                         break;
                     }
+                    let mut expected = [0; 1027];
                     assert_eq!(
-                        pcm.frame_range(start, n as u64).unwrap().as_bytes(),
-                        &out[..n * align]
+                        pcm.read_frames(start, &mut expected[..n * align]).unwrap(),
+                        n
                     );
+                    assert_eq!(&expected[..n * align], &out[..n * align]);
                     start += n as u64;
                 }
-                assert_eq!(start, pcm.frames());
+                assert!(start == pcm.frames() || start >= 8192);
             }
             forward.finish().unwrap();
             paths |= 1 << 15;
@@ -265,7 +278,9 @@ fn pcm_ranges(pcm: Pcm<'_>, reader: &mut Reader<ShortReads<'_>>) {
         assert_eq!(range.is_ok(), actual.is_ok(), "native range acceptance");
         if let (Ok(view), Ok(frames)) = (range, actual) {
             assert_eq!(view.frames() as usize, frames);
-            assert_eq!(view.as_bytes(), &raw[..frames * align]);
+            let mut expected = [0; 1031];
+            assert_eq!(view.read_frames(0, &mut expected).unwrap(), frames);
+            assert_eq!(&expected[..frames * align], &raw[..frames * align]);
         }
         let mut integers = [0i32; 257];
         let mut file_integers = [0i32; 257];
@@ -592,7 +607,7 @@ fn encode(data: &[u8]) -> u64 {
     writer.write_frames(&payload[split..]).unwrap();
     let bytes = writer.finish().unwrap().into_inner();
     let wave = Wave::parse(&bytes).unwrap();
-    assert_eq!(wave.data(), payload);
+    assert_eq!(wave.data().unwrap(), payload);
     assert_eq!(wave.format.valid_bits, spec.valid_bits);
     let mut known = Writer::with_frames(Vec::new(), spec, options, &[], frames as u64).unwrap();
     known.write_frames(&payload[..split]).unwrap();
@@ -606,6 +621,28 @@ fn encode(data: &[u8]) -> u64 {
     assert_eq!(parsed.data(), wave.data());
     assert_eq!(parsed.fact, wave.fact);
     let mut paths = (1 << 13) | container(&bytes);
+    let leading_silence = u64::from(data[9] % 8);
+    let ancillary = &data[10..data.len().min(21)];
+    let child_size = |n: usize| 8 + n as u64 + (n & 1) as u64;
+    let length = DataLength {
+        bytes: 4
+            + 36
+            + child_size(split)
+            + child_size(payload.len() - split)
+            + child_size(ancillary.len()),
+        frames: frames as u64 + leading_silence + 5,
+    };
+    let mut indexed = WavlWriter::new(Cursor::new(Vec::new()), spec, options, &[]).unwrap();
+    let mut known = WavlWriter::with_lengths(Vec::new(), spec, options, &[], length).unwrap();
+    write_wavl(&mut known, leading_silence, payload, split, ancillary);
+    write_wavl(&mut indexed, leading_silence, payload, split, ancillary);
+    let indexed = indexed.finish().unwrap().into_inner();
+    let known = known.finish_stream().unwrap();
+    let a = Wave::parse(&indexed).unwrap();
+    let b = Wave::parse(&known).unwrap();
+    assert_eq!(a.audio_chunk().data, b.audio_chunk().data);
+    assert_eq!(a.fact, b.fact);
+    paths |= container(&indexed);
     // Independently generated block parameters expose both encoder geometry checks and sample packing.
     let block_spec = AdpcmSpec {
         kind: match data[3] % 3 {
@@ -646,7 +683,7 @@ fn encode(data: &[u8]) -> u64 {
                 known.write_i16(&source[..n]).unwrap();
                 let bytes = known.finish_stream().unwrap();
                 let parsed = Wave::parse(&bytes).unwrap();
-                assert_eq!(parsed.data(), &encoded[..len]);
+                assert_eq!(parsed.data().unwrap(), &encoded[..len]);
                 assert_eq!(parsed.fact, Some((n / usize::from(channels)) as u64));
                 assert_eq!(
                     codec.decode_block(&encoded[..len], &mut decoded).unwrap(),
@@ -657,4 +694,24 @@ fn encode(data: &[u8]) -> u64 {
         }
     }
     paths
+}
+
+fn write_wavl<W: std::io::Write>(
+    writer: &mut WavlWriter<W>,
+    leading: u64,
+    payload: &[u8],
+    split: usize,
+    ancillary: &[u8],
+) {
+    writer.write_silence(leading).unwrap();
+    writer.write_frames(&payload[..split]).unwrap();
+    writer
+        .write_chunk(RawChunk {
+            id: *b"JUNK",
+            data: ancillary,
+        })
+        .unwrap();
+    writer.write_silence(5).unwrap();
+    writer.write_frames(&payload[split..]).unwrap();
+    writer.write_silence(0).unwrap();
 }

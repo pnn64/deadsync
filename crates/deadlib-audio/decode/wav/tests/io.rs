@@ -74,7 +74,12 @@ fn native_integer_roundtrip_all_containers_and_packing() {
             assert_eq!(r.read_frames(&mut raw).unwrap(), 1);
             assert_eq!(
                 &raw[..raw.len() - 1],
-                wave.pcm().unwrap().frame_range(2, 1).unwrap().as_bytes()
+                wave.pcm()
+                    .unwrap()
+                    .frame_range(2, 1)
+                    .unwrap()
+                    .as_bytes()
+                    .unwrap()
             );
             assert_eq!(raw[raw.len() - 1], 0);
             let c = *r.chunks().iter().find(|c| c.id == *b"zzzz").unwrap();

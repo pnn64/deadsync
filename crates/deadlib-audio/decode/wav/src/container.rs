@@ -1,4 +1,4 @@
-use crate::{Endian, Error, Format, Limits, Pcm, reserve};
+use crate::{ChunkInfo, Endian, Error, Format, Limits, Pcm, reserve, timeline::Timeline};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Container {
@@ -166,8 +166,8 @@ pub struct Wave<'a> {
     pub format: Format<'a>,
     pub ds64: Option<Ds64<'a>>,
     pub fact: Option<u64>,
-    data: &'a [u8],
-    data_offset: u64,
+    data: ChunkInfo,
+    timeline: Option<Timeline>,
     bytes: &'a [u8],
     limits: Limits,
 }
@@ -222,8 +222,11 @@ impl<'a> Wave<'a> {
         let mut format = None;
         let mut data = None;
         let mut fact = None;
+        let mut timeline = None;
+        let mut left = limits.chunks;
         for c in Chunks::new(bytes, e, ds64, limits)? {
             let c = c?;
+            left = left.checked_sub(1).ok_or(Error::Limit("chunk count"))?;
             match &c.id {
                 b"fmt " => {
                     if format.is_some() {
@@ -238,6 +241,37 @@ impl<'a> Wave<'a> {
                     if data.is_some() {
                         return Err(Error::Unsupported("multiple data chunks"));
                     }
+                    data = Some(c);
+                }
+                b"LIST" if c.data.starts_with(b"wavl") => {
+                    if data.is_some() {
+                        return Err(Error::Invalid("multiple WAVE data sections"));
+                    }
+                    let list = crate::metadata::List::parse(c.data, e, limits)?;
+                    let mut index = Timeline::default();
+                    let mut offset = c.offset + 4;
+                    for child in list.entries() {
+                        let child = child?;
+                        left = left.checked_sub(1).ok_or(Error::Limit("chunk count"))?;
+                        let silence = if child.id == *b"slnt" {
+                            if child.data.len() != 4 {
+                                return Err(Error::Invalid("slnt payload size"));
+                            }
+                            u64::from(e.u32(child.data))
+                        } else {
+                            0
+                        };
+                        index.push(
+                            ChunkInfo {
+                                id: child.id,
+                                offset: offset + 8,
+                                size: child.data.len() as u64,
+                            },
+                            silence,
+                        )?;
+                        offset += 8 + child.data.len() as u64 + child.padding.len() as u64;
+                    }
+                    timeline = Some(index);
                     data = Some(c);
                 }
                 b"fact" => {
@@ -262,7 +296,9 @@ impl<'a> Wave<'a> {
         }
         let format = format.ok_or(Error::Invalid("missing format chunk"))?;
         let data = data.ok_or(Error::Invalid("missing data chunk"))?;
-        if matches!(
+        if let Some(index) = &mut timeline {
+            index.initialize(format, fact)?;
+        } else if matches!(
             format.encoding,
             crate::Encoding::Pcm | crate::Encoding::Float
         ) && data.data.len() % usize::from(format.block_align) != 0
@@ -274,8 +310,12 @@ impl<'a> Wave<'a> {
             format,
             ds64,
             fact,
-            data: data.data,
-            data_offset: data.offset,
+            data: ChunkInfo {
+                id: data.id,
+                offset: data.offset,
+                size: data.data.len() as u64,
+            },
+            timeline,
             bytes,
             limits,
         })
@@ -283,17 +323,40 @@ impl<'a> Wave<'a> {
     pub fn chunks(&self) -> Result<Chunks<'a>, Error> {
         Chunks::new(self.bytes, self.format.endian, self.ds64, self.limits)
     }
-    pub fn data(&self) -> &'a [u8] {
-        self.data
+    /// A single contiguous data payload; wavl audio has no such byte slice.
+    pub fn data(&self) -> Option<&'a [u8]> {
+        self.timeline.is_none().then(|| self.audio_chunk().data)
     }
-    pub fn data_offset(&self) -> u64 {
-        self.data_offset
+    pub fn data_offset(&self) -> Option<u64> {
+        self.timeline.is_none().then_some(self.data.offset)
+    }
+    /// The physical data or LIST/wavl chunk, with exact original padding.
+    pub fn audio_chunk(&self) -> Chunk<'a> {
+        self.chunk(self.data)
+    }
+    pub fn wavl_chunks(&self) -> Option<impl Iterator<Item = Chunk<'a>> + '_> {
+        self.timeline
+            .as_ref()
+            .map(|t| t.entries.iter().map(|e| self.chunk(e.chunk)))
+    }
+    fn chunk(&self, c: ChunkInfo) -> Chunk<'a> {
+        let start = c.offset as usize;
+        let end = start + c.size as usize;
+        Chunk {
+            id: c.id,
+            offset: c.offset,
+            data: &self.bytes[start..end],
+            padding: &self.bytes[end..end + (c.size & 1) as usize],
+        }
     }
     /// Original form including unknown chunks and their exact padding bytes.
     pub fn as_bytes(&self) -> &'a [u8] {
         self.bytes
     }
-    pub fn pcm(&self) -> Result<Pcm<'a>, Error> {
-        Pcm::new(self.data, self.format)
+    pub fn pcm(&self) -> Result<Pcm<'_>, Error> {
+        match &self.timeline {
+            Some(t) => Pcm::segmented(self.bytes, t, self.format),
+            None => Pcm::new(self.data().unwrap(), self.format),
+        }
     }
 }

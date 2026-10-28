@@ -208,3 +208,23 @@ before/after snapshots and private commit. This is bounded whole-process memory
 evidence for opening and random seeking, not isolated codec RSS, full-stream disk
 throughput or a reference-library memory comparison. Comparative process memory,
 representative sequential I/O and wider-format throughput remain unmeasured.
+
+## Flat PCM regression after wavl support
+
+`validation/wavl-pcm16-regression.{tsv,json}` repeats the unchanged resident 4 MiB
+PCM16 workload after adding segmented audio and the explicit contiguous accessors.
+All sample, encoded-output and direct-pointer checks pass. Median full read is
+0.317 ms, Reader streaming 0.185 ms, and forward streaming 0.183 ms. The same-run
+Hound full read/stream medians are 12.014/12.401 ms. Scoped allocation counts stay
+at zero for borrowed/direct/full-copy operations, two calls/112 bytes for Reader
+streaming and one call/16 bytes for forward streaming. Caller storage, stack and
+process RSS are excluded as before.
+
+Short construction costs have increased: borrowed open is 99.159 ns and direct
+view including open is 141.495 ns, versus 82.596/96.616 ns in the retained
+`pcm16-forward-reader` run. Same-run Hound open is 79.566 ns. These separate runs
+have no affinity/frequency controls, but the increased short-operation time and
+thread-cycle counts warrant profiling the added state and dispatch. No opening
+speed improvement is claimed; this retained result is the baseline for that work.
+Segmented throughput, allocation inventories and comparative memory still need
+their own measurements.

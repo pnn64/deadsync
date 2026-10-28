@@ -161,7 +161,8 @@ fn main() {
         );
     });
     bench("wav/read_caller_i16", 128, samples.len() * 2, || {
-        let p = Wave::parse(black_box(&encoded)).unwrap().pcm().unwrap();
+        let wave = Wave::parse(black_box(&encoded)).unwrap();
+        let p = wave.pcm().unwrap();
         assert_eq!(
             p.read_i16(0, black_box(&mut decoded)).unwrap(),
             samples.len()

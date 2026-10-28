@@ -309,7 +309,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut reader = Reader::new(File::open(path)?)?;
         assert_eq!(reader.container(), container);
         assert_eq!(reader.frames()?, frames);
-        offset = reader.data_chunk().offset;
+        offset = reader.data_chunk().unwrap().offset;
         for frame in positions(frames, offset) {
             reader.seek_frame(frame)?;
             let mut out = [0i32; 1];

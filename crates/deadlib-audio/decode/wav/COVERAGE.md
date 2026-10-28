@@ -15,7 +15,7 @@ extensible GUID dispatch, masks and valid-bit depth. Encoded format tags and
 vendor GUIDs are retained without requiring their decoders. Unknown chunks remain
 borrowed and exact original bytes are available. No whole-audio allocation.
 
-Strict structural errors: duplicate fmt/fact, missing fmt/data, partial PCM frames,
+Strict structural errors: duplicate fmt/fact, missing fmt/audio, partial PCM frames,
 invalid block/byte rates, invalid valid-bit depth, mask count mismatch, truncated
 payloads/padding, missing ds64 table entries. Nonzero pad bytes are accepted and
 retained. Trailing bytes outside the RIFF form are deliberately ignored.
@@ -140,8 +140,19 @@ x64 debug/release and i686 debug, along with Clippy, two million checked mutatio
 Microsoft/4-bit IMA file/range cases retain their decoded hashes. See ADPCM.md
 for reference errors, exact scope and lossy encoder quality limitations.
 
-Remaining work: metadata profile/semantic validation, wavl/slnt and multiple-data
-handling, broader fuzzing and representative comparative performance/RSS coverage
+Native wavl/slnt now works through borrowed, seekable and forward frame APIs and
+incremental/known-length WavlWriter. All 248 independent fixture/layout gates,
+1736 descriptor/read/range checks and 992 writer cases pass. Direct reference
+drivers reject wavl here; all 24 predeclared paired flat RIFF gates agree with
+all four readers. WAVL.md distinguishes that indirect evidence from direct parity.
+Nine tests add native raw truth, NaN/held-frame precision, metadata, malformed
+boundaries, I/O failures, huge virtual silence and >4 GiB physical-offset seeks.
+All 69 tests pass on x64 debug/release and i686 debug, with Clippy, two million
+checked mutations, 100000 fresh ASan executions and 2507 earlier corpus files.
+All 460 ordinary native fixtures and 204 ADPCM file/range regressions also pass.
+
+Remaining work: metadata profile/semantic validation, compressed wavl routing,
+broader fuzzing and representative comparative performance/RSS coverage
 (the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); extensible
 compressed formats. BW64 shares 64-bit container mechanics; ADM profile
 conformance is not yet claimed. These fixture results do not certify every

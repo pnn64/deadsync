@@ -1,6 +1,7 @@
 //! Validation driver: canonical native decode, exact range access, typed encode.
 use deadlib_audio_decode_wav::{
-    ForwardReader, RawChunk, Reader, SampleFormat, Spec, Wave, WriteOptions, Writer,
+    DataLength, Endian, ForwardReader, RawChunk, Reader, SampleFormat, Spec, Wave, WavlWriter,
+    WriteOptions, Writer,
 };
 use std::io::{Cursor, Read, Write};
 struct Input(std::fs::File);
@@ -13,7 +14,7 @@ impl Read for Input {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Vec<_>>();
     if !(3..=6).contains(&args.len()) {
-        return Err("pcm_reference INPUT describe|borrowed|reader|forward|encode|encode-known [START [FRAMES [BUFFER_FRAMES]]]".into());
+        return Err("pcm_reference INPUT describe|borrowed|reader|forward|encode|encode-known|encode-wavl|encode-wavl-known [START [FRAMES [BUFFER_FRAMES]]]".into());
     }
     let bytes = std::fs::read(&args[1])?;
     let wave = Wave::parse(&bytes)?;
@@ -53,75 +54,140 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let chunks = wave
             .chunks()?
             .map(Result::unwrap)
-            .filter(|c| ![*b"fmt ", *b"data", *b"fact", *b"ds64"].contains(&c.id))
+            .filter(|c| {
+                c.offset != wave.audio_chunk().offset
+                    && ![*b"fmt ", *b"data", *b"fact", *b"ds64"].contains(&c.id)
+            })
             .map(|c| RawChunk {
                 id: c.id,
                 data: c.data,
             })
             .collect::<Vec<_>>();
-        let known = args[2] == "encode-known";
-        if !known && args[2] != "encode" {
-            return Err("unknown mode".into());
-        }
-        let mut writer = if known {
-            Writer::with_frames(
-                Cursor::new(Vec::new()),
-                spec,
-                options,
-                &chunks,
-                pcm.frames(),
-            )?
-        } else {
-            Writer::new(Cursor::new(Vec::new()), spec, options, &chunks)?
-        };
-        let mut start = 0;
-        let mut integers = vec![0i32; 13 * channels];
-        let mut floats = vec![0f32; 13 * channels];
-        let mut doubles = vec![0f64; 13 * channels];
-        let mut shorts = vec![0i16; 13 * channels];
-        while start < pcm.frames() {
-            let n = match sample {
-                SampleFormat::F32 => {
-                    let n = pcm.read_f32(start, &mut floats)?;
-                    writer.write_f32(&floats[..n])?;
-                    n
-                }
-                SampleFormat::F64 => {
-                    let n = pcm.read_f64(start, &mut doubles)?;
-                    writer.write_f64(&doubles[..n])?;
-                    n
-                }
-                SampleFormat::I16 => {
-                    let n = pcm.read_i16(start, &mut shorts)?;
-                    writer.write_i16(&shorts[..n])?;
-                    n
-                }
-                _ => {
-                    let n = pcm.read_i32(start, &mut integers)?;
-                    if sample == SampleFormat::I32 {
-                        writer.write_i32(&integers[..n])?;
-                    } else {
-                        writer.write_integers(&integers[..n])?;
-                    }
-                    n
-                }
+        let output = if args[2] == "encode-wavl" || args[2] == "encode-wavl-known" {
+            let children = wave.wavl_chunks().ok_or("input is not wavl")?;
+            let mut writer = if args[2] == "encode-wavl-known" {
+                WavlWriter::with_lengths(
+                    Cursor::new(Vec::new()),
+                    spec,
+                    options,
+                    &chunks,
+                    DataLength {
+                        bytes: wave.audio_chunk().data.len() as u64,
+                        frames: pcm.frames(),
+                    },
+                )?
+            } else {
+                WavlWriter::new(Cursor::new(Vec::new()), spec, options, &chunks)?
             };
-            start += (n / channels) as u64;
-        }
-        let output = if known {
-            writer.finish_stream()?
+            for c in children {
+                match &c.id {
+                    b"data" => writer.write_frames(c.data)?,
+                    b"slnt" => {
+                        let b: [u8; 4] = c.data.try_into()?;
+                        let frames = if format.endian == Endian::Little {
+                            u32::from_le_bytes(b)
+                        } else {
+                            u32::from_be_bytes(b)
+                        };
+                        writer.write_silence(u64::from(frames))?;
+                    }
+                    _ => writer.write_chunk(RawChunk {
+                        id: c.id,
+                        data: c.data,
+                    })?,
+                }
+            }
+            if args[2] == "encode-wavl-known" {
+                writer.finish_stream()?
+            } else {
+                writer.finish()?
+            }
+            .into_inner()
         } else {
-            writer.finish()?
-        }
-        .into_inner();
+            let known = args[2] == "encode-known";
+            if !known && args[2] != "encode" {
+                return Err("unknown mode".into());
+            }
+            let mut writer = if known {
+                Writer::with_frames(
+                    Cursor::new(Vec::new()),
+                    spec,
+                    options,
+                    &chunks,
+                    pcm.frames(),
+                )?
+            } else {
+                Writer::new(Cursor::new(Vec::new()), spec, options, &chunks)?
+            };
+            let mut start = 0;
+            let mut integers = vec![0i32; 13 * channels];
+            let mut floats = vec![0f32; 13 * channels];
+            let mut doubles = vec![0f64; 13 * channels];
+            let mut shorts = vec![0i16; 13 * channels];
+            while start < pcm.frames() {
+                let n = match sample {
+                    SampleFormat::F32 => {
+                        let n = pcm.read_f32(start, &mut floats)?;
+                        writer.write_f32(&floats[..n])?;
+                        n
+                    }
+                    SampleFormat::F64 => {
+                        let n = pcm.read_f64(start, &mut doubles)?;
+                        writer.write_f64(&doubles[..n])?;
+                        n
+                    }
+                    SampleFormat::I16 => {
+                        let n = pcm.read_i16(start, &mut shorts)?;
+                        writer.write_i16(&shorts[..n])?;
+                        n
+                    }
+                    _ => {
+                        let n = pcm.read_i32(start, &mut integers)?;
+                        if sample == SampleFormat::I32 {
+                            writer.write_i32(&integers[..n])?;
+                        } else {
+                            writer.write_integers(&integers[..n])?;
+                        }
+                        n
+                    }
+                };
+                start += (n / channels) as u64;
+            }
+            if known {
+                writer.finish_stream()?
+            } else {
+                writer.finish()?
+            }
+            .into_inner()
+        };
         let encoded = Wave::parse(&output)?;
-        assert_eq!(encoded.data(), wave.data());
+        let output_pcm = encoded.pcm()?;
+        assert_eq!(output_pcm.frames(), pcm.frames());
+        let align = usize::from(format.block_align);
+        let mut a = vec![0; 17 * align];
+        let mut b = vec![0; a.len()];
+        let mut position = 0;
+        while position < pcm.frames() {
+            let n = pcm.read_frames(position, &mut a)?;
+            assert_eq!(output_pcm.read_frames(position, &mut b)?, n);
+            assert_eq!(&a[..n * align], &b[..n * align]);
+            position += n as u64;
+        }
+        if let (Some(source), Some(target)) = (wave.wavl_chunks(), encoded.wavl_chunks()) {
+            assert_eq!(
+                source.map(|c| (c.id, c.data)).collect::<Vec<_>>(),
+                target.map(|c| (c.id, c.data)).collect::<Vec<_>>()
+            );
+        }
         assert_eq!(encoded.format.valid_bits, format.valid_bits);
         assert_eq!(encoded.format.channel_mask, format.channel_mask);
         let retained = encoded
             .chunks()?
             .map(Result::unwrap)
-            .filter(|c| ![*b"fmt ", *b"data", *b"fact", *b"ds64"].contains(&c.id))
+            .filter(|c| {
+                c.offset != encoded.audio_chunk().offset
+                    && ![*b"fmt ", *b"data", *b"fact", *b"ds64"].contains(&c.id)
+            })
             .map(|c| (c.id, c.data))
             .collect::<Vec<_>>();
         assert_eq!(
@@ -150,10 +216,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let mut forward = if args[2] == "forward" {
         let mut r = ForwardReader::new(Input(std::fs::File::open(&args[1])?))?;
-        let mut skip = start * u64::from(format.block_align);
-        let mut scratch = [0; 4096];
+        let mut skip = start;
+        let align = usize::from(format.block_align);
+        let mut scratch = vec![0; 4096usize.max(align)];
         while skip != 0 {
-            let n = r.read_data(&mut scratch[..skip.min(4096) as usize])?;
+            let capacity = skip.min((scratch.len() / align) as u64) as usize * align;
+            let n = r.read_frames(&mut scratch[..capacity])?;
             if n == 0 {
                 return Err("early skip EOF".into());
             }

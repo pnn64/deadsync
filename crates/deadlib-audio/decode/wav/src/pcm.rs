@@ -1,4 +1,4 @@
-use crate::{Endian, Error, Format, SampleFormat};
+use crate::{Endian, Error, Format, SampleFormat, native_io::NativeIo, timeline::Timeline};
 
 /// Borrowed interleaved PCM. All integer methods retain the container's scale;
 /// valid bits remain left justified. Floating methods preserve native bits.
@@ -7,6 +7,9 @@ pub struct Pcm<'a> {
     bytes: &'a [u8],
     format: Format<'a>,
     sample: SampleFormat,
+    timeline: Option<&'a Timeline>,
+    start: u64,
+    frames: u64,
 }
 impl<'a> Pcm<'a> {
     pub fn new(bytes: &'a [u8], format: Format<'a>) -> Result<Self, Error> {
@@ -20,10 +23,33 @@ impl<'a> Pcm<'a> {
             bytes,
             format,
             sample,
+            timeline: None,
+            start: 0,
+            frames: (bytes.len() / usize::from(format.block_align)) as u64,
         })
     }
-    pub fn as_bytes(self) -> &'a [u8] {
-        self.bytes
+    pub(crate) fn segmented(
+        bytes: &'a [u8],
+        timeline: &'a Timeline,
+        format: Format<'a>,
+    ) -> Result<Self, Error> {
+        let format = Format::parse(format.raw, format.endian)?;
+        let sample = format.sample_format()?;
+        if timeline.align != Some(format.block_align) {
+            return Err(Error::Invalid("changed wavl format alignment"));
+        }
+        Ok(Self {
+            bytes,
+            format,
+            sample,
+            timeline: Some(timeline),
+            start: 0,
+            frames: timeline.frames,
+        })
+    }
+    /// Contiguous sample bytes. Segmented wavl views return None.
+    pub fn as_bytes(self) -> Option<&'a [u8]> {
+        self.timeline.is_none().then_some(self.bytes)
     }
     pub fn format(self) -> Format<'a> {
         self.format
@@ -32,10 +58,11 @@ impl<'a> Pcm<'a> {
         self.sample
     }
     pub fn frames(self) -> u64 {
-        (self.bytes.len() / usize::from(self.format.block_align)) as u64
+        self.frames
     }
-    pub fn samples(self) -> usize {
-        self.bytes.len() / usize::from(self.sample.bits() / 8)
+    /// Exact logical interleaved sample count, including large virtual silence.
+    pub fn samples(self) -> u128 {
+        u128::from(self.frames) * u128::from(self.format.channels)
     }
     pub fn frame_range(self, start: u64, frames: u64) -> Result<Self, Error> {
         let end = start
@@ -45,16 +72,67 @@ impl<'a> Pcm<'a> {
             return Err(Error::Invalid("frame range"));
         }
         let align = usize::from(self.format.block_align);
+        if self.timeline.is_some() {
+            return Ok(Self {
+                start: self.start + start,
+                frames,
+                ..self
+            });
+        }
         Ok(Self {
             bytes: &self.bytes[start as usize * align..end as usize * align],
+            frames,
             ..self
         })
+    }
+    /// Copy whole native frames, expanding slnt into the caller's storage only.
+    pub fn read_frames(self, start: u64, out: &mut [u8]) -> Result<usize, Error> {
+        if start > self.frames {
+            return Err(Error::Invalid("frame position"));
+        }
+        let align = usize::from(self.format.block_align);
+        let frames = (self.frames - start).min((out.len() / align) as u64) as usize;
+        let Some(index) = self.timeline else {
+            let offset = start as usize * align;
+            out[..frames * align].copy_from_slice(&self.bytes[offset..offset + frames * align]);
+            return Ok(frames);
+        };
+        let mut position = self.start + start;
+        let mut done = 0;
+        while done < frames {
+            let entry = index
+                .at(position)
+                .ok_or(Error::Invalid("wavl frame index"))?;
+            let skip = position - entry.start;
+            let n = (entry.frames - skip).min((frames - done) as u64) as usize;
+            let dst = &mut out[done * align..(done + n) * align];
+            if entry.chunk.id == *b"data" {
+                let offset = entry.chunk.offset as usize + skip as usize * align;
+                dst.copy_from_slice(&self.bytes[offset..offset + dst.len()]);
+            } else if entry.hold == 0 {
+                dst.fill(if self.sample == SampleFormat::U8 {
+                    128
+                } else {
+                    0
+                });
+            } else {
+                let offset = entry.hold as usize;
+                crate::timeline::repeat(dst, &self.bytes[offset..offset + align]);
+            }
+            done += n;
+            position += n as u64;
+        }
+        Ok(frames)
     }
     /// Integer values in their native container scale. U8 becomes signed around zero.
     /// This is an explicit conversion for U8/I16/I24; I32 remains exact.
     pub fn read_i32(self, start_frame: u64, out: &mut [i32]) -> Result<usize, Error> {
         if self.sample.is_float() {
             return Err(Error::Unsupported("float to integer conversion"));
+        }
+        if self.timeline.is_some() {
+            return NativeIo::new(self.format)?
+                .read_integers(out, |b| self.read_frames(start_frame, b));
         }
         let (src, count) = self.window(start_frame, out.len())?;
         let out = &mut out[..count];
@@ -100,6 +178,9 @@ impl<'a> Pcm<'a> {
         Ok(count)
     }
     pub fn read_i16(self, start_frame: u64, out: &mut [i16]) -> Result<usize, Error> {
+        if self.timeline.is_some() {
+            return NativeIo::new(self.format)?.read_i16(out, |b| self.read_frames(start_frame, b));
+        }
         if self.sample != SampleFormat::I16 {
             return Err(Error::Unsupported("native sample type is not i16"));
         }
@@ -115,6 +196,9 @@ impl<'a> Pcm<'a> {
     }
     /// Only accepts native F32; does not normalize integers or narrow F64.
     pub fn read_f32(self, start_frame: u64, out: &mut [f32]) -> Result<usize, Error> {
+        if self.timeline.is_some() {
+            return NativeIo::new(self.format)?.read_f32(out, |b| self.read_frames(start_frame, b));
+        }
         if self.sample != SampleFormat::F32 {
             return Err(Error::Unsupported("native sample type is not f32"));
         }
@@ -129,6 +213,9 @@ impl<'a> Pcm<'a> {
         Ok(n)
     }
     pub fn read_f64(self, start_frame: u64, out: &mut [f64]) -> Result<usize, Error> {
+        if self.timeline.is_some() {
+            return NativeIo::new(self.format)?.read_f64(out, |b| self.read_frames(start_frame, b));
+        }
         if self.sample != SampleFormat::F64 {
             return Err(Error::Unsupported("native sample type is not f64"));
         }
@@ -153,7 +240,7 @@ impl<'a> Pcm<'a> {
         Ok((&self.bytes[offset..offset + len], count))
     }
     pub fn as_u8(self) -> Option<&'a [u8]> {
-        (self.sample == SampleFormat::U8).then_some(self.bytes)
+        (self.sample == SampleFormat::U8 && self.timeline.is_none()).then_some(self.bytes)
     }
     pub fn as_i16(self) -> Option<&'a [i16]> {
         self.cast(SampleFormat::I16)
@@ -168,7 +255,8 @@ impl<'a> Pcm<'a> {
         self.cast(SampleFormat::F64)
     }
     fn cast<T>(self, sample: SampleFormat) -> Option<&'a [T]> {
-        if self.sample != sample
+        if self.timeline.is_some()
+            || self.sample != sample
             || !self.format.endian.native()
             || self.bytes.as_ptr().align_offset(core::mem::align_of::<T>()) != 0
         {

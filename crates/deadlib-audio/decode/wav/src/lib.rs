@@ -16,6 +16,8 @@ mod native_io;
 pub mod pcm;
 pub mod reader;
 pub mod stream;
+mod timeline;
+pub mod wavl_encode;
 
 pub use adpcm::{Adpcm, AdpcmData};
 pub use adpcm_encode::{AdpcmKind, AdpcmSpec, AdpcmWriter};
@@ -29,6 +31,7 @@ pub use mux::{DataLength, Muxer};
 pub use pcm::Pcm;
 pub use reader::Reader;
 pub use stream::{ChunkInfo, Stream};
+pub use wavl_encode::WavlWriter;
 
 #[derive(Debug)]
 pub enum Error {

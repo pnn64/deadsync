@@ -13,19 +13,23 @@ def corpus():
     def ck(tag, data, e='<', size=None):
         return tag+struct.pack(e+'I',len(data) if size is None else size)+data+b'\xa5'*(len(data)&1)
 
-    def form(kind, fmt, audio, channels, frames, metadata=b'', trailing=False, fact=False):
+    def form(kind, fmt, audio, channels, frames, metadata=b'', trailing=False, fact=False, wavl=False):
         e = '>' if kind==b'RIFX' else '<'
         large = kind in (b'RF64',b'BW64')
+        data = ck(b'data',audio,e,0xffffffff if large else None)
+        if wavl:
+            align=len(audio)//frames
+            sequence=b'wavl'+ck(b'slnt',struct.pack(e+'I',3),e)+ck(b'data',audio,e)+ck(b'JUNK',b'odd',e)+ck(b'slnt',struct.pack(e+'I',5),e)+ck(b'data',b'',e)+ck(b'data',audio[:align],e)
+            data=ck(b'LIST',sequence,e);frames+=9
         chunks = ck(b'fmt ',fmt,e)+metadata
         if fact:
-            chunks += ck(b'fact',struct.pack(e+'I',frames),e)
-        data = ck(b'data',audio,e,0xffffffff if large else None)
+            chunks += ck(b'fact',struct.pack(e+'I',min(frames,0xffffffff)),e)
         body = (data+chunks if trailing else chunks+data)+ck(b'zzzz',b'odd',e)
         if large:
             # Exercise repeated IDs and consumption of distinct ds64 table rows.
             body += ck(b'XTRA',b'a',size=0xffffffff)+ck(b'XTRA',b'bc',size=0xffffffff)
             table = b'XTRA'+struct.pack('<Q',1)+b'XTRA'+struct.pack('<Q',2)
-            ds = ck(b'ds64',struct.pack('<QQQI',4+8+28+len(table)+len(body),len(audio),frames,2)+table)
+            ds = ck(b'ds64',struct.pack('<QQQI',4+8+28+len(table)+len(body),0 if wavl else len(audio),frames,2)+table)
             return kind+b'\xff'*4+b'WAVE'+ds+body
         return kind+struct.pack(e+'I',4+len(body))+b'WAVE'+body
 
@@ -48,6 +52,7 @@ def corpus():
                 name=f'{kind.decode()}-{tag}-{bits}-{channels}'
                 info=ck(b'LIST',b'INFO'+ck(b'INAM',b'caf\xe9\0',e),e)
                 result[name]=b'\0'+form(kind,fmt,audio,channels,7,info,trailing=channels%2==1,fact=tag==3)
+                result[name+'-wavl']=b'\0'+form(kind,fmt,audio,channels,7,info,fact=True,wavl=True)
 
     coef=[(256,0),(512,-256),(0,0),(192,64),(240,0),(460,-208),(392,-232)]
     for e in ('<','>'):

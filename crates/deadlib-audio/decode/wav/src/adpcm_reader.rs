@@ -28,7 +28,13 @@ impl<R: Read + Seek> AdpcmReader<R> {
             .fact()
             .or(reader.ds64_sample_count())
             .ok_or(Error::Invalid("ADPCM requires fact sample count"))?;
-        codec.validate_frame_count(reader.data_chunk().size, total_frames)?;
+        codec.validate_frame_count(
+            reader
+                .data_chunk()
+                .ok_or(Error::Unsupported("segmented ADPCM data"))?
+                .size,
+            total_frames,
+        )?;
         let channels = codec.channels();
         let block_frames = codec.frames_per_block() as u64;
         let mut encoded = Vec::new();
@@ -76,7 +82,7 @@ impl<R: Read + Seek> AdpcmReader<R> {
         let offset = block
             .checked_mul(self.encoded.len() as u64)
             .ok_or(Error::Invalid("encoded seek overflow"))?
-            .min(self.reader.data_chunk().size);
+            .min(self.reader.data_chunk().unwrap().size);
         self.failed = true;
         self.reader.seek_encoded(offset)?;
         self.position = frame;

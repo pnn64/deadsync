@@ -108,14 +108,17 @@ fn streaming_block_splits_are_deterministic_and_fact_trims_last_block() {
                     let wave = Wave::parse(&b).unwrap();
                     let view = AdpcmData::new(&wave).unwrap();
                     assert_eq!(view.frames(), length as u64);
-                    assert_eq!(wave.data().len(), length.div_ceil(frames) * block as usize);
+                    assert_eq!(
+                        wave.data().unwrap().len(),
+                        length.div_ceil(frames) * block as usize
+                    );
                     let mut expected = Vec::new();
                     let mut encoded = vec![0; block as usize];
                     for batch in input.chunks(frames * channels as usize) {
                         codec.encode_block(batch, &mut encoded).unwrap();
                         expected.extend(&encoded);
                     }
-                    assert_eq!(wave.data(), expected);
+                    assert_eq!(wave.data().unwrap(), expected);
                     let mut w =
                         AdpcmWriter::new(Cursor::new(Vec::new()), spec, options, &[]).unwrap();
                     w.write_i16(&input).unwrap();

@@ -24,7 +24,11 @@ impl Spec {
             channel_mask: 0,
         }
     }
-    fn header(self, e: Endian, force_extensible: bool) -> Result<([u8; 40], usize), Error> {
+    pub(crate) fn header(
+        self,
+        e: Endian,
+        force_extensible: bool,
+    ) -> Result<([u8; 40], usize), Error> {
         let bits = self.sample_format.bits();
         let align = self
             .channels
