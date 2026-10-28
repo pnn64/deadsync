@@ -1,4 +1,4 @@
-use deadlib_image_jpeg::{ColorSpace, Error, Limits, Process, Upsampling, decode_coefficients};
+use deadlib_image_jpeg::{Error, Limits, Process, Upsampling, decode_coefficients};
 
 fn word(data: &[u8], pos: &mut usize) -> usize {
     let value = u32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap()) as usize;
@@ -76,20 +76,16 @@ fn pinned_libjpeg_turbo_coefficients_and_idct_planes() {
             }
         }
         assert_eq!(pos, expected.len());
-        if planes.color_space == ColorSpace::Cmyk {
-            assert!(planes.to_image(Upsampling::Nearest).is_err());
-        } else {
-            planes
-                .to_image(Upsampling::Nearest)
-                .unwrap()
-                .validate()
-                .unwrap();
-            planes
-                .to_image(Upsampling::Linear)
-                .unwrap()
-                .validate()
-                .unwrap();
-        }
+        planes
+            .to_image(Upsampling::Nearest)
+            .unwrap()
+            .validate()
+            .unwrap();
+        planes
+            .to_image(Upsampling::Linear)
+            .unwrap()
+            .validate()
+            .unwrap();
         assert_eq!(image.consumed, input.len());
         if path
             .file_name()

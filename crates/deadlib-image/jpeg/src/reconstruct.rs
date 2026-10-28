@@ -12,6 +12,27 @@ pub enum ColorSpace {
     Unknown,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CmykPolarity {
+    #[default]
+    Conventional,
+    AdobeInverted,
+}
+
+/// Full-resolution encoded CMYK values. Precision stays native (including
+/// 12-bit samples); polarity describes whether components encode ink or its
+/// complement. This is suitable for a caller's ICC color-management system.
+#[derive(Clone, Debug)]
+pub struct CmykImage {
+    pub width: u16,
+    pub height: u16,
+    pub precision: u8,
+    pub polarity: CmykPolarity,
+    pub samples: Vec<u16>,
+    limits: Limits,
+    memory_bytes: usize,
+}
+
 #[derive(Clone, Debug)]
 pub struct ComponentPlane {
     pub spec: ComponentSpec,
@@ -27,13 +48,14 @@ pub struct PlanarImage {
     pub height: u16,
     pub precision: u8,
     pub color_space: ColorSpace,
+    pub cmyk_polarity: CmykPolarity,
     pub components: Vec<ComponentPlane>,
     limits: Limits,
     memory_bytes: usize,
 }
 
-/// How component samples are expanded to the full image grid. Linear uses the
-/// centered chroma sample positions from JFIF 1.02, including fractional ratios.
+/// How component samples are expanded to the full image grid. Both policies use
+/// JFIF's centered sample positions, including fractional sampling ratios.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum Upsampling {
     Nearest,
@@ -73,6 +95,7 @@ impl CoefficientImage<'_> {
     }
 
     pub fn reconstruct(&self) -> Result<PlanarImage> {
+        self.validate_grid()?;
         let sample_bytes = self
             .components
             .iter()
@@ -126,27 +149,95 @@ impl CoefficientImage<'_> {
             height: self.frame.height,
             precision: self.frame.precision,
             color_space: self.color_space(),
+            cmyk_polarity: self.cmyk_polarity(),
             components: planes,
             limits: self.limits,
             memory_bytes,
         })
     }
+
+    pub fn cmyk_polarity(&self) -> CmykPolarity {
+        if self.components.len() == 4
+            && self
+                .metadata
+                .iter()
+                .filter(|s| s.preceding_scans == 0)
+                .any(|s| {
+                    s.adobe()
+                        .ok()
+                        .flatten()
+                        .is_some_and(|a| a.transform == 0 || a.transform == 2)
+                })
+        {
+            CmykPolarity::AdobeInverted
+        } else {
+            CmykPolarity::Conventional
+        }
+    }
+
+    fn validate_grid(&self) -> Result<()> {
+        let f = &self.frame;
+        if f.width == 0
+            || f.height == 0
+            || !matches!(f.precision, 8 | 12)
+            || self.components.is_empty()
+            || self.components.len() != f.components.len()
+        {
+            return Err(Error::Invalid("reconstruction frame"));
+        }
+        if self.components.iter().any(|c| {
+            !(1..=4).contains(&c.spec.horizontal_sampling)
+                || !(1..=4).contains(&c.spec.vertical_sampling)
+        }) {
+            return Err(Error::Invalid("reconstruction sampling factors"));
+        }
+        let max_h = self
+            .components
+            .iter()
+            .map(|c| c.spec.horizontal_sampling as usize)
+            .max()
+            .unwrap();
+        let max_v = self
+            .components
+            .iter()
+            .map(|c| c.spec.vertical_sampling as usize)
+            .max()
+            .unwrap();
+        for (i, c) in self.components.iter().enumerate() {
+            if c.spec != f.components[i]
+                || c.width
+                    != (f.width as usize * c.spec.horizontal_sampling as usize).div_ceil(max_h)
+                || c.height
+                    != (f.height as usize * c.spec.vertical_sampling as usize).div_ceil(max_v)
+                || c.blocks_wide < c.width.div_ceil(8)
+                || c.blocks_high < c.height.div_ceil(8)
+                || c.blocks_wide.checked_mul(c.blocks_high) != Some(c.blocks.len())
+                || c.quantization.contains(&0)
+            {
+                return Err(Error::Invalid("reconstruction coefficient grid"));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl PlanarImage {
-    /// Convert grayscale or RGB-family planes to the shared image model.
-    /// 12-bit samples are explicitly scaled to 16 bits. CMYK/YCCK stay native
-    /// until a color-management policy is supplied; ICC profiles are not applied.
+    /// Convert to shared gray/RGB storage. CMYK uses an uncalibrated subtractive
+    /// approximation with explicit ink polarity; use `to_cmyk` and the original
+    /// ICC profile for color-managed conversion. 12-bit output scales to 16 bits.
     pub fn to_image(&self, upsampling: Upsampling) -> Result<Image> {
         let color_type = match self.color_space {
             ColorSpace::Grayscale => ColorType::Grayscale,
-            ColorSpace::Rgb | ColorSpace::YCbCr => ColorType::Rgb,
+            ColorSpace::Rgb | ColorSpace::YCbCr | ColorSpace::Cmyk | ColorSpace::Ycck => {
+                ColorType::Rgb
+            }
             _ => {
                 return Err(Error::Unsupported(
-                    "shared conversion of CMYK/YCCK or unknown color space",
+                    "shared conversion of unknown color space",
                 ));
             }
         };
+        let (max_h, max_v) = self.validate_layout()?;
         let channels = color_type.channels();
         let count = (self.width as usize)
             .checked_mul(self.height as usize)
@@ -174,34 +265,26 @@ impl PlanarImage {
                 .map_err(|_| Error::Allocation)?;
         }
         let max = (1i32 << self.precision) - 1;
-        let center = 1i32 << (self.precision - 1);
-        let max_h = self
-            .components
-            .iter()
-            .map(|c| c.spec.horizontal_sampling as usize)
-            .max()
-            .ok_or(Error::Invalid("empty planes"))?;
-        let max_v = self
-            .components
-            .iter()
-            .map(|c| c.spec.vertical_sampling as usize)
-            .max()
-            .unwrap();
         for y in 0..self.height as usize {
             for x in 0..self.width as usize {
-                let mut values = [0i32; 3];
+                let mut values = [0i32; 4];
                 for (c, v) in self.components.iter().zip(&mut values) {
                     *v = sample(c, x, y, max_h, max_v, upsampling);
                 }
                 if self.color_space == ColorSpace::YCbCr {
-                    let [l, cb, cr] = values;
-                    let cb = cb - center;
-                    let cr = cr - center;
-                    values = [
-                        l + ((91881 * cr + 32768) >> 16),
-                        l - ((22554 * cb + 46802 * cr + 32768) >> 16),
-                        l + ((116130 * cb + 32768) >> 16),
-                    ];
+                    let rgb = ycbcr_to_rgb(values[..3].try_into().unwrap(), self.precision);
+                    values[..3].copy_from_slice(&rgb);
+                } else if matches!(self.color_space, ColorSpace::Cmyk | ColorSpace::Ycck) {
+                    let cmyk = if self.color_space == ColorSpace::Ycck {
+                        ycck_to_cmyk(values, self.precision)
+                    } else {
+                        values
+                    };
+                    values[..3].copy_from_slice(&cmyk_to_rgb(
+                        cmyk,
+                        self.cmyk_polarity,
+                        self.precision,
+                    ));
                 }
                 for &v in &values[..channels] {
                     let v = v.clamp(0, max) as u32;
@@ -225,6 +308,208 @@ impl PlanarImage {
             },
         })
     }
+
+    pub fn to_cmyk(&self, upsampling: Upsampling) -> Result<CmykImage> {
+        if !matches!(self.color_space, ColorSpace::Cmyk | ColorSpace::Ycck) {
+            return Err(Error::Unsupported("CMYK output of non-CMYK image"));
+        }
+        let (max_h, max_v) = self.validate_layout()?;
+        let count = (self.width as usize)
+            .checked_mul(self.height as usize)
+            .and_then(|n| n.checked_mul(4))
+            .ok_or(Error::LimitExceeded("CMYK sample storage"))?;
+        let memory_bytes = count
+            .checked_mul(2)
+            .and_then(|n| self.memory_bytes.checked_add(n))
+            .ok_or(Error::LimitExceeded("CMYK sample storage"))?;
+        if memory_bytes > self.limits.max_memory_bytes {
+            return Err(Error::LimitExceeded("CMYK sample storage"));
+        }
+        let mut samples = Vec::new();
+        samples
+            .try_reserve_exact(count)
+            .map_err(|_| Error::Allocation)?;
+        for y in 0..self.height as usize {
+            for x in 0..self.width as usize {
+                let mut values = [0i32; 4];
+                for (c, v) in self.components.iter().zip(&mut values) {
+                    *v = sample(c, x, y, max_h, max_v, upsampling);
+                }
+                if self.color_space == ColorSpace::Ycck {
+                    values = ycck_to_cmyk(values, self.precision);
+                }
+                samples.extend(values.map(|v| v as u16));
+            }
+        }
+        Ok(CmykImage {
+            width: self.width,
+            height: self.height,
+            precision: self.precision,
+            polarity: self.cmyk_polarity,
+            samples,
+            limits: self.limits,
+            memory_bytes,
+        })
+    }
+
+    fn validate_layout(&self) -> Result<(usize, usize)> {
+        let count = match self.color_space {
+            ColorSpace::Grayscale => 1,
+            ColorSpace::Rgb | ColorSpace::YCbCr => 3,
+            ColorSpace::Cmyk | ColorSpace::Ycck => 4,
+            _ => return Err(Error::Unsupported("unknown planar color space")),
+        };
+        if self.width == 0
+            || self.height == 0
+            || !matches!(self.precision, 8 | 12)
+            || self.components.len() != count
+            || (self.color_space == ColorSpace::Ycck
+                && self.cmyk_polarity != CmykPolarity::AdobeInverted)
+        {
+            return Err(Error::Invalid(
+                "planar output dimensions, precision or components",
+            ));
+        }
+        if self.components.iter().any(|c| {
+            !(1..=4).contains(&c.spec.horizontal_sampling)
+                || !(1..=4).contains(&c.spec.vertical_sampling)
+        }) {
+            return Err(Error::Invalid("planar output sampling factors"));
+        }
+        let max_h = self
+            .components
+            .iter()
+            .map(|c| c.spec.horizontal_sampling as usize)
+            .max()
+            .unwrap();
+        let max_v = self
+            .components
+            .iter()
+            .map(|c| c.spec.vertical_sampling as usize)
+            .max()
+            .unwrap();
+        let max = (1u16 << self.precision) - 1;
+        for c in &self.components {
+            if c.width
+                != (self.width as usize * c.spec.horizontal_sampling as usize).div_ceil(max_h)
+                || c.height
+                    != (self.height as usize * c.spec.vertical_sampling as usize).div_ceil(max_v)
+                || c.width.checked_mul(c.height) != Some(c.samples.len())
+                || c.samples.iter().any(|&v| v > max)
+            {
+                return Err(Error::Invalid("planar output sample layout or range"));
+            }
+        }
+        Ok((max_h, max_v))
+    }
+}
+
+impl CmykImage {
+    pub fn convert_polarity(&mut self, polarity: CmykPolarity) -> Result<()> {
+        let (_, max) = self.validate()?;
+        if polarity != self.polarity {
+            for v in &mut self.samples {
+                *v = max - *v;
+            }
+            self.polarity = polarity;
+        }
+        Ok(())
+    }
+    /// Uncalibrated subtractive approximation. CMYK/ICC users can consume the
+    /// original samples and profile instead of this RGB convenience output.
+    pub fn to_image(&self) -> Result<Image> {
+        let (pixels, max) = self.validate()?;
+        let count = pixels
+            .checked_mul(3)
+            .ok_or(Error::LimitExceeded("CMYK RGB output"))?;
+        let bytes = count
+            .checked_mul(if self.precision == 8 { 1 } else { 2 })
+            .ok_or(Error::LimitExceeded("CMYK RGB output"))?;
+        if self
+            .memory_bytes
+            .checked_add(bytes)
+            .is_none_or(|n| n > self.limits.max_memory_bytes)
+        {
+            return Err(Error::LimitExceeded("CMYK RGB output"));
+        }
+        let mut u8_samples = Vec::new();
+        let mut u16_samples = Vec::new();
+        if self.precision == 8 {
+            u8_samples
+                .try_reserve_exact(count)
+                .map_err(|_| Error::Allocation)?;
+        } else {
+            u16_samples
+                .try_reserve_exact(count)
+                .map_err(|_| Error::Allocation)?;
+        }
+        for values in self.samples.as_chunks::<4>().0 {
+            for value in cmyk_to_rgb(values.map(i32::from), self.polarity, self.precision) {
+                if self.precision == 8 {
+                    u8_samples.push(value as u8);
+                } else {
+                    u16_samples.push(((value as u32 * 65535 + max as u32 / 2) / max as u32) as u16);
+                }
+            }
+        }
+        Ok(Image {
+            width: self.width as u32,
+            height: self.height as u32,
+            color_type: ColorType::Rgb,
+            bit_depth: if self.precision == 8 { 8 } else { 16 },
+            samples: if self.precision == 8 {
+                Samples::U8(u8_samples)
+            } else {
+                Samples::U16(u16_samples)
+            },
+        })
+    }
+
+    fn validate(&self) -> Result<(usize, u16)> {
+        let pixels = self.width as usize * self.height as usize;
+        if self.width == 0
+            || self.height == 0
+            || !matches!(self.precision, 8 | 12)
+            || pixels.checked_mul(4) != Some(self.samples.len())
+        {
+            return Err(Error::Invalid("CMYK image layout"));
+        }
+        let max = (1u16 << self.precision) - 1;
+        if self.samples.iter().any(|&v| v > max) {
+            return Err(Error::Invalid("CMYK sample range"));
+        }
+        Ok((pixels, max))
+    }
+}
+
+fn ycbcr_to_rgb(values: [i32; 3], precision: u8) -> [i32; 3] {
+    let [y, cb, cr] = values;
+    let center = 1i32 << (precision - 1);
+    let max = (1i32 << precision) - 1;
+    let (cb, cr) = (cb - center, cr - center);
+    [
+        y + ((91881 * cr + 32768) >> 16),
+        y + ((-22554 * cb - 46802 * cr + 32768) >> 16),
+        y + ((116130 * cb + 32768) >> 16),
+    ]
+    .map(|v| v.clamp(0, max))
+}
+
+fn ycck_to_cmyk(values: [i32; 4], precision: u8) -> [i32; 4] {
+    let max = (1i32 << precision) - 1;
+    let rgb = ycbcr_to_rgb(values[..3].try_into().unwrap(), precision);
+    [max - rgb[0], max - rgb[1], max - rgb[2], values[3]]
+}
+fn cmyk_to_rgb(values: [i32; 4], polarity: CmykPolarity, precision: u8) -> [i32; 3] {
+    let max = (1i32 << precision) - 1;
+    let inverse = values.map(|v| {
+        if polarity == CmykPolarity::AdobeInverted {
+            v
+        } else {
+            max - v
+        }
+    });
+    [0, 1, 2].map(|i| (inverse[i] * inverse[3] + max / 2) / max)
 }
 
 fn sample(
@@ -245,17 +530,99 @@ fn sample(
             + sx.clamp(0, c.width as i64 - 1) as usize] as i64
     };
     match method {
-        Upsampling::Nearest => get((x * h / max_h) as i64, (y * v / max_v) as i64) as i32,
+        Upsampling::Nearest => get(
+            ((2 * x + 1) * h / (2 * max_h)) as i64,
+            ((2 * y + 1) * v / (2 * max_v)) as i64,
+        ) as i32,
         Upsampling::Linear => {
-            let sx = (((2 * x + 1) * h * 256) / (2 * max_h)) as i64 - 128;
-            let sy = (((2 * y + 1) * v * 256) / (2 * max_v)) as i64 - 128;
-            let ix = sx.div_euclid(256);
-            let fx = sx.rem_euclid(256);
-            let iy = sy.div_euclid(256);
-            let fy = sy.rem_euclid(256);
-            let top = get(ix, iy) * (256 - fx) + get(ix + 1, iy) * fx;
-            let bottom = get(ix, iy + 1) * (256 - fx) + get(ix + 1, iy + 1) * fx;
-            ((top * (256 - fy) + bottom * fy + 32768) >> 16) as i32
+            let sx = ((2 * x + 1) * h) as i64 - max_h as i64;
+            let sy = ((2 * y + 1) * v) as i64 - max_v as i64;
+            let dx = (2 * max_h) as i64;
+            let dy = (2 * max_v) as i64;
+            let ix = sx.div_euclid(dx);
+            let fx = sx.rem_euclid(dx);
+            let iy = sy.div_euclid(dy);
+            let fy = sy.rem_euclid(dy);
+            let top = get(ix, iy) * (dx - fx) + get(ix + 1, iy) * fx;
+            let bottom = get(ix, iy + 1) * (dx - fx) + get(ix + 1, iy + 1) * fx;
+            ((top * (dy - fy) + bottom * fy + dx * dy / 2) / (dx * dy)) as i32
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn subtractive_extrema_and_polarity_conversion() {
+        for precision in [8, 12] {
+            let max = (1i32 << precision) - 1;
+            assert_eq!(
+                cmyk_to_rgb([0, 0, 0, 0], CmykPolarity::Conventional, precision),
+                [max; 3]
+            );
+            assert_eq!(
+                cmyk_to_rgb([0, 0, 0, max], CmykPolarity::Conventional, precision),
+                [0; 3]
+            );
+            assert_eq!(
+                cmyk_to_rgb([max, 0, 0, 0], CmykPolarity::Conventional, precision),
+                [0, max, max]
+            );
+            assert_eq!(
+                ycck_to_cmyk(
+                    [0, 1 << (precision - 1), 1 << (precision - 1), max],
+                    precision
+                ),
+                [max; 4]
+            );
+        }
+        let mut image = CmykImage {
+            width: 1,
+            height: 1,
+            precision: 8,
+            polarity: CmykPolarity::Conventional,
+            samples: vec![0, 128, 255, 64],
+            limits: Limits::default(),
+            memory_bytes: 8,
+        };
+        assert_eq!(
+            image.to_image().unwrap().samples,
+            Samples::U8(vec![191, 95, 0])
+        );
+        image.convert_polarity(CmykPolarity::AdobeInverted).unwrap();
+        assert_eq!(image.samples, [255, 127, 0, 191]);
+        assert_eq!(
+            image.to_image().unwrap().samples,
+            Samples::U8(vec![191, 95, 0])
+        );
+        image.convert_polarity(CmykPolarity::Conventional).unwrap();
+        assert_eq!(image.samples, [0, 128, 255, 64]);
+    }
+
+    #[test]
+    fn fractional_siting_retains_twelve_bit_interpolation_precision() {
+        let c = ComponentPlane {
+            spec: ComponentSpec {
+                id: 1,
+                horizontal_sampling: 2,
+                vertical_sampling: 1,
+                quantization_table: 0,
+            },
+            width: 5,
+            height: 1,
+            samples: vec![0, 4095, 0, 4095, 0],
+        };
+        assert_eq!(sample(&c, 2, 0, 3, 1, Upsampling::Linear), 3413); // 4095 * 5/6.
+        assert_eq!(sample(&c, 1, 0, 3, 1, Upsampling::Nearest), 4095);
+        for x in 0..7 {
+            let pos = (x as f64 + 0.5) * 2.0 / 3.0 - 0.5;
+            let left = pos.floor() as i32;
+            let weight = pos - pos.floor();
+            let get = |i: i32| c.samples[i.clamp(0, 4) as usize] as f64;
+            let expected =
+                (get(left) * (1.0 - weight) + get(left + 1) * weight + 1e-9).round() as i32;
+            assert_eq!(sample(&c, x, 0, 3, 1, Upsampling::Linear), expected);
         }
     }
 }

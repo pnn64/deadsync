@@ -30,7 +30,7 @@ int main(int argc,char **argv) {
     FILE *in,*out;
     jvirt_barray_ptr *arrays;
     int ci,k;
-    if(argc!=3) return 2;
+    if(argc!=3 && !(argc==4 && strcmp(argv[3],"fancy")==0)) return 2;
     in=open_jpeg(&c,&e,argv[1]);
     arrays=jpeg_read_coefficients(&c);
     out=output(argv[2],".coef"); fwrite("JCO1",1,4,out);
@@ -101,7 +101,7 @@ int main(int argc,char **argv) {
             }
         }
     }
-    c.dct_method=JDCT_FLOAT;c.do_fancy_upsampling=FALSE;
+    c.dct_method=JDCT_FLOAT;c.do_fancy_upsampling=argc==4?TRUE:FALSE;
     jpeg_start_decompress(&c);
     out=output(argv[2],".color");
     {

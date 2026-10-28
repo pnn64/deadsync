@@ -48,8 +48,10 @@ image.validate()?;
 Coefficient blocks and quantization tables use natural frequency order; padded
 MCU blocks remain available. Each component snapshots its quantizer at scan
 time. Component planes preserve their original integer precision and sampling
-grid. CMYK/YCCK planes retain their encoded values, including Adobe inversion;
-shared RGB conversion for these spaces is still pending. Shared-model output
+grid. CMYK/YCCK planes retain their encoded values. `to_cmyk` exposes native
+CMYK with explicit polarity; `convert_polarity` changes convention in place.
+Shared RGB conversion uses a documented uncalibrated subtractive approximation
+and can write directly without an intermediate CMYK raster. Shared-model output
 scales 12-bit samples to the full 16-bit range. ICC profiles can be borrowed,
 assembled or replaced; their original bytes are exposed for caller color
 management. Metadata bytes are preserved without modification by default.
@@ -83,3 +85,5 @@ broader conformance, libjpeg/mozjpeg parity and performance characterization
 remain open. No throughput claim is made yet.
 See ENCODER-VALIDATION.md for external encoder checks and measured size/quality
 results, including their numerical bounds and limits.
+COLOR-VALIDATION.md describes CMYK/YCCK conversion, exact rational chroma
+siting, profile/polarity policies and the 486-case color reference gate.

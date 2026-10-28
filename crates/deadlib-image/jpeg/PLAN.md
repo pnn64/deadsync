@@ -83,7 +83,7 @@ Verified milestones:
   Clippy and rustdoc with warnings denied pass. After restricting fixed
   Huffman tables to each process/precision's legal symbols, both external
   gates were rerun: 600 rewrites plus 172 pixel encodes still pass exactly.
-- Metadata/profile milestone: borrowed typed JFIF/JFXX/Adobe/Exif views,
+- `03d5583ab`: borrowed typed JFIF/JFXX/Adobe/Exif views,
   bounded TIFF IFD/value and orientation/thumbnail access, ordered zero-copy
   ICC chunks, header inspection, explicit copy budgets, and metadata/ICC
   encoding controls. The independent libjpeg metadata API agrees on all 114
@@ -95,3 +95,15 @@ Verified milestones:
   Final gates: all 37 tests pass in release and isolated debug builds; rustfmt,
   Clippy and rustdoc with warnings denied pass. Source metadata and existing
   PNG/GIF code remain untouched by the new package APIs.
+- Color reconstruction milestone: explicit CMYK polarity/native raster,
+  in-place polarity conversion, YCCK-to-CMYK and direct RGB output, signed green
+  rounding, exact rational interpolation for fractional sampling, and bounded
+  validation of public reconstruction models. The C/independent filter gate
+  passes 486 comparisons across 243 unique files, observed RGB error <=3 at
+  both precisions. Pillow agrees on all 26 comparable tagged 8-bit CMYK/YCCK
+  cases. See COLOR-VALIDATION.md and tests/reports/colors-turbo.json.
+  Encoder source-polarity and CMYK-to-YCCK transforms, streaming, rare modes,
+  full oracle/conformance corpora, fuzzing and all performance work remain open.
+  Final gates: all 43 tests pass in release and isolated debug builds; rustfmt,
+  Clippy and rustdoc with warnings denied pass. The direct RGB memory-budget
+  regression confirms conversion does not require a full CMYK intermediate.

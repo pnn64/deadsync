@@ -31,7 +31,9 @@ pub use pixel_encode::{
     EncodeInput, EncodeOptions, SampleData, Subsampling, encode, encode_samples,
     encode_samples_with_metadata, encode_with_metadata, quantize,
 };
-pub use reconstruct::{ColorSpace, ComponentPlane, PlanarImage, Upsampling};
+pub use reconstruct::{
+    CmykImage, CmykPolarity, ColorSpace, ComponentPlane, PlanarImage, Upsampling,
+};
 
 pub use marker::{Event, MarkerReader};
 pub use model::*;
