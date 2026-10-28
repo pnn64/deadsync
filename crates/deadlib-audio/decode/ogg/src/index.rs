@@ -247,14 +247,11 @@ impl OggIndex {
             length: 0,
             compatibility: CompatibilityStats::default(),
         };
-        let mut partial_starts = Vec::new();
         while let Some(located) = reader.next_page()? {
             let page = located.page;
             let header = page.header();
-            let mut last = None;
             let mut failure = None;
-            let stream_index = demux.push_indexed_page(page, located.offset, |packet| {
-                last = Some(packet.info);
+            let state = demux.push_indexed_page(page, located.offset, |packet| {
                 if failure.is_none() {
                     failure = observe(IndexEvent::Packet { page, packet }).err();
                 }
@@ -267,11 +264,9 @@ impl OggIndex {
             }
             if header.is_bos() {
                 reserve(&mut index.streams, 1)?;
-                reserve(&mut partial_starts, 1)?;
-                partial_starts.push(located.offset);
                 index.streams.push(StreamIndex {
                     serial: header.serial,
-                    chain: last.ok_or(Error::Invalid("BOS without a packet"))?.chain,
+                    chain: demux.chain(),
                     bos_offset: located.offset,
                     eos_offset: 0,
                     end_offset: 0,
@@ -279,36 +274,20 @@ impl OggIndex {
                     pages: 0..0,
                 });
             }
-            let stream = &mut index.streams[stream_index];
-            let first_packet_offset = if header.is_continued() {
-                partial_starts[stream_index]
-            } else {
-                located.offset
-            };
+            let stream = &mut index.streams[state.stream];
             reserve(&mut index.pages, 1)?;
             index.pages.push(IndexedPage {
                 offset: located.offset,
                 length: page.bytes().len() as u32,
                 header,
-                stream: stream_index,
+                stream: state.stream,
                 first_packet: stream.packets,
-                // Demux already numbered every completed packet on this page.
-                completed_packets: last.map_or(0, |last| (last.number - stream.packets + 1) as u16),
-                first_packet_offset,
+                completed_packets: state.completed_packets,
+                first_packet_offset: state.first_packet_offset,
                 granule_floor: 0,
                 landmark: 0,
             });
-            // Carry only an unfinished packet's start. A continued page can
-            // start a new one after completing its incoming packet.
-            if page.lacing().last() == Some(&255) && (!header.is_continued() || last.is_some()) {
-                partial_starts[stream_index] = located.offset;
-            }
-            if let Some(last) = last {
-                stream.packets = last
-                    .number
-                    .checked_add(1)
-                    .ok_or(Error::LimitExceeded("packet count"))?;
-            }
+            stream.packets = state.packets;
             index.length = located
                 .offset
                 .checked_add(page.bytes().len() as u64)

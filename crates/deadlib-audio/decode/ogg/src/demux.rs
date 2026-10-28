@@ -56,6 +56,13 @@ struct Stream {
     granule: u64,
 }
 
+pub(crate) struct PageState {
+    pub stream: usize,
+    pub first_packet_offset: u64,
+    pub packets: u64,
+    pub completed_packets: u16,
+}
+
 /// Physical-stream validator and demultiplexer, strict by default. Named
 /// compatibility exceptions require with_validation. Errors are terminal
 /// until reset. Codec-specific header ordering and time interpretation belong
@@ -131,7 +138,7 @@ impl Demuxer {
         page: Page<'_>,
         offset: u64,
         emit: impl FnMut(Packet<'_>),
-    ) -> Result<usize, Error> {
+    ) -> Result<PageState, Error> {
         if self.failed {
             return Err(Error::Failed);
         }
@@ -146,7 +153,7 @@ impl Demuxer {
         page: Page<'_>,
         offset: u64,
         mut emit: impl FnMut(Packet<'_>),
-    ) -> Result<usize, Error> {
+    ) -> Result<PageState, Error> {
         let header = page.header();
         let complete = page.completed_packets();
         let index = match self.streams.iter().rposition(|s| s.serial == header.serial) {
@@ -223,6 +230,11 @@ impl Demuxer {
             stream.granule = granule;
         }
         // Preflight the entire page before emitting any of its packets.
+        let first_packet_offset = if header.is_continued() {
+            stream.packet_offset
+        } else {
+            offset
+        };
         let mut length = stream.partial.len();
         let mut pending = self.pending - length;
         let body = page.body().len();
@@ -315,6 +327,11 @@ impl Demuxer {
             self.bos_phase = false;
         }
         self.compatibility.add(compatibility)?;
-        Ok(index)
+        Ok(PageState {
+            stream: index,
+            first_packet_offset,
+            packets: stream.packets,
+            completed_packets: complete as u16,
+        })
     }
 }
