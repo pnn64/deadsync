@@ -165,6 +165,10 @@ impl SyncBuffer {
     fn step(&mut self) -> Result<Step, Error> {
         let bytes = &self.data[self.start..];
         self.current = None;
+        // Appends preserve an already recognized header and its declared length.
+        if self.length != 0 && bytes.len() < self.length {
+            return Ok(Step::NeedMore);
+        }
         if bytes.len() < 27 {
             return Ok(Step::NeedMore);
         }
