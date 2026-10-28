@@ -1,7 +1,10 @@
-use deadlib_audio_decode_wav::{Endian, Limits, RawChunk, metadata::*};
+use deadlib_audio_decode_wav::{
+    Container, DataLength, Endian, Limits, RawChunk, WavlMuxer, WriteOptions, metadata::*,
+};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     hint::black_box,
+    io::Cursor,
     sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed},
 };
 static TRACK: AtomicBool = AtomicBool::new(false);
@@ -46,7 +49,7 @@ unsafe impl GlobalAlloc for Heap {
 static ALLOCATOR: Heap = Heap;
 
 #[test]
-fn caller_owned_metadata_views_and_serialization_allocate_no_heap() {
+fn caller_owned_metadata_and_wavl_muxing_allocate_no_heap() {
     let mut out = vec![0u8; 2048];
     TRACK.store(true, Relaxed);
     let result = (|| -> Result<(), deadlib_audio_decode_wav::Error> {
@@ -126,6 +129,42 @@ fn caller_owned_metadata_views_and_serialization_allocate_no_heap() {
         let n = write_markers(&[marker], &mut out)?;
         for p in Markers::parse(&out[..n], Limits::default())?.iter() {
             black_box(p);
+        }
+        for container in [
+            Container::Riff,
+            Container::Rifx,
+            Container::Rf64,
+            Container::Bw64,
+        ] {
+            let format = if container == Container::Rifx {
+                [
+                    0x12, 0x34, 0, 1, 0, 0, 0x1f, 0x40, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+                ]
+            } else {
+                [
+                    0x34, 0x12, 1, 0, 0x40, 0x1f, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                ]
+            };
+            let options = WriteOptions {
+                container,
+                ..WriteOptions::default()
+            };
+            let mut mux =
+                WavlMuxer::new(Cursor::new(black_box(&mut out[..])), &format, options, &[])?;
+            mux.write_data(&[1, 2, 3], 7)?;
+            black_box(mux.finish()?);
+            let mut mux = WavlMuxer::with_lengths(
+                Cursor::new(black_box(&mut out[..])),
+                &format,
+                options,
+                &[],
+                DataLength {
+                    bytes: 16,
+                    frames: 7,
+                },
+            )?;
+            mux.write_data(&[1, 2, 3], 7)?;
+            black_box(mux.finish_stream()?);
         }
         Ok(())
     })();

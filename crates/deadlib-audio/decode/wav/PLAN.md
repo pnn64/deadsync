@@ -158,3 +158,21 @@ now fails explicitly before I/O instead of silently emitting a legacy header.
 Unknown raw descriptors remain available through the independent container.
 Compressed wavl routing, broader extensible variants/profile validation and the
 comparative performance/memory requirements remain unfinished.
+
+Codec-independent segmented output is now implemented as WavlMuxer. It preserves
+raw descriptors and data children, accepts explicit decoded counts and silence,
+supports known-length Write-only output or Write+Seek patching, and enforces
+native alignment, count/size limits and I/O poisoning. Native WavlWriter uses
+the same container implementation. Five tests bring the total to 83, passing
+on x64 debug/release and i686 debug with Clippy. The zero-allocation probe checks
+both public muxer constructors across all containers. All 708 retained native
+gates, 4484 descriptor/read/range checks and 1912 encoded outputs retain their
+expected hashes under the existing BW64 dummy-byte rule. Two million checked
+mutations, 1580 prior corpus inputs and 100000 fresh ASan executions pass.
+
+PERFORMANCE.md retains matching native output benchmarks, exact source snapshots
+and the rejected inlining experiment. The native object size and requested heap
+counts remain unchanged, but the final paired runs show slower construction and
+segmented output. This regression is an explicit optimization target. Generic
+encoded serialization does not complete compressed wavl decoding/seeking/forward
+routing; those paths, broader profiles and comparative performance/RSS remain open.

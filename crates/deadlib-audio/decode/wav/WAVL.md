@@ -85,7 +85,66 @@ BW64 output now zeros the ds64 dummy words. Its wavl compatibility path uses a
 literal 32-bit fact count and rejects larger counts before output; use RF64 for
 larger virtual sequences. See [BW64.md](BW64.md) for the corrected distinction.
 
-## Evidence and limits
+## Codec-independent segmented output
+
+`WavlMuxer::new(sink, format, options, metadata)` accepts a validated raw fmt
+payload and a Write+Seek sink. `with_lengths` provides Write-only output with
+the same LIST byte/frame accounting as WavlWriter. `write_data(bytes, frames)`
+emits one data child; `write_silence` and `write_chunk` handle held frames and
+ancillary children. `frames_written`, `list_bytes_written` and `expected_length`
+make the count contract inspectable. Finish is explicit; dropping or extracting
+the sink does not finalize or check an incomplete declared sequence.
+
+The format payload is written exactly, including odd size and unrecognized
+extension bytes. The muxer borrows it only during construction, retains no format
+copy and performs no codec dispatch. force_extensible does not rewrite a supplied
+raw descriptor. Native PCM/float byte/frame counts are checked against alignment;
+encoded block validity and duration are the producer's responsibility. Per-call
+frame counts contribute to the aggregate fact count; WAV does not store a separate
+decoded count beside each data child. Producers must choose segment boundaries
+and padding that their codec's reader can reconstruct.
+
+The wire layout follows the
+[IBM/Microsoft data-list and mandatory-fact definitions, pages 3-26–3-28](https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Docs/riffmci.pdf).
+Known lengths include the wavl type, every child header/payload/pad and all silent
+frames. Native alignment, declared overfill, u64 arithmetic and BW64 fact limits
+are checked before the offending record is written. Partial I/O poisons the
+writer; counters retain only complete successful records. Individual children
+remain below the existing u32 sentinel limit; RF64/BW64 promote the outer LIST
+through its ds64 table entry and keep primary dataSize zero. BW64 dummy words
+remain zero, with literal fact counts through u32::MAX only.
+
+WavlWriter now handles native packing over this muxer. Its public sample methods
+and serialized bytes remain unchanged; expected_length is also available there.
+The wrapper's private constructor passes a descriptor already validated by
+Spec::header, avoiding a second full parse. Public raw-format constructors always
+validate the supplied descriptor. No production unsafe code or dependency is added.
+
+Five tests bring the full suite to 83, passing on x64 debug/release and i686 debug,
+with denied-warning Clippy (`validation/wavl-mux-checks*`). They independently
+construct RIFF/RIFX/RF64/BW64 bytes for odd opaque descriptors, vendor GUIDs,
+metadata/data pads, embedded forms, split records and both finalization paths.
+Microsoft/3-bit/4-bit IMA and extensible IMA descriptors retain their encoded bytes.
+Tests also check native wrapper equality, u64 fact promotion, a >4 GiB declared
+LIST header, literal BW64 limits, reserved IDs, malformed formats, declared counts
+and partial-write poisoning. The existing allocator probe now checks both public
+muxer constructors with caller storage across all four containers: zero requested
+allocations and bytes.
+
+`wavl-mux-native-replay.json` passes all 708 retained native fixture gates, 4484
+descriptor/read/range checks and 1912 full encoded-output comparisons under the
+previously declared BW64 dummy-byte rule. All 1580 earlier corpus inputs, two
+million checked mutations and 100000 fresh ASan executions pass; FUZZING.md
+records the expanded properties and preserved corpus. This is retained sample
+truth and byte parity, not a new external reader comparison. As documented below,
+the reference drivers do not directly support wavl here.
+
+Generic encoded serialization is implemented; compressed convenience decoding,
+segment-aware cached seeking and forward ADPCM routing remain open. The measured
+native writer slowdown is retained as an outstanding optimization issue in
+PERFORMANCE.md. This milestone does not claim completion of those requirements.
+
+## Native fixture evidence
 
 `validation/wavl-references.{json,build.log,corpus.zip}` records 248 independent
 fixtures: 240 canonical padding profiles and eight explicit nonzero-pad

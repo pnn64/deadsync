@@ -22,3 +22,7 @@ harness = false
 [[bench]]
 name = "metadata"
 harness = false
+
+[[bench]]
+name = "wavl"
+harness = false

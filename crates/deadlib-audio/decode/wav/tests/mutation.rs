@@ -26,5 +26,5 @@ fn malformed_container_mutations_preserve_reader_and_stream_agreement() {
         }
         fuzz_support::exercise(&seed[..pos]);
     }
-    assert_eq!(fuzz_support::PATHS.len(), 17);
+    assert_eq!(fuzz_support::PATHS.len(), 18);
 }

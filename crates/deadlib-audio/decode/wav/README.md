@@ -52,6 +52,9 @@ position and are not truncated; callers replacing longer files must truncate the
 seekable finalization or declared byte/frame lengths on a Write-only sink.
 It splits long silence counts without allocating PCM. See WAVL.md for count
 accounting, size limits and RF64/BW64 LIST mechanics.
+`WavlMuxer` supplies the same container operations for a raw format descriptor
+and preencoded data children. Producers supply decoded frame counts; block
+validation stays with the codec. WavlWriter now uses this common muxer.
 BW64 dummy fields are preserved raw on input and zeroed on output. Its float,
 compressed and wavl paths are compatibility extensions; see [BW64.md](BW64.md)
 for count limits, the RF64 distinction and remaining profile requirements.

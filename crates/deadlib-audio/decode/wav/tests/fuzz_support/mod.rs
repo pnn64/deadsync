@@ -3,7 +3,7 @@
 use deadlib_audio_decode_wav::{
     Adpcm, AdpcmData, AdpcmForwardReader, AdpcmKind, AdpcmReader, AdpcmSpec, Container, DataLength,
     Endian, Error, Format, ForwardReader, Limits, Pcm, RawChunk, Reader, SampleFormat, Spec,
-    Stream, Wave, WavlWriter, WriteOptions, Writer,
+    Stream, Wave, WavlMuxer, WavlWriter, WriteOptions, Writer,
     metadata::{self, Metadata},
 };
 use std::io::{self, Cursor, Read, Seek, SeekFrom};
@@ -14,7 +14,7 @@ const LIMITS: Limits = Limits {
     size_table_entries: 16,
     format_bytes: 4096,
 };
-pub const PATHS: [&str; 17] = [
+pub const PATHS: [&str; 18] = [
     "container",
     "pcm",
     "adpcm_file",
@@ -32,6 +32,7 @@ pub const PATHS: [&str; 17] = [
     "raw_metadata",
     "forward",
     "wavl",
+    "wavl_mux",
 ];
 
 /// Returns a bit for each successfully entered family, not a code-coverage count.
@@ -540,11 +541,12 @@ fn block(data: &[u8]) -> u64 {
     let Ok(f) = Format::parse(&data[3..3 + n], endian) else {
         return 0;
     };
+    let paths = mux_segments(f.raw, f, &data[3 + n..], data[0]);
     let Ok(codec) = Adpcm::from_format(f) else {
-        return 0;
+        return paths;
     };
     if codec.scratch_samples() > 8192 || codec.block_bytes() > 4096 {
-        return 0;
+        return paths;
     }
     let encoded = &data[3 + n..];
     let mut out = [0i16; 8192];
@@ -565,9 +567,87 @@ fn block(data: &[u8]) -> u64 {
             codec.decode_block(&bytes[..n], &mut out).unwrap(),
             codec.frames_per_block()
         );
-        return (1 << 11) | (1 << 12);
+        return paths | (1 << 11) | (1 << 12);
     }
-    1 << 11
+    paths | (1 << 11)
+}
+
+fn mux_segments(format: &[u8], f: Format<'_>, data: &[u8], selector: u8) -> u64 {
+    let container = if f.endian == Endian::Big {
+        Container::Rifx
+    } else {
+        [Container::Riff, Container::Rf64, Container::Bw64][usize::from(selector >> 1) % 3]
+    };
+    let options = WriteOptions {
+        container,
+        auto_rf64: false,
+        force_extensible: selector & 4 != 0,
+    };
+    let native = matches!(
+        f.encoding,
+        deadlib_audio_decode_wav::Encoding::Pcm | deadlib_audio_decode_wav::Encoding::Float
+    );
+    let align = if native {
+        usize::from(f.block_align)
+    } else {
+        1
+    };
+    let data = &data[..data.len() / align * align];
+    let split = (data.len() / align / 2) * align;
+    let first = if native {
+        split as u64 / align as u64
+    } else {
+        u64::from(selector % 17)
+    };
+    let second = if native {
+        (data.len() - split) as u64 / align as u64
+    } else {
+        (data.len() % 31) as u64
+    };
+    let ancillary = &data[..data.len().min(17)];
+    let child = |n: usize| 8 + n as u64 + (n & 1) as u64;
+    let length = DataLength {
+        bytes: 4 + 24 + child(split) + child(data.len() - split) + child(ancillary.len()),
+        frames: first + second + 7,
+    };
+    let mut known = WavlMuxer::with_lengths(Vec::new(), format, options, &[], length).unwrap();
+    let mut patch = WavlMuxer::new(Cursor::new(Vec::new()), format, options, &[]).unwrap();
+    known.write_silence(2).unwrap();
+    known.write_data(&data[..split], first).unwrap();
+    known
+        .write_chunk(RawChunk {
+            id: *b"JUNK",
+            data: ancillary,
+        })
+        .unwrap();
+    known.write_data(&data[split..], second).unwrap();
+    known.write_silence(5).unwrap();
+    patch.write_silence(2).unwrap();
+    patch.write_data(&data[..split], first).unwrap();
+    patch
+        .write_chunk(RawChunk {
+            id: *b"JUNK",
+            data: ancillary,
+        })
+        .unwrap();
+    patch.write_data(&data[split..], second).unwrap();
+    patch.write_silence(5).unwrap();
+    assert!(known.write_data(data, first + second + 1).is_err());
+    let a = known.finish_stream().unwrap();
+    let b = patch.finish().unwrap().into_inner();
+    assert_eq!(a, b);
+    let wave = Wave::with_limits(&a, LIMITS).unwrap();
+    assert_eq!(wave.format.raw, format);
+    assert_eq!(wave.fact, Some(length.frames));
+    assert_eq!(wave.audio_chunk().data.len() as u64, length.bytes);
+    let reader = Reader::with_limits(Cursor::new(&a), LIMITS).unwrap();
+    assert_eq!(reader.fact(), wave.fact);
+    assert_eq!(reader.wavl_chunks().unwrap().count(), 5);
+    ForwardReader::with_limits(ShortReads::new(&a), LIMITS)
+        .unwrap()
+        .finish()
+        .unwrap();
+    1 << 17
 }
 
 fn encode(data: &[u8]) -> u64 {

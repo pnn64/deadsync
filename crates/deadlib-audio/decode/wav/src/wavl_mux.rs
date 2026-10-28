@@ -1,0 +1,449 @@
+//! Codec-independent wavl output with explicit decoded-frame accounting.
+use crate::{
+    Container, DataLength, Encoding, Endian, Error, Format, RawChunk, WriteOptions,
+    mux::{chunk, container_id, put32, validate_chunk, validate_fact_count, write32},
+};
+use std::io::{Seek, SeekFrom, Write};
+
+/// Codec-independent wavl muxer. The producer supplies encoded bytes and decoded
+/// frame counts; silence counts include held frames. Codec-specific block validity
+/// remains the producer's responsibility. Dropping does not finalize the form.
+pub struct WavlMuxer<W> {
+    inner: W,
+    native_align: Option<u16>,
+    options: WriteOptions,
+    base: u64,
+    list_header: u64,
+    fact_offset: u64,
+    bytes: u64,
+    frames: u64,
+    length: Option<DataLength>,
+    failed: bool,
+}
+impl<W: Write + Seek> WavlMuxer<W> {
+    pub fn new(
+        inner: W,
+        format: &[u8],
+        options: WriteOptions,
+        metadata: &[RawChunk<'_>],
+    ) -> Result<Self, Error> {
+        let align = native_alignment(format, options.container.endian())?;
+        Self::new_validated(inner, format, align, options, metadata)
+    }
+    /// Private callers have validated the complete descriptor and its size.
+    pub(crate) fn new_validated(
+        mut inner: W,
+        format: &[u8],
+        native_align: Option<u16>,
+        options: WriteOptions,
+        metadata: &[RawChunk<'_>],
+    ) -> Result<Self, Error> {
+        let reserve = options.container.is_64()
+            || (options.auto_rf64 && options.container == Container::Riff);
+        let header = Header::new(format, native_align, metadata, reserve)?;
+        let base = inner.stream_position()?;
+        let size = header
+            .list_header
+            .checked_add(4)
+            .ok_or(Error::Limit("wavl header size overflow"))?;
+        base.checked_add(size)
+            .and_then(|v| v.checked_add(8))
+            .ok_or(Error::Limit("wavl file offset overflow"))?;
+        if !reserve && large(size, 4, 0) {
+            return Err(Error::Limit("32-bit RIFF size"));
+        }
+        header.write(&mut inner, format, options.container, metadata, None)?;
+        Ok(Self {
+            inner,
+            native_align: header.native_align,
+            options,
+            base,
+            list_header: base + header.list_header,
+            fact_offset: base + header.fact_offset,
+            bytes: 4,
+            frames: 0,
+            length: None,
+            failed: false,
+        })
+    }
+    pub fn finish(mut self) -> Result<W, Error> {
+        if self.length.is_some() {
+            return self.finish_stream();
+        }
+        self.check()?;
+        let end = self.inner.stream_position()?;
+        let size = self.list_header - self.base + self.bytes;
+        if end != self.base + 8 + size {
+            return Err(Error::Invalid("wavl sink position"));
+        }
+        let is64 = self.options.container.is_64() || large(size, self.bytes, self.frames);
+        let container = if is64 && self.options.container != Container::Bw64 {
+            Container::Rf64
+        } else {
+            self.options.container
+        };
+        let e = container.endian();
+        self.inner.seek(SeekFrom::Start(self.base))?;
+        self.inner.write_all(container_id(container))?;
+        write32(
+            &mut self.inner,
+            if is64 { u32::MAX } else { size as u32 },
+            e,
+        )?;
+        if is64 {
+            self.inner.seek(SeekFrom::Start(self.base + 12))?;
+            chunk(
+                &mut self.inner,
+                b"ds64",
+                &ds64(container, size, self.bytes, self.frames),
+                e,
+            )?;
+        }
+        self.inner.seek(SeekFrom::Start(self.fact_offset))?;
+        write32(
+            &mut self.inner,
+            self.frames.min(u64::from(u32::MAX)) as u32,
+            e,
+        )?;
+        self.inner.seek(SeekFrom::Start(self.list_header + 4))?;
+        write32(
+            &mut self.inner,
+            if is64 { u32::MAX } else { self.bytes as u32 },
+            e,
+        )?;
+        self.inner.seek(SeekFrom::Start(end))?;
+        self.inner.flush()?;
+        Ok(self.inner)
+    }
+}
+impl<W: Write> WavlMuxer<W> {
+    /// `length.bytes` is the complete LIST payload: four bytes for `wavl`, plus
+    /// every child header, payload and odd pad. Frames include virtual silence.
+    pub fn with_lengths(
+        inner: W,
+        format: &[u8],
+        options: WriteOptions,
+        metadata: &[RawChunk<'_>],
+        length: DataLength,
+    ) -> Result<Self, Error> {
+        let align = native_alignment(format, options.container.endian())?;
+        Self::with_lengths_validated(inner, format, align, options, metadata, length)
+    }
+    /// Private callers have validated the complete descriptor and its size.
+    pub(crate) fn with_lengths_validated(
+        mut inner: W,
+        format: &[u8],
+        native_align: Option<u16>,
+        mut options: WriteOptions,
+        metadata: &[RawChunk<'_>],
+        length: DataLength,
+    ) -> Result<Self, Error> {
+        validate_fact_count(options.container, length.frames)?;
+        if length.bytes < 4 || !length.bytes.is_multiple_of(2) {
+            return Err(Error::Invalid("wavl declared byte length"));
+        }
+        let mut header = Header::new(format, native_align, metadata, options.container.is_64())?;
+        let mut size = header
+            .list_header
+            .checked_add(length.bytes)
+            .ok_or(Error::Limit("wavl file size overflow"))?;
+        if !options.container.is_64() && large(size, length.bytes, length.frames) {
+            if options.container != Container::Riff || !options.auto_rf64 {
+                return Err(Error::Limit("32-bit RIFF size or sample count"));
+            }
+            options.container = Container::Rf64;
+            header = Header::new(format, native_align, metadata, true)?;
+            size = header
+                .list_header
+                .checked_add(length.bytes)
+                .ok_or(Error::Limit("wavl file size overflow"))?;
+        }
+        size.checked_add(8)
+            .ok_or(Error::Limit("wavl file size overflow"))?;
+        header.write(
+            &mut inner,
+            format,
+            options.container,
+            metadata,
+            Some(length),
+        )?;
+        Ok(Self {
+            inner,
+            native_align: header.native_align,
+            options,
+            base: 0,
+            list_header: header.list_header,
+            fact_offset: header.fact_offset,
+            bytes: 4,
+            frames: 0,
+            length: Some(length),
+            failed: false,
+        })
+    }
+    pub fn finish_stream(mut self) -> Result<W, Error> {
+        self.check()?;
+        if self.length
+            != Some(DataLength {
+                bytes: self.bytes,
+                frames: self.frames,
+            })
+        {
+            return Err(if self.length.is_none() {
+                Error::Unsupported("unknown-length wavl needs seek finalization")
+            } else {
+                Error::Invalid("incomplete declared wavl length")
+            });
+        }
+        self.inner.flush()?;
+        Ok(self.inner)
+    }
+    pub fn expected_length(&self) -> Option<DataLength> {
+        self.length
+    }
+    pub(crate) fn endian(&self) -> Endian {
+        self.options.container.endian()
+    }
+    pub fn frames_written(&self) -> u64 {
+        self.frames
+    }
+    pub fn list_bytes_written(&self) -> u64 {
+        self.bytes
+    }
+    pub fn into_inner(self) -> W {
+        self.inner
+    }
+    /// Write one encoded data child and its decoded frame count. The producer
+    /// validates codec blocks; native byte/frame counts are checked here.
+    pub fn write_data(&mut self, bytes: &[u8], decoded_frames: u64) -> Result<(), Error> {
+        self.data_with(bytes.len() as u64, decoded_frames, |w| {
+            w.write_all(bytes)?;
+            Ok(())
+        })
+    }
+    /// Counts are split into u32-sized slnt records without materializing PCM.
+    /// A zero count deliberately emits a zero-length silence record.
+    pub fn write_silence(&mut self, frames: u64) -> Result<(), Error> {
+        let records = frames.div_ceil(u64::from(u32::MAX)).max(1);
+        let bytes = records
+            .checked_mul(12)
+            .ok_or(Error::Limit("wavl silence size overflow"))?;
+        let e = self.options.container.endian();
+        self.write_with(bytes, frames, |w| {
+            let mut left = frames;
+            for _ in 0..records {
+                let n = left.min(u64::from(u32::MAX)) as u32;
+                let mut b = [0; 4];
+                put32(&mut b, n, e);
+                chunk(w, b"slnt", &b, e)?;
+                left -= u64::from(n);
+            }
+            Ok(())
+        })
+    }
+    /// Preserve an ancillary child payload verbatim. Use the audio methods for
+    /// data/slnt so byte and logical frame accounting cannot diverge.
+    pub fn write_chunk(&mut self, record: RawChunk<'_>) -> Result<(), Error> {
+        if [*b"data", *b"slnt"].contains(&record.id) {
+            return Err(Error::Invalid("reserved wavl child ID"));
+        }
+        validate_chunk(record.data)?;
+        let e = self.options.container.endian();
+        self.write_with(
+            8 + record.data.len() as u64 + (record.data.len() & 1) as u64,
+            0,
+            |w| chunk(w, &record.id, record.data, e),
+        )
+    }
+    pub(crate) fn data_with(
+        &mut self,
+        bytes: u64,
+        frames: u64,
+        payload: impl FnOnce(&mut W) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        if bytes >= u64::from(u32::MAX) {
+            return Err(Error::Limit("wavl child data size"));
+        }
+        if let Some(align) = self.native_align
+            && frames.checked_mul(u64::from(align)) != Some(bytes)
+        {
+            return Err(Error::Invalid("native data/frame count mismatch"));
+        }
+        let e = self.options.container.endian();
+        self.write_with(8 + bytes + (bytes & 1), frames, |w| {
+            w.write_all(b"data")?;
+            write32(w, bytes as u32, e)?;
+            payload(w)?;
+            if bytes & 1 != 0 {
+                w.write_all(&[0])?;
+            }
+            Ok(())
+        })
+    }
+    fn check(&self) -> Result<(), Error> {
+        if self.failed {
+            Err(Error::Invalid("wavl writer unusable after I/O error"))
+        } else {
+            Ok(())
+        }
+    }
+    fn write_with(
+        &mut self,
+        bytes: u64,
+        frames: u64,
+        write: impl FnOnce(&mut W) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        self.check()?;
+        let bytes = self
+            .bytes
+            .checked_add(bytes)
+            .ok_or(Error::Limit("wavl byte count overflow"))?;
+        let frames = self
+            .frames
+            .checked_add(frames)
+            .ok_or(Error::Limit("wavl frame count overflow"))?;
+        validate_fact_count(self.options.container, frames)?;
+        if self
+            .length
+            .is_some_and(|v| bytes > v.bytes || frames > v.frames)
+        {
+            return Err(Error::Invalid("declared wavl length exceeded"));
+        }
+        let size = (self.list_header - self.base)
+            .checked_add(bytes)
+            .ok_or(Error::Limit("wavl file size overflow"))?;
+        self.base
+            .checked_add(8)
+            .and_then(|v| v.checked_add(size))
+            .ok_or(Error::Limit("wavl file offset overflow"))?;
+        if !self.options.container.is_64()
+            && !(self.options.container == Container::Riff && self.options.auto_rf64)
+            && large(size, bytes, frames)
+        {
+            return Err(Error::Limit("32-bit RIFF size or sample count"));
+        }
+        self.failed = true;
+        write(&mut self.inner)?;
+        self.bytes = bytes;
+        self.frames = frames;
+        self.failed = false;
+        Ok(())
+    }
+}
+fn native_alignment(format: &[u8], endian: Endian) -> Result<Option<u16>, Error> {
+    validate_chunk(format)?;
+    let f = Format::parse(format, endian)?;
+    Ok(matches!(f.encoding, Encoding::Pcm | Encoding::Float).then_some(f.block_align))
+}
+fn large(size: u64, list: u64, frames: u64) -> bool {
+    size >= u64::from(u32::MAX) || list >= u64::from(u32::MAX) || frames >= u64::from(u32::MAX)
+}
+fn ds64(container: Container, size: u64, list: u64, frames: u64) -> [u8; 40] {
+    let mut b = [0; 40];
+    b[..8].copy_from_slice(&size.to_le_bytes());
+    if container == Container::Rf64 {
+        b[16..24].copy_from_slice(&frames.to_le_bytes());
+    }
+    b[24..28].copy_from_slice(&1u32.to_le_bytes());
+    b[28..32].copy_from_slice(b"LIST");
+    b[32..].copy_from_slice(&list.to_le_bytes());
+    b
+}
+struct Header {
+    native_align: Option<u16>,
+    reserve: bool,
+    list_header: u64,
+    fact_offset: u64,
+}
+impl Header {
+    fn new(
+        format: &[u8],
+        native_align: Option<u16>,
+        metadata: &[RawChunk<'_>],
+        reserve: bool,
+    ) -> Result<Self, Error> {
+        let mut bytes =
+            12 + if reserve { 48 } else { 0 } + 8 + format.len() as u64 + (format.len() & 1) as u64;
+        let fact_offset = bytes + 8;
+        bytes += 12;
+        for c in metadata {
+            if [
+                *b"fmt ", *b"data", *b"fact", *b"ds64", *b"RIFF", *b"RIFX", *b"RF64", *b"BW64",
+            ]
+            .contains(&c.id)
+                || (c.id == *b"LIST" && c.data.starts_with(b"wavl"))
+            {
+                return Err(Error::Invalid("reserved metadata chunk ID"));
+            }
+            validate_chunk(c.data)?;
+            bytes = bytes
+                .checked_add(8 + c.data.len() as u64 + (c.data.len() & 1) as u64)
+                .ok_or(Error::Limit("metadata size overflow"))?;
+        }
+        Ok(Self {
+            native_align,
+            reserve,
+            list_header: bytes,
+            fact_offset,
+        })
+    }
+    fn write(
+        &self,
+        inner: &mut impl Write,
+        format: &[u8],
+        container: Container,
+        metadata: &[RawChunk<'_>],
+        length: Option<DataLength>,
+    ) -> Result<(), Error> {
+        let e = container.endian();
+        let is64 = container.is_64();
+        inner.write_all(container_id(container))?;
+        write32(
+            inner,
+            if is64 {
+                u32::MAX
+            } else {
+                length.map_or(0, |v| (self.list_header + v.bytes) as u32)
+            },
+            e,
+        )?;
+        inner.write_all(b"WAVE")?;
+        if self.reserve {
+            chunk(
+                inner,
+                if is64 { b"ds64" } else { b"JUNK" },
+                &if is64 {
+                    length.map_or_else(
+                        || ds64(container, 0, 0, 0),
+                        |v| ds64(container, self.list_header + v.bytes, v.bytes, v.frames),
+                    )
+                } else {
+                    [0; 40]
+                },
+                e,
+            )?;
+        }
+        chunk(inner, b"fmt ", format, e)?;
+        let mut fact = [0; 4];
+        put32(
+            &mut fact,
+            length.map_or(0, |v| v.frames.min(u64::from(u32::MAX)) as u32),
+            e,
+        );
+        chunk(inner, b"fact", &fact, e)?;
+        for c in metadata {
+            chunk(inner, &c.id, c.data, e)?;
+        }
+        inner.write_all(b"LIST")?;
+        write32(
+            inner,
+            if is64 {
+                u32::MAX
+            } else {
+                length.map_or(0, |v| v.bytes as u32)
+            },
+            e,
+        )?;
+        inner.write_all(b"wavl")?;
+        Ok(())
+    }
+}

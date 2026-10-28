@@ -100,6 +100,11 @@ compatibility scope and remaining profile validation.
 Its byte count includes the wavl type and every nested header/payload/pad; its
 frame count includes silence. `WavlWriter::new` provides unknown-length seekable
 finalization. See WAVL.md for RF64 LIST tables and individual child-size limits.
+`WavlMuxer::with_lengths` now provides the same sequence operations for a supplied
+raw format and encoded data children. Decoded frame counts include silence;
+codec validation remains with the producer. Its public raw-format constructors
+allocate no internal heap storage with a caller-owned sink. Native WavlWriter
+shares this muxer; compressed convenience decoding remains separate unfinished work.
 
 `Muxer::with_lengths` accepts `DataLength { bytes, frames }`, a raw format
 descriptor, container options and ancillary chunks. It needs only `Write`. It

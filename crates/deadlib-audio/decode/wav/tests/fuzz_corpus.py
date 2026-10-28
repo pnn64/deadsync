@@ -145,6 +145,14 @@ def corpus():
                     prefix=ck(b'ds64',struct.pack('<QQQI',40+len(body),len(encoded),frames-1 if kind==b'RF64' else 0,0)) if large else b''
                     result[name+f'-{trailing}']=b'\0'+kind+struct.pack(e+'I',0xffffffff if large else 4+len(body))+b'WAVE'+prefix+body
 
+    for selector in (0,1,2,4):
+        e='>' if selector&1 else '<'
+        formats=[struct.pack(e+'HHIIHHH',0x1234,3,8000,913,7,0,1)+b'\x81',
+                 struct.pack(e+'HHIIHHHHI',0xfffe,3,8000,913,7,0,25,0,7)+b'\x37'*16+b'odd',
+                 struct.pack(e+'HHIIHH',1,3,8000,48000,6,16)]
+        for n,fmt in enumerate(formats):
+            result[f'wavl-mux-{selector}-{n}']=b'\2'+bytes([selector])+struct.pack('<H',len(fmt))+fmt+bytes(range(128))
+
     metadata=[]
     for e in ('<','>'):
         metadata.extend([

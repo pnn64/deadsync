@@ -244,3 +244,22 @@ All listed campaign inputs remain unchanged. The full 78-test suite, Clippy,
 416 independent fixture/encoder gates, 432 earlier forward outputs and 24 updated
 physical sparse-file probes pass. IMA_EXTENSIBLE.md distinguishes primary-field
 interpretation, direct reader parity, paired legacy evidence and unresolved scope.
+
+Generic segmented output adds a separately reported eighteenth family, wavl_mux,
+and 12 opaque/vendor-GUID/native descriptor seeds (484 total). The block selector
+now also sends any valid bounded raw descriptor through known-length and patched
+muxers, checking complete byte equality, raw fmt preservation, aggregate counts,
+overfill rejection, container/seekable/forward acceptance and child inventory.
+Native data counts derive from alignment; encoded counts remain producer supplied.
+Both byte orders and RIFF/RF64/BW64 flags are exercised without codec dispatch.
+
+`validation/wavl-mux-mutation-{x64,i686}.*` each pass one million checked mutations,
+including over 145000 successful entries into the new family per architecture.
+All 1580 prior corpus inputs pass (`wavl-mux-prior-replay.*`). `wavl-mux-asan.*`
+passes 100000 fresh executions in 131.19 seconds, adds 1901 units and produces no
+failure artifact. Its complete 1581-file corpus is preserved in
+`wavl-mux-asan-corpus.zip` with a verified archive/report sidecar. The 260 MiB
+instrumented peak is not normal codec RSS. All listed inputs remain unchanged.
+The full 83-test suite, Clippy and the 708-case native byte/sample replay pass.
+WAVL.md documents the producer boundary; PERFORMANCE.md retains the native
+output regression and does not claim competitive performance from these checks.

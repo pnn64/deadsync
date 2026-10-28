@@ -277,3 +277,57 @@ replay of established sample truth, not a fresh external-library comparison.
 All 69 integration tests pass in x64 debug/release and i686 debug; denied-warning
 Clippy passes (`compact-checks*`). Two million checked mutations, 2507 earlier
 corpus inputs and 100000 fresh ASan executions also pass; see FUZZING.md.
+
+## Native wavl output after container extraction
+
+`benches/wavl.rs` checks native PCM16 output with caller-owned storage, 512 data
+children for 4 MiB of audio, empty forms, sixteen ancillary chunks and a tiny
+RF64 form with virtual silence above u32. It verifies sample/count truth before
+measurement, reports QueryThreadCycleTime and requested heap counts, and runs
+three warmed trials per row. Short rows use one million or 100000 iterations;
+full resident-audio rows use 128. Input/output buffers, decoded verification,
+stack and process RSS are excluded from scoped heap counts.
+
+`validation/wavl-mux-control{,-repeat}.*` temporarily restores the native writer
+from `1ffaa3190`; the exact bytes are preserved in
+`wavl-mux-baseline-encode.rs.txt`. `wavl-mux-validated{,-repeat}.*` uses the retained
+WavlMuxer wrapper and the same harness. The wrapper passes its descriptor already
+validated by Spec::header to a private constructor; public raw-format entrypoints
+still validate their input. Native object state remains 112 bytes on x64, and
+every measured row requests zero heap allocations/bytes. A separate allocator
+probe checks both public generic muxer constructors in all four containers.
+
+| Median ns/op | Original 1 | Extracted 1 | Original repeat | Extracted repeat |
+| --- | ---: | ---: | ---: | ---: |
+| Open/finalize empty | 123.463 | 128.296 | 119.644 | 126.481 |
+| Known-length empty | 107.762 | 111.161 | 92.749 | 112.802 |
+| Open/finalize with 16 metadata chunks | 335.687 | 351.701 | 300.437 | 352.334 |
+| Known-length with 16 metadata chunks | 315.913 | 342.402 | 288.928 | 335.973 |
+| Segmented 4 MiB PCM16 output | 360085.938 | 371850.000 | 341236.719 | 361685.938 |
+| Known segmented 4 MiB output | 356386.719 | 374156.250 | 331052.344 | 371630.469 |
+| u64 silence/RF64 finalization | 199.851 | 206.347 | 177.224 | 204.287 |
+
+The retained extraction is slower in these paired medians: about 4–6% for empty
+seekable forms, 3–22% for known empty forms and 3–12% for full segmented output.
+Metadata and virtual-silence rows also regress. CPU-cycle rows and all individual
+trials are retained. Runs have no affinity/frequency control or confidence
+intervals, so these do not prove a platform-wide cost; they do identify an
+outstanding native-writer optimization issue. The codec-independent output API
+is retained as required architecture work. No speed improvement or performance
+parity is claimed for this extraction, and competitive broad-format performance
+remains unfinished.
+
+`wavl-mux-initial.*` records the initial version that parsed the native descriptor
+twice; its exact two source files are preserved as
+`wavl-mux-initial-{encode,mux}.rs.txt`. `wavl-mux-inline.*` records an additional
+inlining experiment and its matching source snapshots. That experiment shows
+mixed results, including a large short-row fluctuation, and was reverted rather
+than supporting an improvement claim. All original attempts remain available.
+The final constructors avoid duplicate parsing without those explicit hints.
+
+All 83 integration tests pass in x64 debug/release and i686 debug, with Clippy.
+The 708-case native replay retains 4484 descriptor/read/range hashes and 1912
+complete writer outputs under the established BW64 dummy-byte rule. Two million
+checked mutations, 1580 earlier corpus files and 100000 fresh ASan executions
+also pass. WAVL.md records the raw descriptor/count API and the remaining
+compressed-sequence decoding work; FUZZING.md records corpus and resource limits.

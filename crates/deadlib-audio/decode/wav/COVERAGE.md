@@ -198,6 +198,19 @@ i686 debug with Clippy. Two million checked mutations, 1490 prior corpus inputs,
 checks and 24 physical sparse-file probes pass. IMA_EXTENSIBLE.md records the field interpretation, specific direct
 reader limits and unresolved Microsoft extensible coefficient mapping.
 
+Codec-independent wavl output now accepts raw descriptors and encoded data
+children through WavlMuxer; native WavlWriter shares the same container code.
+Five tests add independent wire-byte truth, opaque GUIDs, odd format/data padding,
+real ADPCM descriptors, native count validation, both output modes, u64 promotion,
+large LIST declarations, literal BW64 limits and partial-I/O poisoning. Both
+public constructors pass a zero-allocation probe with caller-owned storage.
+All 83 tests pass on x64 debug/release and i686 debug, with Clippy, 708 retained
+native fixture gates, 4484 descriptor/read/range checks and 1912 full writer
+comparisons under the existing BW64 rule. Two million checked mutations, 1580
+prior corpus inputs and 100000 fresh ASan executions pass. WAVL.md records the
+raw-format/count contract. PERFORMANCE.md retains measured native-output
+regressions; encoded convenience decoding/seeking/forward routing remains open.
+
 Remaining work: metadata profile/semantic validation, compressed wavl routing,
 broader fuzzing and representative comparative performance/RSS coverage
 (the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); extensible
