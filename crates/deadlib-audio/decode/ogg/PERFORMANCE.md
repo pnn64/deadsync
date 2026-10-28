@@ -1,5 +1,9 @@
 # Container performance
 
+The [2026-10-28 kernel measurements](KERNELS.md) cover fragment traversal,
+packet-writing allocations and masked-header CRC, with isolated CPU-cycle
+comparisons, complete-byte verification and an explicit large-writer CPU tradeoff.
+
 The initial Ogg-only baseline exposes a CRC bottleneck: native CRC reaches about
 341 MiB/s on 4 KiB input versus libogg's 1,558 MiB/s, and native song packet
 demux is about four times slower. This is a valid-input, warm-process API
