@@ -8,6 +8,7 @@ pub mod bits;
 pub mod checksum;
 pub mod decoder;
 pub mod frame;
+pub mod gapless;
 pub mod huffman;
 pub mod indexed;
 pub mod reader;
@@ -21,6 +22,7 @@ pub mod tags;
 
 pub use decoder::{DecodeOptions, DecodedFrame, FrameDecoder, Pcm};
 pub use frame::{ChannelMode, Frame, FrameHeader, FreeFormat, MpegVersion};
+pub use gapless::{GaplessDecoder, GaplessFrame};
 pub use indexed::{
     DECODER_DELAY, FileFrame, FileOptions, FrameIndex, IndexEntry, IndexedDecoder, SampleMode,
     SampleRange,

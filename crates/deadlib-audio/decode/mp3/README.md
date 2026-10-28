@@ -23,6 +23,8 @@ streams, retaining metadata and exact raw byte/sample coordinates. Recovery and
 truncation are explicit policies; [STREAMING.md](STREAMING.md) documents them.
 `IndexedDecoder<R: Read + Seek>` adds raw/gapless sample coordinates, exact
 physical indexing and sample-accurate repeated seeks; see [SEEKING.md](SEEKING.md).
+`GaplessDecoder<R: Read>` provides bounded tagged trimming without seeking;
+see [GAPLESS_STREAMING.md](GAPLESS_STREAMING.md).
 Encoding remains unfinished.
 No complete standards-conformance or performance-completion claim is made.
 See [PLAN.md](PLAN.md) for the full requested scope and verification gates.

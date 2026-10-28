@@ -8,7 +8,7 @@ and coverage instrumentation.
 | Target | Checked invariants |
 | --- | --- |
 | `frames` | ID3/VBR parsers; MSB fields against direct wire-bit indexing, including atomic failed reads; free-format inference; entropy/PCM decoding, finite output and exact paired decode/reset behavior. |
-| `streams` | Exact whole-read versus fragmented-read PCM bits, headers, physical/sample positions, recovery status, errors and termination; stable EOF/terminal errors; raw indexed counts and repeated first/middle/last/EOF seeks against sequential PCM. |
+| `streams` | Exact whole-read versus fragmented-read raw and gapless PCM bits, headers, physical/sample positions, recovery status, errors and termination; stable EOF/terminal errors; raw indexed counts and repeated first/middle/last/EOF seeks; gapless indexed count/ordered PCM signature against complete streaming output. |
 
 Inputs begin with one policy byte, followed by physical frame bytes or file
 bytes. CRC, recovery, truncation and read size vary. Input is capped at 32 KiB

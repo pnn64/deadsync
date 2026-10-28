@@ -19,6 +19,7 @@ impl Read for Chunked<'_> {
 struct Block {
     header: FrameHeader,
     position: u64,
+    raw_position: u64,
     offset: u64,
     status: FrameStatus,
     planes: Vec<Vec<u32>>,
@@ -44,6 +45,7 @@ fn stream(source: impl Read, options: StreamOptions) -> (Vec<Block>, Option<Erro
             Ok(Some(out)) => blocks.push(Block {
                 header: out.header,
                 position: out.position,
+                raw_position: out.position,
                 offset: out.byte_offset,
                 status: out.status,
                 planes: bits(out.pcm),
@@ -59,6 +61,42 @@ fn stream(source: impl Read, options: StreamOptions) -> (Vec<Block>, Option<Erro
         }
     }
     (blocks, None, false)
+}
+fn gapless(source: impl Read, options: StreamOptions) -> (Vec<Block>, Option<Error>, bool) {
+    let mut reader = GaplessDecoder::with_options(source, options);
+    let mut blocks = Vec::new();
+    for _ in 0..128 {
+        match reader.next_frame() {
+            Ok(Some(out)) => blocks.push(Block {
+                header: out.header,
+                position: out.position,
+                raw_position: out.raw_position,
+                offset: out.byte_offset,
+                status: out.status,
+                planes: bits(out.pcm),
+            }),
+            Ok(None) => {
+                assert!(reader.next_frame().unwrap().is_none());
+                return (blocks, None, true);
+            }
+            Err(error) => {
+                assert!(reader.next_frame().is_err());
+                return (blocks, Some(error), false);
+            }
+        }
+    }
+    (blocks, None, false)
+}
+fn signature(header: FrameHeader, planes: &[Vec<u32>], hash: &mut u64, count: &mut u64) {
+    *count += planes[0].len() as u64;
+    for n in 0..planes[0].len() {
+        for plane in planes {
+            *hash = hash.wrapping_mul(0x100000001b3)
+                ^ (u64::from(header.sample_rate()) << 32)
+                ^ u64::from(plane[n])
+                ^ planes.len() as u64;
+        }
+    }
 }
 fuzz_target!(|input: &[u8]| {
     if input.is_empty() || input.len() > 32769 {
@@ -94,6 +132,38 @@ fuzz_target!(|input: &[u8]| {
         a == b,
         "read schedule changed PCM, positions, errors or termination"
     );
+    let g = gapless(Cursor::new(data), options);
+    let fragmented = gapless(
+        Chunked {
+            bytes: data,
+            chunk: usize::from(control % 31) + 1,
+        },
+        options,
+    );
+    assert!(
+        g == fragmented,
+        "gapless read schedule changed output or error"
+    );
+    if g.2 && g.1.is_none() && !a.0.is_empty() && a.2 && a.1.is_none() {
+        let mut indexed = IndexedDecoder::with_options(
+            Cursor::new(data),
+            FileOptions {
+                stream: options,
+                samples: SampleMode::Gapless,
+            },
+        )
+        .unwrap();
+        let (mut wanted, mut count) = (0, 0);
+        for block in &g.0 {
+            signature(block.header, &block.planes, &mut wanted, &mut count);
+        }
+        assert_eq!(count, indexed.samples());
+        let (mut actual, mut samples) = (0, 0);
+        while let Some(out) = indexed.next_frame().unwrap() {
+            signature(out.header, &bits(out.pcm), &mut actual, &mut samples);
+        }
+        assert_eq!((actual, samples), (wanted, count));
+    }
     let (linear, error, ended) = a;
     if error.is_some() || !ended || linear.is_empty() {
         return;

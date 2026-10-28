@@ -30,6 +30,15 @@ pub struct Pcm<'a> {
     stride: usize,
 }
 impl<'a> Pcm<'a> {
+    pub(crate) fn planar(data: &'a [f32], channels: usize, samples: usize) -> Self {
+        debug_assert!((1..=2).contains(&channels) && data.len() == channels * samples);
+        Self {
+            data,
+            channels,
+            samples,
+            stride: samples,
+        }
+    }
     pub fn channels(self) -> usize {
         self.channels
     }
