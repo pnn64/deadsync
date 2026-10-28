@@ -110,7 +110,7 @@ the reverted shared-budget experiment. All 708 retained native fixture gates,
 tests pass on x64 debug/release and i686 debug; Clippy, two million checked
 mutations, 2507 earlier corpus inputs and 100000 fresh ASan executions pass too.
 
-Required work still includes extensible ADPCM, compressed wavl routing,
+Required work still includes unresolved extensible compressed mappings, compressed wavl routing,
 representative comparative benchmarks, comparative RSS and sequential
 disk evidence, and broader native/reference fixtures. Metadata profile/semantic certification
 and broader fuzz coverage remain unproven. Forward PCM16 streaming currently
@@ -139,3 +139,22 @@ read/range checks, 1912 writer outputs under the exact dummy-byte transformation
 432 retained forward ADPCM outputs and 24 updated physical sparse-file probes
 pass. Two million checked mutations, 1414 prior corpus files and 100000 fresh
 ASan executions pass. Normative BW64 profile/ADM validation remains open.
+
+The extensible IMA GUID/samples-per-block mapping is now implemented for 3/4-bit
+blocks across all reader APIs, with a caller-buffer descriptor serializer and
+effective force_extensible output. Four tests bring the total to 78, passing
+on x64 debug/release and i686 debug with Clippy. All 416 independent fixture/
+encoder gates and 2784 decoder/range checks pass, including 40 direct dr_wav
+4-bit RIFF gates and 40 paired legacy FFmpeg 3-bit packing gates. The exact prior
+driver rejects 256 newly supported leading-fact cases. All 432 earlier forward
+outputs, 204 earlier file/range checks, 24 updated physical sparse-file probes,
+two million checked mutations, 1490 prior corpus inputs and 100000 fresh ASan
+executions pass.
+
+IMA_EXTENSIBLE.md records the generic Microsoft field rules used for this
+interpretation and the narrow direct-reference support. The Microsoft ADPCM
+coefficient placement in an extensible header was not established; forcing it
+now fails explicitly before I/O instead of silently emitting a legacy header.
+Unknown raw descriptors remain available through the independent container.
+Compressed wavl routing, broader extensible variants/profile validation and the
+comparative performance/memory requirements remain unfinished.

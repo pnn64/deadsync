@@ -1,6 +1,6 @@
 # Physical large-file and process-memory evidence
 
-`validation/bw64-dummy-sparse.json` records eight real NTFS sparse files and 24
+`validation/ima-extensible-sparse.json` records eight real NTFS sparse files and 24
 successful fresh-process checks on Windows 11, rustc 1.99.1. RF64 and BW64 are each
 tested with native mono i32 and IMA ADPCM, at 65573 and 4294967333 decoded frames,
 except large BW64 IMA uses 4294967295, the largest literal u32 fact count.
@@ -12,10 +12,10 @@ compiler/build commands and build logs accompany the report.
 | File geometry | Logical file length, bytes | NTFS allocated bytes |
 | --- | ---: | ---: |
 | Small native PCM | 262396 | 131072 |
-| Small IMA | 262388 | 131072 |
+| Small IMA | 262408 | 131072 |
 | Large native PCM | 17179869436 | 262144 |
-| Large RF64 IMA | 17179869428 | 262144 |
-| Large BW64 IMA | 17179869276 | 262144 |
+| Large RF64 IMA | 17179869448 | 262144 |
+| Large BW64 IMA | 17179869296 | 262144 |
 
 The large files all exceed 16 GiB. RF64 and native PCM frame counts exceed u32;
 BW64 IMA ends at its literal fact limit. Markers straddle the physical
@@ -31,6 +31,10 @@ used an RF64-style count extension in those words and is now rejected. The
 updated case preserves a real >16 GiB physical-file check without that extension.
 BW64 IMA and extensible native output here are compatibility cases rather than
 normative BW64 profile evidence; see [BW64.md](BW64.md).
+The runner requests force_extensible. That flag now emits a 40-byte IMA format
+instead of the legacy 20-byte descriptor, adding 20 bytes to its header/file
+length. `bw64-dummy-sparse.json` retains the preceding legacy-header run;
+[IMA_EXTENSIBLE.md](IMA_EXTENSIBLE.md) records the new mapping and its limits.
 
 This fixture builder uses known-length writer headers and then creates sparse
 extents with the filesystem, so it does not claim that a writer accepted missing
@@ -52,7 +56,7 @@ private/peak commit are retained in the JSON.
 
 | Verify process | Small-file peak working set, MiB | Large-file peak working set, MiB |
 | --- | ---: | ---: |
-| x64 | 3.42–3.43 | 3.42–3.43 |
+| x64 | 3.43–3.44 | 3.43–3.44 |
 | i686 | 4.58–4.59 | 4.58–4.59 |
 
 The measurements show bounded whole-process memory for these open/random-seek

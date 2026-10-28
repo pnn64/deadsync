@@ -127,6 +127,24 @@ def corpus():
                 ds=ck(b'ds64',struct.pack('<QQQI',40+len(body),4,dummy,0))
                 result[f'bw64-dummy-{tag}-{fact_count}-{dummy}']=b'\0BW64'+b'\xff'*4+b'WAVE'+ds+body
 
+    # IMA's extensible Samples union carries block frames, not valid bit depth.
+    for kind in (b'RIFF',b'RIFX',b'RF64',b'BW64'):
+        e='>' if kind==b'RIFX' else '<';large=kind in (b'RF64',b'BW64')
+        for bits in (3,4):
+            for channels in (1,2,6,33):
+                block_bytes=channels*(16 if bits==3 else 8);frames=33 if bits==3 else 9
+                mask=(1<<channels)-1 if channels<32 else 0x80000000
+                fmt=struct.pack(e+'HHIIHHHHIIHH',0xfffe,channels,8000,8000*block_bytes//frames,block_bytes,bits,22,frames,mask,17,0,16)+b'\x80\0\0\xaa\0\x38\x9b\x71'
+                header=b''.join(struct.pack(e+'hBB',-30000+c*100,c%89,0) for c in range(channels))
+                encoded=header+bytes((i*37+11)&255 for i in range(block_bytes-len(header)))
+                name=f'ima-extensible-{kind.decode()}-{bits}-{channels}'
+                result[name+'-block']=b'\2'+bytes([e=='>'])+struct.pack('<H',len(fmt))+fmt+encoded
+                for trailing in (False,True):
+                    fact=ck(b'fact',struct.pack(e+'I',frames-1),e);data=ck(b'data',encoded,e,0xffffffff if large else None)
+                    body=ck(b'fmt ',fmt,e)+(data+fact if trailing else fact+data)
+                    prefix=ck(b'ds64',struct.pack('<QQQI',40+len(body),len(encoded),frames-1 if kind==b'RF64' else 0,0)) if large else b''
+                    result[name+f'-{trailing}']=b'\0'+kind+struct.pack(e+'I',0xffffffff if large else 4+len(body))+b'WAVE'+prefix+body
+
     metadata=[]
     for e in ('<','>'):
         metadata.extend([

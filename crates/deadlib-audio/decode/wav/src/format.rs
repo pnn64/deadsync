@@ -79,7 +79,9 @@ pub struct Format<'a> {
     pub byte_rate: u32,
     pub block_align: u16,
     pub bits_per_sample: u16,
-    /// Integer valid bits are left justified within the sample container.
+    /// Native integer valid bits are left justified within the sample container.
+    /// For an extensible block codec this is the raw Samples union instead:
+    /// its samples-per-block value is interpreted by the individual codec.
     pub valid_bits: u16,
     /// Zero means unspecified; otherwise channels follow ascending mask bits.
     pub channel_mask: u32,

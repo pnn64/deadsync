@@ -38,8 +38,8 @@ pub struct Adpcm<'a> {
 impl<'a> Adpcm<'a> {
     pub fn from_format(format: Format<'a>) -> Result<Self, Error> {
         let f = Format::parse(format.raw, format.endian)?;
-        if f.tag == 0xfffe {
-            return Err(Error::Unsupported("extensible ADPCM mapping"));
+        if f.tag == 0xfffe && f.encoding != Encoding::ImaAdpcm {
+            return Err(Error::Unsupported("extensible Microsoft ADPCM mapping"));
         }
         if f.bits_per_sample != 4 && !(f.encoding == Encoding::ImaAdpcm && f.bits_per_sample == 3) {
             return Err(Error::Unsupported("ADPCM bit depth"));

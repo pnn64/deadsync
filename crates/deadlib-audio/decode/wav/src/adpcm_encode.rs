@@ -68,6 +68,36 @@ impl AdpcmSpec {
         Adpcm::from_format(Format::parse(b, endian)?)?;
         Ok(n)
     }
+    /// Emit a 40-byte IMA extensible descriptor with samples per block and a
+    /// speaker mask. Microsoft ADPCM coefficient placement is not defined here.
+    /// Invalid arguments leave the caller's output unchanged.
+    pub fn format_extensible(
+        self,
+        endian: Endian,
+        channel_mask: u32,
+        out: &mut [u8],
+    ) -> Result<usize, Error> {
+        if self.kind == AdpcmKind::Microsoft {
+            return Err(Error::Unsupported("extensible Microsoft ADPCM mapping"));
+        }
+        if out.len() < 40 {
+            return Err(Error::Limit("ADPCM format output capacity"));
+        }
+        let mut legacy = [0; 50];
+        self.format(endian, &mut legacy)?;
+        let mut b = [0; 40];
+        b[..16].copy_from_slice(&legacy[..16]);
+        put16(&mut b, 0xfffe, endian);
+        put16(&mut b[16..], 22, endian);
+        b[18..20].copy_from_slice(&legacy[18..20]);
+        put32(&mut b[20..], channel_mask, endian);
+        put32(&mut b[24..], 17, endian);
+        put16(&mut b[30..], 0x10, endian);
+        b[32..].copy_from_slice(&[0x80, 0, 0, 0xaa, 0, 0x38, 0x9b, 0x71]);
+        Adpcm::from_format(Format::parse(&b, endian)?)?;
+        out[..40].copy_from_slice(&b);
+        Ok(40)
+    }
 }
 
 impl Adpcm<'_> {
@@ -275,9 +305,13 @@ impl<W: Write + Seek> AdpcmWriter<W> {
         options: WriteOptions,
         metadata: &[RawChunk<'_>],
     ) -> Result<Self, Error> {
-        Self::initialize(inner, spec, options.container.endian(), |inner, header| {
-            Muxer::new(inner, header, options, metadata)
-        })
+        Self::initialize(
+            inner,
+            spec,
+            options.container.endian(),
+            options.force_extensible,
+            |inner, header| Muxer::new(inner, header, options, metadata),
+        )
     }
     pub fn finish(mut self) -> Result<W, Error> {
         self.finish_pending()?;
@@ -295,29 +329,40 @@ impl<W: Write> AdpcmWriter<W> {
         frames: u64,
     ) -> Result<Self, Error> {
         let endian = options.container.endian();
-        Self::initialize(inner, spec, endian, |inner, header| {
-            let codec = Adpcm::from_format(Format::parse(header, endian)?)?;
-            let blocks = frames.div_ceil(codec.frames_per_block() as u64);
-            let bytes = blocks
-                .checked_mul(codec.block_bytes() as u64)
-                .ok_or(Error::Limit("ADPCM data size overflow"))?;
-            Muxer::with_lengths(
-                inner,
-                header,
-                options,
-                metadata,
-                crate::DataLength { bytes, frames },
-            )
-        })
+        Self::initialize(
+            inner,
+            spec,
+            endian,
+            options.force_extensible,
+            |inner, header| {
+                let codec = Adpcm::from_format(Format::parse(header, endian)?)?;
+                let blocks = frames.div_ceil(codec.frames_per_block() as u64);
+                let bytes = blocks
+                    .checked_mul(codec.block_bytes() as u64)
+                    .ok_or(Error::Limit("ADPCM data size overflow"))?;
+                Muxer::with_lengths(
+                    inner,
+                    header,
+                    options,
+                    metadata,
+                    crate::DataLength { bytes, frames },
+                )
+            },
+        )
     }
     fn initialize(
         inner: W,
         spec: AdpcmSpec,
         endian: Endian,
+        extensible: bool,
         mux: impl FnOnce(W, &[u8]) -> Result<Muxer<W>, Error>,
     ) -> Result<Self, Error> {
         let mut header = [0; 50];
-        let header_len = spec.format(endian, &mut header)?;
+        let header_len = if extensible {
+            spec.format_extensible(endian, 0, &mut header)?
+        } else {
+            spec.format(endian, &mut header)?
+        };
         let codec = Adpcm::from_format(Format::parse(&header[..header_len], endian)?)?;
         let mut pending = Vec::new();
         reserve(&mut pending, codec.scratch_samples())?;

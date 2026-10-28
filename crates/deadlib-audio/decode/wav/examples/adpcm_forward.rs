@@ -1,5 +1,5 @@
 //! Decode through a Read-only wrapper to raw interleaved i16 LE.
-use deadlib_audio_decode_wav::AdpcmForwardReader;
+use deadlib_audio_decode_wav::{AdpcmForwardReader, ForwardReader};
 use std::io::{Read, Write};
 struct Input {
     file: std::fs::File,
@@ -18,19 +18,26 @@ impl Read for Input {
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Vec<_>>();
-    if !(2..=4).contains(&args.len()) {
-        return Err("usage: adpcm_forward INPUT [BUFFER_FRAMES [READ_WIDTH]]".into());
+    if !(2..=5).contains(&args.len()) {
+        return Err(
+            "usage: adpcm_forward INPUT [BUFFER_FRAMES [READ_WIDTH [TOTAL_FRAMES]]]".into(),
+        );
     }
     let capacity = args.get(2).map_or(Ok(127), |v| v.parse::<usize>())?;
     let width = args.get(3).map_or(Ok(17), |v| v.parse::<usize>())?;
     if capacity == 0 || width == 0 || capacity > 1048576 {
         return Err("invalid buffer/read width".into());
     }
-    let mut reader = AdpcmForwardReader::new(Input {
+    let input = Input {
         file: std::fs::File::open(&args[1])?,
         width,
         calls: 0,
-    })?;
+    };
+    let mut reader = if let Some(count) = args.get(4) {
+        AdpcmForwardReader::from_reader_with_frames(ForwardReader::new(input)?, count.parse()?)?
+    } else {
+        AdpcmForwardReader::new(input)?
+    };
     let channels = usize::from(reader.format().channels);
     let expected = reader.frames();
     let mut frames = 0;

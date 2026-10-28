@@ -11,6 +11,10 @@ Each block restarts from its header. Neither block decoder allocates.
 trim padding. `read_frames(start, output, scratch)` gives sample-accurate random
 access with caller-owned block scratch, returning interleaved samples. The
 container retains unrecognized encoded formats without invoking either codec.
+Extensible IMA now uses its GUID and samples-per-block union through every block
+and file API. `AdpcmSpec::format_extensible` serializes speaker masks, and IMA
+writers honor force_extensible. [IMA_EXTENSIBLE.md](IMA_EXTENSIBLE.md) records the
+independent truth, reader limitations and unresolved Microsoft coefficient layout.
 BW64 dummy words never supply a duration; its ADPCM compatibility path requires
 fact and supports literal counts through u32::MAX. Writers reject larger BW64
 fact counts. RF64 retains its 64-bit count extension. See [BW64.md](BW64.md).

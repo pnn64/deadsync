@@ -683,6 +683,19 @@ fn encode(data: &[u8]) -> u64 {
                 .collect::<Vec<_>>();
             let n = source.len() / usize::from(channels) * usize::from(channels);
             if n != 0 {
+                if block_spec.kind == AdpcmKind::Microsoft && options.force_extensible {
+                    assert!(matches!(
+                        deadlib_audio_decode_wav::AdpcmWriter::with_frames(
+                            Vec::new(),
+                            block_spec,
+                            options,
+                            &[],
+                            1
+                        ),
+                        Err(Error::Unsupported(_))
+                    ));
+                    return paths;
+                }
                 let mut encoded = [0; 4096];
                 let mut decoded = [0; 8192];
                 let len = codec.encode_block(&source[..n], &mut encoded).unwrap();
@@ -698,6 +711,10 @@ fn encode(data: &[u8]) -> u64 {
                 let bytes = known.finish_stream().unwrap();
                 let parsed = Wave::parse(&bytes).unwrap();
                 assert_eq!(parsed.data().unwrap(), &encoded[..len]);
+                assert_eq!(parsed.format.tag == 0xfffe, options.force_extensible);
+                if options.force_extensible {
+                    assert_eq!(parsed.format.valid_bits as usize, codec.frames_per_block());
+                }
                 assert_eq!(parsed.fact, Some((n / usize::from(channels)) as u64));
                 assert_eq!(
                     codec.decode_block(&encoded[..len], &mut decoded).unwrap(),

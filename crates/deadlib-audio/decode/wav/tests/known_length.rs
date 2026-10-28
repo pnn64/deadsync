@@ -190,6 +190,10 @@ fn known_adpcm_counts_include_final_block_padding_and_trim_exactly() {
         Container::Bw64,
     ] {
         for kind in [AdpcmKind::Ima, AdpcmKind::Microsoft] {
+            let options = WriteOptions {
+                force_extensible: kind == AdpcmKind::Ima,
+                ..options(container)
+            };
             for channels in if kind == AdpcmKind::Ima {
                 &[1, 2, 5][..]
             } else {
@@ -219,14 +223,13 @@ fn known_adpcm_counts_include_final_block_padding_and_trim_exactly() {
                     let mut known = AdpcmWriter::with_frames(
                         Pipe::default(),
                         spec,
-                        options(container),
+                        options,
                         &[],
                         frames as u64,
                     )
                     .unwrap();
                     let mut seek =
-                        AdpcmWriter::new(Cursor::new(Vec::new()), spec, options(container), &[])
-                            .unwrap();
+                        AdpcmWriter::new(Cursor::new(Vec::new()), spec, options, &[]).unwrap();
                     for part in samples.chunks(3 * usize::from(*channels)) {
                         known.write_i16(part).unwrap();
                         seek.write_i16(part).unwrap();

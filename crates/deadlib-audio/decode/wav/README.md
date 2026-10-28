@@ -66,6 +66,10 @@ the last real frame is repeated as padding. `AdpcmSpec` emits standard descripto
 block, and records the unpadded frame count on finish. Both Microsoft and 4-bit
 IMA encoding are native Rust; `AdpcmKind::Ima3` adds standard 3-bit WAV IMA.
 Encoding does not promise lossless source recovery.
+IMA also supports the extensible GUID/samples-per-block mapping and caller-buffer
+descriptor serialization with channel masks. AdpcmWriter honors force_extensible
+for IMA; requesting the unresolved Microsoft mapping returns Unsupported before
+I/O. See [IMA_EXTENSIBLE.md](IMA_EXTENSIBLE.md) for precise scope and evidence.
 
 `AdpcmReader<R: Read + Seek>` scans through the shared container reader and caches
 one decoded block. It reads interleaved i16 into caller storage and supports exact

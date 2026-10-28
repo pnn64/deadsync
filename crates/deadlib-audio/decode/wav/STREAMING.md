@@ -67,6 +67,10 @@ checks the final encountered fact/ds64 against that count and rejects a missing
 required duration. A plain RIFF stream whose count is only available after data
 needs the explicit count. This API does not buffer the whole encoded stream.
 Its initial and final duration checks do not decode intentionally unread blocks.
+IMA's extensible GUID and samples-per-block word now use these same bounded
+reader/writer paths. IMA writers honor force_extensible, while the unresolved
+Microsoft extensible coefficient mapping returns Unsupported before output.
+See IMA_EXTENSIBLE.md for mask serialization, evidence and format limits.
 
 [EBU Tech 3306, section 3.4](https://tech.ebu.ch/docs/tech/tech3306v1_1.pdf)
 selects ds64 sampleCount only when the corresponding 32-bit fact field is

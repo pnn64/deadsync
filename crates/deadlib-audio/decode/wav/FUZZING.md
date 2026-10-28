@@ -227,3 +227,20 @@ All recorded source inputs remain unchanged. All 74 tests pass on x64
 debug/release and i686 debug, with Clippy, the native replay, 432 forward ADPCM
 outputs and 24 physical sparse-file probes. BW64.md records the changed count
 policy and the precise eight-byte writer-output comparison rule.
+
+Extensible IMA adds 96 independent seeds (472 total): file and block selectors,
+3/4-bit word geometries, RIFF/RIFX/RF64/BW64, 1/2/6/33 channels, masks and both fact
+placements. Generated IMA output now checks that the force_extensible option
+selects the extensible tag and the correct samples-per-block word. The unresolved
+forced Microsoft mapping is explicitly checked for Unsupported.
+
+`validation/ima-extensible-mutation-{x64,i686}.*` each pass one million checked
+mutations. All 1490 prior archived inputs replay successfully
+(`ima-extensible-prior-replay.*`). `ima-extensible-asan.*` passes 100000 executions
+in 113.55 seconds, adds 1891 units and produces no failure artifact. Its complete
+1580-file corpus is preserved in `ima-extensible-asan-corpus.zip` with a verified
+archive/report sidecar. The 263 MiB instrumented peak is not normal codec RSS.
+All listed campaign inputs remain unchanged. The full 78-test suite, Clippy,
+416 independent fixture/encoder gates, 432 earlier forward outputs and 24 updated
+physical sparse-file probes pass. IMA_EXTENSIBLE.md distinguishes primary-field
+interpretation, direct reader parity, paired legacy evidence and unresolved scope.

@@ -186,6 +186,18 @@ the BW64 IMA large probe uses literal u32::MAX fact rather than the former
 RF64-only count extension. See BW64.md for exact compatibility/profile scope
 and `validation/bw64-dummy-*` for hashes, reports and raw logs.
 
+The extensible IMA mapping now passes 416 independent fixture/encoder gates and
+2784 borrowed/seekable/forward/range checks. Its 40 direct 4-bit dr_wav RIFF gates
+and 40 paired legacy 3-bit FFmpeg packing gates pass; the latter do not claim
+extensible-header support in FFmpeg. All 256 retained previous-driver probes
+reject the newly supported leading-fact cases. All four reference outcomes, full
+output hashes/errors, fixture archives and exact field/serializer checks are
+preserved. Four tests bring the total to 78, passing on x64 debug/release and
+i686 debug with Clippy. Two million checked mutations, 1490 prior corpus inputs,
+100000 ASan executions, 432 earlier forward outputs, 204 earlier file/range
+checks and 24 physical sparse-file probes pass. IMA_EXTENSIBLE.md records the field interpretation, specific direct
+reader limits and unresolved Microsoft extensible coefficient mapping.
+
 Remaining work: metadata profile/semantic validation, compressed wavl routing,
 broader fuzzing and representative comparative performance/RSS coverage
 (the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); extensible

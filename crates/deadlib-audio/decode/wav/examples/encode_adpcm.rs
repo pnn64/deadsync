@@ -1,10 +1,13 @@
-//! Encode PCM16 WAVE to ADPCM WAVE: encode_adpcm INPUT ms|ima|ima3 BLOCK_BYTES
+//! Encode PCM16: encode_adpcm INPUT ms|ima|ima3 BLOCK_BYTES [extensible|extensible-known]
 use deadlib_audio_decode_wav::{AdpcmKind, AdpcmSpec, AdpcmWriter, Wave, WriteOptions};
 use std::io::{Cursor, Write};
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args().collect();
-    if args.len() != 4 {
-        return Err("usage: encode_adpcm INPUT ms|ima|ima3 BLOCK_BYTES".into());
+    if !(4..=5).contains(&args.len()) {
+        return Err(
+            "usage: encode_adpcm INPUT ms|ima|ima3 BLOCK_BYTES [extensible|extensible-known]"
+                .into(),
+        );
     }
     let bytes = std::fs::read(&args[1])?;
     let wave = Wave::parse(&bytes)?;
@@ -21,7 +24,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         block_bytes: args[3].parse()?,
     };
     let pcm = wave.pcm()?;
-    let mut writer = AdpcmWriter::new(Cursor::new(Vec::new()), spec, WriteOptions::default(), &[])?;
+    let known = match args.get(4).map(String::as_str) {
+        None | Some("extensible") => false,
+        Some("extensible-known") => true,
+        _ => return Err("unknown output mode".into()),
+    };
+    let options = WriteOptions {
+        force_extensible: args.len() == 5,
+        ..WriteOptions::default()
+    };
+    let mut writer = if known {
+        AdpcmWriter::with_frames(Cursor::new(Vec::new()), spec, options, &[], pcm.frames())?
+    } else {
+        AdpcmWriter::new(Cursor::new(Vec::new()), spec, options, &[])?
+    };
     let mut samples = vec![0; usize::from(spec.channels) * 127];
     let mut frame = 0;
     while frame < pcm.frames() {
@@ -29,8 +45,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         writer.write_i16(&samples[..n])?;
         frame += (n / usize::from(spec.channels)) as u64;
     }
-    std::io::stdout()
-        .lock()
-        .write_all(&writer.finish()?.into_inner())?;
+    let output = if known {
+        writer.finish_stream()?
+    } else {
+        writer.finish()?
+    };
+    std::io::stdout().lock().write_all(&output.into_inner())?;
     Ok(())
 }
