@@ -30,6 +30,7 @@ def main():
     parser.add_argument("--native", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--pillow", action="store_true")
+    parser.add_argument("--progressive", action="store_true")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
     cases = []
@@ -50,12 +51,14 @@ def main():
             ("wide-quant", ["-quality", "1"]),
         ]:
             path = args.out / f"{precision}-{name}.jpg"
-            command = [args.cjpeg, "-precision", precision, "-quality", 83, *options,
+            command = [args.cjpeg, "-precision", precision, "-quality", 83,
+                       *(["-progressive"] if args.progressive else []), *options,
                        "-outfile", path, src]
             run(command)
             cases.append((path, command))
         script = args.out / "sequential.scans"
-        script.write_text("0; 1; 2;\n")
+        script.write_text("0,1,2: 0,0,0,0; 2: 32,63,0,0; 1: 1,63,0,0; "
+                          "0: 1,5,0,0; 2: 1,31,0,0; 0: 6,63,0,0;\n" if args.progressive else "0; 1; 2;\n")
         path = args.out / f"{precision}-multiscan.jpg"
         command = [args.cjpeg, "-precision", precision, "-scans", script,
                    "-restart", "2B", "-outfile", path, src]
@@ -68,7 +71,7 @@ def main():
         image = Image.new("CMYK", (31, 25))
         image.putdata([tuple((x * 19 + y * 13 + c * 71) % 256 for c in range(4))
                        for y in range(25) for x in range(31)])
-        image.save(path, quality=83)
+        image.save(path, quality=83, progressive=args.progressive)
         cases.append((path, ["Pillow", PIL.__version__, "CMYK", "quality=83"]))
     manifest = {"reference": run([args.cjpeg, "-version"]).stderr.decode().strip(), "cases": []}
     for path, command in cases:

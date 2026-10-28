@@ -1,4 +1,5 @@
 use crate::entropy::{Bits, Huffman};
+use crate::progressive::ProgressiveScan;
 use crate::{
     ComponentSpec, Error, Event, FrameHeader, Limits, MarkerReader, MetadataSegment, Process,
     Result, ZIGZAG,
@@ -19,6 +20,8 @@ pub struct CoefficientComponent {
     pub blocks_wide: usize,
     pub blocks_high: usize,
     pub quantization: [u16; 64],
+    /// Zig-zag band precision: -1 for unseen, otherwise the last scan's Al.
+    pub successive_approximation: [i8; 64],
     pub blocks: Vec<[i16; 64]>,
 }
 
@@ -90,13 +93,14 @@ fn allocate_components(
             blocks_high,
             blocks,
             quantization: [0; 64],
+            successive_approximation: [-1; 64],
         });
     }
     Ok((components, bytes))
 }
 
 /// Decode without IDCT or color conversion. APPn/COM payloads borrow the input.
-/// Currently accepts sequential Huffman DCT frames; other processes are explicit
+/// Currently accepts sequential/progressive Huffman DCT frames; other processes are explicit
 /// errors while their native implementations are in progress.
 pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientImage<'_>> {
     let mut reader = MarkerReader::new(input)?;
@@ -166,8 +170,9 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
                 let header = FrameHeader::parse(marker, data)?;
                 if header.process != Process::Baseline
                     && header.process != Process::ExtendedSequential
+                    && header.process != Process::Progressive
                 {
-                    return Err(Error::Unsupported("non-sequential Huffman process"));
+                    return Err(Error::Unsupported("non-Huffman DCT process"));
                 }
                 if header.height == 0 {
                     return Err(Error::Unsupported("DNL height"));
@@ -316,7 +321,12 @@ fn decode_scan(
     if !(1..=4).contains(&n) || header.len() != 4 + 2 * n {
         return Err(Error::Invalid("SOS components"));
     }
-    if header[1 + 2 * n..] != [0, 63, 0] {
+    let progression = if frame.process == Process::Progressive {
+        Some(ProgressiveScan::parse(&header[1 + 2 * n..], n)?)
+    } else {
+        None
+    };
+    if progression.is_none() && header[1 + 2 * n..] != [0, 63, 0] {
         return Err(Error::Invalid("sequential scan parameters"));
     }
     let mut selected = [(0usize, 0usize, 0usize); 4];
@@ -334,10 +344,16 @@ fn decode_scan(
         } else {
             3
         };
-        if dc > max_table || ac > max_table || tables[dc].is_none() || tables[4 + ac].is_none() {
+        let need_dc = progression.is_none_or(|s| s.ss == 0 && s.ah == 0);
+        let need_ac = progression.is_none_or(|s| s.ss != 0);
+        if dc > max_table
+            || ac > max_table
+            || (need_dc && tables[dc].is_none())
+            || (need_ac && tables[4 + ac].is_none())
+        {
             return Err(Error::Invalid("missing or invalid Huffman table"));
         }
-        if seen[i] || selected[..j].iter().any(|v| v.0 == i) {
+        if (progression.is_none() && seen[i]) || selected[..j].iter().any(|v| v.0 == i) {
             return Err(Error::Invalid("duplicate sequential component"));
         }
         selected[j] = (i, dc, 4 + ac);
@@ -346,6 +362,14 @@ fn decode_scan(
             .ok_or(Error::Invalid("missing quantization table"))?;
         if frame.process == Process::Baseline && table.wide {
             return Err(Error::Invalid("16-bit quantizer in baseline"));
+        }
+        if let Some(scan) = progression {
+            if seen[i] && components[i].quantization != table.values {
+                return Err(Error::Invalid(
+                    "quantizer changed between progressive scans",
+                ));
+            }
+            scan.advance(&mut components[i].successive_approximation)?;
         }
         components[i].quantization = table.values;
         block_count += spec.horizontal_sampling as usize * spec.vertical_sampling as usize;
@@ -377,8 +401,12 @@ fn decode_scan(
     let mut bits = Bits::new(entropy);
     let mut predictors = [0i32; 4];
     let mut restart = 0;
+    let mut eob_run = 0;
     for mcu in 0..cols * rows {
         if interval > 0 && mcu > 0 && mcu % interval == 0 {
+            if eob_run != 0 {
+                return Err(Error::Invalid("EOB run crosses restart"));
+            }
             bits.restart(restart)?;
             restart = (restart + 1) & 7;
             predictors.fill(0);
@@ -398,21 +426,41 @@ fn decode_scan(
                     let bx = mcu % cols * h + x;
                     let by = mcu / cols * v + y;
                     let block = &mut c.blocks[by * c.blocks_wide + bx];
-                    sequential_block(
-                        block,
-                        &mut bits,
-                        tables[dc].as_ref().unwrap(),
-                        tables[ac].as_ref().unwrap(),
-                        &mut predictors[j],
-                        frame.precision,
-                    )?;
+                    if let Some(scan) = progression {
+                        scan.decode(
+                            block,
+                            &mut bits,
+                            tables[dc].as_ref(),
+                            tables[ac].as_ref(),
+                            &mut predictors[j],
+                            &mut eob_run,
+                            frame.precision,
+                        )?;
+                    } else {
+                        sequential_block(
+                            block,
+                            &mut bits,
+                            tables[dc].as_ref().unwrap(),
+                            tables[ac].as_ref().unwrap(),
+                            &mut predictors[j],
+                            frame.precision,
+                        )?;
+                    }
                 }
             }
         }
     }
+    if eob_run != 0 {
+        return Err(Error::Invalid("EOB run exceeds scan"));
+    }
     bits.finish()?;
     for &(i, _, _) in &selected[..n] {
-        seen[i] = true;
+        if progression.is_none_or(|s| s.ss == 0) {
+            seen[i] = true;
+        }
+        if progression.is_none() {
+            components[i].successive_approximation.fill(0);
+        }
     }
     Ok(())
 }

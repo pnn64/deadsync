@@ -8,6 +8,7 @@ mod decode;
 mod entropy;
 mod marker;
 mod model;
+mod progressive;
 mod reconstruct;
 mod transform;
 

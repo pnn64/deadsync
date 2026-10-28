@@ -11,14 +11,18 @@ fn short(data: &[u8], pos: &mut usize) -> u16 {
     value
 }
 fn fixtures() -> Vec<std::path::PathBuf> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/sequential");
-    let mut paths: Vec<_> = std::fs::read_dir(root)
-        .unwrap()
-        .map(|p| p.unwrap().path())
-        .filter(|p| p.extension().is_some_and(|s| s == "jpg"))
-        .collect();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let mut paths = Vec::new();
+    for mode in ["sequential", "progressive"] {
+        let group: Vec<_> = std::fs::read_dir(root.join(mode))
+            .unwrap()
+            .map(|p| p.unwrap().path())
+            .filter(|p| p.extension().is_some_and(|s| s == "jpg"))
+            .collect();
+        assert_eq!(group.len(), 25);
+        paths.extend(group);
+    }
     paths.sort();
-    assert_eq!(paths.len(), 25);
     paths
 }
 
@@ -94,7 +98,14 @@ fn pinned_libjpeg_turbo_coefficients_and_idct_planes() {
             .unwrap()
             .contains("multiscan")
         {
-            assert_eq!(image.scans, 3);
+            assert_eq!(
+                image.scans,
+                if image.frame.process == Process::Progressive {
+                    6
+                } else {
+                    3
+                }
+            );
         }
     }
 }

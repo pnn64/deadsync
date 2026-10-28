@@ -29,7 +29,12 @@ Use platform-specific library/executable paths on Unix. The oracle currently
 requires libjpeg-turbo's 12-bit raw API; adapters for IJG libjpeg and mozjpeg are
 still required by the overall plan.
 
-Observed gate: **25/25 exact coefficient/table comparisons** and **maximum
+Repeat the Python command with `--progressive` and the output directory
+`tests/fixtures/progressive` to regenerate the second set of 25 cases. That set
+adds DC/AC successive approximation, reordered spectral bands, and progressive
+restart markers. Both sets include 8/12-bit precision and CMYK.
+
+Observed gate: **50/50 exact coefficient/table comparisons** and **maximum
 native IDCT error 1** for all samples in these fixtures. Rust integration tests
 load these exact outputs. Tests also cover every truncated fixture prefix,
 4,000 deterministic bounded mutations, corrupted restarts, fractional sampling

@@ -44,9 +44,19 @@ explicit errors until implemented.
 Verified milestones:
 - `cdc8e854d`: package registration, complete SOF process model, native borrowed
   marker/entropy segment reader, marker/precision/truncation tests.
-- Sequential decoder milestone: native Huffman, sequential 8/12-bit coefficients,
+- `647cf77fa`: native Huffman, sequential 8/12-bit coefficients,
   bounded allocations, integer IDCT, component planes and initial color pipeline.
   All 25 pinned libjpeg-turbo cases have exact coefficients/tables and native
   IDCT error <=1. Twelve Rust tests pass in debug, release and isolated builds;
   rustfmt and Clippy with warnings denied pass. See tests/oracle/README.md.
-  Progressive, encoding, rare modes and remaining gates are still open.
+  Encoding, rare modes and remaining gates are still open.
+- Progressive decoder milestone: SOF2 spectral selection and successive
+  approximation in native Rust, with band precision tracking, DC/AC refinement,
+  EOB runs, partial progressions, unused-table selectors and quantizer stability.
+  Another 25 pinned 8/12-bit libjpeg-turbo cases match exactly in coefficients
+  and quantizers, IDCT error <=1. Maximum Al=13 negative DC refinement and bad
+  scan/restart/EOB transitions have focused tests. Streaming, encoding, rare
+  modes, broader reference validation and all performance work remain open.
+  Final gates: 17 tests pass in debug, release and isolated builds; rustfmt,
+  Clippy and rustdoc with warnings denied pass. All 50 checked-in oracle cases
+  retain exact coefficient/table parity and IDCT sample error <=1.
