@@ -22,11 +22,18 @@ impl PageHeader {
 }
 
 /// A CRC-verified page borrowing the original contiguous bytes.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Page<'a> {
     bytes: &'a [u8],
-    header: PageHeader,
-    body_start: usize,
+}
+impl core::fmt::Debug for Page<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Page")
+            .field("bytes", &self.bytes)
+            .field("header", &self.header())
+            .field("body_start", &self.body_start())
+            .finish()
+    }
 }
 impl<'a> Page<'a> {
     /// Parse one page, returning the number of bytes consumed. Trailing input
@@ -44,28 +51,30 @@ impl<'a> Page<'a> {
     /// Strict callers also validate version/flags; SyncedPage keeps that policy
     /// separate and never exposes an unconverted Page publicly.
     pub(crate) fn verified(bytes: &'a [u8]) -> Self {
-        Self {
-            bytes,
-            header: PageHeader {
-                flags: bytes[5],
-                granule_position: u64::from_le_bytes(bytes[6..14].try_into().unwrap()),
-                serial: u32::from_le_bytes(bytes[14..18].try_into().unwrap()),
-                sequence: u32::from_le_bytes(bytes[18..22].try_into().unwrap()),
-            },
-            body_start: 27 + bytes[26] as usize,
+        Self { bytes }
+    }
+    #[inline]
+    pub fn header(self) -> PageHeader {
+        let bytes = self.bytes;
+        PageHeader {
+            flags: bytes[5],
+            granule_position: u64::from_le_bytes(bytes[6..14].try_into().unwrap()),
+            serial: u32::from_le_bytes(bytes[14..18].try_into().unwrap()),
+            sequence: u32::from_le_bytes(bytes[18..22].try_into().unwrap()),
         }
     }
-    pub fn header(self) -> PageHeader {
-        self.header
+    #[inline]
+    fn body_start(self) -> usize {
+        27 + self.bytes[26] as usize
     }
     pub fn bytes(self) -> &'a [u8] {
         self.bytes
     }
     pub fn lacing(self) -> &'a [u8] {
-        &self.bytes[27..self.body_start]
+        &self.bytes[27..self.body_start()]
     }
     pub fn body(self) -> &'a [u8] {
-        &self.bytes[self.body_start..]
+        &self.bytes[self.body_start()..]
     }
     pub fn checksum(self) -> u32 {
         u32::from_le_bytes(self.bytes[22..26].try_into().unwrap())
@@ -82,7 +91,7 @@ impl<'a> Page<'a> {
             lacing: &self.lacing()[segment..],
             body: &self.body()[body..],
             continued: if segment == 0 {
-                self.header.is_continued()
+                self.header().is_continued()
             } else {
                 self.lacing()[segment - 1] == 255
             },
