@@ -1783,3 +1783,112 @@ to `2414ec857`; immutable binaries, source/harness hashes and raw logs identify
 every checkpoint. Final checks are in `accepted-final-validation.json` and
 `accepted-library-validation.json`. The new checksum example retains its exact
 baseline source snapshot and oracle checks for reproducibility.
+
+## Direct None rows and omitted Sub predictors (2026-10-28)
+
+Three safe Rust changes remove intermediate encoder storage and copying:
+
+1. Buffered None filtering appends the filter byte and writes directly into the
+   final filtered vector. Contiguous 8-bit rows extend directly from native
+   samples; other rows pack into the initialized final span. Three scratch rows
+   and two full-row copies are removed. The total filtered size is reserved
+   before writing, as before.
+2. Streaming None filtering packs directly into the row output after its filter
+   byte. It removes the raw and previous-row buffers, a copy, predictor setup
+   and unused swaps while retaining the same row lengths and framing.
+3. Sub filtering omits the previous-row buffer in both encoders. Its left
+   predictor uses only the current raw row. Constant filter kernels no longer
+   slice/read unused previous-row data for None/Sub; Paeth alone computes its
+   upper-left byte. Up, Average, Paeth and adaptive selection retain their
+   previous rows and exact tie order.
+
+The isolated before/after comparisons use four alternating processes per
+version. These are complete Stored pipelines, not standalone packing kernels:
+
+| Component, gray8 513x257 None | Before cycles | After cycles | CPU throughput | Allocation calls |
+| --- | ---: | ---: | ---: | ---: |
+| Buffered direct output | 709,314 | 405,197 | 1.75x | 6 -> 3 |
+| Streaming direct output | 743,520 | 445,695 | 1.67x | 7 -> 5 |
+
+The third change's established benefit is allocation/storage reduction, not a
+claimed CPU gain. RGBA16 513x257 Sub drops from six to five buffered allocation
+calls and seven to six writer calls, with 4,104 fewer requested bytes in each
+case. The previous row is no longer allocated, cleared, resized or swapped.
+Sub's in-process CPU ratios below are approximately neutral. Allocation probes
+are separate from timing; counts include the full PNG API rather than only rows.
+
+Between-process control timings varied substantially, including reader paths
+whose source did not change. An additional caller links an immutable baseline
+crate and the current crate into one executable, using the same shared native
+image types and copied bench-profile settings. Before timing, both buffered
+and writer PNG files must match byte-for-byte. Each process alternates variants
+within batches; three processes each retain eleven batches per variant after
+one warmup batch. The results corroborate the None fast paths:
+
+| In-process combined comparison | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Gray8 None, 513x257 buffered | 1,323,366 | 1,043,942 | 1.27x |
+| Gray8 None, 513x257 writer | 1,391,703 | 1,072,404 | 1.30x |
+| GA8 None, 513x257 Adam7 buffered | 2,770,310 | 2,371,990 | 1.17x |
+| GA8 None, 513x257 Adam7 writer | 2,771,626 | 2,035,570 | 1.36x |
+| RGBA16 None, 513x257 buffered | 9,632,612 | 6,970,295 | 1.38x |
+| RGBA16 None, 513x257 writer | 8,913,310 | 6,005,447 | 1.48x |
+| RGBA8 None, 33x9 Adam7 buffered | 9,815 | 6,020 | 1.63x |
+| RGBA8 None, 33x9 Adam7 writer | 31,459 | 25,436 | 1.24x |
+| RGBA16 Sub, 513x257 buffered | 9,175,466 | 9,347,920 | 0.98x |
+| RGBA16 Sub, 513x257 writer | 7,784,275 | 7,823,053 | 1.00x |
+
+The four adaptive encoder controls have in-process throughput ratios
+1.017x/1.034x (RGBA8 buffered/writer) and 1.001x/1.029x (RGBA16).
+Four one-row reader controls range from 0.987x to 1.021x. Small differences are
+within observed host/caller variation. The separate-process final comparison
+also shows None/Sub encoder gains, but several reader controls are slower by
+10-30%; these did not reproduce in the within-process controls. Both datasets
+remain visible. The results establish targeted encoding/storage benefits,
+not a universal speedup or an isolated decoder regression diagnosis.
+
+`DEADLIB_PNG_BENCH_STAGE=rowbuffers` adds Sub, Up and adaptive controls to the
+existing row/large-reader cases: 124 case/operations per process. Every process
+checks independently modeled complete filtered bytes and complete decoded
+images. Reader fingerprints identify input PNGs. Logical CPU 2, Windows thread
+cycles, Rust 1.99.1 and the existing optimized/LTO bench profile are used.
+There are three warmups, an untimed allocation probe, and seven batches per
+whole-pipeline process. Large cases use three iterations; readers up to 65,536
+native bytes use at least 64; other outputs below 4,096 bytes use at least 2,048.
+Measurement jobs are serialized; other workloads, frequency and preemption are
+uncontrolled. No Fast-DEFLATE throughput or compression-ratio claim is inferred
+from the Stored timing cases.
+
+The within-process caller measures 22 encoder case/operations and four reader
+controls. Large encodes use three iterations per batch, the small case 1,024,
+and reader controls 64. The baseline source is recovered directly from Git,
+renaming its package only to link both crate versions. Source hashes, generated
+manifest/profile and immutable executable identity are recorded. This extra
+probe supplements full-library correctness and allocation checks; it does not
+replace them.
+
+The selected source passes 33 release and 32 debug tests, strict all-target
+Clippy and scoped formatting. The optional C encoder audit ran in release.
+Checks include 17,280 independently modeled encoded outputs, all native
+formats/filter types/Adam7 passes, partial packed tails, 1,620 C encoder
+references, 109,376 literal scalar files, 308,033 rejected native inputs,
+49,419 ordering pairs and 2,616 exact writer failure prefixes. The filter unit
+oracle now supplies empty previous slices for None/Sub, testing their absent
+dependency alongside exact bytes and adaptive scores. All twelve library tests
+also pass, including packed-byte/stride exhaustiveness and checksum boundaries.
+Wire bytes and input acceptance/error behavior are preserved; working-memory
+statistics truthfully decrease with the removed buffers.
+
+The production-source diff is 54 lines net (75 added, 21 removed, including
+the unit-oracle adjustment). The direct paths remove allocations, clears,
+copies and swaps without new unsafe code, runtime dependencies or public APIs.
+
+Evidence is in [`experiments/directrows-20261028`](experiments/directrows-20261028).
+`buffered-paired-summary.tsv`, `writer-paired-summary.tsv` and
+`sub-paired-summary.tsv` retain the three components;
+`selected-paired-summary.tsv` retains the whole selected pipeline comparison.
+`in-process-summary.tsv` and its raw logs retain the additional paired caller.
+`compare.py` regenerates its baseline source and build under the ignored target
+directory; `compare.rs` contains the exact API comparisons. Cumulative patches
+are relative to `68a288d39`; final checks are in `final-validation.json` and
+`library-validation.json`. `protocol.json` records both measurement scopes.

@@ -148,7 +148,10 @@ fn main() {
         "case\toperation\titerations\tsample_bytes\tcycles_per_image\tns_per_image\tMiB_per_second\tallocations\treallocations\trequested_bytes\tfingerprint"
     );
     let stage = std::env::var("DEADLIB_PNG_BENCH_STAGE");
-    if matches!(stage.as_deref(), Ok("encode" | "rows" | "bitwords")) {
+    if matches!(
+        stage.as_deref(),
+        Ok("encode" | "rows" | "bitwords" | "rowbuffers")
+    ) {
         encoding(stage.as_deref() != Ok("encode"));
         return;
     }
@@ -382,6 +385,24 @@ fn main() {
 
 fn encoding(rows: bool) {
     let mut cases = Vec::new();
+    let rowbuffers = std::env::var("DEADLIB_PNG_BENCH_STAGE").as_deref() == Ok("rowbuffers");
+    if rowbuffers {
+        for (color, depth) in [
+            (ColorType::Grayscale, 8),
+            (ColorType::Rgba, 8),
+            (ColorType::Rgba, 16),
+        ] {
+            for interlaced in [false, true] {
+                cases.push((513, 257, color, depth, interlaced, Filter::Sub));
+            }
+        }
+        cases.push((33, 9, ColorType::Rgba, 8, true, Filter::Sub));
+        for depth in [8, 16] {
+            for filter in [Filter::Up, Filter::Adaptive] {
+                cases.push((513, 257, ColorType::Rgba, depth, false, filter));
+            }
+        }
+    }
     let filters = if rows {
         &[Filter::None][..]
     } else {
@@ -458,7 +479,7 @@ fn encoding(rows: bool) {
         measure(&case, "encode", expected.len(), hash, || {
             encode(black_box(&png), black_box(&opts)).unwrap()
         });
-        if matches!(filter, Filter::None | Filter::Adaptive) {
+        if rowbuffers || matches!(filter, Filter::None | Filter::Adaptive) {
             measure(&case, "encode-writer", expected.len(), hash, || {
                 let mut output = Vec::new();
                 deadlib_image_png::encode_writer(black_box(&png), black_box(&opts), &mut output)
@@ -474,7 +495,10 @@ fn encoding(rows: bool) {
 
 fn first_rows() {
     let mut cases = Vec::new();
-    if std::env::var("DEADLIB_PNG_BENCH_STAGE").as_deref() == Ok("bitwords") {
+    if matches!(
+        std::env::var("DEADLIB_PNG_BENCH_STAGE").as_deref(),
+        Ok("bitwords" | "rowbuffers")
+    ) {
         for (color, depth) in [
             (ColorType::Grayscale, 8),
             (ColorType::Rgba, 8),
