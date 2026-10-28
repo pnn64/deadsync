@@ -58,6 +58,14 @@ implemented and differentially exercised; see [ADPCM.md](ADPCM.md) and the retai
 JSON reports. Total integration tests: 20. This does not complete compressed
 encoding or all standard variants.
 
+Codec-independent `Muxer` now handles arbitrary encoded descriptors and decoded
+frame counts; native Writer shares it. Three added tests prove opaque descriptor
+retention, decoded-count RF64 promotion and count overflow rejection, as well as
+native byte/frame consistency. Total tests: 23; debug and Clippy pass. The retained
+`validation/pcm16-generic-mux.*` benchmark has median native encoding 0.296 ms
+and zero scoped heap allocation, within prior run variation. No encoding-speed
+improvement is claimed from this architecture change.
+
 Remaining work: ADPCM encoding and compressed I/O convenience, structured metadata,
 wavl/slnt and multiple-data handling, oracle comparisons, fuzzing, sparse >4 GiB
 evidence and broad performance coverage (the first PCM16 baseline is in

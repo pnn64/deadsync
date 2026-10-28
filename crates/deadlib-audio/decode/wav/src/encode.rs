@@ -1,5 +1,9 @@
 use crate::{Container, Endian, Error, Format, SampleFormat};
-use std::io::{Seek, SeekFrom, Write};
+use crate::{
+    Muxer,
+    mux::{put16, put32},
+};
+use std::io::{Seek, Write};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Spec {
@@ -87,138 +91,40 @@ pub struct RawChunk<'a> {
 /// Streaming native PCM/float writer. Audio goes straight to the sink. `finish`
 /// writes padding and patches sizes; dropping the writer does not finalize it.
 pub struct Writer<W> {
-    inner: W,
+    mux: Muxer<W>,
     spec: Spec,
-    options: WriteOptions,
-    base: u64,
-    data_header: u64,
-    fact_offset: Option<u64>,
-    bytes: u64,
-    failed: bool,
+    endian: Endian,
 }
 impl<W: Write + Seek> Writer<W> {
     pub fn new(
-        mut inner: W,
+        inner: W,
         spec: Spec,
         options: WriteOptions,
         metadata: &[RawChunk<'_>],
     ) -> Result<Self, Error> {
-        let e = options.container.endian();
-        let (f, n) = spec.header(e, options.force_extensible)?;
-        for c in metadata {
-            if [
-                *b"fmt ", *b"data", *b"fact", *b"ds64", *b"RIFF", *b"RF64", *b"BW64", *b"RIFX",
-            ]
-            .contains(&c.id)
-            {
-                return Err(Error::Invalid("reserved metadata chunk ID"));
-            }
-            if c.data.len() as u64 >= u64::from(u32::MAX) {
-                return Err(Error::Limit("metadata chunk size"));
-            }
-        }
-        let base = inner.stream_position()?;
-        inner.write_all(match options.container {
-            Container::Riff => b"RIFF",
-            Container::Rifx => b"RIFX",
-            Container::Rf64 => b"RF64",
-            Container::Bw64 => b"BW64",
-        })?;
-        write32(
-            &mut inner,
-            if options.container.is_64() {
-                u32::MAX
-            } else {
-                0
-            },
-            e,
-        )?;
-        inner.write_all(b"WAVE")?;
-        if options.container.is_64() || (options.auto_rf64 && options.container == Container::Riff)
-        {
-            chunk(
-                &mut inner,
-                if options.container.is_64() {
-                    b"ds64"
-                } else {
-                    b"JUNK"
-                },
-                &[0; 28],
-                e,
-            )?;
-        }
-        chunk(&mut inner, b"fmt ", &f[..n], e)?;
-        let fact_offset = if spec.sample_format.is_float() {
-            let pos = inner.stream_position()? + 8;
-            chunk(&mut inner, b"fact", &[0; 4], e)?;
-            Some(pos)
-        } else {
-            None
-        };
-        for c in metadata {
-            chunk(&mut inner, &c.id, c.data, e)?;
-        }
-        let data_header = inner.stream_position()?;
-        inner.write_all(b"data")?;
-        write32(
-            &mut inner,
-            if options.container.is_64() {
-                u32::MAX
-            } else {
-                0
-            },
-            e,
-        )?;
-        Ok(Self {
-            inner,
-            spec,
-            options,
-            base,
-            data_header,
-            fact_offset,
-            bytes: 0,
-            failed: false,
-        })
+        let endian = options.container.endian();
+        let (format, n) = spec.header(endian, options.force_extensible)?;
+        let mux = Muxer::new(inner, &format[..n], options, metadata)?;
+        Ok(Self { mux, spec, endian })
     }
     pub fn spec(&self) -> Spec {
         self.spec
     }
     pub fn frames_written(&self) -> u64 {
-        self.bytes / (u64::from(self.spec.channels) * u64::from(self.spec.sample_format.bits() / 8))
+        self.mux.frames_written()
     }
     pub fn into_inner(self) -> W {
-        self.inner
+        self.mux.into_inner()
     }
     /// Complete interleaved frames already in the specified container byte order.
     /// Preserves sample bits, including low unused valid-bit padding.
     pub fn write_frames(&mut self, bytes: &[u8]) -> Result<(), Error> {
-        if self.failed {
-            return Err(Error::Invalid("writer unusable after I/O error"));
-        }
         let align =
             usize::from(self.spec.channels) * usize::from(self.spec.sample_format.bits() / 8);
         if !bytes.len().is_multiple_of(align) {
             return Err(Error::Invalid("partial PCM frame"));
         }
-        let count = self
-            .bytes
-            .checked_add(bytes.len() as u64)
-            .ok_or(Error::Limit("data size overflow"))?;
-        let form_size = (self.data_header - self.base)
-            .checked_add(count)
-            .and_then(|v| v.checked_add(count & 1))
-            .ok_or(Error::Limit("file size overflow"))?;
-        if !self.options.container.is_64()
-            && !(self.options.auto_rf64 && self.options.container == Container::Riff)
-            && (count >= u64::from(u32::MAX) || form_size >= u64::from(u32::MAX))
-        {
-            return Err(Error::Limit("32-bit RIFF size"));
-        }
-        self.failed = true;
-        self.inner.write_all(bytes)?;
-        self.bytes = count;
-        self.failed = false;
-        Ok(())
+        self.mux.write_data(bytes, (bytes.len() / align) as u64)
     }
     pub fn write_i16(&mut self, samples: &[i16]) -> Result<(), Error> {
         self.write_native(samples, SampleFormat::I16, |v, b, e| put16(b, *v as u16, e))
@@ -255,7 +161,7 @@ impl<W: Write + Seek> Writer<W> {
         {
             return Err(Error::Invalid("partial PCM frame"));
         }
-        let e = self.options.container.endian();
+        let e = self.endian;
         if e.native() {
             // SAFETY: private callers supply only fully initialized numeric values
             // without padding; the immutable byte borrow covers their exact storage.
@@ -296,7 +202,7 @@ impl<W: Write + Seek> Writer<W> {
         if bits == 32 {
             return self.write_i32(samples);
         }
-        let e = self.options.container.endian();
+        let e = self.endian;
         self.pack_samples(samples, &mut [0; 8192], usize::from(bits / 8), |n, b| {
             if bits == 8 {
                 b[0] = (*n + 128) as u8;
@@ -314,11 +220,6 @@ impl<W: Write + Seek> Writer<W> {
         width: usize,
         pack: impl Fn(&T, &mut [u8]),
     ) -> Result<(), Error> {
-        // Group full frames when possible. For extreme channel counts, emit one
-        // sample at a time into the same sink with a total-frame accounting guard.
-        if self.failed {
-            return Err(Error::Invalid("writer unusable after I/O error"));
-        }
         let align = usize::from(self.spec.channels) * width;
         let per_batch = if align <= scratch.len() {
             scratch.len() / align * usize::from(self.spec.channels)
@@ -328,124 +229,21 @@ impl<W: Write + Seek> Writer<W> {
         let total = (samples.len() as u64)
             .checked_mul(width as u64)
             .ok_or(Error::Limit("data size overflow"))?;
-        // Validate the full call's size before writing the first batch.
-        let count = self
-            .bytes
-            .checked_add(total)
-            .ok_or(Error::Limit("data size overflow"))?;
-        let form_size = (self.data_header - self.base)
-            .checked_add(count)
-            .and_then(|v| v.checked_add(count & 1))
-            .ok_or(Error::Limit("file size overflow"))?;
-        if !self.options.container.is_64()
-            && !(self.options.auto_rf64 && self.options.container == Container::Riff)
-            && (count >= u64::from(u32::MAX) || form_size >= u64::from(u32::MAX))
-        {
-            return Err(Error::Limit("32-bit RIFF size"));
-        }
-        self.failed = true;
-        for batch in samples.chunks(per_batch) {
-            for (v, b) in batch.iter().zip(scratch.chunks_exact_mut(width)) {
-                pack(v, b);
-            }
-            self.inner.write_all(&scratch[..batch.len() * width])?;
-        }
-        self.bytes = count;
-        self.failed = false;
-        Ok(())
+        self.mux.write_with(
+            total,
+            (samples.len() / usize::from(self.spec.channels)) as u64,
+            |inner| {
+                for batch in samples.chunks(per_batch) {
+                    for (v, b) in batch.iter().zip(scratch.chunks_exact_mut(width)) {
+                        pack(v, b);
+                    }
+                    inner.write_all(&scratch[..batch.len() * width])?;
+                }
+                Ok(())
+            },
+        )
     }
-    pub fn finish(mut self) -> Result<W, Error> {
-        if self.failed {
-            return Err(Error::Invalid("writer unusable after I/O error"));
-        }
-        let e = self.options.container.endian();
-        if self.bytes & 1 != 0 {
-            self.inner.write_all(&[0])?;
-        }
-        let end = self.inner.stream_position()?;
-        let riff_size = end - self.base - 8;
-        let large = riff_size >= u64::from(u32::MAX) || self.bytes >= u64::from(u32::MAX);
-        let is64 = self.options.container.is_64() || large;
-        if large
-            && !self.options.container.is_64()
-            && !(self.options.auto_rf64 && self.options.container == Container::Riff)
-        {
-            return Err(Error::Limit("32-bit RIFF size"));
-        }
-        self.inner.seek(SeekFrom::Start(self.base))?;
-        let id: &[u8; 4] = if is64 {
-            if self.options.container == Container::Bw64 {
-                b"BW64"
-            } else {
-                b"RF64"
-            }
-        } else if self.options.container == Container::Rifx {
-            b"RIFX"
-        } else {
-            b"RIFF"
-        };
-        self.inner.write_all(id)?;
-        write32(
-            &mut self.inner,
-            if is64 { u32::MAX } else { riff_size as u32 },
-            e,
-        )?;
-        let frames = self.frames_written();
-        if is64 {
-            self.inner.seek(SeekFrom::Start(self.base + 12))?;
-            let mut d = [0u8; 28];
-            d[..8].copy_from_slice(&riff_size.to_le_bytes());
-            d[8..16].copy_from_slice(&self.bytes.to_le_bytes());
-            d[16..24].copy_from_slice(&frames.to_le_bytes());
-            chunk(&mut self.inner, b"ds64", &d, Endian::Little)?;
-        }
-        if let Some(pos) = self.fact_offset {
-            self.inner.seek(SeekFrom::Start(pos))?;
-            write32(
-                &mut self.inner,
-                if frames >= u64::from(u32::MAX) {
-                    u32::MAX
-                } else {
-                    frames as u32
-                },
-                e,
-            )?;
-        }
-        self.inner.seek(SeekFrom::Start(self.data_header + 4))?;
-        write32(
-            &mut self.inner,
-            if is64 { u32::MAX } else { self.bytes as u32 },
-            e,
-        )?;
-        self.inner.seek(SeekFrom::Start(end))?;
-        self.inner.flush()?;
-        Ok(self.inner)
+    pub fn finish(self) -> Result<W, Error> {
+        self.mux.finish()
     }
-}
-fn put16(b: &mut [u8], v: u16, e: Endian) {
-    b[..2].copy_from_slice(&match e {
-        Endian::Little => v.to_le_bytes(),
-        Endian::Big => v.to_be_bytes(),
-    });
-}
-fn put32(b: &mut [u8], v: u32, e: Endian) {
-    b[..4].copy_from_slice(&match e {
-        Endian::Little => v.to_le_bytes(),
-        Endian::Big => v.to_be_bytes(),
-    });
-}
-fn write32(w: &mut impl Write, v: u32, e: Endian) -> Result<(), Error> {
-    let mut b = [0; 4];
-    put32(&mut b, v, e);
-    w.write_all(&b)?;
-    Ok(())
-}
-fn chunk(w: &mut impl Write, id: &[u8; 4], data: &[u8], e: Endian) -> Result<(), Error> {
-    w.write_all(id)?;
-    write32(w, data.len() as u32, e)?;
-    w.write_all(data)?;
-    if data.len() & 1 != 0 {
-        w.write_all(&[0])?;
-    }
-    Ok(())
 }

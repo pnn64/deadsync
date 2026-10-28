@@ -41,6 +41,13 @@ position and are not truncated; callers replacing longer files must truncate the
 `AdpcmData` adds fact-trimmed borrowed audio and exact range access using reusable
 block scratch. See [ADPCM.md](ADPCM.md) for coverage and reference disagreements.
 
+`Muxer<W: Write + Seek>` accepts a raw format descriptor, encoded bytes and
+decoded frame counts. It preserves the descriptor without codec dispatch and
+handles fact/ds64/RIFF finalization. Producers own encoded block validation; native
+PCM/float counts are checked against block alignment. The native `Writer` uses
+this same muxer. RF64 promotion also accounts for decoded counts above 32 bits,
+even when compressed data is small.
+
 Build and test by package name:
 
 ```sh
