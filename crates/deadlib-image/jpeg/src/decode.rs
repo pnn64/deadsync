@@ -362,6 +362,9 @@ fn decode_scan(
         if (progression.is_none() && seen[i]) || selected[..j].iter().any(|v| v.0 == i) {
             return Err(Error::Invalid("duplicate sequential component"));
         }
+        if j != 0 && i < selected[j - 1].0 {
+            return Err(Error::Invalid("SOS component order"));
+        }
         selected[j] = (i, dc, 4 + ac);
         let spec = components[i].spec;
         let table = quant[spec.quantization_table as usize]

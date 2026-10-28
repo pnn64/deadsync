@@ -106,30 +106,35 @@ impl Statistics {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn encode_ac(
         &mut self,
         coder: &mut Coder<'_>,
         table: usize,
         block: &[i16; 64],
         conditioning: ArithmeticConditioning,
+        ss: usize,
+        se: usize,
+        al: u8,
     ) -> Result<()> {
         let state = &mut self.ac[table];
-        let last = (1..=63).rfind(|&k| block[ZIGZAG[k]] != 0).unwrap_or(0);
-        let mut k = 1;
-        while k <= 63 {
+        let magnitude = |k: usize| i32::from(block[ZIGZAG[k]]).unsigned_abs() >> al;
+        let last = (ss..=se).rfind(|&k| magnitude(k) != 0).unwrap_or(ss - 1);
+        let mut k = ss;
+        while k <= se {
             let mut base = 3 * (k - 1);
             coder.encode(&mut state[base], u8::from(k > last))?;
             if k > last {
                 break;
             }
-            while block[ZIGZAG[k]] == 0 {
+            while magnitude(k) == 0 {
                 coder.encode(&mut state[base + 1], 0)?;
                 k += 1;
                 base += 3;
             }
             coder.encode(&mut state[base + 1], 1)?;
             let value = i32::from(block[ZIGZAG[k]]);
-            let absolute = value.unsigned_abs();
+            let absolute = magnitude(k);
             coder.fixed(u8::from(value < 0))?;
             let magnitude = absolute - 1;
             coder.encode(&mut state[base + 2], u8::from(magnitude != 0))?;
@@ -159,6 +164,49 @@ impl Statistics {
                     coder.encode(&mut state[category + 14], u8::from(magnitude & bit != 0))?;
                     bit >>= 1;
                 }
+            }
+            k += 1;
+        }
+        Ok(())
+    }
+
+    pub fn encode_ac_refine(
+        &mut self,
+        coder: &mut Coder<'_>,
+        table: usize,
+        block: &[i16; 64],
+        scan: crate::progressive::ProgressiveScan,
+    ) -> Result<()> {
+        let magnitude = |k: usize| i32::from(block[ZIGZAG[k]]).unsigned_abs();
+        let last = (scan.ss..=scan.se)
+            .rfind(|&k| magnitude(k) >> scan.al != 0)
+            .unwrap_or(scan.ss - 1);
+        let history = (scan.ss..=scan.se)
+            .rfind(|&k| magnitude(k) >> scan.ah != 0)
+            .map_or(scan.ss, |k| k + 1);
+        let state = &mut self.ac[table];
+        let mut k = scan.ss;
+        while k <= scan.se {
+            let mut base = 3 * (k - 1);
+            if k >= history {
+                coder.encode(&mut state[base], u8::from(k > last))?;
+                if k > last {
+                    break;
+                }
+            }
+            loop {
+                let value = magnitude(k) >> scan.al;
+                if value > 1 {
+                    coder.encode(&mut state[base + 2], (value & 1) as u8)?;
+                    break;
+                }
+                coder.encode(&mut state[base + 1], u8::from(value != 0))?;
+                if value != 0 {
+                    coder.fixed(u8::from(block[ZIGZAG[k]] < 0))?;
+                    break;
+                }
+                k += 1;
+                base += 3;
             }
             k += 1;
         }

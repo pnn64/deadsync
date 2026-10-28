@@ -18,6 +18,7 @@ mod output;
 mod pixel_encode;
 mod progressive;
 mod reconstruct;
+mod scan_encode;
 mod transform;
 
 pub use arithmetic_encode::ArithmeticConditioning;
@@ -37,6 +38,7 @@ pub use pixel_encode::{
 pub use reconstruct::{
     CmykImage, CmykPolarity, ColorSpace, ComponentPlane, PlanarImage, Upsampling,
 };
+pub use scan_encode::ScanSpec;
 
 pub use marker::{Event, MarkerReader};
 pub use model::*;

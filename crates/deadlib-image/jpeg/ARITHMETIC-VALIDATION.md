@@ -65,8 +65,8 @@ restart markers, accept marker fill, reject surplus restarts, test every
 truncated prefix and resource limits, and run 5,000 bounded deterministic
 mutations. Mutation smoke tests do not replace coverage-guided fuzzing.
 
-Successive approximation encoding, predictive lossless arithmetic and
-hierarchical arithmetic remain open. Independent IJG/mozjpeg and
+Predictive lossless arithmetic and hierarchical arithmetic remain open.
+Independent IJG/mozjpeg and
 external conformance fixtures, broader corruption semantics, streaming,
 performance and allocation measurements are still required. No speed claim or
 complete arithmetic conformance claim is made by this milestone.
@@ -114,7 +114,7 @@ required.
 ## Native arithmetic encoding
 
 `CodingOptions::entropy_coding = EntropyCoding::Arithmetic` selects native
-SOF9 sequential or SOF10 spectral progressive output. Arithmetic coding applies
+SOF9 sequential or SOF10 progressive output. Arithmetic coding applies
 to coefficient rewriting and all pixel/native-raster entry points. The writer
 emits explicit DAC tables; `ArithmeticConditioning` configures L/U (0 <= L <= U
 <= 15) and Kx (1..63). Both encoder table groups use those values. Group zero
@@ -182,6 +182,7 @@ both decoders agree without warnings. `--resume` verifies retained bytes and
 hashes before reuse. An incomplete final checkpoint record from an interrupted
 write is discarded and that case is rerun; earlier corruption is an error.
 Production code still has only the shared `deadlib-image` dependency.
-Arithmetic successive approximation scan generation, predictive lossless and
-hierarchical entropy coding, other reference implementations, streaming and
+Successive approximation and custom scan generation are documented in
+PROGRESSIVE-ENCODER-VALIDATION.md. Predictive lossless and hierarchical entropy
+coding, other reference implementations, streaming and
 measured speed/size/quality comparisons remain part of the overall plan.

@@ -33,7 +33,7 @@ pub enum Subsampling {
     S411,
     S410,
     /// Per-component (H,V) factors in frame order. Each factor is 1..4;
-    /// interleaved frames must contain at most ten blocks per MCU.
+    /// Each interleaved scan must contain at most ten blocks per MCU.
     Custom([(u8, u8); 4]),
 }
 
@@ -53,7 +53,7 @@ impl Subsampling {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct EncodeOptions {
+pub struct EncodeOptions<'a> {
     pub quality: u8,
     /// JPEG DCT output precision: 8 or 12 bits.
     pub precision: u8,
@@ -68,11 +68,11 @@ pub struct EncodeOptions {
     pub cmyk_to_ycck: bool,
     /// Clamp scaled Annex K quantizers to 255; false permits extended tables.
     pub baseline_quantization: bool,
-    pub coding: CodingOptions,
+    pub coding: CodingOptions<'a>,
     pub limits: Limits,
 }
 
-impl Default for EncodeOptions {
+impl Default for EncodeOptions<'_> {
     fn default() -> Self {
         Self {
             quality: 75,
@@ -213,7 +213,7 @@ pub fn quantize(
         }
         blocks_per_mcu += h as usize * v as usize;
     }
-    if channels > 1 && blocks_per_mcu > 10 {
+    if channels > 1 && blocks_per_mcu > 10 && options.coding.scan_script.is_empty() {
         return Err(Error::Invalid("encoder MCU exceeds ten blocks"));
     }
     let ids = match output_space {

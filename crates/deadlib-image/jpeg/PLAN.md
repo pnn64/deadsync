@@ -142,7 +142,7 @@ Verified milestones:
   See ARITHMETIC-VALIDATION.md and tests/reports/arithmetic-progressive-turbo.json.
   Arithmetic encoding, lossless/hierarchy, streaming, broader references and
   conformance, coverage-guided fuzzing and all performance work remain open.
-- Native arithmetic encoder milestone: Annex D.1 interval/carry/byte-stuffing
+- `400df4bc5`: Annex D.1 interval/carry/byte-stuffing
   writer, exact K.4 golden bytes, Annex F DC/AC models, configurable DAC values,
   sequential SOF9 and spectral progressive SOF10 output, shared pixel/raster
   APIs, metadata and restart controls. The writer has constant entropy state
@@ -165,3 +165,23 @@ Verified milestones:
   Successive approximation encoding, lossless/hierarchy, DNL/abbreviated modes,
   streaming, other reference/conformance corpora, coverage-guided fuzzing and
   all benchmark/optimization work remain required.
+- Scan generation/refinement milestone: generated successive approximation
+  through Al=13, borrowed caller `ScanSpec` scripts, DC/AC point transforms and
+  refinements for Huffman/arithmetic, custom spectral bands, partial progressions
+  and separate/mixed sequential scans. Scan planning validates each actual MCU,
+  so layouts such as YCCK 4:1:0 and four 4x4 components can use separate scans.
+  The encoder/decoder now enforce SOS component order from T.81 A.2.3/B.2.3.
+  Correction storage is bounded to 63 bits; no second coefficient/scan vector
+  is allocated by the encoder. All 5,214 structured C/native comparisons from
+  409 distinct inputs and 128 randomized legal scan graphs match coefficients
+  and quantizers exactly, with zero C warnings. Random graphs span 47..427 scans,
+  independent band precisions and mixed component/DC/AC order. Full signed
+  16-bit model extrema also transcode through Huffman point transforms exactly.
+  All 600 default Huffman output hashes remain unchanged. All 69 tests pass in
+  release and isolated debug builds; rustfmt, Clippy and rustdoc with warnings
+  denied pass. See PROGRESSIVE-ENCODER-VALIDATION.md and retained reports.
+  Validation resumed from verified checkpoints after disk exhaustion; temporary
+  builds used an alternate drive and the final matrix used a bounded case
+  directory. Full component counts, lossless/hierarchy, DNL/abbreviated streams,
+  incremental I/O, other references/conformance, coverage-guided fuzzing and
+  measured performance/optimization remain required.

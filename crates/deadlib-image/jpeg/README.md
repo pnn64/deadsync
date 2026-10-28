@@ -24,12 +24,19 @@ signed 16-bit model at either sample precision.
 
 `encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
 without another lossy transform. It preserves quantizer values, visible blocks,
-and APPn/COM payloads. Controls select sequential or spectral progressive
+and APPn/COM payloads. Controls select sequential or progressive
 output, optimized or fixed Huffman tables, restart intervals, and an output
 byte budget. The initial writer accepts one to four components. Metadata keeps
 its relative order; segments beyond the new last scan are emitted before EOI.
-Progressive encoding currently uses full-precision DC and AC bands; successive
-approximation scan generation remains planned.
+Progressive output defaults to full-precision spectral scans. Set
+`successive_approximation` to an initial Al in 1..=13 to generate DC/AC
+refinement passes down to Al=0. `scan_script` borrows caller `ScanSpec`
+descriptors for custom component scans, spectral bands and precision order.
+The descriptor uses frame component IDs; IDs within one scan follow frame
+order, while separate scans may visit components in any order. Explicit
+progressive scripts may intentionally transmit partial progressions. These
+controls are available through both `CodingOptions<'a>` and the pixel/raster
+`EncodeOptions<'a>` entry points.
 `CodingOptions::entropy_coding` selects `EntropyCoding::Huffman` (default) or
 native `EntropyCoding::Arithmetic`. Arithmetic output uses SOF9/SOF10, explicit
 DAC tables, configurable `ArithmeticConditioning` and the same restart,
@@ -47,6 +54,9 @@ the native transform. Already encoded YCCK values pass through. `quantize` expos
 entropy coding. Alpha/indexed conversion is explicit; grayscale is always 1x1
 sampled. Color presets enlarge the first component and also K for YCCK; `Subsampling::Custom`
 specifies every component's factors, including fractional ratios.
+Explicit separate-component scripts support layouts whose global sampling
+sum exceeds ten blocks, including YCCK 4:1:0. The ten-block restriction applies
+to each actual interleaved scan.
 
 ```rust
 use deadlib_image_jpeg::{decode_coefficients, Limits, Upsampling};
@@ -103,3 +113,5 @@ COLOR-VALIDATION.md describes CMYK/YCCK conversion, exact rational chroma
 siting, profile/polarity policies and the 486-case color reference gate.
 CMYK-ENCODER-VALIDATION.md covers source-polarity and CMYK-to-YCCK encoding.
 ARITHMETIC-VALIDATION.md covers sequential/progressive arithmetic decoding and reference gates.
+PROGRESSIVE-ENCODER-VALIDATION.md covers refinement/custom scan generation and
+the external scan-script matrix.
