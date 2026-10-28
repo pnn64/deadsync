@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [index-query and stream-storage measurements](PACKET_STATE.md) cover
+The latest [index-construction and short-page measurements](INDEX_BUILD.md)
+cover stable page grouping, reused demux stream positions and direct short
+lacing sums, with rotating CPU/heap trials and exact protocol comparisons.
+
+The earlier [index-query and stream-storage measurements](PACKET_STATE.md) cover
 early-exit packet-existence checks, endpoint stream selection and a smaller
 stored granule, with paired query measurements and exact state comparisons.
 

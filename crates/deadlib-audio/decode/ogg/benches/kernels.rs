@@ -72,6 +72,89 @@ fn main() {
         }
         return;
     }
+    for segments in [1, 17, 128, 255] {
+        let frame = encode_page(
+            PageHeader {
+                flags: 0,
+                granule_position: UNKNOWN_GRANULE_POSITION,
+                serial: 42,
+                sequence: 0,
+            },
+            &vec![255; segments],
+            &vec![37; segments * 255],
+        )
+        .unwrap();
+        let header = &frame[..27 + segments];
+        for chunk in [1, 7, 27] {
+            let mut decoder = PageDecoder::new();
+            decoder.push(header).unwrap();
+            probe(&format!("decoder-header/{segments}/{chunk}"), 1000, || {
+                decoder.reset();
+                for bytes in black_box(header).chunks(chunk) {
+                    let progress = decoder.push(bytes).unwrap();
+                    assert_eq!(progress.consumed, bytes.len());
+                    assert!(progress.page.is_none());
+                }
+            });
+        }
+    }
+    for streams in [2u32, 16, 128] {
+        for shuffled in [false, true] {
+            let mut bytes = Vec::new();
+            for sequence in 0..64 {
+                for i in 0..streams {
+                    let serial = if shuffled {
+                        (i * 17 + sequence * 13) & (streams - 1)
+                    } else {
+                        i
+                    };
+                    bytes.extend(
+                        encode_page(
+                            PageHeader {
+                                flags: if sequence == 0 {
+                                    BOS
+                                } else if sequence == 63 {
+                                    EOS
+                                } else {
+                                    0
+                                },
+                                granule_position: sequence as u64,
+                                serial,
+                                sequence,
+                            },
+                            &[1],
+                            &[37],
+                        )
+                        .unwrap(),
+                    );
+                }
+            }
+            probe(
+                &format!("mux-index/{streams}/{shuffled}"),
+                if streams == 128 { 1 } else { 8 },
+                || {
+                    black_box(
+                        OggIndex::read(black_box(bytes.as_slice()), IndexOptions::default())
+                            .unwrap(),
+                    );
+                },
+            );
+        }
+    }
+    for size in [65025, 130050] {
+        let mut writer = PacketWriter::new(Vec::new(), 42);
+        writer.write_packet(b"header", 0, false).unwrap();
+        let data = vec![37; size];
+        for i in 0..16 {
+            writer.write_packet(&data, i, i == 15).unwrap();
+        }
+        let bytes = writer.into_inner();
+        probe(&format!("span-index/{size}"), 1, || {
+            black_box(
+                OggIndex::read(black_box(bytes.as_slice()), IndexOptions::default()).unwrap(),
+            );
+        });
+    }
     for segments in [8, 17, 128, 255] {
         let frame = encode_page(
             PageHeader {

@@ -167,3 +167,6 @@ optimization level 3, one codegen unit, LTO, debug symbols, aborting panics and
 the static CRT.
 
 Saved workers and traces remain under ignored `target/ogg-packet-state-20261028/`.
+
+The subsequent [index-construction and short-page measurements](INDEX_BUILD.md)
+cover stable page grouping, reused demux stream positions and short lacing sums.
