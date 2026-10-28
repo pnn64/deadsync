@@ -1,0 +1,15 @@
+{
+  "reference": "libjpeg-turbo 3.2.1 lossless encoder; expected samples constructed directly from exact input integers",
+  "precision": 2,
+  "width": 9,
+  "height": 19,
+  "components": 10,
+  "predictor": 4,
+  "point_transform": 0,
+  "restart_rows": 1,
+  "layout": "separate scans",
+  "source_sha256": "da7ed6c15ca4593ce62ac79e220339ff05288b4021c08000cbd80a07fa1c8ffd",
+  "sha256": "3828d410a77d845d5c4c68de924aad40804bbe9023ac5adfb4b488d1df1e6b15",
+  "samples_sha256": "0a24aa233108861f5cdcd08342a9090e321ca07beff431bbdd35c8bb8a876bc4",
+  "reference_decoder_result": "rejects its own output: Invalid component ID 4 in SOS"
+}

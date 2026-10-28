@@ -86,7 +86,7 @@ fn malformed_public_reconstruction_models_return_errors() {
     bad.components[0].samples[0] = 65535;
     assert!(bad.to_image(Upsampling::Nearest).is_err());
     let mut bad = planes.clone();
-    bad.precision = 16;
+    bad.precision = 17;
     assert!(bad.to_image(Upsampling::Nearest).is_err());
     let mut cmyk = planes.to_cmyk(Upsampling::Nearest).unwrap();
     cmyk.samples[0] = 65535;

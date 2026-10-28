@@ -7,7 +7,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy)]
-struct Quantization {
+pub(crate) struct Quantization {
     values: [u16; 64],
     wide: bool,
 }
@@ -250,7 +250,7 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
     })
 }
 
-fn parse_quant(mut data: &[u8], tables: &mut [Option<Quantization>; 4]) -> Result<()> {
+pub(crate) fn parse_quant(mut data: &[u8], tables: &mut [Option<Quantization>; 4]) -> Result<()> {
     if data.is_empty() {
         return Err(Error::Invalid("empty DQT"));
     }
@@ -284,7 +284,7 @@ fn parse_quant(mut data: &[u8], tables: &mut [Option<Quantization>; 4]) -> Resul
     Ok(())
 }
 
-fn parse_huffman(mut data: &[u8], tables: &mut [Option<Huffman>; 8]) -> Result<()> {
+pub(crate) fn parse_huffman(mut data: &[u8], tables: &mut [Option<Huffman>; 8]) -> Result<()> {
     if data.is_empty() {
         return Err(Error::Invalid("empty DHT"));
     }

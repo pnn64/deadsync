@@ -11,6 +11,7 @@ mod encode;
 mod entropy;
 mod exif;
 mod huffman_encode;
+mod lossless;
 mod marker;
 mod metadata;
 mod model;
@@ -28,6 +29,7 @@ pub use encode::{
     encode_coefficients_with_metadata,
 };
 pub use exif::{ByteOrder, Exif, ExifEntry, ExifIfd};
+pub use lossless::{LosslessCoding, LosslessImage, decode_lossless};
 pub use metadata::{
     Adobe, DensityUnit, ICC_CHUNK_BYTES, IccChunk, IccHeader, IccProfile, Jfif, Jfxx, MAX_ICC_BYTES,
 };

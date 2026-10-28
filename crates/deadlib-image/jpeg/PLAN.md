@@ -165,7 +165,7 @@ Verified milestones:
   Successive approximation encoding, lossless/hierarchy, DNL/abbreviated modes,
   streaming, other reference/conformance corpora, coverage-guided fuzzing and
   all benchmark/optimization work remain required.
-- Scan generation/refinement milestone: generated successive approximation
+- `9e1773b11`: generated successive approximation
   through Al=13, borrowed caller `ScanSpec` scripts, DC/AC point transforms and
   refinements for Huffman/arithmetic, custom spectral bands, partial progressions
   and separate/mixed sequential scans. Scan planning validates each actual MCU,
@@ -185,3 +185,24 @@ Verified milestones:
   directory. Full component counts, lossless/hierarchy, DNL/abbreviated streams,
   incremental I/O, other references/conformance, coverage-guided fuzzing and
   measured performance/optimization remain required.
+- Predictive lossless Huffman decoder milestone: native SOF3 at every unsigned
+  precision from 2 through 16, all seven predictors, unclamped integer
+  prediction, arithmetic half shifts, modulo-65536 differences, category 16
+  without appended bits, per-component Pt, whole-row restarts and interleaved
+  or separate scans. Exact native planes retain borrowed metadata/ICC views
+  and move into the common planar/color API without copying sample buffers.
+  Native conversion now covers 2..16-bit samples with wide color intermediates.
+  All 4,628 C/native/source comparisons pass exactly with zero C warnings.
+  Forty-five pinned fixtures span every precision and all predictor selections;
+  every prefix and 4,500 bounded mutations run in Cargo tests. Literal Annex H
+  cases cover subsampling, odd padding, vertically sampled restart borders,
+  16-bit wraparound, entropy destinations and 255 frame components. A retained
+  ten-component C-encoded file matches independently constructed source samples;
+  the reference decoder rejects its own output at its fifth component scan.
+  The successful C matrix stays within its supported 1x1 sampling/1..4 component
+  range. All 78 tests pass in release and isolated debug builds; rustfmt,
+  Clippy and rustdoc with warnings denied pass. See LOSSLESS-VALIDATION.md and
+  tests/reports/lossless-turbo.json. SOF3 encoding, arithmetic/differential
+  lossless, hierarchy, DNL/abbreviated streams, incremental I/O, other references
+  and conformance, coverage-guided fuzzing and all measured performance work
+  remain required.

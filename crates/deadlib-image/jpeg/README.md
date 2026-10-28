@@ -22,6 +22,18 @@ JPEG without changing its coefficients when the coefficients fit the target
 Huffman process's magnitude categories. Arithmetic decisions use the full
 signed 16-bit model at either sample precision.
 
+`decode_lossless(&jpeg, limits)` decodes predictive Huffman SOF3 directly into
+native unsigned sample planes at every precision from 2 through 16 bits.
+All seven predictors, per-scan point transforms, whole-row restart intervals,
+interleaved/separate scans, subsampling and up to 255 frame components are
+supported. At Pt=0 the samples are exact source integers; Pt>0 reconstructs
+`(source >> Pt) << Pt`. The `coding` records retain each component's predictor
+and Pt. APPn/COM and ICC views use the same borrowed metadata representation.
+`LosslessImage::into_planar` moves its buffers into the common color interface
+without copying samples. Shared output keeps 8-bit values and scales other
+precisions to 16-bit storage; use the native planes for exact original values.
+See LOSSLESS-VALIDATION.md for reference gates and remaining lossless work.
+
 `encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
 without another lossy transform. It preserves quantizer values, visible blocks,
 and APPn/COM payloads. Controls select sequential or progressive
@@ -90,7 +102,7 @@ Limits bound pixels, coefficient/sample storage, metadata (including segment
 record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark; allocation instrumentation remains planned.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
-unsupported errors. Predictive lossless, hierarchy,
+unsupported errors. Predictive lossless encoding and arithmetic lossless, hierarchy,
 DNL, streaming, additional encoder scan strategies, and the broader validation
 and performance work remain required.
 

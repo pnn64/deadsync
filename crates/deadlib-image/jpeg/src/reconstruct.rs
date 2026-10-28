@@ -1,5 +1,5 @@
 use crate::transform::idct;
-use crate::{CoefficientImage, ComponentSpec, Error, Limits, Result};
+use crate::{CoefficientImage, ComponentSpec, Error, FrameHeader, Limits, MetadataSegment, Result};
 use deadlib_image::{ColorType, Image, Samples};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -50,8 +50,8 @@ pub struct PlanarImage {
     pub color_space: ColorSpace,
     pub cmyk_polarity: CmykPolarity,
     pub components: Vec<ComponentPlane>,
-    limits: Limits,
-    memory_bytes: usize,
+    pub(crate) limits: Limits,
+    pub(crate) memory_bytes: usize,
 }
 
 /// How component samples are expanded to the full image grid. Both policies use
@@ -67,31 +67,7 @@ impl CoefficientImage<'_> {
     /// Interpret only well-known JFIF, Adobe and RGB component conventions.
     /// An untagged three-component JPEG conventionally uses YCbCr.
     pub fn color_space(&self) -> ColorSpace {
-        let adobe = self
-            .metadata
-            .iter()
-            .rev()
-            .filter(|s| s.preceding_scans == 0)
-            .find_map(|s| s.adobe().ok().flatten().map(|a| a.transform));
-        let jfif = self.metadata.iter().any(|s| {
-            s.preceding_scans == 0
-                && s.marker == 0xe0
-                && s.data.len() >= 14
-                && s.data.starts_with(b"JFIF\0")
-        });
-        match (self.components.len(), adobe) {
-            (1, _) => ColorSpace::Grayscale,
-            (3, _) if jfif => ColorSpace::YCbCr,
-            (3, Some(0)) => ColorSpace::Rgb,
-            (3, Some(1)) => ColorSpace::YCbCr,
-            (3, None) if !jfif && self.components.iter().map(|c| c.spec.id).eq(*b"RGB") => {
-                ColorSpace::Rgb
-            }
-            (3, None) => ColorSpace::YCbCr,
-            (4, Some(2)) => ColorSpace::Ycck,
-            (4, None | Some(0)) => ColorSpace::Cmyk,
-            _ => ColorSpace::Unknown,
-        }
+        infer_color(&self.frame, &self.metadata)
     }
 
     pub fn reconstruct(&self) -> Result<PlanarImage> {
@@ -157,19 +133,8 @@ impl CoefficientImage<'_> {
     }
 
     pub fn cmyk_polarity(&self) -> CmykPolarity {
-        if self.components.len() == 4
-            && self
-                .metadata
-                .iter()
-                .filter(|s| s.preceding_scans == 0)
-                .any(|s| {
-                    s.adobe()
-                        .ok()
-                        .flatten()
-                        .is_some_and(|a| a.transform == 0 || a.transform == 2)
-                })
-        {
-            CmykPolarity::AdobeInverted
+        if self.components.len() == 4 {
+            infer_cmyk_polarity(&self.metadata)
         } else {
             CmykPolarity::Conventional
         }
@@ -224,7 +189,8 @@ impl CoefficientImage<'_> {
 impl PlanarImage {
     /// Convert to shared gray/RGB storage. CMYK uses an uncalibrated subtractive
     /// approximation with explicit ink polarity; use `to_cmyk` and the original
-    /// ICC profile for color-managed conversion. 12-bit output scales to 16 bits.
+    /// ICC profile for color-managed conversion. Precision other than 8 bits
+    /// scales to shared 16-bit storage; native planes retain original integers.
     pub fn to_image(&self, upsampling: Upsampling) -> Result<Image> {
         let color_type = match self.color_space {
             ColorSpace::Grayscale => ColorType::Grayscale,
@@ -361,7 +327,7 @@ impl PlanarImage {
         };
         if self.width == 0
             || self.height == 0
-            || !matches!(self.precision, 8 | 12)
+            || !(2..=16).contains(&self.precision)
             || self.components.len() != count
             || (self.color_space == ColorSpace::Ycck
                 && self.cmyk_polarity != CmykPolarity::AdobeInverted)
@@ -388,7 +354,7 @@ impl PlanarImage {
             .map(|c| c.spec.vertical_sampling as usize)
             .max()
             .unwrap();
-        let max = (1u16 << self.precision) - 1;
+        let max = ((1u32 << self.precision) - 1) as u16;
         for c in &self.components {
             if c.width
                 != (self.width as usize * c.spec.horizontal_sampling as usize).div_ceil(max_h)
@@ -493,12 +459,12 @@ impl CmykImage {
         let pixels = self.width as usize * self.height as usize;
         if self.width == 0
             || self.height == 0
-            || !matches!(self.precision, 8 | 12)
+            || !(2..=16).contains(&self.precision)
             || pixels.checked_mul(4) != Some(self.samples.len())
         {
             return Err(Error::Invalid("CMYK image layout"));
         }
-        let max = (1u16 << self.precision) - 1;
+        let max = ((1u32 << self.precision) - 1) as u16;
         if self.samples.iter().any(|&v| v > max) {
             return Err(Error::Invalid("CMYK sample range"));
         }
@@ -507,16 +473,16 @@ impl CmykImage {
 }
 
 fn ycbcr_to_rgb(values: [i32; 3], precision: u8) -> [i32; 3] {
-    let [y, cb, cr] = values;
-    let center = 1i32 << (precision - 1);
-    let max = (1i32 << precision) - 1;
+    let [y, cb, cr] = values.map(i64::from);
+    let center = 1i64 << (precision - 1);
+    let max = (1i64 << precision) - 1;
     let (cb, cr) = (cb - center, cr - center);
     [
         y + ((91881 * cr + 32768) >> 16),
         y + ((-22554 * cb - 46802 * cr + 32768) >> 16),
         y + ((116130 * cb + 32768) >> 16),
     ]
-    .map(|v| v.clamp(0, max))
+    .map(|v| v.clamp(0, max) as i32)
 }
 
 fn ycck_to_cmyk(values: [i32; 4], precision: u8) -> [i32; 4] {
@@ -533,7 +499,48 @@ fn cmyk_to_rgb(values: [i32; 4], polarity: CmykPolarity, precision: u8) -> [i32;
             max - v
         }
     });
-    [0, 1, 2].map(|i| (inverse[i] * inverse[3] + max / 2) / max)
+    [0, 1, 2].map(|i| {
+        ((i64::from(inverse[i]) * i64::from(inverse[3]) + i64::from(max / 2)) / i64::from(max))
+            as i32
+    })
+}
+
+pub(crate) fn infer_color(frame: &FrameHeader, metadata: &[MetadataSegment<'_>]) -> ColorSpace {
+    let adobe = metadata
+        .iter()
+        .rev()
+        .filter(|s| s.preceding_scans == 0)
+        .find_map(|s| s.adobe().ok().flatten().map(|a| a.transform));
+    let jfif = metadata.iter().any(|s| {
+        s.preceding_scans == 0
+            && s.marker == 0xe0
+            && s.data.len() >= 14
+            && s.data.starts_with(b"JFIF\0")
+    });
+    match (frame.components.len(), adobe) {
+        (1, _) => ColorSpace::Grayscale,
+        (3, _) if jfif => ColorSpace::YCbCr,
+        (3, Some(0)) => ColorSpace::Rgb,
+        (3, Some(1)) => ColorSpace::YCbCr,
+        (3, None) if frame.components.iter().map(|c| c.id).eq(*b"RGB") => ColorSpace::Rgb,
+        (3, None) => ColorSpace::YCbCr,
+        (4, Some(2)) => ColorSpace::Ycck,
+        (4, None | Some(0)) => ColorSpace::Cmyk,
+        _ => ColorSpace::Unknown,
+    }
+}
+
+pub(crate) fn infer_cmyk_polarity(metadata: &[MetadataSegment<'_>]) -> CmykPolarity {
+    if metadata.iter().filter(|s| s.preceding_scans == 0).any(|s| {
+        s.adobe()
+            .ok()
+            .flatten()
+            .is_some_and(|a| a.transform == 0 || a.transform == 2)
+    }) {
+        CmykPolarity::AdobeInverted
+    } else {
+        CmykPolarity::Conventional
+    }
 }
 
 fn sample(
@@ -579,7 +586,7 @@ mod tests {
     use super::*;
     #[test]
     fn subtractive_extrema_and_polarity_conversion() {
-        for precision in [8, 12] {
+        for precision in 2..=16 {
             let max = (1i32 << precision) - 1;
             assert_eq!(
                 cmyk_to_rgb([0, 0, 0, 0], CmykPolarity::Conventional, precision),
@@ -599,6 +606,13 @@ mod tests {
                     precision
                 ),
                 [max; 4]
+            );
+            let center = 1 << (precision - 1);
+            assert_eq!(ycbcr_to_rgb([max, center, center], precision), [max; 3]);
+            assert_eq!(ycbcr_to_rgb([0, center, center], precision), [0; 3]);
+            assert_eq!(
+                cmyk_to_rgb([max; 4], CmykPolarity::AdobeInverted, precision),
+                [max; 3]
             );
         }
         let mut image = CmykImage {

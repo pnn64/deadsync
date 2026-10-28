@@ -83,3 +83,15 @@ The native arithmetic encoder gate uses `reference_arithmetic_encode.py` with
 this same C coefficient decoder. It snapshots executables automatically and
 supports verified checkpoint resumption; native encoder bytes are never taken
 from the reference library.
+
+## Predictive lossless reference gate
+
+`lossless.c` uses public `jpeg[12/16]_write_scanlines` and
+`jpeg[12/16]_read_scanlines` APIs at precision 2..16. Encoding accepts
+`encode input.raw output.jpg width height precision components predictor Pt
+restart-rows layout`; the raw source is interleaved LE u16 at every precision.
+Layout 0 interleaves, layout 1 separates components, and layout 2 separates
+components with predictor/Pt varying by component. Decoding accepts
+`decode input.jpg output.samples` and emits exact native `JLP1` planes.
+See ../../LOSSLESS-VALIDATION.md for format, commands, scope and the reference
+decoder's sampling/component-count limitations.
