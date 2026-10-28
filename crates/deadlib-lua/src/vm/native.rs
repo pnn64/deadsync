@@ -654,6 +654,9 @@ impl Vm {
             let Value::String(id) = value else {
                 unreachable!("print string conversion");
             };
+            if self.output.is_none() {
+                self.ensure_file_backend()?;
+            }
             let bytes = &self.strings.bytes[slot_index(id.0)];
             let bytes = &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())];
             if let Some(output) = &mut self.output {
@@ -663,9 +666,9 @@ impl Vm {
                 output.extend_from_slice(bytes);
             } else {
                 if completed != 0 {
-                    io::stdout_write(b"\t").map_err(io_error)?;
+                    let _ = self.io.write_standard(1, b"\t");
                 }
-                io::stdout_write(bytes).map_err(io_error)?;
+                let _ = self.io.write_standard(1, bytes);
             }
         }
         let next = if frame.pc() == 1 { 0 } else { completed + 1 };
@@ -673,7 +676,8 @@ impl Vm {
             if let Some(output) = &mut self.output {
                 output.push(b'\n');
             } else {
-                io::stdout_write(b"\n").map_err(io_error)?;
+                self.ensure_file_backend()?;
+                let _ = self.io.write_standard(1, b"\n");
             }
             return Ok(self.return_frame(frame, base, 0));
         }
@@ -685,10 +689,6 @@ impl Vm {
         }
         Ok(None)
     }
-}
-
-fn io_error(error: std::io::Error) -> Error {
-    Error::new(ErrorKind::Runtime, 0, error.to_string())
 }
 
 impl Vm {

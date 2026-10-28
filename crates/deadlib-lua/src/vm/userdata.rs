@@ -322,6 +322,6 @@ impl Drop for Vm {
         if !self.gc.closing {
             self.finalize_on_close();
         }
-        let _ = io::stdout_flush();
+        let _ = self.io.flush_stdout();
     }
 }

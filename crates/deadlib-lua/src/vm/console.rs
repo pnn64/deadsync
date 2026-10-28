@@ -2,31 +2,40 @@
 use super::*;
 use standalone::EntryMode;
 
-fn console_write(output: &mut Option<Vec<u8>>, bytes: &[u8]) {
+fn console_write(io: &mut io::Io, output: &mut Option<Vec<u8>>, bytes: &[u8]) {
     if let Some(output) = output {
         output.extend_from_slice(bytes);
     } else {
-        let _ = io::stdout_write(bytes);
-        let _ = io::stdout_flush();
+        let _ = io.write_standard(1, bytes);
+        let _ = io.flush_stdout();
     }
 }
 
 impl Vm {
     pub(super) fn debug_console_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
+        self.ensure_file_backend()?;
         let base = frame.base;
         if frame.pc() == 2 {
             match self.registers[base + 1] {
-                Value::String(id) => io::stderr_write(io::c_bytes(self.string_bytes(id).unwrap())),
-                Value::Number(n) => io::stderr_write(&format_number(n)),
+                Value::String(id) => {
+                    let _ = self
+                        .io
+                        .write_standard(2, io::c_bytes(&self.strings.bytes[slot_index(id.0)]));
+                }
+                Value::Number(n) => {
+                    let _ = self.io.write_standard(2, &format_number(n));
+                }
                 // The C reference passes NULL to fputs for other error values.
-                _ => io::stderr_write(b"(null)"),
+                _ => {
+                    let _ = self.io.write_standard(2, b"(null)");
+                }
             }
-            io::stderr_write(b"\n");
+            let _ = self.io.write_standard(2, b"\n");
         }
         if frame.pc() != 0 {
             self.debug_console_clear(frame);
         }
-        io::stderr_write(b"lua_debug> ");
+        let _ = self.io.write_standard(2, b"lua_debug> ");
         let mut buffer = [0; 249];
         let len = self.console_read(&mut buffer);
         if len == 0 || io::c_bytes(&buffer[..len]) == b"cont\n" {
@@ -49,12 +58,11 @@ impl Vm {
                 }
             }
             Err(error) => {
-                io::stderr_write(io::c_bytes(&loads::message(
-                    name,
-                    &error,
-                    source.first() == Some(&27),
-                )));
-                io::stderr_write(b"\n");
+                let _ = self.io.write_standard(
+                    2,
+                    io::c_bytes(&loads::message(name, &error, source.first() == Some(&27))),
+                );
+                let _ = self.io.write_standard(2, b"\n");
                 self.debug_console_clear(frame);
             }
         }
@@ -71,9 +79,7 @@ impl Vm {
     }
 
     fn console_read(&mut self, buffer: &mut [u8]) -> usize {
-        let Some(key) = self.io.stdin else {
-            return 0;
-        };
+        let key = self.standard_stream(0);
         let stream = &mut self.io.files[slot_index(key.get())];
         let mut len = 0;
         while len < buffer.len() {
@@ -184,7 +190,7 @@ impl Vm {
         }
         self.registers.clear();
         self.top = 0;
-        console_write(&mut self.output, b"\n");
+        console_write(&mut self.io, &mut self.output, b"\n");
         Ok(())
     }
 
@@ -199,14 +205,22 @@ impl Vm {
     }
 
     fn console_line(&mut self, first: bool, line: &mut Vec<u8>) -> Result<bool, Error> {
+        self.ensure_file_backend()?;
         let prompt = self.get_global(if first { b"_PROMPT" } else { b"_PROMPT2" })?;
         match prompt {
             Value::String(id) => console_write(
+                &mut self.io,
                 &mut self.output,
                 io::c_bytes(&self.strings.bytes[slot_index(id.0)]),
             ),
-            Value::Number(number) => console_write(&mut self.output, &format_number(number)),
-            _ => console_write(&mut self.output, if first { b"> " } else { b">> " }),
+            Value::Number(number) => {
+                console_write(&mut self.io, &mut self.output, &format_number(number))
+            }
+            _ => console_write(
+                &mut self.io,
+                &mut self.output,
+                if first { b"> " } else { b">> " },
+            ),
         }
         // The default official console uses fgets(buffer, 512, stdin).
         // Consume its entire fragment even when strlen stops at an embedded NUL.

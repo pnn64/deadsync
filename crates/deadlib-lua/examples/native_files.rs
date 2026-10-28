@@ -7,7 +7,10 @@ fn run() {
     let [image, source, ..] = args.as_slice() else {
         panic!("native_files image source.lua [rust]")
     };
-    let rust_libraries = args.get(2).is_some_and(|mode| mode == "rust");
+    let stdio = args.get(2).is_some_and(|mode| mode.starts_with("stdio"));
+    let rust_libraries = args
+        .get(2)
+        .is_some_and(|mode| mode == "rust" || mode == "stdio-rust");
     // SAFETY: the fixture image is built from this build's boundary protocol.
     let loader =
         std::sync::Arc::new(unsafe { NativeCAbiLoader::from_library(image.as_bytes()) }.unwrap());
@@ -18,13 +21,22 @@ fn run() {
     };
     vm.set_native_library_loader(Some(loader.clone()));
     if rust_libraries {
-        vm.execute(&compile_named(b"early=assert(io.tmpfile());assert(early:write('early\\n')and early:seek('set')==0 and early:read(2)=='ea')",b"=before C activation").unwrap()).unwrap();
+        let source = if stdio {
+            b"early_stdin=io.stdin;early_stdout=io.stdout;early_stderr=io.stderr;assert(io.read(2)=='al')".as_slice()
+        } else {
+            b"early=assert(io.tmpfile());assert(early:write('early\\n')and early:seek('set')==0 and early:read(2)=='ea')"
+        };
+        vm.execute(&compile_named(source, b"=before C activation").unwrap())
+            .unwrap();
         assert_eq!(NativeCAbiLoader::statistics().states_created, 0);
     } else {
         let all = vm
             .new_native_function(loader.open_libraries().unwrap())
             .unwrap();
         vm.call(all, &[]).unwrap();
+        if stdio {
+            vm.execute(&compile_named(b"early_stdin=io.stdin;early_stdout=io.stdout;early_stderr=io.stderr;assert(io.read(2)=='al')",b"=stdio setup").unwrap()).unwrap();
+        }
     }
     let library = loader.open(image.as_bytes()).unwrap();
     let entry = vm

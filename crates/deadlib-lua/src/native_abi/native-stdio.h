@@ -52,6 +52,8 @@ API int boundary_stdio(int op,void *pointer,BoundaryValue *value) {
       }
       else file=fopen(value->bytes,(const char *)value->userdata);
       value->userdata=file;return file?0:STDIO_ERROR;
+    case 14:
+      value->userdata=value->integer==0?stdin:value->integer==1?stdout:stderr;return 0;
     default: return EINVAL;
   }
 }

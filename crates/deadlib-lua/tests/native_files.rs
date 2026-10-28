@@ -172,4 +172,28 @@ fn native_file_payloads_preserve_stdio_buffers_ownership_and_close_state() {
         .unwrap(),
     )
     .unwrap();
+    drop(vm);
+    let input = folder.join("standard-input.txt");
+    std::fs::write(&input, b"alpha\nbeta\ngamma\nreturn 17\n").unwrap();
+    let mut vm = Vm::new();
+    vm.set_native_library_loader(Some(loader.clone()));
+    let library = loader.open(image.to_string_lossy().as_bytes()).unwrap();
+    let entry = vm
+        .new_native_function(library.symbol(b"luaopen_native_files").unwrap())
+        .unwrap();
+    let module = vm.call(entry, &[]).unwrap()[0];
+    vm.set_global(b"native_files", module).unwrap();
+    let path = vm.intern(input.to_string_lossy().as_bytes());
+    vm.set_global(b"standard_input_path", path).unwrap();
+    vm.execute(&compile_named(b"native_files.capture_begin(0,standard_input_path);early_stdin=io.stdin;early_stdout=io.stdout;early_stderr=io.stderr;assert(io.read(2)=='al')",b"=standard setup").unwrap()).unwrap();
+    vm.execute(
+        &compile_named(
+            include_bytes!("native-boundary/standard-streams.lua"),
+            b"@standard-streams.lua",
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    vm.execute(&compile_named(b"native_files.capture_end(0)", b"=restore stdin").unwrap())
+        .unwrap();
 }

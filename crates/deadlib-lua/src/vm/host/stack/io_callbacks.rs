@@ -53,6 +53,7 @@ pub(in crate::vm) fn finalize(call: &mut HostCall<'_>) -> Result<(), Error> {
 }
 pub(in crate::vm) fn readline(call: &mut HostCall<'_>) -> Result<(), Error> {
     let mut stack = stack(call)?;
+    stack.call.vm.ensure_file_backend()?;
     let file = stack.value(-10003).unwrap_or(Value::Nil);
     let close = stack.value(-10004).unwrap_or(Value::Nil).is_truthy();
     let key = stack

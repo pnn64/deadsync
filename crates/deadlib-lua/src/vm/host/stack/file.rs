@@ -7,18 +7,7 @@ impl NativeStack<'_, '_> {
         &mut self,
         backend: Arc<dyn io::native::FileBackend>,
     ) -> Result<(), Error> {
-        if self
-            .call
-            .vm
-            .io
-            .backend
-            .as_ref()
-            .is_some_and(|old| old.identity() != backend.identity())
-        {
-            return Err(self.error(b"one Lua state cannot mix C API images"));
-        }
-        self.call.vm.io.backend = Some(backend);
-        Ok(())
+        self.call.vm.install_file_backend(backend)
     }
     #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
     pub(crate) fn attach_standard_stream(
@@ -34,8 +23,11 @@ impl NativeStack<'_, '_> {
         {
             return Err(self.error(b"invalid standard stream"));
         }
-        let key = self.call.vm.standard_stream(kind);
-        self.call.vm.userdata[slot_index(id.0)].file = Some(key);
+        self.call.vm.standard_stream(kind);
+        self.call
+            .vm
+            .file_key(Value::Userdata(id), false)
+            .ok_or_else(|| self.error(b"invalid standard stream"))?;
         Ok(())
     }
     /// Compile a named file, or shared standard input when `path` is None.
@@ -49,6 +41,9 @@ impl NativeStack<'_, '_> {
     /// Rejects pending unprotected errors, stack overflow and fatal quotas,
     /// following [`Self::load_reader`].
     pub fn load_file(&mut self, path: Option<&[u8]>) -> Result<NativeLoadStatus, Error> {
+        if path.is_none() {
+            self.call.vm.ensure_file_backend()?;
+        }
         self.check_error()?;
         if !self.check_stack(2) {
             return Err(self.error(b"native stack overflow"));

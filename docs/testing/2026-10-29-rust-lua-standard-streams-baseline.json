@@ -1,0 +1,21 @@
+{
+  "commit": "5dec4513bbd9958ac1a2bedc99597be9fc142ed3",
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\standard-streams-before\\native_files.exe",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\standard-streams-before\\native-files.dll",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\standard-streams-before\\standard.lua",
+    "rust"
+  ],
+  "returncode": 0,
+  "stdout_hex": "66616c73650a",
+  "stderr_hex": "4e41544956455f46494c4553206f7065726174696f6e733d3530207374617465733d312067726f7570733d31206c69627261726965733d310a",
+  "expected_stdout_hex": "747275650a",
+  "artifacts": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\standard-streams-before\\native_files.exe": "3f6c9a05b163c6c5b57afd49ddce453f5cc577cea05af0020375bb4c85d0eb30",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\standard-streams-before\\native-files.dll": "edb9458eff9fa64b2e56b1c35010594d0fcffb9fcb53bf015a876a0ed3c45379",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\standard-streams-before\\standard.lua": "584ea5084741b96a1f48c53fad93eab27284ccda1adfdae17aa001c2722b2a50"
+  },
+  "reference_report": "docs/testing/2026-10-28-rust-lua-file-payloads-current.json",
+  "reference_report_sha256": "6eb6eb52b13083b6ca18eb1be6245b59a2b42c797572cc6d325d6b271523aba0",
+  "audit_script_sha256": "01e3231e0d75162ae1068757d9ade994d642eb42d0a7a3926c6e16c256258b75"
+}

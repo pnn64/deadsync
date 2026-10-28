@@ -24,6 +24,16 @@ impl FileBackend for Backend {
     fn identity(&self) -> usize {
         self._library.0
     }
+    fn standard(&self, kind: usize) -> usize {
+        let mut value = BoundaryValue {
+            integer: kind as c_int,
+            ..Default::default()
+        };
+        // SAFETY: the primitive returns this image's standard FILE pointer.
+        let code = unsafe { (self.operation)(14, std::ptr::null_mut(), &mut value) };
+        assert_eq!(code, 0);
+        value.userdata as usize
+    }
     fn attach(&self, pointer: usize) -> Box<dyn File> {
         Box::new(Handle {
             backend: self.clone(),

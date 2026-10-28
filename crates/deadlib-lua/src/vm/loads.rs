@@ -464,6 +464,7 @@ impl Vm {
         if frame.pc == 0 {
             let args = frame.vararg_start - 1;
             let (name, opened) = if self.argument(args, frame.argc(), 0) == Value::Nil {
+                self.ensure_file_backend()?;
                 (b"=stdin".to_vec(), self.open_file_reader(None))
             } else {
                 let path = self.string_argument(args, frame.argc(), 0)?;

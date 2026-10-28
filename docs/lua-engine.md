@@ -1506,9 +1506,21 @@ created before any C API activation. `NativeLibraryLoader::as_any` lets a
 configured C adapter provide that runtime; incompatible late image changes are
 rejected while existing files remain usable. Comparisons cover 26 constructor
 observations plus the prior 47 native-file observations per profile on Windows
-debug/release and Linux i686 SSE2 release. Standard-stream payloads and shared
-C/Rust buffering, the four lifecycle/allocator APIs, collector accounting and
-the broader full Lua 5.1 parity gates remain open.
+debug/release and Linux i686 SSE2 release. Standard streams are extended below.
+The four lifecycle/allocator APIs, collector accounting and the broader full
+Lua 5.1 parity gates remain open.
+
+The [standard-stream checks](testing/2026-10-29-rust-lua-standard-streams.md)
+give stdin, stdout and stderr native payloads and one C stdio buffer per stream
+when the C feature is enabled. `print`, stdin file loading, console input and
+debugger diagnostics use those streams. Userdata pointers can be cleared or
+replaced independently of the kernel streams, and reopening I/O preserves
+unread input. `print` ignores output failures as Lua 5.1 does, while `io.write`
+returns its error tuple. Both Rust and public C initialization match 13
+observations per profile, with file regressions bringing the checkpoint to 297
+observations across Windows debug/release and Linux i686 SSE2 release. The
+lifecycle/allocator APIs, collector accounting, broader strict continuations,
+diagnostics and resource/OOM gates remain unfinished.
 
 ## Reference contract
 

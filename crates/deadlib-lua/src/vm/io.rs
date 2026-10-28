@@ -87,21 +87,126 @@ impl Io {
     pub fn heap_bytes(&self) -> usize {
         self.files.iter().map(Stream::heap_bytes).sum()
     }
+    pub(in crate::vm) fn standard_stream(&mut self, kind: usize) -> NonZeroU64 {
+        let (slot, resource, read, write) = match kind {
+            0 => (&mut self.stdin, Resource::Input, true, false),
+            1 => (&mut self.stdout, Resource::Output, false, true),
+            2 => (&mut self.stderr, Resource::Error, false, true),
+            _ => unreachable!("standard stream kind"),
+        };
+        if let Some(backend) = &self.backend {
+            let pointer = backend.standard(kind);
+            if let Some(key) = slot {
+                if !matches!(self.files[slot_index(key.get())].resource.as_ref(),Some(Resource::Native(file))if file.pointer()==pointer)
+                {
+                    self.files[slot_index(key.get())] = Stream::new(
+                        Resource::Native(backend.attach(pointer)),
+                        read,
+                        write,
+                        false,
+                    );
+                }
+            } else {
+                *slot = NonZeroU64::new(self.files.insert(Stream::new(
+                    Resource::Native(backend.attach(pointer)),
+                    read,
+                    write,
+                    false,
+                )));
+            }
+        }
+        *slot.get_or_insert_with(|| {
+            NonZeroU64::new(self.files.insert(Stream::new(resource, read, write, true)))
+                .expect("stream arena key")
+        })
+    }
+    pub(in crate::vm) fn write_standard(&mut self, kind: usize, bytes: &[u8]) -> Result<(), i32> {
+        if self.backend.is_some() {
+            let key = self.standard_stream(kind);
+            self.files[slot_index(key.get())].write(bytes)
+        } else if kind == 1 {
+            stdout_write(bytes).map_err(errno)
+        } else {
+            stderr_write(bytes);
+            Ok(())
+        }
+    }
+    pub(in crate::vm) fn flush_stdout(&mut self) -> Result<(), i32> {
+        if self.backend.is_some() {
+            let key = self.standard_stream(1);
+            self.files[slot_index(key.get())].flush()
+        } else {
+            stdout_flush().map_err(errno)
+        }
+    }
+    fn is_stdout(&self, key: u64) -> bool {
+        if matches!(self.files[slot_index(key)].resource, Some(Resource::Output)) {
+            return true;
+        }
+        match (
+            self.files[slot_index(key)].resource.as_ref(),
+            self.backend.as_ref(),
+        ) {
+            (Some(Resource::Native(file)), Some(backend)) => file.pointer() == backend.standard(1),
+            _ => false,
+        }
+    }
 }
 impl Vm {
+    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+    pub(in crate::vm) fn install_file_backend(
+        &mut self,
+        backend: Arc<dyn native::FileBackend>,
+    ) -> Result<(), Error> {
+        if self
+            .io
+            .backend
+            .as_ref()
+            .is_some_and(|old| old.identity() != backend.identity())
+        {
+            return Err(runtime("one Lua state cannot mix C API images"));
+        }
+        if self.io.backend.is_some() {
+            return Ok(());
+        }
+        self.io.backend = Some(backend);
+        for (kind, key) in [self.io.stdin, self.io.stdout, self.io.stderr]
+            .into_iter()
+            .enumerate()
+        {
+            if key.is_some() {
+                let key = self.io.standard_stream(kind).get();
+                let pointer = match self.io.files[slot_index(key)].resource.as_ref() {
+                    Some(Resource::Native(file)) => file.pointer(),
+                    _ => unreachable!(),
+                };
+                for user in self.userdata.iter_mut() {
+                    if !user.native_file && user.file.is_some_and(|file| file.get() == key) {
+                        user.bytes.as_mut()[..std::mem::size_of::<usize>()]
+                            .copy_from_slice(&pointer.to_ne_bytes());
+                        user.native_file = true;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+    pub(in crate::vm) fn ensure_file_backend(&mut self) -> Result<(), Error> {
+        #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+        if self.io.backend.is_none() {
+            let backend = crate::native_abi::file_backend(self.native_library_loader.as_deref())
+                .map_err(|bytes| Error::from_bytes(ErrorKind::Runtime, 0, bytes.into_vec()))?;
+            self.install_file_backend(backend)?;
+        }
+        Ok(())
+    }
     fn open_stream(
         &mut self,
         path: Option<&[u8]>,
         mode: &[u8],
         pipe_file: bool,
     ) -> Result<Result<Stream, i32>, Error> {
-        #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-        if self.io.backend.is_none() {
-            self.io.backend = Some(
-                crate::native_abi::file_backend(self.native_library_loader.as_deref())
-                    .map_err(|bytes| Error::from_bytes(ErrorKind::Runtime, 0, bytes.into_vec()))?,
-            );
-        }
+        self.ensure_file_backend()?;
         if let Some(backend) = &self.io.backend {
             return Ok(backend
                 .open(path, mode, pipe_file)
@@ -114,20 +219,7 @@ impl Vm {
         })
     }
     pub(super) fn standard_stream(&mut self, kind: usize) -> NonZeroU64 {
-        let (slot, resource, read, write) = match kind {
-            0 => (&mut self.io.stdin, Resource::Input, true, false),
-            1 => (&mut self.io.stdout, Resource::Output, false, true),
-            2 => (&mut self.io.stderr, Resource::Error, false, true),
-            _ => unreachable!("standard stream kind"),
-        };
-        *slot.get_or_insert_with(|| {
-            NonZeroU64::new(
-                self.io
-                    .files
-                    .insert(Stream::new(resource, read, write, true)),
-            )
-            .expect("stream arena key")
-        })
+        self.io.standard_stream(kind)
     }
     pub(super) fn flush_process_streams(&mut self) {
         // Process exit flushes C streams without closing the Lua state or
@@ -140,7 +232,7 @@ impl Vm {
             }
         }
         use std::io::Write;
-        let _ = stdout_flush();
+        let _ = self.io.flush_stdout();
         let _ = std::io::stderr().flush();
     }
 }
@@ -435,6 +527,14 @@ impl Vm {
         let bytes = user.bytes.as_ref().get(..std::mem::size_of::<usize>())?;
         let pointer = usize::from_ne_bytes(bytes.try_into().ok()?);
         let key = user.file.map(NonZeroU64::get);
+        // Standard FILE buffers are shared in C, while each Lua FILE** can be
+        // independently cleared or replaced. Keep kernel readers/print separate.
+        let shared = key.is_some_and(|key| {
+            [self.io.stdin, self.io.stdout, self.io.stderr]
+                .into_iter()
+                .flatten()
+                .any(|standard| standard.get() == key)
+        });
         let cached = key
             .and_then(
                 |key| match self.io.files[slot_index(key)].resource.as_ref() {
@@ -443,7 +543,7 @@ impl Vm {
                 },
             )
             .unwrap_or(0);
-        if key.is_some() && cached == pointer {
+        if key.is_some() && cached == pointer && !shared {
             return key;
         }
         let stream = if pointer == 0 {
@@ -456,7 +556,7 @@ impl Vm {
                 false,
             )
         };
-        let key = if let Some(key) = key {
+        let key = if let Some(key) = key.filter(|_| !shared) {
             self.io.files[slot_index(key)] = stream;
             key
         } else {
@@ -584,6 +684,7 @@ impl Vm {
             self.registers[base + 1] = self.intern(b"cannot close standard file");
             return Ok(2);
         }
+        self.ensure_file_backend()?;
         if matches!(id, REAL_CLOSE | PIPE_CLOSE) {
             let key = self.checked_file(arg, true)?;
             return Ok(self.close_backend(key, base, id == PIPE_CLOSE, arg));
@@ -807,7 +908,7 @@ impl Vm {
                     };
                     let Value::String(s) = s else { unreachable!() };
                     if status.is_ok() {
-                        if matches!(self.io.files[slot].resource, Some(Resource::Output))
+                        if self.io.is_stdout(key)
                             && let Some(output) = self.output.as_mut()
                         {
                             output.extend_from_slice(&self.strings.bytes[slot_index(s.0)]);

@@ -5,6 +5,7 @@ pub(crate) trait FileBackend: Debug + Send + Sync {
     #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
     fn identity(&self) -> usize;
     fn attach(&self, pointer: usize) -> Box<dyn File>;
+    fn standard(&self, kind: usize) -> usize;
     fn open(&self, path: Option<&[u8]>, mode: &[u8], pipe: bool) -> Result<Box<dyn File>, i32>;
 }
 pub(crate) trait File: Debug + Send + Sync {
