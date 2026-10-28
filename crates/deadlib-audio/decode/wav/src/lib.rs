@@ -2,6 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![deny(unsafe_op_in_unsafe_fn)]
 
+pub mod adpcm;
 pub mod container;
 pub mod encode;
 pub mod format;
@@ -9,6 +10,7 @@ pub mod pcm;
 pub mod reader;
 pub mod stream;
 
+pub use adpcm::{Adpcm, AdpcmData};
 pub use container::{Chunk, Chunks, Container, Ds64, Wave};
 pub use encode::{RawChunk, Spec, WriteOptions, Writer};
 pub use format::{Encoding, Endian, Format, SampleFormat};

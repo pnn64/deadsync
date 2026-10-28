@@ -53,7 +53,12 @@ and a sparse virtual source crossing 4 GiB with a nonzero final sample. That las
 test proves 64-bit arithmetic and seeking without large memory/disk use; it does
 not establish real-filesystem or physical large-file throughput.
 
-Remaining work: ADPCM, structured metadata,
+Microsoft and 4-bit IMA ADPCM block decoding and borrowed exact range access are
+implemented and differentially exercised; see [ADPCM.md](ADPCM.md) and the retained
+JSON reports. Total integration tests: 20. This does not complete compressed
+encoding or all standard variants.
+
+Remaining work: ADPCM encoding and compressed I/O convenience, structured metadata,
 wavl/slnt and multiple-data handling, oracle comparisons, fuzzing, sparse >4 GiB
 evidence and all performance measurements; forward-only audio convenience APIs,
 known-length nonseekable encoding, and extensible compressed formats. BW64 shares 64-bit container

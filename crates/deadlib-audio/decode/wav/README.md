@@ -37,6 +37,10 @@ packs integer containers after checking range. Failed writes poison the writer.
 Dropping a writer does not finalize a file. Sinks are used from their current
 position and are not truncated; callers replacing longer files must truncate them.
 
+`Adpcm` provides independent Microsoft/IMA block decoding into i16 caller buffers.
+`AdpcmData` adds fact-trimmed borrowed audio and exact range access using reusable
+block scratch. See [ADPCM.md](ADPCM.md) for coverage and reference disagreements.
+
 Build and test by package name:
 
 ```sh

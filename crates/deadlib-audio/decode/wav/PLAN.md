@@ -13,7 +13,10 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    integration tests, debug/release and Clippy; see COVERAGE.md). Forward-only
    audio convenience and known-length nonseekable output remain. RIFF and
    64-bit output, extensible valid bits/masks, metadata and exact roundtrips.
-3. Independent Microsoft ADPCM and WAV IMA ADPCM block codecs, encoded-format
+3. Independent Microsoft ADPCM and 4-bit WAV IMA ADPCM block decoding implemented,
+   with borrowed fact-trimmed exact range access and 40 differential fixture sets
+   (see ADPCM.md). Encoding, compressed I/O convenience, 3-bit IMA and extensible
+   mapping remain. Encoded-format
    dispatch, fact trimming, block boundaries and exact seeking. Additional encoded
    formats must remain possible without coupling container parsing to codecs.
 4. Rich metadata views and preservation: INFO, BEXT, cue/adtl, smpl, RF64 markers,
