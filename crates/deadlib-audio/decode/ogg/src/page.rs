@@ -129,20 +129,51 @@ pub struct Fragments<'a> {
     body: &'a [u8],
     continued: bool,
 }
-impl<'a> Iterator for Fragments<'a> {
-    type Item = Fragment<'a>;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.lacing.is_empty() {
-            return None;
+
+// Keep the wide scan out of packet loops; most fragments end in the first few laces.
+#[inline(never)]
+fn fragment_segment_count(lacing: &[u8]) -> usize {
+    let (words, tail) = lacing.as_chunks::<8>();
+    for (i, word) in words.iter().enumerate() {
+        // Only 0xff continues a packet. The first differing bit identifies
+        // the first terminating byte in little-endian order.
+        let bits = !u64::from_le_bytes(*word);
+        if bits != 0 {
+            return i * 8 + bits.trailing_zeros() as usize / 8 + 1;
         }
-        let count = self
-            .lacing
+    }
+    lacing.len() - tail.len()
+        + tail
             .iter()
             .position(|&n| n < 255)
-            .map_or(self.lacing.len(), |n| n + 1);
-        // Every segment before the terminator is exactly 255 bytes.
-        let len = (count - 1) * 255 + self.lacing[count - 1] as usize;
-        let ends_packet = self.lacing[count - 1] < 255;
+            .map_or(tail.len(), |n| n + 1)
+}
+
+impl<'a> Iterator for Fragments<'a> {
+    type Item = Fragment<'a>;
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        let &first = self.lacing.first()?;
+        let (count, len, ends_packet) = if first < 255 {
+            (1, first as usize, true)
+        } else if let Some(&second) = self.lacing.get(1)
+            && second < 255
+        {
+            (2, 255 + second as usize, true)
+        } else if let Some(&third) = self.lacing.get(2)
+            && third < 255
+        {
+            (3, 2 * 255 + third as usize, true)
+        } else if let Some(&fourth) = self.lacing.get(3)
+            && fourth < 255
+        {
+            (4, 3 * 255 + fourth as usize, true)
+        } else {
+            let count = fragment_segment_count(self.lacing);
+            let last = self.lacing[count - 1];
+            // Every segment before the terminator is exactly 255 bytes.
+            (count, (count - 1) * 255 + last as usize, last < 255)
+        };
         let fragment = Fragment {
             data: &self.body[..len],
             starts_packet: !self.continued,
