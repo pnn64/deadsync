@@ -120,6 +120,48 @@ fn requantization_half_steps_preemphasis_and_short_gain() {
 }
 
 #[test]
+fn every_i16_coefficient_matches_runtime_power_at_scale_extremes() {
+    let bands = Bands::for_rate(44100).unwrap();
+    for gain in [0, 210, 255] {
+        for factor in [0, 1, 31, 255] {
+            for scale in [false, true] {
+                let info = GranuleChannel {
+                    global_gain: gain,
+                    scalefac_scale: scale,
+                    ..Default::default()
+                };
+                let factors = ScaleFactors {
+                    long: [factor; 22],
+                    ..Default::default()
+                };
+                let amplitude = ((f64::from(gain) - 210.0) * 0.25).exp2()
+                    * (-0.5 * f64::from((1 + u16::from(scale)) * u16::from(factor))).exp2();
+                for start in (0..=u16::MAX as usize).step_by(576) {
+                    let input = std::array::from_fn(|n| (start + n) as u16 as i16);
+                    let mut output = [0.0; 576];
+                    spectral::requantize(&input, &info, &factors, bands, &mut output).unwrap();
+                    for (&value, actual) in input.iter().zip(output) {
+                        let expected = if value == 0 {
+                            0.0
+                        } else {
+                            std::hint::black_box(f64::from(value.unsigned_abs()))
+                                .powf(4.0 / 3.0)
+                                .copysign(f64::from(value))
+                                * amplitude
+                        };
+                        assert_eq!(
+                            actual.to_bits(),
+                            expected.to_bits(),
+                            "coefficient {value}, gain {gain}, factor {factor}, scale {scale}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn big_values_errors_and_partial_count1_stuffing() {
     let bands = Bands::for_rate(44100).unwrap();
     let mut output = [0; 576];

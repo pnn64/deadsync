@@ -217,6 +217,36 @@ fn verify(paths: &[String]) {
 
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|s| s == "cold") {
+        cpu::pin_thread();
+        let input = [0; 576];
+        let info = GranuleChannel {
+            global_gain: 210,
+            ..Default::default()
+        };
+        let factors = ScaleFactors::default();
+        let bands = Bands::for_rate(44100).unwrap();
+        let mut output = [0.0; 576];
+        heap::measure(|| ());
+        black_box(cpu::cycles());
+        let start = cpu::cycles();
+        let clock = std::time::Instant::now();
+        let (_, counts) = heap::measure(|| {
+            spectral::requantize(
+                black_box(&input),
+                black_box(&info),
+                black_box(&factors),
+                bands,
+                black_box(&mut output),
+            )
+            .unwrap();
+        });
+        let ns = clock.elapsed().as_nanos();
+        let cycles = cpu::cycles() - start;
+        println!("cold/zero: cycles/op {cycles}; ns/op {ns}");
+        println!("cold/zero: allocation {counts:?}");
+        return;
+    }
     if args.first().is_some_and(|s| s == "verify") {
         verify(&args[1..]);
         return;
@@ -239,6 +269,18 @@ fn main() {
         });
     }
     let bytes: Vec<_> = (0..4096).map(|n| (n * 37 + 13) as u8).collect();
+    for size in [2, 17, 32, 1024] {
+        probe(
+            &format!("crc/{size}"),
+            if size == 1024 { 1000 } else { 10_000 },
+            || {
+                black_box(checksum::bytes(
+                    black_box(0xffff),
+                    black_box(&bytes[..size]),
+                ));
+            },
+        );
+    }
     for width in [1, 4, 9, 16, 24, 32] {
         probe(&format!("bits/{width}"), 1000, || {
             let mut bits = BitReader::new(black_box(&bytes));

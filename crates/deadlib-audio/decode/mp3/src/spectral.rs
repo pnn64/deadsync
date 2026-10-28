@@ -5,6 +5,11 @@ use crate::{
 const PRETAB: [u8; 22] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2, 0,
 ];
+static POWERS: std::sync::LazyLock<[f64; 16]> = std::sync::LazyLock::new(|| {
+    // Keep the same runtime powf path as uncached coefficients; constant-folded
+    // powers can round differently from the platform math implementation.
+    std::array::from_fn(|n| std::hint::black_box(n as f64).powf(4.0 / 3.0))
+});
 
 /// Decodes big-values pairs and count1 quads. Incomplete final count1 words are
 /// stuffing; incomplete big-values words are errors. On error, output is invalid
@@ -73,16 +78,19 @@ pub fn quantized(
     *bits = cursor;
     Ok(line)
 }
-fn power(value: i16, scale: f64) -> f64 {
+fn power(value: i16, scale: f64, powers: &[f64; 16]) -> f64 {
     match value {
         0 => 0.0,
         1 => scale,
         -1 => -scale,
         _ => {
-            (value.unsigned_abs() as f64)
-                .powf(4.0 / 3.0)
-                .copysign(value as f64)
-                * scale
+            let magnitude = value.unsigned_abs() as usize;
+            let power = if magnitude < powers.len() {
+                powers[magnitude]
+            } else {
+                (magnitude as f64).powf(4.0 / 3.0)
+            };
+            power.copysign(value as f64) * scale
         }
     }
 }
@@ -97,6 +105,7 @@ pub fn requantize(
     if info.block_type > 3 {
         return Err(Error::Invalid("requantization block shape"));
     }
+    let powers = &*POWERS;
     output.fill(0.0);
     let gain = ((info.global_gain as f64 - 210.0) * 0.25).exp2();
     let scale = 1 + i32::from(info.scalefac_scale);
@@ -113,7 +122,7 @@ pub fn requantize(
             scale * (factors.long[band] as i32 + if factors.preflag { pre as i32 } else { 0 });
         let amplitude = gain * (-0.5 * exponent as f64).exp2();
         for line in bands.long()[band] as usize..bands.long()[band + 1] as usize {
-            output[line] = power(input[line], amplitude);
+            output[line] = power(input[line], amplitude, powers);
         }
     }
     if short {
@@ -128,7 +137,7 @@ pub fn requantize(
                     + 4 * info.subblock_gain[window] as i32;
                 let amplitude = gain * (-0.5 * exponent as f64).exp2();
                 for line in bands.short()[band] as usize..bands.short()[band + 1] as usize {
-                    output[3 * line + window] = power(input[source], amplitude);
+                    output[3 * line + window] = power(input[source], amplitude, powers);
                     source += 1;
                 }
             }
