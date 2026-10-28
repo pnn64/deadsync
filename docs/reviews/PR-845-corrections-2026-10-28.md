@@ -104,7 +104,7 @@ Journaux de ce suivi : `target/pr845-endless-before-fix.log`, `target/pr845-endl
 
 ## Essai manuel préparé
 
-La version d’essai est reconstruite avec le profil `release` et LTO pour macOS ARM64. Le build porte le commit source dans `DEADSYNC_BUILD_HASH` et le marqueur `pr845-endless-transition-2026-10-28` dans `DEADSYNC_BUILD_STAMP`. Le manifeste local `target/pr845-playtest/validation.json` contient le commit source exact, les empreintes des fichiers et le SHA-256 du binaire ; `deadsync.sha256` permet de contrôler la copie du dossier d’essai.
+La version d’essai est reconstruite avec le profil `release` et LTO pour macOS ARM64. Le script `build.rs` inscrit automatiquement le commit source abrégé `563a85c34c` dans `DEADSYNC_BUILD_HASH` et la date de ce commit dans `DEADSYNC_BUILD_STAMP`. Le libellé `pr845-endless-transition-2026-10-28` identifie le paquet dans le manifeste local. Le manifeste local `target/pr845-playtest/validation.json` contient le commit source exact, les empreintes des fichiers et le SHA-256 du binaire ; `deadsync.sha256` permet de contrôler la copie du dossier d’essai.
 
 Le dossier local `target/pr845-playtest` utilise le mode portable du jeu : ses réglages, profils et scores sont isolés. `Tester-PR845.command` lance le binaire optimisé placé à côté. Les assets viennent du worktree par lien symbolique.
 
