@@ -245,23 +245,39 @@ impl Demuxer {
                 .checked_add(body)
                 .is_none_or(|n| n > self.limits.max_pending_bytes)
         {
-            for fragment in page.fragments() {
+            if complete == 0 {
+                // Without a terminator, the entire body belongs to one packet.
                 length = length
-                    .checked_add(fragment.data.len())
+                    .checked_add(body)
                     .ok_or(Error::LimitExceeded("packet size"))?;
                 if length > self.limits.max_packet_bytes {
                     return Err(Error::LimitExceeded("packet size"));
                 }
-                // Completed in-page packets do not need assembly allocation.
-                if (!fragment.starts_packet || !fragment.ends_packet)
-                    && pending
-                        .checked_add(length)
-                        .is_none_or(|n| n > self.limits.max_pending_bytes)
+                if pending
+                    .checked_add(length)
+                    .is_none_or(|n| n > self.limits.max_pending_bytes)
                 {
                     return Err(Error::LimitExceeded("pending packet bytes"));
                 }
-                if fragment.ends_packet {
-                    length = 0;
+            } else {
+                for fragment in page.fragments() {
+                    length = length
+                        .checked_add(fragment.data.len())
+                        .ok_or(Error::LimitExceeded("packet size"))?;
+                    if length > self.limits.max_packet_bytes {
+                        return Err(Error::LimitExceeded("packet size"));
+                    }
+                    // Completed in-page packets do not need assembly allocation.
+                    if (!fragment.starts_packet || !fragment.ends_packet)
+                        && pending
+                            .checked_add(length)
+                            .is_none_or(|n| n > self.limits.max_pending_bytes)
+                    {
+                        return Err(Error::LimitExceeded("pending packet bytes"));
+                    }
+                    if fragment.ends_packet {
+                        length = 0;
+                    }
                 }
             }
         }
