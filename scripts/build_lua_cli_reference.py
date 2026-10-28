@@ -47,7 +47,7 @@ def build(root: Path, target: str | None = None, fp_model: str | None = None) ->
     else:
         compiler=shutil.which('cc')
         if not compiler:raise SystemExit('a C compiler is required for the standalone oracle')
-        command=[compiler,'-O2','-DLUA_USE_POSIX','-DLUA_USE_DLOPEN','-DLUA_USE_ISATTY','-I'+str(source),*[str(p) for p in files],'-lm','-ldl','-o',str(output)]
+        command=[compiler,'-O2','-DLUA_USE_POSIX','-DLUA_USE_DLOPEN','-DLUA_USE_ISATTY','-I'+str(source),*[str(p) for p in files],'-Wl,-E','-lm','-ldl','-o',str(output)]
         if target:command.insert(1,'-m32')
         if fp_model:command[2:2]=['-msse2','-mfpmath=sse']
         invocation=command

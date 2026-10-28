@@ -174,7 +174,7 @@ impl Decoder {
             if expected > self.limits.max_output_bytes {
                 return Err(Error::LimitExceeded);
             }
-            let (mut raw, _) = zlib::decompress_prefix(&compressed, expected).map_err(|error| {
+            let (raw, _) = zlib::decompress_prefix(&compressed, expected).map_err(|error| {
                 if error == Error::LimitExceeded {
                     Error::Invalid("APNG frame data length")
                 } else {
@@ -185,7 +185,7 @@ impl Decoder {
                 return Err(Error::Invalid("APNG frame data length"));
             }
             let image = scanline::decode(
-                &mut raw,
+                raw,
                 h.width,
                 h.height,
                 h.color,

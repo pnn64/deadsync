@@ -74,34 +74,37 @@ impl<R: Read> PageReader<R> {
     }
     fn fill(&mut self, required: usize) -> Result<bool, Error> {
         debug_assert!(required <= MAX_PAGE_SIZE);
-        while self.buffer.len() - self.start < required && !self.eof {
-            self.read_more(required)?;
+        if self.buffer.len() - self.start < required && !self.eof {
+            self.read_more(required, true)?;
         }
         Ok(self.buffer.len() - self.start >= required)
     }
-    fn read_more(&mut self, target: usize) -> Result<(), Error> {
+    fn read_more(&mut self, target: usize, complete: bool) -> Result<(), Error> {
         debug_assert!(target <= MAX_PAGE_SIZE && self.buffer.len() - self.start < target);
         if self.start != 0 {
             self.buffer.copy_within(self.start.., 0);
             self.buffer.truncate(self.buffer.len() - self.start);
             self.start = 0;
         }
-        let old = self.buffer.len();
-        reserve(&mut self.buffer, target - old)?;
+        let mut filled = self.buffer.len();
+        reserve(&mut self.buffer, target - filled)?;
         self.buffer.resize(target, 0);
-        let result = self.inner.read(&mut self.buffer[old..]);
-        match result {
-            Ok(0) => {
-                self.buffer.truncate(old);
-                self.eof = true;
+        // Initialize the unread suffix once, retaining it across short reads.
+        loop {
+            match self.inner.read(&mut self.buffer[filled..]) {
+                Ok(0) => self.eof = true,
+                Ok(n) => filled += n,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => (),
+                Err(e) => {
+                    self.buffer.truncate(filled);
+                    return Err(e.into());
+                }
             }
-            Ok(n) => self.buffer.truncate(old + n),
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => self.buffer.truncate(old),
-            Err(e) => {
-                self.buffer.truncate(old);
-                return Err(e.into());
+            if !complete || filled >= target || self.eof {
+                break;
             }
         }
+        self.buffer.truncate(filled);
         Ok(())
     }
 
@@ -144,7 +147,7 @@ impl<R: Read> PageReader<R> {
     fn scan_capture(&mut self) -> Result<(), Error> {
         loop {
             let available = &self.buffer[self.start..];
-            if let Some(skip) = available.windows(4).position(|bytes| bytes == b"OggS") {
+            if let Some(skip) = capture_pattern(available) {
                 self.discard(skip);
                 self.discarded += skip as u64;
                 return Ok(());
@@ -159,7 +162,7 @@ impl<R: Read> PageReader<R> {
             if self.eof {
                 return Ok(());
             }
-            self.read_more(4096)?;
+            self.read_more(4096, false)?;
         }
     }
     fn candidate(&mut self) -> Result<Option<usize>, Error> {
@@ -173,11 +176,15 @@ impl<R: Read> PageReader<R> {
         if !self.fill(header)? {
             return Err(Error::Truncated);
         }
-        let len = page::page_size(&self.buffer[self.start..])?;
+        let len = header
+            + self.buffer[self.start + 27..self.start + header]
+                .iter()
+                .map(|&n| n as usize)
+                .sum::<usize>();
         if !self.fill(len)? {
             return Err(Error::Truncated);
         }
-        Page::parse(&self.buffer[self.start..self.start + len])?;
+        page::check_crc(&self.buffer[self.start..self.start + len])?;
         Ok(Some(len))
     }
     pub fn next_page(&mut self) -> Result<Option<LocatedPage<'_>>, Error> {
@@ -194,6 +201,40 @@ impl<R: Read> PageReader<R> {
         }))
     }
 }
+
+fn capture_pattern(bytes: &[u8]) -> Option<usize> {
+    let (words, _) = bytes[..bytes.len().saturating_sub(3)].as_chunks::<8>();
+    for (i, word) in words.iter().enumerate() {
+        let word = u64::from_le_bytes(*word);
+        let o = word ^ 0x4f4f_4f4f_4f4f_4f4f;
+        let g = word ^ 0x6767_6767_6767_6767;
+        let o = o.wrapping_sub(0x0101_0101_0101_0101) & !o & 0x8080_8080_8080_8080;
+        let g = g.wrapping_sub(0x0101_0101_0101_0101) & !g & 0x8080_8080_8080_8080;
+        // Filter on Og; the last byte may pair with g in the next word.
+        // Borrow propagation can add candidates, so verify the complete capture.
+        let candidates = o & ((g >> 8) | 0x8000_0000_0000_0000);
+        // Dense false prefixes favor the original scalar search.
+        if candidates & candidates.wrapping_sub(1) != 0 {
+            let offset = i * 8;
+            return bytes[offset..]
+                .windows(4)
+                .position(|bytes| bytes == b"OggS")
+                .map(|i| offset + i);
+        }
+        if candidates != 0 {
+            let offset = i * 8 + candidates.trailing_zeros() as usize / 8;
+            if bytes[offset..].starts_with(b"OggS") {
+                return Some(offset);
+            }
+        }
+    }
+    let offset = words.len() * 8;
+    bytes[offset..]
+        .windows(4)
+        .position(|bytes| bytes == b"OggS")
+        .map(|i| offset + i)
+}
+
 impl<R: Read + Seek> PageReader<R> {
     /// Reset transport state at an absolute offset. Use recovery mode when
     /// the offset is not a known page boundary. Codec overlap is caller-owned.
@@ -221,6 +262,7 @@ pub struct PageProgress<'a> {
 #[derive(Default)]
 pub struct PageDecoder {
     buffer: Vec<u8>,
+    length: usize,
     ready: bool,
     failed: bool,
 }
@@ -230,6 +272,7 @@ impl PageDecoder {
     }
     pub fn reset(&mut self) {
         self.buffer.clear();
+        self.length = 0;
         self.ready = false;
         self.failed = false;
     }
@@ -249,6 +292,7 @@ impl PageDecoder {
         }
         if self.ready {
             self.buffer.clear();
+            self.length = 0;
             self.ready = false;
         }
         let result = self.fill_page(input);
@@ -271,16 +315,34 @@ impl PageDecoder {
         }
     }
     fn fill_page(&mut self, input: &[u8]) -> Result<(usize, bool), Error> {
+        // A complete page can be copied once into its final-sized buffer.
+        if self.buffer.is_empty()
+            && let Ok(length) = page::page_size(input)
+            && input.len() >= length
+        {
+            reserve(&mut self.buffer, length)?;
+            self.buffer.extend_from_slice(&input[..length]);
+            self.length = length;
+            page::check_crc(&self.buffer)?;
+            return Ok((length, true));
+        }
         let mut consumed = 0;
         loop {
-            let target = if self.buffer.len() < 27 {
+            let target = if self.length != 0 {
+                self.length
+            } else if self.buffer.len() < 27 {
                 27
             } else {
                 let header = page::header_size(&self.buffer)?;
                 if self.buffer.len() < header {
                     header
                 } else {
-                    page::page_size(&self.buffer)?
+                    self.length = header
+                        + self.buffer[27..header]
+                            .iter()
+                            .map(|&n| n as usize)
+                            .sum::<usize>();
+                    self.length
                 }
             };
             let take = (target - self.buffer.len()).min(input.len() - consumed);
@@ -291,17 +353,47 @@ impl PageDecoder {
             if self.buffer.len() < target {
                 return Ok((consumed, false));
             }
-            if self.buffer.len() >= 27 {
-                let header = page::header_size(&self.buffer)?;
-                if self.buffer.len() >= header
-                    && self.buffer.len() == page::page_size(&self.buffer)?
-                {
-                    Page::parse(&self.buffer)?;
-                    return Ok((consumed, true));
+            if self.length != 0 {
+                page::check_crc(&self.buffer)?;
+                return Ok((consumed, true));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::capture_pattern;
+
+    #[test]
+    fn capture_search_matches_scalar_with_every_byte_and_word_boundary() {
+        for fill in 0..=255 {
+            for length in 0..80 {
+                let bytes = vec![fill; length];
+                assert_eq!(
+                    capture_pattern(&bytes),
+                    bytes.windows(4).position(|b| b == b"OggS")
+                );
+                for offset in 0..length.saturating_sub(3) {
+                    let mut bytes = bytes.clone();
+                    bytes[offset..offset + 4].copy_from_slice(b"OggS");
+                    assert_eq!(
+                        capture_pattern(&bytes),
+                        bytes.windows(4).position(|b| b == b"OggS")
+                    );
                 }
             }
-            if consumed == input.len() {
-                return Ok((consumed, false));
+        }
+        for pattern in [b"OgOg".as_slice(), b"OggOg", b"OggSOggS", b"NOfgOgg"] {
+            let bytes = pattern.repeat(50);
+            for start in 0..16 {
+                for end in start..bytes.len() {
+                    let bytes = &bytes[start..end];
+                    assert_eq!(
+                        capture_pattern(bytes),
+                        bytes.windows(4).position(|b| b == b"OggS")
+                    );
+                }
             }
         }
     }

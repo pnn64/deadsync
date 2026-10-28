@@ -1,0 +1,32 @@
+{
+  "baseline_png_commit": "8ce596494afb8cdfa09a273f6f8091cb02a79106",
+  "production_changes": [
+    "src/zlib.rs"
+  ],
+  "all_recorded_regression_inputs_unchanged": true,
+  "existing_fixture_scope": "Native-format/filter/Adam7 geometry matrix, APNG render/recovery, exact native sample bytes on 84 external/format files; primary lookup all 65,536 two-byte values and independent widths/padding; one-bit literal lengths 0..63; every legal match length/distance at eight bit offsets, fixed/dynamic trees and both padding values; prefix/suffix and exact/short limits; PNG/APNG/Adam7 and metadata in the full release suite.",
+  "c_zlib_batch_cases": 19645,
+  "c_zlib_successful_outputs": 3091,
+  "c_zlib_error_records": 16554,
+  "documented_reference_policy_rejections": 68,
+  "performance_scope": "One fewer observed realloc call for each of 21 format-corpus images, in both PNG decode and raw inflation, with identical logical peak/retained requested bytes and native samples on all 84 images. The longer three-case stored subset supports a modest raw benefit; broader photo/format PNG throughput is inconclusive. Longer checks do not repeat the short-run gray8 PNG and RGB16 raw outliers. No broad speedup or decoder parity is claimed.",
+  "new_successful_sanitizer_executions": 72160,
+  "evidence": [
+    {
+      "path": "stored-growth-validation.json",
+      "sha256": "ed21903d4aeb9f72ad29c941c2fec55e1dcf566de261bdc974a96713ea17907d"
+    },
+    {
+      "path": "fuzz/reports/stored-growth-source.json",
+      "sha256": "67b7ff13cc02ee4af029dba28f26378463e556e1fee752d33042242d242d78ee"
+    },
+    {
+      "path": "fuzz/reports/stored-growth-seeds.json",
+      "sha256": "d9502a124c2b457a1b32099dc6ca96f474c9b15cf392f8e9888000d2a0825401"
+    },
+    {
+      "path": "experiments/stored-growth-selection.json",
+      "sha256": "6377c5b4e6f6cce95dbd1630cb1fcdf81a4f7013f8ea93c173f6ccc09ad4b5a4"
+    }
+  ]
+}

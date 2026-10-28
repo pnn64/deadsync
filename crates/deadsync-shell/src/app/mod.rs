@@ -1790,6 +1790,7 @@ pub struct App {
     content_reload: crate::content_reload::Service,
     apply_replaygain: crate::apply_replaygain::Service,
     heart_rate: crate::heart_rate::Runtime,
+    twitch: crate::twitch::Runtime,
     qr_login: crate::qr_login::Service,
     score_import: crate::score_import::Service,
     sync_analysis: crate::sync_analysis::Service,
@@ -4465,6 +4466,7 @@ impl App {
             self.evaluation_submissions_rebuild = true;
         }
         let frame_policy = self.frame_policy;
+        self.twitch.sync(self.frame_config.twitch);
         if work_caps & frame_work::SMX_CONFIG != 0 {
             self.reconcile_smx_assignment(frame_policy.smx);
             self.apply_smx_managed_preset(frame_policy.smx);
@@ -5354,6 +5356,7 @@ impl App {
             content_reload: crate::content_reload::Service::default(),
             apply_replaygain: crate::apply_replaygain::Service::default(),
             heart_rate: crate::heart_rate::Runtime::default(),
+            twitch: crate::twitch::Runtime::default(),
             qr_login: crate::qr_login::Service::default(),
             score_import: crate::score_import::Service::default(),
             sync_analysis: crate::sync_analysis::Service::new(dirs.null_or_die_cache_file()),
@@ -8160,6 +8163,20 @@ impl App {
                     visual_policy,
                 );
             }
+        }
+
+        if self.frame_config.twitch.enabled {
+            self.twitch.push(
+                &mut actors,
+                self.state.screens.current_screen,
+                self.state
+                    .screens
+                    .gameplay_state
+                    .as_ref()
+                    .map(gameplay::State::twitch_chat_layout),
+                self.frame_config.tournament.enabled,
+                &self.asset_manager,
+            );
         }
 
         if self.state.shell.overlay_mode.shows_fps() {

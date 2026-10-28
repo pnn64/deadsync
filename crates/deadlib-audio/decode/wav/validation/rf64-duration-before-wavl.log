@@ -1,0 +1,22 @@
+
+running 1 test
+test rf64_wavl_duration_uses_fact_or_observed_frames_not_unused_ds64 ... FAILED
+
+failures:
+
+---- rf64_wavl_duration_uses_fact_or_observed_frames_not_unused_ds64 stdout ----
+
+thread 'rf64_wavl_duration_uses_fact_or_observed_frames_not_unused_ds64' (31548) panicked at crates\deadlib-audio\decode\wav\tests\wavl.rs:450:21:
+assertion failed: reader.frames().is_err()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    rf64_wavl_duration_uses_fact_or_observed_frames_not_unused_ds64
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 9 filtered out; finished in 0.00s
+
+   Compiling deadlib-audio-decode-wav v0.1.0 (C:\GitHub\deadsync\crates\deadlib-audio\decode\wav)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.80s
+     Running tests\wavl.rs (target/wav\debug\deps\wavl-14834d374fde5a0f.exe)
+error: test failed, to rerun pass `-p deadlib-audio-decode-wav --test wavl`

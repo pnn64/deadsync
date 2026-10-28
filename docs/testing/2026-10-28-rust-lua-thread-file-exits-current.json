@@ -1,0 +1,67 @@
+{
+  "runs": {
+    "absent": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('file exit');boundary_panic_swap=m.panic_swap;boundary_thread_file_panic=m.file_panic;local co=coroutine.create(function()end);local path='thread-file-late-exit.lua';local f=assert(io.open(path,'wb'));f:write('return 42');f:close();collectgarbage();collectgarbage('stop');do local p=newproxy(true);getmetatable(p).__gc=function()assert(coroutine.running()==co);boundary_panic_swap(co,0);assert(os.remove(path));error('native failure',0)end end;boundary_panic_swap(co,1);boundary_thread_file_panic(co,'native failure',path);error('panic returned')"
+        ],
+        "returncode": 1,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\release\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('file exit');boundary_panic_swap=m.panic_swap;boundary_thread_file_panic=m.file_panic;local co=coroutine.create(function()end);local path='thread-file-late-exit.lua';local f=assert(io.open(path,'wb'));f:write('return 42');f:close();collectgarbage();collectgarbage('stop');do local p=newproxy(true);getmetatable(p).__gc=function()assert(coroutine.running()==co);boundary_panic_swap(co,0);assert(os.remove(path));error('native failure',0)end end;boundary_panic_swap(co,1);boundary_thread_file_panic(co,'native failure',path);error('panic returned')"
+        ],
+        "returncode": 1,
+        "stdout_hex": "",
+        "stderr_hex": ""
+      }
+    },
+    "returning": {
+      "reference": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-boundary-fixtures-1793146289905980700\\reference\\lua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('file exit');boundary_panic_swap=m.panic_swap;boundary_thread_file_panic=m.file_panic;local co=coroutine.create(function()end);local path='thread-file-late-exit.lua';local f=assert(io.open(path,'wb'));f:write('return 42');f:close();collectgarbage();collectgarbage('stop');do local p=newproxy(true);getmetatable(p).__gc=function()assert(coroutine.running()==co);boundary_panic_swap(co,3);assert(os.remove(path));error('native failure',0)end end;boundary_panic_swap(co,1);boundary_thread_file_panic(co,'native failure',path);error('panic returned')"
+        ],
+        "returncode": 1,
+        "stdout_hex": "70616e69632d72657475726e093209310d0a",
+        "stderr_hex": ""
+      },
+      "rust": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\release\\deadlua.exe",
+          "-e",
+          "local m=assert(package.loadlib('./native.dll','luaopen_native'))('file exit');boundary_panic_swap=m.panic_swap;boundary_thread_file_panic=m.file_panic;local co=coroutine.create(function()end);local path='thread-file-late-exit.lua';local f=assert(io.open(path,'wb'));f:write('return 42');f:close();collectgarbage();collectgarbage('stop');do local p=newproxy(true);getmetatable(p).__gc=function()assert(coroutine.running()==co);boundary_panic_swap(co,3);assert(os.remove(path));error('native failure',0)end end;boundary_panic_swap(co,1);boundary_thread_file_panic(co,'native failure',path);error('panic returned')"
+        ],
+        "returncode": 1,
+        "stdout_hex": "70616e69632d72657475726e093209310d0a",
+        "stderr_hex": ""
+      }
+    }
+  },
+  "strict_equal": true,
+  "matches_expected": {
+    "absent": {
+      "reference": true,
+      "rust": true
+    },
+    "returning": {
+      "reference": true,
+      "rust": true
+    }
+  },
+  "explicit_collection_before_proxy": true,
+  "rust_cli": {
+    "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\release\\deadlua.exe",
+    "sha256": "11b3579c7da4934ce6d0410577af8aee45d88a3f736c78c01b334230cdbf9446",
+    "matches_source_built_stdlib_report": true
+  },
+  "boundary_report_sha256": "cccc8ea7961cc747a6b4381a62a18498a1493303a8c87c402c0fe338a0de8a1b",
+  "public_header_report_sha256": "55d02f7c71e892d2e5b3c75c487dde93836fd252002c92ba8341e8779bdf38db"
+}

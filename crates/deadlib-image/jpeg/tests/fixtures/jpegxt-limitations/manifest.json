@@ -1,0 +1,59 @@
+{
+  "reference": "thorfdbg/libjpeg",
+  "commit": "702114c8130ae818ccd2354cc03e879dac69e579",
+  "setup_patch": "tests/oracle/jpegxt-lossless-table-selection.patch",
+  "decoder": "unchanged",
+  "point_transform": {
+    "input": "pt-huffman.jpg",
+    "expected": "pt-huffman.samples",
+    "expected_source": "libjpeg-turbo 3.2.1 decode; native decoder agrees",
+    "reference_output": "pt-reference.raw",
+    "precision": 2,
+    "predictor": 5,
+    "point_transform": 1,
+    "native_and_turbo_first_values": [
+      0,
+      0,
+      2,
+      2,
+      0,
+      0,
+      2,
+      0
+    ],
+    "reference_first_values": [
+      2,
+      2,
+      3,
+      3,
+      2,
+      2,
+      3,
+      2
+    ]
+  },
+  "partial_vertical_row": {
+    "input": "partial-row.jpg",
+    "expected": "partial-row-first.samples",
+    "expected_source": "original unmodified first input component, not a decoder",
+    "reference_output": "partial-row-reference.raw",
+    "width": 9,
+    "height": 19,
+    "precision": 16,
+    "first_sampling": [
+      2,
+      2
+    ],
+    "restart_interval": 5,
+    "native_first_component": "exact source",
+    "reference_first_component_mismatches": 9
+  },
+  "files": {
+    "partial-row-first.samples": "19abad02bc0eaac0fe365866d1e3b3ac70bd9981e5fae2c6bd1455fb2b08dd17",
+    "partial-row-reference.raw": "08812e0711b0093469611e335b261396726a862bdb7ea464b79bb9758dc2a67e",
+    "partial-row.jpg": "11b9bda70ec301e866406343112eb658fd4210a3130bfd88a4b6a357a10dcf3d",
+    "pt-huffman.jpg": "56b9ef4ebd08a91e09b2f4ce1455a34d6608d3cca2102a158a94724a649b0ff8",
+    "pt-huffman.samples": "30d9f322b9ea7d2f9ca807b079d10d732e75a5bcc52e338ab9ef8a904a9f4c18",
+    "pt-reference.raw": "0a98a88dedd8517e21c2c6f6d1a3485584bb64ea064e4d6a15316c132718671a"
+  }
+}

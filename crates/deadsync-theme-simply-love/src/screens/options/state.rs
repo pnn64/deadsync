@@ -23,6 +23,7 @@ pub enum SubmenuKind {
     SmxConfig,
     Lights,
     OnlineScoring,
+    Streaming,
     NullOrDie,
     NullOrDieOptions,
     SyncPacks,
@@ -41,7 +42,7 @@ pub enum SubmenuKind {
 }
 
 impl SubmenuKind {
-    pub(super) const ALL: [Self; 24] = [
+    pub(super) const ALL: [Self; 25] = [
         Self::Coin,
         Self::Bookkeeping,
         Self::System,
@@ -51,6 +52,7 @@ impl SubmenuKind {
         Self::SmxConfig,
         Self::Lights,
         Self::OnlineScoring,
+        Self::Streaming,
         Self::NullOrDie,
         Self::NullOrDieOptions,
         Self::SyncPacks,
@@ -177,6 +179,9 @@ pub(super) enum SubmenuTransition {
 }
 
 pub struct State {
+    pub(super) twitch: config::streaming::TwitchOptions,
+    pub(super) twitch_channel_entry: Option<String>,
+    pub(super) twitch_channel_invalid: bool,
     pub(super) main_visible_items: Vec<&'static Item>,
     pub(super) app_paths: AppPathsView,
     pub(super) audio_options: AudioOptionsView,
@@ -416,6 +421,9 @@ pub fn init(view: OptionsInitView) -> State {
         .unwrap_or(0);
     let main_visible_items = build_visible_items(updater_capabilities);
     let mut state = State {
+        twitch: cfg.twitch,
+        twitch_channel_entry: None,
+        twitch_channel_invalid: false,
         main_visible_items,
         app_paths,
         audio_options,
@@ -1669,6 +1677,19 @@ pub fn init(view: OptionsInitView) -> State {
         SubRowId::ScoreImportOnlyMissing,
         yes_no_choice_index(false),
     );
+    for (id, enabled) in [
+        (SubRowId::TwitchEnabled, cfg.twitch.enabled),
+        (SubRowId::TwitchBadges, cfg.twitch.show_badges),
+        (SubRowId::TwitchEmotes, cfg.twitch.show_emotes),
+        (SubRowId::TwitchGameplay, cfg.twitch.show_gameplay),
+    ] {
+        set_choice_by_id(
+            &mut state.sub[SubmenuKind::Streaming].choice_indices,
+            STREAMING_ROWS,
+            id,
+            yes_no_choice_index(enabled),
+        );
+    }
     sync_submenu_cursor_indices(&mut state);
     state
 }

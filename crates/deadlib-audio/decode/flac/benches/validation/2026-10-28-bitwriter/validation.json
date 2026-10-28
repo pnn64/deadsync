@@ -1,0 +1,41 @@
+{
+  "baseline_revision": "55ea6aaa2",
+  "measurement": "Windows QueryThreadCycleTime and Instant on logical CPU 2; 200 ms untimed encoder warmup and identical iteration counts per pair in direct-warm and subsequent reports. First cold allocation counts exclude encoder construction and PCM fixture creation.",
+  "individual_rounds": "11 x approximately 100 ms per variant, plus untimed warmup; 21 x 150 ms for the added 32-bit noise case.",
+  "final_rounds": "15 x approximately 150 ms per variant, plus untimed warmup, 9 cases.",
+  "matrix": {
+    "frames": 1044,
+    "bytes": 635954,
+    "sha256": "c617f0aa343e11c9e1305b679e6f4657e22b94a6baa4e737c9646b2cd0b94eac",
+    "exact": [
+      "direct",
+      "unary",
+      "word",
+      "word-small",
+      "baseline-final",
+      "final"
+    ]
+  },
+  "bitwise_reference_test": "7,800 fields (0..64 bits, five values, eight initial offsets, three clear/reuse passes), long unary prefixes, padding, invalid width and failure-state preservation.",
+  "tests": {
+    "unit": 14,
+    "integration": 36,
+    "documentation": 3,
+    "external_ignored": 8,
+    "debug": "pass",
+    "release": "pass",
+    "clippy": "pass",
+    "format": "pass"
+  },
+  "production_unsafe_added": 0,
+  "heap": "All 9 final cases remove one cold allocation and retain zero allocations and reallocations after warmup. Requested-byte totals include repeated reallocation requests; not RSS or retained heap.",
+  "discarded": {
+    "original_process_protocol": [
+      "control.json",
+      "direct.json",
+      "direct-repeat.json"
+    ],
+    "word_without_small_append": "word.json: 4.8% slower smooth16-l0; replaced with explicit zero-byte/one-byte appends."
+  },
+  "limits": "Synthetic resident-frame encoding on one variable-frequency Intel i7-1250U host. Counter outliers and whole-process power-state differences remain in raw rows; neither decoder nor playback throughput is measured. External oracle gates were not rerun."
+}

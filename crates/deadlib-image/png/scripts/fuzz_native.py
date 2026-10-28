@@ -77,7 +77,10 @@ def main():
     parser.add_argument('--target-dir', type=Path, required=True)
     parser.add_argument('--output-dir', type=Path, required=True)
     parser.add_argument('--targets', nargs='+', choices=['png_stream', 'inflate_stream', 'decoder_limits'], default=['png_stream', 'inflate_stream'])
+    parser.add_argument('--runs', type=int, help='Execution threshold per selected target; defaults to the historical target-specific thresholds')
     args = parser.parse_args()
+    if args.runs is not None and args.runs < 1:
+        parser.error('--runs must be positive')
     assert os.name == 'posix', 'Use Linux for the ASan campaign'
     package = Path(__file__).resolve().parent.parent
     output = args.output_dir.resolve()
@@ -110,7 +113,7 @@ def main():
         package / 'fuzz/scripts/native_rustc.py', Path(__file__).resolve()]
     sources = [{'path': p.relative_to(package.parent).as_posix(), 'sha256': sha(p)} for p in source_paths]
     metadata = {'baseline_png_commit': 'fae2e5bd2', 'source_sha256': sources,
-                'seed_archive_sha256': sha(args.seed_archive), 'commands': [], 'campaigns': [],
+                'seed_archive_sha256': sha(args.seed_archive), 'commands': [], 'campaigns': [], 'requested_run_override': args.runs,
                 'environment': {key: env[key] for key in ['RUSTFLAGS', 'RUSTC_WRAPPER',
                     'DEADLIB_PNG_NATIVE_FUZZ_AUDIT', 'CARGO_BUILD_JOBS', 'CC', 'CFLAGS']},
                 'rustc': subprocess.check_output(['rustup', 'run', 'nightly', 'rustc', '-vV'], text=True),
@@ -121,7 +124,7 @@ def main():
         manifest.write_text(json.dumps(metadata, indent=2) + '\n')
 
     for target in args.targets:
-        runs = {'png_stream': 50000, 'inflate_stream': 20000, 'decoder_limits': 30000}[target]
+        runs = args.runs if args.runs is not None else {'png_stream': 50000, 'inflate_stream': 20000, 'decoder_limits': 30000}[target]
         corpus = corpus_root / target
         digest, sizes = hashlib.sha256(), []
         for seed in sorted(corpus.iterdir(), key=lambda p: p.name.encode()):

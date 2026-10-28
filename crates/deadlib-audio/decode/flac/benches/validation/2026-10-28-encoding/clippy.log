@@ -1,0 +1,4 @@
+cargo clippy --locked -p deadlib-audio-decode-flac --all-targets -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.55s
+
+exit_code=0

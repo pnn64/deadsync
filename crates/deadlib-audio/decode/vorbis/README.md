@@ -1,6 +1,6 @@
 # deadlib-audio-decode-vorbis
 
-Independent, in-development Vorbis I implementation. The only production
+Independent Vorbis I implementation with [completed decoding validation](DECODING_COMPLETION.md). The only production
 dependency is the sibling `deadlib-audio-decode-ogg` container. Symphonia and
 libvorbis serve only as test oracles. Neither new crate is integrated into
 DeadSync's decoder or playback pipeline.
@@ -38,6 +38,12 @@ Raw Vorbis packet APIs remain usable independently of Ogg:
 * `PacketDecoder`: floor-zero/one curves, residue-zero/one/two, inverse channel
   coupling in reverse order, native FFT-based inverse MDCT, Vorbis windows and
   overlap-add. Output is borrowed planar, unclipped f32 in Vorbis channel order.
+* `SynthesisDecoder`: raw packet timing, track-only insertion, queued PCM,
+  partial reads and retained-buffer restart behavior matching libvorbis.
+  `PacketTiming` supplies sequence/granule/EOS fields independently of Ogg;
+  `SynthesisState` exposes the exact queue and clocks. Numerical policies remain
+  explicit. See [synthesis state](SYNTHESIS_STATE.md) and
+  [reference file seeking](REFERENCE_SEEKING.md).
   Transform tables/scratch use f64 to retain PCM accuracy through cancellation;
   [configuration parity](CONFIGURATION_PARITY.md) records the regression.
   The first block primes overlap and returns zero frames. `reset` keeps tables
@@ -216,6 +222,12 @@ There is no synthetic final flush; the container mapping supplies final length.
 Do not replace the existing decoding
 pipeline. Application integration remains outside this task.
 See [COVERAGE.md](COVERAGE.md) and the parent work plan for the remaining scope.
+`SeekOptions::seek_behavior = SeekBehavior::Libvorbis` now selects reference
+page/packet scheduling and the granule-aware synthesis queue. It matches the
+172 previously recorded seek-position/count disagreements, including retained
+restart history and continued-packet fallback. The default `Retained` mode
+continues to address sequential PCM exactly. See [reference seeking](REFERENCE_SEEKING.md)
+for policy, independent comparisons and remaining scope.
 The separate [fuzz workspace](../fuzz/README.md) covers headers, raw packet
 synthesis, streaming/reset and indexed seek error recovery under AddressSanitizer.
 
@@ -248,5 +260,10 @@ finite PCM still uses the original numerical bounds.
 
 The [EOS count follow-up](EOS_CLAMPING.md) adds explicit bounded reference EOS
 clipping and separates declared duration from emitted PCM. It retains the
-remaining libvorbisfile seek-position/count differences as an exact inventory;
-the overall parity goal remains open.
+original retained-PCM/libvorbisfile differences as an exact inventory. The
+explicit reference seek mode checks all of those requests against C directly.
+
+[Empty EOS pages without timestamps](UNTIMED_EOS.md) inherit the last completed
+audio landmark under the default policy. The explicit reference EOS policy
+preserves libvorbisfile's zero declared duration and separately records emitted
+PCM. Completed audio pages with unknown or negative granules remain errors.

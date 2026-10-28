@@ -1,0 +1,14 @@
+{
+  "passed": true,
+  "survey": false,
+  "files": 1,
+  "method": "Raw framed PCM against public libmad/mpg123 and Symphonia decoders.\n\nIncludes Info/Xing-frame samples and synthesis delay. File-level gapless trimming\nis intentionally a separate gate. Every raw frame's rate/channel/count is exact.\n",
+  "binaries": {
+    "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode": "508aff847d3b9c20f325ce62b2c007e395002fb58904a37035ebe26262a8e428",
+    "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final": "621c5342e2d0ec404f97c84623933c19492fee37ba15cbf363f153c2c542c8a7"
+  },
+  "reference_versions": [
+    "0.15.1b",
+    "1.32.10"
+  ]
+}

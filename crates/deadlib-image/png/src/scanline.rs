@@ -139,8 +139,58 @@ pub(crate) fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> R
     Ok(())
 }
 
+pub(crate) fn unpack<const DEPTH: u8>(row: &[u8], out: &mut [u8]) {
+    for (samples, &byte) in out.chunks_mut(8 / DEPTH as usize).zip(row) {
+        for (n, sample) in samples.iter_mut().enumerate() {
+            *sample = (byte >> (8 - DEPTH - n as u8 * DEPTH)) & ((1 << DEPTH) - 1);
+        }
+    }
+}
+
+fn unfilter_first_pixels<const N: usize, const HALF: bool>(row: &mut [u8]) {
+    let (pixels, tail) = row.as_chunks_mut::<N>();
+    let mut left = [0; N];
+    for pixel in pixels {
+        for n in 0..N {
+            pixel[n] = pixel[n].wrapping_add(left[n] >> u8::from(HALF));
+        }
+        left = *pixel;
+    }
+    for (n, value) in tail.iter_mut().enumerate() {
+        *value = value.wrapping_add(left[n] >> u8::from(HALF));
+    }
+}
+
+fn unfilter_first_neighbors<const HALF: bool>(row: &mut [u8], bpp: usize) {
+    match bpp {
+        1 => unfilter_first_pixels::<1, HALF>(row),
+        2 => {
+            for n in 2..row.len() {
+                row[n] = row[n].wrapping_add(row[n - 2] >> u8::from(HALF));
+            }
+        }
+        3 => unfilter_first_pixels::<3, HALF>(row),
+        4 => unfilter_first_pixels::<4, HALF>(row),
+        6 => unfilter_first_pixels::<6, HALF>(row),
+        8 => unfilter_first_pixels::<8, HALF>(row),
+        _ => unreachable!("validated PNG byte stride"),
+    }
+}
+
+pub(crate) fn unfilter_first(row: &mut [u8], bpp: usize, filter: u8) -> Result<(), Error> {
+    // With a zero row above, Paeth is Sub and Average uses half of the left byte.
+    match filter {
+        0 | 2 => (),
+        1 => return unfilter(row, &[], bpp, 1),
+        4 => unfilter_first_neighbors::<false>(row, bpp),
+        3 => unfilter_first_neighbors::<true>(row, bpp),
+        _ => return Err(Error::Invalid("scanline filter")),
+    }
+    Ok(())
+}
+
 pub(crate) fn decode(
-    raw: &mut [u8],
+    mut raw: Vec<u8>,
     width: u32,
     height: u32,
     color: ColorType,
@@ -158,7 +208,10 @@ pub(crate) fn decode(
     if bytes > limit {
         return Err(Error::LimitExceeded);
     }
-    let mut samples = if depth == 16 {
+    let reuse = depth == 8 && !interlaced;
+    let mut samples = if reuse {
+        Samples::U8(Vec::new())
+    } else if depth == 16 {
         let mut v = Vec::new();
         reserve(&mut v, count)?;
         v.resize(count, 0u16);
@@ -179,24 +232,40 @@ pub(crate) fn decode(
             continue;
         }
         let stride = row_bytes(w, channels, depth)?;
-        let mut zeros = Vec::new();
-        reserve(&mut zeros, stride)?;
-        zeros.resize(stride, 0);
         for row_index in 0..h {
             let (before, after) = raw.split_at_mut(position);
             let filter = *after.first().ok_or(Error::Truncated)?;
             let row = after.get_mut(1..1 + stride).ok_or(Error::Truncated)?;
-            let previous = if row_index == 0 {
-                &zeros
+            if row_index == 0 {
+                unfilter_first(row, bpp, filter)?;
             } else {
-                &before[position - stride..position]
-            };
-            unfilter(row, previous, bpp, filter)?;
+                let previous = if reuse {
+                    &before[(row_index - 1) * stride..row_index * stride]
+                } else {
+                    &before[position - stride..position]
+                };
+                unfilter(row, previous, bpp, filter)?;
+            }
+            if reuse {
+                // Read the next row's predictor from the compacted output.
+                // Moving this row left cannot overwrite any unread row.
+                raw.copy_within(position + 1..position + 1 + stride, row_index * stride);
+                position += stride + 1;
+                continue;
+            }
             let dst_y = y as usize + row_index * dy as usize;
-            if dx == 1 && depth >= 8 {
+            if dx == 1 {
                 let dst = (dst_y * width as usize + x as usize) * channels;
                 match &mut samples {
-                    Samples::U8(v) => v[dst..dst + row.len()].copy_from_slice(row),
+                    Samples::U8(v) => {
+                        let out = &mut v[dst..dst + w * channels];
+                        match depth {
+                            1 => unpack::<1>(row, out),
+                            2 => unpack::<2>(row, out),
+                            4 => unpack::<4>(row, out),
+                            _ => out.copy_from_slice(row),
+                        }
+                    }
                     Samples::U16(v) => {
                         for (out, &bytes) in v[dst..dst + w * channels]
                             .iter_mut()
@@ -237,26 +306,131 @@ pub(crate) fn decode(
         height,
         color_type: color,
         bit_depth: depth,
-        samples,
+        samples: if reuse {
+            raw.truncate(count);
+            Samples::U8(raw)
+        } else {
+            samples
+        },
     })
 }
 
-pub(crate) fn filter_into(row: &[u8], prev: &[u8], bpp: usize, filter: u8, out: &mut [u8]) -> u64 {
+#[inline]
+pub(crate) fn filter_into<const SCORE: bool>(
+    row: &[u8],
+    prev: &[u8],
+    bpp: usize,
+    filter: u8,
+    out: &mut [u8],
+) -> u64 {
+    match filter {
+        0 => filter_bytes::<0, SCORE>(row, prev, bpp, out),
+        1 => filter_bytes::<1, SCORE>(row, prev, bpp, out),
+        2 => filter_bytes::<2, SCORE>(row, prev, bpp, out),
+        3 => filter_bytes::<3, SCORE>(row, prev, bpp, out),
+        _ => filter_bytes::<4, SCORE>(row, prev, bpp, out),
+    }
+}
+
+fn filter_bytes<const FILTER: u8, const SCORE: bool>(
+    row: &[u8],
+    prev: &[u8],
+    bpp: usize,
+    out: &mut [u8],
+) -> u64 {
+    let prev = if FILTER >= 2 {
+        &prev[..row.len()]
+    } else {
+        prev
+    };
+    let out = &mut out[..row.len()];
     let mut score = 0u64;
-    for n in 0..row.len() {
+    for (n, (&value, out)) in row.iter().zip(out).enumerate() {
         let left = if n >= bpp { row[n - bpp] } else { 0 };
-        let up_left = if n >= bpp { prev[n - bpp] } else { 0 };
-        let predictor = match filter {
+        let predictor = match FILTER {
             0 => 0,
             1 => left,
             2 => prev[n],
             3 => ((u16::from(left) + u16::from(prev[n])) / 2) as u8,
-            _ => paeth(left, prev[n], up_left),
+            _ => paeth(left, prev[n], if n >= bpp { prev[n - bpp] } else { 0 }),
         };
-        out[n] = row[n].wrapping_sub(predictor);
-        score += u64::from((out[n] as i8).unsigned_abs());
+        *out = value.wrapping_sub(predictor);
+        if SCORE {
+            score += u64::from((*out as i8).unsigned_abs());
+        }
     }
     score
+}
+
+fn pack_bits<const DEPTH: u8>(samples: &[u8], row: &mut [u8]) {
+    if DEPTH == 4 {
+        for (out, values) in row.iter_mut().zip(samples.chunks(8 / DEPTH as usize)) {
+            let mut byte = 0;
+            for (n, &value) in values.iter().enumerate() {
+                byte |= value << (8 - DEPTH - n as u8 * DEPTH);
+            }
+            *out = byte;
+        }
+        return;
+    }
+    let group = 8 / DEPTH as usize;
+    let full = samples.len() / group;
+    let (words, tail) = row.split_at_mut(full);
+    // Validated low sample bits are gathered into the high word byte in PNG
+    // order. Each product bit has one contributor, so there are no carries.
+    match DEPTH {
+        1 => {
+            for (out, &bytes) in words.iter_mut().zip(samples.as_chunks::<8>().0) {
+                *out = (u64::from_le_bytes(bytes).wrapping_mul(0x8040_2010_0804_0201) >> 56) as u8;
+            }
+        }
+        2 => {
+            for (out, &bytes) in words.iter_mut().zip(samples.as_chunks::<4>().0) {
+                *out = (u32::from_le_bytes(bytes).wrapping_mul(0x4010_0401) >> 24) as u8;
+            }
+        }
+        _ => unreachable!("validated packed PNG depth"),
+    }
+    if let Some(out) = tail.first_mut() {
+        let mut byte = 0;
+        for (n, &value) in samples[full * group..].iter().enumerate() {
+            byte |= value << (8 - DEPTH - n as u8 * DEPTH);
+        }
+        *out = byte;
+    }
+}
+
+fn pack_step<const DEPTH: u8>(samples: &[u8], step: usize, width: usize, row: &mut [u8]) {
+    let group = 8 / DEPTH as usize;
+    let full = width / group;
+    let (words, tail) = row.split_at_mut(full);
+    for (index, out) in words.iter_mut().enumerate() {
+        let start = index * group * step;
+        let mut byte = 0;
+        for n in 0..group {
+            byte |= samples[start + n * step] << (8 - DEPTH - n as u8 * DEPTH);
+        }
+        *out = byte;
+    }
+    if let Some(out) = tail.first_mut() {
+        let start = full * group;
+        let mut byte = 0;
+        for n in 0..width - start {
+            byte |= samples[(start + n) * step] << (8 - DEPTH - n as u8 * DEPTH);
+        }
+        *out = byte;
+    }
+}
+
+fn gather8<const CHANNELS: usize>(samples: &[u8], step: usize, row: &mut [u8]) {
+    for (out, pixel) in row
+        .as_chunks_mut::<CHANNELS>()
+        .0
+        .iter_mut()
+        .zip(samples.chunks(step * CHANNELS))
+    {
+        out.copy_from_slice(&pixel[..CHANNELS]);
+    }
 }
 
 pub(crate) fn pack_row(
@@ -274,7 +448,6 @@ pub(crate) fn pack_row(
         match &image.samples {
             Samples::U8(v) if depth == 8 => {
                 row.copy_from_slice(&v[start..start + width * channels]);
-                return;
             }
             Samples::U16(v) => {
                 for (out, value) in row
@@ -285,27 +458,48 @@ pub(crate) fn pack_row(
                 {
                     *out = value.to_be_bytes();
                 }
-                return;
             }
-            _ => (),
+            Samples::U8(v) => {
+                let samples = &v[start..start + width * channels];
+                match depth {
+                    1 => pack_bits::<1>(samples, row),
+                    2 => pack_bits::<2>(samples, row),
+                    4 => pack_bits::<4>(samples, row),
+                    _ => unreachable!("validated packed PNG depth"),
+                }
+            }
         }
+        return;
     }
-    row.fill(0);
-    for pixel in 0..width {
-        let src = start + pixel * step * channels;
-        for channel in 0..channels {
-            let dst = pixel * channels + channel;
-            match &image.samples {
-                Samples::U16(v) => {
-                    row[dst * 2..dst * 2 + 2].copy_from_slice(&v[src + channel].to_be_bytes())
-                }
-                Samples::U8(v) if depth == 8 => row[dst] = v[src + channel],
-                Samples::U8(v) => {
-                    row[dst * depth as usize / 8] |=
-                        v[src + channel] << (8 - depth - (dst * depth as usize % 8) as u8)
+    let samples = match &image.samples {
+        Samples::U8(v) if depth == 8 => {
+            let samples = &v[start..];
+            match channels {
+                1 => gather8::<1>(samples, step, row),
+                2 => gather8::<2>(samples, step, row),
+                3 => gather8::<3>(samples, step, row),
+                _ => gather8::<4>(samples, step, row),
+            }
+            return;
+        }
+        Samples::U16(v) => {
+            for pixel in 0..width {
+                let src = start + pixel * step * channels;
+                for channel in 0..channels {
+                    let dst = (pixel * channels + channel) * 2;
+                    row[dst..dst + 2].copy_from_slice(&v[src + channel].to_be_bytes());
                 }
             }
+            return;
         }
+        Samples::U8(v) => v,
+    };
+    let samples = &samples[start..];
+    match depth {
+        1 => pack_step::<1>(samples, step, width, row),
+        2 => pack_step::<2>(samples, step, width, row),
+        4 => pack_step::<4>(samples, step, width, row),
+        _ => unreachable!("validated packed PNG depth"),
     }
 }
 
@@ -322,6 +516,30 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
     let channels = image.color_type.channels();
     let depth = image.bit_depth;
     let bpp = (channels * depth as usize).div_ceil(8);
+    let capacity = if filter == Filter::None {
+        0
+    } else {
+        let width = passes(interlaced)
+            .iter()
+            .filter(|&&(_, y, _, _)| y < image.height)
+            .map(|&(x, _, dx, _)| extent(image.width, x, dx))
+            .max()
+            .unwrap_or(0);
+        row_bytes(width, channels, depth)?
+    };
+    let mut row = vec![0; capacity];
+    let uses_previous = !matches!(filter, Filter::None | Filter::Sub);
+    let mut previous = if uses_previous {
+        vec![0; capacity]
+    } else {
+        Vec::new()
+    };
+    let mut candidate = if filter == Filter::Adaptive {
+        vec![0; capacity]
+    } else {
+        Vec::new()
+    };
+    let mut best = vec![0; capacity];
     for &(x, y, dx, dy) in passes(interlaced) {
         let w = extent(image.width, x, dx);
         let h = extent(image.height, y, dy);
@@ -329,10 +547,33 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
             continue;
         }
         let stride = row_bytes(w, channels, depth)?;
-        let mut row = vec![0; stride];
-        let mut previous = vec![0; stride];
-        let mut candidate = vec![0; stride];
-        let mut best = vec![0; stride];
+        if filter == Filter::None {
+            for row_index in 0..h {
+                let src_y = y as usize + row_index * dy as usize;
+                out.push(0);
+                match &image.samples {
+                    Samples::U8(samples) if depth == 8 && dx == 1 => {
+                        let start = (src_y * image.width as usize + x as usize) * channels;
+                        out.extend_from_slice(&samples[start..start + w * channels]);
+                    }
+                    _ => {
+                        let start = out.len();
+                        out.resize(start + stride, 0);
+                        pack_row(image, src_y, x as usize, dx as usize, w, &mut out[start..]);
+                    }
+                }
+            }
+            continue;
+        }
+        row.resize(stride, 0);
+        if uses_previous {
+            previous.resize(stride, 0);
+            previous.fill(0);
+        }
+        if filter == Filter::Adaptive {
+            candidate.resize(stride, 0);
+        }
+        best.resize(stride, 0);
         for row_index in 0..h {
             let src_y = y as usize + row_index * dy as usize;
             pack_row(image, src_y, x as usize, dx as usize, w, &mut row);
@@ -340,7 +581,7 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
             if filter == Filter::Adaptive {
                 let mut score = u64::MAX;
                 for kind in 0..5 {
-                    let value = filter_into(&row, &previous, bpp, kind, &mut candidate);
+                    let value = filter_into::<true>(&row, &previous, bpp, kind, &mut candidate);
                     if value < score {
                         score = value;
                         selected = kind;
@@ -349,11 +590,13 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
                 }
             } else {
                 selected = filter as u8;
-                filter_into(&row, &previous, bpp, selected, &mut best);
+                filter_into::<false>(&row, &previous, bpp, selected, &mut best);
             }
             out.push(selected);
             out.extend_from_slice(&best);
-            core::mem::swap(&mut row, &mut previous);
+            if uses_previous {
+                core::mem::swap(&mut row, &mut previous);
+            }
         }
     }
     Ok(out)
@@ -377,6 +620,40 @@ mod tests {
             b
         } else {
             c
+        }
+    }
+
+    #[test]
+    fn every_packed_byte_and_tail_survives_strided_gather() {
+        for depth in [1, 2, 4] {
+            for byte in 0..=255u8 {
+                for width in 1..=8 / depth as usize {
+                    for step in [1, 2, 4, 8] {
+                        for offset in 0..3 {
+                            let size = offset + (width - 1) * step + 3;
+                            let mut samples = vec![(1 << depth) - 1; size];
+                            for n in 0..width {
+                                samples[offset + n * step] =
+                                    (byte >> (8 - depth as usize * (n + 1))) & ((1 << depth) - 1);
+                            }
+                            let image = Image {
+                                width: size as u32,
+                                height: 1,
+                                color_type: ColorType::Grayscale,
+                                bit_depth: depth,
+                                samples: Samples::U8(samples),
+                            };
+                            let mut output = [0xa5];
+                            pack_row(&image, 0, offset, step, width, &mut output);
+                            assert_eq!(
+                                output,
+                                [byte & (u8::MAX << (8 - depth as usize * width))],
+                                "depth={depth} byte={byte} width={width} step={step} offset={offset}"
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -431,10 +708,19 @@ mod tests {
                             .map(|&v| u64::from((v as i8).unsigned_abs()))
                             .sum();
                         let mut actual = vec![0xa5; len];
-                        assert_eq!(filter_into(&row, &prev, bpp, filter, &mut actual), score);
+                        let predictors: &[u8] = if filter < 2 { &[] } else { &prev };
+                        assert_eq!(
+                            filter_into::<true>(&row, predictors, bpp, filter, &mut actual),
+                            score
+                        );
                         assert_eq!(actual, expected);
                         unfilter(&mut actual, &prev, bpp, filter).unwrap();
                         assert_eq!(actual, row);
+                        if prev.iter().all(|&v| v == 0) {
+                            let mut first = expected.clone();
+                            unfilter_first(&mut first, bpp, filter).unwrap();
+                            assert_eq!(first, row);
+                        }
                     }
                 }
             }
@@ -447,6 +733,11 @@ mod tests {
             let mut row = [0xa5; 17];
             assert_eq!(
                 unfilter(&mut row, &[0; 17], 3, filter),
+                Err(Error::Invalid("scanline filter"))
+            );
+            assert_eq!(row, [0xa5; 17]);
+            assert_eq!(
+                unfilter_first(&mut row, 3, filter),
                 Err(Error::Invalid("scanline filter"))
             );
             assert_eq!(row, [0xa5; 17]);

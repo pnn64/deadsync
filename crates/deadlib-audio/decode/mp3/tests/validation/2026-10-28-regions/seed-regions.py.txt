@@ -1,0 +1,12 @@
+from pathlib import Path
+import shutil,hashlib
+base=Path('/home/perfecttaste/.cache/deadlib-mp3')
+seeds=base/'fuzz-regions-seeds'
+shutil.copytree(base/'fuzz-gapless-campaign-4/corpus',seeds)
+for path in Path('/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/regions-equations-after').glob('*.mp3'):
+ data=path.read_bytes()
+ for target in ['streams','frames']:
+  for control in ([0,3,7] if target=='streams' else [0,1]):
+   value=bytes([control])+data[:32768]
+   (seeds/target/hashlib.sha256(value).hexdigest()).write_bytes(value)
+print('seeds',[(p.name,len(list(p.iterdir()))) for p in seeds.iterdir()])

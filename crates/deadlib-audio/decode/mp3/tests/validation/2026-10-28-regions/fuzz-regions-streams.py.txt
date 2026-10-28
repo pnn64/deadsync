@@ -1,0 +1,18 @@
+from pathlib import Path
+import hashlib,json,subprocess,time
+base=Path('/home/perfecttaste/.cache/deadlib-mp3')
+out=base/'fuzz-regions-streams-extended';out.mkdir(exist_ok=False)
+binary=base/'fuzz-build-fixed/x86_64-unknown-linux-gnu/release/streams'
+corpus=base/'fuzz-regions-campaign/corpus/streams'
+artifacts=out/'artifacts';artifacts.mkdir()
+sha=lambda p:hashlib.sha256(p.read_bytes()).hexdigest()
+initial={p.name:sha(p) for p in corpus.iterdir() if p.is_file()}
+command=[str(binary),str(corpus),'-artifact_prefix='+str(artifacts)+'/',
+ '-max_total_time=360','-timeout=10','-rss_limit_mb=1024','-max_len=32769','-seed=438179','-print_final_stats=1']
+started=time.time()
+with (out/'streams.log').open('wb') as log:run=subprocess.run(command,stdout=log,stderr=subprocess.STDOUT)
+record={'passed':run.returncode==0 and not list(artifacts.iterdir()),'command':command,'exit_code':run.returncode,
+ 'elapsed_seconds':time.time()-started,'binary_sha256':sha(binary),'initial_seeds':initial,
+ 'final_corpus':{p.name:sha(p) for p in corpus.iterdir() if p.is_file()},'artifacts':[p.name for p in artifacts.iterdir()]}
+(out/'validation.json').write_text(json.dumps(record,indent=2)+'\n');assert record['passed']
+print('extended streams passed')

@@ -1,5 +1,9 @@
 //! Lua 5.1 module discovery, cached imports and module environments.
 use super::*;
+mod library;
+mod returns;
+pub(in crate::vm) use library::LoadingLibrary;
+pub use library::{NativeLibrary, NativeLibraryLoader, NativeSymbol};
 
 pub(super) const REQUIRE: u64 = 151;
 pub(super) const MODULE: u64 = 152;
@@ -9,10 +13,11 @@ const LUA: u64 = 155;
 const C: u64 = 156;
 const CROOT: u64 = 157;
 const LOADLIB: u64 = 158;
+const LIB_GC: u64 = 170;
 const SENTINEL: Value = Value::LightUserdata(u64::MAX);
 
 pub(super) fn contains(id: u64) -> bool {
-    (REQUIRE..=LOADLIB).contains(&id)
+    (REQUIRE..=LOADLIB).contains(&id) || id == LIB_GC
 }
 
 fn runtime(message: impl Into<Box<str>>) -> Error {
@@ -72,10 +77,11 @@ impl Vm {
         if frame.pc == 0 {
             let name = self.package_name(frame)?;
             self.resize_registers(self.registers.len().max(scratch + 9));
-            self.registers
-                .copy_within(frame.vararg_start..frame.vararg_start + frame.argc(), base);
+            let arguments = frame.vararg_start..frame.vararg_start + frame.argc();
+            self.registers.copy_within(arguments.clone(), base);
+            self.relocate_native_error_functions(arguments.clone(), base);
+            self.registers[arguments].fill(Value::Nil);
             self.registers[scratch + 8] = name;
-            self.registers[base] = self.argument(frame.vararg_start - 1, frame.argc(), 0);
             frame.vararg_start = base;
             frame.pc = 1;
             self.frames[owner] = frame;
@@ -152,10 +158,13 @@ impl Vm {
                 self.get_table(self.registers[scratch + 1], key, scratch + 3)?;
             }
             7 => {
-                if self.registers[scratch + 3] != Value::Nil {
+                let initialized = self.registers[scratch + 3] != Value::Nil;
+                self.registers[scratch + 3] = Value::Nil;
+                if initialized {
                     self.frames[owner].pc = 10
                 } else {
                     self.frames[owner].pc = 8;
+                    self.registers[scratch + 2] = self.registers[scratch + 1];
                     let key = self.intern(b"_M");
                     self.set_table(
                         self.registers[scratch + 1],
@@ -167,6 +176,7 @@ impl Vm {
             8 => {
                 self.frames[owner].pc = 9;
                 let key = self.intern(b"_NAME");
+                self.registers[scratch + 2] = self.registers[scratch + 8];
                 self.set_table(
                     self.registers[scratch + 1],
                     key,
@@ -178,6 +188,7 @@ impl Vm {
                 let length = name.iter().rposition(|&b| b == b'.').map_or(0, |n| n + 1);
                 let package = self.intern(&name[..length]);
                 let key = self.intern(b"_PACKAGE");
+                self.registers[scratch + 2] = package;
                 self.frames[owner].pc = 10;
                 self.set_table(self.registers[scratch + 1], key, package)?;
             }
@@ -215,9 +226,13 @@ impl Vm {
         }
         Ok(None)
     }
-    fn require_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
+    fn require_step(&mut self, mut frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
         let owner = self.frames.len() - 1;
+        // The visible C window lives at base. Captured C locals (the name and
+        // loader index) stay beyond its largest temporary stack.
+        let name_slot = base + 16;
+        let index_slot = base + 17;
         match frame.pc {
             0 => {
                 let name = self.package_name(frame)?;
@@ -227,24 +242,34 @@ impl Vm {
                 };
                 self.registers[frame.vararg_start..frame.vararg_start + frame.argc()]
                     .fill(Value::Nil);
-                self.frames[owner].vararg_count = 0;
-                self.resize_registers(self.registers.len().max(base + 9));
-                self.registers[base + 8] = name;
+                self.resize_registers(self.registers.len().max(base + 18));
+                self.registers[name_slot] = name;
                 self.registers[base] = original;
-                self.frames[owner].pc = 1;
+                frame.vararg_start = base;
+                frame.vararg_count = 1;
+                frame.pc = 1;
+                self.frames[owner] = frame;
                 let key = self.intern(b"_LOADED");
                 self.get_table(Value::Table(self.registry), key, base + 1)?;
             }
             1 => {
-                self.frames[owner].pc = 2;
-                self.get_table(self.registers[base + 1], self.registers[base + 8], base + 2)?;
+                frame.pc = 2;
+                frame.vararg_count = 2;
+                self.frames[owner] = frame;
+                self.get_table(
+                    self.registers[base + 1],
+                    self.registers[name_slot],
+                    base + 2,
+                )?;
             }
             2 => {
+                frame.vararg_count = 3;
+                self.frames[owner] = frame;
                 if self.registers[base + 2].is_truthy() {
                     if self.registers[base + 2] == SENTINEL {
                         return Err(self.package_named_error(
                             b"loop or previous error loading module '",
-                            self.registers[base + 8],
+                            self.registers[name_slot],
                             b"'",
                         ));
                     }
@@ -258,15 +283,17 @@ impl Vm {
                     return Err(runtime("'package.loaders' must be a table"));
                 }
                 self.registers[base + 4] = self.intern(b"");
-                self.registers[base + 5] = Value::Number(1.);
-                self.frames[owner].pc = 4;
+                self.registers[index_slot] = Value::Number(1.);
+                frame.pc = 4;
+                frame.vararg_count = 5;
+                self.frames[owner] = frame;
             }
             4 => {
                 let loader = self
                     .table(self.registers[base + 3])?
-                    .get(self.registers[base + 5]);
+                    .get(self.registers[index_slot]);
                 if loader == Value::Nil {
-                    let name = self.concat_bytes(self.registers[base + 8])?;
+                    let name = self.concat_bytes(self.registers[name_slot])?;
                     let errors = self
                         .concat_bytes(self.registers[base + 4])
                         .unwrap_or_else(|_| b"(null)".to_vec());
@@ -279,59 +306,96 @@ impl Vm {
                     let value = self.located_error(value, 1);
                     return Err(self.package_raised(value));
                 }
-                let Value::Number(index) = self.registers[base + 5] else {
+                let Value::Number(index) = self.registers[index_slot] else {
                     unreachable!("loader index")
                 };
-                self.registers[base + 5] = Value::Number(index + 1.);
-                self.registers[base + 6] = loader;
-                self.registers[base + 7] = self.registers[base + 8];
+                self.registers[index_slot] = Value::Number(index + 1.);
+                self.registers[base + 5] = loader;
+                self.registers[base + 6] = self.registers[name_slot];
                 self.frames[owner].pc = 5;
-                self.package_call(base + 6, 1, 1)?;
+                self.package_call(base + 5, 1, 1)?;
             }
             5 => {
-                let value = self.registers[base + 6];
+                let value = self.registers[base + 5];
                 if matches!(value, Value::Function(_) | Value::Native(_)) {
-                    self.frames[owner].pc = 6;
-                    self.set_table(self.registers[base + 1], self.registers[base + 8], SENTINEL)?;
+                    self.registers[base + 6] = SENTINEL;
+                    frame.pc = 6;
+                    frame.vararg_count = 7;
+                    self.frames[owner] = frame;
+                    self.set_table(
+                        self.registers[base + 1],
+                        self.registers[name_slot],
+                        SENTINEL,
+                    )?;
                 } else {
                     self.frames[owner].pc = 4;
                     if matches!(value, Value::String(_) | Value::Number(_)) {
                         self.concatenate(self.registers[base + 4], value, base + 4)?;
                     }
+                    self.registers[base + 5] = Value::Nil;
+                    self.registers[base + 6] = Value::Nil;
                 }
             }
             6 => {
-                self.registers[base + 7] = self.registers[base + 8];
-                self.frames[owner].pc = 7;
-                self.package_call(base + 6, 1, 1)?;
+                self.registers[base + 6] = self.registers[name_slot];
+                frame.pc = 7;
+                frame.vararg_count = 5;
+                self.frames[owner] = frame;
+                self.package_call(base + 5, 1, 1)?;
             }
             7 => {
-                self.frames[owner].pc = 8;
-                if self.registers[base + 6] != Value::Nil {
+                frame.vararg_count = 6;
+                frame.pc = if self.registers[base + 5] == Value::Nil {
+                    11
+                } else {
+                    8
+                };
+                self.frames[owner] = frame;
+                if frame.pc == 8 {
                     self.set_table(
                         self.registers[base + 1],
-                        self.registers[base + 8],
-                        self.registers[base + 6],
+                        self.registers[name_slot],
+                        self.registers[base + 5],
                     )?;
                 }
             }
             8 => {
+                self.registers[base + 5] = Value::Nil;
+                self.frames[owner].vararg_count = 5;
+                self.frames[owner].pc = 11;
+            }
+            11 => {
                 self.frames[owner].pc = 9;
-                self.get_table(self.registers[base + 1], self.registers[base + 8], base + 2)?;
+                self.get_table(
+                    self.registers[base + 1],
+                    self.registers[name_slot],
+                    base + frame.argc(),
+                )?;
             }
             9 => {
-                if self.registers[base + 2] != SENTINEL {
-                    return Ok(self.return_frame(frame, base + 2, 1));
+                let result = base + frame.argc();
+                frame.vararg_count += 1;
+                self.frames[owner] = frame;
+                if self.registers[result] != SENTINEL {
+                    return Ok(self.return_frame(frame, result, 1));
                 }
-                self.registers[base + 2] = Value::Boolean(true);
-                self.frames[owner].pc = 10;
+                self.registers[result + 1] = Value::Boolean(true);
+                self.registers[result + 2] = Value::Boolean(true);
+                frame.pc = 10;
+                frame.vararg_count += 2;
+                self.frames[owner] = frame;
                 self.set_table(
                     self.registers[base + 1],
-                    self.registers[base + 8],
+                    self.registers[name_slot],
                     Value::Boolean(true),
                 )?;
             }
-            10 => return Ok(self.return_frame(frame, base + 2, 1)),
+            10 => {
+                self.registers[base + frame.argc() - 1] = Value::Nil;
+                frame.vararg_count -= 1;
+                self.frames[owner] = frame;
+                return Ok(self.return_frame(frame, base + frame.argc() - 1, 1));
+            }
             _ => unreachable!("require phase"),
         }
         Ok(None)
@@ -361,6 +425,7 @@ impl Vm {
                 self.get_table(self.registers[base + 1], self.registers[base], base + 2)?;
             }
             2 => {
+                self.registers[base + 3] = self.registers[base + 2];
                 if self.registers[base + 2] == Value::Nil {
                     let name = self.concat_bytes(self.registers[base])?;
                     let mut bytes = self.take_buffer(name.len() + 40);
@@ -375,7 +440,7 @@ impl Vm {
         }
         Ok(None)
     }
-    fn seeall_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
+    fn seeall_step(&mut self, mut frame: Frame) -> Result<Option<usize>, Error> {
         if frame.pc == 0 {
             let value = self.argument(frame.vararg_start - 1, frame.argc(), 0);
             let Value::Table(_) = value else {
@@ -388,14 +453,30 @@ impl Vm {
                 self.set_metatable(value, Some(mt));
                 mt
             };
-            self.frames.last_mut().expect("seeall frame").pc = 1;
+            let arguments = frame.vararg_start..frame.vararg_start + frame.argc();
+            self.resize_registers(self.registers.len().max(frame.base + frame.argc() + 2));
+            self.registers.copy_within(arguments.clone(), frame.base);
+            self.relocate_native_error_functions(arguments.clone(), frame.base);
+            self.registers[arguments].fill(Value::Nil);
+            self.registers[frame.base + frame.argc()] = Value::Table(mt);
+            self.registers[frame.base + frame.argc() + 1] = Value::Table(self.globals);
+            frame.vararg_start = frame.base;
+            frame.vararg_count += 2;
+            frame.pc = 1;
+            *self.frames.last_mut().expect("seeall frame") = frame;
             let key = self.intern(b"__index");
             self.set_table(Value::Table(mt), key, Value::Table(self.globals))?;
             return Ok(None);
         }
+        self.registers[frame.base + frame.argc() - 1] = Value::Nil;
+        frame.vararg_count -= 1;
+        *self.frames.last_mut().expect("seeall frame") = frame;
         Ok(self.return_frame(frame, frame.base, 0))
     }
     fn searcher_step(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
+        if frame.pc >= 100 {
+            return self.library_step(id, frame);
+        }
         let base = frame.base;
         let owner = self.frames.len() - 1;
         match frame.pc {
@@ -411,9 +492,13 @@ impl Vm {
                     &bytes
                 };
                 let replaced = replace(search, b'.', if cfg!(windows) { b"\\" } else { b"/" });
-                self.resize_registers(self.registers.len().max(base + 8));
+                self.resize_registers(self.registers.len().max(base + 11));
                 self.registers[base] = name;
                 self.registers[base + 1] = self.intern(&replaced);
+                self.registers[base + 8] = self.registers[base + 1];
+                if id == CROOT {
+                    self.registers[base + 10] = self.intern(search);
+                }
                 self.frames[owner].pc = 1;
                 self.package_field(id, if id == LUA { b"path" } else { b"cpath" }, base + 2)?;
             }
@@ -431,12 +516,13 @@ impl Vm {
                 let path = self.concat_bytes(self.registers[base + 2])?;
                 let path = self.intern(io::c_bytes(&path));
                 self.registers[base + 2] = path;
+                self.registers[base + 9] = path;
                 self.registers[base + 3] = self.intern(b"");
                 self.registers[base + 4] = Value::Number(0.);
                 self.frames[owner].pc = 2;
             }
             2 => {
-                let Value::String(path_id) = self.registers[base + 2] else {
+                let Value::String(path_id) = self.registers[base + 9] else {
                     unreachable!("search path string")
                 };
                 let path = &self.strings.bytes[slot_index(path_id.0)];
@@ -455,7 +541,7 @@ impl Vm {
                     .position(|&b| b == b';')
                     .map_or(path.len(), |n| start + n);
                 self.registers[base + 4] = Value::Number(end as f64);
-                let Value::String(name_id) = self.registers[base + 1] else {
+                let Value::String(name_id) = self.registers[base + 8] else {
                     unreachable!("search name string")
                 };
                 let filename = replace(
@@ -466,6 +552,9 @@ impl Vm {
                 if io::open(&filename, b"r").is_ok() {
                     self.registers[base + 5] = self.intern(&filename);
                     if id != LUA {
+                        if self.native_library_support {
+                            return self.library_step(id, frame);
+                        }
                         let error =
                             self.intern(b"dynamic libraries are not enabled in this Rust engine");
                         return self.package_load_error(frame, base + 5, error);
@@ -515,6 +604,11 @@ impl Vm {
         Err(self.package_raised(value))
     }
     pub(super) fn open_package(&mut self, loaded: TableId) {
+        let mt = self.new_table();
+        let key = self.intern(b"__gc");
+        self.raw_set(mt, key, Value::Native(LIB_GC)).unwrap();
+        let key = self.intern(b"_LOADLIB");
+        self.raw_set(self.registry, key, Value::Table(mt)).unwrap();
         let library = self.new_table();
         let loaders = self.new_table();
         let preload = self.new_table();
@@ -621,7 +715,7 @@ impl Vm {
     }
     fn package_field(&mut self, id: u64, name: &[u8], result: usize) -> Result<(), Error> {
         let key = self.intern(name);
-        self.get_table(Value::Table(self.native_environment(id)), key, result)
+        self.get_table(Value::Table(self.builtin_environment(id)), key, result)
     }
     fn package_call(&mut self, call: usize, count: usize, wanted: u32) -> Result<(), Error> {
         if let Some(actual) = self.start_call(call, count, wanted, false)? {
@@ -636,7 +730,11 @@ impl Vm {
             PRELOAD => self.preload_step(frame),
             LUA | C | CROOT => self.searcher_step(id, frame),
             SEEALL => self.seeall_step(frame),
+            LIB_GC => self.library_gc(frame),
             LOADLIB => {
+                if self.native_library_support || frame.pc >= 100 {
+                    return self.library_step(id, frame);
+                }
                 for index in 0..2 {
                     if !matches!(
                         self.argument(frame.vararg_start - 1, frame.argc(), index),

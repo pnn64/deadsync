@@ -1308,6 +1308,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadlib-audio-decode-mp3"
+version = "0.1.0"
+dependencies = [
+ "symphonia",
+]
+
+[[package]]
 name = "deadlib-audio-decode-ogg"
 version = "0.1.0"
 dependencies = [
@@ -1321,6 +1328,13 @@ dependencies = [
  "deadlib-audio-decode-ogg",
  "ogg",
  "symphonia",
+]
+
+[[package]]
+name = "deadlib-audio-decode-wav"
+version = "0.1.0"
+dependencies = [
+ "hound",
 ]
 
 [[package]]
@@ -1349,6 +1363,13 @@ dependencies = [
  "gif",
  "gif-dispose",
  "weezl 0.2.1",
+]
+
+[[package]]
+name = "deadlib-image-jpeg"
+version = "0.1.0"
+dependencies = [
+ "deadlib-image",
 ]
 
 [[package]]
@@ -1587,7 +1608,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync"
-version = "0.5.2478"
+version = "0.5.2479"
 dependencies = [
  "deadlib-assets",
  "deadlib-audio",
@@ -2063,7 +2084,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-theme-simply-love"
-version = "0.5.2478"
+version = "0.5.2479"
 dependencies = [
  "askama",
  "bitflags 2.13.2",
@@ -2133,7 +2154,7 @@ dependencies = [
 
 [[package]]
 name = "deadsync-version"
-version = "0.5.2478"
+version = "0.5.2479"
 dependencies = [
  "log",
  "semver",
@@ -2919,6 +2940,12 @@ checksum = "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d"
 dependencies = [
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "hound"
+version = "3.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62adaabb884c94955b19907d60019f4e145d091c75345379e70d1ee696f7854f"
 
 [[package]]
 name = "http"
@@ -6449,8 +6476,11 @@ dependencies = [
  "httparse",
  "log",
  "rand 0.10.3",
+ "rustls",
+ "rustls-pki-types",
  "sha1",
  "thiserror 2.0.21",
+ "webpki-roots 0.26.11",
 ]
 
 [[package]]
@@ -6531,7 +6561,7 @@ dependencies = [
  "ureq-proto",
  "url",
  "utf8-zero",
- "webpki-roots",
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]
@@ -6869,6 +6899,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e49d0e65abc00c142e8f9428da991da9f1a250c39be97459901eb12b9b49f62a"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "0.26.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "521bc38abb08001b01866da9f51eb7c5d647a19260e00054a8c7fd5f9e57f7a9"
+dependencies = [
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]

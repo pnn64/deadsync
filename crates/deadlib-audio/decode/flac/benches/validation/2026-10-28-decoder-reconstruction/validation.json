@@ -1,0 +1,52 @@
+{
+  "baseline_revision": "887dcb628",
+  "retained": [
+    "Fixed orders 2..4 integrate successive differences.",
+    "Scalar LPC orders 1 and 2 retain preceding samples in registers.",
+    "The fixed header prefix uses three grouped reads instead of seven field reads; validation order is unchanged."
+  ],
+  "measurement": "Windows QueryThreadCycleTime and Instant on logical CPU 2; 200 ms untimed warmup, resident input and equal iterations per pair. Preparation, exact PCM/MD5 verification and heap counting are untimed.",
+  "trials": "Per change: 11 rounds at about 100-150 ms; final 14 synthetic cases: 11 rounds at about 150 ms; resident music: 7 rounds at about 300 ms.",
+  "wire_snapshot": {
+    "valid_cases": 1279,
+    "records": 280908,
+    "bytes": 4250075,
+    "sha256": "21646c3fd3fca6687891a4dd1a4fdf09f97bccf09aea744b05f84f567326332e",
+    "result": "Independent PCM vectors and original MD5 verify; every input prefix produces identical PCM/error records."
+  },
+  "header_snapshot": {
+    "records": 174080,
+    "bytes": 4909667,
+    "sha256": "ab9fa51825793c1630b4a456333f5cb485569b457637bf666a3af35aa5582b0c",
+    "result": "All descriptors, representative sync/block/rate codes, with and without STREAMINFO, at every byte prefix produce identical FrameHeader/error results."
+  },
+  "fixed_oracle": {
+    "valid_configurations": 297,
+    "overflow_configurations": 792,
+    "result": "Matches closed-form predictions, including output before the first failure at each tested position."
+  },
+  "checks": {
+    "unit": 15,
+    "integration": 36,
+    "documentation": 3,
+    "external_ignored": 8,
+    "debug": "pass",
+    "release": "pass",
+    "clippy": "pass",
+    "format": "pass"
+  },
+  "music": {
+    "bytes": 49843225,
+    "sha256": "095566bfa0abd76611dd7bcd474f02310ed96278f2acdbca32844cb5e25ae950",
+    "rate": 44100,
+    "channels": 2,
+    "bits": 24,
+    "samples_per_channel": 10343813,
+    "stored_pcm_md5": "61b98d1894401920953dfd5a2af52e12"
+  },
+  "allocations": "Cold counts unchanged; all final synthetic and music trials allocate and reallocate zero times after warmup. Music cold accounting is the first raw frame only.",
+  "unsafe_added": 0,
+  "discarded": "All stereo modifications were removed after inconsistent or slower wide mid/side controls. stereo() matches the starting revision exactly.",
+  "initial_header": "The early 1.213x short-frame header result used an earlier harness; the retained identical-harness comparison is header-groups.json.",
+  "limits": "One variable-frequency Intel i7-1250U Windows host. Music measures resident raw frames, excluding file I/O, reader buffering and timed MD5. Its throughput is essentially unchanged; do not generalize synthetic low-order improvements to all music. Eight external oracle/corpus gates were not rerun."
+}

@@ -21,7 +21,9 @@ members = [
     "crates/deadlib-audio",
     "crates/deadlib-audio/decode/ogg",
     "crates/deadlib-audio/decode/flac",
+    "crates/deadlib-audio/decode/mp3",
     "crates/deadlib-audio/decode/vorbis",
+    "crates/deadlib-audio/decode/wav",
     "crates/deadlib-audio-backend-pipewire",
     "crates/deadlib-audio-backend-pulse",
     "crates/deadlib-audio-backend-wasapi",
@@ -48,6 +50,7 @@ members = [
     "crates/deadlib-image",
     "crates/deadlib-image/png",
     "crates/deadlib-image/gif",
+    "crates/deadlib-image/jpeg",
     "crates/deadlib-lua",
     "crates/deadlib-lua-legacy",
     "crates/deadlib-lua-legacy/mlua-sys",
@@ -82,7 +85,7 @@ resolver = "3"
 # `version.workspace = true`, so `env!("CARGO_PKG_VERSION")` and
 # `deadsync_version::current()` always agree. Bump THIS line on release.
 [workspace.package]
-version = "0.5.2478"
+version = "0.5.2479"
 
 [[bin]]
 name = "generate_pseudo"

@@ -1,0 +1,59 @@
+{
+  "source": "use deadlib_audio_decode_ogg::*;\nfn main() { println!(\"SyncBuffer={} SyncReader={} PageDecoder={} Demuxer={} PacketCapture={}\", std::mem::size_of::<SyncBuffer>(),std::mem::size_of::<SyncReader<&[u8]>>(),std::mem::size_of::<PageDecoder>(),std::mem::size_of::<Demuxer>(),std::mem::size_of::<PacketCapture>()); }\n",
+  "workers": {
+    "before": {
+      "command": [
+        "rustc",
+        "--edition",
+        "2024",
+        "-D",
+        "warnings",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=yes",
+        "-C",
+        "panic=abort",
+        "-C",
+        "target-feature=+crt-static",
+        "--extern",
+        "deadlib_audio_decode_ogg=C:\\GitHub\\deadsync\\target\\ogg-lacing-20261028\\before\\target\\release\\deps\\libdeadlib_audio_decode_ogg-7b241ee5bc617107.rlib",
+        "-L",
+        "dependency=C:\\GitHub\\deadsync\\target\\ogg-lacing-20261028\\before\\target\\release\\deps",
+        "C:\\GitHub\\deadsync\\target\\ogg-lacing-20261028\\layout.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\ogg-lacing-20261028\\before-layout.exe"
+      ],
+      "library_sha256": "7a91383e70bff12d7377a7abc715ea11626fdc94ce2c9ca57fbc658c892caf49",
+      "executable_sha256": "1161f36e49b1eed16986d501b32d76dddbe852910895c6e53aa3b0b69dd93d8a",
+      "output": "SyncBuffer=88 SyncReader=144 PageDecoder=40 Demuxer=88 PacketCapture=224"
+    },
+    "sync": {
+      "command": [
+        "rustc",
+        "--edition",
+        "2024",
+        "-D",
+        "warnings",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=yes",
+        "-C",
+        "panic=abort",
+        "-C",
+        "target-feature=+crt-static",
+        "--extern",
+        "deadlib_audio_decode_ogg=C:\\GitHub\\deadsync\\target\\ogg-lacing-20261028\\sync\\target\\release\\deps\\libdeadlib_audio_decode_ogg-7b241ee5bc617107.rlib",
+        "-L",
+        "dependency=C:\\GitHub\\deadsync\\target\\ogg-lacing-20261028\\sync\\target\\release\\deps",
+        "C:\\GitHub\\deadsync\\target\\ogg-lacing-20261028\\layout.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\ogg-lacing-20261028\\sync-layout.exe"
+      ],
+      "library_sha256": "ed25ec856b3c77a52e451ef55bca3b65775bca72e3a1aeefb43f8cfdf1929679",
+      "executable_sha256": "f3777c0b2417c730ae8603b421c5b9ab22cf8c0c704f96d3b2b7d44696b128d4",
+      "output": "SyncBuffer=96 SyncReader=152 PageDecoder=40 Demuxer=88 PacketCapture=224"
+    }
+  }
+}

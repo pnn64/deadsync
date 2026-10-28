@@ -50,6 +50,75 @@ fn fixture() -> (Vec<u8>, Vec<Vec<u8>>) {
 }
 
 #[test]
+fn fragment_ranges_match_independent_lace_accumulation() {
+    for segments in 0..=255 {
+        for flags in [0, CONTINUED] {
+            for seed in 0..8 {
+                let lacing: Vec<_> = (0..segments)
+                    .map(|i| [255, 255, 0, 1, 254, 255, 17, 255][(i + seed) % 8])
+                    .collect();
+                let body: Vec<_> = (0..lacing.iter().map(|&n| n as usize).sum())
+                    .map(|i| (i * 37) as u8)
+                    .collect();
+                let bytes = page(flags, 0, 1, 0, &lacing, &body);
+                let parsed = Page::parse(&bytes).unwrap().0;
+                let mut fragments = parsed.fragments();
+                let mut offset = 0;
+                let mut length = 0;
+                let mut starts = flags == 0;
+                for (i, &lace) in lacing.iter().enumerate() {
+                    length += lace as usize;
+                    if lace < 255 || i + 1 == segments {
+                        let fragment = fragments.next().unwrap();
+                        assert_eq!(fragment.data, &body[offset..offset + length]);
+                        assert_eq!(fragment.data.as_ptr(), parsed.body()[offset..].as_ptr());
+                        assert_eq!(fragment.starts_packet, starts);
+                        assert_eq!(fragment.ends_packet, lace < 255);
+                        offset += length;
+                        length = 0;
+                        starts = true;
+                    }
+                }
+                assert!(fragments.next().is_none());
+                assert_eq!(offset, body.len());
+            }
+        }
+    }
+}
+
+#[test]
+fn fragment_terminators_match_lacing_sums_at_every_segment() {
+    let body = vec![37; 65025];
+    for position in 0..255 {
+        for terminal in [0, 254, 253, 251, 247, 239, 223, 191, 127] {
+            let mut lacing = [255; 255];
+            lacing[position] = terminal;
+            let length = lacing.iter().map(|&n| n as usize).sum::<usize>();
+            let first_length = lacing[..=position]
+                .iter()
+                .map(|&n| n as usize)
+                .sum::<usize>();
+            for flags in [0, CONTINUED] {
+                let bytes = page(flags, 0, 1, 0, &lacing, &body[..length]);
+                let parsed = Page::parse(&bytes).unwrap().0;
+                let mut fragments = parsed.fragments();
+                let first = fragments.next().unwrap();
+                assert_eq!(first.data, &body[..first_length]);
+                assert_eq!(first.starts_packet, flags == 0);
+                assert!(first.ends_packet);
+                if position < 254 {
+                    let rest = fragments.next().unwrap();
+                    assert_eq!(rest.data, &body[first_length..length]);
+                    assert!(rest.starts_packet);
+                    assert!(!rest.ends_packet);
+                }
+                assert!(fragments.next().is_none());
+            }
+        }
+    }
+}
+
+#[test]
 fn crc_matches_independent_bitwise_polynomial() {
     let data: Vec<u8> = (0..65536).map(|n| (n * 13 + n / 17) as u8).collect();
     let mut crc = 0u32;
@@ -415,6 +484,58 @@ fn borrowed_packets_do_not_copy_and_finish_emits_nil_eos() {
 }
 
 #[test]
+fn full_terminated_lacing_waits_for_the_next_packet_or_flush() {
+    for lace in [0, 1, 17, 254] {
+        let mut writer = PacketWriter::with_options(
+            Vec::new(),
+            42,
+            WriteOptions {
+                target_page_body: usize::MAX,
+            },
+        );
+        writer.write_packet(b"header", 0, false).unwrap();
+        let bos_length = writer.get_ref().len();
+        let data = vec![37; lace as usize];
+        for i in 0..255 {
+            writer.write_packet(&data, i, false).unwrap();
+        }
+        assert_eq!(writer.get_ref().len(), bos_length);
+        writer.write_packet(&[], 255, false).unwrap();
+        let (full, length) = Page::parse(&writer.get_ref()[bos_length..]).unwrap();
+        assert_eq!(full.lacing(), &[lace; 255]);
+        assert_eq!(full.body(), data.repeat(255));
+        assert_eq!(full.header().granule_position, 254);
+        assert_eq!(full.header().flags, 0);
+        assert_eq!(writer.get_ref().len(), bos_length + length);
+        writer.finish().unwrap();
+        let (eos, _) = Page::parse(&writer.get_ref()[bos_length + length..]).unwrap();
+        assert_eq!(eos.lacing(), &[0]);
+        assert_eq!(eos.header().flags, EOS);
+        assert_eq!(eos.header().granule_position, 255);
+    }
+}
+
+#[test]
+fn incremental_reset_and_reuse_discard_partial_page_lengths() {
+    let large = page(BOS | EOS, 0, 8, 0, &[255, 17], &[37; 272]);
+    let small = page(BOS | EOS, 0, 9, 0, &[0], &[]);
+    let mut decoder = PageDecoder::new();
+    for prefix in [27, 28, 29, 30, large.len() - 1] {
+        decoder.reset();
+        assert!(decoder.push(&large[..prefix]).unwrap().page.is_none());
+        assert!(decoder.push(&[]).unwrap().page.is_none());
+        assert_eq!(decoder.finish(), Err(Error::Truncated));
+        assert!(matches!(decoder.push(&small), Err(Error::Failed)));
+        decoder.reset();
+        assert_eq!(decoder.push(&small).unwrap().page.unwrap().bytes(), small);
+        assert_eq!(decoder.push(&large).unwrap().page.unwrap().bytes(), large);
+        assert!(decoder.push(&[]).unwrap().page.is_none());
+        assert_eq!(decoder.push(&small).unwrap().page.unwrap().bytes(), small);
+        decoder.finish().unwrap();
+    }
+}
+
+#[test]
 fn deterministic_random_packets_differential() {
     let mut seed = 0x9428_7381u32;
     let mut writer = PacketWriter::with_options(
@@ -441,4 +562,76 @@ fn deterministic_random_packets_differential() {
     }
     assert_eq!(native.len(), 500);
     assert!(reference.read_packet().unwrap().is_none());
+}
+
+#[test]
+fn tight_limits_preserve_in_page_packets_and_atomic_preflight_errors() {
+    let bos = page(BOS, 0, 11, 0, &[0], &[]);
+    let complete = page(EOS, 1, 11, 1, &[1, 254], &[37; 255]);
+    let bos = Page::parse(&bos).unwrap().0;
+    let complete = Page::parse(&complete).unwrap().0;
+    let limits = Limits {
+        max_packet_bytes: 254,
+        max_pending_bytes: 0,
+        max_streams: 1,
+    };
+    let mut demux = Demuxer::new(limits);
+    demux.push_page(bos, 0, |_| {}).unwrap();
+    let mut lengths = Vec::new();
+    demux
+        .push_page(complete, 28, |p| lengths.push(p.data.len()))
+        .unwrap();
+    assert_eq!(lengths, [1, 254]);
+    demux.finish().unwrap();
+    let mut capture = PacketCapture::new(11, limits);
+    capture.push_page(bos, 0, |_| {}).unwrap();
+    lengths.clear();
+    capture
+        .push_page(complete, 28, |p| lengths.push(p.data.len()))
+        .unwrap();
+    assert_eq!(lengths, [1, 254]);
+    capture.finish().unwrap();
+    let unfinished = page(EOS, 1, 11, 1, &[1, 255], &[37; 256]);
+    let unfinished = Page::parse(&unfinished).unwrap().0;
+    for (packet, pending, demux_error, capture_error) in [
+        (
+            254,
+            usize::MAX,
+            Error::LimitExceeded("packet size"),
+            Error::LimitExceeded("packet size"),
+        ),
+        (
+            256,
+            0,
+            Error::LimitExceeded("pending packet bytes"),
+            Error::LimitExceeded("pending packet bytes"),
+        ),
+        (
+            256,
+            256,
+            Error::Invalid("unfinished packet at EOS"),
+            Error::Invalid("unfinished captured packet at EOS"),
+        ),
+    ] {
+        let limits = Limits {
+            max_packet_bytes: packet,
+            max_pending_bytes: pending,
+            max_streams: 1,
+        };
+        let mut demux = Demuxer::new(limits);
+        demux.push_page(bos, 0, |_| {}).unwrap();
+        let mut emitted = 0;
+        assert_eq!(
+            demux.push_page(unfinished, 28, |_| emitted += 1),
+            Err(demux_error)
+        );
+        assert_eq!(emitted, 0);
+        let mut capture = PacketCapture::new(11, limits);
+        capture.push_page(bos, 0, |_| {}).unwrap();
+        assert_eq!(
+            capture.push_page(unfinished, 28, |_| emitted += 1),
+            Err(capture_error)
+        );
+        assert_eq!(emitted, 0);
+    }
 }

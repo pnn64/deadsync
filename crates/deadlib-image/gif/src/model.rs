@@ -148,7 +148,12 @@ impl Frame {
         };
         Ok(Self::new(image.width as u16, image.height as u16, indices))
     }
-    pub(crate) fn validate(&self, header: &Header, bounds: bool) -> Result<(), Error> {
+    pub(crate) fn validate(
+        &self,
+        header: &Header,
+        external: Option<&[[u8; 3]]>,
+        bounds: bool,
+    ) -> Result<(), Error> {
         validate_rect(self.left, self.top, self.width, self.height, header, bounds)?;
         if self.indices.len() != self.width as usize * self.height as usize {
             return Err(Error::Invalid("frame sample count"));
@@ -156,7 +161,7 @@ impl Frame {
         if let Some(p) = &self.local_palette {
             validate_palette(p)?;
         }
-        if let Some(p) = self.palette(header) {
+        if let Some(p) = self.palette(header).or(external) {
             validate_indices(&self.indices, p.len())?;
             validate_control(self.control, p.len())?;
         }
@@ -291,7 +296,15 @@ pub(crate) fn validate_palette(p: &[[u8; 3]]) -> Result<(), Error> {
     }
 }
 pub(crate) fn validate_indices(data: &[u8], len: usize) -> Result<(), Error> {
-    if len < 256 && data.iter().any(|&v| v as usize >= len) {
+    // A byte maximum lets the compiler validate a palette's indices in SIMD
+    // batches instead of branching on every pixel. Every u8 fits 256 colors.
+    if len < 256
+        && data
+            .iter()
+            .copied()
+            .max()
+            .is_some_and(|v| v as usize >= len)
+    {
         Err(Error::Invalid("pixel index outside active palette"))
     } else {
         Ok(())

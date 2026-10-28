@@ -1,0 +1,107 @@
+# fixture=small; implementation=rust; file_bytes=3184; truth={"audio_bytes": 2180, "checksum": 31600, "cues": 32, "info_entries": 4, "metadata_bytes": 960, "text_bytes_per_entry": 32}
+operation	trial	iters	ns_per_op	thread_cycles_per_op	alloc_calls	requested_bytes	peak_requested_live_bytes
+wav/open_headers	0	50000	103.030	225.409	0	0	0
+wav/open_headers	1	50000	104.436	228.447	0	0	0
+wav/open_headers	2	50000	105.232	230.567	0	0	0
+wav/open_headers	3	50000	105.560	230.817	0	0	0
+wav/open_headers	4	50000	101.962	223.548	0	0	0
+wav/open_walk_metadata	0	50000	400.638	876.960	0	0	0
+wav/open_walk_metadata	1	50000	379.194	830.259	0	0	0
+wav/open_walk_metadata	2	50000	378.168	828.428	0	0	0
+wav/open_walk_metadata	3	50000	379.054	830.285	0	0	0
+wav/open_walk_metadata	4	50000	381.422	835.483	0	0	0
+wav/walk_retained_views	0	50000	203.178	444.874	0	0	0
+wav/walk_retained_views	1	50000	212.070	464.502	0	0	0
+wav/walk_retained_views	2	50000	216.282	473.685	0	0	0
+wav/walk_retained_views	3	50000	205.472	449.896	0	0	0
+wav/walk_retained_views	4	50000	200.840	439.768	0	0	0
+
+# fixture=small; implementation=dr_wav; file_bytes=3184; truth={"audio_bytes": 2180, "checksum": 31600, "cues": 32, "info_entries": 4, "metadata_bytes": 960, "text_bytes_per_entry": 32}
+operation	trial	iters	ns_per_op	thread_cycles_per_op	alloc_calls	requested_bytes	peak_requested_live_bytes
+dr_wav/open_headers	0	50000	186.030	405.386	0	0	0
+dr_wav/open_headers	1	50000	183.886	402.326	0	0	0
+dr_wav/open_headers	2	50000	182.528	399.837	0	0	0
+dr_wav/open_headers	3	50000	181.584	396.680	0	0	0
+dr_wav/open_headers	4	50000	184.466	403.933	0	0	0
+dr_wav/open_walk_metadata	0	50000	1307.958	2864.967	1	1467	1467
+dr_wav/open_walk_metadata	1	50000	1297.650	2841.287	1	1467	1467
+dr_wav/open_walk_metadata	2	50000	1297.050	2840.427	1	1467	1467
+dr_wav/open_walk_metadata	3	50000	1293.302	2831.581	1	1467	1467
+dr_wav/open_walk_metadata	4	50000	1278.492	2803.050	1	1467	1467
+dr_wav/walk_retained_views	0	50000	111.332	243.952	0	0	0
+dr_wav/walk_retained_views	1	50000	109.782	240.335	0	0	0
+dr_wav/walk_retained_views	2	50000	113.076	247.890	0	0	0
+dr_wav/walk_retained_views	3	50000	111.756	244.808	0	0	0
+dr_wav/walk_retained_views	4	50000	118.612	260.077	0	0	0
+
+# fixture=medium; implementation=dr_wav; file_bytes=381640; truth={"audio_bytes": 278532, "checksum": 152982756, "cues": 4096, "info_entries": 64, "metadata_bytes": 103064, "text_bytes_per_entry": 64}
+operation	trial	iters	ns_per_op	thread_cycles_per_op	alloc_calls	requested_bytes	peak_requested_live_bytes
+dr_wav/open_headers	0	5000	198.080	432.986	0	0	0
+dr_wav/open_headers	1	5000	200.720	437.727	0	0	0
+dr_wav/open_headers	2	5000	198.120	434.522	0	0	0
+dr_wav/open_headers	3	5000	199.360	432.327	0	0	0
+dr_wav/open_headers	4	5000	200.220	439.132	0	0	0
+dr_wav/open_walk_metadata	0	5000	69986.240	153334.708	1	109751	109751
+dr_wav/open_walk_metadata	1	5000	64968.580	142168.745	1	109751	109751
+dr_wav/open_walk_metadata	2	5000	69599.140	151673.050	1	109751	109751
+dr_wav/open_walk_metadata	3	5000	70152.320	153703.997	1	109751	109751
+dr_wav/open_walk_metadata	4	5000	69959.360	153279.221	1	109751	109751
+dr_wav/walk_retained_views	0	5000	8937.100	19582.999	0	0	0
+dr_wav/walk_retained_views	1	5000	8953.600	19621.763	0	0	0
+dr_wav/walk_retained_views	2	5000	8902.100	19504.200	0	0	0
+dr_wav/walk_retained_views	3	5000	8929.100	19567.986	0	0	0
+dr_wav/walk_retained_views	4	5000	8945.760	19594.633	0	0	0
+
+# fixture=medium; implementation=rust; file_bytes=381640; truth={"audio_bytes": 278532, "checksum": 152982756, "cues": 4096, "info_entries": 64, "metadata_bytes": 103064, "text_bytes_per_entry": 64}
+operation	trial	iters	ns_per_op	thread_cycles_per_op	alloc_calls	requested_bytes	peak_requested_live_bytes
+wav/open_headers	0	5000	116.380	254.708	0	0	0
+wav/open_headers	1	5000	109.080	238.992	0	0	0
+wav/open_headers	2	5000	110.700	241.011	0	0	0
+wav/open_headers	3	5000	131.780	283.989	0	0	0
+wav/open_headers	4	5000	117.440	257.342	0	0	0
+wav/open_walk_metadata	0	5000	12763.000	27941.208	0	0	0
+wav/open_walk_metadata	1	5000	12821.020	28066.851	0	0	0
+wav/open_walk_metadata	2	5000	12799.860	28024.005	0	0	0
+wav/open_walk_metadata	3	5000	12460.580	27283.324	0	0	0
+wav/open_walk_metadata	4	5000	12528.780	27434.602	0	0	0
+wav/walk_retained_views	0	5000	11857.900	25961.012	0	0	0
+wav/walk_retained_views	1	5000	13626.380	29846.556	0	0	0
+wav/walk_retained_views	2	5000	11816.160	25896.741	0	0	0
+wav/walk_retained_views	3	5000	11845.940	25951.003	0	0	0
+wav/walk_retained_views	4	5000	11790.000	25838.135	0	0	0
+
+# fixture=large; implementation=rust; file_bytes=1643592; truth={"audio_bytes": 1114116, "checksum": 2432762068, "cues": 16384, "info_entries": 512, "metadata_bytes": 529432, "text_bytes_per_entry": 256}
+operation	trial	iters	ns_per_op	thread_cycles_per_op	alloc_calls	requested_bytes	peak_requested_live_bytes
+wav/open_headers	0	1000	164.200	356.688	0	0	0
+wav/open_headers	1	1000	149.400	325.738	0	0	0
+wav/open_headers	2	1000	144.000	302.691	0	0	0
+wav/open_headers	3	1000	158.700	346.151	0	0	0
+wav/open_headers	4	1000	124.200	270.643	0	0	0
+wav/open_walk_metadata	0	1000	157357.300	344473.419	0	0	0
+wav/open_walk_metadata	1	1000	152199.800	333147.004	0	0	0
+wav/open_walk_metadata	2	1000	158122.300	346409.853	0	0	0
+wav/open_walk_metadata	3	1000	156442.200	342815.096	0	0	0
+wav/open_walk_metadata	4	1000	155356.200	340440.764	0	0	0
+wav/walk_retained_views	0	1000	152827.600	334875.569	0	0	0
+wav/walk_retained_views	1	1000	160924.300	352525.562	0	0	0
+wav/walk_retained_views	2	1000	164618.200	360686.351	0	0	0
+wav/walk_retained_views	3	1000	165625.200	362854.136	0	0	0
+wav/walk_retained_views	4	1000	161687.400	354310.100	0	0	0
+
+# fixture=large; implementation=dr_wav; file_bytes=1643592; truth={"audio_bytes": 1114116, "checksum": 2432762068, "cues": 16384, "info_entries": 512, "metadata_bytes": 529432, "text_bytes_per_entry": 256}
+operation	trial	iters	ns_per_op	thread_cycles_per_op	alloc_calls	requested_bytes	peak_requested_live_bytes
+dr_wav/open_headers	0	1000	194.100	418.367	0	0	0
+dr_wav/open_headers	1	1000	179.600	392.247	0	0	0
+dr_wav/open_headers	2	1000	191.000	417.709	0	0	0
+dr_wav/open_headers	3	1000	184.200	394.223	0	0	0
+dr_wav/open_headers	4	1000	174.300	381.052	0	0	0
+dr_wav/open_walk_metadata	0	1000	347097.100	755788.108	1	582263	582263
+dr_wav/open_walk_metadata	1	1000	328252.100	712989.785	1	582263	582263
+dr_wav/open_walk_metadata	2	1000	342970.300	743639.661	1	582263	582263
+dr_wav/open_walk_metadata	3	1000	334196.200	725693.339	1	582263	582263
+dr_wav/open_walk_metadata	4	1000	329064.100	718019.403	1	582263	582263
+dr_wav/walk_retained_views	0	1000	80321.900	175754.088	0	0	0
+dr_wav/walk_retained_views	1	1000	79289.600	173508.161	0	0	0
+dr_wav/walk_retained_views	2	1000	75733.500	165809.641	0	0	0
+dr_wav/walk_retained_views	3	1000	75151.600	164422.401	0	0	0
+dr_wav/walk_retained_views	4	1000	73377.000	160657.320	0	0	0

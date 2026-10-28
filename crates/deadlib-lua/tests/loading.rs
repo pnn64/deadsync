@@ -7,6 +7,56 @@ enum Scalar {
     Number(u64),
     Bytes(Vec<u8>),
 }
+
+#[test]
+fn lua_readers_expose_and_retain_real_parser_tables_through_eof_and_return_hooks() {
+    compare(br#"
+local out={};local loadfn=load
+local function shape(v)
+ local t=type(v)
+ if t=='table'then
+  local entries={}
+  for k,value in pairs(v)do
+   if type(k)=='string'or type(k)=='number'then entries[#entries+1]=type(k)..':'..tostring(k)..'='..tostring(value)end
+  end
+  table.sort(entries);return 'table{'..table.concat(entries,',')..'}'
+ end
+ if t=='proto'then return 'proto'end
+ if t=='function'then return 'function'end
+ return t..':'..tostring(v)
+end
+local function snapshot(level)
+ local row={}
+ for i=1,30 do local name,v=debug.getlocal(level+1,i);if not name then break end
+  row[#row+1]=shape(v)
+ end
+ out[#out+1]=table.concat(row,'/')
+end
+for _,parts in ipairs{
+ {'local x="blob";','return function(a)return x,a,nil end'},
+ {'return +'}, {}, {'return 17',''},
+}do
+ local i=0
+ local f,e=loadfn(function()
+  snapshot(2);collectgarbage();i=i+1;return parts[i]
+ end,'=reader-stack','reserved')
+ out[#out+1]=type(f)..':'..type(e)
+ if f then collectgarbage();out[#out+1]=type((f()))end
+end
+local co=coroutine.create(function()
+ local i=0
+ return loadfn(function()i=i+1;if i==1 then return 'return 17' end end,'=eof')
+end)
+debug.sethook(co,function(event)
+ if event=='return'and debug.getinfo(2,'f').func==loadfn then
+  local name,t=debug.getlocal(2,4);assert(name and type(t)=='table')
+  out[#out+1]=t[17];collectgarbage();assert(t[17]==0)
+ end
+end,'r')
+assert(coroutine.resume(co))
+return table.concat(out,'|')
+"#);
+}
 fn compare(source: &[u8]) {
     let mut vm = Vm::new();
     vm.set_instruction_limit(Some(10_000_000));

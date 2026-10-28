@@ -1,10 +1,14 @@
 # PNG Third Edition implementation and verification
 
-This is an incremental implementation, not yet a claim of complete conformance.
-The current deliverable is independent PNG/APNG decoding, exact native samples,
-rendering and measured competitive decoder performance. Encoder features,
-compression ratio and encoder speed are outside the completion requirements.
-Milestones are committed only after their relevant checks pass.
+The PNG/APNG encoder and decoder correctness deliverables are complete. The
+[encoder validation](ENCODER-VALIDATION.md) and
+[decoder validation](DECODER-VALIDATION.md) record their requirement audits and
+fresh full-suite/reference checks. On 2026-10-28 the user explicitly excluded
+performance from completion and added the encoder correctness goal after the
+decoder audit. Earlier encoder exclusions below describe the old decoder goal.
+Milestones are committed only after their relevant checks pass. Sections below
+the current requirement table are a chronological development record: earlier
+statements about pending work describe those snapshots, not current gates.
 The [clause audit](CONFORMANCE.md) maps the Third Edition to current code,
 evidence, application responsibilities and explicitly open items.
 
@@ -12,13 +16,15 @@ evidence, application responsibilities and explicitly open items.
 | --- | --- | --- |
 | Separate packages, no application integration | Package names, production tree, isolated offline workspace tests (`independent-build.log`) | Verified outside the application workspace; production dependency is only `deadlib-image` |
 | Native samples, all legal formats | Shared `Image`, `Samples`, `ColorType` | Primitives implemented |
+| Complete native PNG/APNG encoding | Both writers, explicit reference-depth conversion, all formats/filters/Adam7, metadata, raw compression and frame serialization | 145 regular plus all 21 optional tests pass; direct C libpng/Rust png encoder comparisons, exact independent field/control bytes, invalid-input and every-byte writer fault matrices pass |
+| Encoder sanitizers and independent reuse | `fuzz/reports/encoder-source.json`, `encoder-completion-validation.json` | 50,000 fresh encoder/DEFLATE ASan executions; native feedback isolation and current sources verified; standalone offline debug suite passes with only the shared image production dependency |
 | CRC-32 / Adler-32 | Known-answer tests | Verified known answers |
-| Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, advertised/actual history and output limits; compression / zlib-header / Huffman / prefix suites | All 65,536 headers, 92 window fixtures, 19,645 Huffman fixtures, 88,414 prefix/suffix cases and virtual cursor overflow boundaries pass; arbitrary tree permutations and coverage review remain open |
-| PNG chunk framing and normative ordering | Independent `tests/chunks.rs` fixtures, malformed/metadata/APNG suites | All 16 property bits, all name-byte values, 25 standard names' case variants, 720 core permutations and every small-stream IDAT split pass; broader ancillary/APNG ordering audit remains open |
+| Native zlib / DEFLATE decode | Stored, fixed, dynamic trees, history/output limits; compression / zlib-header / Huffman / prefix suites | All 65,536 headers, 92 window fixtures, 19,645 Huffman fixtures, 88,414 prefix/suffix cases, 65,668 literal-pair streams and 10,744 symbol/depth streams pass. Selected shapes cover every legal symbol/depth cell; this does not enumerate all trees |
+| PNG chunk framing and normative ordering | Independent `tests/chunks.rs`, `ancillary_order.rs`, `animation_fields.rs` and metadata suites | Property/name/case matrices, 720 core permutations, all 18 ancillary types across native formats, ordered pairs and critical boundaries, 120 APNG permutations and every small-stream IDAT split pass |
 | All five color types and all legal bit depths | `tests/static_png.rs`, `tests/pngsuite.rs` | 3,240 native/reference matrix cases and 161 valid PNGSuite files pass |
 | Five filters and Adam7 decode | Same format matrix, PNGSuite pass geometry cases | Verified exact native samples |
 | Indexed-color error recovery (13.1) | `tests/palette.rs`; all indexed depths, Adam7, APNG, one-byte reads/events, independent Rust png fixtures | Native indices retained, opaque-black expansion/rendering; opt-in strict decode |
-| Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / field / IANA / profile tests, PNGSuite | Typed wire roundtrips, UTF-8, BCP47 registration, method distinctions, sample masks, histogram usage and profile containers checked; extension-specific and payload semantics still require audit |
+| Metadata, including Third Edition color chunks | `metadata.rs`, metadata / text / scalar-field / language-extension / profile suites | Wire values, UTF-8, BCP47 core registration/syntax, method distinctions, masks, histogram usage and profile containers checked. Extension interpretation, opaque profile transforms and Exif payload semantics remain application responsibilities |
 | Latin-1 text-body recovery | `tests/text_body.rs`, independent stored-zlib fixtures and C named-metadata oracle | All 256 byte values across 6,144 files; non-null decoder recovery, NBSP/long text and iTXt Unicode distinctions verified |
 | sRGB fallback metadata | `tests/metadata_fields.rs`, metadata selection API | All 15 formats / four intents and fallback orders pass; original metadata values remain available |
 | cICP code-point validity | `tests/cicp.rs`, H.273 (07/2024) | All 131,072 primaries/transfer/range combinations, all matrix/flag bytes and reserved-code fallback behavior pass |
@@ -26,9 +32,9 @@ evidence, application responsibilities and explicitly open items.
 | APNG frame decoding and compositing | `apng.rs`, `composite.rs`, APNG/compositing/recovery/rendered tests | Exact native frames, 4,530 independent faults, legal fcTL-before-acTL ordering, 983,040 rational alpha pairs and 2,121 independent RGBA16 canvases pass, including replay/reset |
 | Bounded streaming with arbitrary input boundaries | `zlib::Inflater`, `StreamDecoder`, `decode_reader` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
-| Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
-| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Twelve targets; 1,410,000 recorded successful sanitizer executions across milestones, including historical encoder runs; newest 50,000 use native-crate feedback with artifact-verified isolation; targeted decoder gaps and longer campaigns remain open |
-| Benchmarks and profile-guided optimization | Decoder-only harnesses, `BENCHMARKS.md`, checked-in TSV and profiles | Bulk copying, filter reconstruction and buffered Adler-32 improvements measured; competitive decoder performance still pending |
+| Independent fixtures / malformed streams / properties | Independent stored-stream known answers, chunk/field/order/resource matrices, malformed fixtures and sanitizer campaigns | Correctness checks pass; systematic boundary classes and recorded native coverage gaps reviewed in the final audit |
+| Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Twelve harnesses; latest PNG/raw decoder campaigns complete 100,000 executions each with native-crate feedback and artifact-verified isolation. `fuzz/reports/huffman-permutations-source.json` retains actual counts. Historical reports include earlier encoder runs; bounded campaigns are not universal conformance proof |
+| Benchmarks and profile-guided optimization | Decoder-only harnesses, `BENCHMARKS.md`, checked-in TSV and profiles | Historical measurements; performance is excluded from the current goal |
 
 Historical milestones: (1) shared primitives and native compression; (2) static PNG codec and
 sample matrix; (3) metadata and APNG; (4) streaming and external conformance;
@@ -511,8 +517,10 @@ dependency graph remains only the local shared image crate, and production
 source is byte-for-byte the `cafedc93d` implementation. Validation records are
 `reference-conformance.log` / `.json`. Broader native fuzz coverage remains open.
 
-The requested end state is not yet achieved. Continue without application
-integration, preserving unrelated work and committing verified milestones:
+The following list records the plan at this historical milestone; later sections
+supersede completed items. The current decoder-only completion requirements are
+listed in `CONFORMANCE.md`. Continue without application integration, preserving
+unrelated work and committing verified milestones:
 
 1. Continue the clause-by-clause field and error-behavior audit beyond the now-
    covered indexed-color recovery, text decoding and encoder field distinctions.
@@ -1858,3 +1866,248 @@ reader; raw format inflation improves 9.43% relative to flate2, compared with
 -0.60% for unchanged streaming inflation. Format end-to-end results remain
 inconclusive, and shared-host effects prevent a broad speedup claim. Remaining
 corpus gaps, the completion audit and competitive decoder performance stay open.
+
+## Owned byte-sample buffers and bounded allocation requests (2026-10-27)
+
+Buffered static images and APNG frames transfer ownership of inflated data into
+scanline reconstruction. Noninterlaced 8-bit rows reuse that allocation as native
+sample storage, reading the preceding row from already compacted output before
+moving the next row over its filter byte. Exact sample length, output limits and
+error checks remain intact. Packed, 16-bit and Adam7 reconstruction retain their
+existing algorithms. On-demand inflation growth requests are capped at the
+logical output limit; no full declared-image allocation is introduced. Four PNG
+production files change; the other seventeen, shared primitives and all existing
+test/helper/harness/generator inputs retain their recorded baseline bytes.
+
+The candidate passes 41 focused tests with four optional checks ignored, then
+134 normal release tests with nineteen optional checks ignored. The explicitly
+run C zlib batch passes 19,645 fixtures: 3,091 successful outputs, 16,554 error
+records and 68 documented published-range reference-policy rejections. Strict
+main/fuzz all-target Clippy and scoped rustfmt pass. A complete standalone copy
+passes the offline static PNG target, including multi-row geometry, all native
+formats, filters and Adam7 (three tests, none ignored). All 885 copied source,
+fixture, example and benchmark files match current bytes, and its production
+dependency tree contains only the shared image crate. `row-reuse-validation.*`,
+the independent log and `row-reuse-audit.json` retain exact evidence and scope.
+
+An independent untimed probe builds baseline/current native sources in separate
+projects, compares saved native sample bytes on all 84 corpus images and records
+actual inflation/sample vector capacities. Across 24 photos, inflation capacity
+falls from 51,036,160 to 28,325,376 bytes; reconstruction no longer allocates a
+second 28,311,552-byte sample cohort. Returned samples retain 13,824 filter-byte
+capacity overhead in total. These cohort sums and separately observed capacities
+are not simultaneous peak-memory or process-RSS measurements.
+
+Fresh native-feedback ASan campaigns complete 55,460 PNG-stream executions
+against a 50,000 request and 20,000 raw-stream executions. Completion/statistics
+counts agree. Native feedback isolation, ASan runtime definitions, dependency
+archives and four harness objects are audited. The immutable 48,167-file PNG /
+6,927-file raw seed ZIP is reused with fresh mutable corpora because fixture,
+generator and harness bytes are unchanged. `fuzz/reports/row-reuse-*` retains
+sources, binaries, logs, seed provenance and exact counts. Historical successful
+sanitizer executions total 1,836,312; the 75,460 new executions are decoder-only.
+
+The preceding completed literal-block corpus is relocated to
+`target/png-fuzz-corpus-literal-block-20261027.zip` to free temporary inodes.
+All 55,523 entries match the original before removal; the ordered filename/
+content digest is verified again from the saved archive. Its report preserves
+the original path, archive/hash and linked campaign evidence. Binaries, logs,
+manifests and object audits retain their original locations.
+
+`BENCHMARKS.md` records local PNG throughput gains and the remaining stored-only
+raw-inflate loss. Longer checks of one photo and nine format files clear the
+initial PNG regressions; gray8 Adam7 raw inflation remains 9.02 to 11.02
+microseconds under the lower-capacity allocation policy. The explicit tradeoff
+is retained rather than claiming every input improves. All sixteen timing groups
+/ 48 processes, six summaries, exact sources and buffer probes are verified by
+`experiments/row-reuse-selection.json`. Competitive decoder performance, remaining
+corpus gaps and the final requirements audit remain open.
+
+## Nonfinal stored-block reservations and measured allocator calls (2026-10-27)
+
+`src/zlib.rs` anticipates up to one additional stored payload only for nonfinal
+blocks, within the remaining output limit. Final blocks retain their previous
+reservation, and decoding/validation behavior is unchanged. The other twenty
+production files, shared primitives and recorded regression/fixture/harness/
+generator inputs retain their baseline bytes. Standalone untimed System allocator
+instrumentation observes one fewer realloc call for 21 format files in both PNG
+decode and raw inflation, with identical logical peak/retained requested bytes
+and native samples across all 84 corpus images. These are allocator-interface
+measurements, excluding allocator overhead, internal realloc overlap and RSS.
+
+Validation passes 41 focused tests (four optional checks ignored), 134 normal
+release tests (nineteen ignored), strict main/fuzz all-target Clippy and scoped
+rustfmt. The allocator helper also passes strict Clippy and four method
+calibrations. The explicit C zlib batch checks 19,645 fixtures: 3,091 successful
+outputs, 16,554 error records and 68 documented published-range policy rejections.
+A fresh standalone copy passes the offline Huffman target (six tests, one optional
+C check ignored); all 885 copied source/fixture/example/benchmark files match and
+the production tree contains only the shared image crate.
+
+Fresh decoder ASan campaigns pass 52,160 PNG-stream executions against a 50,000
+request and 20,000 raw-stream executions, with matching completion/statistics
+counts and native/dependency/harness feedback audits. Historical successful
+sanitizer executions total 1,908,472, including 72,160 new decoder executions.
+Unchanged fixture/generator/harness bytes permit reuse of the immutable seed ZIP
+with fresh mutable extractions. `fuzz/reports/stored-growth-*` retains exact
+sources, binaries, logs, initial corpus digests and provenance.
+
+The benchmark runner separately fixes inherited control-lineage metadata when
+reusing an already saved manifest. Its three completed stdout files from the
+initial metadata-write failure are preserved but excluded; the corrected long
+comparison has fresh names and verified parent/runner hashes. `BENCHMARKS.md`
+records all sixteen final timing groups / 48 processes, four summaries, the
+allocation reduction and inconclusive broad throughput results. Larger short-run
+outliers do not repeat in the longer checks. `stored-growth-validation.*`,
+`stored-growth-audit.json` and `experiments/stored-growth-selection.json` retain
+the exact validation and measurement boundaries. Competitive decoder performance,
+remaining corpus gaps and the final requirement audit remain open.
+
+## Huffman symbol/depth assignments (2026-10-28)
+
+`tests/huffman_permutations.rs` closes the specific systematic symbol-assignment
+gap recorded in the compression clause matrix. Independent complete-tree shapes
+are rotated over four alphabets:
+
+| Family | Streams | Selected shapes | Symbol/depth cells |
+| --- | ---: | ---: | ---: |
+| Literals and EOB, empty distance alphabet | 4,626 | 9 | 257 × 15 = 3,855 |
+| All literal/length symbols, distance-one matches | 5,148 | 9 | 286 × 15 = 4,290 |
+| All legal distances, 32 KiB initial history | 780 | 13 | 30 × 15 = 450 |
+| Code-length alphabet, including repeats 16/17/18 | 190 | 5 | 19 × 7 = 133 |
+| Total | 10,744 | 36 | 8,728 |
+
+Each symbol in the rotated alphabet is emitted. Literal bodies visit every byte
+value; match bodies visit all 29 length symbols, and distance bodies visit all 30 legal
+distance symbols with low/high extra fields. Code-length headers exercise every
+symbol 0–18. Both padding modes, buffered raw decoding, three fragmented
+input/output shapes, prefix consumption, strict suffix rejection, exact/zero/
+short limits and four truncated-trailer lengths are checked. PNG framing then
+checks exact native samples through buffered and seven-byte-reader APIs.
+The lexicographic canonical wire builder, scalar checksums and byte-wise overlap
+answers are independent of production codec code.
+
+All 10,744 streams match flate2 and C zlib exactly; all PNG wrappers match Rust
+png pixels. This is selected-tree and cyclic-assignment coverage, including
+every legal symbol/depth cell. It is not enumeration of every possible tree,
+assignment, extra-field combination or block sequence. Earlier malformed-tree,
+repeat-count, reserved-symbol and match-value suites remain complementary.
+
+Strict main/fuzz all-target Clippy and scoped rustfmt pass. The complete release
+suite passes 138 tests with twenty optional checks ignored. The explicit C batch
+passes all 10,744 positive cases. A fresh standalone copy passes four offline
+tests with one optional C check ignored. All 887 copied files are inspected:
+886 remain identical, and the oracle README was subsequently updated with the
+new test commands. Every compilation input matches, and the production
+dependency tree contains only the shared image crate. An initial duplicate lint allowance was removed before
+these checks; the original failure and source patch are retained separately.
+
+A fresh narrow seed export adds 10,744 PNG and 10,744 raw inputs to the earlier
+immutable corpus. The merged ZIP contains 58,911 PNG and 17,671 raw seeds; its
+tree/archive hashes and producer inputs are retained. The native fuzz runner's
+optional `--runs` flag requests 100,000 executions per target, above the enlarged
+initial corpus. Historical default thresholds are unchanged. Reports retain
+actual completed counts, source/binary/log identities, ASan runtime checks and
+native/dependency/harness feedback audits. Both targets complete exactly 100,000
+executions without a finding: 200,000 new decoder executions, bringing recorded
+historical campaigns to 2,108,472. All sixteen Rust archive and four harness-object
+audits pass. The first direct WSL launch failed
+to find `rustup` before compilation; all 76,582 extracted seed bytes were checked
+against the immutable archive before removing that duplicate extraction. The
+successful retry uses the established login-shell environment and fresh paths.
+Completed older mutable corpora were also verified and archived before freeing
+temporary inodes; their binaries, logs and build audits remain available.
+
+`huffman-permutations-validation.*`, `huffman-permutations-audit.json`,
+`experiments/huffman-permutations-*` and `fuzz/reports/huffman-permutations-*`
+retain the exact evidence. All 21 production PNG files and shared primitives
+remain byte-identical to `e30aac88`; no new performance claim follows from this
+milestone. `CONFORMANCE.md` now maps all twelve decoder conditions to current
+implementation and regression evidence. Competitive decoder throughput and the
+final requirement audit remain open. Encoding is outside the completion scope.
+
+## Refilling literal-loop experiment (2026-10-28)
+
+A decoder-only candidate continues literal runs across conservative four-byte
+refills, retaining the original match, long-code, end-of-block and tail paths.
+It passes 41 focused tests with five optional C checks ignored, strict all-target
+Clippy and scoped rustfmt. Its benchmark harness additionally checks raw output
+and exact native samples against references on all 84 inputs before timing.
+
+Twenty-four timed processes compare fresh baseline/candidate binaries in ABBA
+order. Photo PNG decoding changes -1.92% relative to Rust png, while format raw
+inflation changes +6.36% relative to flate2. These results do not demonstrate an
+overall PNG benefit. The candidate is rejected; all 21 production source files
+and every recorded input to the prior validation remain unchanged. No new
+sanitizer execution or full candidate suite is claimed. `BENCHMARKS.md`, both
+`benchmark-literal-refill-*-summary.json` files and
+`experiments/literal-refill-selection.json` retain the measurement boundaries,
+source reconstruction, binary/input hashes and unchanged-control results.
+Competitive decoder performance and the final requirement audit remain open.
+
+## Decoder correctness completion (2026-10-28)
+
+The user explicitly removed performance from the current completion goal. The
+[final decoder validation](DECODER-VALIDATION.md) audits all remaining correctness
+requirements against current code and authoritative results. The fresh full
+release run passes 138 tests; the explicit reference run executes all twenty
+normally ignored checks with zero failures or skips. A fresh isolated offline
+debug build passes the same 138 regular tests. Separate strict-window and
+extended-count C zlib checks pass, as do all-target Clippy with warnings denied
+and scoped rustfmt.
+
+The independent run regenerates all 35 WPT and 240 native-precision animation
+answers using C libpng frames and Python rational composition. Native sample,
+metadata, APNG control and raw compression comparisons also pass. All 57 source
+identities from the latest 200,000-execution ASan decoder campaigns match the
+current worktree. The recorded decoder coverage gaps and the twelve PNG decoder
+conditions have been reviewed; no missing required decoder feature or known
+correctness defect remains. No production code change was needed.
+
+`decoder-completion-validation.json` and companion logs retain the exact source,
+reference, command and result identities. Earlier open-performance statements
+above are historical and do not block this correctness deliverable. The goal is
+complete for independent PNG/APNG decoding and stored-sample rendering; caller
+color management and animation scheduling retain their documented API roles.
+
+## Encoder correctness completion (2026-10-28)
+
+After closing the decoder goal, the user requested the same correctness and
+independent-comparison standard for encoding, again excluding performance.
+Milestone `337da6b64` adds three encoder-specific integration targets and a
+separate C libpng encoder. The [encoder audit](ENCODER-VALIDATION.md) records
+109,376 exact literal scalar files, 82,396 rejected scalar inputs, 49,419
+metadata-order pairs, 308,033 invalid native boundary inputs, direct APNG wire
+controls/streams, and 2,616 every-byte writer-failure checks. Every case exercises
+both native writers where applicable. Unrepresentable malformed wire lengths
+are explicitly distinguished from invalid native API inputs.
+
+Direct encoder comparison checks 1,620 C libpng files plus 3,240 native files,
+and 2,160 Rust png animations / 180 static files plus 8,640 corresponding native
+animations. Original samples, palette/transparency bytes and frame controls
+remain exact. The adapter uses Rust png's documented/native metadata layout and
+the known zero-initialized, canvas-stride Adam7 scatter behavior; initial adapter
+failures required no production fix.
+
+The fresh complete release suite and isolated offline debug suite each pass
+145 regular tests. All 21 optional reference tests pass separately, including
+native sample/metadata getters and regeneration of the independent animation
+goldens. All 892 copied package files match the worktree. Strict all-target
+Clippy and scoped rustfmt pass; the production graph still contains only the
+shared image package.
+
+Fresh native-feedback ASan campaigns pass 30,000 PNG/APNG writer and 20,000 raw
+buffered/streaming DEFLATE executions. Seeds cover all image formats/options and
+empty/short/32/64/128 KiB raw boundaries with noisy, periodic and mixed data.
+Source identities, ASan runtime symbols, sixteen Rust archive audits and four
+harness-object audits are retained in `fuzz/reports/encoder-*`. Only the two
+native image crates have mutation feedback; no decoder-only source coverage
+percentage is inferred. All 57 recorded source identities still match.
+
+The three encoder conditions and datastream prerequisites are mapped in
+`CONFORMANCE.md`; the machine-readable final record is
+`encoder-completion-validation.json`. No required encoder feature or known
+correctness defect remains, and no production source change was needed.
+Application color conversion, quantization, opaque metadata interpretation and
+animation scheduling retain their documented roles. Performance measurements
+and historical encoder exclusions do not block this completed correctness goal.

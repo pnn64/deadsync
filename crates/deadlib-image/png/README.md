@@ -4,10 +4,12 @@ Independent pure-Rust PNG implementation. The only production dependency is
 `deadlib-image` for native sample storage. PNG framing, CRC-32, Adler-32,
 zlib/DEFLATE, filters and Adam7 are implemented locally in safe Rust.
 
-The current deliverable focuses on decoding, native sample precision, PNG
-conformance, APNG rendering and decoder performance. Existing encoding utilities
-remain available, but encoder feature completeness and speed are outside the
-completion requirements clarified by the user on 2026-10-27.
+PNG/APNG encoding and decoding are complete for the native-sample APIs described
+below, including both writers and reference-depth sample conversion. The
+[encoder validation](ENCODER-VALIDATION.md) and
+[decoder validation](DECODER-VALIDATION.md) record the correctness audits, full
+test runs and independent codec comparisons. Performance is outside the user's
+completion goals. No application loader integration is enabled.
 
 ```rust
 use deadlib_image_png::decode;
@@ -86,9 +88,10 @@ an explicit development script; decoding and encoding perform no network access.
 Encoding zeroes unused tRNS/bKGD sample bits and rejects hIST zero frequencies
 for palette indices used by the default image or animation frames.
 
-See [COVERAGE.md](COVERAGE.md) for evidence and current limitations. Broader
-conformance and competitive performance validation remain under development.
-The [clause audit](CONFORMANCE.md) records supported behavior and remaining gates.
+See [COVERAGE.md](COVERAGE.md) for evidence and historical milestones.
+The [clause audit](CONFORMANCE.md) records supported behavior and application
+responsibilities; the encoder and decoder validation reports close their
+respective correctness requirements. Performance experiments are historical evidence.
 This crate is registered in the workspace but is not used by DeadSync loaders.
 
 APNG frame images retain their original formats. `Animation::default_is_frame`
@@ -138,4 +141,6 @@ pipeline and identical-input compression measurements, including rejected trials
 
 `scripts/verify_independent.ps1` copies only the two packages into a separate
 temporary workspace and runs offline package tests plus the production dependency
-tree. `independent-build.log` records the latest verified run.
+tree. [The current encoder/decoder suite](encoder-completion-independent.log)
+passes all 145 regular tests in that isolated workspace; older standalone logs
+remain as historical snapshots.

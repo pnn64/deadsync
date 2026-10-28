@@ -1,0 +1,223 @@
+{
+  "repository": "https://github.com/lieff/minimp3",
+  "revision": "ea99364f61c14656440e8d77e9c233ccf3124633",
+  "files": [
+    {
+      "name": "M2L3_bitrate_16_all.bit",
+      "bytes": 154224,
+      "sha256": "69577544aa28b87f6217ad2060f4cec3b1835593c659683ed8437429a74d3640",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/M2L3_bitrate_16_all.bit"
+    },
+    {
+      "name": "M2L3_bitrate_16_all.pcm",
+      "bytes": 548352,
+      "sha256": "e575c8900be1f8949cfcd3e797ed512a3179ce7d36112ad01cea15a1be1e83be",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/M2L3_bitrate_16_all.pcm"
+    },
+    {
+      "name": "M2L3_bitrate_22_all.bit",
+      "bytes": 111908,
+      "sha256": "d636dc9e1108daac730fa23da1b45142c4cda610f0fd50d83cdab0a04264f876",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/M2L3_bitrate_22_all.bit"
+    },
+    {
+      "name": "M2L3_bitrate_22_all.pcm",
+      "bytes": 548352,
+      "sha256": "0d9d5ba8a81dba7592a25d619e5c2474f2c87fac812c19245f66b864a6062afd",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/M2L3_bitrate_22_all.pcm"
+    },
+    {
+      "name": "M2L3_bitrate_24_all.bit",
+      "bytes": 102816,
+      "sha256": "0bb8dda0f56562889d157a2cd37478d58eb7f18df533ec1187d6fbc5b54f1e7a",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/M2L3_bitrate_24_all.bit"
+    },
+    {
+      "name": "M2L3_bitrate_24_all.pcm",
+      "bytes": 548352,
+      "sha256": "ef4fa61d0a041de7ed27ce727c734b719a69871d456d8907c0d26b9fe42797df",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/M2L3_bitrate_24_all.pcm"
+    },
+    {
+      "name": "M2L3_compl24.bit",
+      "bytes": 81408,
+      "sha256": "856df786497a394091212086edbb77cc5f5c5572f0381f96be4273d2a7dccabf",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/M2L3_compl24.bit"
+    },
+    {
+      "name": "M2L3_compl24.pcm",
+      "bytes": 244224,
+      "sha256": "c8ffa0ee2d763a7ff0b7cdb9662867c4e86bf3a53923b28cf7dfdf947a0985ee",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/M2L3_compl24.pcm"
+    },
+    {
+      "name": "M2L3_noise.bit",
+      "bytes": 120999,
+      "sha256": "d61b64a058f202a9d075f6c58a83b9ef88eb1aab2a7144c9ab6d788fe58fccec",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/M2L3_noise.bit"
+    },
+    {
+      "name": "M2L3_noise.pcm",
+      "bytes": 889344,
+      "sha256": "b750f748429ee011ede3ed03eb08b42c54d513d6a755737e422c3d951f7cc43f",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/M2L3_noise.pcm"
+    },
+    {
+      "name": "l3-compl.bit",
+      "bytes": 41495,
+      "sha256": "3b93f3675821a5af4826abcff7097fa2e42efcc46154e02c992995f7e31dbc8e",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-compl.bit"
+    },
+    {
+      "name": "l3-compl.pcm",
+      "bytes": 497664,
+      "sha256": "b33610eba44b3c1c0eb2dbc90bd55aba8c57e82c71b133266780d7182e2d994e",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-compl.pcm"
+    },
+    {
+      "name": "l3-he_32khz.bit",
+      "bytes": 95760,
+      "sha256": "965065cdcac3f45a61a9f54b4f94d59d0334f4b5cb74840a5aec7d405e2e050f",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-he_32khz.bit"
+    },
+    {
+      "name": "l3-he_32khz.pcm",
+      "bytes": 343296,
+      "sha256": "61c5a85e3057905e47402bb85b36fadeba23be9a04b8090e42670eab621acf08",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-he_32khz.pcm"
+    },
+    {
+      "name": "l3-he_44khz.bit",
+      "bytes": 166661,
+      "sha256": "a64212281a8896d90e00f06c9b21f2c8f21ef9cb7367cae692a92ea421984441",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-he_44khz.bit"
+    },
+    {
+      "name": "l3-he_44khz.pcm",
+      "bytes": 942336,
+      "sha256": "fa9a4f4ab1e4dd8b2d08211d8c20a35c08237a0615172e8572d4b43645a9db2c",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-he_44khz.pcm"
+    },
+    {
+      "name": "l3-he_48khz.bit",
+      "bytes": 63840,
+      "sha256": "dd0383075710570648b8961f3cd0ce692f07a679b265fc4997e50883b3958299",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-he_48khz.bit"
+    },
+    {
+      "name": "l3-he_48khz.pcm",
+      "bytes": 343296,
+      "sha256": "61c5a85e3057905e47402bb85b36fadeba23be9a04b8090e42670eab621acf08",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-he_48khz.pcm"
+    },
+    {
+      "name": "l3-he_free.bit",
+      "bytes": 26645,
+      "sha256": "b55afc2a21492c4b3035d423f36fe87560ef34f65eb997da60af9b01f300362c",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-he_free.bit"
+    },
+    {
+      "name": "l3-he_free.pcm",
+      "bytes": 308736,
+      "sha256": "9e89d9481c68261e070e575174c85739b630553ddc9f7feaf1c61605fb15b3d2",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-he_free.pcm"
+    },
+    {
+      "name": "l3-he_mode.bit",
+      "bytes": 53498,
+      "sha256": "fb90396d9bb13311be35284d061e19196830d213d823e05297b18172c88d90ce",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-he_mode.bit"
+    },
+    {
+      "name": "l3-he_mode.pcm",
+      "bytes": 525312,
+      "sha256": "12c1c72d0a99648698216a0014134259087838b3f3266cb19943ef78206317b0",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-he_mode.pcm"
+    },
+    {
+      "name": "l3-hecommon.bit",
+      "bytes": 12538,
+      "sha256": "21999b77716aeba047c7f55c2c1ce17b54c780b6dc007912f251b7ea189676ef",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-hecommon.bit"
+    },
+    {
+      "name": "l3-hecommon.pcm",
+      "bytes": 133632,
+      "sha256": "5af4952d4451dc977b1344f836975e7545a66e38425de1764f3c28994cc38397",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-hecommon.pcm"
+    },
+    {
+      "name": "l3-si.bit",
+      "bytes": 24659,
+      "sha256": "4f3382de1d9265013d42249ff108023d4a90ecf3c0136489d199243a90a5d0f9",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-si.bit"
+    },
+    {
+      "name": "l3-si.pcm",
+      "bytes": 269568,
+      "sha256": "331c1e57fd6161ee63eac62650337d5f73cbf70dcdd76e50a11acb8016d8669d",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-si.pcm"
+    },
+    {
+      "name": "l3-si_block.bit",
+      "bytes": 13374,
+      "sha256": "1d12956840638bf6b81164fc510c3e8269eeb038a51dc4548469e21a71e52b69",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-si_block.bit"
+    },
+    {
+      "name": "l3-si_block.pcm",
+      "bytes": 145152,
+      "sha256": "7ed181c7dad40e7033d73303131345ac57b914fab9eb1ae8c00a263aa9b0b7cb",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-si_block.pcm"
+    },
+    {
+      "name": "l3-si_huff.bit",
+      "bytes": 15673,
+      "sha256": "fda6d8a7d4e1df3cb17d3560b57013ef98abbf9c60d940455c2e3ebf63eae0ef",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-si_huff.bit"
+    },
+    {
+      "name": "l3-si_huff.pcm",
+      "bytes": 170496,
+      "sha256": "468cd5d833fa3e017300128d3a80126412e6d77bdbdcca9e97abace6752cc0be",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-si_huff.pcm"
+    },
+    {
+      "name": "l3-sin1k0db.bit",
+      "bytes": 133120,
+      "sha256": "64775e23c29aa84e27f68777460f88e0717af2ed64e732d287a20c5a92c9fa3e",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-sin1k0db.bit"
+    },
+    {
+      "name": "l3-sin1k0db.pcm",
+      "bytes": 1451520,
+      "sha256": "4a31caa4ec395b4f4c8efbb1b7fe739f7390a83b78320d078ef53bcb84939e63",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-sin1k0db.pcm"
+    },
+    {
+      "name": "l3-test45.bit",
+      "bytes": 391105,
+      "sha256": "384ccca2d558a3505bb2e7c2860e12aa3b651473ace655cda3a2c8cfb1b2fc53",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-test45.bit"
+    },
+    {
+      "name": "l3-test45.pcm",
+      "bytes": 1893888,
+      "sha256": "bd79ae04a9437ffa9794df9540c119b45c89b29488c6b6584cc32c3ccde21fe0",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-test45.pcm"
+    },
+    {
+      "name": "l3-test46.bit",
+      "bytes": 130613,
+      "sha256": "c44f835c6efbfad67359aa327d78f0feaf22c443e191d68f80e6d2fefd6d8af5",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-test46.bit"
+    },
+    {
+      "name": "l3-test46.pcm",
+      "bytes": 576000,
+      "sha256": "5038a9c90f640474261da37833d3ad9c172301938a8e75c06d39e7ef1610edf1",
+      "url": "https://raw.githubusercontent.com/lieff/minimp3/ea99364f61c14656440e8d77e9c233ccf3124633/vectors/l3-test46.pcm"
+    }
+  ],
+  "provenance_note": "Public mirror of legacy MPEG Layer III test vectors and signed 16-bit PCM. Original ISO distribution identity has not been independently certified; compare every supplied sample and retain mirror hashes."
+}

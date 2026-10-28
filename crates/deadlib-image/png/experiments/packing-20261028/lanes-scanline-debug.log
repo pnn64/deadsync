@@ -1,0 +1,12 @@
+
+running 4 tests
+test scanline::tests::invalid_filter_bytes_do_not_change_the_row ... ok
+test scanline::tests::independent_filter_bytes_scores_and_short_row_boundaries ... ok
+test scanline::tests::every_packed_byte_and_tail_survives_strided_gather ... ok
+test scanline::tests::every_paeth_triplet_matches_the_specification ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.77s
+
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.89s
+     Running unittests src\lib.rs (target/png-packing-20261028/build\debug\deps\deadlib_image_png-4ea268d579a9cf3b.exe)

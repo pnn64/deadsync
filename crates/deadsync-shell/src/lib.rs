@@ -23,6 +23,7 @@ mod input_backend;
 mod input_trace;
 mod interaction;
 mod latest_worker_value;
+mod twitch;
 mod lighting;
 pub mod live_case;
 mod local_profiles;

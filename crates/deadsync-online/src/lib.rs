@@ -2,7 +2,6 @@ pub mod arrowcloud;
 pub mod banners;
 pub mod beginner;
 pub mod downloads;
-pub mod golf;
 pub mod groovestats;
 pub mod itgdb;
 pub mod lobbies;
@@ -21,6 +20,7 @@ pub mod smo_songs;
 pub mod song_preview;
 pub mod srpg_shop;
 pub mod stepmaniaonline;
+pub mod twitch;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OnlineRequestError {

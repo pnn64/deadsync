@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "scope": "Independent all-frequency direct-equation check of the 1997 MPEG-2.5 8-kHz mixed profile. Reference decoder disagreements are retained explicitly. This is not a universal reference parity or complete ISO-conformance claim.",
+  "frames": 1728,
+  "samples": 995328,
+  "native_rms": 3.1747191710675082e-09,
+  "native_max": 2.9794098188595797e-08,
+  "source_sha256": {
+    "src/decoder.rs": "d58465071cc8bba2bbfd4ca4d81a063d36370377d4dcc8c605334b3e294d1cc1",
+    "src/spectral.rs": "9333a66334c0d4a5c026810055b12c30d3206ea2ddc5af2aa89803fac9ee6ab2",
+    "src/bands.rs": "2a3902d77a7af0d2a44ddb5a89c3cafbd8937145cf1978c684c48c1744d953b7",
+    "src/scalefactors.rs": "5f4815b8b828d8378b61ef92127b11d1b3cf2b986522269ac571e92bf851be8a",
+    "src/huffman.rs": "430e97da63d767e70441c636f455b67c9ead9fdd0f8f0cc58f085117a1b4058b",
+    "src/synthesis.rs": "9ee6f7f70823f886f7a676e68a69cc8174855bf1bf663623a5c0e98b3e3579ef",
+    "src/dsp_tables.rs": "09d9a0d3b735b1cff73dda46bc5260fe75b12951f4b20fe5ee45e1ff49a3c5da",
+    "examples/decode.rs": "0c598b913258f00876ce77e1705e3714c14fe23faf74a844884ce779391d9ee3",
+    "tests/reference_mixed8.py": "b35d72888637edafd50b61b98b2ad69574c48fea9a33f3cc0ec2d0255a8f2467",
+    "tests/data/bands.json": "a291732bebc1754f25335219cc3380fe86661a03eeaac99987d39a7e3388d963",
+    "tests/data/dsp.json": "2f95c1442665900d71443e113ccaa6bef6611ede6c6bee08f3d9cae39048db96"
+  },
+  "results_sha256": "f7b4b1e66c409f3e40c7267879b51b989088d94400958f95613f8d25db87ffac"
+}

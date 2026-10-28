@@ -1,0 +1,19 @@
+{
+  "command": [
+    "wsl",
+    "-d",
+    "Debian",
+    "--",
+    "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/file",
+    "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Ed_Rush_-_Sabotage.mp3",
+    "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/edrush-recovery.bin",
+    "raw",
+    "audit",
+    "recover",
+    "discard"
+  ],
+  "exit_code": 0,
+  "stdout": "range\t0\t19393920\t19393920\t19393920\t16835\nseeks\t50588\t194218410\tbit-identical\n",
+  "output_sha256": "3cfff4acd2f19c4c123acdc4d630cce8322e9cf055fdf33d250cfede5d1876bd",
+  "provenance": "Captured unified exec completion output from the completed recovery audit; output file is independently checked by three streaming schedules."
+}

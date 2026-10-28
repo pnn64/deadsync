@@ -1,0 +1,59 @@
+{
+  "libsndfile": "1.2.2",
+  "soundfile": "0.13.1",
+  "source_sha256": "1d69ceecdf65657bad99b6aacd81c025769bddddaaa6aa53dee95415db855b23",
+  "corpus_sha256": "1fa01b75adafb708aed5cc10ea885b3e31a4134a97cb9065d684c54577e127e5",
+  "cases": [
+    {
+      "name": "bare",
+      "fixture_sha256": "b0c554af71c05d6b7685db256267081083fc004d06026891740d0847483802d6",
+      "zero_padding": true,
+      "accepted": true,
+      "exact": true,
+      "output_sha256": "664de42822adb22c4ba77bd8f84d457e83983f66c8df03d459505aa969430387",
+      "rate": 48000
+    },
+    {
+      "name": "odd-junk-before",
+      "fixture_sha256": "d953750b47d36e584c97395be0e46d4abe9525b81eabe383ceb21601bd937ff5",
+      "zero_padding": true,
+      "accepted": false,
+      "exact": false,
+      "error": "Error opening 'C:\\\\GitHub\\\\deadsync\\\\target\\\\wav\\\\pcm-rf64-reductions.json-files\\\\odd-junk-before.wav': Error in RF64 file. No 'data' chunk marker."
+    },
+    {
+      "name": "odd-junk-after",
+      "fixture_sha256": "a274a834e2001a735c01376c1b65e991c72a7e772437ef0177bc3de4d8db1466",
+      "zero_padding": true,
+      "accepted": false,
+      "exact": false,
+      "error": "Error opening 'C:\\\\GitHub\\\\deadsync\\\\target\\\\wav\\\\pcm-rf64-reductions.json-files\\\\odd-junk-after.wav': Error in RF64 file. No 'data' chunk marker."
+    },
+    {
+      "name": "even-junk-before",
+      "fixture_sha256": "eba5eb7df06a578fd31bbff0ed57125ba3f46b48c62b4e64ec82017a455387c3",
+      "zero_padding": true,
+      "accepted": true,
+      "exact": true,
+      "output_sha256": "664de42822adb22c4ba77bd8f84d457e83983f66c8df03d459505aa969430387",
+      "rate": 48000
+    },
+    {
+      "name": "odd-junk-nonzero-pad",
+      "fixture_sha256": "40debf78e28f62346511f18d2df59049f2134cc66d88343b525b448bf21b8bea",
+      "zero_padding": false,
+      "accepted": false,
+      "exact": false,
+      "error": "Error opening 'C:\\\\GitHub\\\\deadsync\\\\target\\\\wav\\\\pcm-rf64-reductions.json-files\\\\odd-junk-nonzero-pad.wav': Error in RF64 file. No 'data' chunk marker."
+    },
+    {
+      "name": "info",
+      "fixture_sha256": "97e692e44d41ee164c4c1dd268ab6aa7c252bd4ae22be7a9dfd54ffa89cc4eba",
+      "zero_padding": true,
+      "accepted": true,
+      "exact": true,
+      "output_sha256": "664de42822adb22c4ba77bd8f84d457e83983f66c8df03d459505aa969430387",
+      "rate": 48000
+    }
+  ]
+}

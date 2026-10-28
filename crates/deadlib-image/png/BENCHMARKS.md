@@ -1016,3 +1016,879 @@ tests, fuzzing or profiling. Shared-host frequency and unrelated workloads remai
 uncontrolled; normalization does not eliminate their effects. Reported pipeline
 byte fields are invariant checks, not measured peak memory. The broader decoder
 performance requirement remains open.
+
+## Owned 8-bit reconstruction and bounded growth requests (2026-10-27)
+
+Ordinary noninterlaced 8-bit images now retain the inflated vector as their native
+sample storage. Each row is unfiltered against the already compacted previous
+row, then moved left over its filter byte. The destination ends before the next
+unread row. This removes the second full-image allocation and its zero fill;
+row movement remains. Packed, 16-bit and Adam7 reconstruction keep their existing
+sample representation and algorithms. Buffered APNG frames use the same owned
+reconstruction entry point; public APIs and incremental decoding are unchanged.
+
+Buffered inflation still allocates only as output is produced. Its geometric
+growth requests are capped at the logical output limit rather than retaining
+unused space from the last doubling. No allocation based on the entire declared
+PNG size is added. On the measured global allocator, final inflation capacity
+equals filtered size on all 84 corpus images. The reused sample vector retains
+only the removed filter-byte overhead beyond its exact sample length.
+
+An untimed probe builds exact baseline/current native sources in separate
+projects and saves native sample bytes for byte-for-byte comparison. Its four
+tables and source/binary hashes are retained in `experiments/row-reuse-buffers.json`.
+The original incomplete-copy manifest parse error and successful continuation
+are separate logs; no measurement preceded the copy correction.
+
+| Summed capacities across 24 photos | Baseline | Selected |
+| --- | ---: | ---: |
+| Inflation buffer, bytes | 51,036,160 | 28,325,376 |
+| Returned sample buffer, bytes | 28,311,552 | 28,325,376 |
+| Separate sample buffer allocated during reconstruction | Yes | No |
+
+These are observed vector capacities from separate calls, not a measured
+simultaneous allocation peak or process RSS. The selected sample vector is the
+inflation allocation itself. Native sample bytes are identical for all 84 files;
+the other 50 format-corpus layouts retain their previous sample capacity.
+
+Baseline/candidate/candidate/baseline timing uses three processes per position,
+twelve iterations, three warmups and CPU 0. Each final comparison combines six
+baseline and six candidate processes. Rates include allocations. No task builds,
+tests, fuzzing or profiling overlap timed runs; unrelated host load and frequency
+remain uncontrolled.
+
+| Corpus | Buffered PNG | Unchanged reader | Buffered inflate | Unchanged streaming inflate |
+| --- | ---: | ---: | ---: | ---: |
+| Photos, reference-relative change | +5.28% | +1.86% | -0.50% | -1.48% |
+| Formats, reference-relative change | +10.28% | +0.26% | +18.36% | +2.78% |
+
+PNG uses Rust png normalization; raw inflation uses flate2. Photo decode changes
+from 96.90 to 103.77 MiB/s, while Rust png changes from 190.47 to 193.74. Format
+decode changes from 258.11 to 263.25 MiB/s. The controls support local PNG gains;
+photo raw inflation remains inconclusive, and broad parity remains unproved.
+
+Longer checks cover every case flagged below -5% against both controls: one
+photo and nine format files, using 48 / 4,096 iterations. None retains a PNG
+decode loss beyond that threshold against both controls. One stored-only raw
+case, gray8 Adam7 noise, remains slower: 9.02 to 11.02 microseconds, -28.49%
+relative to flate2 and -12.03% relative to unchanged streaming inflation.
+The lower-capacity allocation policy has a documented per-input tradeoff;
+no uniform raw-inflate speedup is claimed.
+
+`experiments/row-reuse-selection.json` reconstructs all 21 production source
+hashes, verifies sixteen timing groups / 48 processes and recomputes six
+final/interim summaries. It links per-case checks, buffer probes, generated code,
+full validation and sanitizer evidence. The final decoder performance and
+requirements audits remain open.
+
+## Stored-block allocation requests and allocator observations (2026-10-27)
+
+Nonfinal buffered stored blocks now request room for up to one additional payload,
+clipped to the remaining output limit. Final blocks keep their previous request.
+LEN/NLEN and logical output checks still precede allocation; no complete declared-
+image allocation is introduced. Only `src/zlib.rs` changes in production.
+
+An untimed, single-threaded [System](https://doc.rust-lang.org/std/alloc/struct.System.html)
+wrapper observes successful [GlobalAlloc](https://doc.rust-lang.org/std/alloc/trait.GlobalAlloc.html)
+calls and requested layout bytes. Its four methods are calibrated before each
+probe process. One fewer realloc call is observed for 21 format-corpus images,
+in both PNG decoding and raw inflation. Photos have unchanged counts. All 84
+images retain identical native sample bytes and logical peak/retained requested
+bytes. The gray8 Adam7 stored case changes from two realloc calls to one, with
+the same 33,397-byte raw peak and retained allocation.
+
+The instrumented binaries are never timed. Logical peaks exclude allocator
+overhead, usable-size rounding, internal realloc overlap and process RSS; compiler
+allocation elision can affect observed calls. Inputs and prior caller-owned
+results are outside each measured API call. The standalone instrumentation uses
+System forwarding; the native codec retains `forbid(unsafe_code)`.
+`experiments/stored-growth-allocations.{rs,py,json,lock}` retain its source,
+as-run Windows driver, dependency lock, binary/source hashes and four result tables.
+
+| Corpus | Buffered PNG | Unchanged reader | Buffered inflate | Unchanged streaming inflate |
+| --- | ---: | ---: | ---: | ---: |
+| Photos, reference-relative change | +0.41% | -1.41% | +1.39% | +0.76% |
+| Formats, reference-relative change | -0.63% | +0.14% | +2.56% | +4.22% |
+
+PNG uses Rust png normalization and raw inflation uses flate2. Broad throughput
+results are inconclusive; retain the change for the verified allocation reduction.
+The longer three-file stored subset improves raw inflation 3.22% relative to
+flate2 while unchanged streaming inflation moves -4.24%. Gray8 raw inflation
+changes from 7.59 to 6.60 microseconds, but normalized gains there are only
+1.73% / 1.58% against flate2 / unchanged streaming inflation. Palette results
+remain inconclusive. Two additional longer outlier checks do not repeat the
+short-run gray8 PNG or RGB16 raw regressions; their unchanged-control changes
+are -1.52% and +3.50%, respectively. No uniform or broad speedup is claimed.
+
+Sixteen final ABBA groups / 48 processes use three runs per position, CPU 0,
+three warmups, twelve iterations for the full corpora and 4,096 for subsets.
+Task builds/tests/fuzzing/profiling do not overlap timed runs; shared-host load
+and frequency remain uncontrolled. The old zero pipeline-byte column is not
+used as a memory measurement.
+
+The saved-binary runner now replaces inherited control lineage with the immediate
+parent and current runner hashes. Previously, deriving an already saved manifest
+ran its three processes but failed to write metadata. Those three stdout files
+are retained and excluded; the corrected comparison uses fresh `-b` names.
+`experiments/stored-growth-focus-recovery.json` binds the archived/fixed runners,
+failure/completion logs and exact parent lineage. `stored-growth-selection.json`
+in the same directory reconstructs all 21 native source hashes and verifies four
+summaries, per-case results, allocator observations and full validation evidence.
+
+## Rejected refilling literal-run loop (2026-10-28)
+
+A buffered-only trial keeps primary-table literal runs in their tight loop when
+the bit reservoir needs refilling. It loads four bytes only below nine available
+bits, preserves the existing lookahead bound, and leaves matches, long codes,
+end-of-block and input tails on the original symbol path. Output capacity and
+logical limits still bound each run. The trial changes only `src/zlib.rs`; it
+adds no allocation, dependency or unsafe code.
+
+Fresh baseline/candidate binaries use the same toolchain, workspace profile,
+harness and dependency lock. All builds and correctness checks finish before
+baseline/candidate/candidate/baseline timing. Each position runs three processes
+per corpus with twelve iterations, three warmups and CPU 0 affinity: 24 timed
+processes across 24 photos and 60 generated format files. Every process checks
+native samples and raw output against independent references before timing.
+Shared-host frequency and unrelated work remain uncontrolled.
+
+| Corpus | Buffered PNG | Unchanged reader | Buffered inflate | Unchanged streaming inflate |
+| --- | ---: | ---: | ---: | ---: |
+| Photos, reference-relative change | -1.92% | -0.70% | -0.89% | +0.74% |
+| Formats, reference-relative change | +1.94% | +0.75% | +6.36% | +0.00% |
+
+PNG is normalized against Rust png, raw inflation against flate2. Absolute photo
+decoding changes from 103.09 to 97.34 MiB/s, while the reference and unchanged
+controls also slow down. Photo inflation changes from 127.33 to 119.30 MiB/s.
+Format inflation rises from 1,040.52 to 1,096.73 MiB/s. The local format result
+does not establish an overall PNG benefit; no photo speedup is demonstrated.
+The candidate is rejected and all 21 production files are restored exactly to
+`b2b3a745`. No precise kernel-regression or uniform-throughput claim is made.
+
+The candidate passes 41 focused tests with five optional C checks ignored,
+strict all-target Clippy and scoped rustfmt. No full candidate suite or new
+sanitizer campaign is claimed. The restored source and all recorded regression,
+fixture, harness and tool inputs match the previously validated conformance
+milestone. Zero pipeline-byte columns are not allocation or peak-memory data.
+`experiments/literal-refill-selection.json` verifies patch reconstruction, both
+saved binaries, all eight timing groups and both recomputed summaries. The
+source-only parent templates contain no measurements; their scope text remains
+in the saved-run manifests alongside actual process measurements and parent
+lineage. The selected decoder's performance requirement remains open.
+## Reconstruction CPU cycles and allocations (2026-10-28)
+
+Three sequential changes simplify native sample reconstruction and explicit
+RGBA16 expansion. Production remains safe Rust under `forbid(unsafe_code)`.
+
+1. Compute the RGBA scale once per image/frame. Every legal sample mask divides
+   65535 exactly, so multiplication replaces division for each output component.
+   Palette expansion and transparency comparisons retain their existing rules.
+2. Unpack contiguous 1/2/4-bit rows in fixed groups per encoded byte. This removes
+   the general pixel/channel scatter loop and its runtime source-index arithmetic
+   from those rows, including Adam7's contiguous final pass. Other Adam7 passes
+   retain their existing scatter path; partial final bytes are bounded by the
+   destination sample count.
+3. Reconstruct each pass's first row directly: Up is identity, Paeth is Sub, and
+   Average adds half the reconstructed left byte. This removes one allocation,
+   zero fill and predictor-row read per nonempty pass. Invalid filters still
+   return the same error before modifying samples.
+
+Measurements use the Intel Xeon E5-2696 v4, Windows x86-64 and Rust 1.99.1,
+with the workspace bench profile (optimization level 3, LTO, debug info 1).
+The new `examples/reconstruction_bench.rs` uses Windows `QueryThreadCycleTime`
+and pins the current thread to logical CPU 2. Each checkpoint has three original
+processes and three saved-binary controls, replayed in reverse checkpoint order.
+Every process warms each operation three times, then takes the median of seven
+12-iteration batches. The table reports medians across all six processes per
+checkpoint. Allocations/reallocations and requested byte totals come from a
+separate untimed operation; counters are disabled during timed batches. Bytes
+are allocation requests, including full replacement sizes on reallocations,
+rather than live memory or RSS. Throughput counts native output sample bytes.
+
+| Change and operation | Before cycles/image | After cycles/image | CPU throughput | Before MiB/s | After MiB/s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Scale: RGBA8 to RGBA16, 513x257 | 6,716,828 | 2,742,890 | 2.45x | 327.9 | 802.0 |
+| Scale: RGBA16 to RGBA16, 513x257 | 6,893,809 | 2,658,182 | 2.59x | 319.2 | 827.2 |
+| Scale: RGBA8 APNG SOURCE, 513x257 | 6,196,110 | 1,816,984 | 3.41x | 355.3 | 1,211.8 |
+| Unpack: grayscale1 decode, 4097x257 | 6,663,023 | 2,827,983 | 2.36x | 331.1 | 775.5 |
+| Unpack: grayscale2 decode, 4097x257 | 7,198,064 | 3,408,890 | 2.11x | 306.5 | 644.3 |
+| Unpack: grayscale4 decode, 4097x257 | 8,409,905 | 4,684,587 | 1.80x | 261.3 | 469.2 |
+
+Scaling's RGBA16 expansion gain spans 1.38x to 2.59x across grayscale, GA, RGB
+and RGBA at 8/16 bits; APNG SOURCE spans 1.61x to 3.41x. These changes preserve
+allocation counts. Unpacking's inputs use identical fixed-seed samples and the
+None filter; timings include the entire native buffered decoder.
+
+| First-row change: buffered decode | Before allocations | After allocations | Before requested bytes | After requested bytes |
+| --- | ---: | ---: | ---: | ---: |
+| RGBA8 33x1, each of all five filters | 3 | 2 | 409 | 277 |
+| Grayscale1 4097x257 | 4 | 3 | 1,840,900 | 1,840,387 |
+| Grayscale8 4097x257 | 3 | 2 | 7,217,667 | 7,213,570 |
+| Grayscale16 4097x257 | 4 | 3 | 16,672,007 | 16,663,813 |
+
+First-row reallocations are unchanged. Short-image cycle medians improve
+14–30% in these measurements, but their very small batches and the shared host
+make exact timing percentages less reliable than the deterministic allocation
+reduction. Small changes in unrelated cases are not attributed to an
+optimization. Host frequency and competing workloads remain uncontrolled.
+
+Raw TSVs, source/binary/toolchain identities, original build logs, reverse-order
+controls, incremental patches and full summaries are in
+[`experiments/reconstruction-20261028`](experiments/reconstruction-20261028).
+`reconstruction_checkpoints.py` verifies every archived transition against every
+production source hash recorded at each build, accounting for checkout line
+endings. All 26 output fingerprints agree across all 24 measured processes.
+The decoder fixtures also compare complete native images with their generated
+sample vectors outside timing.
+
+`measured-benchmark.rs` preserves the exact harness used for those measurements.
+The current example resolves the identical CPU helper inside the PNG package,
+so standalone package builds also work. The helper's bytes and the measured
+production source are unchanged by that path relocation.
+
+The source diff adds 32 production lines net (48 added, 16 removed), plus ten
+lines extending independent filter and invalid-filter checks. The removed work
+is per-channel division, runtime packed-sample scatter arithmetic and per-pass
+predictor allocation/initialization. No public API or dependency changes.
+
+The complete release suite, including the optional C/reference checks, passes
+166 tests with zero failures or skips. Focused debug unit/static/compositing
+checks also pass, including the 3,240-case static matrix and every Paeth byte
+triplet. All-target Clippy with warnings denied and scoped formatting pass.
+Commands, source/reference binary hashes and output are retained in
+`validation.json`, `release.log`, `debug.log`, `clippy.log` and `fmt.log` in the
+evidence directory.
+
+The standalone offline debug suite passes 145 tests. Its 21 optional reference
+checks ran separately in the complete release suite above. All 894 copied
+source/test/example/benchmark files match the current package, and the normal
+dependency tree contains only `deadlib-image`; see `independent.log` and
+`independent.json` in the same evidence directory.
+
+## Native pixel expansion and opaque blending (2026-10-28)
+
+Three changes accelerate explicit RGBA16 expansion and APNG rendering:
+
+1. Native RGBA8 widens directly into the destination slice; RGBA16 copies its
+   native slice. This removes per-pixel color/storage dispatch and channel
+   indexing; native RGBA16 also avoids per-channel multiplication.
+2. Indexed images with at least 256 pixels build a 2 KiB stack table of RGBA16
+   values. Each pixel then needs one indexed load. Missing palette entries stay
+   opaque black, and missing transparency entries stay opaque. Smaller images
+   keep direct expansion, avoiding the fixed table initialization cost.
+3. OVER against an opaque destination uses exact u32 interpolation with the
+   constant divisor 65535. The destination alpha stays opaque. Transparent
+   source pixels skip the remaining blend work. The shared pixel kernel is
+   explicitly inlined to retain fast grayscale expansion and SOURCE rendering.
+
+With M=65535, an opaque destination makes the original alpha denominator M².
+Its rounded channel result is exactly `(source*sa + destination*(M-sa) + 32767)
+/ M`. M is odd, so removing the common factor preserves rounding. The largest
+new numerator is M²+32767=4,294,868,992, which fits u32. This removes variable
+u64 channel divisions and repeated alpha normalization from opaque pixels.
+Production remains safe Rust under `forbid(unsafe_code)`.
+
+| Change / 513x257 case | Before cycles | After cycles | CPU throughput | Before MiB/s | After MiB/s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Direct RGBA8 expansion | 2,610,093 | 1,132,995 | 2.30x | 843.1 | 1,940.0 |
+| Direct RGBA16 expansion | 2,677,690 | 1,223,191 | 2.19x | 815.2 | 1,802.6 |
+| Indexed8, two palette entries | 2,264,920 | 1,153,454 | 1.96x | 970.7 | 1,904.1 |
+| Indexed8, 256 palette entries | 4,229,866 | 1,179,191 | 3.59x | 520.3 | 1,867.5 |
+| Two-frame RGBA8, opaque destination | 13,246,880 | 4,688,419 | 2.83x | 328.4 | 938.2 |
+| Two-frame RGBA16, opaque destination | 13,266,690 | 4,573,292 | 2.90x | 326.0 | 963.8 |
+
+The first four rows compare sequential checkpoints using medians from six
+processes each: three original runs and three reverse-order saved-binary
+controls. The last two use four alternating processes per version, comparing
+the palette checkpoint with the selected `inline` checkpoint. Mixed destination
+alpha improves CPU throughput 1.28–1.30x in the latter comparison. Grayscale8
+expansion improves from 2,601,002 to 1,630,428 cycles; grayscale16 improves from
+2,577,936 to 1,714,268 cycles. Full results include the final cumulative source.
+
+The intermediate `opaque` checkpoint showed slower grayscale expansion in
+alternating controls (2.37M to 2.71M cycles for grayscale8). It was superseded
+by `inline`, which retains the opaque arithmetic and forces the pixel kernel
+inline. Both intermediate and selected measurements are retained. Some unchanged
+decoder/control cases vary with host load; small differences are not attributed
+to these optimizations. CPU cycles take precedence over wall throughput, which
+also reflects preemption. Host frequency and competing workloads are uncontrolled.
+
+Measurements use the same Windows x86-64 Xeon E5-2696 v4, Rust 1.99.1 and bench
+profile as the preceding experiment. Windows thread-cycle counters run on CPU 2.
+Each process warms an operation three times, then takes the median of seven
+batches: twelve iterations for large cases, at least 2,048 for outputs smaller
+than 4,096 bytes. Static rates count expanded RGBA16 bytes. APNG rates count both
+full-canvas frames and include reset, SOURCE background rendering and OVER
+foreground rendering. Native parser/inflater cases remain in the harness as
+controls.
+
+Every benchmark process compares complete outputs against the existing
+independent expansion/rational-compositing model outside timing. All 46 cases
+have matching fingerprints across five checkpoints and the alternating controls.
+Untimed allocation probes agree throughout: one 1,054,728-byte output allocation
+for large static expansion, zero allocations during reused two-frame rendering.
+The palette table adds fixed stack scratch space and no heap allocation.
+
+The selected source passes 13 focused release tests with no skips, including
+independent C/Python regeneration of 35 WPT and 240 precision animations. Nine
+debug checks pass; their optional regeneration check ran in the release suite.
+New tests cover every legal palette size at depths 1/2/4/8, short transparency
+tables, recovered black indices, 255/256/257-pixel boundaries and exact output
+limits. A white-over-opaque-white property checks every source alpha at maximum
+channel arithmetic bounds; the existing rational test covers every source alpha
+at fifteen destination-alpha boundaries. All-target Clippy with warnings denied
+and scoped formatting pass.
+
+The production diff adds 41 lines net (44 added, three removed). It removes
+execution steps: per-pixel RGBA interpretation, repeated palette/transparency
+lookups and scaling, and variable u64 divisions for opaque blends. Public APIs
+and dependencies are unchanged.
+
+Raw measurements, cumulative source patches from `22d57bf31`, source/binary/
+oracle hashes, archived original drivers, validation logs and summaries are in
+[`experiments/pixels-20261028`](experiments/pixels-20261028). `summary.tsv` contains
+the five six-process checkpoints; `selected-paired-summary.tsv` contains the
+selected alternating comparison. `selected-validation.json` identifies the final
+source and verification commands. The example and all oracle modules are inside
+the PNG package. Run the current benchmark with:
+
+```powershell
+cargo run --offline -p deadlib-image-png --profile bench --example reconstruction_bench
+```
+
+## Owned pixels, packed streaming rows and SOURCE copies (2026-10-28)
+
+Three further changes remove work in expansion, streamed decoding and rendering:
+
+1. RGBA16 expansion builds complete `[u16; 4]` pixels in its output allocation,
+   then transfers that allocation to the flat sample vector with the safe
+   `Vec::into_flattened` API. Every output sample is initialized by its final
+   value, eliminating the preceding full-image zero fill. Exact reservation
+   preserves allocation sizes for tiny images. Compact indexed images use a
+   direct palette kernel; large indexed images retain their lookup table.
+2. Streaming 1/2/4-bit reconstruction reuses the buffered decoder's fixed-width
+   unpacker. The native row vector keeps its length within each pass and is
+   overwritten directly. This removes per-sample `push`, source division/modulo,
+   repeated dynamic shifts and repeated vector-length updates. Buffer growth
+   remains fallible and follows pass width; allocation counts/sizes are unchanged.
+3. RGBA SOURCE frames dispatch once per frame, widening native bytes or copying
+   native u16 rows directly into the destination rectangle. This removes generic
+   pixel interpretation, per-pixel destination slicing and blend selection from
+   those copies. The general renderer retains its previous loop and pixel kernel.
+   Compositor canvases still start transparent and reset by zeroing their samples.
+
+Production remains safe Rust under `forbid(unsafe_code)`. Pixel arrays and flat
+u16 samples share the same storage; flattening adds neither a copy nor a second
+allocation. The implementation uses standard-library layout/iteration operations
+and adds no dependency or public API.
+
+Final baseline/selected alternating comparison:
+
+| Operation / fixture | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| RGB8 expansion, 513x257 | 1,983,182 | 1,548,874 | 1.28x |
+| RGBA16 expansion, 513x257 | 1,146,988 | 916,925 | 1.25x |
+| Indexed8 expansion, 255x1, full palette | 3,165.98 | 1,740.89 | 1.82x |
+| Grayscale1 reader, 4097x257 | 6,711,633 | 2,758,630 | 2.43x |
+| Grayscale2 reader, 4097x257 | 7,030,283 | 3,041,246 | 2.31x |
+| Grayscale4 reader, 4097x257 | 8,035,749 | 4,093,016 | 1.96x |
+| RGBA8 SOURCE, 513x257 | 1,449,313 | 280,274 | 5.17x |
+| RGBA16 SOURCE, 513x257 | 1,505,852 | 313,291 | 4.81x |
+
+The packed-reader component comparison before the SOURCE change also measures
+6,685,238 to 2,635,143 cycles for grayscale1, 6,991,660 to 2,951,205 for
+grayscale2, and 7,912,838 to 3,898,814 for grayscale4 (six processes per position).
+The 8/16-bit reader controls are essentially unchanged in the final paired run.
+Large expansion still makes one 1,054,728-byte allocation; reused SOURCE rendering
+makes none. All measured allocation/reallocation requests match the baseline.
+
+Measured tradeoffs remain visible: RGB16 SOURCE is 1.42M to 1.54M cycles in the
+final paired run; a full-palette 256x1 conversion is 1,935 to 2,182 cycles, and
+its 1x1 counterpart is 262 to 288 cycles. RGBA8 static expansion's 1.21M to 1.20M
+difference is within run variance. These timings concern individual public API
+operations and this shared host; they do not establish an application-wide gain.
+
+Earlier output/renderer variants were superseded after broader comparisons.
+The first flat-u16 iterator lost short indexed-image throughput. Complete pixel
+construction plus direct indexed lookup removes that loss at 255 pixels. A
+common row loop and shared palette-call refactoring slowed generic SOURCE
+formats; the selected `frame` checkpoint restores the general loop/kernel while
+retaining direct RGBA copies. Grayscale and GA SOURCE are around baseline in
+the final alternating runs. Intermediate source patches and raw data are retained.
+
+Measurements use Windows thread cycles, logical CPU 2, the Xeon E5-2696 v4,
+Rust 1.99.1 and the existing optimized/LTO bench profile. Each process has three
+warmups and seven batches; large cases use twelve iterations, small outputs at
+least 2,048. Sequential checkpoints have three original and three reverse-order
+controls. Final alternating runs use four processes per version in balanced
+order. Allocation probes are untimed. Native reader outputs are compared with
+the generated native images; every conversion/render case also checks complete
+samples against the independent expansion/rational model before timing. All 51
+case fingerprints agree. Host frequency, preemption and external workloads remain
+uncontrolled; CPU cycles take precedence over wall throughput.
+
+The selected source passes 28 release checks with no skips and 24 debug checks.
+Debug's one optional regeneration check ran in release. Checks include the
+3,240-case native format/filter/Adam7 matrix, PNGSuite fragmented/interrupted
+reads, strict/recovered palette policies, exact resource budgets and all sixteen
+bits of compositing precision. The new SOURCE test covers odd and wide native
+RGBA rows, nonzero rectangle offsets, transparent RGB preservation, every
+disposal mode, completion and reset. Independent C/Python checks regenerate 35
+WPT and 240 precision animations. All-target Clippy with warnings denied and
+scoped formatting pass.
+
+The production diff is 48 lines net (103 added, 55 removed, including formatting
+of the general renderer). Removed execution includes zero fill, per-sample
+packed reconstruction bookkeeping and generic interpretation of RGBA SOURCE.
+The native conversion helpers and reused row kernel remain local to the crate.
+
+Evidence is in [`experiments/rows-20261028`](experiments/rows-20261028).
+`frame-paired-summary.tsv` contains the final comparison;
+`summary.tsv` contains the sequential six-process checkpoints. `owned`, `pixels`,
+`compact`, `indexed`, `mode`, `leaf`, `local` and `range` identify intermediate
+construction/dispatch trials; `frame` is the selected source. Cumulative patches
+and source/binary hashes are relative to `e96e16343`. `selected-validation.json`
+records the final source and verification commands. The existing measurement,
+pairing and validation scripts now accept `DEADLIB_PNG_PERF_SERIES` so independent
+series preserve separate evidence; `DEADLIB_PNG_PERF_BASE` selects the patch base.
+
+## Encoder filtering and reusable pass rows (2026-10-28)
+
+Three retained changes remove repeated encoder work:
+
+1. Dispatch the filter once per row into a constant filter kernel, removing the
+   dynamic match from the byte loop. Predictor arithmetic and adaptive tie order
+   are unchanged.
+2. Compile score accumulation only for adaptive selection. Fixed filters no
+   longer calculate signed-byte magnitudes and a discarded 64-bit sum.
+3. Reuse buffered encoder rows across Adam7 passes and omit the candidate buffer
+   for fixed filters in both encoders. Capacity is bounded by the widest nonempty
+   pass, including one-row images. Checked equal row spans and zipped writes
+   avoid repeated output indexing in the filter kernels; the small dispatch
+   wrapper is inline. No unsafe code, runtime dependencies or public APIs were
+   added.
+
+The following are isolated, alternating comparisons: each row uses four
+processes before and four after its component change. Cycle values are medians
+of the process medians. These component ratios must not be multiplied.
+
+| Change and case | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Row dispatch, adaptive gray8 513x257 buffered | 6,904,007 | 4,856,950 | 1.42x |
+| Row dispatch, adaptive RGB8 513x257 buffered | 17,879,445 | 13,467,935 | 1.33x |
+| Omit score, None RGBA8 513x257 buffered | 5,137,215 | 4,312,151 | 1.19x |
+| Omit score, None gray8 513x257 writer | 1,678,919 | 1,480,308 | 1.13x |
+| Reuse/check spans, None RGBA8 9x9 Adam7 buffered | 9,452 | 5,380 | 1.76x |
+| Reuse/check spans, adaptive RGBA8 33x9 Adam7 writer | 65,852 | 58,055 | 1.13x |
+
+The last component reduces full seven-pass adaptive buffered allocation calls
+from 31 to 7, with output reallocations unchanged. For RGBA16 513x257 Adam7,
+requested bytes fall from 6,419,218 to 6,390,450. Fixed filters use three row
+buffers rather than four: the 9x9 Adam7 case falls from 31 to 6 allocation calls,
+with three output reallocations unchanged. Fixed writer paths also remove one
+allocation, including its later growth across passes. Requested bytes count
+allocator requests, not peak resident memory.
+
+The combined selected implementation (`bounded`) was then replayed directly
+against the original source with the same balanced four-process protocol:
+
+| Complete Stored pipeline | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Adaptive RGB8 513x257 buffered | 17,696,859 | 13,365,172 | 1.32x |
+| Adaptive RGB8 513x257 writer | 15,096,844 | 14,568,617 | 1.04x |
+| None RGBA8 513x257 buffered | 5,913,806 | 2,880,133 | 2.05x |
+| None RGBA8 513x257 writer | 5,431,089 | 3,552,571 | 1.53x |
+| Adaptive RGBA16 513x257 Adam7 buffered | 51,736,590 | 39,100,524 | 1.32x |
+| None RGBA8 9x9 Adam7 buffered | 10,973 | 5,357 | 2.05x |
+| Adaptive RGBA8 33x9 Adam7 buffered | 57,276 | 42,126 | 1.36x |
+
+These are targeted filtering/row-layout measurements with Stored compression,
+including PNG validation, checksums, allocation and framing. They do not predict
+Fast DEFLATE throughput or compression ratios. The 116 cases cover all six
+native byte strides, all filters, packed 1/2/4-bit samples, plain/Adam7 layout,
+buffered/writer encoding and small rows. Native images are pseudorandom and
+fixture construction stays outside timing. Every process compares complete
+inflated IDAT bytes against independent normative filtering and adaptive
+selection, and verifies decoded native images before measuring.
+
+The first allocation-reuse trial (`buffers`) slowed many large adaptive
+buffered cases by about 13%, despite reducing allocations. It is rejected in
+favor of checked spans plus bounded capacity (`bounded`). Some tradeoffs remain
+relative to the preceding `score` checkpoint: GA8 Average, RGB8 Average and
+RGB16 Sub buffered cases have throughput ratios 0.78x, 0.83x and 0.84x. All three
+are faster than the original source in the combined comparison, by 1.07x,
+1.28x and 1.18x. The final corpus has no median regression above 5%; changes near
+1% are within shared-host variance and are not treated as established gains.
+Large plain adaptive RGBA16 baseline timings varied substantially across
+comparisons, so its unusually high final ratio is not used as a headline result.
+
+Measurements use Windows thread cycles on logical CPU 2, Rust 1.99.1 and the
+existing optimized/LTO bench profile. Every measured process has three warmups
+and seven batches, with three iterations for large outputs and at least 2,048
+for outputs below 4,096 bytes. Allocation probes run separately, untimed.
+Frequency, preemption and unrelated host workloads remain uncontrolled; CPU
+cycles take precedence over wall-clock throughput. All retained comparisons
+run sequentially in alternating A/B, B/A order.
+
+The selected source passes 20 release tests and 19 debug tests, strict
+all-target Clippy and scoped formatting. Debug skips the optional C encoder
+audit that passed in release. A new independent filter-byte test checks 8,640
+format/width/height/pattern/filter/interlace configurations through both
+encoders: 17,280 encoded outputs, including one- and two-row images, partial
+packed bytes, zero/full rows and deterministic adaptive ties. Existing checks
+include every Paeth triplet, filter scores and short boundaries, 1,620 C encoder
+reference files, 8,640 native APNG outputs, input/ordering/resource limits,
+literal wire answers, and exact writer prefixes under interrupted/short writes.
+
+The production-source diff is 49 lines net (64 added, 15 removed, including
+unit-test call formatting). Removed execution includes a per-byte filter
+switch, discarded score arithmetic, repeated pass allocation and unused fixed
+candidate storage. The five constant filter kernels share one local safe Rust
+implementation rather than duplicating predictor logic.
+
+Evidence is in [`experiments/encoding-20261028`](experiments/encoding-20261028).
+`dispatch-paired-summary.tsv`, `score-paired-summary.tsv` and
+`bounded-paired-summary.tsv` record component comparisons;
+`selected-paired-summary.tsv` is the final baseline comparison. Checkpoints
+carry cumulative patches relative to `e372c77f0`, source/harness/binary hashes,
+build logs and raw process data. `final-validation.json` and
+`scanline-validation.json` record checks and oracle hashes. `exclusions.json`
+identifies overlapping exploratory runs, the disk-interrupted comparison,
+superseded validation failures and intermediate candidates. The measurement
+driver's `freeze` mode separates builds from timing; use
+`DEADLIB_PNG_PERF_SERIES=encoding-20261028`,
+`DEADLIB_PNG_BENCH_STAGE=encode`, and `DEADLIB_PNG_PAIR_ITERS=3` to replay this
+protocol without running competing measurement jobs.
+
+## Packed rows, Adam7 gathers and first-row lanes (2026-10-28)
+
+Three retained safe Rust changes remove reconstruction work:
+
+1. Pack contiguous 1/2/4-bit samples in constant groups per output byte. Each
+   byte is written once, with zero padding in its partial tail. This removes
+   the initial row clear, dynamic bit-offset calculations and repeated byte
+   read/modify/write operations.
+2. Gather 8-bit Adam7 pixels as fixed channel arrays. Representation and channel
+   dispatch happen once per row, rather than inside a per-channel loop. Complete
+   byte-aligned output is overwritten directly without an initial zero fill.
+   The unsuccessful generic 16-bit gather kernels are removed; 16-bit samples
+   retain direct per-channel big-endian writes.
+3. Share first-row reconstruction with the streaming decoder, removing unused
+   zero-predictor clearing and reading. Paeth reduces to Sub and Average uses
+   half of the left byte. Constant shifts and register-carried pixel lanes
+   handle these cases, with the measured scalar recurrence retained for
+   two-byte strides. Explicit Sub filters reuse the existing reconstruction
+   loop. The same first-row helper also serves buffered decoding.
+
+Isolated alternating comparisons use four processes before and four after
+each component change; these ratios must not be multiplied:
+
+| Component and complete Stored pipeline | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Grouped 1-bit gray, 4097x129 buffered encode | 3,239,601 | 1,665,164 | 1.95x |
+| Grouped 2-bit gray, 4097x129 buffered encode | 3,236,930 | 1,905,077 | 1.70x |
+| Grouped 4-bit gray, 4097x129 buffered encode | 3,941,159 | 2,836,416 | 1.39x |
+| 8-bit RGB Adam7 gather, 513x257 buffered encode | 3,719,208 | 3,467,039 | 1.07x |
+| 8-bit RGBA Adam7 gather, 513x257 buffered encode | 4,209,132 | 3,939,842 | 1.07x |
+| First-row Average gray8, 4097x1 reader decode | 34,530 | 30,058 | 1.15x |
+| First-row Paeth RGBA16, 4097x1 reader decode | 297,110 | 238,744 | 1.24x |
+
+The selected implementation (`scalar2`) was also compared directly against the
+original source with the same balanced four-process protocol:
+
+| Combined pipeline | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| 1-bit gray, 4097x129 buffered encode | 3,642,675 | 1,888,688 | 1.93x |
+| 2-bit gray, 4097x129 buffered encode | 3,959,670 | 2,089,677 | 1.89x |
+| 4-bit gray, 4097x129 writer encode | 5,054,280 | 3,303,292 | 1.53x |
+| RGB8 Adam7, 513x257 writer encode | 3,801,008 | 3,318,584 | 1.15x |
+| RGBA8 Adam7, 513x257 buffered encode | 4,360,989 | 4,056,397 | 1.08x |
+| Average gray8, 4097x1 reader decode | 36,447 | 28,655 | 1.27x |
+| Paeth RGBA8, 4097x1 reader decode | 109,047 | 69,813 | 1.56x |
+| Paeth RGBA16, 4097x1 reader decode | 303,016 | 227,114 | 1.33x |
+| Paeth RGBA8, 513x257 reader control | 3,156,812 | 3,172,507 | 1.00x |
+| Paeth RGBA16, 513x257 reader control | 9,346,603 | 9,368,114 | 1.00x |
+
+First-row improvements are startup/pass-boundary improvements, not a promise
+of equivalent gains on tall images. Allocation counts, reallocations and
+requested bytes are identical before/after in all 99 final cases. Tradeoffs
+remain: gray16 Adam7 buffered encoding rises from 2,306,140 to 2,462,132 cycles,
+plain RGB8 buffered encoding from 3,472,746 to 3,693,490, and first-row Sub
+gray16 reading from 60,160 to 63,398. These are approximately 6.8%, 6.4% and
+5.4% more cycles. Other small changes should be read alongside the raw
+shared-host variation rather than treated as established gains.
+
+The first trials exposed regressions rather than being retained unchanged.
+Generic 16-bit gathers did not establish a benefit. Reusing the previous scalar
+first-row helper slowed Average; register lanes fixed most strides, while
+two-byte lanes and explicit Sub required their scalar/existing loops. Initial
+short reader timings used only three iterations per batch. All four retained
+checkpoints were rebuilt with the same longer short-reader protocol before
+the final comparisons. The original harness and all intermediate measurements
+are retained separately.
+
+Measurements use logical CPU 2, Windows thread cycles, Rust 1.99.1 and the
+existing optimized/LTO bench profile. Each process has three warmups, a separate
+untimed allocation probe, and seven batches. Reader cases up to 65,536 native
+bytes use at least 64 iterations per batch; other outputs below 4,096 bytes use
+at least 2,048; remaining cases use three. Reported values are medians of four
+process medians in alternating A/B, B/A order. Measurement jobs run sequentially.
+Host frequency, preemption and unrelated workloads remain uncontrolled.
+
+`DEADLIB_PNG_BENCH_STAGE=rows` supplies 50 buffered/writer encoding cases and
+49 reader cases: all six native byte strides, packed depths, plain/Adam7
+layout, all first-row filters, short images and tall-image controls. Stored
+DEFLATE emphasizes packing/reconstruction while retaining PNG framing,
+checksums and allocation. These measurements do not predict Fast DEFLATE
+compression throughput. Every process checks complete filtered bytes against
+the independent normative model and complete decoded native images against
+the generated source. Reader fingerprints identify the exact input PNG, so
+changed fixture encoding cannot silently change a comparison.
+
+The selected source passes 29 release and 27 debug tests, strict all-target
+Clippy and scoped formatting. Debug's two optional C checks passed in release.
+The new unit test checks all 256 packed byte values, every partial tail, four
+strides and three offsets: 43,008 cases, with poisoned output and unused source
+samples. Existing checks include 17,280 independently modeled encoded outputs,
+every Paeth triplet, all first-row/short-filter boundaries, the 3,240-case native
+format/filter/interlace matrix, 1,620 C encoder references, 3,000 modeled APNG
+faults, exact resource thresholds, palette policies and fragmented/I/O failures.
+
+The source diff is 104 lines net (130 added, 26 removed, including the new
+exhaustive unit test). The additional local constant-width kernels remove
+executed work; they add no allocation, unsafe code, runtime dependency or public
+API. Data layout and low-level specialization replace repeated interpretation.
+
+Evidence is in [`experiments/packing-20261028`](experiments/packing-20261028).
+`packed64-paired-summary.tsv`, `gather8-paired-summary.tsv` and
+`scalar2-paired-summary.tsv` are the retained component comparisons;
+`accepted-paired-summary.tsv` is the selected baseline comparison. Cumulative
+patches and source/binary/harness hashes are relative to `ae44814be`.
+`accepted-final-validation.json` and `accepted-scanline-validation.json` record
+the final checks and oracle identities. `protocol.json` identifies superseded
+trials and timing protocols; `exploratory-benchmark.rs` preserves the exact
+original short-batch harness. The validation driver accepts `*-final` labels
+to retain separate complete checks for refinements without overwriting logs.
+
+## Word gathers, stepped bit rows and streaming Adler-32 (2026-10-28)
+
+Three retained changes replace repeated scalar work:
+
+1. Gather eight validated 1-bit samples with a little-endian u64 multiply by
+   `0x8040201008040201`, taking the high byte. Four 2-bit samples use a u32
+   multiply by `0x40100401`. Within the validated sample ranges, product bit
+   positions have unique contributors, so carries cannot corrupt the result.
+   Partial groups retain scalar packing and zero padding. The unsuccessful
+   direct nibble-pair trial is rejected; contiguous 4-bit rows keep their
+   original grouping loop.
+2. Pack stepped Adam7 samples in constant groups per output byte, writing each
+   byte once. A separate partial group handles padding. This removes clearing
+   the packed row, repeated byte read/modify/write operations and dynamic bit
+   offsets from the per-sample loop.
+3. Route streaming Adler-32 updates of at least 64 bytes to the existing bulk
+   kernel. Short calls retain an inline scalar path, including an empty-input
+   no-op. The original all-bulk entry point regressed byte fragmentation and
+   is rejected. One-shot checksums keep their existing bulk path. Duplicate
+   direct/indirect checksum test passes are removed while retaining independent
+   per-byte modular oracles, fragmented calls and worst normalized states.
+
+Each component below has a separate alternating four-process comparison
+before and after its change. Cycle values are medians of process medians;
+component ratios must not be multiplied.
+
+| Component and complete Stored pipeline | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Word gather, 1-bit gray 4097x129 buffered encode | 1,852,031 | 1,507,819 | 1.23x |
+| Word gather, 2-bit gray 4097x129 buffered encode | 2,150,625 | 1,880,676 | 1.14x |
+| Stepped 1-bit gray 4097x129 Adam7 buffered encode | 2,478,045 | 1,890,627 | 1.31x |
+| Stepped 2-bit gray 4097x129 Adam7 buffered encode | 2,936,764 | 2,309,360 | 1.27x |
+| Stepped 4-bit gray 4097x129 Adam7 buffered encode | 3,745,438 | 3,021,637 | 1.24x |
+| Shared bulk checksum, gray8 4097x257 reader | 4,310,431 | 3,619,957 | 1.19x |
+| Shared bulk checksum, RGBA16 4097x257 reader | 38,673,267 | 32,050,769 | 1.21x |
+
+The final baseline comparison was repeated, giving eight processes per version
+in two balanced alternating replays. The selected source is `adaptive-nibble`:
+
+| Combined pipeline | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| 1-bit gray 4097x129 buffered encode | 1,935,405 | 1,525,635 | 1.27x |
+| 1-bit gray 4097x129 writer encode | 1,988,999 | 1,586,875 | 1.25x |
+| 2-bit gray 4097x129 buffered encode | 2,151,686 | 1,907,492 | 1.13x |
+| 2-bit gray 4097x129 Adam7 buffered encode | 2,906,985 | 2,245,119 | 1.29x |
+| 4-bit gray 4097x129 Adam7 buffered encode | 3,710,209 | 2,992,809 | 1.24x |
+| Gray8 4097x257 reader | 4,226,473 | 3,478,746 | 1.21x |
+| RGBA8 4097x257 reader | 16,668,684 | 13,919,885 | 1.20x |
+| RGBA16 4097x257 reader | 38,067,410 | 32,530,193 | 1.17x |
+
+There are measured control-path tradeoffs. Combined before/after medians for
+GA8 Adam7 buffered encoding are 2,355,528 / 2,740,128 cycles; GA16 Adam7 buffered
+encoding is 4,205,327 / 4,721,555; plain RGB16 writer encoding is
+5,644,296 / 6,201,058; and the small RGBA8 33x9 Adam7 writer case is
+29,667 / 35,455. These are throughput ratios of 0.86x, 0.89x, 0.91x and 0.84x.
+Outlining the larger kernels produced mixed results and was rejected; no
+blanket no-inline attributes are retained. Raw per-process ranges show material
+shared-host variation. These targeted gains are not a universal speedup claim.
+
+A separate checksum-only example compares the exact scalar baseline and
+candidate implementations in one executable, checking both against an
+independent u64 modular oracle before timing. Three processes each retain
+eleven alternating batches per variant after a warmup batch. For 8,192 bytes
+in 5,552-byte fragments, the selected path improves from 8,341 to 2,984 cycles
+(2.80x); seven-byte fragments improve from 17,574 to 15,790 (1.11x). One-byte
+fragmentation costs 65,967 / 68,717 cycles, a 4.2% increase. The rejected
+all-bulk entry point was substantially worse on tiny fragments. The probe's
+64-byte inputs use 1,024 iterations per batch and 8,192-byte inputs use 32.
+This is a checksum microbenchmark, not an end-to-end compression measurement.
+
+The whole-pipeline harness uses `DEADLIB_PNG_BENCH_STAGE=bitwords`: the previous
+99 row cases plus three large unfiltered reader inputs, all with Stored
+DEFLATE. It includes PNG framing, CRCs, allocations and reconstruction while
+excluding fixture generation and independent model checks from timing. Every
+process verifies complete filtered pass bytes and native decoded images;
+reader fingerprints identify exact input PNGs. Allocation calls, reallocations
+and requested bytes are unchanged in all 102 cases. No Fast-DEFLATE throughput
+or compression-ratio gain is inferred from these Stored measurements.
+
+Measurements use logical CPU 2, Windows thread cycles, Rust 1.99.1 and the
+existing optimized/LTO bench profile. Every whole-pipeline process has three
+warmups, a separate untimed allocation probe and seven batches. Short reader
+cases up to 65,536 native bytes use at least 64 iterations; other outputs below
+4,096 bytes use at least 2,048; remaining cases use three. Measurement jobs are
+serialized. Frequency, preemption and unrelated workloads remain uncontrolled.
+
+The exact selected source passes 33 release and 32 debug tests, strict
+all-target Clippy and scoped formatting. The optional C encoder check skipped
+in debug passed in release. Checks include all 43,008 packed-byte/tail/stride
+answers, 17,280 independently modeled encoded outputs, the 3,240-case native
+format/filter/interlace matrix, 1,620 C encoder references, streamed DEFLATE
+fragmentation and invalid streams, writer failures, every Paeth triplet and
+Adler modulus/block boundaries with initial states `(1, 0)` and
+`(65520, 65520)`. Empty calls, arbitrary split points and 5,551/5,552/5,553-byte
+fragments exercise both checksum paths. Production remains safe Rust, with no
+new runtime dependencies or public APIs.
+
+Production-source files change by 32 lines net (63 added, 31 removed), including
+deduplicated checksum tests. Removed execution includes group-shift loops for
+complete 1/2-bit bytes, stepped-row clearing and repeated writes, and the serial
+Adler dependency chain for large streaming chunks.
+
+Evidence is in [`experiments/bitwords-20261028`](experiments/bitwords-20261028).
+`words-final-paired-summary.tsv`, `steps-final-paired-summary.tsv` and
+`checksum-final-paired-summary.tsv` record the retained components.
+`accepted-combined-summary.tsv` pools the two final balanced comparisons;
+their individual data remains in `accepted-paired*` and `accepted-replay*`.
+`micro-summary.tsv` retains checksum-only results. `protocol.json` identifies
+rejected nibble, all-bulk and outlining trials. Cumulative patches are relative
+to `2414ec857`; immutable binaries, source/harness hashes and raw logs identify
+every checkpoint. Final checks are in `accepted-final-validation.json` and
+`accepted-library-validation.json`. The new checksum example retains its exact
+baseline source snapshot and oracle checks for reproducibility.
+
+## Direct None rows and omitted Sub predictors (2026-10-28)
+
+Three safe Rust changes remove intermediate encoder storage and copying:
+
+1. Buffered None filtering appends the filter byte and writes directly into the
+   final filtered vector. Contiguous 8-bit rows extend directly from native
+   samples; other rows pack into the initialized final span. Three scratch rows
+   and two full-row copies are removed. The total filtered size is reserved
+   before writing, as before.
+2. Streaming None filtering packs directly into the row output after its filter
+   byte. It removes the raw and previous-row buffers, a copy, predictor setup
+   and unused swaps while retaining the same row lengths and framing.
+3. Sub filtering omits the previous-row buffer in both encoders. Its left
+   predictor uses only the current raw row. Constant filter kernels no longer
+   slice/read unused previous-row data for None/Sub; Paeth alone computes its
+   upper-left byte. Up, Average, Paeth and adaptive selection retain their
+   previous rows and exact tie order.
+
+The isolated before/after comparisons use four alternating processes per
+version. These are complete Stored pipelines, not standalone packing kernels:
+
+| Component, gray8 513x257 None | Before cycles | After cycles | CPU throughput | Allocation calls |
+| --- | ---: | ---: | ---: | ---: |
+| Buffered direct output | 709,314 | 405,197 | 1.75x | 6 -> 3 |
+| Streaming direct output | 743,520 | 445,695 | 1.67x | 7 -> 5 |
+
+The third change's established benefit is allocation/storage reduction, not a
+claimed CPU gain. RGBA16 513x257 Sub drops from six to five buffered allocation
+calls and seven to six writer calls, with 4,104 fewer requested bytes in each
+case. The previous row is no longer allocated, cleared, resized or swapped.
+Sub's in-process CPU ratios below are approximately neutral. Allocation probes
+are separate from timing; counts include the full PNG API rather than only rows.
+
+Between-process control timings varied substantially, including reader paths
+whose source did not change. An additional caller links an immutable baseline
+crate and the current crate into one executable, using the same shared native
+image types and copied bench-profile settings. Before timing, both buffered
+and writer PNG files must match byte-for-byte. Each process alternates variants
+within batches; three processes each retain eleven batches per variant after
+one warmup batch. The results corroborate the None fast paths:
+
+| In-process combined comparison | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Gray8 None, 513x257 buffered | 1,323,366 | 1,043,942 | 1.27x |
+| Gray8 None, 513x257 writer | 1,391,703 | 1,072,404 | 1.30x |
+| GA8 None, 513x257 Adam7 buffered | 2,770,310 | 2,371,990 | 1.17x |
+| GA8 None, 513x257 Adam7 writer | 2,771,626 | 2,035,570 | 1.36x |
+| RGBA16 None, 513x257 buffered | 9,632,612 | 6,970,295 | 1.38x |
+| RGBA16 None, 513x257 writer | 8,913,310 | 6,005,447 | 1.48x |
+| RGBA8 None, 33x9 Adam7 buffered | 9,815 | 6,020 | 1.63x |
+| RGBA8 None, 33x9 Adam7 writer | 31,459 | 25,436 | 1.24x |
+| RGBA16 Sub, 513x257 buffered | 9,175,466 | 9,347,920 | 0.98x |
+| RGBA16 Sub, 513x257 writer | 7,784,275 | 7,823,053 | 1.00x |
+
+The four adaptive encoder controls have in-process throughput ratios
+1.017x/1.034x (RGBA8 buffered/writer) and 1.001x/1.029x (RGBA16).
+Four one-row reader controls range from 0.987x to 1.021x. Small differences are
+within observed host/caller variation. The separate-process final comparison
+also shows None/Sub encoder gains, but several reader controls are slower by
+10-30%; these did not reproduce in the within-process controls. Both datasets
+remain visible. The results establish targeted encoding/storage benefits,
+not a universal speedup or an isolated decoder regression diagnosis.
+
+`DEADLIB_PNG_BENCH_STAGE=rowbuffers` adds Sub, Up and adaptive controls to the
+existing row/large-reader cases: 124 case/operations per process. Every process
+checks independently modeled complete filtered bytes and complete decoded
+images. Reader fingerprints identify input PNGs. Logical CPU 2, Windows thread
+cycles, Rust 1.99.1 and the existing optimized/LTO bench profile are used.
+There are three warmups, an untimed allocation probe, and seven batches per
+whole-pipeline process. Large cases use three iterations; readers up to 65,536
+native bytes use at least 64; other outputs below 4,096 bytes use at least 2,048.
+Measurement jobs are serialized; other workloads, frequency and preemption are
+uncontrolled. No Fast-DEFLATE throughput or compression-ratio claim is inferred
+from the Stored timing cases.
+
+The within-process caller measures 22 encoder case/operations and four reader
+controls. Large encodes use three iterations per batch, the small case 1,024,
+and reader controls 64. The baseline source is recovered directly from Git,
+renaming its package only to link both crate versions. Source hashes, generated
+manifest/profile and immutable executable identity are recorded. This extra
+probe supplements full-library correctness and allocation checks; it does not
+replace them.
+
+The selected source passes 33 release and 32 debug tests, strict all-target
+Clippy and scoped formatting. The optional C encoder audit ran in release.
+Checks include 17,280 independently modeled encoded outputs, all native
+formats/filter types/Adam7 passes, partial packed tails, 1,620 C encoder
+references, 109,376 literal scalar files, 308,033 rejected native inputs,
+49,419 ordering pairs and 2,616 exact writer failure prefixes. The filter unit
+oracle now supplies empty previous slices for None/Sub, testing their absent
+dependency alongside exact bytes and adaptive scores. All twelve library tests
+also pass, including packed-byte/stride exhaustiveness and checksum boundaries.
+Wire bytes and input acceptance/error behavior are preserved; working-memory
+statistics truthfully decrease with the removed buffers.
+
+The production-source diff is 54 lines net (75 added, 21 removed, including
+the unit-oracle adjustment). The direct paths remove allocations, clears,
+copies and swaps without new unsafe code, runtime dependencies or public APIs.
+
+Evidence is in [`experiments/directrows-20261028`](experiments/directrows-20261028).
+`buffered-paired-summary.tsv`, `writer-paired-summary.tsv` and
+`sub-paired-summary.tsv` retain the three components;
+`selected-paired-summary.tsv` retains the whole selected pipeline comparison.
+`in-process-summary.tsv` and its raw logs retain the additional paired caller.
+`compare.py` regenerates its baseline source and build under the ignored target
+directory; `compare.rs` contains the exact API comparisons. Cumulative patches
+are relative to `68a288d39`; final checks are in `final-validation.json` and
+`library-validation.json`. `protocol.json` records both measurement scopes.

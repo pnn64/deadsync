@@ -1,13 +1,24 @@
 # Vorbis coverage and numerical evidence
 
-Status: **raw synthesis, streaming mapping, indexed sample-accurate seeking and initial native encoding implemented**. No full
-Vorbis I conformance or competitive-performance claim is made. The complete
-requested end state remains in the parent work plan.
+Status: **Vorbis decoding completion gates pass**. Raw synthesis, streaming
+mapping and indexed sample-accurate seeking are implemented and independently
+validated. The [completion audit](DECODING_COMPLETION.md) maps the full parent
+work plan to final evidence, reviewed acceptance differences and future work.
+This is not exhaustive conformance certification or a competitive-performance
+claim. Initial native encoding is also independently validated.
 
-The active priority is complete behavioral parity with exact behavior/counts
-and the original PCM tolerances. The [parity ledger](PARITY.md) records two
-corrected discard/truncation differences, 7,014 independent cases and remaining
-work. Performance measurements do not establish completion.
+Counts, positions and behavior remain exact under each documented policy, with
+the original PCM tolerances. The [parity ledger](PARITY.md) and component reports
+retain the corrections and independent matrices. The additional
+[32-song pack](SONGPACKS.md) and [untimed EOS regression](UNTIMED_EOS.md) close
+the final corpus/mapping follow-ups. Performance does not establish completion.
+
+The [synthesis-state follow-up](SYNTHESIS_STATE.md) adds raw reference packet
+clocks, track-only insertion, partial PCM consumption and retained-buffer
+restarts. Actual vorbisfile traces provide independent queue/clock and PCM
+checks. The indexed reader now uses this state machine under explicit
+`SeekBehavior::Libvorbis`; [reference seeking](REFERENCE_SEEKING.md) closes the
+172 recorded seek-position/count differences for that mode.
 
 The [bit-mutation follow-up](BIT_MUTATIONS.md) adds 55,845 finite-reference
 cases and corrects floor-zero selector/rounding plus VQ sequence offsets.
@@ -211,8 +222,8 @@ Windows x86-64, rustc 1.99.1 evidence:
   Oracles check reset determinism, finite PCM, pull/push agreement and repeated
   seek error recovery. See [the fuzz documentation](../fuzz/README.md), including
   source/binary/seed hashes, caps and feedback counter limitations. Longer
-  campaigns, additional grammar/malformed inputs and independent differential
-  fuzz oracles remain required.
+  campaigns remain useful maintenance. Subsequent independent malformed
+  component/packet matrices are linked in the completion audit.
 * Initial five-file comparative performance baseline: 225 trial rows across
   native/libvorbisfile/Symphonia, resident full decode, capped 4 KiB reads and
   warm-process stream startup. All complete decode counts agree. Native full
@@ -261,7 +272,10 @@ rounding differences can be amplified. The separate
 unit-peak bounds correspond to about 1.64 / 0.10 of a 16-bit sample step and do
 not relax counts or channel layout. Odd/even products have independent closed
 form DC checks. The historical file's observed maximum is below one 16-bit step.
-Further high-order/dynamic-range conformance material remains necessary.
+The subsequent [floor-zero parameter matrix](FLOOR0_PARAMETERS.md) checks
+orders through 255, all amplitude widths, extreme Bark grids, partial LSP
+vectors and finite/nonfinite output classes directly against C. Related
+codebook-exponent and geometry matrices add dynamic-range extremes.
 
 The Symphonia raw API is used with gapless priming enabled and untrimmed raw
 packets (`trim_start/end == 0`), so initial priming and all subsequent raw frame
@@ -287,19 +301,25 @@ counts match without discarding comparison samples.
   Native strict counts and the initial-trimmed samples match libvorbisfile.
 * Strict final trimming is limited to the last packet's overlap span. Synthetic
   larger trims make libvorbisfile's declared total disagree with its emitted PCM;
-  strict decoding rejects them. Indexed `trim_to_final_granule` can clip across
+  strict decoding rejects them. Explicit `EosBehavior::Libvorbis` matches bounded
+  reference clipping and preserves declared/emitted totals separately. Indexed
+  `trim_to_final_granule` can clip across
   packets/pages using the endpoint known in advance. Synthetic tests check both
-  layouts, repeated seeks and invalid endpoints. Streaming stays strict.
+  layouts, repeated seeks and invalid endpoints. Streaming defaults stay strict.
 * libvorbisfile 1.3.7 reports PCM position 900 after requesting retained frame 1
   in the generated stream with broadcast offset +900. A named external regression
   records this discrepancy. Native seeking preserves frame 1 / granule 901 and
   matches sequential PCM; the Symphonia pre-roll comparison also covers this case.
+  Explicit `SeekBehavior::Libvorbis` instead matches the reference's position
+  900 and returned PCM, including repeated seek history.
 * The pinned ITGmania shipped song `Mecha-Tribe Assault.ogg` (libVorbis 20040629)
   has final granule 4,630,500 after a preceding page at 4,692,672. Strict decoding
   rejects this decreasing granule. Explicit indexed endpoint clipping emits
   4,630,500 frames per channel; libvorbisfile reports that length but emits
   4,762,304. Native PCM matches the reference prefix inside the declared interval,
-  including endpoint seeks. `Goin' Under.ogg` (libVorbis 20070622) passes
+  including endpoint seeks. The separate reference EOS and seek options now
+  match the complete emitted PCM and reference seek decisions as well.
+  `Goin' Under.ogg` (libVorbis 20070622) passes
   strict PCM/count comparison against libvorbisfile and Symphonia: 10,886,400
   channel samples, peak errors 7.152557373e-7 / 4.768371582e-7. Sources/hashes and
   paired SSC charts are pinned in `validation/corpus.json`. Policy details and
@@ -316,56 +336,29 @@ counts match without discarding comparison samples.
   40 API/policy paths; `1sec.ogg` has a named encoded-endpoint/reference-count
   discrepancy. See [HISTORICAL.md](HISTORICAL.md) for evidence and limitations.
 
-## Remaining required work
+## Completion and future work
 
-Initial native encoding now generates fixed-block setup/audio packets from PCM
-and supplies raw and Ogg APIs. All legal transform sizes, four additive precision
-stages, 1..255 channels, exact input lengths, reset/chunk determinism, allocation
-checks and independent decoder parity have dedicated tests. The 144-case
-libvorbisfile matrix compares 2,375,544 channel samples. A named reference test
-records a lost first block after libvorbisfile PCM-seek zero for a spanning
-priming packet; raw-start decoding returns the full correct output. See
-[ENCODING.md](ENCODING.md) for the precise interval checks, measured lossy source
-error, coding subset, resource policies and outstanding encoder work.
+The [completion audit](DECODING_COMPLETION.md) supersedes the earlier open-work
+list. It includes the current full reference suite, extracted offline gates,
+component and malformed-packet matrices, historical media and expanded real
+song-pack corpus. Strict, legacy and explicit reference decisions remain
+separately asserted; arbitrary corrupt-file recovery is not silently enabled.
 
-* Index-free/sparse codec seeking and measured startup/seek optimizations. The
-  indexed reader eagerly scans the full container and all audio mode prefixes;
-  it does not decode every audio payload during construction. Broader malformed
-  packet concealment differential validation remains necessary.
-  `read_packet` now avoids decoding unused page tails, with exact suffix/mixed
-  read checks, 1,900 corpus and 2,640 upstream packet-read seeks, and paired
-  1.16-1.76x seek-batch gains. The subsequent compact packet-mode index avoids
-  page-interval pre-roll synthesis, adding paired 1.99x/3.18x longer-track gains
-  for 4,224 additional live requested bytes per track. Both packet and page-only
-  pre-roll strategies are tested. Eager construction and sparse seeking remain.
-* Broader conformance material, unusual/legacy encoders, malformed/fuzz corpora,
-  and wider real ITGmania/StepMania song-pack coverage beyond the pinned shipped
-  songs. The two documented compatibility policies do not conceal packet holes
-  or repair arbitrary malformed containers.
-* Competitive native encoding quality/bitrate control, broader real-music lossy
-  evaluation and encoding performance, measured decoding pipeline
-  optimization and broader throughput/startup plus memory/allocation/seek
-  comparisons with libvorbis and Symphonia. The five-file
-  [resource/seek baseline](RESOURCES.md) now covers requested heap, process memory
-  and 500 shared PCM-window requests, exposing substantial seek performance
-  gaps. This remains an initial sample rather than a complete benchmark suite.
-  No SIMD or competitive performance claims yet.
-  The initial [encoding baseline](ENCODING_PERFORMANCE.md) now measures six
-  shared PCM inputs, 42 independently decoded streams and 294 timing trials.
-  It exposes a compression gap on two song excerpts and profiles actual packet
-  symbols for an entropy improvement. The subsequent
-  [compact-book update](ENCODING_ENTROPY.md) reduces paired two-stage song files
-  26–29% with identical decoded PCM through three decoders. Header costs increase
-  tiny-file sizes. These comparisons do not establish matched perceptual quality
-  against another encoder or complete the broader performance/conformance goal.
+Initial native encoding has raw/Ogg APIs and an independently decoded 144-case
+matrix covering 2,375,544 channel samples. Its source reconstruction criteria
+remain distinct from decoder parity; see [ENCODING.md](ENCODING.md).
 
-Raw packet and full-container comparisons are separate: raw PCM tests assign
-unknown granules and omit EOS trimming; `ogg_mapping` tests independently use
-libvorbisfile and Symphonia's container demuxer with real timestamps and trim.
-The separate `seeking` suite checks pre-roll, exact requested positions, retained
-suffixes and repeated seeks. These fixtures/corpus checks do not establish full
-Vorbis conformance or competitive performance. External reference APIs remain in
-separate test helpers.
+Future work outside this decoding request includes sparse/index-free codec
+seek strategies, competitive encoding quality/rate control, performance,
+additional platforms and application integration. The current indexed reader
+eagerly validates the container and audio mode prefixes and implements both
+packet and page-only pre-roll for its documented seek contract. Longer fuzz
+campaigns and additional conformance/media inputs remain ongoing maintenance.
+
+Raw packet and full-container comparisons are separate: raw PCM tests omit EOS
+trimming; mapping tests use real timestamps/trim against independent demuxers.
+Seeking tests check pre-roll, exact requested positions, retained suffixes and
+the explicit reference scheduler. External reference APIs remain test-only.
 
 The [residue tail matrix](RESIDUE_TAILS.md) adds direct libvorbis vector-add
 callbacks for partial partitions, empty books, unaligned type-two intervals,
@@ -381,6 +374,6 @@ finite PCM still uses the original numerical bounds.
 
 The [EOS count follow-up](EOS_CLAMPING.md) checks bounded reference clipping,
 discarded-packet clock resets, declared/emitted duration differences and real
-historical endpoints. It records 172 remaining libvorbisfile seek-position/count
-differences. Current work targets full parity with original PCM tolerances;
-performance work is deferred.
+historical endpoints. Its 172 retained-PCM/libvorbisfile differences remain a
+guard for the default retained timeline; the reference seek mode separately
+matches all C results. Broader acceptance/conformance coverage remains open.

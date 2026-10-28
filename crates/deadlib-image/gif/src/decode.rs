@@ -500,16 +500,11 @@ impl Decoder {
                             }
                             std::mem::swap(&mut self.interlace, &mut self.frame.indices);
                         }
-                        self.frame
-                            .validate(self.header.as_ref().unwrap(), self.options.check_bounds)?;
-                        if let Some(p) = self
-                            .frame
-                            .palette(self.header.as_ref().unwrap())
-                            .or(self.options.external_palette.as_deref())
-                        {
-                            validate_indices(&self.frame.indices, p.len())?;
-                            validate_control(self.frame.control, p.len())?;
-                        }
+                        self.frame.validate(
+                            self.header.as_ref().unwrap(),
+                            self.options.external_palette.as_deref(),
+                            self.options.check_bounds,
+                        )?;
                         self.state = State::Block;
                         break Some(Event::Block(Block::Frame(std::mem::take(&mut self.frame))));
                     }

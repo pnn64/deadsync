@@ -2,21 +2,29 @@
 
 This matrix tracks the implementation against the [24 June 2025 Recommendation](https://www.w3.org/TR/2025/REC-png-3-20250624/)
 and its [published errata](https://www.w3.org/2025/06/REC-PNG-20250624-errata).
-It is an audit in progress, not a certificate of complete conformance.
+The encoder and decoder correctness audits are complete; this is an engineering
+assessment, not an external conformance certificate.
+[Encoder validation](ENCODER-VALIDATION.md) and
+[decoder validation](DECODER-VALIDATION.md) record fresh results and claim scopes.
 `Covered` identifies current code and automated evidence; it does not mean every
 possible input was enumerated. `Open` identifies missing implementation or
 insufficient evidence. `Application` identifies an explicit caller responsibility
 of this native-sample codec, rather than an implicit image transformation.
 
-The user clarified on 2026-10-27 that decoding is the deliverable. Completion
-therefore covers native PNG/APNG decoding and rendering, standards behavior,
-differential/fuzz validation, independent reuse and measured decoder performance.
-Existing encoding utilities and their historical evidence remain documented;
-encoder feature completeness, compression ratio and encoder speed are outside
-the current completion requirements.
+The decoder deliverable was clarified on 2026-10-27; on 2026-10-28 the user
+explicitly excluded performance and then added a separate encoder correctness
+goal. This matrix now covers native PNG/APNG writing, decoding and rendering,
+sample precision, standards behavior, independent comparisons and package reuse.
+Earlier historical encoder exclusions do not apply to the new encoder goal.
 
 All test paths below are relative to the PNG package. `COVERAGE.md` records exact
-campaign counts, external tool versions, isolated builds and remaining milestones.
+campaign counts, external tool versions, isolated builds and historical milestones.
+
+As rechecked on 2026-10-28, the [published errata](https://www.w3.org/2025/06/REC-PNG-20250624-errata)
+list a proposed correction to an mDCV example, categorized as not affecting
+conformance. The twelve decoder conditions in
+[15.3.3](https://www.w3.org/TR/2025/REC-png-3-20250624/)
+are mapped to implementation and regression evidence below.
 
 ## Representation, framing and compression
 
@@ -26,7 +34,7 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | 4.1–4.6, 6.1: static images and native representation | Five color types, all 15 legal depth combinations; native/reference image APIs; `tests/static_png.rs`, `tests/pngsuite.rs`, `tests/reference_samples.rs`, external C oracle | Covered for native samples and all 1–16-bit reference RGB/RGBA channel-depth combinations; arbitrary source-to-reference transformations remain outside the specification's interface scope (4.2) |
 | 4.4.1–4.4.5, 6.2: alpha/indexing/merging/scaling | Native channels/indices remain exact; explicit full-range expansion and reference-depth conversion with sBIT | Covered for storage/scaling: 69,904 depth declarations, exhaustive uniform source values, both writers and independent C sBIT recovery. Optional indexing, RGB merging and alpha reductions are not implicitly applied |
 | 4.7: additional information and color precedence | Raw placement plus typed metadata; supported color selection with bounded ICC validation; `tests/metadata.rs`, `tests/profiles.rs` | Covered for wire values and selection; color transforms are Application |
-| 4.8, 5.1–5.3: signature and chunks | Literal signature, checked lengths, CRCs and core grammar in both parsers; `tests/chunks.rs` independently checks all 256 byte values in each name position, empty/unaligned payloads and 31-bit length boundaries | Covered for these framing equivalence classes; broader field/length mutations remain Open |
+| 4.8, 5.1–5.3: signature and chunks | Literal signature, checked lengths, CRCs and core grammar in both parsers; `tests/chunks.rs` independently checks all 256 byte values in each name position, empty/unaligned payloads and 31-bit length boundaries | Covered by framing, field-boundary and malformed/fuzz suites; arbitrary input enumeration is not claimed |
 | 5.4: chunk property bits | `tests/chunks.rs`: all 16 property-bit combinations at three positions, both empty/binary data, and every noncanonical case variant of all 25 standard names | Covered for literal dispatch, all property bits and future reserved-bit handling; C reference differences are recorded in `chunks-validation.log` |
 | 5.5: CRC | Native CRC-32 for chunks and fdAT sequence/data; known answers, bulk tails/splits, corrupt-stream tests | Covered |
 | 5.6: ordering | All 720 core and 120 APNG permutations; `tests/ancillary_order.rs` checks all 18 non-animation ancillary types across all native formats, optional palettes, critical-boundary placements, ordered pairs, duplicates and 720 six-type permutations per context | Covered for the Table 7 representative matrix, every small-stream IDAT split and direct event error termination; arbitrary payload mutations remain separate field/fuzz evidence |
@@ -36,7 +44,7 @@ campaign counts, external tool versions, isolated builds and remaining milestone
 | 7.3, 9.1–9.4: filters | Native None/Sub/Up/Average/Paeth plus adaptive encoder selection; byte-wise wrapping arithmetic and pass resets | Covered by reference sample matrix and PNGSuite |
 | 8.1: Adam7 | All seven pass origins/steps, empty passes, plain/stream writer and row-reader paths | Covered by geometry matrix, PNGSuite and APNG subframes |
 | 10.1, RFC 1950: zlib | All 65,536 CMF/FLG pairs, advertised-window boundaries, Adler-32, limits and prefix consumption; `tests/zlib_headers.rs`, `tests/deflate_prefix.rs` | Covered by buffered/fragmented raw and PNG tests, all level hints, 92 independent window fixtures, C zlib default/strict builds and 88,414 prefix/suffix cases; consumed-byte arithmetic is checked at virtual usize boundaries without a large input allocation |
-| 10.1, RFC 1951: DEFLATE decode | Stored/fixed/dynamic trees; 19,645 independently assembled Huffman fixtures, 1,525 complete code-length histograms, all repeat counts, reserved symbols, code widths 1–15 and legal length/distance values; `tests/huffman.rs`. `tests/primary_pairs.rs` adds every ordered two-byte value and 132 width/padding fixtures | Covered for these equivalence classes through buffered/fragmented raw and PNG paths, default/compatibility C zlib, 3,091 libdeflate positive checks and structured ASan fuzzing. The 65,668 additional literal streams match flate2/C zlib with exact native EOF/prefix consumption and limits; broader symbol permutations and targeted native fuzz coverage gaps remain Open |
+| 10.1, RFC 1951: DEFLATE decode | Stored/fixed/dynamic trees; 19,645 independent Huffman fixtures, 1,525 complete code-length histograms, repeats, reserved symbols and legal length/distance values; `tests/huffman.rs`. `tests/primary_pairs.rs` adds 65,668 literal streams. `tests/huffman_permutations.rs` adds 10,744 streams assigning every LL/distance symbol to depths 1–15 and every CL symbol to depths 1–7 across 36 selected shapes | Covered for these equivalence classes through buffered/fragmented raw and PNG paths, C zlib, flate2, Rust png and structured ASan fuzzing. The new matrix checks 8,728 symbol/depth cells, both padding modes, all length/distance symbols, all CL repeat instructions and full-window history. This is systematic assignment coverage over selected complete trees, not enumeration of every possible tree, permutation or block sequence |
 | 10.2: image datastream | One zlib stream across arbitrary IDAT/fdAT splits; exact filtered/native output lengths; prefix tolerance for unused final data | Covered by one-byte payloads, truncations and streaming properties |
 | 10.3: compressed metadata | Independent native zlib streams and cumulative raw/inflated metadata limits; metadata/text/profile tests and structured profile fuzzer | Covered; no preset dictionaries or concatenated metadata streams |
 
@@ -95,12 +103,12 @@ change native known answers.
 | 12.1–12.2: color/gamma | Caller supplies stored samples and color metadata; integer metadata stays exact; precedence exposed | Application for selecting/converting color spaces; no implicit CMS |
 | 12.3–12.4: alpha and source precision | `Png::from_reference_samples` accepts per-channel depths 1–16, scales to the smallest legal PNG depth, records sBIT and preserves high bits/alpha endpoints | Covered by exhaustive declaration/value checks, 3,456 static and 1,152 APNG writer files, 576 C native files and 576 independent C unshift recoveries; native `Image` remains the PNG-image representation |
 | 12.5: suggested palettes | PLTE/sPLT/hIST serialization and usage checks; no automatic quantization | Covered for supplied metadata; palette generation is Application |
-| 12.6–12.7: interlace/filter choice | Plain/Adam7 and all filters selectable; adaptive score shared by both writers | Covered; predictor exhaustively compared over all byte triplets, independent row/score matrix and filter/photo benchmarks retained; broader performance remains Open |
-| 12.8: compression | Native stored/fixed-Huffman LZ77, bounded 16-candidate chains, per-block coding choice and cross-block streaming history | Historical encoding utility evidence; compression ratio and encoder performance are outside the clarified decoder completion requirements |
+| 12.6–12.7: interlace/filter choice | Plain/Adam7 and all filters selectable; adaptive score shared by both writers | Covered; predictor exhaustively compared over all byte triplets, independent row/score matrix and historical filter/photo benchmarks retained |
+| 12.8: compression | Native stored/fixed-Huffman LZ77, bounded 16-candidate chains, per-block coding choice and cross-block streaming history | Covered by flate2/C zlib comparisons, block/window/fragment tests and fresh encoder ASan campaigns; no requirement for compressed-byte identity with another encoder |
 | 12.9: text | UTF-8 serialization, keyword byte/length classes, strict Latin-1 body encoding, native metadata compression and raw/typed APIs | Covered for these wire/encoder rules, including body NBSP and LF, empty/long text and unchanged non-null iTXt controls; line wrapping/display conventions are Application |
-| 12.10: chunking/extensions | Chunk size control, bounded writer chunks, recognized ancillary placement, private-name/property validation | Covered; full ordering mutation matrix remains Open |
+| 12.10: chunking/extensions | Chunk size control, bounded writer chunks, recognized ancillary placement, private-name/property validation | Covered by the independent encoder field/order matrix, byte-fault tests, direct APNG wire checks and prior property-bit/editor tests |
 | 13.1: errors/recovery | Strict default plus `AnimationPolicy::RecoverDefault`, first-error event/diagnostic, discarded animation frames and verified native static image; palette/profile recovery | Covered for the APNG fault/CRC/sequence/data classes, all fragments/truncations tested, fatal core/resource/IO cases and diagnostic-free static reencoding; presentation remains Application |
-| 13.2–13.3: checking/security | Mandatory CRCs/checksums, grammar/format checks, checked arithmetic, input/output/chunk/frame/metadata limits; twelve sanitizer targets | Covered for tested cases, including 4,680 independently calculated budget/policy probes and 80,760 reader fault checks. Native-crate feedback isolation and source replay are verified; remaining corpus/field gaps and longer campaigns remain Open |
+| 13.2–13.3: checking/security | Mandatory CRCs/checksums, grammar/format checks, checked arithmetic, input/output/chunk/frame/metadata limits; twelve sanitizer targets | Covered by independent budget/reader probes and bounded sanitizer campaigns. Native feedback isolation, source identities and the recorded decoder guard reachability review are verified; continued fuzzing is maintenance, not proof of universal safety |
 | 13.4: privacy | Exact hidden color samples, Exif and text are retained; encoder does not claim redaction or metadata scrubbing | Application; native preservation is intentional |
 | 13.5: unknown chunks | Independent property-bit/name-byte/case matrices through buffered, one-/seven-byte reader and direct event paths; literal raw names/data/positions and fused critical errors | Covered for these equivalence classes; reserved-bit ancillary acceptance follows 13.5 despite libpng 1.6.50 rejecting these names |
 | 13.6: pixel dimensions | pHYs values available without changing pixel storage | Application for presentation scaling |
@@ -111,24 +119,80 @@ change native known answers.
 | 13.13–13.14: color/gamma rendering | Supported metadata selection is available; source sample space remains explicit | Application; no automatic ICC, HDR or gamma conversion |
 | 13.15–13.17: backgrounds/alpha/palettes | bKGD/hIST/sPLT retained; explicit APNG SOURCE/OVER and disposal renderer | Covered by 983,040 exact rational alpha pairs, 2,121 WPT/generated libpng/Fraction RGBA16 canvases, all formats, rectangles, disposal transitions, budget boundaries, replay/reset and compositor fuzzing; additional color management remains Application |
 | 14.1–14.3: editor copy/order rules | Both encoders tested for all 16 property combinations at three positions; unknown unsafe chunks omitted, repeated safe chunks retain binary payload/order/placement, known unsafe metadata follows its own rules | Covered for reencoding, including prewrite rejection of all nonalphabetic name bytes and reserved-bit names; arbitrary edit operations are not provided |
-| 15.3.1: datastream conditions | Signature, core grammar, per-chunk fields/relationships, known order constraints and encoder validation | Partial until all open field/order audit items are resolved |
-| 15.3.2: encoder conditions | Both native writers agree with independent readers; reference-depth frontend preserves original high bits and legal-depth native input remains strict | Historical utility evidence; encoder conformance is outside the current decoder completion scope |
-| 15.3.3: decoder conditions | All standardized critical methods/formats, unknown property/case matrices, both transparency bytes and arbitrary data splitting | Partial: broader malformed equivalence classes and completion audit remain |
+| 15.3.1: datastream conditions | Signature, core grammar, per-chunk fields/relationships, known order constraints and encoder validation | Both native writers covered by independent literal files and field/order/control models, reference codecs and malformed-input rejection; no universal validator certificate is claimed |
+| 15.3.2: encoder conditions | Both native writers agree with independent encoders/readers; reference-depth frontend preserves original high bits and legal-depth native input remains strict | Covered by the encoder traceability and completed full/reference/standalone/sanitizer checks below |
+| 15.3.3: decoder conditions | All twelve conditions mapped to production paths and regression evidence below | Covered by the final engineering audit; finite testing is not a mathematical proof for every input |
 | 15.3.4: editor conditions | Native reference-image samples preserved; safe-to-copy handling implemented | Partial for reencoding API; no general editing UI or color-managed viewer is claimed |
 
-## Completion evidence still required
+## Decoder conditions: traceability review (2026-10-28)
 
-The clarified decoder deliverable still requires competitive performance,
-comprehensive differential and fuzz evidence, independent reuse and no DeadSync
-integration. Package isolation and the production dependency boundary are
-verified by retained offline builds. Decoder performance remains incomplete in
-`BENCHMARKS.md`: the latest buffered-literal comparison measures buffered
-photo decoding at 108.58 MiB/s against Rust png's 212.21 on the same shared host,
-and reader decoding at 104.23 MiB/s. Local decoder gains do not establish
-competitive end-to-end performance. Native-precision APNG render answers and scoped native compositor
-corpus coverage are now retained. Native-crate feedback isolation and a
-whole-package source replay are verified; package totals also contain untouched
-encoding utilities and are not decoder-only percentages. Resolve remaining
-decoder field audits, review the recorded native decoder gaps,
-improve measured decoder performance, and repeat the requirement audit against
-the resulting implementation and measurements before claiming completion.
+These are short paraphrases of [15.3.3](https://www.w3.org/TR/2025/REC-png-3-20250624/),
+not additional project requirements. Production filenames are under `src/`;
+regression target names refer to files under `tests/`. The
+full release run in `huffman-permutations-validation.log` includes each listed
+regular regression target. Resource limits remain explicit caller policy.
+
+| Condition | Current implementation and direct evidence | Assessment |
+| --- | --- | --- |
+| 1. Read conforming datastreams | `codec.rs`, `stream/decode.rs`, native inflate and scanline paths; PNGSuite, external corpus, format, metadata and APNG suites | Aggregate: supported behaviors have evidence; finite matrices do not prove acceptance of every conforming stream |
+| 2. Standard critical chunks and methods | `Header::parse`, literal critical dispatch, `zlib.rs`, `scanline.rs`; `static_png`, `decoder_boundaries`, `huffman`, `huffman_permutations`, `zlib_headers` | Covered for standardized methods and tested compression classes |
+| 3. Unknown-chunk property handling | Both chunk dispatch paths; `chunks::every_property_bit_and_name_byte` | Covered across property combinations, names and placements |
+| 4. Unexpected known-field values | Shared header parser, metadata/APNG validation; `decoder_boundaries`, `scalar_fields`, `animation_fields` | Covered for their field equivalence classes and documented reserved-value policies |
+| 5. All image types | Native `Image`/`Samples`; `static_png`, `pngsuite`, `reference_samples` | Covered without reducing native precision |
+| 6. Unknown critical chunks fail | Both parsers return `UnsupportedCriticalChunk`; `chunks::unknown_stream_events_and_fused_critical_errors` | Covered, including terminal event behavior |
+| 7. Reserved-bit names are unknown | Case-sensitive dispatch; `chunks::standard_names_are_literal_not_case_folded` | Covered; ancillary data retained, critical names rejected |
+| 8. All legal color/depth combinations | `ColorType::allows_depth`, scanline unpacking; `static_png`, all 65,536 header pairs in `decoder_boundaries` | Covered for all 15 combinations, plain and Adam7 |
+| 9. Invalid IHDR method/type fields fail | Shared `Header::parse`; `decoder_boundaries::ihdr_integer_color_depth_and_method_fields_fail_before_large_allocation` | Covered by all field bytes and color/depth pairs |
+| 10. Both bytes of 16-bit tRNS matter | `be16` in both parsers, full-width comparison in `composite.rs`; `scalar_fields` varies every byte in every transparency channel and checks RGBA16 | Covered for high-/low-byte distinctions |
+| 11. One zlib stream across arbitrary IDAT splits | Buffered concatenation and resumable inflate; `static_png::one_byte_idat_and_truncations`, `ancillary_order::every_idat_split_keeps_known_ancillary_chunks_outside_the_consecutive_run`, streaming suites | Covered, including empty/small chunks and unused final data |
+| 12. Only specified ancillary ordering assumed | Both metadata validators; `ancillary_order` slots, ordered pairs, permutations, every small-stream IDAT split and direct events | Covered for the Table 7 matrix and unknown-chunk placements |
+
+The reviewed code and regression evidence support the individual behaviors
+above. Viewer color conversion, display scaling and presentation remain
+application responsibilities, as recorded in the clause matrix.
+
+## Completion audit (2026-10-28)
+
+[Decoder validation](DECODER-VALIDATION.md) maps the full deliverable to fresh
+test/reference results, isolated reuse, sanitizer source identities and the
+reviewed coverage gaps. The field, ordering, APNG-control, language-extension and
+Huffman-assignment audits documented above resolve the earlier concrete decoder
+audit items. No known decoder correctness defect or missing required feature
+remains. Finite boundary matrices and fuzz campaigns do not enumerate every
+possible datastream; that limitation is not a missing decoder feature.
+
+Performance is outside the user's current completion requirements. Historical
+measurements and rejected experiments remain in `BENCHMARKS.md` without a new
+performance claim. Encoder completeness, application integration and viewer
+color management are outside this decoder deliverable.
+
+## Encoder conditions and final audit (2026-10-28)
+
+The subsequent encoder goal is now complete as recorded in
+[ENCODER-VALIDATION.md](ENCODER-VALIDATION.md). This supersedes the encoder
+exclusion in the preceding historical decoder-goal audit. The published
+[15.3.2 encoder conditions](https://www.w3.org/TR/2025/REC-png-3-20250624/)
+map to the current implementation as follows:
+
+| Condition | Production path and authoritative evidence | Assessment |
+| --- | --- | --- |
+| 1. Conforming output | `validate_encoding`, both writers, metadata/APNG validation, filter/Adam7 and native compression; `encoder_fields`, `encoder_boundaries`, `encoder_reference`, static/APNG/metadata/reference-sample suites and full external checks | Covered by literal independent PNG bytes, direct CRC/control/inflate checks, invalid-input rejection and C/Rust encoder/decoder comparisons |
+| 2. Original high bits survive legal-depth scaling | `Png::from_reference_samples`; `reference_samples` declaration/value/writer tests, independent rational model and C libpng sBIT/unshift recovery | Covered for every 1–16-bit channel-depth declaration, including mixed channel precision and alpha endpoints |
+| 3. Experimental/private methods use appropriate values | Header construction emits only standardized color/depth, compression/filter method 0 and interlace 0/1; typed enums bound filter/frame operations; ancillary names are validated | Covered; no experimental method/type-field API is exposed and no reserved public method values are generated |
+
+Datastream conditions 1–3 map to the exact start/header/end bytes in literal
+writer fixtures and direct wire checks. Conditions 4/6 map to field/relationship
+validation and independent integer/control bytes. Condition 5 maps to all 49,419
+metadata-order pairs and APNG sequencing. Condition 7 maps to literal chunk
+dispatch and the private-name/property matrices. Condition 8 maps to all native
+formats, scanlines, filters, Adam7 and independent zlib output checks.
+
+All 145 regular tests, all 21 optional reference checks, the complete standalone
+offline debug suite, strict all-target Clippy and scoped rustfmt pass. Fresh
+ASan campaigns complete 30,000 PNG/APNG writer and 20,000 buffered/streaming
+DEFLATE executions without a finding; native/dependency/harness instrumentation
+and all 57 current source identities are verified. The production sources remain
+unchanged from the completed decoder baseline. No known missing required encoder
+feature or correctness defect remains. Finite testing is not a formal proof for
+every possible input; application color transforms, quantization and opaque
+profile/Exif interpretation remain the documented caller responsibilities.

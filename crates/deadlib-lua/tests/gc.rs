@@ -414,13 +414,14 @@ fn roots_reject_release_and_foreign_vm_and_keep_values_alive() {
 #[test]
 fn repeated_collection_reclaims_programs_and_bounds_object_slots() {
     let mut vm = Vm::new();
+    let baseline_tables = vm.collect_garbage().unwrap().tables;
     let program=compile(b"for i=1,1000 do local t={i};local s='item'..i;local f=loadstring('return '..i);assert(f()==i) end;return nil").unwrap();
     let mut maximum = 0;
     for _ in 0..12 {
         vm.execute(&program).unwrap();
         let stats = vm.collect_garbage().unwrap();
         maximum = maximum.max(stats.reserved_bytes);
-        assert!(stats.tables < 20);
+        assert_eq!(stats.tables, baseline_tables);
         assert!(stats.functions < 10);
         assert!(stats.programs < 10);
     }
@@ -452,6 +453,7 @@ fn host_program_bindings_survive_collection_without_pinning_loadstring_caches() 
 #[test]
 fn automatic_collection_handles_opcode_only_churn_and_large_live_arrays() {
     let mut vm = Vm::new();
+    let baseline_tables = vm.collect_garbage().unwrap().tables;
     let program = compile(b"local s='';for i=1,5000 do s=s..'x' end;return #s").unwrap();
     assert_eq!(vm.execute(&program).unwrap(), &[Value::Number(5000.0)]);
     let stats = vm.heap_stats();
@@ -464,7 +466,7 @@ fn automatic_collection_handles_opcode_only_churn_and_large_live_arrays() {
         &[Value::Number(50_005_000.0)]
     );
     assert!(vm.heap_stats().tables >= 10_000);
-    assert!(vm.collect_garbage().unwrap().tables < 20);
+    assert_eq!(vm.collect_garbage().unwrap().tables, baseline_tables);
 }
 
 #[test]

@@ -7,8 +7,10 @@ with DeadSync. `Cargo.lock` pins the fuzz tooling dependencies.
 | Target | Input and invariants |
 | --- | --- |
 | `ogg_container` | One control byte, then Ogg bytes. Strict/explicit compatibility flags and chunk size vary. Pull and incremental parsing must return identical packet summaries, errors and exception counts. Recovery exposes only CRC-valid pages and terminates. Accepted index-event packet summaries match full demux; full-page and packet-paused capture at first/last pages also agree, including exception counts. |
+| `ogg_sync` | Stateful reset/append/pageseek/pageout and cached/bounded reader operations. Paired contexts match exact results, byte positions, unread counts and ordered page hashes. Every returned page passes an independent bitwise CRC check; strict conversion checks raw versions/flags. |
 | `vorbis_headers` | Selector byte: identification, comments, or 30-byte identification followed by setup. Accepted identification/comments round-trip exactly; owned metadata preserves binary fields. Accepted setups construct a decoder under separate memory limits and consume probe packets. Every bounded input also exercises mixed bit-reader lookaheads/reads against direct wire-bit indexing, including invalid widths, exact positions/remaining bits and sticky end-of-packet state. |
 | `vorbis_packets` | Fixture selector byte, then repeated little-endian u16 lengths and packet bytes (a final oversized length consumes the remainder). At most 32 packets. Two reset/replays must agree on PCM bits, errors and positions. A known-good replay after malformed input must match its original result. The high control bit tests positions near u64 overflow. |
+| `vorbis_synthesis` | Fixture selector and finite/IEEE policy, then at most 32 decode, track-only, read, drain and restart operations. Paired decoders with identical histories must match results, clocks, counts, positions and ordered PCM hashes. Failed or discarded operations preserve exposed state/PCM. Restart retains the previous block size and overlap storage, matching the reference lifecycle. |
 | `vorbis_stream` | Control byte then Ogg bytes, with arbitrary input chunks. Pull and two reset/push replays must match PCM/event summaries, errors and exception counts. Accepted indices compare page, packet, and mixed reads after end/middle/start/last-frame seeks, including deterministic payload errors and recovery by seeking. |
 | `vorbis_encode` | Six policy bytes then little-endian i16 PCM, or raw f32 for range/NaN rejection. Vary legal blocks, 1..255 channels, four precision stages, rates, input chunks and page targets. Whole interleaved and reset/chunked planar encoding must produce identical bytes. Native decoding checks framing, finite PCM, exact positions and final trimming. Invalid PCM must emit nothing and preserve position. |
 
@@ -19,7 +21,7 @@ finite samples and infinity signs retain their exact bits. Summaries use an orde
 hash is a practical fuzz oracle, not a mathematical proof of equality. Separate
 normal/reference tests compare complete PCM values and exact positions.
 
-The two Ogg targets use a custom mutator that repairs checksums for three
+`ogg_container`, `ogg_sync` and `vorbis_stream` use a custom mutator that repairs checksums for three
 quarters of mutations. It changes no other page field and leaves malformed
 headers/lacing, sequence holes and invalid granules available to the validator.
 The other quarter retains ordinary mutations for CRC rejection/recovery paths.
@@ -90,12 +92,24 @@ EOS seeds cover decreasing/excessive final granules, declared durations differen
 from emitted PCM, empty EOS pages and discarded final/intermediate packets.
 Indexed replay checks emitted suffixes independently of declared seek bounds; the
 endpoint-repair policy is disabled when bounded reference EOS is selected.
+The same reference control also runs paired indexed reference-seek schedules.
+Both readers have identical histories so retained synthesis buffers after
+restart are compared correctly; this mode is not compared to sequential PCM.
 The harness permits 131,072 declared codebook entries so sparse scalar books can
 return values above 65,535; its separate tree and memory caps still apply.
 Header control bit four raises the codebook extent cap from 24 to the full
 40 wire-field bits. Streaming bit six makes the same choice, preserved during
 indexing and selected setup reparsing. Entry/value/memory caps remain independent;
 procedural seeds cover both sides of the default reference extent guard.
+
+Synchronization input starts with a control byte, u32 source length and source
+bytes. Up to 64 following opcodes modulo six select buffer reset, u16-length
+append, pageseek, pageout, reader query with a u32 boundary, or reader seek with
+a u32 offset. Boundary `u32::MAX` means unbounded; zero means cached only.
+The reader uses one-, seven-, 27-, 255-, 2,048- or 65,536-byte reads. Control bit
+seven lowers the append buffer cap from 128 KiB to 256 bytes to exercise
+transactional rejection. A final reader drain checks at most 128 pages. Reader
+storage is capped independently at one maximum page plus one input chunk.
 Streaming control bits three, four and five select layout, empty books and IEEE
 propagation for pull, push, reset and indexed seeking. The raw target uses its
 normative fixture contexts. Procedural empty-book and unaligned
@@ -109,6 +123,16 @@ at most 128 pages; raw synthesis at most 32 packets per replay. The fuzzer has a
 20-second per-input timeout and 2 GiB RSS limit. These are fuzz harness policies,
 not format restrictions. Sanitizer RSS includes its allocator/quarantine and
 must not be reported as production decoder memory consumption.
+
+The synthesis target uses the low six control bits for its fixture and bit six
+for IEEE propagation. Its reference floor/codebook/residue options are explicit.
+An opcode modulo six selects restart, decode, track-only, u32 read, drain, or a
+boundary read. Decode/track records contain a little-endian u16 payload length,
+u64 packet number, i64 granule, one EOS byte, then payload. Boundary reads cover
+zero, one, half/all queued frames, one beyond the queue and `INT_MAX`. Generated
+seeds include partial reads, pending PCM, sequence gaps, granule clipping and
+retained-buffer restarts. This deterministic fuzz oracle supplements independent
+libvorbis comparisons of complete PCM buffers and actual seek operation traces.
 
 Encoder inputs are capped at 2,048 frames and 8 MiB of raw encoder elements;
 oversized channel/block combinations are skipped. Encoded packets are capped at

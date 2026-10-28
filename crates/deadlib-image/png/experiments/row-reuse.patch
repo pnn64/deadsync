@@ -1,0 +1,159 @@
+diff --git a/crates/deadlib-image/png/src/apng.rs b/crates/deadlib-image/png/src/apng.rs
+index 494c22519..4874681d5 100644
+--- a/crates/deadlib-image/png/src/apng.rs
++++ b/crates/deadlib-image/png/src/apng.rs
+@@ -174,7 +174,7 @@ impl Decoder {
+             if expected > self.limits.max_output_bytes {
+                 return Err(Error::LimitExceeded);
+             }
+-            let (mut raw, _) = zlib::decompress_prefix(&compressed, expected).map_err(|error| {
++            let (raw, _) = zlib::decompress_prefix(&compressed, expected).map_err(|error| {
+                 if error == Error::LimitExceeded {
+                     Error::Invalid("APNG frame data length")
+                 } else {
+@@ -185,7 +185,7 @@ impl Decoder {
+                 return Err(Error::Invalid("APNG frame data length"));
+             }
+             let image = scanline::decode(
+-                &mut raw,
++                raw,
+                 h.width,
+                 h.height,
+                 h.color,
+diff --git a/crates/deadlib-image/png/src/codec.rs b/crates/deadlib-image/png/src/codec.rs
+index eb15b69af..663696779 100644
+--- a/crates/deadlib-image/png/src/codec.rs
++++ b/crates/deadlib-image/png/src/codec.rs
+@@ -355,12 +355,12 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
+     }
+     crate::metadata::validate(&ancillary, header, palette.len(), limits)?;
+     // PNG Third Edition 11.2.3 recommends ignoring unused bytes in final IDAT.
+-    let (mut raw, _) = zlib::decompress_prefix(&compressed, expected)?;
++    let (raw, _) = zlib::decompress_prefix(&compressed, expected)?;
+     if raw.len() != expected {
+         return Err(Error::Invalid("image data length"));
+     }
+     let image = scanline::decode(
+-        &mut raw,
++        raw,
+         header.width,
+         header.height,
+         header.color,
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index e9b7aa615..e521a7abe 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -140,7 +140,7 @@ pub(crate) fn unfilter(row: &mut [u8], prev: &[u8], bpp: usize, filter: u8) -> R
+ }
+ 
+ pub(crate) fn decode(
+-    raw: &mut [u8],
++    mut raw: Vec<u8>,
+     width: u32,
+     height: u32,
+     color: ColorType,
+@@ -158,7 +158,10 @@ pub(crate) fn decode(
+     if bytes > limit {
+         return Err(Error::LimitExceeded);
+     }
+-    let mut samples = if depth == 16 {
++    let reuse = depth == 8 && !interlaced;
++    let mut samples = if reuse {
++        Samples::U8(Vec::new())
++    } else if depth == 16 {
+         let mut v = Vec::new();
+         reserve(&mut v, count)?;
+         v.resize(count, 0u16);
+@@ -188,10 +191,19 @@ pub(crate) fn decode(
+             let row = after.get_mut(1..1 + stride).ok_or(Error::Truncated)?;
+             let previous = if row_index == 0 {
+                 &zeros
++            } else if reuse {
++                &before[(row_index - 1) * stride..row_index * stride]
+             } else {
+                 &before[position - stride..position]
+             };
+             unfilter(row, previous, bpp, filter)?;
++            if reuse {
++                // Read the next row's predictor from the compacted output.
++                // Moving this row left cannot overwrite any unread row.
++                raw.copy_within(position + 1..position + 1 + stride, row_index * stride);
++                position += stride + 1;
++                continue;
++            }
+             let dst_y = y as usize + row_index * dy as usize;
+             if dx == 1 && depth >= 8 {
+                 let dst = (dst_y * width as usize + x as usize) * channels;
+@@ -237,7 +249,12 @@ pub(crate) fn decode(
+         height,
+         color_type: color,
+         bit_depth: depth,
+-        samples,
++        samples: if reuse {
++            raw.truncate(count);
++            Samples::U8(raw)
++        } else {
++            samples
++        },
+     })
+ }
+ 
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index 63c11f278..0dfa6fe2e 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -243,6 +243,27 @@ fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
+     ))
+ }
+ 
++fn reserve_output(output: &mut Vec<u8>, additional: usize, limit: usize) -> Result<(), Error> {
++    if additional > output.capacity() - output.len() {
++        let needed = output
++            .len()
++            .checked_add(additional)
++            .filter(|&n| n <= limit)
++            .ok_or(Error::LimitExceeded)?;
++        // Grow only as output is produced, capping requests at its limit.
++        let capacity = output
++            .capacity()
++            .saturating_mul(2)
++            .max(8)
++            .max(needed)
++            .min(limit);
++        output
++            .try_reserve_exact(capacity - output.len())
++            .map_err(|_| Error::Allocation)?;
++    }
++    Ok(())
++}
++
+ // Keep the Huffman tables and coded-block loop out of stored-block decoding.
+ #[inline(never)]
+ fn inflate_codes(
+@@ -260,7 +281,7 @@ fn inflate_codes(
+                     return Err(Error::LimitExceeded);
+                 }
+                 if output.len() == output.capacity() {
+-                    reserve(output, 1)?;
++                    reserve_output(output, 1, limit)?;
+                 }
+                 output.push(literal as u8);
+                 let mut room = (limit - output.len()).min(output.capacity() - output.len());
+@@ -297,7 +318,7 @@ fn inflate_codes(
+                 if len > limit.saturating_sub(output.len()) {
+                     return Err(Error::LimitExceeded);
+                 }
+-                reserve(output, len)?;
++                reserve_output(output, len, limit)?;
+                 let start = output.len() - distance;
+                 if distance == 1 {
+                     output.resize(output.len() + len, output[start]);
+@@ -352,7 +373,7 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
+             if len > limit.saturating_sub(output.len()) {
+                 return Err(Error::LimitExceeded);
+             }
+-            reserve(&mut output, len)?;
++            reserve_output(&mut output, len, limit)?;
+             // Drain bytes prefetched by a preceding Huffman block, then copy
+             // the byte-aligned payload directly without bit-reader dispatch.
+             let mut left = len;

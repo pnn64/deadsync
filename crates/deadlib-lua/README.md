@@ -1,7 +1,7 @@
 # deadlib-lua
 
-Independent Lua compiler and register interpreter in Rust, with no runtime
-dependencies. This incremental implementation does **not** yet run arbitrary Lua
+Independent Lua compiler and register interpreter in Rust, with no third-party
+runtime crates or C Lua linkage. This incremental implementation does **not** yet run arbitrary Lua
 programs. Production consumers use [deadlib-lua-legacy](../deadlib-lua-legacy/README.md).
 
 ```rust
@@ -195,14 +195,14 @@ enabled through `Vm::set_output_capture`.
 and `atan2` check their second operand first on Linux/glibc and their first
 operand first elsewhere. These error orders follow the pinned GCC and MSVC
 reference builds; C itself does not specify the evaluation order. The
-[library argument audit](../../docs/testing/2026-10-26-rust-lua-stdlib-arguments.md)
-also retains failures for unsupported native module loading. It does not
-establish full standard-library parity.
+[library argument audit](../../docs/testing/2026-10-28-rust-lua-call-yields-stdlib.json)
+now matches all 5,507 bounded cases, including native-loading argument errors.
+It does not establish full standard-library parity.
 
 The development [native-boundary proof](../../docs/testing/2026-10-26-rust-lua-native-boundary.md)
 exercises real C callbacks through the Rust host API, including recoverable
-errors under `panic=abort`. It uses a test-only C shim; production `package.loadlib`
-and the complete Lua C API remain unfinished.
+errors under `panic=abort`. Its C-only jump shim now also serves the default
+Windows/Linux native adapter; the complete Lua C API remains unfinished.
 
 `HostCall::native_stack` opens a VM-owned mutable argument/temporary window.
 `NativeStack` supports signed indexes, growth/pop, numeric reads, nested calls
@@ -230,8 +230,127 @@ finalizers. Their reported allocation bytes contribute to heap accounting.
 The [persistent-state proof](../../docs/testing/2026-10-26-rust-lua-thread-states.md)
 keeps a C state pointer stable across calls, reentry, suspension and VM moves,
 and frees every state while keeping its DLLs loaded. It covers operations on
-the currently executing thread; inactive/cross-thread C API access and
-production native-module loading remain unfinished.
+the currently executing thread; complete inactive/cross-thread C API access
+remains unfinished.
+
+`NativeThreadStack` also supports table creation and raw access/traversal,
+metatables, userdata and host closure creation, environments and indexed
+upvalues. These operations use the target thread's calling environment and
+preserve its execution status and stack prefix. Shared Lua cells and native
+captures remain live collector roots. The
+[inactive-object checks](../../docs/testing/2026-10-28-rust-lua-inactive-objects.md)
+compare real C operations on fresh, yielded, failed, completed and waiting
+threads. `NativeStack::protected_call_thread` also executes protected calls
+through a selected thread's own stack, with result counts, error handlers and
+its retained status. The [thread-call checks](../../docs/testing/2026-10-28-rust-lua-inactive-calls.md)
+cover reentry, hooks and later resumption. The
+[API-yield checks](../../docs/testing/2026-10-28-rust-lua-api-yields.md) also match
+protected yields on completed, yielded and failed threads, preserving pending
+frames and expiring the original error handler. Completed targets can resume
+with the requested result count and live shared cells. Unprotected calls,
+direct metamethod operations and other executing APIs on inactive threads remain
+unfinished.
+
+`NativeStack::load_reader_thread` also compiles through a selected thread's own
+stack without resuming its pending computation. The C adapter supports
+`lua_load` and its buffer/string helpers on these stacks. Reader callbacks see
+the target's environment and status, and may reenter Lua or another loader.
+The [thread-loader checks](../../docs/testing/2026-10-28-rust-lua-thread-loads.md)
+cover syntax/reader errors, stack-base restoration and permitted reader yields.
+Broader executing APIs remain open.
+
+The [reader-continuation checks](../../docs/testing/2026-10-28-rust-lua-reader-continuations.md)
+also preserve the parser's final physical top and suspended reader frames when
+loading succeeds after a yield. The visible window can be empty even after
+successful parsing. Current-function environments follow the retained activation.
+The release corpus matches 122 observations. A separate strict resume audit
+still fails on five reference crashes, and the checked reference rejects further
+continuation shapes; arbitrary reader continuation parity remains unproven.
+
+The [native panic checks](../../docs/testing/2026-10-28-rust-lua-native-panic.md)
+add `lua_atpanic` and unprotected `lua_error` on idle other threads. Callback
+replacement is shared within a VM and isolated across VMs. Stack reset closes
+upvalues and preserves the original error; C callbacks run after Rust dispatch
+returns and can recover through a C-local jump. Fifty-four observations and
+three terminating subprocess cases match Lua 5.1.5. Protected routing into a
+waiting target and complete unprotected error/lifecycle behavior remain open.
+
+The [selected-thread file checks](../../docs/testing/2026-10-28-rust-lua-thread-files.md)
+add `NativeStack::load_file_thread` and direct `luaL_loadfile` on another thread.
+Named files and buffered stdin preserve the target's environment, pending frames
+and retained status. File-open failures keep a yielded C suffix; parser failures
+restore its CallInfo base. Filename-push finalizer errors reach an idle target's
+latest panic callback after Rust dispatch returns. The comparisons cover 111
+observations and two additional terminating subprocess cases. Protected error
+routing into a waiting target remains open.
+An additional public-module CLI audit retains a mismatch in automatic GC timing;
+explicit full-collection controls isolate and verify the new panic routing.
+
+The [native allocation checks](../../docs/testing/2026-10-28-rust-lua-native-alloc-gc.md)
+add the required collector safe points to allocating C API operations. Completed
+primitive host actions avoid entering the interpreter for an unrelated check.
+Finalizer calls restore the C stack base on selected threads; steps without a
+tag method keep a yielded suffix. All 126 allocation/control observations match,
+including original errors and C-local panic recovery. Supplementary checks cover
+operand visibility and mutation during collection. General GC timing remains
+unfinished, including the retained unsettled file-panic mismatch.
+
+The [selected-thread execution checks](../../docs/testing/2026-10-28-rust-lua-thread-execution.md)
+add thread creation, formatted messages and primitive/metamethod concatenation
+on another thread. New threads inherit the target's environment and hook
+configuration. Concatenation follows Lua 5.1's relative operand offsets when a
+tag call restores a suspended C thread's base, including returned operand
+identity. Idle-target errors reach its panic callback and close surviving
+upvalues. The comparisons cover 54 execution observations, ten panic observations
+and 156 allocation/control observations. Four concatenation-yield cases remain
+strict mismatches against both release and checked references. Waiting-target
+error routing, general GC timing and full Lua 5.1 parity remain unfinished.
+
+The [concatenation-yield checks](../../docs/testing/2026-10-28-rust-lua-concat-yields.md)
+close those four initial mismatches. Selected concatenation retains pending Lua
+frames and continues the C API's physical stack reductions after a permitted
+yield. `top_offset` exposes the signed Lua 5.1 stack offset; `top` counts
+accessible values. Forty observations cover yielded-value counts, pushes through
+negative offsets, completed-target resumptions, repeated yields and surviving
+upvalues. Broader resumptions still include checked-reference invariant failures
+and reference crashes; these remain separate strict audits. Full continuation,
+GC, lifecycle and resource parity remain unfinished.
+
+The [selected-thread collector checks](../../docs/testing/2026-10-28-rust-lua-thread-gc.md)
+add `NativeStack::gc_thread` and `lua_gc` on another thread. Controls remain
+shared across the VM; finalizers observe the selected thread and its calling
+context. Fifty-two control/finalizer observations and one hundred panic
+observations match release and checked references. Heap-count cases check the
+integer/range contract, without claiming equal allocation charges. Invalid
+resumption states from the broader audit now return Lua errors instead of
+aborting Rust. That audit remains unequal, and full continuation, collector,
+lifecycle, allocator and resource parity remain unfinished.
+
+The [waiting-thread error checks](../../docs/testing/2026-10-28-rust-lua-waiting-errors.md)
+route errors through the selected thread's protection chain. Child handlers are
+bypassed, abandoned threads retain their normal status and fault frames, and
+open upvalues close when those threads are collected. C jumps still occur after
+Rust dispatch returns. The release and checked references match 736 observations
+across Lua/C resumers, protected API calls, GC errors, error handlers and eight
+error-value types. Supplementary checks cover C-call counts and 800 count-copy
+and activation controls. Broader cross-thread continuations remain unfinished.
+
+The [selected unprotected-call checks](../../docs/testing/2026-10-28-rust-lua-thread-unprotected.md)
+add `lua_call` through other thread stacks. They match 960 observations for
+results, errors, waiting protection scopes and panic recovery, plus 1,120 C-call
+count controls. Unprotected waiting states now reach their panic callback and
+retain the reset stack and closed upvalues while Rust returns through discarded
+invocations. Twenty terminating cases also preserve buffered stdout and file
+writes. Interleaved continuations, collector behavior and lifecycle/allocator
+coverage remain unfinished.
+
+The [selected-call yield checks](../../docs/testing/2026-10-28-rust-lua-call-yields.md)
+cover 1,280 protected/unprotected call and resume observations, including
+synchronous calls while a yield is pending, nested calls through other threads,
+repeated yields, and a second pending call that raises on resume. Native returns
+restore the pending Lua caller's register window after an intervening API call
+shrinks its storage. Release and checked references also match 4,224 C-call count
+controls. Arbitrary interleaved execution and full Lua 5.1 parity remain open.
 
 The string library provides byte operations, method lookup, Lua patterns,
 `find`, `match`, independent `gmatch` iterators, `gsub` with string/table/function
@@ -459,8 +578,8 @@ the native inputs and failing Lua frames available to outer handlers; field
 keys remain private temporaries. The
 [native table checks](../../docs/testing/2026-10-26-rust-lua-native-tables.md)
 compare these operations, call limits and overflow-handler reserves against
-official Lua in matching standalone contexts. The development bridge still
-does not enable production native-module loading.
+official Lua in matching standalone contexts. These operations also serve the
+default native-module adapter.
 
 Native stacks also expose full userdata payloads, function/userdata/thread
 environments, raw object lengths and numeric-to-string conversion in the
@@ -491,7 +610,7 @@ as in Lua 5.1. Comparison callbacks can release cleared operand roots without
 private argument copies retaining them. The
 [native value checks](../../docs/testing/2026-10-27-rust-lua-native-values.md)
 compare thirteen additional C API functions against the Windows/MSVC reference.
-The C API remains partial and production module loading remains unfinished.
+The C API remains partial.
 
 `NativeStack::push_where` provides Lua 5.1 source prefixes, and
 `argument_error` applies caller names and method/self adjustment. Primitive
@@ -502,8 +621,8 @@ dotted table creation and reference handles. Its
 [auxiliary API checks](../../docs/testing/2026-10-27-rust-lua-native-auxiliary.md)
 compare the same C module against official Lua, including error-stack locals,
 binary strings, capture/environment inheritance and reference reclamation.
-These helpers extend the development boundary; full standalone parity and
-production native-module loading remain open.
+These helpers also serve the default native-module adapter; full standalone
+parity remains open.
 
 Callbacks run synchronously and can allocate strings, tables and userdata or
 perform raw table access. `HostCall::call` invokes a callable through a protected
@@ -550,9 +669,92 @@ thread's native stack, including function-pop and result-push effects. Debug
 strings share interned storage and remain stable while their program is reachable;
 activation records and string handles do not root their owners. The development
 C fixture compares the corresponding four APIs; native hooks and the remaining
-C APIs are still incomplete.
+C APIs require broader compatibility checks.
 
-Other standard libraries, native C-library loading, complete diagnostic text and
+External native hooks use `NativeStack::set_hook` and `hook` for per-thread
+controls and `HostCall::hook_event` for the activation record and event. The
+callback runs against the interrupted native/Lua stack without adding a visible
+function frame. Hooks retain their host binding and captures through collection,
+including after disabling themselves. Temporary pushes alias debug locals and
+are removed after delivery; hidden VM storage stays separate. Native callbacks
+can call Lua, inspect/mutate locals and resume children with recursive hook
+delivery suppressed on their own thread. Line/count hooks can yield zero values
+and resume the pending instruction. The development C boundary adds `lua_sethook`,
+`lua_gethook`, `lua_gethookmask` and `lua_gethookcount`. Its
+[native hook checks](../../docs/testing/2026-10-27-rust-lua-native-hooks.md)
+compare native event records, pointer restoration, signed counts, stack aliases,
+coroutine inheritance/yields and nested C-call counts. These checks also cover
+math and iterator return windows. Broader builtin scratch stacks, instruction
+events and complete C API coverage remain open gates.
+
+Native API environment/upvalue pseudo-indexes inside an external hook refer to
+the interrupted function. Hook registration data and Rust captures remain
+separate through `HostCall`. Userdata and new native closures inherit the actual
+calling function's environment, including when scheduler continuations are
+present. Inactive stack access follows the same visible function identity for
+waiting and hook-suspended threads. Replacing the calling environment on a fresh
+thread returns `no calling environment` without changing its globals. The
+[native context checks](../../docs/testing/2026-10-27-rust-lua-native-context.md)
+compare these reads, writes and allocation identities against official Lua.
+
+Base/string return hooks now see the library's retained and consumed arguments,
+temporary values and actual result suffix, with writes changing pending results.
+Discarded native arguments and scratch stop retaining objects. Lua reader-based
+`load` shares the incremental native parser-root model, preserving constants
+tables, prototypes, EOF nils and protected error stack layouts. The
+[return-stack checks](../../docs/testing/2026-10-27-rust-lua-return-stacks.md)
+compare 252 C-hook observations and portable Lua debug-hook/reader regressions.
+
+Return-hook errors escape a completed `pcall`, `xpcall` or loader's protection
+scope. Active parents still protect child call/return hooks, and loaders invoked
+inside a hook inherit the active outer error handler. The
+[protection-scope checks](../../docs/testing/2026-10-27-rust-lua-protection-hooks.md)
+compare 39 C-hook scenarios plus portable Lua/native hook regressions.
+
+The [library stack checks](../../docs/testing/2026-10-27-rust-lua-library-stacks.md)
+extend return-hook windows across table, debug, I/O and OS operations, including
+cross-thread debug calls, failed-open userdata, close temporaries and iterator
+EOF. `debug.setupvalue` consumes the actual topmost argument; nil/closed default
+line and close arguments follow the reference's checks. Four portable groups
+cover Lua-hook writes, result aliases and collector lifetime effects.
+
+The [native body checks](../../docs/testing/2026-10-27-rust-lua-native-bodies.md)
+add `lua_tocfunction` to the development C boundary. Builtin implementation
+pointers can be compared, called directly, or copied into closures with their
+own captures and environments. Direct body calls preserve the current function
+and C stack without another visible frame or call/return hook. Body handles do
+not retain the closure that supplied them. The comparison covers 543 copied-body
+stack observations, coroutine suspension, external hooks and collection. The
+boundary now declares 76 of 80 core APIs; complete semantics remain unproven.
+
+The [package stack checks](../../docs/testing/2026-10-27-rust-lua-package-stacks.md)
+extend those comparisons to `require`, `module`, `seeall` and package searchers.
+`require` maintains its live C window through loader and cache callbacks.
+Retained nils, import sentinels, module copies, preload tables and search strings
+remain visible and writable; consumed options/results release their roots.
+Captured search names remain independent of writes to exposed temporary slots.
+These fixes also apply when native code copies and calls builtin bodies.
+
+The [native-library integration checks](../../docs/testing/2026-10-27-rust-lua-library-loading.md)
+add a host ABI resolver to `package.loadlib` and the C/C-root searchers. Library
+handles live in registry-cached `_LOADLIB` userdata, with failed-open retries,
+symbol errors, explicit close/reopen and collection/shutdown cleanup. Resolved
+functions inherit the actual calling environment and use the ordinary native
+boundary. `Vm::set_native_library_loader` installs or replaces an adapter.
+
+The [default C ABI checks](../../docs/testing/2026-10-28-rust-lua-default-native.md)
+enable real native modules in `Vm::new` and the CLI on Windows and Linux through
+the default `native-c-api` feature. The build compiles a small C-only jump shim
+with MSVC or a target C compiler; it contains no C Lua VM and adds no normal/build
+Cargo dependency. Its image is embedded and loaded lazily from a byte-verified
+per-build cache. Windows modules can link the generated `OUT_DIR/lua51.lib`;
+Linux modules resolve the globally loaded C API. Public-header module tests cover
+the actual CLI, child coroutines, replacement adapters, parallel VMs and cleanup.
+`--no-default-features` omits the bundled adapter and its C build. Custom providers
+remain available. The adapter declares 76 of 80 core APIs; this is partial C API
+support, with lifecycle/allocator entry points and broader semantics still open.
+
+Other standard libraries, complete native C API semantics, diagnostic text and
 debug behavior, cache eviction/package integration, richer Rust host objects and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. Native locales require Windows/MSVC or Linux/glibc,
@@ -599,7 +801,7 @@ On Linux with the i686 Rust target and C multilib toolchain installed:
 
 ```sh
 CARGO_TARGET_DIR=/tmp/deadsync-lua-target CFLAGS_i686_unknown_linux_gnu='-msse2 -mfpmath=sse' cargo test -p deadlib-lua --target i686-unknown-linux-gnu
-CARGO_TARGET_DIR=/tmp/deadsync-lua-target python3 scripts/check_rust_lua_full_suite.py --target i686-unknown-linux-gnu --reference-fp-model sse2 --run-root /tmp/deadsync-lua-suite --output docs/testing/rust-lua-i686.json
+CARGO_TARGET_DIR=/tmp/deadsync-lua-target python3 scripts/check_rust_lua_full_suite.py --target i686-unknown-linux-gnu --reference-fp-model sse2 --native-libraries --run-root /tmp/deadsync-lua-suite --output docs/testing/rust-lua-i686.json
 ```
 
 Tests use the official vendored Lua 5.1 interpreter through the legacy binding

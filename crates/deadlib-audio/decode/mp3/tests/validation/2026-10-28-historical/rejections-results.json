@@ -1,0 +1,192 @@
+{
+  "method": "Historical strict rejection, prefix parity and explicit recovery IO checks.",
+  "records": [
+    {
+      "file": "ascii.mp3",
+      "input_sha256": "7c72e328ad3fe508ba244d8a20bac3d2c646ceca42341dcb7dc4fbf7bb3badeb",
+      "commands": [
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/ascii.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-rejections-final/ascii-native.bin"
+          ],
+          "exit_code": 1,
+          "stdout": "",
+          "stderr": "Error: \"at byte 0: Invalid(\\\"Layer III big_values\\\")\"\n"
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/ascii.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-rejections-final/ascii-mad.bin"
+          ],
+          "exit_code": 1,
+          "stdout": "",
+          "stderr": "libmad at 0: bad big_values count\n"
+        }
+      ],
+      "prefix": {
+        "sample_values": 0,
+        "rms": 0.0,
+        "max": 0.0,
+        "bit_identical": true
+      },
+      "first_rejected_byte": 0
+    },
+    {
+      "file": "Ed_Rush_-_Sabotage.mp3",
+      "input_sha256": "f7de854f9e313f8e5b5050f2a43932cdf100426a722a22533c774e0a6b190e38",
+      "commands": [
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Ed_Rush_-_Sabotage.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-rejections-final/Ed_Rush_-_Sabotage-native.bin"
+          ],
+          "exit_code": 1,
+          "stdout": "",
+          "stderr": "Error: \"at byte 3678041: Invalid(\\\"SCFSI reuse of short-block factors\\\")\"\n"
+        },
+        {
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Ed_Rush_-_Sabotage.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-rejections-final/Ed_Rush_-_Sabotage-mad.bin"
+          ],
+          "exit_code": 1,
+          "stdout": "",
+          "stderr": "libmad at 3678041: bad scalefactor selection info\n"
+        }
+      ],
+      "prefix": {
+        "sample_values": 20275200,
+        "rms": 9.157348982510858e-08,
+        "max": 8.094357326626778e-07,
+        "bit_identical": false
+      },
+      "first_rejected_byte": 3678041,
+      "physical": {
+        "frames": 16835,
+        "samples": 19393920,
+        "incomplete_tail_bytes": 0
+      },
+      "recovery": [
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/stream",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Ed_Rush_-_Sabotage.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-rejections-final/Ed_Rush_-_Sabotage-recovered-1.bin",
+            "1",
+            "recover",
+            "discard"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            16832,
+            3,
+            19393920,
+            0,
+            0,
+            0
+          ],
+          "indexed_pcm": {
+            "sample_values": 38787840,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "pcm_sha256": "90f1b9121d3e8ba67be638905d73d760a1dc15bad8600fd958477f73fb7ee443"
+        },
+        {
+          "chunk": 17,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/stream",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Ed_Rush_-_Sabotage.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-rejections-final/Ed_Rush_-_Sabotage-recovered-17.bin",
+            "17",
+            "recover",
+            "discard"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            16832,
+            3,
+            19393920,
+            0,
+            0,
+            0
+          ],
+          "indexed_pcm": {
+            "sample_values": 38787840,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "pcm_sha256": "90f1b9121d3e8ba67be638905d73d760a1dc15bad8600fd958477f73fb7ee443"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/stream",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/Ed_Rush_-_Sabotage.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-rejections-final/Ed_Rush_-_Sabotage-recovered-4096.bin",
+            "4096",
+            "recover",
+            "discard"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            16832,
+            3,
+            19393920,
+            0,
+            0,
+            0
+          ],
+          "indexed_pcm": {
+            "sample_values": 38787840,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "pcm_sha256": "90f1b9121d3e8ba67be638905d73d760a1dc15bad8600fd958477f73fb7ee443"
+        }
+      ],
+      "indexed_recovery_sha256": "3cfff4acd2f19c4c123acdc4d630cce8322e9cf055fdf33d250cfede5d1876bd"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 //! Source, bytecode, and runtime diagnostics.
 
-use crate::Value;
+use crate::{ThreadId, Value};
 use std::fmt;
 
 /// The stage that reported an error.
@@ -28,6 +28,8 @@ pub struct Error {
     pub(crate) near: bool,
     pub(crate) bypass_handler: bool,
     value: Option<Value>,
+    // Internal control transfer; public execution boundaries remove it.
+    pub(crate) target_thread: Option<ThreadId>,
 }
 
 impl Error {
@@ -40,6 +42,7 @@ impl Error {
             near: false,
             bypass_handler: false,
             value: None,
+            target_thread: None,
         }
     }
 
@@ -52,6 +55,7 @@ impl Error {
             near: false,
             bypass_handler: false,
             value: Some(value),
+            target_thread: None,
         }
     }
 
@@ -77,6 +81,7 @@ impl Error {
                     near: false,
                     bypass_handler: false,
                     value: None,
+                    target_thread: None,
                 }
             }
         }

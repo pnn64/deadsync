@@ -629,3 +629,102 @@ ASan runtime. The raw-stream harness exercises buffered decompression as well as
 incremental inflation. These campaigns validate the buffered literal run and
 per-coded-block extraction; only decoder targets run. They are bounded campaigns,
 not a proof that all malformed inputs or source branches have been covered.
+
+## Owned row-buffer follow-up
+
+`reports/row-reuse-source.json` records 55,460 PNG-stream executions against a
+50,000 request and 20,000 raw-stream executions, with completion/statistics
+agreement and native/dependency/harness feedback isolation. Both targets retain
+ASan, and the raw harness exercises buffered inflation as well as incremental
+decoding. Sources, binaries, logs and initial corpus hashes are preserved.
+`reports/row-reuse-seeds.json` reuses the same immutable seed ZIP with fresh
+mutable extractions; existing fixture/generator/harness bytes are unchanged.
+
+`reports/row-reuse-corpus-storage.json` relocates the preceding completed
+literal-block mutable corpus to `target/png-fuzz-corpus-literal-block-20261027.zip`.
+Its 55,523 entries are verified byte for byte before the temporary source is
+removed, then checked again by ordered filename/content digest. Restore the
+archive beneath its recorded source path to replay that mutated corpus.
+The original binaries, logs, manifests and object audits remain in place.
+
+## Nonfinal stored-block allocation follow-up
+
+`reports/stored-growth-source.json` records 52,160 successful PNG-stream
+executions against a 50,000 request and 20,000 raw-stream executions. Both retain
+ASan, with verified completion/statistics agreement and native-only feedback.
+`reports/stored-growth-seeds.json` reuses the unchanged immutable seed ZIP with
+fresh mutable extractions; fixture, seed-generator and harness bytes are unchanged.
+
+The preceding completed row-reuse corpus is relocated to
+`target/png-fuzz-corpus-row-reuse-20261027.zip`, freeing temporary inodes for this
+campaign. All 55,508 entries are verified before removing the original corpus,
+then checked again by ordered filename/content digest. The storage report keeps
+the original source path, archive hashes and linked campaign evidence. Binaries,
+logs, manifests and object audits remain at their original locations.
+
+## Huffman symbol/depth assignment seeds
+
+`seed_fuzz --huffman-permutations-only <fresh-root>` exports 10,744 independent
+raw streams and their PNG wrappers, using the helper shared with
+`tests/huffman_permutations.rs`. It calls no production encoder. The four
+families cover literal/EOB, literal/length, distance and code-length assignments
+over 36 selected complete-tree shapes, with every legal symbol/depth cell and
+both padding modes. They complement the earlier malformed-tree and match-value
+corpora rather than enumerating every possible Huffman tree.
+
+`reports/huffman-permutations-seeds.json` records the fresh deterministic union
+with the earlier immutable seed ZIP: 58,911 PNG and 17,671 raw inputs.
+`reports/huffman-permutations-seed-build.json` binds the generator, helper,
+production source, executable and validation command. The runner accepts
+`--runs 100000` to request that execution threshold for each selected target;
+omitting the flag retains the historical target-specific defaults. Use fresh
+target/output directories for each invocation and a Linux environment in which
+`rustup` is available.
+
+`reports/huffman-permutations-source.json` and target logs retain actual
+completion/statistics counts, source/binary hashes, initial corpus digests and
+feedback isolation audits. Both PNG/raw decoder targets complete 100,000
+executions without a finding; all sixteen Rust archive and four harness-object
+audits pass. The separate
+launch-recovery report records a direct WSL PATH failure before compilation;
+the successful retry uses the established login shell and fresh directories.
+All duplicated seed bytes were verified against the immutable archive before
+removing the failed launch's extraction. The two corpus-storage reports preserve
+completed older mutable corpora in workspace ZIPs after byte-for-byte checks.
+
+## Encoder correctness completion campaigns (2026-10-28)
+
+The separate encoder goal excludes performance. Fresh campaigns pass 30,000
+`encode_stream` and 20,000 `deflate_stream` executions with ASan and native-crate
+mutation feedback. The PNG target checks generated PNG/APNG samples with Rust
+png; the raw target checks both buffered and streaming compression with flate2,
+then native streaming inflation. All formats, filter/interlace options, metadata,
+transparency and animation roles vary. Raw inputs include empty/short cases and
+32/64/128 KiB block/history boundaries, all input/output fragmentation choices,
+empty output calls and separate final input. No performance measurement or
+compression-ratio completion claim is made.
+
+`../experiments/encoder-fuzz-seeds.py` deterministically creates a narrow ZIP
+without invoking a production encoder: 2,250 PNG generator seeds and 1,152 raw
+seeds. `reports/encoder-seeds.json` binds archive/content digests and the producer.
+The archived `../experiments/encoder-fuzz-native.py` adapts the existing native
+runner for these targets, with 256-/131,072-byte caps, 30,000-/20,000-run defaults,
+offline Cargo and fresh output/build directories. The shared decoder runner and
+harnesses remain unchanged. To reproduce, generate the seed ZIP in a fresh
+checkout with `python experiments/encoder-fuzz-seeds.py` from the PNG package,
+or reuse the matching retained archive. Then run the archived runner on Linux
+from the workspace root:
+
+```sh
+python3 crates/deadlib-image/png/experiments/encoder-fuzz-native.py --cargo-fuzz /path/to/cargo-fuzz --seed-archive target/png-encoder-20261028-seeds.zip --target-dir /fresh/encoder-build --output-dir /fresh/encoder-campaign
+```
+
+`reports/encoder-source.json` and `encoder-encode_stream.log` /
+`encoder-deflate_stream.log` retain exact successful counts, commands,
+source/corpus/binary/log hashes, ASan runtime checks and compiler/object audits.
+Both native archives have feedback; fourteen dependency archives and four
+harness objects have no feedback counters or PC tables. All 57 source identities
+match current files. Full mutable corpora, binaries and object audits remain in
+`/home/perfecttaste/png-encoder-asan-20261028-a` and its matching build directory.
+These 50,000 new successful encoder executions are bounded evidence, not a
+universal safety or conformance proof. No production code changed.

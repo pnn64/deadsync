@@ -1,0 +1,126 @@
+{
+  "before": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 97.45812321903401,
+      "deadlib-image-png/decode-reader": 86.26017625675998,
+      "deadlib-image-png/inflate": 120.07597044638747,
+      "deadlib-image-png/inflate-stream": 95.36076133249051,
+      "flate2-1.1.10/inflate": 117.05215825158967,
+      "png-0.18.1/decode": 183.92011752577253
+    },
+    "process_runs": 6,
+    "artifacts": [
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-row-reuse-focus-before-photos-a-manifest.json",
+        "sha256": "283c7d1da676ebb569e456148d765008c4e64c972b68fda0a323f16f60b9a6c7"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-before-photos-a-run1.tsv",
+        "sha256": "bce9dd8874a2278d72ae4e6e04f2fecf26f95fa6880b908ecd3a81d50f101980"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-before-photos-a-run2.tsv",
+        "sha256": "83456d2c934792547832d865697cf8b1d12c69986e5a4aa19279b21020a0a7e4"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-before-photos-a-run3.tsv",
+        "sha256": "445b1b8cf3581072793bf27bd847d47a7d188837858f5f043dc10aeace180047"
+      },
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-row-reuse-focus-control-photos-a-manifest.json",
+        "sha256": "731a378d997e3f41932d7a4824993377f1fb9d5b0702557efb1eae38d18c7a45"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-control-photos-a-run1.tsv",
+        "sha256": "e63eb3d6949f6d2c3aaf001dc1443d7f04afe33bdb7553bd20a5c71066873b5a"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-control-photos-a-run2.tsv",
+        "sha256": "d68a5f9535eed73c3ae5de86968f004dbc509b42b328ebf2ec49c281aaa823f3"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-control-photos-a-run3.tsv",
+        "sha256": "8cd0c421de7782ca4d8a4151bf8b962047b7c02afee027edce944ac122477732"
+      }
+    ]
+  },
+  "after": {
+    "rates_mib_s": {
+      "deadlib-image-png/decode": 100.11640200339595,
+      "deadlib-image-png/decode-reader": 89.19313747207462,
+      "deadlib-image-png/inflate": 125.95931312345193,
+      "deadlib-image-png/inflate-stream": 97.39524763789186,
+      "flate2-1.1.10/inflate": 121.76494266412676,
+      "png-0.18.1/decode": 185.2030500390655
+    },
+    "process_runs": 6,
+    "artifacts": [
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-row-reuse-focus-trial-photos-a-manifest.json",
+        "sha256": "d6d48af9bca9ed91d09dd2445965a82986418d67e4fdd638043b8213004716eb"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-trial-photos-a-run1.tsv",
+        "sha256": "1f2537e1338f89ae0800f78299916006eecab2d633c75fd46c53a6e0eca9aa6e"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-trial-photos-a-run2.tsv",
+        "sha256": "6c1583a20b0d97f3e804da127f8d8a0b2d33e83ad002f188a9f1bf4f6c882355"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-trial-photos-a-run3.tsv",
+        "sha256": "2ebed5b5dfa4534949e5eaf56c5acf7b68cb6a3d295f5544286d241df2ec163b"
+      },
+      {
+        "path": "crates\\deadlib-image\\png\\benchmark-row-reuse-focus-repeat-photos-a-manifest.json",
+        "sha256": "67a017c767ba9766547ea37a5fbb42b29d028cd5b983f78270bd4bf48352af8d"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-repeat-photos-a-run1.tsv",
+        "sha256": "d644b2f358a11d7785f9dd548ecc4f8ca7b62d1adba6b7df6a68e0fb4211bfe4"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-repeat-photos-a-run2.tsv",
+        "sha256": "367054f203e00cd03cbac26aed71b6e35e6ace28a843d3c5017956377fe0c10c"
+      },
+      {
+        "path": "C:\\GitHub\\deadsync\\crates\\deadlib-image\\png\\benchmark-row-reuse-focus-repeat-photos-a-run3.tsv",
+        "sha256": "625f7748d2e83c319d95f068528605af991d23a3edd998a9b1fa2fa4cab4a459"
+      }
+    ]
+  },
+  "native_changes": {
+    "decode": {
+      "before_mib_s": 97.45812321903401,
+      "after_mib_s": 100.11640200339595,
+      "absolute_change_percent": 2.7276113027413285,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": 2.015999952251102
+    },
+    "decode-reader": {
+      "before_mib_s": 86.26017625675998,
+      "after_mib_s": 89.19313747207462,
+      "absolute_change_percent": 3.400133575642683,
+      "reference": "png-0.18.1/decode",
+      "reference_relative_change_percent": 2.683863550850729
+    },
+    "inflate": {
+      "before_mib_s": 120.07597044638747,
+      "after_mib_s": 125.95931312345193,
+      "absolute_change_percent": 4.899683637944285,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": 0.8396513896424818
+    },
+    "inflate-stream": {
+      "before_mib_s": 95.36076133249051,
+      "after_mib_s": 97.39524763789186,
+      "absolute_change_percent": 2.133462733490332,
+      "reference": "flate2-1.1.10/inflate",
+      "reference_relative_change_percent": -1.8195058356037075
+    }
+  },
+  "case_count": 1,
+  "size_and_pipeline_capacity_invariants_verified": true,
+  "scope": "Single-CPU shared-host measurements, including allocations. Reference normalization cannot eliminate scheduling/frequency/cache effects. No broad performance claim follows from one pair.",
+  "runner_sha256": "6e14c9081ea08715bd2a8289ca03812a7ff6601812ca1ae5104916956460703f"
+}

@@ -19,6 +19,13 @@ deadlib-audio-decode-vorbis = { path = "../vorbis" }
 members = ["."]
 
 [[bin]]
+name = "ogg_sync"
+path = "fuzz_targets/ogg_sync.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "ogg_container"
 path = "fuzz_targets/ogg_container.rs"
 test = false
@@ -42,6 +49,13 @@ bench = false
 [[bin]]
 name = "vorbis_stream"
 path = "fuzz_targets/vorbis_stream.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "vorbis_synthesis"
+path = "fuzz_targets/vorbis_synthesis.rs"
 test = false
 doc = false
 bench = false

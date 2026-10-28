@@ -22,6 +22,8 @@ mod compositor;
 mod hdr;
 #[path = "../tests/support/huffman.rs"]
 mod huffman;
+#[path = "../tests/support/huffman_permutations.rs"]
+mod huffman_permutations;
 #[allow(dead_code)]
 #[path = "../tests/support/language_extensions.rs"]
 mod language_extensions;
@@ -100,7 +102,39 @@ fn write_stream_followup(root: &Path) -> std::io::Result<()> {
     );
     Ok(())
 }
+fn write_huffman_permutations(root: &Path) -> std::io::Result<()> {
+    for target in ["png_stream", "inflate_stream", "zlib"] {
+        fs::create_dir_all(root.join(target))?;
+    }
+    let cases = huffman_permutations::all_cases();
+    for case in &cases {
+        fs::write(root.join("inflate_stream").join(&case.name), &case.bytes)?;
+        fs::write(
+            root.join("png_stream").join(format!("{}.png", case.name)),
+            huffman_permutations::png(case),
+        )?;
+    }
+    println!(
+        "Huffman symbol permutations: {} independent seeds per PNG/raw stream target",
+        cases.len()
+    );
+    Ok(())
+}
 fn main() -> std::io::Result<()> {
+    if std::env::args_os()
+        .nth(1)
+        .is_some_and(|s| s == "--huffman-permutations-only")
+    {
+        let destination = std::env::args_os().nth(2).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "--huffman-permutations-only requires a fresh output root",
+            )
+        })?;
+        let path = PathBuf::from(destination);
+        fs::create_dir(&path)?;
+        return write_huffman_permutations(&path);
+    }
     if std::env::args_os()
         .nth(1)
         .is_some_and(|s| s == "--stream-followup-only")
@@ -298,6 +332,7 @@ fn main() -> std::io::Result<()> {
     write_stream_followup(&corpus)?;
     write_animation_fields(&corpus)?;
     write_primary_pairs(&corpus)?;
+    write_huffman_permutations(&corpus)?;
     let decoder_limits = corpus.join("decoder_limits");
     fs::create_dir_all(&decoder_limits)?;
     for (name, bytes) in budgets::seeds() {

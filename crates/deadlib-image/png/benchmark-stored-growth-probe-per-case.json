@@ -1,0 +1,50 @@
+[
+  {
+    "case": "color-0-depth-08-adam7-1-noise-1",
+    "operation": "decode",
+    "before_ns": 195615.0,
+    "after_ns": 177771.5,
+    "reference_relative_percent": -0.38867821259008783,
+    "unchanged_control_relative_percent": 2.990382650960788
+  },
+  {
+    "case": "color-2-depth-08-adam7-0-noise-1",
+    "operation": "decode",
+    "before_ns": 119187.0,
+    "after_ns": 104706.0,
+    "reference_relative_percent": -4.6725770068844374,
+    "unchanged_control_relative_percent": -3.0956718788037296
+  },
+  {
+    "case": "color-3-depth-08-adam7-0-noise-1",
+    "operation": "decode",
+    "before_ns": 40755.5,
+    "after_ns": 34292.0,
+    "reference_relative_percent": -4.08071992390362,
+    "unchanged_control_relative_percent": 3.156624817902598
+  },
+  {
+    "case": "color-0-depth-08-adam7-1-noise-1",
+    "operation": "inflate",
+    "before_ns": 7587.0,
+    "after_ns": 6600.0,
+    "reference_relative_percent": 1.732936392680795,
+    "unchanged_control_relative_percent": 1.583743385281755
+  },
+  {
+    "case": "color-2-depth-08-adam7-0-noise-1",
+    "operation": "inflate",
+    "before_ns": 31000.5,
+    "after_ns": 24586.0,
+    "reference_relative_percent": 4.638096985082885,
+    "unchanged_control_relative_percent": 11.984957609934831
+  },
+  {
+    "case": "color-3-depth-08-adam7-0-noise-1",
+    "operation": "inflate",
+    "before_ns": 9531.5,
+    "after_ns": 8259.5,
+    "reference_relative_percent": -2.1565590335313134,
+    "unchanged_control_relative_percent": 0.45002453392406494
+  }
+]

@@ -1,0 +1,25 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.14s
+     Running tests\compositing.rs (target\png-pixels-20261028\build\debug\deps\compositing-ab9a7a9809be645f.exe)
+
+running 3 tests
+test explicit_precision_palette_and_transparency_expansion ... ok
+test source_over_and_disposal_known_answers ... ok
+test separate_default_and_first_previous ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\compositor_precision.rs (target\png-pixels-20261028\build\debug\deps\compositor_precision-cfe354017dc73bc0.exe)
+
+running 7 tests
+test regenerate_precision_goldens_from_independent_c_frames_and_python_fractions ... ignored, requires DEADLIB_LIBPNG_ORACLE and Python 3
+test opaque_white_blends_stay_white_at_every_source_alpha ... ok
+test exact_canvas_and_previous_snapshot_limits_fail_before_advancing_and_reset_cleanly ... ok
+test every_palette_size_transparency_length_and_expansion_boundary_matches_model ... ok
+test independent_libpng_and_python_fraction_canvases_retain_all_sixteen_bits ... ok
+High-precision APNG: 240 independent wire files, 1920 displayed canvases, all six disposal/blend states and nine disposal transitions
+test all_native_formats_disposal_geometry_default_roles_and_adam7_match_rational_model ... ok
+test every_source_alpha_at_fifteen_destination_boundaries_matches_exact_fractions ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 7.06s
+

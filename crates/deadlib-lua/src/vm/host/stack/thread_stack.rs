@@ -1,14 +1,22 @@
 //! Non-executing access to another thread's public native stack.
 use super::*;
+mod calls;
+mod execution;
+mod loader;
+mod objects;
+#[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+mod panic;
+mod tables;
 
 /// A borrowed native stack on an inactive thread in the same VM.
 /// Operations do not activate the thread, run Lua or change its execution status.
 /// Values on the visible stack are collector roots while the thread is live.
 pub struct NativeThreadStack<'vm> {
-    vm: &'vm mut Vm,
+    pub(super) vm: &'vm mut Vm,
     thread: ThreadId,
     base: usize,
     top: usize,
+    end: usize,
     frame: Option<usize>,
 }
 impl NativeStack<'_, '_> {
@@ -23,7 +31,7 @@ impl NativeStack<'_, '_> {
         if !self.check_stack(1) {
             return Err(self.error(b"native stack overflow"));
         }
-        self.call.run_action(Action::GcCheck, false)?;
+        self.check_gc()?;
         let thread = self.call.vm.allocate_thread();
         self.push(Value::Thread(thread))?;
         Ok(thread)
@@ -52,6 +60,7 @@ impl NativeStack<'_, '_> {
             thread,
             base: range.start,
             top: range.len(),
+            end: range.end,
             frame,
         })
     }
@@ -134,6 +143,10 @@ impl NativeThreadStack<'_> {
     pub fn top(&self) -> usize {
         self.top
     }
+    /// Signed Lua 5.1 stack offset, including a top below a yielded base.
+    pub fn top_offset(&self) -> isize {
+        self.end as isize - self.base as isize
+    }
     fn position(&self, index: isize) -> Option<usize> {
         let p = if index > 0 {
             index - 1
@@ -142,25 +155,21 @@ impl NativeThreadStack<'_> {
         };
         (p >= 0 && (p as usize) < self.top).then(|| self.base + p as usize)
     }
-    fn function(&self) -> Option<u64> {
-        let f = self.vm.threads[slot_index(self.thread.0)].frames.last()?;
-        match f.function {
-            FrameKind::Native(id) => Some(id),
-            _ => None,
-        }
+    fn function(&self) -> Option<Value> {
+        self.vm.calling_function(self.thread)
     }
     /// Read ordinary indexes or registry/global/environment/capture pseudo-indexes.
     pub fn value(&self, index: isize) -> Option<Value> {
         match index {
             -10000 => Some(Value::Table(self.vm.registry)),
             -10002 => Some(Value::Table(self.vm.thread_environment(self.thread))),
-            -10001 => Some(Value::Table(self.function().map_or_else(
-                || self.vm.thread_environment(self.thread),
-                |f| self.vm.native_environment(f),
-            ))),
+            -10001 => Some(Value::Table(self.vm.calling_environment(self.thread))),
             ..=-10003 => self
                 .function()
-                .and_then(|id| self.vm.native_closures.get(id))
+                .and_then(|function| match function {
+                    Value::Native(id) => self.vm.native_closures.get(id),
+                    _ => None,
+                })
                 .and_then(|f| {
                     NativeStack::capture_index(index).and_then(|i| f.captures.get(i).copied())
                 }),
@@ -171,18 +180,24 @@ impl NativeThreadStack<'_> {
     }
     /// Reserve slots without changing the top; false indicates overflow/allocation failure.
     pub fn check_stack(&mut self, extra: usize) -> bool {
-        let Some(top) = self
-            .top
+        let Some(end) = self
+            .end
             .checked_add(extra)
-            .filter(|&n| n <= limits::MAX_CSTACK)
+            .filter(|_| extra <= limits::MAX_CSTACK)
         else {
             return false;
         };
+        self.reserve_end(end)
+    }
+    fn reserve_end(&mut self, end: usize) -> bool {
+        if end > self.base + limits::MAX_CSTACK {
+            return false;
+        }
         let state = &mut self.vm.threads[slot_index(self.thread.0)];
         let before = state.registers.capacity();
         if state
             .registers
-            .try_reserve((self.base + top).saturating_sub(state.registers.len()))
+            .try_reserve(end.saturating_sub(state.registers.len()))
             .is_err()
         {
             return false;
@@ -196,22 +211,29 @@ impl NativeThreadStack<'_> {
     /// # Errors
     /// Rejects sizes above 8,000 slots or allocation failure.
     pub fn set_top(&mut self, top: usize) -> Result<(), Error> {
-        if top > limits::MAX_CSTACK || (top > self.top && !self.check_stack(top - self.top)) {
+        if top > limits::MAX_CSTACK {
+            return Err(self.error(b"native stack overflow"));
+        }
+        self.set_end(self.base + top)
+    }
+    fn set_end(&mut self, end: usize) -> Result<(), Error> {
+        if end > self.end && !self.reserve_end(end) {
             return Err(self.error(b"native stack overflow"));
         }
         let state = &mut self.vm.threads[slot_index(self.thread.0)];
-        if state.registers.len() < self.base + top {
-            state.registers.resize(self.base + top, Value::Nil);
+        if state.registers.len() < end {
+            state.registers.resize(end, Value::Nil);
         }
-        if top > self.top {
-            state.registers[self.base + self.top..self.base + top].fill(Value::Nil);
+        if end > self.end {
+            state.registers[self.end..end].fill(Value::Nil);
         }
-        state.top = self.base + top;
-        state.api_stack = self.base..self.base + top;
+        state.top = end;
+        state.api_stack = self.base..end;
+        self.top = end.saturating_sub(self.base);
         if let Some(i) = self.frame {
-            state.frames[i].vararg_count = top as u32;
+            state.frames[i].vararg_count = self.top as u32;
         }
-        self.top = top;
+        self.end = end;
         Ok(())
     }
     /// Push a live value and keep its graph reachable from this thread.
@@ -220,8 +242,8 @@ impl NativeThreadStack<'_> {
     /// Rejects stale values, overflow or allocation failure.
     pub fn push(&mut self, value: Value) -> Result<(), Error> {
         self.vm.validate_value(value)?;
-        let at = self.base + self.top;
-        self.set_top(self.top + 1)?;
+        let at = self.end;
+        self.set_end(at + 1)?;
         self.vm.threads[slot_index(self.thread.0)].registers[at] = value;
         self.vm.gc_barrier(Value::Thread(self.thread), value);
         Ok(())
@@ -229,7 +251,8 @@ impl NativeThreadStack<'_> {
     /// Replace an ordinary slot or supported pseudo-index, preserving the top.
     ///
     /// # Errors
-    /// Rejects stale values, absent indexes and invalid pseudo-index assignments.
+    /// Rejects stale values, absent indexes, invalid pseudo-index assignments
+    /// and an environment replacement when no function is active.
     pub fn set(&mut self, index: isize, value: Value) -> Result<(), Error> {
         self.vm.validate_value(value)?;
         if (-10002..=-10000).contains(&index) {
@@ -243,19 +266,18 @@ impl NativeThreadStack<'_> {
                 }
                 -10002 => self.vm.set_thread_environment(self.thread, table),
                 _ => {
-                    if let Some(id) = self.function() {
-                        self.vm.set_native_environment(id, table);
-                    } else {
-                        self.vm.set_thread_environment(self.thread, table);
-                    }
+                    let function = self
+                        .function()
+                        .ok_or_else(|| self.error(b"no calling environment"))?;
+                    self.vm.set_closure_environment(function, table);
                 }
             }
             return Ok(());
         }
         if index <= -10003 {
-            let id = self
-                .function()
-                .ok_or_else(|| self.error(b"invalid native capture index"))?;
+            let Some(Value::Native(id)) = self.function() else {
+                return Err(self.error(b"invalid native capture index"));
+            };
             let i = NativeStack::capture_index(index)
                 .ok_or_else(|| self.error(b"invalid native capture index"))?;
             return self.vm.set_native_capture(id, i, value);

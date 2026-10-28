@@ -555,12 +555,18 @@ impl Vm {
         Ok(None)
     }
     pub(super) fn trim_loads(&mut self) {
+        self.trim_library_loads();
+        let active: Vec<_> = self
+            .frames
+            .iter()
+            .enumerate()
+            .filter_map(|(i, f)| {
+                (protected(self.body_kind(i, f.function)) && matches!(f.pc, 1 | 3)).then_some(i)
+            })
+            .collect();
         let files = &mut self.io.files;
         self.loads.retain(|j| {
-            let keep = self
-                .frames
-                .get(j.owner)
-                .is_some_and(|f| protected(f.function) && matches!(f.pc, 1 | 3));
+            let keep = active.contains(&j.owner);
             if !keep
                 && let Some(file) = j.file
                 && file.owned
@@ -586,11 +592,11 @@ impl Vm {
             })
             .sum()
     }
-    pub(super) fn load_step(&mut self, frame: Frame) -> Result<Option<usize>, Error> {
+    pub(super) fn load_step(&mut self, mut frame: Frame) -> Result<Option<usize>, Error> {
         let owner = self.frames.len() - 1;
         let base = frame.base;
         if frame.pc == 2 {
-            return Ok(self.return_frame(frame, base, 2));
+            return Ok(self.return_frame(frame, base + 3, 2));
         }
         if frame.pc == 0 {
             let args = frame.vararg_start - 1;
@@ -617,13 +623,20 @@ impl Vm {
             self.registers[base] = reader;
             self.registers[base + 1] = supplied_name;
             self.registers[base + 2] = reserved;
-            self.frames[owner].vararg_count = 0;
-            self.frames[owner].pc = 1;
+            frame.vararg_start = base;
+            frame.vararg_count = 3;
+            frame.pc = 1;
+            self.frames[owner] = frame;
             let source = self.take_buffer(0);
             let before = self.loads.capacity();
             self.loads.push(Loading {
                 owner,
-                parser: crate::parser::Parser::with_native_depth(self.native_depth(owner + 1)),
+                parser: {
+                    let mut parser =
+                        crate::parser::Parser::with_native_depth(self.native_depth(owner + 1));
+                    parser.enable_native_roots();
+                    parser
+                },
                 decoder: None,
                 native_depth: self.native_depth(owner + 1),
                 binary_mode: false,
@@ -632,7 +645,7 @@ impl Vm {
                 awaiting: false,
                 closed: false,
                 probed: false,
-                native: None,
+                native: Some(NativeRoots::default()),
                 file: None,
             });
             self.gc_note_control((self.loads.capacity() - before) * std::mem::size_of::<Loading>());
@@ -645,14 +658,18 @@ impl Vm {
             // its first character. An empty first probe is not sticky EOF.
             let first = !self.loads[index].probed;
             self.loads[index].probed = true;
-            let result = self.registers[base + 3];
+            let result = self.registers[base + frame.argc()];
             let result = if let Value::Number(n) = result {
                 self.intern(format_number(n).as_slice())
             } else {
                 result
             };
             match result {
-                Value::Nil => self.loads[index].closed = !first,
+                Value::Nil => {
+                    // generic_reader leaves its EOF nil on the parser stack.
+                    self.loads[index].closed = !first;
+                    frame.vararg_count += 1;
+                }
                 Value::String(id) => {
                     self.registers[base + 2] = result;
                     let bytes = &self.strings.bytes[slot_index(id.0)];
@@ -676,12 +693,17 @@ impl Vm {
                     ));
                 }
             }
+            self.registers.truncate(base + frame.argc());
         }
         let job = &mut self.loads[index];
         let before = job.arena_bytes();
         let parsed = job.resume();
         let growth = job.arena_bytes().saturating_sub(before);
         self.gc_note_control(growth);
+        let mut top = frame.argc();
+        self.apply_native_load_roots(index, base, &mut top, base)?;
+        frame.vararg_count = top as u32;
+        self.frames[owner] = frame;
         let compiled = match parsed {
             Ok(Some(program)) => Some(Ok(program)),
             Err(error) => Some(Err(error)),
@@ -691,10 +713,15 @@ impl Vm {
             match compiled {
                 Ok(program) => {
                     let function = self.load(&program);
+                    self.retain_load_prototypes(index, function);
                     let job = self.loads.pop().expect("completed reader job");
                     self.buffers.push(job.source);
-                    self.registers[base] = Value::Function(function);
-                    return Ok(self.return_frame(frame, base, 1));
+                    let result = base + frame.argc();
+                    self.resize_registers(self.registers.len().max(result + 1));
+                    self.registers[result] = Value::Function(function);
+                    frame.vararg_count += 1;
+                    self.frames[owner] = frame;
+                    return Ok(self.return_frame(frame, result, 1));
                 }
                 Err(error) => {
                     let message = message(
@@ -710,10 +737,28 @@ impl Vm {
         }
         self.check_c_call()?;
         self.loads[index].awaiting = true;
-        self.registers[base + 3] = self.registers[base];
-        if let Some(actual) = self.start_call(base + 3, 0, 1, false)? {
-            self.finish_call(base + 3, actual, 1);
+        let call = base + frame.argc();
+        self.resize_registers(self.registers.len().max(call + 1));
+        self.registers[call] = self.registers[base];
+        if let Some(actual) = self.start_call(call, 0, 1, false)? {
+            self.finish_call(call, actual, 1);
         }
         Ok(None)
+    }
+    pub(super) fn retain_load_prototypes(&mut self, index: usize, function: FunctionId) {
+        let prototypes = std::mem::take(&mut self.loads[index].native.as_mut().unwrap().prototypes)
+            .into_boxed_slice();
+        let closure = &self.functions[slot_index(function.0)];
+        let entry = closure.prototype;
+        let loaded = closure.program;
+        assert_eq!(
+            prototypes.len(),
+            self.programs[loaded].data.prototypes.len()
+        );
+        let root = prototypes[entry];
+        self.programs
+            .note_alloc(std::mem::size_of_val(prototypes.as_ref()));
+        self.programs[loaded].parser_prototypes = prototypes;
+        self.gc_new_value(Value::ParserPrototype(root));
     }
 }

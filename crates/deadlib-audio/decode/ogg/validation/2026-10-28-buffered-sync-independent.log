@@ -1,0 +1,453 @@
+     Locking 17 packages to highest Rust 1.97 compatible versions
+   Compiling autocfg v1.5.1
+   Compiling byteorder v1.5.0
+   Compiling deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\buffered-sync-independent-20261028\ogg)
+   Compiling bytemuck v1.25.2
+   Compiling bitflags v2.13.2
+   Compiling log v0.4.34
+   Compiling smallvec v1.16.4
+   Compiling lazy_static v1.5.1
+   Compiling regex-lite v0.1.9
+   Compiling ogg v0.9.2
+   Compiling num-traits v0.2.19
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\buffered-sync-independent-20261028\vorbis)
+   Compiling num-complex v0.4.6
+   Compiling symphonia-core v0.6.1
+   Compiling symphonia-metadata v0.6.1
+   Compiling symphonia-common v0.6.1
+   Compiling symphonia-format-ogg v0.6.1
+   Compiling symphonia-codec-vorbis v0.6.1
+   Compiling symphonia v0.6.1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 17.17s
+     Running unittests src\lib.rs (target\debug\deps\deadlib_audio_decode_ogg-682f74656a839798.exe)
+
+running 2 tests
+test crc::tests::every_byte_table_power_matches_the_bitwise_polynomial ... ok
+test crc::tests::eight_byte_updates_match_bitwise_across_alignment_tails_and_seeded_splits ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+
+     Running tests\compatibility.rs (target\debug\deps\compatibility-4e3769ab2b527c0b.exe)
+
+running 3 tests
+test final_decrease_is_explicit_and_excluded_from_ordered_landmarks ... ok
+test capture_and_reset_preserve_the_selected_validation_flags ... ok
+test zero_span_granule_is_explicit_and_never_updates_the_timeline ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\container.rs (target\debug\deps\container-aface013ea5674da.exe)
+
+running 13 tests
+test continued_zero_terminator_and_granule_on_last_complete_packet ... ok
+test multiplexed_groups_and_chains_and_nil_eos ... ok
+test borrowed_packets_do_not_copy_and_finish_emits_nil_eos ... ok
+test page_and_physical_validation_reject_malformed_data ... ok
+test recovery_finds_capture_inside_false_page_and_after_crc_error ... ok
+test unfinished_input_limits_and_terminal_error_states ... ok
+test crc_matches_independent_bitwise_polynomial ... ok
+test native_writer_packets_and_metadata_match_reference_reader ... ok
+test reference_writer_packets_match_native_reader ... ok
+test recovery_scans_batches_and_preserves_split_captures_and_read_latency ... ok
+test deterministic_random_packets_differential ... ok
+test incremental_every_header_split_and_small_body_chunks ... ok
+test partial_interrupted_reads_and_writes ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 11.01s
+
+     Running tests\libogg.rs (target\debug\deps\libogg-12d0676b544286ef.exe)
+
+running 3 tests
+test libogg_bidirectional_packet_and_page_parity ... ignored, requires independently built libogg oracle; see tests/oracle/README.md
+test libogg_historical_vorbis_pages_and_packets ... ignored, requires libogg oracle and pinned DEADLIB_OGG_EXTERNAL_CORPUS
+test libogg_local_corpus ... ignored, requires libogg oracle and DEADLIB_OGG_CORPUS directory
+
+test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\seeking.rs (target\debug\deps\seeking-9782e41e2d9bc3b8.exe)
+
+running 15 tests
+test libogg_capture_at_every_generated_page_boundary ... ignored, requires independently built libogg oracle
+test libogg_local_corpus_indexed_captures ... ignored, requires libogg oracle and DEADLIB_OGG_CORPUS
+test capture_at_empty_continued_page_keeps_skipping_until_packet_end ... ok
+test paused_capture_counts_compatibility_once_at_page_completion ... ok
+test paused_capture_rejects_changed_pages_and_validates_tail_before_output ... ok
+test current_page_reborrows_verified_storage_and_is_cleared_on_seek_or_eof ... ok
+test index_callback_errors_stop_observations_and_crc_failure_leaves_only_provisional_events ... ok
+test index_and_capture_reject_corruption_truncation_holes_and_limits ... ok
+test unindexed_capture_discards_only_unavailable_initial_fragment ... ok
+test index_events_share_exact_demux_packets_and_finish_every_page_in_physical_order ... ok
+test indexed_granules_and_packet_boundaries_match_complete_demux ... ok
+test every_indexed_page_capture_and_repeated_seek_returns_exact_suffix ... ok
+test indexless_search_uses_absolute_64_bit_offsets_and_fenced_reads ... ok
+test paused_capture_matches_demux_from_every_page_including_spans_and_mux ... ok
+test indexless_bisection_matches_linear_landmarks_in_all_streams ... ok
+
+test result: ok. 13 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 3.03s
+
+     Running tests\synchronization.rs (target\debug\deps\synchronization-8914b16088839822.exe)
+
+running 7 tests
+test all_transport_versions_flags_and_lacing_counts_match_reference ... ignored, requires independent libogg raw header/lacing oracle
+test bounded_cached_reads_repeated_seeks_and_io_errors_match_reference ... ignored, requires independent libogg bounded read/seek oracle
+test buffered_sync_and_mixed_page_polling_match_libogg ... ignored, requires independent libogg synchronization oracle
+test regenerate_sync_state_golden ... ignored, manual external-oracle golden regeneration
+test append_limits_and_offset_errors_preserve_unread_data ... ok
+test transport_version_flags_and_nested_captures_are_explicit ... ok
+test retained_sync_state_golden ... ok
+
+test result: ok. 3 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src\lib.rs (target\debug\deps\deadlib_audio_decode_vorbis-15db6bec60daabbd.exe)
+
+running 46 tests
+test decoder::synthesis::reference_tests::regenerate_synthesis_state_golden ... ignored, manual external-oracle golden regeneration
+test decoder::synthesis::reference_tests::synthesis_captured_seek_schedules_match_reference ... ignored, requires captured reference vorbisfile DSP schedules
+test decoder::synthesis::reference_tests::synthesis_direct_windows_counter_wrap_and_ieee_match_reference ... ignored, requires independent libvorbis overlap and counter oracle
+test decoder::synthesis::reference_tests::synthesis_packet_schedules_track_read_and_restart_match_reference ... ignored, requires independent libvorbis synthesis state oracle
+test decoder::synthesis::reference_tests::synthesis_queue_schedule_witness ... ignored, requires unmodified libvorbis synthesis/track/read oracle
+test floor::floor_one_tests::floor_one_guard_witness ... ignored, requires external libvorbis floor-one backend
+test floor::floor_one_tests::floor_one_guards_eof_and_prediction_match_reference ... ignored, requires external libvorbis floor-one backend
+test floor::floor_one_tests::regenerate_floor1_component_golden ... ignored, manual golden regeneration; requires external libvorbis floor-one backend
+test floor::reference_tests::floor_zero_components_match_reference_callbacks ... ignored, requires external libvorbis floor0 callbacks
+test floor::reference_tests::regenerate_floor0_reference_goldens ... ignored, manual golden regeneration; requires external libvorbis floor0 callbacks
+test codebook::prefix_tests::prefix_memory_is_optional_and_logical_node_limits_are_unchanged ... ok
+test ogg::eos_reference::regenerate_eos_packet_goldens ... ignored, manual external-oracle golden regeneration
+test ogg::eos_reference::timed_eos_packets_and_counter_boundaries_match_reference ... ignored, requires external unmodified libvorbis synthesis
+test residue::reference_tests::partial_vector_additions_match_reference_callbacks ... ignored, requires external libvorbis vector-add callbacks
+test decoder::tests::windows_obey_complementary_slopes_and_hybrid_bounds ... ok
+test residue::reference_tests::regenerate_residue_tail_vector_golden ... ignored, manual golden regeneration; requires external libvorbis vector-add callbacks
+test floor::tests::floor0_odd_even_products_match_closed_form_at_dc ... ok
+test floor::tests::empty_floor_books_preserve_following_channel_bits ... ok
+test decoder::tests::inverse_coupling_covers_all_signs_and_channel_orders ... ok
+test residue::tests::residue_interleaves_clips_and_propagates_truncation ... ok
+test floor::tests::render_integer_line_and_prediction_use_spec_rounding ... ok
+test floor::floor_one_tests::floor_one_published_guard_and_eof_remain_default ... ok
+test ogg::eos_reference::metadata_block_query_does_not_require_synthesis_window_flags ... ok
+test decoder::synthesis::reference_tests::synthesis_memory_budget_and_finite_failure_are_transactional ... ok
+test floor::tests::floor0_high_order_gain_keeps_wide_range_fallback ... ok
+test residue::reference_tests::reference_classword_eof_preserves_reader_state ... ok
+test setup::tests::floor1_sixty_five_point_limit_is_a_format_constraint ... ok
+test residue::tests::empty_vector_stage_preserves_earlier_additions_later_stages_and_reader ... ok
+test floor::tests::floor0_invalid_selectors_leave_following_floor_bits_available ... ok
+test residue::tests::residue_zero_truncation_keeps_only_completed_partitions ... ok
+test encoder::tests::first_stage_words_decode_all_entries_with_exact_lengths ... ok
+test floor::tests::unsigned_amplitude_default_and_reference_integer_edges_stay_separate ... ok
+test residue::tests::stageless_residue_leaves_packet_and_output_untouched ... ok
+test residue::tests::surplus_classwords_keep_completed_residue_and_following_bits ... ok
+test codebook::prefix_tests::cardinality_bound_matches_checked_integer_powers_including_zero_entries ... ok
+test residue::tests::residue_two_scatter_covers_pairs_generic_interleaves_and_truncation ... ok
+test transform::tests::analysis_window_and_synthesis_overlap_reconstruct_unquantized_pcm ... ok
+test codebook::prefix_tests::lookup_matches_tree_at_every_prefix_alignment_and_packet_tail ... ok
+test floor::floor_one_tests::floor_one_components_match_retained_reference ... ok
+test transform::tests::fft_imdct_matches_direct_cosine_for_all_vorbis_sizes ... ok
+test residue::reference_tests::partial_vector_additions_match_retained_reference ... ok
+test floor::reference_tests::floor_zero_components_match_retained_reference ... ok
+test transform::tests::fft_mdct_matches_direct_analysis_at_every_legal_size ... ok
+test decoder::synthesis::reference_tests::synthesis_state_retained_reference_golden ... ok
+test ogg::eos_reference::eos_packet_and_counter_goldens ... ok
+test floor::reference_tests::floor_zero_bark_maps_match_retained_reference ... ok
+
+test result: ok. 32 passed; 0 failed; 14 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+     Running tests\allocations.rs (target\debug\deps\allocations-607a0999e0f020e0.exe)
+
+running 1 test
+test repeated_packet_decode_reset_and_in_page_mapping_allocate_nothing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests\book_limit_streams.rs (target\debug\deps\book_limit_streams-7dab2626fc743f40.exe)
+
+running 2 tests
+test unused_extent_boundary_books_preserve_reference_pcm ... ignored, requires external libvorbis oracle
+test extent_limit_survives_ogg_reset_and_indexed_setup_reparse ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.47s
+
+     Running tests\book_limits.rs (target\debug\deps\book_limits-6765e823b0747b8a.exe)
+
+running 5 tests
+test codebook_extent_decisions_and_positions_match_libvorbis ... ignored, requires external libvorbis oracle
+test regenerate_codebook_extent_golden ... ignored, manual golden regeneration; requires external libvorbis oracle
+test whole_setup_extent_acceptance_matches_libvorbis_initialization ... ignored, requires external libvorbis oracle
+test extent_limit_precedes_lengths_entry_limits_and_allocation ... ok
+test codebook_extent_decisions_and_positions_match_retained_reference ... ok
+
+test result: ok. 2 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 26.61s
+
+     Running tests\codebook_compatibility.rs (target\debug\deps\codebook_compatibility-2261d0ce1d73bc34.exe)
+
+running 9 tests
+test empty_codebook_consumers_match_libvorbis ... ignored, requires external libvorbis oracle
+test empty_floor_zero_preserves_reference_ieee_propagation_after_later_floor_eof ... ignored, requires external libvorbis oracle
+test reference_nonfinite_cases_preserve_counts_and_ieee_classes ... ignored, requires external libvorbis oracle and DEADLIB_VORBIS_FLOOR0
+test regenerate_degenerate_book_golden ... ignored, manual golden regeneration; requires external libvorbis oracle
+test zero_dimension_scalar_books_match_libvorbis ... ignored, requires external libvorbis oracle
+test degenerate_books_retain_context_and_resource_validation ... ok
+test empty_book_policy_preserves_reader_state_and_zero_dimension_scalar_codes ... ok
+test degenerate_book_consumers_match_retained_libvorbis_pcm ... ok
+test codebook_policies_survive_streaming_reset_and_both_seek_strategies ... ok
+
+test result: ok. 4 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 0.53s
+
+     Running tests\codebook_float_packets.rs (target\debug\deps\codebook_float_packets-98ab78f709e02722.exe)
+
+running 4 tests
+test custom_float_packet_prefixes_and_recovery_match_reference ... ignored, requires external libvorbis oracle
+test regenerate_codebook_float_pcm_golden ... ignored, manual golden regeneration; requires external libvorbis oracle
+test custom_float_pcm_matches_retained_reference ... ok
+test codebook_policy_survives_ogg_reset_and_both_seek_strategies ... ok
+
+test result: ok. 2 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running tests\codebook_floats.rs (target\debug\deps\codebook_floats-817b5db1aadef819.exe)
+
+running 8 tests
+test custom_float_boundaries_match_reference_vq ... ignored, requires external libvorbis oracle
+test custom_float_vq_matrix_matches_reference_values_and_codewords ... ignored, requires external libvorbis oracle
+test every_custom_float_exponent_matches_reference_unpack ... ignored, requires external libvorbis oracle
+test reference_byte_guard_decisions_and_positions_match_reference ... ignored, requires external libvorbis oracle
+test regenerate_codebook_float_golden ... ignored, manual golden regeneration; requires external libvorbis oracle
+test custom_float_defaults_retain_full_published_range ... ok
+test published_bit_bounds_and_reference_byte_guards_stay_distinct ... ok
+test custom_float_unpack_bounds_and_vq_match_retained_reference ... ok
+
+test result: ok. 3 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 5.86s
+
+     Running tests\concealment.rs (target\debug\deps\concealment-dedb166de0d572a9.exe)
+
+running 4 tests
+test every_fixture_audio_bit_flip_and_following_recovery_match_libvorbis ... ignored, requires external libvorbis oracle
+test every_fixture_packet_byte_prefix_and_following_recovery_match_libvorbis ... ignored, requires external libvorbis oracle
+test historical_floor_zero_audio_bit_flips_check_finite_reference_and_recovery ... ignored, requires external libvorbis oracle and DEADLIB_VORBIS_FLOOR0
+test historical_floor_zero_packet_prefixes_and_recovery_match_libvorbis ... ignored, requires external libvorbis oracle and DEADLIB_VORBIS_FLOOR0
+
+test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\configuration_parity.rs (target\debug\deps\configuration_parity-7d77e79093f6e6e0.exe)
+
+running 5 tests
+test all_mode_counts_and_unused_slots_match_libvorbis_with_recovery ... ignored, requires external libvorbis oracle
+test regenerate_synthetic_setup_golden ... ignored, manual golden regeneration; requires external libvorbis oracle
+test residue_classwords_and_stageless_submaps_match_libvorbis_with_recovery ... ignored, requires external libvorbis oracle
+test synthetic_setup_regressions_match_retained_libvorbis_pcm ... ok
+test unused_modes_preserve_ogg_streaming_counts_and_seek_positions ... ok
+
+test result: ok. 2 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests\encoding.rs (target\debug\deps\encoding-e938d26c0101ba94.exe)
+
+running 9 tests
+test forward_mdct_matches_libvorbis_at_all_legal_sizes ... ignored, requires independently built libvorbis transform oracle
+test libvorbisfile_pcm_seek_zero_loses_first_block_when_priming_packet_spans_pages ... ignored, requires pinned libvorbisfile 1.3.7 oracle
+test native_encoder_codebooks_match_libvorbis_for_every_entry ... ignored, requires independently built libvorbis codebook oracle
+test native_encoding_is_accepted_by_libvorbis_with_exact_counts_and_pcm_parity ... ignored, requires independently built libvorbisfile oracle
+test raw_encoder_argument_errors_callback_failures_limits_and_reset ... ok
+test ogg_encoder_seek_positions_and_write_failures_are_explicit ... ok
+test native_encoded_setup_pcm_lengths_chunking_and_precision ... ok
+test encoder_handles_channel_range_silence_dc_impulses_and_precision_stages ... ok
+test native_generated_packets_match_symphonia_without_channel_coupling ... ok
+
+test result: ok. 5 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.83s
+
+     Running tests\eos_clamping.rs (target\debug\deps\eos_clamping-2e7220d4b22f2ec2.exe)
+
+running 8 tests
+test bounded_eos_layouts_and_discarded_packets_match_reference ... ignored, requires unseekable libvorbisfile oracle
+test bounded_eos_metadata_and_seek_difference_inventory ... ignored, requires real libvorbisfile seek status oracle
+test real_song_and_ffmpeg_eos_counts_match_reference_without_repair ... ignored, requires pinned historical corpus and libvorbisfile oracle
+test reference_eos_clamping_witness ... ignored, requires external libvorbisfile oracle
+test regenerate_eos_stream_golden ... ignored, manual external-oracle golden regeneration
+test eos_reference_is_explicit_and_separate_from_indexed_endpoint_trimming ... ok
+test eos_stream_pcm_and_declared_duration_golden ... ok
+test eos_stream_pull_push_and_reset_preserve_counts_and_bits has been running for over 60 seconds
+test eos_stream_pull_push_and_reset_preserve_counts_and_bits ... ok
+
+test result: ok. 3 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 100.90s
+
+     Running tests\floor_one_guards.rs (target\debug\deps\floor_one_guards-f44790a011b288c9.exe)
+
+running 4 tests
+test floor_one_packet_guards_prefixes_and_recovery_match_reference ... ignored, requires external libvorbis oracle
+test regenerate_floor1_pcm_golden ... ignored, manual golden regeneration; requires external libvorbis oracle
+test floor_one_pcm_matches_retained_reference ... ok
+test floor_one_policy_survives_reset_streaming_and_both_seek_strategies ... ok
+
+test result: ok. 2 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.80s
+
+     Running tests\floor_zero_parameters.rs (target\debug\deps\floor_zero_parameters-6d04824988831cff.exe)
+
+running 7 tests
+test direct_floor_zero_probe_reports_amplitude_and_bark_geometry ... ignored, requires external libvorbis oracle
+test every_nonfinite_spectrum_position_produces_reference_nan_blocks ... ignored, requires external libvorbis oracle
+test floor_zero_parameter_pcm_and_prefix_recovery_match_libvorbis ... ignored, requires external libvorbis oracle
+test regenerate_floor0_pcm_golden ... ignored, manual golden regeneration; requires external libvorbis oracle
+test wide_floor_zero_amplitudes_match_libvorbis ... ignored, requires external libvorbis oracle
+test floor_zero_pcm_matches_retained_reference ... ok
+test floor_zero_policy_survives_ogg_reset_and_both_seek_strategies ... ok
+
+test result: ok. 2 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 0.49s
+
+     Running tests\headers.rs (target\debug\deps\headers-c74ef8577c903100.exe)
+
+running 2 tests
+test local_corpus_headers_match_symphonia ... ignored, requires DEADLIB_VORBIS_CORPUS directory of single-stream Ogg Vorbis files
+test generated_stereo_and_eight_channel_headers_match_symphonia ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\historical.rs (target\debug\deps\historical-c31895994e8ed6f2.exe)
+
+running 3 tests
+test ffmpeg_endpoint_exceeds_independent_raw_synthesis ... ignored, requires pinned external corpus and libvorbisfile oracle
+test historical_floor_zero_and_aotuv_surround_pcm_streaming_reset_and_seeks ... ignored, requires pinned external corpus and libvorbisfile oracle
+test known_bad_endpoints_sequence_gaps_and_game_crcs_stay_rejected ... ignored, requires pinned external malformed corpus
+
+test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\legacy.rs (target\debug\deps\legacy-1975f175e1705a79.exe)
+
+running 3 tests
+test historical_and_itg_song_pcm_counts_and_native_seeks ... ignored, requires pinned external corpus and libvorbisfile oracle
+test zero_span_header_quirk_works_in_streaming_indexed_and_reset_paths ... ok
+test indexed_endpoint_policy_clips_across_packets_and_preceding_pages ... ok
+
+test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.72s
+
+     Running tests\libvorbis.rs (target\debug\deps\libvorbis-89037235490246a7.exe)
+
+running 2 tests
+test libvorbis_generated_header_codebook_vq_and_huffman_parity ... ignored, requires external libvorbis oracle; see tests/oracle/README.md
+test libvorbis_local_corpus_headers_codebooks_and_huffman ... ignored, requires external libvorbis oracle and DEADLIB_VORBIS_CORPUS
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\lifecycle.rs (target\debug\deps\lifecycle-907e3e17a9a92b46.exe)
+
+running 4 tests
+test window_transitions_produce_exact_raw_frame_positions ... ok
+test rejected_packets_preserve_overlap_and_limits_fail_before_use ... ok
+test every_short_packet_prefix_is_bounded_and_reset_restores_synthesis ... ok
+test seeded_malformed_packets_cannot_escape_buffers_or_emit_nonfinite_pcm ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.53s
+
+     Running tests\ogg_mapping.rs (target\debug\deps\ogg_mapping-e24b538048292eb8.exe)
+
+running 12 tests
+test libvorbisfile_local_corpus_final_counts_and_pcm ... ignored, requires libvorbisfile oracle and DEADLIB_VORBIS_CORPUS
+test libvorbisfile_original_edited_and_chained_streams ... ignored, requires independently built libvorbisfile oracle
+test invalid_mapping_headers_and_granules_are_terminal ... ok
+test fragmented_io_truncation_terminal_errors_and_limits ... ok
+test symphonia_0_6_1_retains_negative_timestamp_initial_samples ... ok
+test comment_truncation_is_nonfatal_and_large_comments_span_pages ... ok
+test original_fixtures_trim_to_exact_source_sample_counts ... ok
+test chains_and_multiplexing_keep_independent_rates_layouts_and_overlaps ... ok
+test symphonia_full_file_counts_pcm_and_timestamps ... ok
+test push_boundaries_and_reset_match_pull_output ... ok
+test empty_and_single_page_audio_have_unambiguous_tail_counts ... ok
+test initial_trim_broadcast_offset_and_final_trim_preserve_correct_pcm ... ok
+
+test result: ok. 10 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+     Running tests\pcm.rs (target\debug\deps\pcm-b37c19b492f15dff.exe)
+
+running 8 tests
+test generated_pcm_matches_libvorbis ... ignored, requires external libvorbis oracle
+test historical_floor0_raw_pcm_matches_independent_decoders ... ignored, requires libvorbis oracle and DEADLIB_VORBIS_FLOOR0 historical file
+test local_corpus_pcm_matches_libvorbis_and_symphonia ... ignored, requires external libvorbis oracle and DEADLIB_VORBIS_CORPUS
+test mdct_matches_libvorbis_at_all_sizes ... ignored, requires external libvorbis oracle
+test regenerate_surround_pcm_golden ... ignored, explicit golden regeneration; requires oracle and DEADLIB_VORBIS_GOLDEN_OUTPUT
+test discarded_long_packet_uses_actual_neighbor_windows_and_matches_libvorbis_golden ... ok
+test symphonia_061_dependent_coupling_disagreement_is_explicit ... ok
+test generated_pcm_matches_symphonia_including_priming_and_reset ... ok
+
+test result: ok. 3 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests\primitives.rs (target\debug\deps\primitives-cd793d7b2a4e6416.exe)
+
+running 11 tests
+test bitpacking_known_wire_values_and_sticky_end_of_packet ... ok
+test comments_preserve_duplicates_binary_vectors_and_limits ... ok
+test codebook_lookup_types_and_sequence_vectors ... ok
+test identification_ranges_hints_and_channel_order ... ok
+test huffman_entry_order_matches_specification_example ... ok
+test huffman_sparse_singleton_deep_and_invalid_trees ... ok
+test sequence_vectors_accumulate_the_returned_f32_value ... ok
+test bitpacking_matches_independent_bit_indexer_for_all_widths_and_alignments ... ok
+test setup_both_floors_all_residues_modes_and_truncation ... ok
+test huffman_assignment_matches_exhaustive_prefix_oracle ... ok
+test mixed_lookahead_and_reads_preserve_cache_carries_and_every_packet_tail ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\residue_geometry.rs (target\debug\deps\residue_geometry-6f63d72f0830fab2.exe)
+
+running 5 tests
+test mixed_residue_books_submaps_and_channel_masks_match_libvorbis ... ignored, requires external libvorbis oracle
+test regenerate_residue_geometry_golden ... ignored, manual golden regeneration; requires external libvorbis oracle
+test unaligned_residue_two_matches_libvorbis ... ignored, requires external libvorbis oracle
+test unaligned_residue_reference_layout_matches_retained_pcm ... ok
+test residue_layout_is_preserved_by_ogg_reset_and_both_seek_strategies ... ok
+
+test result: ok. 2 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.52s
+
+     Running tests\residue_tails.rs (target\debug\deps\residue_tails-06eb228e853793ac.exe)
+
+running 6 tests
+test partial_residue_packet_prefixes_and_later_submaps_match_reference ... ignored, requires external libvorbis oracle
+test reference_accepts_partial_partitions_and_inverted_ranges ... ignored, requires external libvorbis oracle
+test regenerate_residue_tail_pcm_golden ... ignored, manual golden regeneration; requires external libvorbis oracle
+test reference_residue_ranges_preserve_strict_defaults_and_metadata ... ok
+test partial_residue_pcm_matches_retained_reference ... ok
+test residue_policy_survives_ogg_reset_and_both_seek_strategies ... ok
+
+test result: ok. 3 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests\seeking.rs (target\debug\deps\seeking-96aa15bcb908fc12.exe)
+
+running 17 tests
+test historical_floor0_repacketized_into_strict_ogg_seeks_correctly ... ignored, requires external historical floor-zero file and libvorbisfile oracle
+test libvorbisfile_1_3_7_broadcast_seek_reports_incorrect_position ... ignored, requires independently built libvorbisfile oracle
+test libvorbisfile_local_corpus_repeated_sample_accurate_seeks ... ignored, requires libvorbisfile oracle and DEADLIB_VORBIS_CORPUS
+test libvorbisfile_repeated_seeks_fixtures_edits_and_mixed_rate_chains ... ignored, requires independently built libvorbisfile oracle
+test one_sample_stream_has_exact_seek_boundaries ... ok
+test terminal_io_errors_recover_by_seek_including_after_stream_switch ... ok
+test empty_stream_end_seeks_and_argument_and_resource_errors ... ok
+test raw_packet_seek_preroll_preserves_absolute_untrimmed_positions ... ok
+test seeking_preserves_nonfatal_and_spanning_metadata ... ok
+test symphonia_accurate_seek_with_packet_preroll_and_timestamp_discard ... ok
+test chained_multiplexed_streams_can_be_selected_in_arbitrary_order ... ok
+test packet_mode_preroll_handles_spanning_audio_and_exact_index_budgets ... ok
+test index_construction_reads_each_byte_once_with_fragmented_input_and_one_initial_rewind ... ok
+test every_frame_of_short_fixtures_matches_sequential_output ... ok
+test packet_reads_and_mixed_page_reads_preserve_exact_suffixes_and_reset_pauses ... ok
+test edited_offsets_long_spans_discarded_packets_and_nil_eos_seek_exactly ... ok
+test compact_packet_modes_reduce_preroll_and_preserve_both_index_strategies ... ok
+
+test result: ok. 13 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 5.71s
+
+     Running tests\upstream.rs (target\debug\deps\upstream-ef48c03bae4cf2f7.exe)
+
+running 1 test
+test xiph_upstream_coded_grid_pcm_streaming_and_seeks ... ignored, requires pinned upstream test outputs and libvorbisfile oracle
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests deadlib_audio_decode_ogg
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests deadlib_audio_decode_vorbis
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\buffered-sync-independent-20261028\ogg)
+deadlib-audio-decode-vorbis v0.1.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\buffered-sync-independent-20261028\vorbis)
+└── deadlib-audio-decode-ogg v0.1.0 (C:\GitHub\deadsync\target\deadlib-audio-reference\buffered-sync-independent-20261028\ogg)
+Independent workspace and evidence retained at C:\GitHub\deadsync\target\deadlib-audio-reference\buffered-sync-independent-20261028

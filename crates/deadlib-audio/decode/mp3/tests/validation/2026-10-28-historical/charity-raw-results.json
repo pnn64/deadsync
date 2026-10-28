@@ -1,0 +1,73 @@
+{
+  "limits": {
+    "rms": 2e-06,
+    "max": 2e-05
+  },
+  "records": [
+    {
+      "case": "01 - Charity Case.mp3",
+      "sha256": "937858498fd1e92eaa1c47238f7cf4a67bc5eb8b8428d0358845b07d85a38469",
+      "frames": 7369,
+      "comparisons": {
+        "mad": {
+          "samples": 16978176,
+          "rms": 1.2199265480627403e-07,
+          "max": 1.3113021850585938e-06
+        },
+        "mpg123": {
+          "samples": 16978176,
+          "rms": 8.661756341301561e-08,
+          "max": 2.384185791015625e-06
+        },
+        "symphonia": {
+          "samples": 16978176,
+          "rms": 1.1153184762769354e-07,
+          "max": 1.4901161193847656e-06
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-charity-initial/01 - Charity Case-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-charity-initial/01 - Charity Case-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-charity-initial/01 - Charity Case-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-probe/01 - Charity Case.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/historical-charity-initial/01 - Charity Case-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    }
+  ]
+}

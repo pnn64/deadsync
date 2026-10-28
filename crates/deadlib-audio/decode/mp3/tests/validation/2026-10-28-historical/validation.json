@@ -1,0 +1,41 @@
+{
+  "passed": true,
+  "scope": "Two full historical music files against three PCM/file references with exact counts/seeks; two independently agreed strict errors and complete explicit-recovery regression on damaged music. Layer II is explicitly excluded from Layer III coverage.",
+  "valid_music_files": 2,
+  "strict_rejection_files": 2,
+  "native_valid_seek_checks": 52526,
+  "native_recovered_seek_checks": 50588,
+  "reference_seek_checks": 60,
+  "raw_sample_values": 40216320,
+  "source_sha256": {
+    "src/decoder.rs": "d58465071cc8bba2bbfd4ca4d81a063d36370377d4dcc8c605334b3e294d1cc1",
+    "src/reader.rs": "052b5fde2727cefb8ce951fc1ed3a8c2e87b5a5bc08d7fcd0685f81225c5b2d2",
+    "src/stream.rs": "1b32b8a6bd9f44f3dd5bb228846e51b637c6450ae713eb7ec931f58cb773ce2b",
+    "src/indexed.rs": "a726fd3a7c1fa1730519b409623a4c29e517218e40957f842f460ab035c52b0e",
+    "src/scalefactors.rs": "5f4815b8b828d8378b61ef92127b11d1b3cf2b986522269ac571e92bf851be8a",
+    "src/spectral.rs": "9333a66334c0d4a5c026810055b12c30d3206ea2ddc5af2aa89803fac9ee6ab2",
+    "examples/file.rs": "704202ba05489350df768ac801aa87dd762b155ede91e27a0b408828e9386218",
+    "examples/stream.rs": "42bb64693faa4c05efc15ab95d5ecbf11f2b1680b74cd7b9c94b2a5438c9acd8",
+    "tests/reference_historical.py": "769042048a78bf5c19234e5aa85e1ca9feece76b180470c868837e112c8a1d95",
+    "tests/reference_rejections.py": "76cb6b682042c0d35813afd13d38f276550c424b5c2383b33c37b0473866b9be",
+    "tests/fetch_historical.py": "81e7787c365e165b0a782e3acf7ef4d01e1f456e0e88936968d6f85002264e24",
+    "tests/reference_pcm.py": "7dbfb45093c9826b60193616490a01be245adfb929ecb5c9a747b3a3c0b14a58",
+    "tests/data/historical.json": "38ee1705d4130087e75e65eff8af03ff1d9fb06487ad9e805e1208f76ddfb733",
+    "tests/oracle/file.c": "778b0c7add070d3d0f07eb866f4fa1e32ae11fa03e6c8bc5c03571ad377d914f",
+    "tests/oracle/decode.c": "b1ac4f000705e2c490b03cc8949e2b5b599a0b72b8ed46c727ddc179a8175acd"
+  },
+  "report_sha256": {
+    "charity-raw-provenance.json": "cd9eea79ae6404cb2dc28c57ac7673aa87cc7c7d0f52c9552d342f9ea647711f",
+    "charity-raw-results.json": "86aed2f0ebe21a87822ee6d6eeb5410416c34b7bb182b545bc27c03861a3a099",
+    "Ed_Rush_-_Sabotage-1-summary.log": "84acf3d0c8c8a89e72e3e2d58655d79f50d1becabf99c612def6698b124207f5",
+    "Ed_Rush_-_Sabotage-17-summary.log": "84acf3d0c8c8a89e72e3e2d58655d79f50d1becabf99c612def6698b124207f5",
+    "Ed_Rush_-_Sabotage-4096-summary.log": "84acf3d0c8c8a89e72e3e2d58655d79f50d1becabf99c612def6698b124207f5",
+    "file-provenance.json": "d9c9c5c7e97e9312ca1a8408d3ae2378bc0eee4223d2e121b675616c594a675a",
+    "file-results.json": "b554c52a15b2465e30a4b0a50dd216acfbdc6d3a0b55f78ea9513124abb61e45",
+    "recovery-audit.json": "59a939246ca0fa1f482f7caebad1382395f3e5f576a97e38e2d2b168db7e5757",
+    "rejections-provenance.json": "8ca70db1e2605e4b38bb257463a46f23f93c69d64f01dc7832d0fa660c5f97ea",
+    "rejections-results.json": "5e5b1d7671444824dc2c3f2aa91015899f63ece77fbdb18af25e7c61e6e8d3dd",
+    "silent-raw-provenance.json": "cd9eea79ae6404cb2dc28c57ac7673aa87cc7c7d0f52c9552d342f9ea647711f",
+    "silent-raw-results.json": "320f1daf87b0489c46d804b6e97e3af473b424d39646c53b93598467fc22ce50"
+  }
+}

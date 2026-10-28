@@ -98,9 +98,9 @@ impl Vm {
                         date.fields[index] = n as i32;
                     }
                     date.fields[8] = number;
-                    self.registers[base] =
+                    self.registers[base + 1] =
                         platform::make_time(date)?.map_or(Value::Nil, |n| Value::Number(n as f64));
-                    return Ok(self.return_frame(frame, base, 1));
+                    return Ok(self.return_frame(frame, base + 1, 1));
                 }
                 frame.pc += 1;
             }

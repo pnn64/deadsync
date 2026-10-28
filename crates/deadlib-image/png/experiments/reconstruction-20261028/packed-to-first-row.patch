@@ -1,0 +1,81 @@
+--- a/src/scanline.rs
++++ b/src/scanline.rs
+@@ -145,6 +145,20 @@
+             *sample = (byte >> (8 - DEPTH - n as u8 * DEPTH)) & ((1 << DEPTH) - 1);
+         }
+     }
++}
++
++fn unfilter_first(row: &mut [u8], bpp: usize, filter: u8) -> Result<(), Error> {
++    // With a zero row above, Paeth is Sub and Average uses half of the left byte.
++    let shift = match filter {
++        0 | 2 => return Ok(()),
++        1 | 4 => 0,
++        3 => 1,
++        _ => return Err(Error::Invalid("scanline filter")),
++    };
++    for n in bpp..row.len() {
++        row[n] = row[n].wrapping_add(row[n - bpp] >> shift);
++    }
++    Ok(())
+ }
+ 
+ pub(crate) fn decode(
+@@ -190,21 +204,20 @@
+             continue;
+         }
+         let stride = row_bytes(w, channels, depth)?;
+-        let mut zeros = Vec::new();
+-        reserve(&mut zeros, stride)?;
+-        zeros.resize(stride, 0);
+         for row_index in 0..h {
+             let (before, after) = raw.split_at_mut(position);
+             let filter = *after.first().ok_or(Error::Truncated)?;
+             let row = after.get_mut(1..1 + stride).ok_or(Error::Truncated)?;
+-            let previous = if row_index == 0 {
+-                &zeros
+-            } else if reuse {
+-                &before[(row_index - 1) * stride..row_index * stride]
++            if row_index == 0 {
++                unfilter_first(row, bpp, filter)?;
+             } else {
+-                &before[position - stride..position]
+-            };
+-            unfilter(row, previous, bpp, filter)?;
++                let previous = if reuse {
++                    &before[(row_index - 1) * stride..row_index * stride]
++                } else {
++                    &before[position - stride..position]
++                };
++                unfilter(row, previous, bpp, filter)?;
++            }
+             if reuse {
+                 // Read the next row's predictor from the compacted output.
+                 // Moving this row left cannot overwrite any unread row.
+@@ -468,6 +481,11 @@
+                         assert_eq!(actual, expected);
+                         unfilter(&mut actual, &prev, bpp, filter).unwrap();
+                         assert_eq!(actual, row);
++                        if prev.iter().all(|&v| v == 0) {
++                            let mut first = expected.clone();
++                            unfilter_first(&mut first, bpp, filter).unwrap();
++                            assert_eq!(first, row);
++                        }
+                     }
+                 }
+             }
+@@ -483,6 +501,11 @@
+                 Err(Error::Invalid("scanline filter"))
+             );
+             assert_eq!(row, [0xa5; 17]);
+-        }
+-    }
+-}
++            assert_eq!(
++                unfilter_first(&mut row, 3, filter),
++                Err(Error::Invalid("scanline filter"))
++            );
++            assert_eq!(row, [0xa5; 17]);
++        }
++    }
++}

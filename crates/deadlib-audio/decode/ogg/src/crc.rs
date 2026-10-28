@@ -20,11 +20,11 @@ const fn table() -> [u32; 256] {
     }
     out
 }
-const fn tables() -> [[u32; 256]; 8] {
-    let mut out = [[0; 256]; 8];
+const fn tables() -> [[u32; 256]; 16] {
+    let mut out = [[0; 256]; 16];
     out[0] = table();
     let mut power = 1;
-    while power < 8 {
+    while power < 16 {
         let mut byte = 0;
         while byte < 256 {
             let previous = out[power - 1][byte];
@@ -36,14 +36,34 @@ const fn tables() -> [[u32; 256]; 8] {
     }
     out
 }
-static TABLES: [[u32; 256]; 8] = tables();
+static TABLES: [[u32; 256]; 16] = tables();
 
 #[inline]
 pub(crate) fn update(mut crc: u32, bytes: &[u8]) -> u32 {
-    let (words, tail) = bytes.as_chunks::<8>();
-    for &[a, b, c, d, e, f, g, h] in words {
+    let (words, tail) = bytes.as_chunks::<16>();
+    for &[a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p] in words {
         // CRC is linear: merge its four bytes with the first four inputs,
         // then XOR each byte's remainder after its remaining zero transitions.
+        let state = crc ^ u32::from_be_bytes([a, b, c, d]);
+        crc = TABLES[15][(state >> 24) as usize]
+            ^ TABLES[14][((state >> 16) & 255) as usize]
+            ^ TABLES[13][((state >> 8) & 255) as usize]
+            ^ TABLES[12][(state & 255) as usize]
+            ^ TABLES[11][e as usize]
+            ^ TABLES[10][f as usize]
+            ^ TABLES[9][g as usize]
+            ^ TABLES[8][h as usize]
+            ^ TABLES[7][i as usize]
+            ^ TABLES[6][j as usize]
+            ^ TABLES[5][k as usize]
+            ^ TABLES[4][l as usize]
+            ^ TABLES[3][m as usize]
+            ^ TABLES[2][n as usize]
+            ^ TABLES[1][o as usize]
+            ^ TABLES[0][p as usize];
+    }
+    let (words, tail) = tail.as_chunks::<8>();
+    for &[a, b, c, d, e, f, g, h] in words {
         let state = crc ^ u32::from_be_bytes([a, b, c, d]);
         crc = TABLES[7][(state >> 24) as usize]
             ^ TABLES[6][((state >> 16) & 255) as usize]
@@ -65,9 +85,10 @@ pub fn crc32(bytes: &[u8]) -> u32 {
 }
 
 pub(crate) fn page_crc(bytes: &[u8]) -> u32 {
-    let crc = update(0, &bytes[..22]);
-    let crc = update(crc, &[0; 4]);
-    update(crc, &bytes[26..])
+    // Keep the masked header contiguous so its last word uses the wide update.
+    let mut header = [0; 26];
+    header[..22].copy_from_slice(&bytes[..22]);
+    update(update(0, &header), &bytes[26..])
 }
 
 #[cfg(test)]
@@ -87,17 +108,36 @@ mod tests {
         state
     }
     #[test]
+    fn page_checksum_masks_only_the_checksum_field() {
+        let bytes: Vec<_> = (0usize..65323)
+            .map(|i| (i.wrapping_mul(37) ^ (i >> 3)) as u8)
+            .collect();
+        for offset in 0..16 {
+            for length in (27..=300).chain([4096, 65025, 65307]) {
+                let input = &bytes[offset..offset + length];
+                let mut masked = input.to_vec();
+                masked[22..26].fill(0);
+                let expected = bitwise(0, &masked);
+                assert_eq!(page_crc(input), expected);
+                for checksum in [0, u32::MAX, 0x0123_4567, 0xfedc_ba98] {
+                    masked[22..26].copy_from_slice(&checksum.to_le_bytes());
+                    assert_eq!(page_crc(&masked), expected);
+                }
+            }
+        }
+    }
+    #[test]
     fn every_byte_table_power_matches_the_bitwise_polynomial() {
         for (power, table) in TABLES.iter().enumerate() {
             for (byte, &entry) in table.iter().enumerate() {
-                let mut data = [0; 8];
+                let mut data = [0; 16];
                 data[0] = byte as u8;
                 assert_eq!(entry, bitwise(0, &data[..power + 1]));
             }
         }
     }
     #[test]
-    fn eight_byte_updates_match_bitwise_across_alignment_tails_and_seeded_splits() {
+    fn word_updates_match_bitwise_across_alignment_tails_and_seeded_splits() {
         let bytes: Vec<_> = (0usize..65568)
             .map(|i| (i.wrapping_mul(37) ^ (i >> 3) ^ (i >> 9)) as u8)
             .collect();

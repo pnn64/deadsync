@@ -759,11 +759,14 @@ fn push_leaderboard_pane(
     }
 }
 
+/// `ArrowCloud` boards follow the two `GrooveStats` boards, except the golf
+/// event board, which leads on golf holes.
 fn insert_arrowcloud_panes(fetched: &mut FetchedPlayerLeaderboards, panes: Vec<LeaderboardPane>) {
     let insert_ix = 2.min(fetched.data.panes.len());
     for pane in panes.into_iter().rev() {
         fetched.data.panes.insert(insert_ix, pane);
     }
+    deadsync_score::prioritize_golf_panes(&mut fetched.data.panes);
 }
 
 #[must_use]
@@ -4853,6 +4856,46 @@ mod tests {
         assert_eq!(fetched.data.panes[1].name, "GrooveStats");
         assert_eq!(fetched.data.panes[2].name, "ArrowCloud");
         assert_eq!(fetched.data.panes[3].name, "SRPG");
+    }
+
+    #[test]
+    fn insert_arrowcloud_panes_leads_with_the_golf_board_on_holes() {
+        let mut fetched = fetched_player_leaderboards_from_api(
+            LeaderboardsApiResponse {
+                player1: Some(LeaderboardApiPlayer {
+                    is_ranked: true,
+                    gs_leaderboard: vec![leaderboard_entry(3, "PerfectTaste", 9876.0, true)],
+                    ex_leaderboard: vec![leaderboard_entry(2, "PerfectTaste", 9912.0, true)],
+                    srpg: None,
+                    itl: None,
+                }),
+            },
+            "perfecttaste",
+            false,
+        );
+
+        insert_arrowcloud_panes(
+            &mut fetched,
+            vec![
+                deadsync_score::arrowcloud_leaderboard_pane(
+                    deadsync_score::ArrowCloudPaneKind::Itg,
+                    Vec::new(),
+                    false,
+                ),
+                deadsync_score::arrowcloud_leaderboard_pane(
+                    deadsync_score::ArrowCloudPaneKind::Golf,
+                    Vec::new(),
+                    false,
+                ),
+            ],
+        );
+
+        let names: Vec<_> = fetched.data.panes.iter().map(|pane| pane.name.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["Golf (ArrowCloud)", "GrooveStats", "GrooveStats", "ArrowCloud"],
+            "golf leads; everything else keeps its order"
+        );
     }
 
     #[test]

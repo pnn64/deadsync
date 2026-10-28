@@ -1,0 +1,40 @@
+{
+  "stages": [
+    "round4-base",
+    "window-masks-current"
+  ],
+  "assembly_command": [
+    "cargo",
+    "rustc",
+    "--offline",
+    "--manifest-path",
+    "target\\mp3-perf-20261028\\build\\Cargo.toml",
+    "-p",
+    "deadlib-audio-decode-mp3",
+    "--bench",
+    "kernels",
+    "--profile",
+    "bench",
+    "--",
+    "--emit=asm"
+  ],
+  "kernels": {
+    "before": {
+      "path": "target\\mp3-perf-20261028\\window-masks-before.s",
+      "sha256": "94b961b5e548dd08719b636b2d6d251248d8e880a319179d32f9cb7f1a0ad813",
+      "bounds_failure_call_sites": 2,
+      "instruction_lines": 1429
+    },
+    "after": {
+      "path": "target\\mp3-perf-20261028\\window-masks-after.s",
+      "sha256": "9548538a0bab08171cd63658f5efa7dd2f2dd1a056750714327d0f233126e2a0",
+      "bounds_failure_call_sites": 0,
+      "instruction_lines": 1379
+    }
+  },
+  "identical_probes": true,
+  "manifest_sha256": {
+    "round4-base": "967e403791266137708e22ab7dc102fa96a7e3caeaa1cff2f49bad5c3bb4b7d8",
+    "window-masks-current": "0875444901ca9c51708de25c2c549165fd9798d1c3cd55823eff6222ef0ce411"
+  }
+}

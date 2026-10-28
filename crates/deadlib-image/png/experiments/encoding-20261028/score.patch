@@ -1,0 +1,103 @@
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index 5cd4a4aad..3d3ecb686 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -287,12 +287,33 @@ pub(crate) fn decode(
+     })
+ }
+ 
+-pub(crate) fn filter_into(row: &[u8], prev: &[u8], bpp: usize, filter: u8, out: &mut [u8]) -> u64 {
++pub(crate) fn filter_into<const SCORE: bool>(
++    row: &[u8],
++    prev: &[u8],
++    bpp: usize,
++    filter: u8,
++    out: &mut [u8],
++) -> u64 {
++    match filter {
++        0 => filter_bytes::<0, SCORE>(row, prev, bpp, out),
++        1 => filter_bytes::<1, SCORE>(row, prev, bpp, out),
++        2 => filter_bytes::<2, SCORE>(row, prev, bpp, out),
++        3 => filter_bytes::<3, SCORE>(row, prev, bpp, out),
++        _ => filter_bytes::<4, SCORE>(row, prev, bpp, out),
++    }
++}
++
++fn filter_bytes<const FILTER: u8, const SCORE: bool>(
++    row: &[u8],
++    prev: &[u8],
++    bpp: usize,
++    out: &mut [u8],
++) -> u64 {
+     let mut score = 0u64;
+     for n in 0..row.len() {
+         let left = if n >= bpp { row[n - bpp] } else { 0 };
+         let up_left = if n >= bpp { prev[n - bpp] } else { 0 };
+-        let predictor = match filter {
++        let predictor = match FILTER {
+             0 => 0,
+             1 => left,
+             2 => prev[n],
+@@ -300,7 +321,9 @@ pub(crate) fn filter_into(row: &[u8], prev: &[u8], bpp: usize, filter: u8, out:
+             _ => paeth(left, prev[n], up_left),
+         };
+         out[n] = row[n].wrapping_sub(predictor);
+-        score += u64::from((out[n] as i8).unsigned_abs());
++        if SCORE {
++            score += u64::from((out[n] as i8).unsigned_abs());
++        }
+     }
+     score
+ }
+@@ -386,7 +409,7 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
+             if filter == Filter::Adaptive {
+                 let mut score = u64::MAX;
+                 for kind in 0..5 {
+-                    let value = filter_into(&row, &previous, bpp, kind, &mut candidate);
++                    let value = filter_into::<true>(&row, &previous, bpp, kind, &mut candidate);
+                     if value < score {
+                         score = value;
+                         selected = kind;
+@@ -395,7 +418,7 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
+                 }
+             } else {
+                 selected = filter as u8;
+-                filter_into(&row, &previous, bpp, selected, &mut best);
++                filter_into::<false>(&row, &previous, bpp, selected, &mut best);
+             }
+             out.push(selected);
+             out.extend_from_slice(&best);
+@@ -477,7 +500,10 @@ mod tests {
+                             .map(|&v| u64::from((v as i8).unsigned_abs()))
+                             .sum();
+                         let mut actual = vec![0xa5; len];
+-                        assert_eq!(filter_into(&row, &prev, bpp, filter, &mut actual), score);
++                        assert_eq!(
++                            filter_into::<true>(&row, &prev, bpp, filter, &mut actual),
++                            score
++                        );
+                         assert_eq!(actual, expected);
+                         unfilter(&mut actual, &prev, bpp, filter).unwrap();
+                         assert_eq!(actual, row);
+diff --git a/crates/deadlib-image/png/src/stream/encode_rows.rs b/crates/deadlib-image/png/src/stream/encode_rows.rs
+index 032c68f8d..640ae6310 100644
+--- a/crates/deadlib-image/png/src/stream/encode_rows.rs
++++ b/crates/deadlib-image/png/src/stream/encode_rows.rs
+@@ -103,7 +103,7 @@ impl<'a> Rows<'a> {
+         if self.filter == Filter::Adaptive {
+             let mut best = u64::MAX;
+             for kind in 0..5 {
+-                let score = scanline::filter_into(
++                let score = scanline::filter_into::<true>(
+                     &self.row,
+                     &self.previous,
+                     bpp,
+@@ -117,7 +117,7 @@ impl<'a> Rows<'a> {
+                 }
+             }
+         } else {
+-            scanline::filter_into(
++            scanline::filter_into::<false>(
+                 &self.row,
+                 &self.previous,
+                 bpp,

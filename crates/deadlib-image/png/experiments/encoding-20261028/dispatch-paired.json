@@ -1,0 +1,71 @@
+{
+  "driver_sha256": "381bf859dabe8bdedbf85ab46284de1b9dca497baa4dd33fb33942c2ba2e8716",
+  "iterations": 3,
+  "benchmark_stage": "encode",
+  "measurements": [
+    {
+      "round": 1,
+      "label": "baseline",
+      "path": "dispatch-paired-1-baseline.tsv",
+      "sha256": "008f0f5b28e7ee7232de5d5821637e9f376ea805d0055674ab2ffcc67c587643",
+      "source_manifest_sha256": "e8726a68f6e6ef62dbe970da7b40b3aab3601016bbdc059e6d717715fd3f1403",
+      "executable_sha256": "8160b56b9818d9ef446b25b57a479135d962166dd90e46fc1bf5d4a4c889a6ad"
+    },
+    {
+      "round": 1,
+      "label": "dispatch",
+      "path": "dispatch-paired-1-dispatch.tsv",
+      "sha256": "7659d64058de7fa532673fddd28e73456b941acd5b1120e26233f9db2b08bb9d",
+      "source_manifest_sha256": "33ed9a991b2e4e3502e28fcdab4f9818a330ce7f2d7ecb287a26a1365628fb06",
+      "executable_sha256": "1603aa6b8f5fc15b36f10ca933c2ba79c72575af652beab7400e1e01c2b5e016"
+    },
+    {
+      "round": 2,
+      "label": "dispatch",
+      "path": "dispatch-paired-2-dispatch.tsv",
+      "sha256": "5e2dad7c4a6793192ae86c7906ba606be2eeb77e56c3cfa392957d352964b7d4",
+      "source_manifest_sha256": "33ed9a991b2e4e3502e28fcdab4f9818a330ce7f2d7ecb287a26a1365628fb06",
+      "executable_sha256": "1603aa6b8f5fc15b36f10ca933c2ba79c72575af652beab7400e1e01c2b5e016"
+    },
+    {
+      "round": 2,
+      "label": "baseline",
+      "path": "dispatch-paired-2-baseline.tsv",
+      "sha256": "9ccc5c5dc05b6092aa97a0e5bc96194ef77969e3d00e31631b379eb7d3ff9072",
+      "source_manifest_sha256": "e8726a68f6e6ef62dbe970da7b40b3aab3601016bbdc059e6d717715fd3f1403",
+      "executable_sha256": "8160b56b9818d9ef446b25b57a479135d962166dd90e46fc1bf5d4a4c889a6ad"
+    },
+    {
+      "round": 3,
+      "label": "baseline",
+      "path": "dispatch-paired-3-baseline.tsv",
+      "sha256": "130f3ab1c132eb9e72c8eb7046c2df16f32aeb20726301a2973e0f467afe2b7d",
+      "source_manifest_sha256": "e8726a68f6e6ef62dbe970da7b40b3aab3601016bbdc059e6d717715fd3f1403",
+      "executable_sha256": "8160b56b9818d9ef446b25b57a479135d962166dd90e46fc1bf5d4a4c889a6ad"
+    },
+    {
+      "round": 3,
+      "label": "dispatch",
+      "path": "dispatch-paired-3-dispatch.tsv",
+      "sha256": "7c87beb87dfeeb65e115ca3102b0258ebdd94491160e8a6561bce7a8a5bad30d",
+      "source_manifest_sha256": "33ed9a991b2e4e3502e28fcdab4f9818a330ce7f2d7ecb287a26a1365628fb06",
+      "executable_sha256": "1603aa6b8f5fc15b36f10ca933c2ba79c72575af652beab7400e1e01c2b5e016"
+    },
+    {
+      "round": 4,
+      "label": "dispatch",
+      "path": "dispatch-paired-4-dispatch.tsv",
+      "sha256": "c2041259a8a3352e14badce3be7bcdef0c8eb62a64eb6a8bfdb6799e4efd5d9d",
+      "source_manifest_sha256": "33ed9a991b2e4e3502e28fcdab4f9818a330ce7f2d7ecb287a26a1365628fb06",
+      "executable_sha256": "1603aa6b8f5fc15b36f10ca933c2ba79c72575af652beab7400e1e01c2b5e016"
+    },
+    {
+      "round": 4,
+      "label": "baseline",
+      "path": "dispatch-paired-4-baseline.tsv",
+      "sha256": "9e010ee0a665be5b731ea4762f5997f73aa4a48a0fd11ea42c9a723a4f2385b6",
+      "source_manifest_sha256": "e8726a68f6e6ef62dbe970da7b40b3aab3601016bbdc059e6d717715fd3f1403",
+      "executable_sha256": "8160b56b9818d9ef446b25b57a479135d962166dd90e46fc1bf5d4a4c889a6ad"
+    }
+  ]
+}

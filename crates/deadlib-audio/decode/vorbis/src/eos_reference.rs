@@ -1,9 +1,6 @@
 //! Independent packet clock and bounded EOS comparisons with libvorbis.
 use super::*;
-use crate as codec;
-#[path = "../tests/support/eos_vectors.rs"]
-#[allow(dead_code)]
-mod vectors;
+use crate::reference_vectors::eos_vectors as vectors;
 use std::{
     fs,
     process::Command,

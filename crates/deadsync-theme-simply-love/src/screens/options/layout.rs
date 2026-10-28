@@ -80,6 +80,17 @@ fn collect_row_choices<T: ChoiceText>(
     rows: &[SubRow],
     row_idx: usize,
 ) -> Vec<T> {
+    if kind == SubmenuKind::Streaming
+        && rows
+            .get(row_idx)
+            .is_some_and(|row| row.id == SubRowId::TwitchChannel)
+    {
+        return vec![if state.twitch.channel.is_empty() {
+            T::shared(tr("OptionsStreaming", "SetChannel"))
+        } else {
+            T::borrowed(state.twitch.channel.as_str())
+        }];
+    }
     if let Some(row) = rows.get(row_idx)
         && kind == SubmenuKind::SelectMusic
         && row.id == SubRowId::GsBoxLeaderboards

@@ -90,30 +90,48 @@ impl<W: Write> PacketWriter<W> {
         let mut position = 0;
         loop {
             if self.segments == 255 {
-                self.emit(false)?;
+                self.emit(false, &[])?;
             }
             if self.segments == 0 {
                 self.continued = self.packet_open;
             }
-            let len = (data.len() - position).min(255);
-            reserve(&mut self.body, len)?;
-            self.body.extend_from_slice(&data[position..position + len]);
-            self.lacing[self.segments] = len as u8;
-            self.segments += 1;
+            let len = (data.len() - position).min((255 - self.segments) * 255);
+            let payload = &data[position..position + len];
+            let mut tail = len;
+            if len >= 255 {
+                let full = len / 255;
+                self.lacing[self.segments..self.segments + full].fill(255);
+                self.segments += full;
+                tail -= full * 255;
+            }
             position += len;
-            self.packet_open = len == 255;
-            if len < 255 {
-                break;
+            self.packet_open = self.segments == 255;
+            if !self.packet_open {
+                self.lacing[self.segments] = tail as u8;
+                self.segments += 1;
+                self.granule = granule;
+                self.last_granule = granule;
+            }
+            let flush = self.packet_open
+                || first_packet
+                || eos
+                || self.body.len() + len >= self.options.target_page_body;
+            let page_eos = eos && !self.packet_open;
+            if self.body.is_empty() && flush {
+                self.emit(page_eos, payload)?;
+            } else {
+                reserve(&mut self.body, len)?;
+                self.body.extend_from_slice(payload);
+                if flush {
+                    self.emit(page_eos, &[])?;
+                }
+            }
+            if !self.packet_open {
+                return Ok(());
             }
         }
-        self.granule = granule;
-        self.last_granule = granule;
-        if first_packet || eos || self.body.len() >= self.options.target_page_body {
-            self.emit(eos)?;
-        }
-        Ok(())
     }
-    fn emit(&mut self, eos: bool) -> Result<(), Error> {
+    fn emit(&mut self, eos: bool, direct: &[u8]) -> Result<(), Error> {
         let flags = if !self.started { BOS } else { 0 }
             | if self.continued { CONTINUED } else { 0 }
             | if eos { EOS } else { 0 };
@@ -131,7 +149,11 @@ impl<W: Write> PacketWriter<W> {
                 sequence: self.sequence,
             },
             &self.lacing[..self.segments],
-            &self.body,
+            if self.body.is_empty() {
+                direct
+            } else {
+                &self.body
+            },
         )?;
         self.sequence = self.sequence.wrapping_add(1);
         self.started = true;
@@ -150,7 +172,7 @@ impl<W: Write> PacketWriter<W> {
         if self.segments == 0 {
             return Ok(());
         }
-        let result = self.emit(false);
+        let result = self.emit(false, &[]);
         if result.is_err() {
             self.failed = true;
         }
@@ -168,7 +190,7 @@ impl<W: Write> PacketWriter<W> {
         if !self.started {
             return Err(Error::Invalid("logical stream has no initial packet"));
         }
-        let result = self.emit(true);
+        let result = self.emit(true, &[]);
         if result.is_err() {
             self.failed = true;
         }

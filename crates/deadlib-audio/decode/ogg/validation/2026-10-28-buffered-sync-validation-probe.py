@@ -1,0 +1,85 @@
+import hashlib, json, os, pathlib, subprocess, datetime
+repo = pathlib.Path.cwd()
+decode = repo / 'crates/deadlib-audio/decode'
+root = repo / 'target/deadlib-audio-reference'
+run = root / 'buffered-sync-validation-20261028'
+run.mkdir(exist_ok=False)
+def sha(path): return hashlib.sha256(path.read_bytes()).hexdigest()
+def sources():
+    files = []
+    for part in ['ogg/src', 'vorbis/src', 'ogg/tests', 'vorbis/tests']:
+        files += [p for p in (decode/part).rglob('*') if p.is_file() and p.suffix in ['.rs','.c','.h','.ogg','.libvorbis-pcm','.libvorbis-headers','.libvorbis','.tsv','.py','.libogg']]
+    files += [decode/p for p in ['ogg/Cargo.toml','vorbis/Cargo.toml','fuzz/src/lib.rs','fuzz/src/bin/seed.rs','fuzz/Cargo.toml','fuzz/README.md','fuzz/fuzz_targets/vorbis_synthesis.rs','fuzz/fuzz_targets/ogg_sync.rs','scripts/fuzz.ps1','scripts/verify_independent.ps1']]
+    return {p.relative_to(decode).as_posix():sha(p) for p in sorted(files)}
+up = root / 'corpus/upstream-3e064a007e6d4f5099a3ddb77c144955'
+lines = (up/'assets.sha256').read_text().splitlines()
+assert len(lines)==528
+for line in lines:
+    digest, name = line.split('  ',1)
+    assert sha(up/name)==digest,name
+external = json.loads((decode/'vorbis/validation/corpus.json').read_text())['files']
+for entry in external:
+    p=root/'corpus'/entry['path']
+    assert p.stat().st_size==entry['bytes'] and sha(p)==entry['sha256']
+env=os.environ.copy()
+env.pop('DEADLIB_VORBIS_SYNTHESIS_FILTER',None)
+env.update({
+ 'DEADLIB_OGG_SYNC_INPUTS':str(run/'sync-inputs'),
+ 'DEADLIB_VORBIS_SYNTHESIS_TRACES':str(root/'seek-reference-20261027/captured-final'),
+ 'DEADLIB_VORBIS_CONFIGURATION_INPUTS':str(run/'configuration-inputs'),
+ 'DEADLIB_VORBIS_BOOK_LIMIT_INPUTS':str(run/'book-inputs'),
+ 'DEADLIB_VORBIS_FLOOR0_INPUTS':str(run/'floor0-inputs'),
+ 'DEADLIB_VORBIS_RESIDUE_TAIL_INPUTS':str(run/'residue-tail-inputs'),
+ 'DEADLIB_VORBIS_FLOOR1_INPUTS':str(run/'floor1-inputs'),
+ 'DEADLIB_VORBIS_EOS_INPUTS':str(run/'eos-inputs'),
+ 'DEADLIB_VORBIS_FLOAT_INPUTS':str(run/'float-inputs'),
+ 'DEADLIB_LIBVORBIS_ORACLE':str(root/'vorbis-oracle-build/Release/deadlib_vorbis_oracle.exe'),
+ 'DEADLIB_LIBOGG_ORACLE':str(root/'ogg-oracle-build/Release/deadlib_ogg_oracle.exe'),
+ 'DEADLIB_VORBIS_CORPUS':str(repo/'assets'), 'DEADLIB_OGG_CORPUS':str(repo/'assets'),
+ 'DEADLIB_VORBIS_FLOOR0':str(root/'corpus/floor0/vorbis_floor_type_0.ogg'),
+ 'DEADLIB_VORBIS_EXTERNAL_CORPUS':str(root/'corpus'),
+ 'DEADLIB_OGG_EXTERNAL_CORPUS':str(root/'corpus'),
+ 'DEADLIB_VORBIS_HISTORICAL_REPORT':str(run/'historical.tsv'),
+ 'DEADLIB_VORBIS_LEGACY_REPORT':str(run/'legacy.tsv'),
+ 'DEADLIB_VORBIS_UPSTREAM_REPORT':str(run/'upstream.tsv'),
+ 'DEADLIB_VORBIS_UPSTREAM_CORPUS':str(up),
+ 'DEADLIB_VORBIS_ENCODE_REPORT':str(run/'matrix.tsv'),
+})
+manifest={'started_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+ 'git_head':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),
+ 'rustc':subprocess.check_output(['rustc','-Vv'],text=True),
+ 'source_sha256':sources(),
+ 'assets_input_sha256':{p.relative_to(repo).as_posix():sha(p) for p in sorted((repo/'assets').rglob('*.ogg'))},
+ 'external_inputs':{e['path']:e['sha256'] for e in external},
+ 'upstream_inputs':{'files':528,'all_hashes_verified':True,'manifest_sha256':sha(up/'assets.sha256')},
+ 'reference_binaries':{k:sha(pathlib.Path(env[k])) for k in ['DEADLIB_LIBVORBIS_ORACLE','DEADLIB_LIBOGG_ORACLE']},
+ 'reference_sources':{p:subprocess.check_output(['git','-C',str(root/p),'rev-parse','HEAD'],text=True).strip() for p in ['ogg','vorbis']},
+ 'captured_schedules':json.loads((root/'seek-reference-20261027/captured-final/checks.json').read_text(encoding='utf8')),
+ 'commands':[]}
+jobs=[
+ ('oracle-build',['cmake','--build',str(root/'ogg-oracle-build'),'--config','Release']),
+ ('fmt',['cargo','fmt','-p','deadlib-audio-decode-ogg','-p','deadlib-audio-decode-vorbis','--check']),
+ ('fuzz-fmt',['cargo','fmt','--manifest-path',str(decode/'fuzz/Cargo.toml'),'--','--check']),
+ ('ogg-release',['cargo','test','-p','deadlib-audio-decode-ogg','--release','--all-features','--','--include-ignored','--skip','regenerate_sync_state_golden','--nocapture']),
+ ('vorbis-regression',['cargo','test','-p','deadlib-audio-decode-vorbis','--release','--all-features']),
+ ('clippy',['cargo','clippy','-p','deadlib-audio-decode-ogg','-p','deadlib-audio-decode-vorbis','--all-targets','--all-features','--','-D','warnings']),
+ ('clippy-default',['cargo','clippy','-p','deadlib-audio-decode-ogg','-p','deadlib-audio-decode-vorbis','--all-targets','--','-D','warnings']),
+ ('independent',['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(decode/'scripts/verify_independent.ps1'),'-ScratchRoot',str(root/'buffered-sync-independent-20261028')]),
+ ('fuzz-tests',['cargo','test','--manifest-path',str(decode/'fuzz/Cargo.toml'),'--lib']),
+ ('fuzz-clippy',['cargo','clippy','--manifest-path',str(decode/'fuzz/Cargo.toml'),'--all-targets','--features','seed','--','-D','warnings'])]
+for name,args in jobs:
+    print('running',name,flush=True)
+    with (run/(name+'.log')).open('wb') as f:
+        result=subprocess.run(args,env=env,stdout=f,stderr=subprocess.STDOUT)
+    manifest['commands'].append({'name':name,'command':args,'exit_code':result.returncode})
+    (run/'checks.json').write_bytes((json.dumps(manifest,indent=2)+'\n').encode())
+    if name=='oracle-build':
+        manifest['reference_binaries']['DEADLIB_LIBOGG_ORACLE']=sha(pathlib.Path(env['DEADLIB_LIBOGG_ORACLE']))
+        (run/'checks.json').write_bytes((json.dumps(manifest,indent=2)+'\n').encode())
+    print('finished',name,result.returncode,flush=True)
+    if result.returncode:
+        print((run/(name+'.log')).read_text(errors='replace')[-10000:])
+        raise SystemExit(result.returncode)
+assert manifest['source_sha256']==sources(),'source changed during validation'
+manifest['completed_utc']=datetime.datetime.now(datetime.timezone.utc).isoformat()
+(run/'checks.json').write_bytes((json.dumps(manifest,indent=2)+'\n').encode())

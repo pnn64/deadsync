@@ -1,0 +1,719 @@
+{
+  "stages": {
+    "synthesis": {
+      "binary": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\synthesis\\target\\release\\deps\\kernels-e85b1e6e007c747e.exe",
+      "binary_sha256": "b69ae48202cfeae428c1759c3f19b39068203c9397c2f8600efd1f94fa7d3337",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "head": "2dff293a5e556a0b72eb2f1a61d34332d892c6d0",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "config": {
+        "target": {
+          "cfg(target_os = \"macos\")": {
+            "rustflags": [
+              "-L",
+              "native=/opt/homebrew/lib",
+              "-L",
+              "native=/opt/homebrew/opt/vulkan-loader/lib",
+              "-L",
+              "native=/usr/local/lib",
+              "-L",
+              "native=/usr/local/opt/vulkan-loader/lib"
+            ]
+          },
+          "cfg(all(target_os = \"windows\", target_env = \"msvc\"))": {
+            "rustflags": [
+              "-C",
+              "target-feature=+crt-static"
+            ]
+          }
+        },
+        "env": {
+          "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:/opt/homebrew/opt/vulkan-loader/lib:/usr/local/lib:/usr/local/opt/vulkan-loader/lib"
+        }
+      },
+      "rustflags": {
+        "RUSTFLAGS": null,
+        "CARGO_ENCODED_RUSTFLAGS": null
+      },
+      "sources": {
+        "tests\\support\\asset_upload_pairs.rs": "55a6e5f538332846e0dda77bf51c8dd7b3a0839f0aedd997d99148dd5ae80554",
+        "tests\\support\\draw_batching.rs": "60d2acf121fec7254b729eb76a38e8401b12f1afce8ec2b80e92fef62d4b1a19",
+        "tests\\support\\kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "tests\\support\\paired_bench.rs": "b7f64377a3665aee3272f72ea7c531d2fcddd4d02c84f4a62ea0125a194bfcf8",
+        "tests\\support\\paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+        "tests\\support\\perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+        "tests\\support\\perf_1870_popular.rs": "31de29d77dc79572ed1fd36ca34a520f4d3eadbc8175534f1d4fca4f60379467",
+        "tests\\support\\perf_1870_ranges.rs": "1c58cfa11b49819906b51da3a1209f22512d8ff56b38799a43adf934291cec3f",
+        "tests\\support\\perf_1870_subline.rs": "bea5fb660547eab8471c88a77ed786d30d5e9af45c4de0deaee65c5058bc3430",
+        "tests\\support\\song_fixture.rs": "e822e40be30452002a647d4af57f07a5d38e57771e6220c9781736a91eabbb2c",
+        "tests\\support\\song_lua_metrics.rs": "54c3654a3f8df64b0d17e1a1fbc89d9207184dba6f65aa56c255e2217a5e8e59",
+        "tests\\support\\song_lua_progress.rs": "43905891d5a03bb02c35b832df93a54cc95a159c610c4ac3508e2799cd54c45f",
+        "tests\\support\\song_lua_source_identity.rs": "f42774066bfd4dac9a2e465ff991593a0e2a83c3f22f8b8a4077551e985fa1d8",
+        "tests\\support\\workshop_fixture.rs": "1a0de4a2e3dea82e80927ec3a215452a51fc2c84218dca34e3f953d083b30412",
+        "crates\\deadlib-audio\\decode\\mp3\\benches\\kernels.rs": "217de3cdfd01b9fdfe02c16215d018f4c84524bc12a2734223402a59a5d94297",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\bands.rs": "2a3902d77a7af0d2a44ddb5a89c3cafbd8937145cf1978c684c48c1744d953b7",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\bits.rs": "26719a5f037dd4cecf3b224506bfda76b5e2939504f686354a94dfd70dda478c",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\checksum.rs": "d28c90579e55f8b887c96c3c4f438451e7df7cfd942e270eb1269d38db0a977c",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\decoder.rs": "5ca2e1b35e8e6981d00cf3137a0c5afd6d090f1c8db6b6cb7e30e034b7b97250",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\dsp_tables.rs": "b6fda8c09aa6c715eb0b116402b8fccd2be5f7ffe651607b347f5331979f6d3e",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\frame.rs": "25dbd80c1108c1aeb7ad511dacec4b6d5b4acebcdfb793c5bc1bff3ae06d9206",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\gapless.rs": "2130ece93da52a08638e269b9ffa9268b85f4737cd67ca0b7817748c4e7779ed",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\huffman.rs": "430e97da63d767e70441c636f455b67c9ead9fdd0f8f0cc58f085117a1b4058b",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\huffman_tables.rs": "ca8404c1e4bdf92550f04fc9afdc202739a43647d6599632930fe0f5911e5c48",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\indexed.rs": "a726fd3a7c1fa1730519b409623a4c29e517218e40957f842f460ab035c52b0e",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\lib.rs": "44faa59484b773468ce01f47c42bcd20f6d9c5fa4a41ab07bf2b9fd5819df9dc",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\reader.rs": "052b5fde2727cefb8ce951fc1ed3a8c2e87b5a5bc08d7fcd0685f81225c5b2d2",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\reservoir.rs": "4a63bd5c8bb970dee297c3e4ff6e64fda219fcc49a96fe1fdd6283dff7726540",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\scalefactors.rs": "5f4815b8b828d8378b61ef92127b11d1b3cf2b986522269ac571e92bf851be8a",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\side.rs": "eab3a1d3b6449a025944ecb200d6855f254f30828cf7f98adf87a1c6405efcca",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\spectral.rs": "399625bfab29e8de6323f5ebc8853ed8fbc9589509dabc6843fdf5533e1d8249",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\stream.rs": "1b32b8a6bd9f44f3dd5bb228846e51b637c6450ae713eb7ec931f58cb773ce2b",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\synthesis.rs": "807fa703c7042d2a544fefde04c98b7b78fe3d50c5c1e3e86b316f449f7504be",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\tags.rs": "b55da852b248663a586be072fe2fce89d3eb5b0287341f715a56d3e63aceb6ab"
+      },
+      "fixtures": {
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\libmp3lame-44100-2.mp3": "fe6b10386312be7c6b3a516a66b38ec0ab14033885f6c3ed4824c9b629fbb88b",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\libmp3lame-22050-1.mp3": "1a5831394f41416c4676f006ed25e409cce0938ab5299b8c6f7244d31962ea11",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\libmp3lame-8000-2.mp3": "12803a5c50a9f49034107b824913279306206d339b5024067f477f24d94b018d"
+      },
+      "output_sha256": "2c9ad122a060f61059087d8c08c14afe759316ae75aa91a00fbd48cd7aad4fb7"
+    },
+    "hybrid-long": {
+      "binary": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\hybrid-long\\target\\release\\deps\\kernels-e85b1e6e007c747e.exe",
+      "binary_sha256": "f804e766ba80ca433525f8ce101dd132ebb923b4f9e8f99c6a85cea00e1b87e1",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "head": "569a8334f7b0826c4ef7eca267cb59d79a43317a",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "config": {
+        "target": {
+          "cfg(target_os = \"macos\")": {
+            "rustflags": [
+              "-L",
+              "native=/opt/homebrew/lib",
+              "-L",
+              "native=/opt/homebrew/opt/vulkan-loader/lib",
+              "-L",
+              "native=/usr/local/lib",
+              "-L",
+              "native=/usr/local/opt/vulkan-loader/lib"
+            ]
+          },
+          "cfg(all(target_os = \"windows\", target_env = \"msvc\"))": {
+            "rustflags": [
+              "-C",
+              "target-feature=+crt-static"
+            ]
+          }
+        },
+        "env": {
+          "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:/opt/homebrew/opt/vulkan-loader/lib:/usr/local/lib:/usr/local/opt/vulkan-loader/lib"
+        }
+      },
+      "rustflags": {
+        "RUSTFLAGS": null,
+        "CARGO_ENCODED_RUSTFLAGS": null
+      },
+      "sources": {
+        "tests\\support\\asset_upload_pairs.rs": "55a6e5f538332846e0dda77bf51c8dd7b3a0839f0aedd997d99148dd5ae80554",
+        "tests\\support\\draw_batching.rs": "60d2acf121fec7254b729eb76a38e8401b12f1afce8ec2b80e92fef62d4b1a19",
+        "tests\\support\\kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "tests\\support\\paired_bench.rs": "b7f64377a3665aee3272f72ea7c531d2fcddd4d02c84f4a62ea0125a194bfcf8",
+        "tests\\support\\paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+        "tests\\support\\perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+        "tests\\support\\perf_1870_popular.rs": "31de29d77dc79572ed1fd36ca34a520f4d3eadbc8175534f1d4fca4f60379467",
+        "tests\\support\\perf_1870_ranges.rs": "1c58cfa11b49819906b51da3a1209f22512d8ff56b38799a43adf934291cec3f",
+        "tests\\support\\perf_1870_subline.rs": "bea5fb660547eab8471c88a77ed786d30d5e9af45c4de0deaee65c5058bc3430",
+        "tests\\support\\song_fixture.rs": "e822e40be30452002a647d4af57f07a5d38e57771e6220c9781736a91eabbb2c",
+        "tests\\support\\song_lua_metrics.rs": "54c3654a3f8df64b0d17e1a1fbc89d9207184dba6f65aa56c255e2217a5e8e59",
+        "tests\\support\\song_lua_progress.rs": "43905891d5a03bb02c35b832df93a54cc95a159c610c4ac3508e2799cd54c45f",
+        "tests\\support\\song_lua_source_identity.rs": "f42774066bfd4dac9a2e465ff991593a0e2a83c3f22f8b8a4077551e985fa1d8",
+        "tests\\support\\workshop_fixture.rs": "1a0de4a2e3dea82e80927ec3a215452a51fc2c84218dca34e3f953d083b30412",
+        "crates\\deadlib-audio\\decode\\mp3\\benches\\kernels.rs": "217de3cdfd01b9fdfe02c16215d018f4c84524bc12a2734223402a59a5d94297",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\bands.rs": "2a3902d77a7af0d2a44ddb5a89c3cafbd8937145cf1978c684c48c1744d953b7",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\bits.rs": "26719a5f037dd4cecf3b224506bfda76b5e2939504f686354a94dfd70dda478c",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\checksum.rs": "d28c90579e55f8b887c96c3c4f438451e7df7cfd942e270eb1269d38db0a977c",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\decoder.rs": "5ca2e1b35e8e6981d00cf3137a0c5afd6d090f1c8db6b6cb7e30e034b7b97250",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\dsp_tables.rs": "5fbb82002044b2f82e37e31aaae6fe34fd5e281df79ff54e84cc581bdc769051",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\frame.rs": "25dbd80c1108c1aeb7ad511dacec4b6d5b4acebcdfb793c5bc1bff3ae06d9206",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\gapless.rs": "2130ece93da52a08638e269b9ffa9268b85f4737cd67ca0b7817748c4e7779ed",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\huffman.rs": "430e97da63d767e70441c636f455b67c9ead9fdd0f8f0cc58f085117a1b4058b",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\huffman_tables.rs": "ca8404c1e4bdf92550f04fc9afdc202739a43647d6599632930fe0f5911e5c48",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\indexed.rs": "a726fd3a7c1fa1730519b409623a4c29e517218e40957f842f460ab035c52b0e",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\lib.rs": "44faa59484b773468ce01f47c42bcd20f6d9c5fa4a41ab07bf2b9fd5819df9dc",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\reader.rs": "052b5fde2727cefb8ce951fc1ed3a8c2e87b5a5bc08d7fcd0685f81225c5b2d2",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\reservoir.rs": "4a63bd5c8bb970dee297c3e4ff6e64fda219fcc49a96fe1fdd6283dff7726540",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\scalefactors.rs": "5f4815b8b828d8378b61ef92127b11d1b3cf2b986522269ac571e92bf851be8a",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\side.rs": "eab3a1d3b6449a025944ecb200d6855f254f30828cf7f98adf87a1c6405efcca",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\spectral.rs": "399625bfab29e8de6323f5ebc8853ed8fbc9589509dabc6843fdf5533e1d8249",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\stream.rs": "1b32b8a6bd9f44f3dd5bb228846e51b637c6450ae713eb7ec931f58cb773ce2b",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\synthesis.rs": "6dd79428fe9e7150d1545580781f6063535be6d337691142f4038c416fe782a7",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\tags.rs": "b55da852b248663a586be072fe2fce89d3eb5b0287341f715a56d3e63aceb6ab"
+      },
+      "fixtures": {
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\libmp3lame-44100-2.mp3": "fe6b10386312be7c6b3a516a66b38ec0ab14033885f6c3ed4824c9b629fbb88b",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\libmp3lame-22050-1.mp3": "1a5831394f41416c4676f006ed25e409cce0938ab5299b8c6f7244d31962ea11",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\libmp3lame-8000-2.mp3": "12803a5c50a9f49034107b824913279306206d339b5024067f477f24d94b018d"
+      },
+      "output_sha256": "2c9ad122a060f61059087d8c08c14afe759316ae75aa91a00fbd48cd7aad4fb7"
+    }
+  },
+  "runs": 7,
+  "summary": [
+    {
+      "workload": "synthesis/slot",
+      "stage": "synthesis",
+      "median_cycles": 1891.8,
+      "min_cycles": 1830.3,
+      "max_cycles": 1973.96,
+      "mad_cycles": 23.24000000000001,
+      "median_ns": 863.54,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "synthesis/slot",
+      "stage": "hybrid-long",
+      "median_cycles": 1630.51,
+      "min_cycles": 1601.14,
+      "max_cycles": 1661.64,
+      "mad_cycles": 10.200000000000045,
+      "median_ns": 744.98,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/0/0",
+      "stage": "synthesis",
+      "median_cycles": 16795.92,
+      "min_cycles": 16589.37,
+      "max_cycles": 17454.64,
+      "mad_cycles": 206.54999999999927,
+      "median_ns": 7670.8,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/0/0",
+      "stage": "hybrid-long",
+      "median_cycles": 13763.53,
+      "min_cycles": 13441.52,
+      "max_cycles": 14054.8,
+      "mad_cycles": 142.67000000000007,
+      "median_ns": 6285.1,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/1/0",
+      "stage": "synthesis",
+      "median_cycles": 17077.98,
+      "min_cycles": 16633.93,
+      "max_cycles": 17793.33,
+      "mad_cycles": 228.9399999999987,
+      "median_ns": 7805.6,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/1/0",
+      "stage": "hybrid-long",
+      "median_cycles": 13734.99,
+      "min_cycles": 13381.16,
+      "max_cycles": 14298.67,
+      "mad_cycles": 115.02000000000044,
+      "median_ns": 6276.6,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/3/0",
+      "stage": "synthesis",
+      "median_cycles": 16816.77,
+      "min_cycles": 16457.67,
+      "max_cycles": 17749.21,
+      "mad_cycles": 285.77999999999884,
+      "median_ns": 7692.2,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/3/0",
+      "stage": "hybrid-long",
+      "median_cycles": 13695.26,
+      "min_cycles": 13254.29,
+      "max_cycles": 13821.91,
+      "mad_cycles": 126.64999999999964,
+      "median_ns": 6268.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/2/0",
+      "stage": "synthesis",
+      "median_cycles": 4894.85,
+      "min_cycles": 4739.01,
+      "max_cycles": 5022.82,
+      "mad_cycles": 28.970000000000255,
+      "median_ns": 2231.4,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/2/0",
+      "stage": "hybrid-long",
+      "median_cycles": 4267.74,
+      "min_cycles": 3961.1,
+      "max_cycles": 4499.75,
+      "mad_cycles": 145.75,
+      "median_ns": 1945.9,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/2/2",
+      "stage": "synthesis",
+      "median_cycles": 5601.64,
+      "min_cycles": 5500.89,
+      "max_cycles": 5828.82,
+      "mad_cycles": 45.88000000000011,
+      "median_ns": 2563.8,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/2/2",
+      "stage": "hybrid-long",
+      "median_cycles": 4838.88,
+      "min_cycles": 4326.78,
+      "max_cycles": 5048.06,
+      "mad_cycles": 183.0599999999995,
+      "median_ns": 2205.4,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/2/4",
+      "stage": "synthesis",
+      "median_cycles": 6461.42,
+      "min_cycles": 6372.74,
+      "max_cycles": 6553.39,
+      "mad_cycles": 72.21000000000004,
+      "median_ns": 2948.8,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/2/4",
+      "stage": "hybrid-long",
+      "median_cycles": 5447.11,
+      "min_cycles": 5284.24,
+      "max_cycles": 5574.64,
+      "mad_cycles": 85.17000000000007,
+      "median_ns": 2483.6,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/1",
+      "stage": "synthesis",
+      "median_cycles": 5034.89,
+      "min_cycles": 4954.99,
+      "max_cycles": 5056.18,
+      "mad_cycles": 21.289999999999964,
+      "median_ns": 2294.7,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/1",
+      "stage": "hybrid-long",
+      "median_cycles": 4990.99,
+      "min_cycles": 4900.78,
+      "max_cycles": 5087.35,
+      "mad_cycles": 33.13999999999942,
+      "median_ns": 2274.6,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/4",
+      "stage": "synthesis",
+      "median_cycles": 4988.14,
+      "min_cycles": 4913.95,
+      "max_cycles": 5142.45,
+      "mad_cycles": 53.340000000000146,
+      "median_ns": 2284.5,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/4",
+      "stage": "hybrid-long",
+      "median_cycles": 5174.93,
+      "min_cycles": 4949.29,
+      "max_cycles": 5241.0,
+      "mad_cycles": 66.06999999999971,
+      "median_ns": 2358.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/9",
+      "stage": "synthesis",
+      "median_cycles": 8808.1,
+      "min_cycles": 8611.64,
+      "max_cycles": 8997.96,
+      "mad_cycles": 103.17000000000007,
+      "median_ns": 4017.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/9",
+      "stage": "hybrid-long",
+      "median_cycles": 8693.08,
+      "min_cycles": 8656.42,
+      "max_cycles": 9092.13,
+      "mad_cycles": 31.829999999999927,
+      "median_ns": 3974.7,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/16",
+      "stage": "synthesis",
+      "median_cycles": 8741.15,
+      "min_cycles": 8616.03,
+      "max_cycles": 8936.28,
+      "mad_cycles": 78.79999999999927,
+      "median_ns": 3995.7,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/16",
+      "stage": "hybrid-long",
+      "median_cycles": 8792.95,
+      "min_cycles": 8641.72,
+      "max_cycles": 8811.17,
+      "mad_cycles": 18.219999999999345,
+      "median_ns": 4011.1,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/24",
+      "stage": "synthesis",
+      "median_cycles": 12103.45,
+      "min_cycles": 11551.62,
+      "max_cycles": 12218.69,
+      "mad_cycles": 64.97000000000116,
+      "median_ns": 5539.1,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/24",
+      "stage": "hybrid-long",
+      "median_cycles": 11982.29,
+      "min_cycles": 11838.07,
+      "max_cycles": 12238.88,
+      "mad_cycles": 40.61000000000058,
+      "median_ns": 5474.4,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/32",
+      "stage": "synthesis",
+      "median_cycles": 15279.39,
+      "min_cycles": 15169.21,
+      "max_cycles": 16087.16,
+      "mad_cycles": 110.18000000000029,
+      "median_ns": 6970.7,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/32",
+      "stage": "hybrid-long",
+      "median_cycles": 15440.73,
+      "min_cycles": 15254.15,
+      "max_cycles": 15602.94,
+      "mad_cycles": 149.92000000000007,
+      "median_ns": 7053.6,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/libmp3lame-44100-2.mp3",
+      "stage": "synthesis",
+      "median_cycles": 33008081.5,
+      "min_cycles": 32822164.5,
+      "max_cycles": 33695774.5,
+      "mad_cycles": 175929.5,
+      "median_ns": 15092250.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/libmp3lame-44100-2.mp3",
+      "stage": "hybrid-long",
+      "median_cycles": 29931787.0,
+      "min_cycles": 29720521.0,
+      "max_cycles": 30393725.5,
+      "mad_cycles": 124237.0,
+      "median_ns": 13681600.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/libmp3lame-22050-1.mp3",
+      "stage": "synthesis",
+      "median_cycles": 11563369.5,
+      "min_cycles": 11455705.0,
+      "max_cycles": 11956933.0,
+      "mad_cycles": 107664.5,
+      "median_ns": 5281600.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/libmp3lame-22050-1.mp3",
+      "stage": "hybrid-long",
+      "median_cycles": 10789961.5,
+      "min_cycles": 10678455.0,
+      "max_cycles": 11004523.0,
+      "mad_cycles": 82751.5,
+      "median_ns": 4929550.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/libmp3lame-8000-2.mp3",
+      "stage": "synthesis",
+      "median_cycles": 7321203.5,
+      "min_cycles": 7174138.0,
+      "max_cycles": 7590858.0,
+      "mad_cycles": 89336.0,
+      "median_ns": 3353550.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/libmp3lame-8000-2.mp3",
+      "stage": "hybrid-long",
+      "median_cycles": 6662154.5,
+      "min_cycles": 6520686.5,
+      "max_cycles": 6775636.0,
+      "mad_cycles": 67166.0,
+      "median_ns": 3039350.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    }
+  ]
+}

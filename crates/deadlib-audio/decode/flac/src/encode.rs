@@ -112,6 +112,7 @@ struct SubframePlan {
 #[derive(Default)]
 struct Analysis {
     residual: Vec<i32>,
+    window: Vec<f64>,
     rice: RicePlan,
     partitions: Vec<Partition>,
 }
@@ -124,7 +125,6 @@ pub struct FrameEncoder {
     plans: [SubframePlan; 8],
     analysis: Analysis,
     writer: BitWriter,
-    output: Vec<u8>,
     assignment: u8,
 }
 impl FrameEncoder {
@@ -136,7 +136,6 @@ impl FrameEncoder {
             plans: std::array::from_fn(|_| SubframePlan::default()),
             analysis: Analysis::default(),
             writer: BitWriter::new(),
-            output: Vec::new(),
             assignment: 0,
         })
     }
@@ -209,9 +208,14 @@ impl FrameEncoder {
                 }
             }
         }
-        self.output.clear();
-        write_header(&mut self.output, self.options, n, self.assignment, number)?;
         self.writer.clear();
+        write_header(
+            self.writer.aligned_bytes_mut(),
+            self.options,
+            n,
+            self.assignment,
+            number,
+        )?;
         for &ch in &selected[..channels] {
             let start = self.writer.position();
             write_subframe(
@@ -223,11 +227,11 @@ impl FrameEncoder {
             debug_assert_eq!((self.writer.position() - start) as u64, self.plans[ch].bits);
         }
         self.writer.align_zero();
-        reserve(&mut self.output, self.writer.as_bytes().len() + 2)?;
-        self.output.extend_from_slice(self.writer.as_bytes());
-        let crc = crc16(&self.output);
-        self.output.extend_from_slice(&crc.to_be_bytes());
-        Ok(&self.output)
+        let output = self.writer.aligned_bytes_mut();
+        reserve(output, 2)?;
+        let crc = crc16(output);
+        output.extend_from_slice(&crc.to_be_bytes());
+        Ok(output)
     }
     pub fn channel_assignment(&self) -> u8 {
         self.assignment
@@ -289,14 +293,16 @@ impl Analysis {
         }
         // Autocorrelation of a Hann-windowed signal; this affects compression
         // quality only. The exact integer residual is tested for every proposal.
+        resize(&mut self.window, samples.len(), 0.0)?;
+        for (i, (value, &sample)) in self.window.iter_mut().zip(samples.iter()).enumerate() {
+            let win =
+                0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / (samples.len() - 1) as f64).cos();
+            *value = sample as f64 * win;
+        }
         let mut corr = [0f64; 33];
         for (lag, value) in corr.iter_mut().enumerate().take(max_order + 1) {
             for i in lag..samples.len() {
-                let win = |j: usize| {
-                    0.5 - 0.5
-                        * (std::f64::consts::TAU * j as f64 / (samples.len() - 1) as f64).cos()
-                };
-                *value += (samples[i] as f64 * win(i)) * (samples[i - lag] as f64 * win(i - lag));
+                *value += self.window[i] * self.window[i - lag];
             }
         }
         let mut coeff = [0f64; 32];
@@ -416,15 +422,15 @@ fn folded(x: i32) -> u32 {
     ((x as u32) << 1) ^ ((x >> 31) as u32)
 }
 fn signed_width(x: i32) -> u8 {
-    if x == 0 {
-        0
-    } else {
-        (33 - (if x < 0 { !x } else { x } as u32).leading_zeros()) as u8
-    }
+    (32 - folded(x).leading_zeros()) as u8
 }
-
 fn partition_cost(samples: &[i32], max_k: u8) -> (u64, Partition) {
-    let sum = samples.iter().map(|&x| u64::from(folded(x))).sum::<u64>();
+    // Zigzag's bit length is the signed sample width. OR retains the maximum
+    // width, so the sum and escape width need only one traversal and one CLZ.
+    let (sum, combined) = samples.iter().fold((0u64, 0u32), |(sum, bits), &x| {
+        let value = folded(x);
+        (sum + u64::from(value), bits | value)
+    });
     let mean = sum / samples.len() as u64;
     let mut k = (63 - mean.max(1).leading_zeros()).min(u32::from(max_k)) as u8;
     let cost = |k: u8| {
@@ -453,7 +459,7 @@ fn partition_cost(samples: &[i32], max_k: u8) -> (u64, Partition) {
         k += 1;
         best = next;
     }
-    let width = samples.iter().map(|&x| signed_width(x)).max().unwrap_or(0);
+    let width = (32 - combined.leading_zeros()) as u8;
     let escape = 5 + samples.len() as u64 * u64::from(width);
     if width <= 31 && escape < best {
         (escape, Partition { k: 255, width })
@@ -476,6 +482,11 @@ fn choose_rice(
             break;
         }
         for method in 0..=1 {
+            // Below k=14, method 0 already found the unconstrained minimum.
+            // Method 1 would repeat the search and add one bit per partition.
+            if method == 1 && trial.iter().all(|p| p.k < 14) {
+                break;
+            }
             let parameter_bits = 4 + method;
             let mut bits = 0u64;
             trial.clear();
@@ -649,4 +660,143 @@ pub(crate) fn resize<T: Clone>(data: &mut Vec<T>, len: usize, value: T) -> Resul
     }
     data.resize(len, value);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn reference_width(x: i32) -> u8 {
+        if x == 0 {
+            0
+        } else {
+            (33 - (if x < 0 { !x } else { x } as u32).leading_zeros()) as u8
+        }
+    }
+
+    #[test]
+    fn zigzag_width_matches_signed_boundaries() {
+        for bit in 0..32 {
+            let boundary = 1i64 << bit;
+            for sign in [-1, 1] {
+                for delta in -2..=2 {
+                    if let Ok(value) = i32::try_from(sign * boundary + delta) {
+                        assert_eq!(signed_width(value), reference_width(value));
+                    }
+                }
+            }
+        }
+    }
+
+    // Enumerate every parameter rather than using the mean or convex search.
+    fn exhaustive_partition(samples: &[i32], max_k: u8) -> (u64, Partition) {
+        let mut best = (u64::MAX, Partition::default());
+        for k in 0..=max_k {
+            let bits: u64 = samples
+                .iter()
+                .map(|&x| {
+                    let zigzag = if x < 0 {
+                        -2 * i64::from(x) - 1
+                    } else {
+                        2 * i64::from(x)
+                    };
+                    (zigzag as u64 >> k) + u64::from(k) + 1
+                })
+                .sum();
+            if bits < best.0 {
+                best = (bits, Partition { k, width: 0 });
+            }
+        }
+        let width = samples.iter().map(|&x| reference_width(x)).max().unwrap();
+        let bits = 5 + samples.len() as u64 * u64::from(width);
+        if width <= 31 && bits < best.0 {
+            best = (bits, Partition { k: 255, width });
+        }
+        best
+    }
+
+    #[test]
+    fn rice_plan_matches_exhaustive_parameters_methods_and_orders() {
+        let mut random = 9639u32;
+        for len in [16usize, 32, 64] {
+            for magnitude in 0..32 {
+                for pattern in 0..4 {
+                    let samples: Vec<_> = (0..len)
+                        .map(|i| {
+                            random = random.wrapping_mul(1664525).wrapping_add(1013904223);
+                            match pattern {
+                                0 => (random as i32) >> (31 - magnitude),
+                                1 => {
+                                    if i % 3 == 0 {
+                                        -1
+                                    } else {
+                                        0
+                                    }
+                                }
+                                2 => {
+                                    if i % 2 == 0 {
+                                        (1u32 << magnitude) as i32
+                                    } else {
+                                        0
+                                    }
+                                }
+                                _ => {
+                                    if i == 0 {
+                                        i32::MAX
+                                    } else {
+                                        i as i32 - 5
+                                    }
+                                }
+                            }
+                        })
+                        .collect();
+                    for predictor in 0..=4 {
+                        let mut expected = RicePlan {
+                            bits: u64::MAX,
+                            ..Default::default()
+                        };
+                        for order in 0..=4 {
+                            let size = len >> order;
+                            if size <= predictor {
+                                break;
+                            }
+                            for method in 0..=1 {
+                                let parts: Vec<_> = (0..1usize << order)
+                                    .map(|p| {
+                                        let start = if p == 0 { predictor } else { p * size };
+                                        exhaustive_partition(
+                                            &samples[start..(p + 1) * size],
+                                            if method == 0 { 14 } else { 30 },
+                                        )
+                                    })
+                                    .collect();
+                                let bits = parts.iter().map(|p| p.0 + 4 + u64::from(method)).sum();
+                                if bits < expected.bits {
+                                    expected = RicePlan {
+                                        bits,
+                                        order,
+                                        method,
+                                        partitions: parts.into_iter().map(|p| p.1).collect(),
+                                    };
+                                }
+                            }
+                        }
+                        let mut actual = RicePlan::default();
+                        choose_rice(&samples, predictor, 4, &mut actual, &mut Vec::new()).unwrap();
+                        assert_eq!(
+                            (actual.bits, actual.order, actual.method),
+                            (expected.bits, expected.order, expected.method)
+                        );
+                        assert!(
+                            actual
+                                .partitions
+                                .iter()
+                                .zip(&expected.partitions)
+                                .all(|(a, b)| (a.k, a.width) == (b.k, b.width))
+                        );
+                    }
+                }
+            }
+        }
+    }
 }

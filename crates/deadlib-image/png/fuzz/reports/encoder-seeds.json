@@ -1,0 +1,19 @@
+{
+  "archive": "C:\\GitHub\\deadsync\\target\\png-encoder-20261028-seeds.zip",
+  "archive_sha256": "574bcf8169148d2194dd7ad11552f3ced83da9797f9008368d4203c12adfdc16",
+  "producer_sha256": "e0d1aa74631e22745a9fd3db63de2fbf4d133d7e3576965d5c2bcc82bb0f6062",
+  "targets": {
+    "encode_stream": {
+      "files": 2250,
+      "bytes": 27000,
+      "max_input": 12,
+      "sha256": "e1eec875d00d68b4f371cb0434253965aa0de985972e922b1ec8cbcdbeea2afc"
+    },
+    "deflate_stream": {
+      "files": 1152,
+      "bytes": 34631520,
+      "max_input": 131072,
+      "sha256": "153c7285ccf7ce102f155105b5cd75c52695be39ca54d33dd8cbe589d07b311b"
+    }
+  }
+}

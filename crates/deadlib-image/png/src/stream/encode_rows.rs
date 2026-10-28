@@ -70,10 +70,16 @@ impl<'a> Rows<'a> {
                     self.image.color_type.channels(),
                     self.image.bit_depth,
                 )?;
-                resize(&mut self.row, bytes)?;
-                resize(&mut self.previous, bytes)?;
-                self.previous.fill(0);
-                resize(&mut self.candidate, bytes + 1)?;
+                if self.filter != Filter::None {
+                    resize(&mut self.row, bytes)?;
+                    if self.filter != Filter::Sub {
+                        resize(&mut self.previous, bytes)?;
+                        self.previous.fill(0);
+                    }
+                    if self.filter == Filter::Adaptive {
+                        resize(&mut self.candidate, bytes + 1)?;
+                    }
+                }
                 resize(&mut self.output, bytes + 1)?;
                 return Ok(true);
             }
@@ -90,6 +96,19 @@ impl<'a> Rows<'a> {
             return Ok(None);
         }
         let y = self.y as usize + self.index * self.dy as usize;
+        if self.filter == Filter::None {
+            scanline::pack_row(
+                self.image,
+                y,
+                self.x as usize,
+                self.dx as usize,
+                self.width,
+                &mut self.output[1..],
+            );
+            self.output[0] = 0;
+            self.index += 1;
+            return Ok(Some(&self.output));
+        }
         scanline::pack_row(
             self.image,
             y,
@@ -103,7 +122,7 @@ impl<'a> Rows<'a> {
         if self.filter == Filter::Adaptive {
             let mut best = u64::MAX;
             for kind in 0..5 {
-                let score = scanline::filter_into(
+                let score = scanline::filter_into::<true>(
                     &self.row,
                     &self.previous,
                     bpp,
@@ -117,7 +136,7 @@ impl<'a> Rows<'a> {
                 }
             }
         } else {
-            scanline::filter_into(
+            scanline::filter_into::<false>(
                 &self.row,
                 &self.previous,
                 bpp,
@@ -127,7 +146,9 @@ impl<'a> Rows<'a> {
         }
         self.output[0] = selected;
         self.index += 1;
-        core::mem::swap(&mut self.row, &mut self.previous);
+        if self.filter != Filter::Sub {
+            core::mem::swap(&mut self.row, &mut self.previous);
+        }
         Ok(Some(&self.output))
     }
     pub(super) fn memory_bytes(&self) -> usize {

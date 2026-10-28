@@ -1,0 +1,41 @@
+   Compiling deadlib-audio-decode-vorbis v0.1.0 (C:\Github\deadsync\crates\deadlib-audio\decode\vorbis)
+    Finished `release` profile [optimized] target(s) in 25.91s
+     Running tests\headers.rs (target\vorbis-completion\release\deps\headers-61e70f34ae16dd97.exe)
+
+running 1 test
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\BACK UP\backup.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\BOSSY\bossy.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\COOL_EXCEPTION\cool_exception.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Can't You Bounce\bounce.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Dysangel\dysangel.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Fantastic World\fantasticworld.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Horsepower\horsepower.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Melody Mountain\melodymountain.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Oceania 909\oceania909.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Roadman\roadman.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Shoes (Club Fantastic Edit)\shoes.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Six Million\sixmillion.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Wandering (VIP)\wanderingvip.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 1\Y.E.A.H\Y.E.A.H.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Adore\adore.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Artifacts\artifacts.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\BOSSY (Jorts Speedy Mix)\bossyremix.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Beachside Photoshoot\Beachside Photoshoot.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\DNA\dna.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Oceania 909 (T2KAZUYA Remix)\oceaniat2k.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\POT\pot.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\SSS\sss.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\SWEETHEART\sweetheart.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Save New Jersey\Save New Jersey.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Singularity\Singularity.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Step It\stepit.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\TerpZone\terpzone.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\WRVTH\wrvth.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\We Can Bounce\WeCanBounce_CleanUp.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\Wipeout\wipeout.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\demonstration protocol\demonstration_protocol.ogg
+C:\Github\deadsync\target\deadlib-audio-reference\corpus\club-fantastic-season2\Club Fantastic Season 2\succulynt\succulynt.ogg
+Symphonia setup/header parity: 32 files, 1406 codebooks, 465178 audio packet prefixes
+test local_corpus_headers_match_symphonia ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.12s

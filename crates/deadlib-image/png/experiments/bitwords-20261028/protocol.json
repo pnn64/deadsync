@@ -1,0 +1,49 @@
+{
+  "source_base": "2414ec857",
+  "benchmark_stage": "bitwords",
+  "cases_per_process": 102,
+  "retained_checkpoints": [
+    "baseline",
+    "words-nibble",
+    "stepped-nibble",
+    "adaptive-nibble"
+  ],
+  "retained_comparisons": [
+    "words-final-paired",
+    "steps-final-paired",
+    "checksum-final-paired",
+    "accepted-paired",
+    "accepted-replay"
+  ],
+  "superseded_comparisons": [
+    "words-paired",
+    "stepped-paired",
+    "checksum-paired",
+    "selected-paired"
+  ],
+  "whole_pipeline_protocol": "Logical CPU 2; Windows thread cycles; three warmups; separate untimed allocation probe; seven batches; four alternating processes per version; serialized measurement jobs. Requested iterations are three, with a minimum of 64 for readers up to 65536 native bytes and 2048 for other outputs below 4096 bytes. Host frequency, preemption and other workloads are uncontrolled.",
+  "microbenchmark_protocol": "Scalar baseline and selected checksum execute in one binary with alternating variant batches. Each process keeps eleven batches after one warmup batch; three processes per candidate; 1024 iterations for 64-byte inputs and 32 for 8192-byte inputs. Both results must match an independent u64 per-byte modular oracle before timing.",
+  "refinements": {
+    "word_gather": "Multiplication gathers validated 1/2-bit samples. The unhelpful direct nibble-pair trial was rejected; 4-bit contiguous packing retains its original scalar grouping.",
+    "stepped_gather": "Full groups have constant bit depth and one final byte store. A separate partial group preserves zero padding without clearing the row.",
+    "streaming_checksum": "The existing bulk kernel is used for updates of at least 64 bytes. An inline scalar path remains for shorter calls; the first all-bulk entry point regressed byte fragmentation and was rejected."
+  },
+  "checksum_baseline_source": "baseline-checksum.rs",
+  "superseded_all_bulk_source": "adler-checksum.rs",
+  "micro_measurements": [
+    "micro-adler.json",
+    "micro-adaptive.json"
+  ],
+  "allocation_scope": "Whole-pipeline allocation/reallocation/requested-byte probes are separate from cycle timing. The checksum-only microbenchmark contains no timed allocation probe.",
+  "selected_checkpoint": "adaptive-nibble",
+  "combined_summary": "accepted-combined-summary.tsv",
+  "combined_processes_per_version": 8,
+  "rejected_outlining": {
+    "checkpoint": "outlined",
+    "comparisons": [
+      "outline-paired",
+      "outlined-final-paired"
+    ],
+    "reason": "Mixed effects across controls and targets; compiler inlining constraints were not retained."
+  }
+}

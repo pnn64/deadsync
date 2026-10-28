@@ -4,6 +4,44 @@ use bincode::{
 };
 
 #[test]
+fn large_boolean_blocks_preserve_error_prefix_and_reader_position() {
+    let config = bincode::config::standard();
+    let values: Vec<bool> = (0..769).map(|i| i % 3 == 0).collect();
+    let mut encoded = bincode::encode_to_vec(&values, config).unwrap();
+    let prefix = encoded.len() - values.len();
+    encoded.push(0xa5);
+    let mut output = Vec::<bool>::with_capacity(values.len());
+    for index in 0..values.len() {
+        for invalid in [2, 128, 255] {
+            encoded[prefix + index] = invalid;
+            // Two invalid bytes exercise first-error ordering across blocks.
+            encoded[prefix + values.len() - 1] = invalid;
+            let error =
+                bincode::decode_from_slice_into_vec(&encoded, &mut output, config).unwrap_err();
+            assert!(matches!(
+                error, bincode::error::DecodeError::InvalidBooleanValue(v) if v == invalid
+            ));
+            assert_eq!(output, values[..index]);
+
+            let mut decoder = bincode::de::DecoderImpl::new(
+                bincode::de::read::SliceReader::new(&encoded),
+                config,
+                (),
+            );
+            assert!(matches!(
+                Vec::<bool>::decode(&mut decoder),
+                Err(bincode::error::DecodeError::InvalidBooleanValue(v)) if v == invalid
+            ));
+            let mut next = [0];
+            decoder.reader().read(&mut next).unwrap();
+            assert_eq!(next[0], encoded[prefix + index + 1]);
+            encoded[prefix + index] = u8::from(values[index]);
+            encoded[prefix + values.len() - 1] = u8::from(values[values.len() - 1]);
+        }
+    }
+}
+
+#[test]
 fn boolean_validation_preserves_first_error_and_reader_position() {
     let config = bincode::config::standard();
     for index in 0..193 {
@@ -78,6 +116,12 @@ fn boolean_validation_covers_word_tails_and_borrowed_decoding() {
     check_array!(31);
     check_array!(32);
     check_array!(33);
+    check_array!(255);
+    check_array!(256);
+    check_array!(257);
+    check_array!(511);
+    check_array!(512);
+    check_array!(513);
     check_array!(63);
     check_array!(64);
     check_array!(65);

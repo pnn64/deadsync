@@ -1,0 +1,5117 @@
+{
+  "method": "Non-seekable gapless output against pinned independently verified file PCM.",
+  "records": [
+    {
+      "file": "11025-1-cbr.mp3",
+      "input_sha256": "63e181d9b2216bc37b1b934e46a580d3d9a62e146ce2c2221dd816dcdf592302",
+      "reference_sha256": "9ce2c20c6676c49f01bccbc797d43384f56cb9c89a667a3e66f07caeef28e472",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-1-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "225fa6eb837e7a8ed9c0673a7f2d2b613a691a997c341f0c2594e74c0c923f1f"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-1-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "225fa6eb837e7a8ed9c0673a7f2d2b613a691a997c341f0c2594e74c0c923f1f"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-1-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "225fa6eb837e7a8ed9c0673a7f2d2b613a691a997c341f0c2594e74c0c923f1f"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-1-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "225fa6eb837e7a8ed9c0673a7f2d2b613a691a997c341f0c2594e74c0c923f1f"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-1-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "225fa6eb837e7a8ed9c0673a7f2d2b613a691a997c341f0c2594e74c0c923f1f"
+        }
+      ]
+    },
+    {
+      "file": "11025-1-vbr.mp3",
+      "input_sha256": "fd5c999caa22aa242bb79715e7cd1439c713b8d67c1bfe7ed378be26096b632e",
+      "reference_sha256": "cab515c0426c6374fe3da339c2576cd7304673843ecac2f6eb8e6ffdf7e641d9",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-1-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "cabaf6470f8ac4f3c3d1d258b546e44abb15597f1e871965305ff36dd770553f"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-1-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "cabaf6470f8ac4f3c3d1d258b546e44abb15597f1e871965305ff36dd770553f"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-1-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "cabaf6470f8ac4f3c3d1d258b546e44abb15597f1e871965305ff36dd770553f"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-1-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "cabaf6470f8ac4f3c3d1d258b546e44abb15597f1e871965305ff36dd770553f"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-1-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "cabaf6470f8ac4f3c3d1d258b546e44abb15597f1e871965305ff36dd770553f"
+        }
+      ]
+    },
+    {
+      "file": "11025-2-cbr.mp3",
+      "input_sha256": "98a3ff3cf1cf6bb234d9c2e3077f4ac7ac0bec1a3b917d1c8768bb79648c1b02",
+      "reference_sha256": "4b6d8196939706a4903479a9e8d462b6a16dcee0edcc42a4e5e229cdc6d03d3b",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-2-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "df5bb2d9da4dd4dd7fe29dc27a1c3f3362464f74465174b243d4bb8fb46f9d91"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-2-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "df5bb2d9da4dd4dd7fe29dc27a1c3f3362464f74465174b243d4bb8fb46f9d91"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-2-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "df5bb2d9da4dd4dd7fe29dc27a1c3f3362464f74465174b243d4bb8fb46f9d91"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-2-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "df5bb2d9da4dd4dd7fe29dc27a1c3f3362464f74465174b243d4bb8fb46f9d91"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-2-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "df5bb2d9da4dd4dd7fe29dc27a1c3f3362464f74465174b243d4bb8fb46f9d91"
+        }
+      ]
+    },
+    {
+      "file": "11025-2-vbr.mp3",
+      "input_sha256": "0c8b9364e4e67324606f9e0ee8548a82997f8af0dd5b736ce16960f115617abe",
+      "reference_sha256": "5a62722f9bcdeb987ae24e47d0903c3d386335eabf09c3b948688213fa1f0f28",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-2-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2a99fde496829a964191e26e571ef437352871e2e43ba466a6aae84c9aa0b952"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-2-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2a99fde496829a964191e26e571ef437352871e2e43ba466a6aae84c9aa0b952"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-2-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2a99fde496829a964191e26e571ef437352871e2e43ba466a6aae84c9aa0b952"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-2-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2a99fde496829a964191e26e571ef437352871e2e43ba466a6aae84c9aa0b952"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/11025-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/11025-2-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2a99fde496829a964191e26e571ef437352871e2e43ba466a6aae84c9aa0b952"
+        }
+      ]
+    },
+    {
+      "file": "12000-1-cbr.mp3",
+      "input_sha256": "c79d0eb2eb05af2abd3bd02cabb87d57f0fdfccded4b1c680e647ad5f7fa723d",
+      "reference_sha256": "7211f6c55d915803304f0c5306acf48b433fdc667d00bb9510187f76c5ba9fe7",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-1-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "07ea65751249fc04a521f4ea9a62ef940fa5ada92ae3bd39abd0fa9ad88e7629"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-1-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "07ea65751249fc04a521f4ea9a62ef940fa5ada92ae3bd39abd0fa9ad88e7629"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-1-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "07ea65751249fc04a521f4ea9a62ef940fa5ada92ae3bd39abd0fa9ad88e7629"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-1-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "07ea65751249fc04a521f4ea9a62ef940fa5ada92ae3bd39abd0fa9ad88e7629"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-1-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "07ea65751249fc04a521f4ea9a62ef940fa5ada92ae3bd39abd0fa9ad88e7629"
+        }
+      ]
+    },
+    {
+      "file": "12000-1-vbr.mp3",
+      "input_sha256": "86637da6b2a626828f2c81d9e52db7783da6afce7cefecf7ea011eb83596ba14",
+      "reference_sha256": "dd554458cf5b11e64b45eae362f6d78cbea2f327bb3cc86e1abca4a58336c007",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-1-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "0ec02947f286db83c42dab96545ce34ac1cd190878cee38ff439b647179e1855"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-1-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "0ec02947f286db83c42dab96545ce34ac1cd190878cee38ff439b647179e1855"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-1-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "0ec02947f286db83c42dab96545ce34ac1cd190878cee38ff439b647179e1855"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-1-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "0ec02947f286db83c42dab96545ce34ac1cd190878cee38ff439b647179e1855"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-1-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "0ec02947f286db83c42dab96545ce34ac1cd190878cee38ff439b647179e1855"
+        }
+      ]
+    },
+    {
+      "file": "12000-2-cbr.mp3",
+      "input_sha256": "30b18fef2b5927eab7621a5fbee6fc1732b4d458093a16af65dcfef808b4fa51",
+      "reference_sha256": "8c460ca2c910771151f2201d43d7e27cda82488167220df64cbb56418fdfda32",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-2-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "340b272c52950209cee0c8832769c97bdc9980944ee35094e21105d48dbcbec2"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-2-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "340b272c52950209cee0c8832769c97bdc9980944ee35094e21105d48dbcbec2"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-2-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "340b272c52950209cee0c8832769c97bdc9980944ee35094e21105d48dbcbec2"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-2-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "340b272c52950209cee0c8832769c97bdc9980944ee35094e21105d48dbcbec2"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-2-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "340b272c52950209cee0c8832769c97bdc9980944ee35094e21105d48dbcbec2"
+        }
+      ]
+    },
+    {
+      "file": "12000-2-vbr.mp3",
+      "input_sha256": "c276df134caf46e838eb32d4ea04dbb809f7e8bd8c28987fdb6e488f0c05c748",
+      "reference_sha256": "6dccf21fe2bd24707e29f5e612e318d7ce73243727b5caa8df8c7d915c33d691",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-2-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "bf56551c8890859e7fb4c3e3f9ee8f1bd87a687c49c7f0d59e9c26cb9134c080"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-2-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "bf56551c8890859e7fb4c3e3f9ee8f1bd87a687c49c7f0d59e9c26cb9134c080"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-2-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "bf56551c8890859e7fb4c3e3f9ee8f1bd87a687c49c7f0d59e9c26cb9134c080"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-2-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "bf56551c8890859e7fb4c3e3f9ee8f1bd87a687c49c7f0d59e9c26cb9134c080"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/12000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/12000-2-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "bf56551c8890859e7fb4c3e3f9ee8f1bd87a687c49c7f0d59e9c26cb9134c080"
+        }
+      ]
+    },
+    {
+      "file": "16000-1-cbr.mp3",
+      "input_sha256": "17678e99d944a0b6ecb7e2c27f6a7c3290fea29511949f2bc1a0d635fc03c961",
+      "reference_sha256": "8637db8ae386d3449b5fb51effbfeb9e48fc60460a36567df29fb6a50509f441",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-1-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6122cfe96691147b54ec75ab07aa6254f818af2e79a8c2b9733e16ed188352f7"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-1-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6122cfe96691147b54ec75ab07aa6254f818af2e79a8c2b9733e16ed188352f7"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-1-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6122cfe96691147b54ec75ab07aa6254f818af2e79a8c2b9733e16ed188352f7"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-1-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6122cfe96691147b54ec75ab07aa6254f818af2e79a8c2b9733e16ed188352f7"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-1-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6122cfe96691147b54ec75ab07aa6254f818af2e79a8c2b9733e16ed188352f7"
+        }
+      ]
+    },
+    {
+      "file": "16000-1-vbr.mp3",
+      "input_sha256": "261a015511b820220bd068287aeee2a36f2e75884a9555e6a0ac4c11ac5c8878",
+      "reference_sha256": "8b3c79416536e5021fee16e3212c5a3b3997d9c21b2b20cdc0b89054acb7e90f",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-1-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e4d92df5545e853c2950a87581bab507fd3ecaf3750149d02ed4e6883e40817e"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-1-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e4d92df5545e853c2950a87581bab507fd3ecaf3750149d02ed4e6883e40817e"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-1-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e4d92df5545e853c2950a87581bab507fd3ecaf3750149d02ed4e6883e40817e"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-1-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e4d92df5545e853c2950a87581bab507fd3ecaf3750149d02ed4e6883e40817e"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-1-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e4d92df5545e853c2950a87581bab507fd3ecaf3750149d02ed4e6883e40817e"
+        }
+      ]
+    },
+    {
+      "file": "16000-2-cbr.mp3",
+      "input_sha256": "610af922842c33e9140f639700ce47592ed38cfd12200892e6fcf37439dda03f",
+      "reference_sha256": "4f21b49e7f8300e3aa83db806b15abc1f87b25f15a757f0a2e966099e09b6ca9",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-2-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "205164157801d046ee5aa4e11fadf11164ad9b1b9aee77f6b92a8371d5ff3d31"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-2-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "205164157801d046ee5aa4e11fadf11164ad9b1b9aee77f6b92a8371d5ff3d31"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-2-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "205164157801d046ee5aa4e11fadf11164ad9b1b9aee77f6b92a8371d5ff3d31"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-2-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "205164157801d046ee5aa4e11fadf11164ad9b1b9aee77f6b92a8371d5ff3d31"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-2-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "205164157801d046ee5aa4e11fadf11164ad9b1b9aee77f6b92a8371d5ff3d31"
+        }
+      ]
+    },
+    {
+      "file": "16000-2-vbr.mp3",
+      "input_sha256": "0058ce8f8e1ebd7d709f9a568548f1f6532929ebd30caef7d07ee6dbce291681",
+      "reference_sha256": "5ed86da74eac12bacfe6ce1d6b9e571cc30f1ffee95d08ed2989151f7a9f1a79",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-2-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "9d2b7b8baec6df990200c3e60b729afb4df69af2c7f411af3488d98eb83eb3f0"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-2-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "9d2b7b8baec6df990200c3e60b729afb4df69af2c7f411af3488d98eb83eb3f0"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-2-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "9d2b7b8baec6df990200c3e60b729afb4df69af2c7f411af3488d98eb83eb3f0"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-2-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "9d2b7b8baec6df990200c3e60b729afb4df69af2c7f411af3488d98eb83eb3f0"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/16000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/16000-2-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "9d2b7b8baec6df990200c3e60b729afb4df69af2c7f411af3488d98eb83eb3f0"
+        }
+      ]
+    },
+    {
+      "file": "22050-1-cbr.mp3",
+      "input_sha256": "4efd2a49e3b430e2efcdf5c66840019f9517958b6951cc7e50b0ee5be81845e0",
+      "reference_sha256": "fd639a71f8bc82c860a487ce6935dd6b1cd910e036618e3020f28a216bd7f5b0",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-1-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd639a71f8bc82c860a487ce6935dd6b1cd910e036618e3020f28a216bd7f5b0"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-1-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd639a71f8bc82c860a487ce6935dd6b1cd910e036618e3020f28a216bd7f5b0"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-1-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd639a71f8bc82c860a487ce6935dd6b1cd910e036618e3020f28a216bd7f5b0"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-1-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd639a71f8bc82c860a487ce6935dd6b1cd910e036618e3020f28a216bd7f5b0"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-1-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd639a71f8bc82c860a487ce6935dd6b1cd910e036618e3020f28a216bd7f5b0"
+        }
+      ]
+    },
+    {
+      "file": "22050-1-vbr.mp3",
+      "input_sha256": "73628f535a197f9048b375a7a3d6f097c02ce7d6075ba780be280cc05ac65d19",
+      "reference_sha256": "052bfa23a5523105aca05f74664f82e92a12d7099ceb8072354c8529ab2d61cd",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-1-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "052bfa23a5523105aca05f74664f82e92a12d7099ceb8072354c8529ab2d61cd"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-1-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "052bfa23a5523105aca05f74664f82e92a12d7099ceb8072354c8529ab2d61cd"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-1-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "052bfa23a5523105aca05f74664f82e92a12d7099ceb8072354c8529ab2d61cd"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-1-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "052bfa23a5523105aca05f74664f82e92a12d7099ceb8072354c8529ab2d61cd"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-1-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "052bfa23a5523105aca05f74664f82e92a12d7099ceb8072354c8529ab2d61cd"
+        }
+      ]
+    },
+    {
+      "file": "22050-2-cbr.mp3",
+      "input_sha256": "d045f99fabc050c03cd115c2c49a50e0c00957b473168651086ff7dd1c62b46a",
+      "reference_sha256": "4d12c0b6fa19a85c1fdb594fd754f48b7e73ea28f415a7efa3da124f532678aa",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-2-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4d12c0b6fa19a85c1fdb594fd754f48b7e73ea28f415a7efa3da124f532678aa"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-2-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4d12c0b6fa19a85c1fdb594fd754f48b7e73ea28f415a7efa3da124f532678aa"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-2-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4d12c0b6fa19a85c1fdb594fd754f48b7e73ea28f415a7efa3da124f532678aa"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-2-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4d12c0b6fa19a85c1fdb594fd754f48b7e73ea28f415a7efa3da124f532678aa"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-2-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4d12c0b6fa19a85c1fdb594fd754f48b7e73ea28f415a7efa3da124f532678aa"
+        }
+      ]
+    },
+    {
+      "file": "22050-2-vbr.mp3",
+      "input_sha256": "a47443a256058f6566eb37b88cc39c8199178e8c8d718c23816443450f170ff7",
+      "reference_sha256": "ff1033d7934a4f86759a0306fe24ae4cf7ab017b925d2b5f4e58032c7b50b48c",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-2-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ff1033d7934a4f86759a0306fe24ae4cf7ab017b925d2b5f4e58032c7b50b48c"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-2-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ff1033d7934a4f86759a0306fe24ae4cf7ab017b925d2b5f4e58032c7b50b48c"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-2-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ff1033d7934a4f86759a0306fe24ae4cf7ab017b925d2b5f4e58032c7b50b48c"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-2-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ff1033d7934a4f86759a0306fe24ae4cf7ab017b925d2b5f4e58032c7b50b48c"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/22050-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/22050-2-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ff1033d7934a4f86759a0306fe24ae4cf7ab017b925d2b5f4e58032c7b50b48c"
+        }
+      ]
+    },
+    {
+      "file": "24000-1-cbr.mp3",
+      "input_sha256": "d8decaed125c8f680f8c3da88ece6d6d645c51685c89ae596f6cfc16c9cb8d00",
+      "reference_sha256": "af0bf76796ceceff645d61c33c163e17c79da28589f8239cedf81ee3b2eb3bc3",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-1-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "a50bb7a28e5c4df89d23a0b006192bad30fa18bec9084810cb6fce6d09fc8c69"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-1-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "a50bb7a28e5c4df89d23a0b006192bad30fa18bec9084810cb6fce6d09fc8c69"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-1-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "a50bb7a28e5c4df89d23a0b006192bad30fa18bec9084810cb6fce6d09fc8c69"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-1-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "a50bb7a28e5c4df89d23a0b006192bad30fa18bec9084810cb6fce6d09fc8c69"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-1-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "a50bb7a28e5c4df89d23a0b006192bad30fa18bec9084810cb6fce6d09fc8c69"
+        }
+      ]
+    },
+    {
+      "file": "24000-1-vbr.mp3",
+      "input_sha256": "cd0763676f74a628f06f40f1213bb741b97f442dc62420fa5dddfdef299586a7",
+      "reference_sha256": "aa4f7cb70afa5da0cf1926507b9a8ed9f68ff57c66fca7168e0f9907ec9b224d",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-1-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "8de8f838bc512fdecb8d2cc4e4e80d8af256966a624759b306cdd45fecc6fcf8"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-1-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "8de8f838bc512fdecb8d2cc4e4e80d8af256966a624759b306cdd45fecc6fcf8"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-1-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "8de8f838bc512fdecb8d2cc4e4e80d8af256966a624759b306cdd45fecc6fcf8"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-1-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "8de8f838bc512fdecb8d2cc4e4e80d8af256966a624759b306cdd45fecc6fcf8"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-1-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "8de8f838bc512fdecb8d2cc4e4e80d8af256966a624759b306cdd45fecc6fcf8"
+        }
+      ]
+    },
+    {
+      "file": "24000-2-cbr.mp3",
+      "input_sha256": "99e5d7d8015480bcd206630831f3e01c25ba5a5e9058cd46d9531988c561827e",
+      "reference_sha256": "3b3f9a68ee108d28e9e9bcb4d246c2290fb2c04f08f22b97ddd5fe3f85d88132",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-2-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fa1f1d0a2f0ceb0e1dc540a6a71d063b2dcc9357ffb008063585984973b05213"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-2-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fa1f1d0a2f0ceb0e1dc540a6a71d063b2dcc9357ffb008063585984973b05213"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-2-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fa1f1d0a2f0ceb0e1dc540a6a71d063b2dcc9357ffb008063585984973b05213"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-2-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fa1f1d0a2f0ceb0e1dc540a6a71d063b2dcc9357ffb008063585984973b05213"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-2-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fa1f1d0a2f0ceb0e1dc540a6a71d063b2dcc9357ffb008063585984973b05213"
+        }
+      ]
+    },
+    {
+      "file": "24000-2-vbr.mp3",
+      "input_sha256": "d4389462eeaec0963105cc73c15351c6c641a8bf789b39e6d4fa07a52ce184d3",
+      "reference_sha256": "5be6c83e2ca4ca39d1819ecebc6685f0b97e44087bdb2de8fde318151a12becb",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-2-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ee95dcc9520665be235535014062a30bf48e185653b8d2e4a947c71fb9ad2f07"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-2-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ee95dcc9520665be235535014062a30bf48e185653b8d2e4a947c71fb9ad2f07"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-2-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ee95dcc9520665be235535014062a30bf48e185653b8d2e4a947c71fb9ad2f07"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-2-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ee95dcc9520665be235535014062a30bf48e185653b8d2e4a947c71fb9ad2f07"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/24000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/24000-2-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ee95dcc9520665be235535014062a30bf48e185653b8d2e4a947c71fb9ad2f07"
+        }
+      ]
+    },
+    {
+      "file": "32000-1-cbr.mp3",
+      "input_sha256": "515ba987c53b896db64a9aaae917e1e13ee7cde9b945c0275b682e1a45b0fe88",
+      "reference_sha256": "837fedfd7615b16957e96318780e7453abf128ffdd02c81b7467f78953cade92",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-1-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f0dbe07845efb78907e62da04bbaee922877dcbdff4ef4964473ae80f3282160"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-1-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f0dbe07845efb78907e62da04bbaee922877dcbdff4ef4964473ae80f3282160"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-1-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f0dbe07845efb78907e62da04bbaee922877dcbdff4ef4964473ae80f3282160"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-1-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f0dbe07845efb78907e62da04bbaee922877dcbdff4ef4964473ae80f3282160"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-1-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f0dbe07845efb78907e62da04bbaee922877dcbdff4ef4964473ae80f3282160"
+        }
+      ]
+    },
+    {
+      "file": "32000-1-vbr.mp3",
+      "input_sha256": "d17409fda3e7e6ffde2e36ee414cbbf3a1c2cdd123e330a635b00ec1f45a8653",
+      "reference_sha256": "11f6d2217daf46d81ba8009be791a081e6f6310921cdecadfdbf897ba0048791",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-1-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e02a20709f3d60e143f9ee807cecabc43134f1fb46b126e1eb3155d51fdfffde"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-1-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e02a20709f3d60e143f9ee807cecabc43134f1fb46b126e1eb3155d51fdfffde"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-1-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e02a20709f3d60e143f9ee807cecabc43134f1fb46b126e1eb3155d51fdfffde"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-1-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e02a20709f3d60e143f9ee807cecabc43134f1fb46b126e1eb3155d51fdfffde"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-1-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e02a20709f3d60e143f9ee807cecabc43134f1fb46b126e1eb3155d51fdfffde"
+        }
+      ]
+    },
+    {
+      "file": "32000-2-cbr.mp3",
+      "input_sha256": "7fd5bb2d858fdceef8684c94c6fcae9fb000321846733d20e06eb3c6e76af701",
+      "reference_sha256": "452977f297a7374832618875cc9e9facf5f482ac7659d5a7f6e89fca69b93816",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-2-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "7fd3c792a2bee0ce379538c7395e350627ef57d75cf597693c0b60a60eb145d5"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-2-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "7fd3c792a2bee0ce379538c7395e350627ef57d75cf597693c0b60a60eb145d5"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-2-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "7fd3c792a2bee0ce379538c7395e350627ef57d75cf597693c0b60a60eb145d5"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-2-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "7fd3c792a2bee0ce379538c7395e350627ef57d75cf597693c0b60a60eb145d5"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-2-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "7fd3c792a2bee0ce379538c7395e350627ef57d75cf597693c0b60a60eb145d5"
+        }
+      ]
+    },
+    {
+      "file": "32000-2-vbr.mp3",
+      "input_sha256": "dfbb5070a12b82944db31372671256f622876a3be46d9c51cb36069a1afa6a6a",
+      "reference_sha256": "e1107c4a9b5929120eb1ed086748b966603c95a7ab80cddb60b1da99eef402fa",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-2-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "98f875899f530eba0cf8bba5481929b8606a55038b596d25c395173cf30c002e"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-2-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "98f875899f530eba0cf8bba5481929b8606a55038b596d25c395173cf30c002e"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-2-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "98f875899f530eba0cf8bba5481929b8606a55038b596d25c395173cf30c002e"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-2-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "98f875899f530eba0cf8bba5481929b8606a55038b596d25c395173cf30c002e"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/32000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/32000-2-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "98f875899f530eba0cf8bba5481929b8606a55038b596d25c395173cf30c002e"
+        }
+      ]
+    },
+    {
+      "file": "44100-1-cbr.mp3",
+      "input_sha256": "959d92db70e7116a419cbfff3db865e7d047d2abab3988dbff0ed8fa1ecf5457",
+      "reference_sha256": "66d76d449bbcdf835c6c7f2bf05d6cc7bc20b410c67a0a45c78bd5d3dff2e054",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-1-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c744afe202f0de596e1c700dee9d70e6cdceae6d81d094fa8fdee57e045385d3"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-1-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c744afe202f0de596e1c700dee9d70e6cdceae6d81d094fa8fdee57e045385d3"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-1-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c744afe202f0de596e1c700dee9d70e6cdceae6d81d094fa8fdee57e045385d3"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-1-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c744afe202f0de596e1c700dee9d70e6cdceae6d81d094fa8fdee57e045385d3"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-1-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c744afe202f0de596e1c700dee9d70e6cdceae6d81d094fa8fdee57e045385d3"
+        }
+      ]
+    },
+    {
+      "file": "44100-1-vbr.mp3",
+      "input_sha256": "d00ef5d2cbcabdf36423e85341fda162fdd746fa9094ebd7d837fa7f57edcba3",
+      "reference_sha256": "332550d25f2ee22105b4678401c22a741c3489b882f604323bc3d4137347609c",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-1-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f6f21ae2859e72dc762dc4059848143db1b7cdf0a3cefb38a7dd44949fc07de7"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-1-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f6f21ae2859e72dc762dc4059848143db1b7cdf0a3cefb38a7dd44949fc07de7"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-1-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f6f21ae2859e72dc762dc4059848143db1b7cdf0a3cefb38a7dd44949fc07de7"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-1-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f6f21ae2859e72dc762dc4059848143db1b7cdf0a3cefb38a7dd44949fc07de7"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-1-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f6f21ae2859e72dc762dc4059848143db1b7cdf0a3cefb38a7dd44949fc07de7"
+        }
+      ]
+    },
+    {
+      "file": "44100-2-cbr.mp3",
+      "input_sha256": "19dc2c410562bfc04ce3c3760e37f6ec0a6e94e5d1cac5ce92ed9282d57661f8",
+      "reference_sha256": "e454c9a931485f51f4618528b43b41e5364dde1378e837b168163024c0cf8147",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-2-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2fd3e3df90711729d2887cbddfbad1db52e506ae61883495d4806ffb03cb9859"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-2-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2fd3e3df90711729d2887cbddfbad1db52e506ae61883495d4806ffb03cb9859"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-2-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2fd3e3df90711729d2887cbddfbad1db52e506ae61883495d4806ffb03cb9859"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-2-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2fd3e3df90711729d2887cbddfbad1db52e506ae61883495d4806ffb03cb9859"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-2-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2fd3e3df90711729d2887cbddfbad1db52e506ae61883495d4806ffb03cb9859"
+        }
+      ]
+    },
+    {
+      "file": "44100-2-vbr.mp3",
+      "input_sha256": "2a2e9b470975cb6d039a2eb213d00f17ea5d23692ea6b9258d80b4942351f4da",
+      "reference_sha256": "a7fc76f2a699f24d80d2f4c75e21abaa05f8274944e35b1d10f748ad363aaa8c",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-2-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "13f2a6a624313f40b672e745d1a44aa7a853ca2be53c9f6cbca29a635297e147"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-2-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "13f2a6a624313f40b672e745d1a44aa7a853ca2be53c9f6cbca29a635297e147"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-2-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "13f2a6a624313f40b672e745d1a44aa7a853ca2be53c9f6cbca29a635297e147"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-2-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "13f2a6a624313f40b672e745d1a44aa7a853ca2be53c9f6cbca29a635297e147"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/44100-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/44100-2-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "13f2a6a624313f40b672e745d1a44aa7a853ca2be53c9f6cbca29a635297e147"
+        }
+      ]
+    },
+    {
+      "file": "48000-1-cbr.mp3",
+      "input_sha256": "d8b1d6cd347031ef5bf5db056ddb1c08d1f69167a67fbbce621d6dfaef0058d3",
+      "reference_sha256": "5f08e3ea96f2205c79ef21c9e144ef48cdb84e4db88e47ae0848163e75b2e371",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-1-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c653570bf807f18def4319627c8863ea75c823324689ca0f57f2a0d1f017e855"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-1-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c653570bf807f18def4319627c8863ea75c823324689ca0f57f2a0d1f017e855"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-1-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c653570bf807f18def4319627c8863ea75c823324689ca0f57f2a0d1f017e855"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-1-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c653570bf807f18def4319627c8863ea75c823324689ca0f57f2a0d1f017e855"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-1-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c653570bf807f18def4319627c8863ea75c823324689ca0f57f2a0d1f017e855"
+        }
+      ]
+    },
+    {
+      "file": "48000-1-vbr.mp3",
+      "input_sha256": "51021ba5d3ec94c35c9589515b43fb7900c055f056bcdb27830866708a2e30b2",
+      "reference_sha256": "d3a1fee5428e6020c395955f5a81f42515e0cde7a34317469e13e7a426d1efaa",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-1-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "dca0a91b526fba110bff29a0ec8545559f58addcf3840a33fc9572972fe4255f"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-1-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "dca0a91b526fba110bff29a0ec8545559f58addcf3840a33fc9572972fe4255f"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-1-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "dca0a91b526fba110bff29a0ec8545559f58addcf3840a33fc9572972fe4255f"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-1-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "dca0a91b526fba110bff29a0ec8545559f58addcf3840a33fc9572972fe4255f"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-1-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "dca0a91b526fba110bff29a0ec8545559f58addcf3840a33fc9572972fe4255f"
+        }
+      ]
+    },
+    {
+      "file": "48000-2-cbr.mp3",
+      "input_sha256": "0201fab507aff7799ac5ad17442355f8e32ce870a19b1c1f21be03c010263924",
+      "reference_sha256": "e84723d50406609d19f9bb9694cce69a5fc735d67dbbf94a03fa2db1a1c43995",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-2-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3d72cdd1aba2ab0a191b534eab97c069543ea1b552ff3b542405bd484954661b"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-2-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3d72cdd1aba2ab0a191b534eab97c069543ea1b552ff3b542405bd484954661b"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-2-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3d72cdd1aba2ab0a191b534eab97c069543ea1b552ff3b542405bd484954661b"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-2-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3d72cdd1aba2ab0a191b534eab97c069543ea1b552ff3b542405bd484954661b"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-2-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3d72cdd1aba2ab0a191b534eab97c069543ea1b552ff3b542405bd484954661b"
+        }
+      ]
+    },
+    {
+      "file": "48000-2-vbr.mp3",
+      "input_sha256": "407a282aa22836979393e361c3fa66d1a56a625682a105408593a0a71202a7c5",
+      "reference_sha256": "ca1f1229ff1f7a23c0555fba0ea6641f19fde7ee7a62e12543867a034284188f",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-2-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "9199a0b62bc70a55f0e62e7657e5f15bc93699ea385b59cde95bf810a61181b8"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-2-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "9199a0b62bc70a55f0e62e7657e5f15bc93699ea385b59cde95bf810a61181b8"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-2-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "9199a0b62bc70a55f0e62e7657e5f15bc93699ea385b59cde95bf810a61181b8"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-2-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "9199a0b62bc70a55f0e62e7657e5f15bc93699ea385b59cde95bf810a61181b8"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/48000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/48000-2-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "9199a0b62bc70a55f0e62e7657e5f15bc93699ea385b59cde95bf810a61181b8"
+        }
+      ]
+    },
+    {
+      "file": "8000-1-cbr.mp3",
+      "input_sha256": "b89cb9554dd02777440b7680cb54ea9dab9f42d598ba1034be6ed1b077c6a816",
+      "reference_sha256": "542bb6697d375ca2f222cfafc0a1968ca4c803c3777a4e424b34337f5bb91515",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-1-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d947e604d85fb7eb367354078c16331cfb8e817f607d3492c7de04a156ca8639"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-1-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d947e604d85fb7eb367354078c16331cfb8e817f607d3492c7de04a156ca8639"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-1-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d947e604d85fb7eb367354078c16331cfb8e817f607d3492c7de04a156ca8639"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-1-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d947e604d85fb7eb367354078c16331cfb8e817f607d3492c7de04a156ca8639"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-1-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-1-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d947e604d85fb7eb367354078c16331cfb8e817f607d3492c7de04a156ca8639"
+        }
+      ]
+    },
+    {
+      "file": "8000-1-vbr.mp3",
+      "input_sha256": "0aa1fe5b3db9bdce7779060b1f6bff58641c7dbc2936c7d6e71faca696301f5c",
+      "reference_sha256": "d9de63d8c3f73a75414ee86733344d454f5a027ac5d581ff21c42b5993c3d3ca",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-1-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4e2bb26d7313cc16702df8619c9205e6b16d043e08f3e4ee426d47335d43c3a9"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-1-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4e2bb26d7313cc16702df8619c9205e6b16d043e08f3e4ee426d47335d43c3a9"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-1-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4e2bb26d7313cc16702df8619c9205e6b16d043e08f3e4ee426d47335d43c3a9"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-1-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4e2bb26d7313cc16702df8619c9205e6b16d043e08f3e4ee426d47335d43c3a9"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-1-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-1-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4e2bb26d7313cc16702df8619c9205e6b16d043e08f3e4ee426d47335d43c3a9"
+        }
+      ]
+    },
+    {
+      "file": "8000-2-cbr.mp3",
+      "input_sha256": "3458c2c1619fb3cb6370cf6b7e3d4fad965ec7f5aa1a6779902e60565ff968a5",
+      "reference_sha256": "b47e79bcd80e52301a6a646d527d16b6f011c529d29b3b22cd58cca4986a2cca",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-2-cbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d5e952021f472ab5570806e43f32ef394338dc7ee72b7d41d87d452f2ff350c1"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-2-cbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d5e952021f472ab5570806e43f32ef394338dc7ee72b7d41d87d452f2ff350c1"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-2-cbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d5e952021f472ab5570806e43f32ef394338dc7ee72b7d41d87d452f2ff350c1"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-2-cbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d5e952021f472ab5570806e43f32ef394338dc7ee72b7d41d87d452f2ff350c1"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-2-cbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-2-cbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d5e952021f472ab5570806e43f32ef394338dc7ee72b7d41d87d452f2ff350c1"
+        }
+      ]
+    },
+    {
+      "file": "8000-2-vbr.mp3",
+      "input_sha256": "e397124f5b694727f48151d260f2474e418b01667e2b576f5082f6d6e676007c",
+      "reference_sha256": "6090de87cf229fd5747692aebd1ad3f841378a1d8317e04bcc973c26a98f97b7",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-2-vbr-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "590a9c123baf1562361af81b1f0a94066a0fc57cd071f488cd667532f5715a0f"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-2-vbr-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "590a9c123baf1562361af81b1f0a94066a0fc57cd071f488cd667532f5715a0f"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-2-vbr-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "590a9c123baf1562361af81b1f0a94066a0fc57cd071f488cd667532f5715a0f"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-2-vbr-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "590a9c123baf1562361af81b1f0a94066a0fc57cd071f488cd667532f5715a0f"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/seek-corpus/8000-2-vbr.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-long-initial/8000-2-vbr-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "590a9c123baf1562361af81b1f0a94066a0fc57cd071f488cd667532f5715a0f"
+        }
+      ]
+    }
+  ]
+}

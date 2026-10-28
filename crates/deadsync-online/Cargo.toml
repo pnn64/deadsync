@@ -21,7 +21,7 @@ log = "0.4.34"
 rand = "0.10.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-tungstenite = "0.30.0"
+tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
 unicode-normalization = "0.1.26"
 zip = { version = "9.1.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 

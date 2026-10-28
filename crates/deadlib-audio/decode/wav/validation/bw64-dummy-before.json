@@ -1,0 +1,17 @@
+{
+  "base_commit": "158ea60ea",
+  "test_sha256": "ea0bdb3fa41596d3f662bc18ae97dcc48b887486afd7faa9a93d42ca8e19ebff",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "-p",
+    "deadlib-audio-decode-wav",
+    "--target-dir",
+    "target/wav",
+    "--test",
+    "bw64"
+  ],
+  "exit_code": 101,
+  "log_sha256": "1c5e92a93946bf0eeeee59c552a8ad755a6b321241e0ac50a43529a883918e2c"
+}

@@ -1183,6 +1183,9 @@ pub enum TextContent {
     Static(&'static str),
     Owned(String),
     Shared(Arc<str>),
+    /// Long changing text in a replaceable layout slot (0..8). Callers sharing
+    /// a slot must not display different values in the same frame.
+    Dynamic(Arc<DynamicText>),
     Inline(InlineText),
     /// Short changing text laid out through an independently reusable frame
     /// slot instead of the persistent whole-string layout cache.
@@ -1202,6 +1205,13 @@ pub enum TextContent {
         text: InlineU32Text,
         slot: u8,
     },
+}
+
+/// The changing text and slot share one allocation so `TextContent` stays compact.
+#[derive(Clone, Debug)]
+pub struct DynamicText {
+    pub text: String,
+    pub slot: u8,
 }
 
 /// Heap-free UTF-8 text for short, frame-local formatted values.
@@ -1519,6 +1529,7 @@ impl TextContent {
             Self::Static(s) => s,
             Self::Owned(s) => s.as_str(),
             Self::Shared(s) => s.as_ref(),
+            Self::Dynamic(text) => text.text.as_str(),
             Self::Inline(s) => s.as_str(),
             Self::FrameInline { text, .. } => text.as_str(),
             Self::InlineU16(s) => s.as_str(),

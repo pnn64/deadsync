@@ -1,0 +1,7 @@
+{
+  "reference": "libjpeg-turbo 3.2.1 jaricom.c probability data (test only)",
+  "reference_source_sha256": "fa144de494da46aa685379a8a0f6f59acaef7a2bb282cbf738a0a8070e1d527e",
+  "probability_states": 113,
+  "values_and_transitions": "exact",
+  "native_table_sha256": "a8cfa3da4407a6a93df1877303ffe6c43209722cc09e19c6c9dc9c3d33db3490"
+}

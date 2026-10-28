@@ -250,6 +250,41 @@ fn empty_path_errors_match_official_file_library_diagnostics() {
     assert_eq!(vm.string_bytes(id).unwrap(), expected.as_bytes().as_ref());
 }
 
+#[test]
+fn selected_file_capacity_failures_restore_both_stacks_and_release_named_files() {
+    fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut s = call.native_stack()?;
+        let path = s.to_bytes(1)?.unwrap().to_vec();
+        let owner = s.thread_id();
+        let child = s.new_thread()?;
+        for _ in 0..7999 {
+            s.thread_stack(child)?.push(Value::Number(17.))?;
+        }
+        assert!(s.load_file_thread(child, Some(&path)).is_err());
+        assert_eq!(s.thread_id(), owner);
+        assert_eq!(s.top(), 2);
+        assert_eq!(s.thread_stack(child)?.top(), 7999);
+        assert_eq!(s.thread_stack(child)?.value(7999), Some(Value::Number(17.)));
+        s.thread_stack(child)?.set_top(0)?;
+        let status = s.load_file_thread(child, Some(&path))?;
+        assert_eq!(status, deadlib_lua::NativeLoadStatus::Ok);
+        assert_eq!(s.thread_stack(child)?.top(), 1);
+        s.move_thread_values(child, owner, 1)?;
+        s.call(0, Some(1))?;
+        assert_eq!(s.value(-1), Some(Value::Number(42.)));
+        assert_eq!(s.load_file_thread(owner, Some(&path))?, status);
+        s.call(0, Some(1))?;
+        s.finish(2)
+    }
+    let file = Fixture::new(b"return 42");
+    let mut vm = Vm::new();
+    install(&mut vm, callback);
+    file.bind(&mut vm);
+    assert_eq!(run(&mut vm, b"return host(path)"), [Value::Number(42.); 2]);
+    std::fs::remove_file(&file.0).unwrap();
+    run(&mut vm, b"collectgarbage();assert(17+29==46)");
+}
+
 #[cfg(all(target_os = "linux", target_env = "gnu"))]
 #[test]
 fn read_errors_override_protected_finalizer_errors_and_release_directory_streams() {

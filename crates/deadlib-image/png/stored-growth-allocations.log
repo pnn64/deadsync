@@ -1,0 +1,43 @@
+COMMAND: ["cargo", "build", "--release", "--offline", "--manifest-path", "C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\baseline\\Cargo.toml", "--target-dir", "C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\target-baseline"]
+     Locking 9 packages to highest Rust 1.99.1 compatible versions
+   Compiling crc32fast v1.5.3
+   Compiling simd-adler32 v0.3.10
+   Compiling cfg-if v1.0.5
+   Compiling adler2 v2.0.1
+   Compiling miniz_oxide v0.9.1
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync\target\png-stored-growth-allocations\baseline-image)
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\target\png-stored-growth-allocations\baseline-image\png)
+   Compiling flate2 v1.1.10
+   Compiling png-allocation-probe v0.0.0 (C:\GitHub\deadsync\target\png-stored-growth-allocations\baseline)
+    Finished `release` profile [optimized + debuginfo] target(s) in 13.07s
+COMMAND: ["C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\target-baseline\\release\\png-allocation-probe.exe", "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak", "C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\baseline-photos-samples"]
+Allocator calibration passed: Stats { allocs: 1, zeroed: 1, reallocs: 1, deallocs: 2, failed: 0, allocated_bytes: 48, reallocated_bytes: 96, live: 0, peak: 113 }
+COMMAND: ["C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\target-baseline\\release\\png-allocation-probe.exe", "C:\\GitHub\\deadsync\\target\\png-decode-corpus-20261027-a", "C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\baseline-formats-samples"]
+Allocator calibration passed: Stats { allocs: 1, zeroed: 1, reallocs: 1, deallocs: 2, failed: 0, allocated_bytes: 48, reallocated_bytes: 96, live: 0, peak: 113 }
+COMMAND: ["cargo", "build", "--release", "--offline", "--manifest-path", "C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\candidate\\Cargo.toml", "--target-dir", "C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\target-candidate"]
+     Locking 9 packages to highest Rust 1.99.1 compatible versions
+   Compiling crc32fast v1.5.3
+   Compiling cfg-if v1.0.5
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling miniz_oxide v0.9.1
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+   Compiling flate2 v1.1.10
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+   Compiling png-allocation-probe v0.0.0 (C:\GitHub\deadsync\target\png-stored-growth-allocations\candidate)
+    Finished `release` profile [optimized + debuginfo] target(s) in 14.38s
+COMMAND: ["cargo", "clippy", "--release", "--offline", "--manifest-path", "C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\candidate\\Cargo.toml", "--target-dir", "C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\target-candidate", "--all-targets", "--", "-D", "warnings"]
+    Checking simd-adler32 v0.3.10
+    Checking adler2 v2.0.1
+    Checking cfg-if v1.0.5
+    Checking crc32fast v1.5.3
+    Checking miniz_oxide v0.9.1
+    Checking deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+    Checking deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+    Checking flate2 v1.1.10
+    Checking png-allocation-probe v0.0.0 (C:\GitHub\deadsync\target\png-stored-growth-allocations\candidate)
+    Finished `release` profile [optimized + debuginfo] target(s) in 3.57s
+COMMAND: ["C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\target-candidate\\release\\png-allocation-probe.exe", "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak", "C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\candidate-photos-samples"]
+Allocator calibration passed: Stats { allocs: 1, zeroed: 1, reallocs: 1, deallocs: 2, failed: 0, allocated_bytes: 48, reallocated_bytes: 96, live: 0, peak: 113 }
+COMMAND: ["C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\target-candidate\\release\\png-allocation-probe.exe", "C:\\GitHub\\deadsync\\target\\png-decode-corpus-20261027-a", "C:\\GitHub\\deadsync\\target\\png-stored-growth-allocations\\candidate-formats-samples"]
+Allocator calibration passed: Stats { allocs: 1, zeroed: 1, reallocs: 1, deallocs: 2, failed: 0, allocated_bytes: 48, reallocated_bytes: 96, live: 0, peak: 113 }

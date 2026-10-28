@@ -502,6 +502,46 @@ fn bounded_eos_metadata_and_seek_difference_inventory() {
             expected.push((t, status, tell, out));
         }
         assert!(w.is_empty());
+        let mut reference_reader = OggSeekReader::with_options(
+            Cursor::new(&bytes),
+            SeekOptions {
+                seek_behavior: SeekBehavior::Libvorbis,
+                eos_behavior: EosBehavior::Libvorbis,
+                ..SeekOptions::default()
+            },
+        )
+        .unwrap();
+        let reference_id = reference_reader.selected().info.id;
+        for (target, status, tell, reference) in &expected {
+            reference_reader
+                .seek(reference_id, *target)
+                .unwrap_or_else(|e| panic!("reference case {i}/{c:?}, target {target}: {e:?}"));
+            assert_eq!(*status, 0);
+            assert_eq!(
+                reference_reader.position(),
+                *tell,
+                "reference case {i}/{c:?}, target {target}"
+            );
+            let mut actual = Output {
+                planes: vec![Vec::new(); full.planes.len()],
+                end: None,
+            };
+            while reference_reader
+                .read_packet(|e| {
+                    if let OggEvent::Pcm(b) = e {
+                        for (p, q) in actual.planes.iter_mut().zip(b.pcm.planes()) {
+                            p.extend(q);
+                        }
+                    }
+                })
+                .unwrap()
+            {}
+            compare_pcm(
+                &format!("reference case {i}/{c:?}, target {target}"),
+                &actual,
+                reference,
+            );
+        }
         for packet_preroll in [false, true] {
             let mut native = OggSeekReader::with_options(
                 Cursor::new(&bytes),
@@ -594,7 +634,10 @@ fn bounded_eos_metadata_and_seek_difference_inventory() {
         differences.len()
     );
     assert_eq!(
-        differences.join("\n") + "\n",
+        differences,
         include_str!("fixtures/eos-seek-differences-v1.tsv")
+            .lines()
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
     );
 }

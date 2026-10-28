@@ -243,6 +243,27 @@ fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
     ))
 }
 
+fn reserve_output(output: &mut Vec<u8>, additional: usize, limit: usize) -> Result<(), Error> {
+    if additional > output.capacity() - output.len() {
+        let needed = output
+            .len()
+            .checked_add(additional)
+            .filter(|&n| n <= limit)
+            .ok_or(Error::LimitExceeded)?;
+        // Grow only as output is produced, capping requests at its limit.
+        let capacity = output
+            .capacity()
+            .saturating_mul(2)
+            .max(8)
+            .max(needed)
+            .min(limit);
+        output
+            .try_reserve_exact(capacity - output.len())
+            .map_err(|_| Error::Allocation)?;
+    }
+    Ok(())
+}
+
 // Keep the Huffman tables and coded-block loop out of stored-block decoding.
 #[inline(never)]
 fn inflate_codes(
@@ -260,7 +281,7 @@ fn inflate_codes(
                     return Err(Error::LimitExceeded);
                 }
                 if output.len() == output.capacity() {
-                    reserve(output, 1)?;
+                    reserve_output(output, 1, limit)?;
                 }
                 output.push(literal as u8);
                 let mut room = (limit - output.len()).min(output.capacity() - output.len());
@@ -297,7 +318,7 @@ fn inflate_codes(
                 if len > limit.saturating_sub(output.len()) {
                     return Err(Error::LimitExceeded);
                 }
-                reserve(output, len)?;
+                reserve_output(output, len, limit)?;
                 let start = output.len() - distance;
                 if distance == 1 {
                     output.resize(output.len() + len, output[start]);
@@ -352,7 +373,14 @@ pub fn decompress_prefix(input: &[u8], limit: usize) -> Result<(Vec<u8>, usize),
             if len > limit.saturating_sub(output.len()) {
                 return Err(Error::LimitExceeded);
             }
-            reserve(&mut output, len)?;
+            // A nonfinal stored block can amortize the next payload's growth.
+            let additional = if last {
+                len
+            } else {
+                len.saturating_mul(2)
+                    .min(limit.saturating_sub(output.len()))
+            };
+            reserve_output(&mut output, additional, limit)?;
             // Drain bytes prefetched by a preceding Huffman block, then copy
             // the byte-aligned payload directly without bit-reader dispatch.
             let mut left = len;

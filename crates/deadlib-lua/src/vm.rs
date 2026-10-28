@@ -32,10 +32,12 @@ mod userdata;
 use crate::arena::{Arena, index as slot_index};
 pub use gc::{GcOperation, HeapStats, Root};
 pub use host::{
-    HostCall, HostFunction, HostThreadState, NativeCallStatus, NativeDebugFrame, NativeDebugInfo,
-    NativeDebugString, NativeLoadStatus, NativeStack, NativeThreadStack,
+    HostCall, HostFunction, HostThreadState, NativeBuiltinBody, NativeCallStatus, NativeDebugFrame,
+    NativeDebugInfo, NativeDebugString, NativeHook, NativeHookEvent, NativeHookInfo,
+    NativeLoadStatus, NativeStack, NativeThreadStack,
 };
 use native::format_number;
+pub use package::{NativeLibrary, NativeLibraryLoader, NativeSymbol};
 pub use threads::NativeThreadStatus;
 
 // Lua 5.1's lua_Integer is ptrdiff_t. The supported SSE2/MSVC profiles
@@ -261,6 +263,8 @@ const CONT_HOST_META: u64 = 269;
 const CONT_HOST_PCALL: u64 = 270;
 const CONT_HOST_CONCAT: u64 = 271;
 const CONT_HOST_LOAD: u64 = 272;
+const CONT_NATIVE_HOOK: u64 = 273;
+const CONT_NATIVE_WINDOW: u64 = 274;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(usize)]
@@ -377,6 +381,8 @@ pub struct Vm {
     active_native: Option<usize>,
     // A synchronous protected host invocation can also drive child threads.
     native_protected: bool,
+    api_calls: Vec<host::ApiCall>,
+    native_bodies: Vec<host::Body>,
     patterns: HashMap<(StringId, bool), crate::pattern::Pattern>,
     pattern_work: crate::pattern::Work,
     pattern_locale: u64,
@@ -399,6 +405,9 @@ pub struct Vm {
     tracebacks: Vec<traces::Traceback>,
     hooks: hooks::Hooks,
     userdata: Arena<userdata::Userdata>,
+    native_library_loader: Option<Arc<dyn NativeLibraryLoader>>,
+    native_library_support: bool,
+    library_loads: Vec<package::LoadingLibrary>,
     io: io::Io,
     userdata_order: u64,
     standalone: u64,
@@ -438,6 +447,8 @@ impl Vm {
             output: None,
             active_native: None,
             native_protected: false,
+            api_calls: Vec::new(),
+            native_bodies: Vec::new(),
             patterns: HashMap::new(),
             pattern_work: crate::pattern::Work::default(),
             pattern_locale: crate::locale::revision(),
@@ -460,6 +471,21 @@ impl Vm {
             tracebacks: Vec::new(),
             hooks: hooks::Hooks::default(),
             userdata: Arena::default(),
+            native_library_loader: {
+                #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+                {
+                    Some(Arc::new(crate::native_abi::NativeCAbiLoader::default()))
+                }
+                #[cfg(not(all(feature = "native-c-api", any(windows, target_os = "linux"))))]
+                {
+                    None
+                }
+            },
+            native_library_support: cfg!(all(
+                feature = "native-c-api",
+                any(windows, target_os = "linux")
+            )),
+            library_loads: Vec::new(),
             io: io::Io::default(),
             userdata_order: 0,
             standalone: 0,
@@ -1029,6 +1055,9 @@ impl Vm {
     }
 
     fn return_frame(&mut self, frame: Frame, source: usize, count: usize) -> Option<usize> {
+        if self.complete_native_body(frame, source, count) {
+            return Some(count);
+        }
         if self.hooks.mask & hooks::RETURN != 0
             && self.hooks.allowed()
             && self.defer_hook_return(frame, source, count)
@@ -1064,7 +1093,15 @@ impl Vm {
         } else {
             frame.wanted as usize
         };
-        self.resize_registers(self.registers.len().max(frame.result + wanted));
+        // An API call on a suspended state can truncate the spare storage of
+        // its pending Lua caller. A resumed native yield must restore that
+        // caller's register window, as luaD_poscall restores ci->top.
+        self.resize_registers(
+            self.registers
+                .len()
+                .max(frame.stack_start)
+                .max(frame.result + wanted),
+        );
         let copied = count.min(wanted);
         self.registers
             .copy_within(source..source + copied, frame.result);
@@ -1227,7 +1264,8 @@ impl Vm {
         self.trim_hooks();
         match result {
             Ok(count) => Ok(&self.registers[..count]),
-            Err(error) => {
+            Err(mut error) => {
+                error.target_thread = None;
                 self.registers.clear();
                 if let Some(value) = error.value() {
                     self.registers.push(value);
@@ -1241,10 +1279,16 @@ impl Vm {
     // Shared entry driver for source execution and host-requested finalization.
     fn drive(&mut self) -> Result<usize, Error> {
         let mut error_line = 0;
+        let mut pending = None;
         let result = loop {
-            let result = self.run(&mut error_line);
+            let result = pending
+                .take()
+                .map_or_else(|| self.run(&mut error_line), Err);
             match result {
                 Err(error) if error.kind() == ErrorKind::Runtime => {
+                    if let Some(target) = error.target_thread {
+                        self.leave_threads_to(target, &mut error_line)?;
+                    }
                     match self.catch_error(&error) {
                         Ok(true) => continue,
                         Ok(false) if self.thread != self.main => {
@@ -1252,6 +1296,10 @@ impl Vm {
                             continue;
                         }
                         Ok(false) => break Err(error),
+                        Err(next) if next.target_thread.is_some() => {
+                            pending = Some(next);
+                            continue;
+                        }
                         Err(next) => break Err(next),
                     }
                 }
@@ -1302,6 +1350,7 @@ impl Vm {
             let function = match frame.function {
                 FrameKind::Native(id) => {
                     self.charge()?;
+                    let id = self.body_code(self.thread, frame_index).unwrap_or(id);
                     let previous = self.active_native.replace(frame_index);
                     let result = self.step_native(id, frame).map_err(|error| {
                         if error.kind() == ErrorKind::Runtime && error.value().is_none() {
@@ -1315,6 +1364,9 @@ impl Vm {
                     self.active_native = previous;
                     if let Some(count) = result? {
                         return Ok(count);
+                    }
+                    if self.suspend_native_body(frame_index) {
+                        return Ok(0);
                     }
                     if let Some(count) = self.apply_transition(error_line)? {
                         return Ok(count);
@@ -1346,6 +1398,21 @@ impl Vm {
                 let b = base + usize::from(i.b);
                 let c = i.c as usize;
                 self.frames[frame_index].pc = pc as u32;
+                if matches!(i.op, Op::Call | Op::CallIter | Op::TailCall | Op::Return)
+                    || i.op == Op::Vararg && i.c == OPEN
+                    || i.op == Op::SetList && i.b == OPEN_ARGS
+                {
+                    if self
+                        .hooks
+                        .resumed_top
+                        .is_some_and(|(owner, _)| owner == frame_index)
+                    {
+                        self.hooks.resumed_top = None;
+                    }
+                    if self.hooks.yield_owner == Some(frame_index) {
+                        self.hooks.yield_owner = None;
+                    }
+                }
                 match i.op {
                     Op::Load => {
                         // Initial nil slots were cleared on frame entry. A call

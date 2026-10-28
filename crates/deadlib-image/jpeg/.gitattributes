@@ -1,0 +1,5 @@
+# Oracle hashes cover exact source bytes on every host.
+tests/oracle/*.patch text eol=lf whitespace=-blank-at-eol
+tests/fixtures/**/*.jpg -text
+tests/fixtures/**/*.samples -text
+tests/fixtures/**/*.raw -text

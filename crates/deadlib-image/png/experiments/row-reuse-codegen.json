@@ -1,0 +1,27 @@
+{
+  "binary_sha256": "878ab3ab528a2d873f861661e9386090dcb83f69d36934e71d4e4fa7f733593b",
+  "pdb_sha256": "d16392e13ddc3663d0a5c9bdd22c65b88996704848163a4595f99eb83e003afc",
+  "functions": [
+    {
+      "name": "deadlib_image_png::scanline::decode",
+      "address": "0x140015340",
+      "code_bytes": 6531,
+      "assembly": "experiments/row-reuse-decode.txt",
+      "assembly_sha256": "cb3f3d7b45155b551aea1e836473985b524b7c0ef240f496cc1abc82c8e0b8d0"
+    },
+    {
+      "name": "deadlib_image_png::zlib::decompress_prefix",
+      "address": "0x140018ec0",
+      "code_bytes": 1855,
+      "assembly": "experiments/row-reuse-decompress_prefix.txt",
+      "assembly_sha256": "7caa13c85071725cbdb746012d83fe379ee913da4491c31862efd8d26bb4b3df"
+    },
+    {
+      "name": "deadlib_image_png::zlib::inflate_codes",
+      "address": "0x140019630",
+      "code_bytes": 4583,
+      "assembly": "experiments/row-reuse-inflate_codes.txt",
+      "assembly_sha256": "ff88afc29c9b7ea73518a202981968cf644a1c7f5459ae6a7715a7a6a72f4793"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 //! Independent APNG wire graphs and native known answers.
 use super::chunks as wire;
-use deadlib_image_png::{ColorType, Image, Samples};
+use deadlib_image_png::{ColorType, Filter, Image, Samples};
+use std::io::Read;
 
 #[derive(Clone)]
 pub struct Chunk {
@@ -98,6 +99,96 @@ pub fn filtered(image: &Image, interlaced: bool) -> Vec<u8> {
     }
     result
 }
+/// Normative filters applied independently to the known packed pass bytes.
+pub fn filtered_with(image: &Image, interlaced: bool, filter: Filter) -> Vec<u8> {
+    let packed = filtered(image, interlaced);
+    let passes = [
+        (0, 0, 8, 8),
+        (4, 0, 8, 8),
+        (0, 4, 4, 8),
+        (2, 0, 4, 4),
+        (0, 2, 2, 4),
+        (1, 0, 2, 2),
+        (0, 1, 1, 2),
+    ];
+    let plain = [(0, 0, 1, 1)];
+    let bpp = (image.color_type.channels() * image.bit_depth as usize).div_ceil(8);
+    let mut position = 0;
+    let mut result = Vec::new();
+    for (x, y, dx, dy) in if interlaced { &passes[..] } else { &plain[..] } {
+        let width = (*x..image.width as usize).step_by(*dx).count();
+        let stride = (width * image.color_type.channels() * image.bit_depth as usize).div_ceil(8);
+        if width == 0 {
+            continue;
+        }
+        let mut previous = vec![0; stride];
+        for _ in (*y..image.height as usize).step_by(*dy) {
+            let row = &packed[position + 1..position + 1 + stride];
+            let mut candidates = Vec::new();
+            for kind in 0..5 {
+                if filter != Filter::Adaptive && filter as u8 != kind {
+                    continue;
+                }
+                let bytes: Vec<u8> = (0..stride)
+                    .map(|n| {
+                        let a = if n < bpp { 0 } else { row[n - bpp] };
+                        let b = previous[n];
+                        let c = if n < bpp { 0 } else { previous[n - bpp] };
+                        let p = i32::from(a) + i32::from(b) - i32::from(c);
+                        let distances = [
+                            (p - i32::from(a)).abs(),
+                            (p - i32::from(b)).abs(),
+                            (p - i32::from(c)).abs(),
+                        ];
+                        let predictor = match kind {
+                            0 => 0,
+                            1 => a,
+                            2 => b,
+                            3 => ((u16::from(a) + u16::from(b)) / 2) as u8,
+                            _ if distances[0] <= distances[1] && distances[0] <= distances[2] => a,
+                            _ if distances[1] <= distances[2] => b,
+                            _ => c,
+                        };
+                        row[n].wrapping_sub(predictor)
+                    })
+                    .collect();
+                let score: u64 = bytes
+                    .iter()
+                    .map(|&v| u64::from((v as i8).unsigned_abs()))
+                    .sum();
+                candidates.push((score, kind, bytes));
+            }
+            let (_, kind, bytes) = candidates
+                .into_iter()
+                .min_by_key(|(score, kind, _)| (*score, *kind))
+                .unwrap();
+            result.push(kind);
+            result.extend(bytes);
+            previous.copy_from_slice(row);
+            position += stride + 1;
+        }
+    }
+    assert_eq!(position, packed.len());
+    result
+}
+
+pub fn inflate_idat(bytes: &[u8]) -> Vec<u8> {
+    let mut compressed = Vec::new();
+    let mut position = 8;
+    while position < bytes.len() {
+        let length = u32::from_be_bytes(bytes[position..position + 4].try_into().unwrap()) as usize;
+        if &bytes[position + 4..position + 8] == b"IDAT" {
+            compressed.extend_from_slice(&bytes[position + 8..position + 8 + length]);
+        }
+        position += length + 12;
+    }
+    let mut raw = Vec::new();
+    flate2::read::ZlibDecoder::new(compressed.as_slice())
+        .read_to_end(&mut raw)
+        .unwrap();
+    raw
+}
+
 fn control(sequence: u32, width: u32, height: u32, x: u32, y: u32) -> Vec<u8> {
     let mut data = Vec::new();
     for n in [sequence, width, height, x, y] {

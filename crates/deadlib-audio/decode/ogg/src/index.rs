@@ -254,7 +254,7 @@ impl OggIndex {
                 index
                     .streams
                     .iter()
-                    .position(|s| s.serial == header.serial)
+                    .rposition(|s| s.serial == header.serial)
                     .ok_or(Error::Invalid("unindexed logical stream"))?
             };
             let stream = &mut index.streams[stream_index];
@@ -270,15 +270,16 @@ impl OggIndex {
                 header,
                 stream: stream_index,
                 first_packet: stream.packets,
-                completed_packets: page.completed_packets() as u16,
+                // Demux already numbered every completed packet on this page.
+                completed_packets: last.map_or(0, |last| (last.number - stream.packets + 1) as u16),
                 first_packet_offset,
                 granule_floor: 0,
                 landmark: 0,
             });
-            for fragment in page.fragments() {
-                if fragment.starts_packet {
-                    partial_starts[stream_index] = located.offset;
-                }
+            // Carry only an unfinished packet's start. A continued page can
+            // start a new one after completing its incoming packet.
+            if page.lacing().last() == Some(&255) && (!header.is_continued() || last.is_some()) {
+                partial_starts[stream_index] = located.offset;
             }
             if let Some(last) = last {
                 stream.packets = last
@@ -367,10 +368,11 @@ impl OggIndex {
     /// many pages. The returned page may begin with an earlier continuation;
     /// PacketCapture discards that fragment before returning complete packets.
     pub fn packet_start_page(&self, serial: u32, number: u64) -> Option<&IndexedPage> {
-        if number >= self.stream(serial)?.packets {
+        let stream = self.stream(serial)?;
+        if number >= stream.packets {
             return None;
         }
-        let pages = self.pages(serial)?;
+        let pages = &self.pages[stream.pages.clone()];
         let page = pages.get(
             pages
                 .partition_point(|p| p.first_packet <= number)
@@ -381,7 +383,14 @@ impl OggIndex {
         } else {
             page.offset
         };
-        let result = self.page_at_or_before(serial, offset)?;
+        if offset == page.offset {
+            return Some(page);
+        }
+        let result = pages.get(
+            pages
+                .partition_point(|page| page.offset <= offset)
+                .checked_sub(1)?,
+        )?;
         (result.offset == offset).then_some(result)
     }
 }

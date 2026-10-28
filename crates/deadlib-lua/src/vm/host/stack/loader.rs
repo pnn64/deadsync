@@ -5,7 +5,7 @@ use super::*;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum NativeLoadStatus {
-    /// The compiled function is on top of the native stack.
+    /// Parsing succeeded. A reader yield can change the visible stack window.
     Ok = 0,
     /// The reader or an initial collector callback raised a Lua error.
     RuntimeError = 2,
@@ -22,17 +22,19 @@ struct Scope {
     depth: usize,
     top: usize,
     active: Option<usize>,
-    count: usize,
     base: usize,
+    call_base: usize,
     native_bias: u16,
 }
 
 impl NativeStack<'_, '_> {
     /// Compile text or native Lua 5.1 bytes through a synchronous reader.
     /// None/empty blocks signal EOF; the initial empty lookahead is not sticky.
-    /// Readers use this same native stack and may reenter Lua. Success pushes
-    /// a function. Parser/runtime failure restores the entry top and pushes its
-    /// error. Changes to caller slots remain visible. Names use the prefix
+    /// Readers use this same native stack and may reenter Lua. Success appends
+    /// a function at the parser's final top. A permitted reader yield can leave
+    /// that function below the newly selected window. Parser/runtime failure
+    /// restores the entry top and CallInfo base before appending its error.
+    /// Changes to caller slots remain visible. Names use the prefix
     /// before the first NUL; None selects `?`.
     /// Text readers also see the active constants-table/prototype pairs; native
     /// bytecode readers see each unfinished prototype, matching Lua 5.1's roots.
@@ -62,8 +64,8 @@ impl NativeStack<'_, '_> {
             depth: self.call.vm.frames.len(),
             top: self.call.vm.top,
             active: self.call.vm.active_native,
-            count: self.top(),
             base: self.base + self.top(),
+            call_base: self.native_call_base(),
             native_bias: self.call.vm.threads[slot_index(self.call.vm.thread.0)].native_bias,
         };
         let depth = self.call.vm.native_depth(scope.depth);
@@ -93,36 +95,30 @@ impl NativeStack<'_, '_> {
         loop {
             if !first {
                 let result = self.call.vm.resume_native_load(index);
-                if let Err(error) = self.apply_load_roots(index) {
-                    return self.catch_load_error(scope, error);
-                }
+                let end = match self.apply_load_roots(index) {
+                    Ok(end) => end,
+                    Err(error) => return self.catch_load_error(scope, error),
+                };
                 match result {
                     Ok(Some(program)) => {
                         let function = self.call.vm.load(&program);
-                        let prototypes = std::mem::take(
-                            &mut self.call.vm.loads[index]
-                                .native
-                                .as_mut()
-                                .unwrap()
-                                .prototypes,
-                        )
-                        .into_boxed_slice();
-                        let closure = &self.call.vm.functions[slot_index(function.0)];
-                        let entry = closure.prototype;
-                        let loaded = closure.program;
-                        assert_eq!(
-                            prototypes.len(),
-                            self.call.vm.programs[loaded].data.prototypes.len()
-                        );
-                        let root = prototypes[entry];
-                        self.call
-                            .vm
-                            .programs
-                            .note_alloc(std::mem::size_of_val(prototypes.as_ref()));
-                        self.call.vm.programs[loaded].parser_prototypes = prototypes;
-                        self.call.vm.gc_new_value(Value::ParserPrototype(root));
-                        self.finish_load_scope(scope);
-                        self.push(Value::Function(function))?;
+                        self.call.vm.retain_load_prototypes(index, function);
+                        // A reader's Lua/C frames can remain suspended after
+                        // lua_load itself has finished. Keep their stack and
+                        // expire the parser's protection without unwinding them.
+                        let pending = self.call.vm.frames.len() > scope.depth + 1;
+                        self.finish_load_scope(scope, end, pending);
+                        let top = end + 1;
+                        self.call.vm.resize_registers(top);
+                        self.call.vm.registers[end] = Value::Function(function);
+                        self.call.vm.gc_new_value(Value::Function(function));
+                        self.call.results = top
+                            .checked_sub(self.base)
+                            .ok_or_else(|| self.error(b"native parser stack underflow"))?;
+                        if pending {
+                            self.call.vm.top = top;
+                        }
+                        self.sync();
                         return Ok(NativeLoadStatus::Ok);
                     }
                     Err(error) => {
@@ -131,8 +127,9 @@ impl NativeStack<'_, '_> {
                         self.call
                             .vm
                             .set_thread_native_bias(scope.owner, scope.native_bias);
-                        self.finish_load_scope(scope);
-                        self.set_top(scope.count)?;
+                        self.restore_load_base(scope);
+                        self.finish_load_scope(scope, scope.base, false);
+                        self.set_top(scope.base - self.base)?;
                         self.push(value)?;
                         return Ok(NativeLoadStatus::SyntaxError);
                     }
@@ -152,7 +149,7 @@ impl NativeStack<'_, '_> {
             self.call.vm.feed_native_load(index, bytes.as_deref());
             if first {
                 first = false;
-                if let Err(error) = self.call.run_action(Action::GcCheck, false) {
+                if let Err(error) = self.check_gc() {
                     self.call.abort = None;
                     return self.catch_load_error(scope, error);
                 }
@@ -171,22 +168,36 @@ impl NativeStack<'_, '_> {
         let mut bytes = Some(bytes.to_vec());
         self.load_reader(name, move |_| Ok(bytes.take()))
     }
-    fn finish_load_scope(&mut self, scope: Scope) {
+    fn restore_load_base(&mut self, scope: Scope) {
+        if matches!(
+            self.call.vm.frames[self.frame].function,
+            FrameKind::Native(CONT_NATIVE_WINDOW)
+        ) {
+            self.base = scope.call_base;
+            self.call.output = self.base;
+        }
+    }
+    fn finish_load_scope(&mut self, scope: Scope, end: usize, pending: bool) {
         let mut line = 0;
         self.call.vm.abort_threads_to(scope.owner, &mut line);
         self.call.vm.end_native_load(scope.depth);
-        self.call.vm.discard_finalizers(scope.depth);
-        self.call.vm.frames.truncate(scope.depth);
+        if pending {
+            self.call.vm.frames[scope.depth].pc = host::API_YIELDED;
+            self.call.vm.frames[scope.depth].vararg_count = 0;
+        } else {
+            self.call.vm.discard_finalizers(scope.depth);
+            self.call.vm.frames.truncate(scope.depth);
+        }
         self.call.vm.restore_calls();
         self.call.vm.trim_substitutions();
         self.call.vm.trim_sorts();
         self.call.vm.trim_loads();
         self.call.vm.trim_tracebacks();
         self.call.vm.trim_hooks();
-        self.call.vm.top = scope.top;
+        self.call.vm.top = if pending { end } else { scope.top };
         self.call.vm.active_native = scope.active;
-        self.call.results = scope.count;
-        self.call.vm.registers.truncate(self.base + scope.count);
+        self.call.results = end.saturating_sub(self.base);
+        self.call.vm.registers.truncate(end);
         self.sync();
     }
     fn catch_load_error(&mut self, scope: Scope, error: Error) -> Result<NativeLoadStatus, Error> {
@@ -194,14 +205,15 @@ impl NativeStack<'_, '_> {
             self.call
                 .vm
                 .set_thread_native_bias(scope.owner, scope.native_bias);
-            self.finish_load_scope(scope);
+            self.restore_load_base(scope);
+            self.finish_load_scope(scope, scope.base, false);
             self.call.abort = Some(error.clone());
             return Err(error);
         }
         let outcome = self
             .call
             .vm
-            .drive_host(scope.owner, scope.depth, Err(error));
+            .drive_host(scope.owner, scope.depth, Err(error), OPEN);
         let (status, value) = match outcome {
             Ok(2) => {
                 let status = if self.call.vm.registers[scope.base] == Value::Number(5.) {
@@ -213,13 +225,15 @@ impl NativeStack<'_, '_> {
             }
             Ok(_) => unreachable!("native parser error outcome"),
             Err(error) => {
-                self.finish_load_scope(scope);
+                self.restore_load_base(scope);
+                self.finish_load_scope(scope, scope.base, false);
                 self.call.abort = Some(error.clone());
                 return Err(error);
             }
         };
-        self.finish_load_scope(scope);
-        self.set_top(scope.count)?;
+        self.restore_load_base(scope);
+        self.finish_load_scope(scope, scope.base, false);
+        self.set_top(scope.base - self.base)?;
         self.push(value)?;
         Ok(status)
     }

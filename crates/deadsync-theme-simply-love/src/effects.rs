@@ -837,6 +837,7 @@ pub enum SimplyLoveLightsConfigRequest {
 /// Online preferences chosen by Simply Love and persisted by shell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SimplyLoveOnlineConfigRequest {
+    TwitchChat(deadsync_config::streaming::TwitchOptions),
     EnableGrooveStats(bool),
     ShowSrpgShop(bool),
     SrpgShopFolder(SimplyLoveSrpgShopFolder),

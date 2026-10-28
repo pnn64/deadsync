@@ -20,6 +20,7 @@ mod technique_bg;
 pub mod test_input;
 pub mod timers;
 pub mod transitions;
+pub mod twitch_chat;
 pub mod update_overlay;
 pub mod version_overlay;
 pub mod visual_style_bg;

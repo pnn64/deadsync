@@ -1,0 +1,245 @@
+{
+  "source_sha256": "ffe34a6725227e4649eb6104b772e4a96203da2b8a08c5a9912aef403f53cdb7",
+  "symbols": 1410,
+  "nodes": 1378,
+  "tables": [
+    {
+      "number": 0,
+      "x": 0,
+      "y": 0,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 1,
+      "x": 2,
+      "y": 2,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 2,
+      "x": 3,
+      "y": 3,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 3,
+      "x": 3,
+      "y": 3,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 4,
+      "x": 0,
+      "y": 0,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 5,
+      "x": 4,
+      "y": 4,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 6,
+      "x": 4,
+      "y": 4,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 7,
+      "x": 6,
+      "y": 6,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 8,
+      "x": 6,
+      "y": 6,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 9,
+      "x": 6,
+      "y": 6,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 10,
+      "x": 8,
+      "y": 8,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 11,
+      "x": 8,
+      "y": 8,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 12,
+      "x": 8,
+      "y": 8,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 13,
+      "x": 16,
+      "y": 16,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 14,
+      "x": 0,
+      "y": 0,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 15,
+      "x": 16,
+      "y": 16,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 16,
+      "x": 16,
+      "y": 16,
+      "linbits": 1,
+      "reference": null
+    },
+    {
+      "number": 17,
+      "x": 16,
+      "y": 16,
+      "linbits": 2,
+      "reference": 16
+    },
+    {
+      "number": 18,
+      "x": 16,
+      "y": 16,
+      "linbits": 3,
+      "reference": 16
+    },
+    {
+      "number": 19,
+      "x": 16,
+      "y": 16,
+      "linbits": 4,
+      "reference": 16
+    },
+    {
+      "number": 20,
+      "x": 16,
+      "y": 16,
+      "linbits": 6,
+      "reference": 16
+    },
+    {
+      "number": 21,
+      "x": 16,
+      "y": 16,
+      "linbits": 8,
+      "reference": 16
+    },
+    {
+      "number": 22,
+      "x": 16,
+      "y": 16,
+      "linbits": 10,
+      "reference": 16
+    },
+    {
+      "number": 23,
+      "x": 16,
+      "y": 16,
+      "linbits": 13,
+      "reference": 16
+    },
+    {
+      "number": 24,
+      "x": 16,
+      "y": 16,
+      "linbits": 4,
+      "reference": null
+    },
+    {
+      "number": 25,
+      "x": 16,
+      "y": 16,
+      "linbits": 5,
+      "reference": 24
+    },
+    {
+      "number": 26,
+      "x": 16,
+      "y": 16,
+      "linbits": 6,
+      "reference": 24
+    },
+    {
+      "number": 27,
+      "x": 16,
+      "y": 16,
+      "linbits": 7,
+      "reference": 24
+    },
+    {
+      "number": 28,
+      "x": 16,
+      "y": 16,
+      "linbits": 8,
+      "reference": 24
+    },
+    {
+      "number": 29,
+      "x": 16,
+      "y": 16,
+      "linbits": 9,
+      "reference": 24
+    },
+    {
+      "number": 30,
+      "x": 16,
+      "y": 16,
+      "linbits": 11,
+      "reference": 24
+    },
+    {
+      "number": 31,
+      "x": 16,
+      "y": 16,
+      "linbits": 13,
+      "reference": 24
+    },
+    {
+      "number": 32,
+      "x": 1,
+      "y": 16,
+      "linbits": 0,
+      "reference": null
+    },
+    {
+      "number": 33,
+      "x": 1,
+      "y": 16,
+      "linbits": 0,
+      "reference": null
+    }
+  ]
+}

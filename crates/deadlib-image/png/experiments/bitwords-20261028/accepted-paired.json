@@ -1,0 +1,71 @@
+{
+  "driver_sha256": "381bf859dabe8bdedbf85ab46284de1b9dca497baa4dd33fb33942c2ba2e8716",
+  "iterations": 3,
+  "benchmark_stage": "bitwords",
+  "measurements": [
+    {
+      "round": 1,
+      "label": "baseline",
+      "path": "accepted-paired-1-baseline.tsv",
+      "sha256": "069c7e28a689396ea1021b6ca1c851803306e3a7680365852a0625e705d31ae0",
+      "source_manifest_sha256": "9e5ee9424c8b4d3f2886b45036b2004bd5b7e056b1141f255af1e99b74a5a127",
+      "executable_sha256": "ed52ac2d1d8ab76f0291163e3a6f6bfff7a24f8f02189ced1bcf06dd90d69239"
+    },
+    {
+      "round": 1,
+      "label": "adaptive-nibble",
+      "path": "accepted-paired-1-adaptive-nibble.tsv",
+      "sha256": "aebe44059832a964a3e836853bcb7aa51ce57b89b2417a2e1baf3473736eb05e",
+      "source_manifest_sha256": "c75cf8a9b6423e6ca60cc6b7d77787f1931968a0933ab26d62c18b87e67d9b53",
+      "executable_sha256": "68f99562f75753a1613baa33786d1a7e006fabd0a3ec9c64ba391b8d6e0dca3f"
+    },
+    {
+      "round": 2,
+      "label": "adaptive-nibble",
+      "path": "accepted-paired-2-adaptive-nibble.tsv",
+      "sha256": "a7eab648f3e4a139b7bb81796b56d1c4ec26e88efdd90f16922d1bb21786f4c1",
+      "source_manifest_sha256": "c75cf8a9b6423e6ca60cc6b7d77787f1931968a0933ab26d62c18b87e67d9b53",
+      "executable_sha256": "68f99562f75753a1613baa33786d1a7e006fabd0a3ec9c64ba391b8d6e0dca3f"
+    },
+    {
+      "round": 2,
+      "label": "baseline",
+      "path": "accepted-paired-2-baseline.tsv",
+      "sha256": "ea7d29868e499f5669bdb8560dc0e5d7c6a11d172a43a8fe6816f6be114a572b",
+      "source_manifest_sha256": "9e5ee9424c8b4d3f2886b45036b2004bd5b7e056b1141f255af1e99b74a5a127",
+      "executable_sha256": "ed52ac2d1d8ab76f0291163e3a6f6bfff7a24f8f02189ced1bcf06dd90d69239"
+    },
+    {
+      "round": 3,
+      "label": "baseline",
+      "path": "accepted-paired-3-baseline.tsv",
+      "sha256": "e85a2d5f92fb7881a41081ffb273c3758a2861b232918a933131247f6fe3176a",
+      "source_manifest_sha256": "9e5ee9424c8b4d3f2886b45036b2004bd5b7e056b1141f255af1e99b74a5a127",
+      "executable_sha256": "ed52ac2d1d8ab76f0291163e3a6f6bfff7a24f8f02189ced1bcf06dd90d69239"
+    },
+    {
+      "round": 3,
+      "label": "adaptive-nibble",
+      "path": "accepted-paired-3-adaptive-nibble.tsv",
+      "sha256": "86cc57d0306873ef1b31a0a9088c1417b8fe9efc8310db87e103faabcc4741b9",
+      "source_manifest_sha256": "c75cf8a9b6423e6ca60cc6b7d77787f1931968a0933ab26d62c18b87e67d9b53",
+      "executable_sha256": "68f99562f75753a1613baa33786d1a7e006fabd0a3ec9c64ba391b8d6e0dca3f"
+    },
+    {
+      "round": 4,
+      "label": "adaptive-nibble",
+      "path": "accepted-paired-4-adaptive-nibble.tsv",
+      "sha256": "f410e8bba7e5d30bdcbf105b3fb8e7680ceae37afce8484e5adf9b13446a6dfd",
+      "source_manifest_sha256": "c75cf8a9b6423e6ca60cc6b7d77787f1931968a0933ab26d62c18b87e67d9b53",
+      "executable_sha256": "68f99562f75753a1613baa33786d1a7e006fabd0a3ec9c64ba391b8d6e0dca3f"
+    },
+    {
+      "round": 4,
+      "label": "baseline",
+      "path": "accepted-paired-4-baseline.tsv",
+      "sha256": "fc87de75529a04a0ebbaf00ba29890c776c2f7fb83be357dead86d2b779ff80f",
+      "source_manifest_sha256": "9e5ee9424c8b4d3f2886b45036b2004bd5b7e056b1141f255af1e99b74a5a127",
+      "executable_sha256": "ed52ac2d1d8ab76f0291163e3a6f6bfff7a24f8f02189ced1bcf06dd90d69239"
+    }
+  ]
+}

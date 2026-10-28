@@ -1,0 +1,450 @@
+{
+  "source_sha256": {
+    "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "3ea4ea651f9a8f6532b405c1577c8159119d283f479808b61ec00e2b1aa1959a",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "c7f255b0968f844e0afae23389e00199a901328274a146afb278b10c3295ec68",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "1bceab2a7a1ef7080fd9722b422fefc2e68c0d53fc2c5779f3be2529a555c31a",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+    "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "480ed62055b29f65fe45df8fc3559ade536bdbbbb8fff565d8fb77767702a6de"
+  },
+  "oracle_sha256": "364bab1990fa7c276f3bb54483c53458f8c45af66d08b4065a9060a82f779f48",
+  "environment": {
+    "DEADLIB_LIBOGG_ORACLE": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\ogg-oracle-build\\Release\\deadlib_ogg_oracle.exe",
+    "DEADLIB_OGG_CORPUS": "C:\\GitHub\\deadsync\\assets",
+    "DEADLIB_OGG_EXTERNAL_CORPUS": "C:\\GitHub\\deadsync\\target\\deadlib-audio-reference\\corpus"
+  },
+  "checks": [
+    {
+      "label": "ogg-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--release",
+        "--target-dir",
+        "target/ogg-kernels-checks",
+        "--",
+        "--include-ignored",
+        "--skip",
+        "regenerate_sync_state_golden",
+        "--nocapture"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-kernels-ogg-tests.log"
+    },
+    {
+      "label": "vorbis-tests",
+      "command": [
+        "cargo",
+        "test",
+        "-p",
+        "deadlib-audio-decode-vorbis",
+        "--release",
+        "--target-dir",
+        "target/ogg-kernels-checks"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-kernels-vorbis-tests.log"
+    },
+    {
+      "label": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--all-targets",
+        "--all-features",
+        "--target-dir",
+        "target/ogg-kernels-checks",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 101,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-kernels-clippy.log"
+    },
+    {
+      "label": "clippy-final",
+      "command": [
+        "cargo",
+        "clippy",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--all-targets",
+        "--all-features",
+        "--target-dir",
+        "target/ogg-kernels-checks",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-kernels-clippy-final.log"
+    },
+    {
+      "label": "fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "deadlib-audio-decode-ogg",
+        "--",
+        "--check"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-kernels-fmt.log"
+    },
+    {
+      "label": "python",
+      "command": [
+        "python",
+        "-m",
+        "py_compile",
+        "crates/deadlib-audio/decode/scripts/benchmark_ogg_kernels.py"
+      ],
+      "exit_code": 0,
+      "log": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-kernels-python.log"
+    }
+  ],
+  "writer_wire": {
+    "complete_byte_comparison": true,
+    "bytes": 1626459,
+    "pages": 75,
+    "sha256": "373373048d6a40b44d724590ae7eb9b8c9cd6867551b9feee754871e068c28fe"
+  },
+  "isolated_source_diffs": {
+    "before->fragments": [
+      "page.rs"
+    ],
+    "fragments->writer-short": [
+      "writer.rs"
+    ],
+    "crc-before->crc": [
+      "crc.rs"
+    ]
+  },
+  "workers": {
+    "before": {
+      "binary": "C:\\GitHub\\deadsync\\target\\ogg-kernels-20261028\\before\\target\\release\\deps\\kernels-a22d9803991cfdf5.exe",
+      "binary_sha256": "1d795080fef411b2a4c8f73eb43f6b65e842d83a21059cc7b5ebd0105f47f80f",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "wire_sha256": "373373048d6a40b44d724590ae7eb9b8c9cd6867551b9feee754871e068c28fe",
+      "source_sha256": {
+        "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "1497792232562689f8db5267d87fb90023afd80811280c8e23a6f42b85647baa",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "1bceab2a7a1ef7080fd9722b422fefc2e68c0d53fc2c5779f3be2529a555c31a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2"
+      },
+      "adapter_sha256": "b6fcc97489d2ec7e49bd35436ea50ab80ae365aae46d91fc5f80942b90906041",
+      "lock_sha256": "85f95c4acba3287c7542da19f6b51a0500ee8d408c12ec61c1b773f02c6c3bdd"
+    },
+    "fragments": {
+      "binary": "C:\\GitHub\\deadsync\\target\\ogg-kernels-20261028\\fragments\\target\\release\\deps\\kernels-a22d9803991cfdf5.exe",
+      "binary_sha256": "1a99007d47cb0efdfd4b4a50d500cb9cc9a00d3f5cc6f5bee9035bc7a7c12c2a",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "wire_sha256": "373373048d6a40b44d724590ae7eb9b8c9cd6867551b9feee754871e068c28fe",
+      "source_sha256": {
+        "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "c7f255b0968f844e0afae23389e00199a901328274a146afb278b10c3295ec68",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "1bceab2a7a1ef7080fd9722b422fefc2e68c0d53fc2c5779f3be2529a555c31a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2"
+      },
+      "adapter_sha256": "b6fcc97489d2ec7e49bd35436ea50ab80ae365aae46d91fc5f80942b90906041",
+      "lock_sha256": "85f95c4acba3287c7542da19f6b51a0500ee8d408c12ec61c1b773f02c6c3bdd"
+    },
+    "writer": {
+      "binary": "C:\\GitHub\\deadsync\\target\\ogg-kernels-20261028\\writer\\target\\release\\deps\\kernels-a22d9803991cfdf5.exe",
+      "binary_sha256": "fae44239f7f4465fe7467df4d2680aa76a6cbc2f5c364ea9ff76bcab9a483c0b",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "wire_sha256": "373373048d6a40b44d724590ae7eb9b8c9cd6867551b9feee754871e068c28fe",
+      "source_sha256": {
+        "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "c7f255b0968f844e0afae23389e00199a901328274a146afb278b10c3295ec68",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "1bceab2a7a1ef7080fd9722b422fefc2e68c0d53fc2c5779f3be2529a555c31a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "02f7a24876305c502bbb9accaaba9fd8647386899426e76c65213cb12feab13c"
+      },
+      "adapter_sha256": "b6fcc97489d2ec7e49bd35436ea50ab80ae365aae46d91fc5f80942b90906041",
+      "lock_sha256": "85f95c4acba3287c7542da19f6b51a0500ee8d408c12ec61c1b773f02c6c3bdd"
+    },
+    "writer-short": {
+      "binary": "C:\\GitHub\\deadsync\\target\\ogg-kernels-20261028\\writer-short\\target\\release\\deps\\kernels-a22d9803991cfdf5.exe",
+      "binary_sha256": "fbb3003e7a8951a2bb3f720df2276f30bf461ae843472c04d3b59cce37989e88",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "wire_sha256": "373373048d6a40b44d724590ae7eb9b8c9cd6867551b9feee754871e068c28fe",
+      "source_sha256": {
+        "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "c7f255b0968f844e0afae23389e00199a901328274a146afb278b10c3295ec68",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "1bceab2a7a1ef7080fd9722b422fefc2e68c0d53fc2c5779f3be2529a555c31a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "480ed62055b29f65fe45df8fc3559ade536bdbbbb8fff565d8fb77767702a6de"
+      },
+      "adapter_sha256": "b6fcc97489d2ec7e49bd35436ea50ab80ae365aae46d91fc5f80942b90906041",
+      "lock_sha256": "85f95c4acba3287c7542da19f6b51a0500ee8d408c12ec61c1b773f02c6c3bdd"
+    },
+    "reader": {
+      "binary": "C:\\GitHub\\deadsync\\target\\ogg-kernels-20261028\\reader\\target\\release\\deps\\kernels-a22d9803991cfdf5.exe",
+      "binary_sha256": "0a69d64be854ee438c470784e18ad5c3944c77397b108f0c9d373aa2e7194ead",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "wire_sha256": "373373048d6a40b44d724590ae7eb9b8c9cd6867551b9feee754871e068c28fe",
+      "source_sha256": {
+        "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "1f29f6315587bb66e82670869637362e817471f6da3023f787d1bf990e310f9f",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "63807c76f16676ba2654a85f04314631a2d95303b25a04e17dae461e944766ec",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "1bceab2a7a1ef7080fd9722b422fefc2e68c0d53fc2c5779f3be2529a555c31a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "480ed62055b29f65fe45df8fc3559ade536bdbbbb8fff565d8fb77767702a6de"
+      },
+      "adapter_sha256": "b6fcc97489d2ec7e49bd35436ea50ab80ae365aae46d91fc5f80942b90906041",
+      "lock_sha256": "85f95c4acba3287c7542da19f6b51a0500ee8d408c12ec61c1b773f02c6c3bdd"
+    },
+    "crc-before": {
+      "binary": "C:\\GitHub\\deadsync\\target\\ogg-kernels-20261028\\crc-before\\target\\release\\deps\\kernels-a22d9803991cfdf5.exe",
+      "binary_sha256": "2bc480db0c462274c5edfa28a64e422bcbf804fe6f62e11d7b2b69a43ff81269",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "wire_sha256": "373373048d6a40b44d724590ae7eb9b8c9cd6867551b9feee754871e068c28fe",
+      "source_sha256": {
+        "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "c7f255b0968f844e0afae23389e00199a901328274a146afb278b10c3295ec68",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "1bceab2a7a1ef7080fd9722b422fefc2e68c0d53fc2c5779f3be2529a555c31a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "480ed62055b29f65fe45df8fc3559ade536bdbbbb8fff565d8fb77767702a6de"
+      },
+      "adapter_sha256": "51589600b0fc79cdc187d55a35006aa7e9b111291946b4ef0f7f11e2b724290c",
+      "lock_sha256": "85f95c4acba3287c7542da19f6b51a0500ee8d408c12ec61c1b773f02c6c3bdd"
+    },
+    "crc": {
+      "binary": "C:\\GitHub\\deadsync\\target\\ogg-kernels-20261028\\crc\\target\\release\\deps\\kernels-a22d9803991cfdf5.exe",
+      "binary_sha256": "b673adc2e2bfa485e984303002bf91fb9f37c76f544892252d0c61c57826f78b",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "wire_sha256": "373373048d6a40b44d724590ae7eb9b8c9cd6867551b9feee754871e068c28fe",
+      "source_sha256": {
+        "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "3ea4ea651f9a8f6532b405c1577c8159119d283f479808b61ec00e2b1aa1959a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "c7f255b0968f844e0afae23389e00199a901328274a146afb278b10c3295ec68",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "1bceab2a7a1ef7080fd9722b422fefc2e68c0d53fc2c5779f3be2529a555c31a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "480ed62055b29f65fe45df8fc3559ade536bdbbbb8fff565d8fb77767702a6de"
+      },
+      "adapter_sha256": "51589600b0fc79cdc187d55a35006aa7e9b111291946b4ef0f7f11e2b724290c",
+      "lock_sha256": "85f95c4acba3287c7542da19f6b51a0500ee8d408c12ec61c1b773f02c6c3bdd"
+    },
+    "cache-before": {
+      "binary": "C:\\GitHub\\deadsync\\target\\ogg-kernels-20261028\\cache-before\\target\\release\\deps\\kernels-a22d9803991cfdf5.exe",
+      "binary_sha256": "294735273c9fc6f290605084d441bf822bdf146e3571f73d97035ddda36a3db7",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "wire_sha256": "373373048d6a40b44d724590ae7eb9b8c9cd6867551b9feee754871e068c28fe",
+      "source_sha256": {
+        "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "3ea4ea651f9a8f6532b405c1577c8159119d283f479808b61ec00e2b1aa1959a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "c7f255b0968f844e0afae23389e00199a901328274a146afb278b10c3295ec68",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "1bceab2a7a1ef7080fd9722b422fefc2e68c0d53fc2c5779f3be2529a555c31a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "480ed62055b29f65fe45df8fc3559ade536bdbbbb8fff565d8fb77767702a6de"
+      },
+      "adapter_sha256": "48b1a09cd72d9ce2b9ebe24a4a4675c2e51e40adf8a97291de8612bff50d37c9",
+      "lock_sha256": "85f95c4acba3287c7542da19f6b51a0500ee8d408c12ec61c1b773f02c6c3bdd"
+    },
+    "cache": {
+      "binary": "C:\\GitHub\\deadsync\\target\\ogg-kernels-20261028\\cache\\target\\release\\deps\\kernels-a22d9803991cfdf5.exe",
+      "binary_sha256": "561e8ee5a6d3b76f2acd14e6bdaa2e0cb5e7e276dc6fe12ce64afcd1630127b4",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "wire_sha256": "373373048d6a40b44d724590ae7eb9b8c9cd6867551b9feee754871e068c28fe",
+      "source_sha256": {
+        "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "3ea4ea651f9a8f6532b405c1577c8159119d283f479808b61ec00e2b1aa1959a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "c7f255b0968f844e0afae23389e00199a901328274a146afb278b10c3295ec68",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "1bceab2a7a1ef7080fd9722b422fefc2e68c0d53fc2c5779f3be2529a555c31a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "5c65ca2e3d203e29ed0f21eea071afc6929f126a4d866f34e8b7632600a2b4cd"
+      },
+      "adapter_sha256": "48b1a09cd72d9ce2b9ebe24a4a4675c2e51e40adf8a97291de8612bff50d37c9",
+      "lock_sha256": "85f95c4acba3287c7542da19f6b51a0500ee8d408c12ec61c1b773f02c6c3bdd"
+    },
+    "original-final": {
+      "binary": "C:\\GitHub\\deadsync\\target\\ogg-kernels-20261028\\original-final\\target\\release\\deps\\kernels-a22d9803991cfdf5.exe",
+      "binary_sha256": "167fcbfe5e6dade76f78ee8676b873af9fa361654be37aaa9520c50248a33816",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "wire_sha256": "373373048d6a40b44d724590ae7eb9b8c9cd6867551b9feee754871e068c28fe",
+      "source_sha256": {
+        "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "ad3d5531eb0845e2904f6396400b5c9aaa44d8019d99bc471cc3944fd504653a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "1497792232562689f8db5267d87fb90023afd80811280c8e23a6f42b85647baa",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "1bceab2a7a1ef7080fd9722b422fefc2e68c0d53fc2c5779f3be2529a555c31a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "7897a37d8e90c3dc08ed061e936dcaf5011e82ae94ae53d0c9d8e742c7cb34b2"
+      },
+      "adapter_sha256": "48b1a09cd72d9ce2b9ebe24a4a4675c2e51e40adf8a97291de8612bff50d37c9",
+      "lock_sha256": "85f95c4acba3287c7542da19f6b51a0500ee8d408c12ec61c1b773f02c6c3bdd"
+    },
+    "final": {
+      "binary": "C:\\GitHub\\deadsync\\target\\ogg-kernels-20261028\\final\\target\\release\\deps\\kernels-a22d9803991cfdf5.exe",
+      "binary_sha256": "bd4cb260d7c31f3538bfacc370dee2b4547c761f6071a83a5d899b6cf0ee74ff",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "wire_sha256": "373373048d6a40b44d724590ae7eb9b8c9cd6867551b9feee754871e068c28fe",
+      "source_sha256": {
+        "crates\\deadlib-audio\\decode\\ogg\\src\\capture.rs": "77caf86fd4b21be9b411381e53d414627dd6139dc7fea52b07c11d37d1cec429",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\crc.rs": "3ea4ea651f9a8f6532b405c1577c8159119d283f479808b61ec00e2b1aa1959a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\demux.rs": "6c555b708deaca5a72b00f73b0888a072e378a9312399befa159159c4e5ab4da",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\index.rs": "fdd8e83fc2ff97dc7f3dc407a62c1b9c578ed922269a7e7102c82f628af448f4",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\page.rs": "c7f255b0968f844e0afae23389e00199a901328274a146afb278b10c3295ec68",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\reader.rs": "317c79ef6afb965f24a92ca4dc41665f336a196357b1e782a0ae6dde45577eef",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\sync.rs": "1bceab2a7a1ef7080fd9722b422fefc2e68c0d53fc2c5779f3be2529a555c31a",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\validation.rs": "09b76d74f9fc33401b9d4122b85b6c6a6c53d5309daa0c578cc51a2ca7166a74",
+        "crates\\deadlib-audio\\decode\\ogg\\src\\writer.rs": "480ed62055b29f65fe45df8fc3559ade536bdbbbb8fff565d8fb77767702a6de"
+      },
+      "adapter_sha256": "48b1a09cd72d9ce2b9ebe24a4a4675c2e51e40adf8a97291de8612bff50d37c9",
+      "lock_sha256": "85f95c4acba3287c7542da19f6b51a0500ee8d408c12ec61c1b773f02c6c3bdd"
+    }
+  },
+  "production_commits": [
+    "bcc8a889f",
+    "b8775edda",
+    "d179713c9"
+  ],
+  "benchmark_rows": {
+    "2026-10-28-kernels-cache.tsv": 336,
+    "2026-10-28-kernels-combined.tsv": 336,
+    "2026-10-28-kernels-crc.tsv": 336,
+    "2026-10-28-kernels-final.tsv": 336,
+    "2026-10-28-kernels-fragments.tsv": 190,
+    "2026-10-28-kernels-reader.tsv": 190,
+    "2026-10-28-kernels-writer-short.tsv": 285,
+    "2026-10-28-kernels-writer.tsv": 190
+  },
+  "reference_source_revision": "be05b13e98b048f0b5a0f5fa8ce514d56db5f822",
+  "reference_source_clean": true,
+  "reference_adapter_sha256": "92e8e8716d44c05f51720252ad6ce5f6d4bdfed79370543534ea57210a29cb9b",
+  "source_and_binary_audit_passed": true
+}

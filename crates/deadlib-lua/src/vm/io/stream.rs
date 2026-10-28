@@ -72,11 +72,19 @@ pub(in crate::vm) struct Stream {
 
 impl Stream {
     pub fn new(resource: Resource, readable: bool, writable: bool, text: bool) -> Self {
+        let mut file = Self::closed();
+        file.resource = Some(resource);
+        file.readable = readable;
+        file.writable = writable;
+        file.text = text;
+        file
+    }
+    pub fn closed() -> Self {
         Self {
-            resource: Some(resource),
-            readable,
-            writable,
-            text,
+            resource: None,
+            readable: false,
+            writable: false,
+            text: false,
             read: Vec::new(),
             position: 0,
             peek: None,

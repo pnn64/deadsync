@@ -2990,6 +2990,12 @@ struct FrameInlineLayoutSlot {
     key: Option<(TextLayoutKey, actors::InlineText)>,
 }
 
+struct DynamicTextLayoutSlot {
+    key: TextLayoutKey,
+    text: Arc<actors::DynamicText>,
+    layout: Box<CachedTextLayout>,
+}
+
 impl FrameInlineLayoutSlot {
     fn new() -> Self {
         Self {
@@ -3307,6 +3313,7 @@ pub struct TextLayoutCache {
     uncached_layout: Option<Box<CachedTextLayout>>,
     frame_inline_slots: Vec<FrameInlineLayoutSlot>,
     frame_inline_fallback: FrameInlineLayoutSlot,
+    dynamic_slots: [Option<DynamicTextLayoutSlot>; 8],
     prepared_u32_slots: Vec<PreparedU32LayoutSlot>,
     prewarmed_u16_domains: Vec<PrewarmedU16Domain>,
 }
@@ -3357,6 +3364,7 @@ impl TextLayoutCache {
             uncached_layout: None,
             frame_inline_slots: vec![FrameInlineLayoutSlot::new()],
             frame_inline_fallback: FrameInlineLayoutSlot::new(),
+            dynamic_slots: std::array::from_fn(|_| None),
             prepared_u32_slots: Vec::new(),
             prewarmed_u16_domains: Vec::new(),
         }
@@ -3410,6 +3418,7 @@ impl TextLayoutCache {
             slot.clear();
         }
         self.frame_inline_fallback.clear();
+        self.dynamic_slots.fill_with(|| None);
         for slot in &mut self.prepared_u32_slots {
             slot.clear();
         }
@@ -3634,6 +3643,39 @@ impl TextLayoutCache {
             }
             actors::TextContent::Shared(text) => {
                 ResolvedTextLayout::cached(self.get_or_build_shared(key, font, fonts, text))
+            }
+            actors::TextContent::Dynamic(text) => {
+                let slot = &mut self.dynamic_slots[usize::from(text.slot).min(7)];
+                if !slot
+                    .as_ref()
+                    .is_some_and(|old| old.key == key && Arc::ptr_eq(&old.text, text))
+                {
+                    let mut layout = Box::new(CachedTextLayout::frame_inline_scratch());
+                    rebuild_cached_text_layout(
+                        &mut layout,
+                        font,
+                        fonts,
+                        &text.text,
+                        key.line_spacing,
+                        key.wrap_width_pixels,
+                        text_layout_mesh_seed(key, &text.text),
+                    );
+                    if let Some(stats) = self.frame_stats.as_mut() {
+                        stats.misses = stats.misses.saturating_add(1);
+                        stats.built_lines = stats
+                            .built_lines
+                            .saturating_add(saturating_u32(layout.lines.len()));
+                        stats.built_glyphs = stats
+                            .built_glyphs
+                            .saturating_add(saturating_u32(layout.glyphs.len()));
+                    }
+                    *slot = Some(DynamicTextLayoutSlot {
+                        key,
+                        text: Arc::clone(text),
+                        layout,
+                    });
+                }
+                ResolvedTextLayout::cached(&slot.as_ref().unwrap().layout)
             }
             actors::TextContent::Inline(text) => {
                 ResolvedTextLayout::cached(self.get_or_build_owned(key, font, fonts, text.as_str()))
@@ -13498,6 +13540,31 @@ mod tests {
         assert_eq!(stats.shared_hits, 1);
         assert_eq!(stats.misses, 3);
         assert_eq!(stats.shared_aliases, 2);
+    }
+
+    #[test]
+    fn dynamic_text_replaces_layout_without_filling_persistent_cache() {
+        let fonts = font::FontMap::from_iter([("test", test_font())]);
+        let font = &fonts["test"];
+        let mut cache = TextLayoutCache::new(1);
+        cache.lock_growth();
+        for i in 1..500 {
+            let content = TextContent::Dynamic(Arc::new(crate::actors::DynamicText {
+                text: "AB".repeat(i % 30 + 1),
+                slot: 0,
+            }));
+            cache.begin_frame_stats(true);
+            let _ = cache.get_or_build(font, &fonts, &content, Some(60), None, TextAlign::Left);
+            for _ in 0..20 {
+                let _ = cache.get_or_build(font, &fonts, &content, Some(60), None, TextAlign::Left);
+            }
+            assert_eq!(cache.frame_stats().misses, 1);
+            assert_eq!(cache.entry_count, 0);
+            assert_eq!(cache.alias_count, 0);
+            assert_eq!(cache.dynamic_slots.iter().flatten().count(), 1);
+        }
+        cache.clear();
+        assert!(cache.dynamic_slots.iter().all(Option::is_none));
     }
 
     #[test]

@@ -1,0 +1,129 @@
+   Compiling autocfg v1.5.1
+   Compiling bytemuck v1.25.2
+   Compiling log v0.4.34
+   Compiling smallvec v1.16.4
+   Compiling lazy_static v1.5.1
+   Compiling bitflags v2.13.2
+   Compiling regex-lite v0.1.9
+   Compiling deadlib-audio-decode-mp3 v0.1.0 (C:\GitHub\deadsync\target\deadlib-mp3-reference\extracted-regions-final)
+   Compiling num-traits v0.2.19
+   Compiling num-complex v0.4.6
+   Compiling symphonia-core v0.6.1
+   Compiling symphonia-metadata v0.6.1
+   Compiling symphonia-bundle-mp3 v0.6.1
+   Compiling symphonia v0.6.1
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.76s
+     Running unittests src\lib.rs (target\deadlib-mp3-extracted-final\debug\deps\deadlib_audio_decode_mp3-dc97f4ad8b1e87e1.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\decoder.rs (target\deadlib-mp3-extracted-final\debug\deps\decoder-4ffe996e36a04078.exe)
+
+running 3 tests
+test crc_and_complete_main_data_errors_require_reset ... ok
+test missing_reservoir_recovery_free_format_and_version_policy ... ok
+test raw_pcm_shape_prefix_retries_and_reset ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests\foundation.rs (target\deadlib-mp3-extracted-final\debug\deps\foundation-3e8bab0c404751cf.exe)
+
+running 8 tests
+test reservoir_cross_frame_history_and_recovery ... ok
+test xing_gapless_and_vbri_optional_tables ... ok
+test free_format_inference_padding_false_sync_and_limits ... ok
+test id3_frames_unsynchronization_footers_and_bounds ... ok
+test all_header_configurations_and_reserved_fields ... ok
+test bit_fields_and_atomic_boundaries ... ok
+test side_information_fields_switched_and_long ... ok
+test frame_truncation_crc_coverage_and_synchronization ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\gapless.rs (target\deadlib-mp3-extracted-final\debug\deps\gapless-cae7b5cd24f2a00f.exe)
+
+running 5 tests
+test empty_streams_impossible_trim_and_declared_frame_mismatches_are_explicit ... ok
+test first_output_is_bounded_and_does_not_require_eof_or_seek ... ok
+test raw_coordinates_metadata_and_recovery_survive_trimming ... ok
+test untagged_unknown_tags_and_format_changes_have_the_same_coordinates ... ok
+test streaming_gapless_matches_indexed_for_all_versions_short_and_long_padding ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 20.74s
+
+     Running tests\huffman.rs (target\deadlib-mp3-extracted-final\debug\deps\huffman-a14317c2906e78e5.exe)
+
+running 3 tests
+test pair_truncation_and_reserved_books_are_atomic ... ok
+test all_quadruples_signs_offsets_and_final_symbol_truncations ... ok
+test every_pair_codeword_sign_offset_and_escape_boundary ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+     Running tests\indexed.rs (target\deadlib-mp3-extracted-final\debug\deps\indexed-5682d3223a16a83a.exe)
+
+running 9 tests
+test index_limits_metadata_mismatches_and_source_origin_are_checked ... ok
+test empty_tagged_audio_and_unknown_encoder_metadata_have_explicit_ranges ... ok
+test pcm_slices_keep_stereo_stride_and_reject_invalid_ranges ... ok
+test indexed_recovery_and_seek_preserve_reservoir_spans_and_discontinuities ... ok
+test caller_supplied_trim_maps_untagged_audio_without_inventing_metadata ... ok
+test short_reads_interrupted_io_and_recovery_after_source_changes_are_checked ... ok
+test tagged_short_padding_stops_at_physical_eof_and_explicit_trim_can_drain ... ok
+test tagged_gapless_counts_ranges_and_seeks_follow_delay_and_padding ... ok
+test indexed_seeks_match_linear_raw_pcm_with_exact_positions ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.88s
+
+     Running tests\scalefactors.rs (target\deadlib-mp3-extracted-final\debug\deps\scalefactors-fd1e4d6df7371946.exe)
+
+running 3 tests
+test mpeg1_widths_and_all_scfsi_masks ... ok
+test scalefactor_boundaries_are_atomic ... ok
+test every_lsf_compression_and_shape ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests\spectral.rs (target\deadlib-mp3-extracted-final\debug\deps\spectral-e7745c2908790a56.exe)
+
+running 7 tests
+test big_values_errors_and_partial_count1_stuffing ... ok
+test scalefactor_band_boundaries_and_mixed_alignment ... ok
+test requantization_half_steps_preemphasis_and_short_gain ... ok
+test short_intensity_bounds_are_independent_per_window ... ok
+test top_band_inherits_pan_only_when_preceding_band_is_intensity_coded ... ok
+test intensity_positions_and_zero_width_partitions ... ok
+test switched_huffman_regions_count_long_and_short_window_bands ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests\stream.rs (target\deadlib-mp3-extracted-final\debug\deps\stream-b576b6621b39c061.exe)
+
+running 8 tests
+test false_headers_limits_and_io_errors_do_not_silently_consume_audio ... ok
+test metadata_larger_than_the_packet_buffer_is_retained_without_hunting_inside_it ... ok
+test strict_errors_and_concealment_preserve_known_frame_timing_and_reservoir ... ok
+test every_final_audio_prefix_and_metadata_truncation_has_explicit_policy ... ok
+test free_format_inference_padding_and_explicit_short_streams ... ok
+test eof_discovered_during_free_format_probe_does_not_change_resynchronization ... ok
+test every_read_split_preserves_packets_tags_and_positions ... ok
+test raw_stream_matches_linear_pcm_for_tiny_reads_and_format_changes ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s
+
+     Running tests\synthesis.rs (target\deadlib-mp3-extracted-final\debug\deps\synthesis-babe90992b98d545.exe)
+
+running 2 tests
+test silence_reset_overlap_and_invalid_shapes ... ok
+test synthesis_finite_history_and_repeatable_reset ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests deadlib_audio_decode_mp3
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

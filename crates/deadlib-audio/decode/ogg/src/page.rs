@@ -22,11 +22,18 @@ impl PageHeader {
 }
 
 /// A CRC-verified page borrowing the original contiguous bytes.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct Page<'a> {
     bytes: &'a [u8],
-    header: PageHeader,
-    body_start: usize,
+}
+impl core::fmt::Debug for Page<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Page")
+            .field("bytes", &self.bytes)
+            .field("header", &self.header())
+            .field("body_start", &self.body_start())
+            .finish()
+    }
 }
 impl<'a> Page<'a> {
     /// Parse one page, returning the number of bytes consumed. Trailing input
@@ -37,37 +44,37 @@ impl<'a> Page<'a> {
             return Err(Error::Truncated);
         }
         let bytes = &input[..len];
-        let expected = u32::from_le_bytes(bytes[22..26].try_into().unwrap());
-        let actual = crc::page_crc(bytes);
-        if actual != expected {
-            return Err(Error::Checksum { expected, actual });
-        }
+        check_crc(bytes)?;
         Ok((Self::verified(bytes), len))
     }
-    /// Only call on an exact slice previously validated by `parse`.
+    /// Only call on an exact slice with verified lacing length and CRC.
+    /// Strict callers also validate version/flags; SyncedPage keeps that policy
+    /// separate and never exposes an unconverted Page publicly.
     pub(crate) fn verified(bytes: &'a [u8]) -> Self {
-        Self {
-            bytes,
-            header: PageHeader {
-                flags: bytes[5],
-                granule_position: u64::from_le_bytes(bytes[6..14].try_into().unwrap()),
-                serial: u32::from_le_bytes(bytes[14..18].try_into().unwrap()),
-                sequence: u32::from_le_bytes(bytes[18..22].try_into().unwrap()),
-            },
-            body_start: 27 + bytes[26] as usize,
+        Self { bytes }
+    }
+    #[inline]
+    pub fn header(self) -> PageHeader {
+        let bytes = self.bytes;
+        PageHeader {
+            flags: bytes[5],
+            granule_position: u64::from_le_bytes(bytes[6..14].try_into().unwrap()),
+            serial: u32::from_le_bytes(bytes[14..18].try_into().unwrap()),
+            sequence: u32::from_le_bytes(bytes[18..22].try_into().unwrap()),
         }
     }
-    pub fn header(self) -> PageHeader {
-        self.header
+    #[inline]
+    fn body_start(self) -> usize {
+        27 + self.bytes[26] as usize
     }
     pub fn bytes(self) -> &'a [u8] {
         self.bytes
     }
     pub fn lacing(self) -> &'a [u8] {
-        &self.bytes[27..self.body_start]
+        &self.bytes[27..self.body_start()]
     }
     pub fn body(self) -> &'a [u8] {
-        &self.bytes[self.body_start..]
+        &self.bytes[self.body_start()..]
     }
     pub fn checksum(self) -> u32 {
         u32::from_le_bytes(self.bytes[22..26].try_into().unwrap())
@@ -84,12 +91,22 @@ impl<'a> Page<'a> {
             lacing: &self.lacing()[segment..],
             body: &self.body()[body..],
             continued: if segment == 0 {
-                self.header.is_continued()
+                self.header().is_continued()
             } else {
                 self.lacing()[segment - 1] == 255
             },
         }
     }
+}
+
+// The exact page length and strict header rules must already be verified.
+pub(crate) fn check_crc(bytes: &[u8]) -> Result<(), Error> {
+    let expected = u32::from_le_bytes(bytes[22..26].try_into().unwrap());
+    let actual = crc::page_crc(bytes);
+    if actual != expected {
+        return Err(Error::Checksum { expected, actual });
+    }
+    Ok(())
 }
 
 pub(crate) fn header_size(input: &[u8]) -> Result<usize, Error> {
@@ -127,22 +144,51 @@ pub struct Fragments<'a> {
     body: &'a [u8],
     continued: bool,
 }
-impl<'a> Iterator for Fragments<'a> {
-    type Item = Fragment<'a>;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.lacing.is_empty() {
-            return None;
+
+// Keep the wide scan out of packet loops; most fragments end in the first few laces.
+#[inline(never)]
+fn fragment_segment_count(lacing: &[u8]) -> usize {
+    let (words, tail) = lacing.as_chunks::<8>();
+    for (i, word) in words.iter().enumerate() {
+        // Only 0xff continues a packet. The first differing bit identifies
+        // the first terminating byte in little-endian order.
+        let bits = !u64::from_le_bytes(*word);
+        if bits != 0 {
+            return i * 8 + bits.trailing_zeros() as usize / 8 + 1;
         }
-        let count = self
-            .lacing
+    }
+    lacing.len() - tail.len()
+        + tail
             .iter()
             .position(|&n| n < 255)
-            .map_or(self.lacing.len(), |n| n + 1);
-        let len = self.lacing[..count]
-            .iter()
-            .map(|&n| n as usize)
-            .sum::<usize>();
-        let ends_packet = self.lacing[count - 1] < 255;
+            .map_or(tail.len(), |n| n + 1)
+}
+
+impl<'a> Iterator for Fragments<'a> {
+    type Item = Fragment<'a>;
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        let &first = self.lacing.first()?;
+        let (count, len, ends_packet) = if first < 255 {
+            (1, first as usize, true)
+        } else if let Some(&second) = self.lacing.get(1)
+            && second < 255
+        {
+            (2, 255 + second as usize, true)
+        } else if let Some(&third) = self.lacing.get(2)
+            && third < 255
+        {
+            (3, 2 * 255 + third as usize, true)
+        } else if let Some(&fourth) = self.lacing.get(3)
+            && fourth < 255
+        {
+            (4, 3 * 255 + fourth as usize, true)
+        } else {
+            let count = fragment_segment_count(self.lacing);
+            let last = self.lacing[count - 1];
+            // Every segment before the terminator is exactly 255 bytes.
+            (count, (count - 1) * 255 + last as usize, last < 255)
+        };
         let fragment = Fragment {
             data: &self.body[..len],
             starts_packet: !self.continued,
@@ -155,6 +201,32 @@ impl<'a> Iterator for Fragments<'a> {
     }
 }
 
+#[inline]
+fn validate_page(fields: PageHeader, lacing: &[u8], body_length: usize) -> Result<(), Error> {
+    if fields.flags & !7 != 0 {
+        return Err(Error::Invalid("reserved page flags"));
+    }
+    if lacing.len() > 255 {
+        return Err(Error::Invalid("more than 255 page segments"));
+    }
+    if lacing.iter().map(|&n| n as usize).sum::<usize>() != body_length {
+        return Err(Error::Invalid("lacing/body size mismatch"));
+    }
+    Ok(())
+}
+
+#[inline]
+fn encoded_header(fields: PageHeader, segments: u8) -> [u8; 27] {
+    let mut header = [0; 27];
+    header[..4].copy_from_slice(b"OggS");
+    header[5] = fields.flags;
+    header[6..14].copy_from_slice(&fields.granule_position.to_le_bytes());
+    header[14..18].copy_from_slice(&fields.serial.to_le_bytes());
+    header[18..22].copy_from_slice(&fields.sequence.to_le_bytes());
+    header[26] = segments;
+    header
+}
+
 /// Write a page without copying its payload. Handles partial/Interrupted IO.
 /// This is a framing primitive; it does not validate logical stream grammar.
 pub fn write_page(
@@ -163,23 +235,10 @@ pub fn write_page(
     lacing: &[u8],
     body: &[u8],
 ) -> Result<usize, Error> {
-    if fields.flags & !7 != 0 {
-        return Err(Error::Invalid("reserved page flags"));
-    }
-    if lacing.len() > 255 {
-        return Err(Error::Invalid("more than 255 page segments"));
-    }
-    if lacing.iter().map(|&n| n as usize).sum::<usize>() != body.len() {
-        return Err(Error::Invalid("lacing/body size mismatch"));
-    }
+    validate_page(fields, lacing, body.len())?;
     let mut header = [0; 282];
     let len = 27 + lacing.len();
-    header[..4].copy_from_slice(b"OggS");
-    header[5] = fields.flags;
-    header[6..14].copy_from_slice(&fields.granule_position.to_le_bytes());
-    header[14..18].copy_from_slice(&fields.serial.to_le_bytes());
-    header[18..22].copy_from_slice(&fields.sequence.to_le_bytes());
-    header[26] = lacing.len() as u8;
+    header[..27].copy_from_slice(&encoded_header(fields, lacing.len() as u8));
     header[27..len].copy_from_slice(lacing);
     let checksum = crc::update(crc::update(0, &header[..len]), body);
     header[22..26].copy_from_slice(&checksum.to_le_bytes());
@@ -195,6 +254,11 @@ pub fn encode_page(fields: PageHeader, lacing: &[u8], body: &[u8]) -> Result<Vec
     }
     let mut out = Vec::new();
     reserve(&mut out, 27 + lacing.len() + body.len())?;
-    write_page(&mut out, fields, lacing, body)?;
+    validate_page(fields, lacing, body.len())?;
+    out.extend_from_slice(&encoded_header(fields, lacing.len() as u8));
+    out.extend_from_slice(lacing);
+    out.extend_from_slice(body);
+    let checksum = crc::update(0, &out);
+    out[22..26].copy_from_slice(&checksum.to_le_bytes());
     Ok(out)
 }

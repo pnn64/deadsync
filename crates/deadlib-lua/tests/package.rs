@@ -323,7 +323,7 @@ fn module_options_preserve_errors_callable_tables_and_execution_order() {
 }
 
 #[test]
-fn c_searchers_report_missing_paths_and_disabled_native_loading_is_explicit() {
+fn c_searchers_report_missing_paths_and_native_open_status() {
     let files = Fixture::new(&[]);
     files.compare(r#"
   package.path='';package.cpath=@DIR@..'/?.missing';local out={}
@@ -342,7 +342,15 @@ fn c_searchers_report_missing_paths_and_disabled_native_loading_is_explicit() {
     let Value::String(where_id) = results[2] else {
         panic!("native loader status")
     };
-    assert_eq!(vm.string_bytes(where_id).unwrap(), b"absent");
+    let expected = if cfg!(all(
+        feature = "native-c-api",
+        any(windows, target_os = "linux")
+    )) {
+        b"open".as_slice()
+    } else {
+        b"absent".as_slice()
+    };
+    assert_eq!(vm.string_bytes(where_id).unwrap(), expected);
 }
 
 #[test]
@@ -483,6 +491,199 @@ fn callback_local_mutation_does_not_alias_captured_names_or_module_copies() {
       end)end;f()
       return name,m._NAME,m==original,package.loaded.original==m,package.loaded.changed
     "#,
+    );
+}
+
+#[test]
+fn package_return_hooks_keep_library_temporaries_and_writable_result_suffixes() {
+    compare(br#"
+local function pack(...)return {n=select('#',...),...}end
+local function scalar(v)
+ local t=type(v)
+ if t=='string'or t=='number'or t=='boolean'or t=='nil'then return t..':'..tostring(v)end
+ if t=='function'then local d=debug.getinfo(v,'Su');return t..':'..d.what..':'..d.nups end
+ return t
+end
+local out={};local token={}
+local function observe(fn,args)
+ for mode=0,2 do
+  local co=coroutine.create(function()return fn(unpack(args,1,args.n))end)
+  debug.sethook(co,function(e)
+   if e=='return'and debug.getinfo(2,'f').func==fn then
+    local n=0
+    for i=1,40 do local name,v=debug.getlocal(2,i);if not name then break end
+     n=i;out[#out+1]=name..'='..scalar(v)
+    end
+    out[#out+1]='top='..n
+    if mode~=0 then assert(debug.setlocal(2,mode==1 and 1 or n-1,'hook-token'))end
+    collectgarbage()
+   end
+  end,'r')
+  local r=pack(coroutine.resume(co))
+  for i=1,r.n do out[#out+1]='result='..scalar(r[i])end
+ end
+end
+package.loaded.cached=17;observe(require,pack('cached',token))
+for _,value in ipairs{17,false}do
+ package.preload.lookup=function()return value end
+ for mode=1,3 do package.loaded.lookup=nil;observe(require,pack('lookup',token))end
+end
+observe(package.loaders[1],pack('missing',token))
+observe(package.loaders[1],pack('lookup',token))
+observe(module,pack('mod_return',function()end))
+observe(package.seeall,pack({},token))
+package.path='absent-?.lua';observe(package.loaders[2],pack('mod.missing',token))
+package.cpath='absent-?.dll';observe(package.loaders[3],pack('mod.missing',token))
+observe(package.loaders[4],pack('mod.missing',token));observe(package.loaders[4],pack('plain',token))
+return table.concat(out,'|')
+"#);
+}
+
+#[test]
+fn import_metamethods_see_and_mutate_the_actual_live_c_window() {
+    compare(
+        br#"
+local out={};local marker={};local backing={};local loaded={}
+local function snapshot(event)
+ local row={event}
+ for i=1,20 do local k,v=debug.getlocal(3,i);if not k then break end
+  row[#row+1]=type(v)..(v==marker and ':marker'or '')
+ end
+ out[#out+1]=table.concat(row,',')
+end
+setmetatable(loaded,{
+ __index=function(t,k)snapshot('get');collectgarbage();return backing[k]end,
+ __newindex=function(t,k,v)snapshot('set:'..type(v));collectgarbage();backing[k]=v end
+})
+debug.getregistry()._LOADED=loaded;package.loaded=loaded
+package.loaders={function()snapshot('loader');assert(debug.setlocal(2,3,marker));return function()
+ snapshot('module');return nil
+end end}
+local result=require('live')
+return result,table.concat(out,'|')
+"#,
+    );
+}
+
+#[test]
+fn consumed_import_results_stop_retaining_userdata_before_the_final_cache_lookup() {
+    compare(
+        br#"
+local count=0;local finalized=false;local loaded={}
+setmetatable(loaded,{
+ __index=function()
+  count=count+1
+  if count==1 then return nil end
+  collectgarbage();collectgarbage();return 17
+ end,
+ __newindex=function()end
+})
+debug.getregistry()._LOADED=loaded
+package.preload.lifetime=function()
+ local p=newproxy(true);getmetatable(p).__gc=function()finalized=true end;return p
+end
+local result=require('lifetime')
+return result,finalized,count
+"#,
+    );
+}
+
+#[test]
+fn package_field_callbacks_expose_consumed_values_and_preserve_captured_names() {
+    compare(
+        br#"
+local out={};local tag={};local old_preload=package.preload
+local function scalar(v)
+ if type(v)=='string'then return 'string:'..v end
+ return type(v)
+end
+local function snapshot(event)
+ local row={event}
+ for i=1,20 do local key,value=debug.getlocal(3,i);if not key then break end
+  row[#row+1]=scalar(value)
+ end
+ out[#out+1]=table.concat(row,',')
+end
+package.preload=setmetatable({},{__index=function()snapshot('preload');return 17 end})
+assert(package.loaders[1]('lookup',tag)==17);package.preload=old_preload
+local m=setmetatable({},{__index=function()snapshot('get-name')end,
+ __newindex=function(t,k,v)snapshot('set-'..k);rawset(t,k,v)end})
+package.loaded.module_live=m
+local function f()module('module_live',function()snapshot('option')end)end
+f()
+local old_path,old_cpath=package.path,package.cpath
+package.path=nil;package.cpath=nil
+setmetatable(package,{__index=function(t,k)
+ snapshot(k)
+ assert(debug.setlocal(2,1,'changed-argument'))
+ assert(debug.setlocal(2,3,'changed-name'))
+ if k=='cpath'then assert(debug.setlocal(2,4,'changed-translation'))end
+ return 'absent-?.missing'
+end})
+out[#out+1]=package.loaders[2]('original.name',tag)
+out[#out+1]=package.loaders[4]('original.name',tag)
+package.path=old_path;package.cpath=old_cpath;setmetatable(package,nil)
+return table.concat(out,'|')
+"#,
+    );
+}
+
+#[test]
+fn replaced_module_options_release_their_original_argument_roots() {
+    compare(
+        br#"
+local finalized=false;local observed=false;local first
+do
+ local p=newproxy(true);getmetatable(p).__gc=function()finalized=true end
+ first=function()assert(p);assert(debug.setlocal(2,2,nil));first=nil end
+end
+local function second()collectgarbage();collectgarbage();observed=finalized end
+local function f()module('option_lifetime',first,second)end
+f();return observed,finalized
+"#,
+    );
+}
+
+#[test]
+fn module_initialization_pops_the_name_lookup_before_options_collect() {
+    compare(
+        br#"
+local finalized=false;local observed=false
+local m=setmetatable({},{__index=function(t,k)
+ if k=='_NAME'then
+  local p=newproxy(true);getmetatable(p).__gc=function()finalized=true end;return p
+ end
+end})
+package.loaded.pop_name=m
+local function f()module('pop_name',function()
+ collectgarbage();collectgarbage();observed=finalized
+end)end
+f();return observed,finalized,getfenv(f)==m
+"#,
+    );
+}
+
+#[test]
+fn seeall_metamethods_keep_the_original_metatable_and_pending_globals_on_the_stack() {
+    compare(
+        br#"
+local target={};local old={};local replacement={};local seen={}
+setmetatable(target,old)
+setmetatable(old,{__newindex=function(t,k,v)
+ for i=1,8 do local name,value=debug.getlocal(2,i);if not name then break end
+  seen[#seen+1]=type(value)..':'..tostring(value==old)..':'..tostring(value==_G)
+ end
+ debug.setmetatable(target,replacement);collectgarbage()
+end})
+local retained
+debug.sethook(function(e)
+ if e=='return'and debug.getinfo(2,'f').func==package.seeall then
+  local _,v=debug.getlocal(2,3);retained=v==old
+ end
+end,'r')
+package.seeall(target,17);debug.sethook()
+return table.concat(seen,'|'),retained,getmetatable(target)==replacement
+"#,
     );
 }
 

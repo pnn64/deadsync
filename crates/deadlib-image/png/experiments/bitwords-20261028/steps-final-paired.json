@@ -1,0 +1,71 @@
+{
+  "driver_sha256": "381bf859dabe8bdedbf85ab46284de1b9dca497baa4dd33fb33942c2ba2e8716",
+  "iterations": 3,
+  "benchmark_stage": "bitwords",
+  "measurements": [
+    {
+      "round": 1,
+      "label": "words-nibble",
+      "path": "steps-final-paired-1-words-nibble.tsv",
+      "sha256": "a535979ff768058f0b62440a6b08cb39dea626408eb5b4a74c0ea8c5d4cc890b",
+      "source_manifest_sha256": "1ed33e63e12799bc5374e32fc30fafbe4149ccb0ece5a33042a8266b04c78640",
+      "executable_sha256": "b3f876a23cec42843e530be99a83d6a1c21186b640094af4266a356d3853d32d"
+    },
+    {
+      "round": 1,
+      "label": "stepped-nibble",
+      "path": "steps-final-paired-1-stepped-nibble.tsv",
+      "sha256": "44b6f8157c6cbc514332cb3e6671a97d3543a9be65a57d588d618ff3590dc752",
+      "source_manifest_sha256": "1d59a1c763a2f644937b4b424c17f33dc05a9bafd68cad0351ac841744284630",
+      "executable_sha256": "7b906fa7b29e60c8763b08c10ba0697c5e558edb6376b8882676c88f892f0030"
+    },
+    {
+      "round": 2,
+      "label": "stepped-nibble",
+      "path": "steps-final-paired-2-stepped-nibble.tsv",
+      "sha256": "6d04ad6dd95e9104150c6cbdbf8d67b232e78efd9ea25c8b160fa17bf7ff90ce",
+      "source_manifest_sha256": "1d59a1c763a2f644937b4b424c17f33dc05a9bafd68cad0351ac841744284630",
+      "executable_sha256": "7b906fa7b29e60c8763b08c10ba0697c5e558edb6376b8882676c88f892f0030"
+    },
+    {
+      "round": 2,
+      "label": "words-nibble",
+      "path": "steps-final-paired-2-words-nibble.tsv",
+      "sha256": "2cdf4102f1d072c9918b0b0ce1b9b417d33de9c156e68eece8924e08b5c5f2ab",
+      "source_manifest_sha256": "1ed33e63e12799bc5374e32fc30fafbe4149ccb0ece5a33042a8266b04c78640",
+      "executable_sha256": "b3f876a23cec42843e530be99a83d6a1c21186b640094af4266a356d3853d32d"
+    },
+    {
+      "round": 3,
+      "label": "words-nibble",
+      "path": "steps-final-paired-3-words-nibble.tsv",
+      "sha256": "0701f210c96741c1adf344d06525e8020b0295b53c26aab374325fb5a421dace",
+      "source_manifest_sha256": "1ed33e63e12799bc5374e32fc30fafbe4149ccb0ece5a33042a8266b04c78640",
+      "executable_sha256": "b3f876a23cec42843e530be99a83d6a1c21186b640094af4266a356d3853d32d"
+    },
+    {
+      "round": 3,
+      "label": "stepped-nibble",
+      "path": "steps-final-paired-3-stepped-nibble.tsv",
+      "sha256": "ee3c6a0a6165a2c5b41a36ef5de063999fdac5a0e4026d8164805cd671807b59",
+      "source_manifest_sha256": "1d59a1c763a2f644937b4b424c17f33dc05a9bafd68cad0351ac841744284630",
+      "executable_sha256": "7b906fa7b29e60c8763b08c10ba0697c5e558edb6376b8882676c88f892f0030"
+    },
+    {
+      "round": 4,
+      "label": "stepped-nibble",
+      "path": "steps-final-paired-4-stepped-nibble.tsv",
+      "sha256": "204e37b03c52cda1aa990ee3c457803818659bb9e161f683d8eec48510bd189e",
+      "source_manifest_sha256": "1d59a1c763a2f644937b4b424c17f33dc05a9bafd68cad0351ac841744284630",
+      "executable_sha256": "7b906fa7b29e60c8763b08c10ba0697c5e558edb6376b8882676c88f892f0030"
+    },
+    {
+      "round": 4,
+      "label": "words-nibble",
+      "path": "steps-final-paired-4-words-nibble.tsv",
+      "sha256": "9017a753525382b5cd08791d868b3a6a996e7222191262bf4f356ac1d529b71e",
+      "source_manifest_sha256": "1ed33e63e12799bc5374e32fc30fafbe4149ccb0ece5a33042a8266b04c78640",
+      "executable_sha256": "b3f876a23cec42843e530be99a83d6a1c21186b640094af4266a356d3853d32d"
+    }
+  ]
+}

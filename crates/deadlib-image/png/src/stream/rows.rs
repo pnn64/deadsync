@@ -90,7 +90,6 @@ impl ImageRows {
                 }
                 self.row.resize(bytes, 0);
                 self.previous.resize(bytes, 0);
-                self.previous.fill(0);
                 return Ok(());
             }
             self.pass += 1;
@@ -129,7 +128,11 @@ impl ImageRows {
         if !self.complete && self.have == self.row.len() {
             let bpp = (self.header.color.channels() * self.header.depth as usize).div_ceil(8);
             let filter = self.row[0];
-            scanline::unfilter(&mut self.row[1..], &self.previous[1..], bpp, filter)?;
+            if self.row_index == 0 {
+                scanline::unfilter_first(&mut self.row[1..], bpp, filter)?;
+            } else {
+                scanline::unfilter(&mut self.row[1..], &self.previous[1..], bpp, filter)?;
+            }
             let count = self.width * self.header.color.channels();
             if self.header.depth == 16 {
                 self.native16.clear();
@@ -142,14 +145,14 @@ impl ImageRows {
                         .map(|&b| u16::from_be_bytes(b)),
                 );
             } else if self.header.depth < 8 {
-                self.native8.clear();
-                reserve(&mut self.native8, count)?;
-                let depth = self.header.depth as usize;
-                for n in 0..count {
-                    self.native8.push(
-                        (self.row[1 + n * depth / 8] >> (8 - depth - n * depth % 8))
-                            & ((1 << depth) - 1),
-                    );
+                let additional = count.saturating_sub(self.native8.len());
+                reserve(&mut self.native8, additional)?;
+                self.native8.resize(count, 0);
+                match self.header.depth {
+                    1 => scanline::unpack::<1>(&self.row[1..], &mut self.native8),
+                    2 => scanline::unpack::<2>(&self.row[1..], &mut self.native8),
+                    4 => scanline::unpack::<4>(&self.row[1..], &mut self.native8),
+                    _ => unreachable!("validated packed PNG depth"),
                 }
             }
             if self.header.color == ColorType::Indexed && policy == crate::PalettePolicy::Strict {

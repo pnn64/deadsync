@@ -1,0 +1,23 @@
+{
+  "exploratory_measurements": {
+    "files": ["baseline-run1.tsv", "baseline-run2.tsv", "baseline-run3.tsv", "dispatch-run1.tsv", "dispatch-run2.tsv", "dispatch-run3.tsv"],
+    "reason": "The initial two runners overlapped on logical CPU 2. These timings are excluded from decisions; immutable binaries were replayed sequentially."
+  },
+  "interrupted_measurements": {
+    "manifest": "buffers-paired.json",
+    "reason": "Disk exhaustion interrupted saving round 2 score output. Three complete, hashed logs are retained; the incomplete comparison is excluded. buffers-replay.json records a fresh complete sequential replay."
+  },
+  "intermediate_validation_failures": {
+    "filters-validation.json": "Missing DEADLIB_LIBPNG_ENCODER configuration for the optional C encoder test; the driver now configures and hashes the encoder binary.",
+    "selected-validation.json": "Release tests passed, but strict Clippy found two unused shared helper functions in tests/apng_recovery.rs. The test module now has the same scoped dead-code allowance as other helper consumers. Final validation supersedes this partial run."
+  },
+  "cache_cleanup": {
+    "scope": "Only generated build caches from previous PNG series, through cargo clean --target-dir; frozen executables and evidence were preserved.",
+    "paths": ["target/png-rows-20261028/build", "target/png-pixels-20261028/build"]
+  },
+  "intermediate_candidates": {
+    "buffers": "Allocation reuse with indexed filter loops. buffers-replay and final-paired are complete comparisons of this intermediate candidate, not the selected result.",
+    "bounded": "Selected refinement: equal checked row spans with zipped output, inline row dispatch, and reusable capacity limited to the widest nonempty pass."
+  },
+  "canonical_comparisons": ["dispatch-paired", "score-paired", "bounded-paired", "selected-paired"]
+}

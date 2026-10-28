@@ -9192,6 +9192,10 @@ mod tests {
             arrowcloud_pane_kind_from_type("EX"),
             Some(ArrowCloudPaneKind::Ex)
         );
+        assert_eq!(
+            arrowcloud_pane_kind_from_type("Golf"),
+            Some(ArrowCloudPaneKind::Golf)
+        );
         assert_eq!(arrowcloud_pane_kind_from_type("event"), None);
     }
 

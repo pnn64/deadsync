@@ -424,12 +424,16 @@ fn removal_reports_platform_errors_for_invalid_and_missing_components() {
     compare(&fixture.source(
         r#"
         local path=@PATH@;local out={}
-        local f=assert(io.open(path,'wb'));f:close()
         local paths={path..'.missing/leaf',path..'/leaf',path..'/',path..'*',path..'?',path..':' }
         for _,p in ipairs(paths) do
-          local a,b,c=os.remove(p);out[#out+1]=a==nil;out[#out+1]=b;out[#out+1]=c
+          local f=assert(io.open(path,'wb'));assert(f:write('original'));assert(f:close())
+          local a,b,c=os.remove(p);out[#out+1]=a==nil;out[#out+1]=b or false;out[#out+1]=c or false
+          f=io.open(path,'rb');out[#out+1]=f~=nil
+          if f then
+            out[#out+1]=f:read('*a');assert(f:close());assert(os.remove(path))
+          end
         end
-        assert(os.remove(path));return unpack(out)
+        return unpack(out)
     "#,
     ));
 }

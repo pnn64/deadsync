@@ -74,7 +74,7 @@ $evidence.iterations = $Iterations
 $evidence.runs = $Runs
 $evidence.executable = $binary.FullName
 $evidence.measurements = $records
-$evidence | Add-Member -NotePropertyName control_of -NotePropertyValue $manifestFile.FullName
-$evidence | Add-Member -NotePropertyName control_manifest_sha256 -NotePropertyValue (Get-FileHash -LiteralPath $manifestFile.FullName -Algorithm SHA256).Hash
-$evidence | Add-Member -NotePropertyName control_runner_sha256 -NotePropertyValue (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
+$evidence | Add-Member -Force -NotePropertyName control_of -NotePropertyValue $manifestFile.FullName
+$evidence | Add-Member -Force -NotePropertyName control_manifest_sha256 -NotePropertyValue (Get-FileHash -LiteralPath $manifestFile.FullName -Algorithm SHA256).Hash
+$evidence | Add-Member -Force -NotePropertyName control_runner_sha256 -NotePropertyValue (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
 [System.IO.File]::WriteAllText($prefix + '-manifest.json', (($evidence | ConvertTo-Json -Depth 9).Replace("`r`n", "`n") + "`n"), $utf8)

@@ -1,0 +1,882 @@
+{
+  "baseline_png_commit": "7a393042f9c5c0aebb8a92a44bd3b34f058b6768",
+  "probe": "experiments/row-reuse-buffers.rs",
+  "probe_sha256": "14e7009fcef2e912dda1923497bec5dd501c9324e60c7a8b4f75dbc80ebd62dc",
+  "baseline_source_sha256": {
+    "Cargo.toml": "7c9f0d36db9d4a157c96ae2323369e09b3667d2445c30ae0500fb49112046bd4",
+    "src/lib.rs": "2b13e653c1c1c41ff414004feb346592e2f12b004116c9d67f2de6baebf832c3",
+    "png/Cargo.toml": "ba683ac0c28f96f73dc41c95f77b6fe00ea63920ff60602c00ef4585d20b6ffd",
+    "png/benches/pipeline.rs": "9370eaa7aaed2d65666803418860e5bacd7193c6adf983997e92fabf0c161719",
+    "png/src/apng.rs": "a7776f11d43d8dd4a9802e4d354689978d819cdf56308369020d07a8eb6da412",
+    "png/src/checksum.rs": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14",
+    "png/src/codec.rs": "5fad4314c55583e8a743215081fdb98809f73aa48d7d0fcda233d564130b2e0e",
+    "png/src/composite.rs": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79",
+    "png/src/lib.rs": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9",
+    "png/src/metadata/language/registry.rs": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4",
+    "png/src/metadata/language.rs": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb",
+    "png/src/metadata/profile.rs": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b",
+    "png/src/metadata.rs": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b",
+    "png/src/reference.rs": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5",
+    "png/src/scanline.rs": "a8eb599ef3ab866b01a0129eb1f8bb6462ca2845b0ed1bd1c3dee26f4614207e",
+    "png/src/stream/decode.rs": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30",
+    "png/src/stream/encode_rows.rs": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447",
+    "png/src/stream/mod.rs": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b",
+    "png/src/stream/read.rs": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d",
+    "png/src/stream/rows.rs": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805",
+    "png/src/stream/write.rs": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463",
+    "png/src/zlib/deflate.rs": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4",
+    "png/src/zlib/inflate.rs": "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97",
+    "png/src/zlib/matcher.rs": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19",
+    "png/src/zlib.rs": "bd65e7db914d8be75d46040763988ddb57cd3edb22b33d23582542a1d4fc8906"
+  },
+  "candidate_source_sha256": [
+    {
+      "path": "src/apng.rs",
+      "sha256": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21"
+    },
+    {
+      "path": "src/checksum.rs",
+      "sha256": "35b18a4a03c88605b044adf657e8631c85074d07ca0193b566df59ae94e47a14"
+    },
+    {
+      "path": "src/codec.rs",
+      "sha256": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f"
+    },
+    {
+      "path": "src/composite.rs",
+      "sha256": "c8e1725049ce5af49fa3d4bac24926bd758920dd548c27b0cac18d30bd5edd79"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha256": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9"
+    },
+    {
+      "path": "src/metadata/language/registry.rs",
+      "sha256": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4"
+    },
+    {
+      "path": "src/metadata/language.rs",
+      "sha256": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb"
+    },
+    {
+      "path": "src/metadata/profile.rs",
+      "sha256": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b"
+    },
+    {
+      "path": "src/metadata.rs",
+      "sha256": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b"
+    },
+    {
+      "path": "src/reference.rs",
+      "sha256": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5"
+    },
+    {
+      "path": "src/scanline.rs",
+      "sha256": "b75b671c306d42a95a561d8ef1f24e3c536de230d6218141ffea8651adfc0fb7"
+    },
+    {
+      "path": "src/stream/decode.rs",
+      "sha256": "2108e0114b57620ce3fff41174377548cc49214d783f637bee9e72abda6b4c30"
+    },
+    {
+      "path": "src/stream/encode_rows.rs",
+      "sha256": "eab412202bd525f1a969500b13894fa0008600da9b34c1f42a78421d121cf447"
+    },
+    {
+      "path": "src/stream/mod.rs",
+      "sha256": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b"
+    },
+    {
+      "path": "src/stream/read.rs",
+      "sha256": "4b0e6e9a1c1863757d28521254f3e4613a6929280972922b6a0fd9ded216e46d"
+    },
+    {
+      "path": "src/stream/rows.rs",
+      "sha256": "d648e905e12acd1319f459e15fa605dbe59e51404b4f0c93b18e67293f270805"
+    },
+    {
+      "path": "src/stream/write.rs",
+      "sha256": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463"
+    },
+    {
+      "path": "src/zlib/deflate.rs",
+      "sha256": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4"
+    },
+    {
+      "path": "src/zlib/inflate.rs",
+      "sha256": "9082de5b5ed2a318c9c6821fac0aa3a8d81f67a1f8b9a896b02526f4e9b65d97"
+    },
+    {
+      "path": "src/zlib/matcher.rs",
+      "sha256": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19"
+    },
+    {
+      "path": "src/zlib.rs",
+      "sha256": "0d1d2e79057fff589a802015ebe3f942468efc6ff891e3964d88ed2034e84a1d"
+    }
+  ],
+  "commands": [
+    {
+      "command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline\\Cargo.toml",
+        "--target-dir",
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-baseline"
+      ],
+      "exit_code": 0
+    },
+    {
+      "command": [
+        "cargo",
+        "build",
+        "--offline",
+        "--manifest-path",
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate\\Cargo.toml",
+        "--target-dir",
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-candidate"
+      ],
+      "exit_code": 0
+    }
+  ],
+  "measurements": [
+    {
+      "side": "baseline",
+      "corpus": "photos",
+      "path": "row-reuse-buffers-baseline-photos.tsv",
+      "sha256": "5e44e9cac891607311d8fc05927dc34326d4ba4e360bc79f6ca5284fd142634f",
+      "binary": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-baseline\\debug\\png-buffer-probe.exe",
+      "binary_sha256": "49d48f4eeae9c9d480d006e91297241e88b03d0d0469b206dc9adba26e1954c4",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-baseline\\debug\\png-buffer-probe.exe",
+        "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak",
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples"
+      ]
+    },
+    {
+      "side": "baseline",
+      "corpus": "formats",
+      "path": "row-reuse-buffers-baseline-formats.tsv",
+      "sha256": "ca03e3eee21db597cffcc756bb4219ccf3a3d47207e37decbf39e2c7fe99be67",
+      "binary": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-baseline\\debug\\png-buffer-probe.exe",
+      "binary_sha256": "49d48f4eeae9c9d480d006e91297241e88b03d0d0469b206dc9adba26e1954c4",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-baseline\\debug\\png-buffer-probe.exe",
+        "C:\\GitHub\\deadsync\\target\\png-decode-corpus-20261027-a",
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples"
+      ]
+    },
+    {
+      "side": "candidate",
+      "corpus": "photos",
+      "path": "row-reuse-buffers-candidate-photos.tsv",
+      "sha256": "a39f70ae4be78efd988eccf9ead422a34e601e1a2f1a5e847c4cc29e6b626261",
+      "binary": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-candidate\\debug\\png-buffer-probe.exe",
+      "binary_sha256": "10dd7864a5f4e250b9c856a3584c48fbf4ff5a6d290d278fbe8e4961992f7659",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-candidate\\debug\\png-buffer-probe.exe",
+        "C:\\GitHub\\deadsync\\target\\deadlib-image-reference\\kodak",
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples"
+      ]
+    },
+    {
+      "side": "candidate",
+      "corpus": "formats",
+      "path": "row-reuse-buffers-candidate-formats.tsv",
+      "sha256": "255b7076978b2e66ab4c28cf1ad1daafe4d2de9b23e08417220509709c86201f",
+      "binary": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-candidate\\debug\\png-buffer-probe.exe",
+      "binary_sha256": "10dd7864a5f4e250b9c856a3584c48fbf4ff5a6d290d278fbe8e4961992f7659",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-candidate\\debug\\png-buffer-probe.exe",
+        "C:\\GitHub\\deadsync\\target\\png-decode-corpus-20261027-a",
+        "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples"
+      ]
+    }
+  ],
+  "samples": [
+    {
+      "corpus": "photos",
+      "file": "kodim01.samples",
+      "bytes": 1179648,
+      "sha256": "a00210743353594464ac67e680a41710f484444ca5f9dfddeb570de25c428273",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim01.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim01.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim02.samples",
+      "bytes": 1179648,
+      "sha256": "ae5a495df4ec40e0941265440ccf98973915b4190ab803e37a23ca93dd43a07e",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim02.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim02.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim03.samples",
+      "bytes": 1179648,
+      "sha256": "234e61f585503f2a44400f5561131e8a512ef2c15328cd83d5cdbf10e2616cf2",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim03.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim03.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim04.samples",
+      "bytes": 1179648,
+      "sha256": "e88e788fca00e6c723bb66ff45edb8cb56091ee284dcb73e3909834f2c96eeb6",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim04.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim04.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim05.samples",
+      "bytes": 1179648,
+      "sha256": "ed3d1ee770909d3b27903b52ce19ee59a9bf24621a7bf1fb57b90677da880cb6",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim05.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim05.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim06.samples",
+      "bytes": 1179648,
+      "sha256": "7f45158999fa297d1cfbd292b3e2f3f5b27770701c3473155c211c3f512cc97f",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim06.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim06.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim07.samples",
+      "bytes": 1179648,
+      "sha256": "4e3664bf6fe865b49f15f7b554efa7dbecaf73ae0e8699f2e307bf07849f1264",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim07.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim07.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim08.samples",
+      "bytes": 1179648,
+      "sha256": "889c3740e4ed54ca53d11ae735a44d15fa24fe312b3bd1609a80618a4092c208",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim08.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim08.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim09.samples",
+      "bytes": 1179648,
+      "sha256": "f8453140e63a42301a6dbebb849a3cc40d34e4e59580eb1f372f7f5460df0dbe",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim09.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim09.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim10.samples",
+      "bytes": 1179648,
+      "sha256": "fabe11b5c4f028394e093a5b5907e5fabc8072da0d5334fb3a38547a7e1be842",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim10.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim10.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim11.samples",
+      "bytes": 1179648,
+      "sha256": "ab4dd9bf8431e717d33892b3ba03c63bfea3c7fa72c2610010de7df3c194c075",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim11.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim11.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim12.samples",
+      "bytes": 1179648,
+      "sha256": "f412db2168e599949aac26bd3264f111b23a684f30a21cfd320e9e95bc69bbae",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim12.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim12.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim13.samples",
+      "bytes": 1179648,
+      "sha256": "875703d56fb9396f478b5d7d3b18e2b77c17147a685c6dc2567e1c574aaf01e3",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim13.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim13.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim14.samples",
+      "bytes": 1179648,
+      "sha256": "2bd5029ee75ac1697542e5b05624e8afe186e3250abd7513d6a806b52084c2f0",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim14.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim14.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim15.samples",
+      "bytes": 1179648,
+      "sha256": "b5353e7511277009922ecbdebfc6418fec53aa1b2a08d44fc957a7540825697b",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim15.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim15.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim16.samples",
+      "bytes": 1179648,
+      "sha256": "ed21745fd32fce95cc2c6af7fc52b1b15e590c7a14ab18ab34bd65ecaf955ac7",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim16.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim16.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim17.samples",
+      "bytes": 1179648,
+      "sha256": "566bc866664e9b06dc86e2654051b454844efe17322dbf7e24156d8243f1943e",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim17.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim17.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim18.samples",
+      "bytes": 1179648,
+      "sha256": "3475af71066f3ca8206eb12cfc989ebe9c6e44820a96604e88ae018606e1f7bd",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim18.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim18.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim19.samples",
+      "bytes": 1179648,
+      "sha256": "7956408ef24222d37ac53f579bd24d5b2c3557b16c657e8b71c1b6ae9f18de1b",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim19.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim19.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim20.samples",
+      "bytes": 1179648,
+      "sha256": "666ce8f2db5566a123bb081e70618f6f4c4253df960f3b41bb9dcc3dd134f3cf",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim20.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim20.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim21.samples",
+      "bytes": 1179648,
+      "sha256": "2d6902daf7c4486b7c8c04d834091841a2b38c8f0c81cd7a963a6510b34a2a6a",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim21.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim21.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim22.samples",
+      "bytes": 1179648,
+      "sha256": "f430842120c108b67725ada96b8b7b2a914f6a0915eacd5595064c6c1a5d70a0",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim22.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim22.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim23.samples",
+      "bytes": 1179648,
+      "sha256": "81992a83592267e69125666f3e3e04c1819529b4c4c1e55fde0a6a741bac4219",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim23.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim23.samples"
+    },
+    {
+      "corpus": "photos",
+      "file": "kodim24.samples",
+      "bytes": 1179648,
+      "sha256": "e3e3ccc3e795b82a3da66934409dfe98ce0f5aadc6d7767543c506453599bb98",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-photos-samples\\kodim24.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-photos-samples\\kodim24.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-01-adam7-0-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "6e472c0f884290720654c8ee4409cfaf035b53f925207586644a7c82af1fd703",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-01-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-01-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-01-adam7-0-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "2da8f189f3639a6ec8049dcf9b78d21eb96ecb647a321e21282d62b1708557f4",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-01-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-01-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-01-adam7-1-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "6e472c0f884290720654c8ee4409cfaf035b53f925207586644a7c82af1fd703",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-01-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-01-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-01-adam7-1-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "2da8f189f3639a6ec8049dcf9b78d21eb96ecb647a321e21282d62b1708557f4",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-01-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-01-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-02-adam7-0-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "c1ac56b5f3f6436c63968ccae576f33431b179d48196c3729f97391a2c97a2a9",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-02-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-02-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-02-adam7-0-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "0fbc627ce98e2f5cb4b3e78726c8b8198e1ed390e3fc9e9d1317af458070993a",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-02-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-02-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-02-adam7-1-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "c1ac56b5f3f6436c63968ccae576f33431b179d48196c3729f97391a2c97a2a9",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-02-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-02-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-02-adam7-1-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "0fbc627ce98e2f5cb4b3e78726c8b8198e1ed390e3fc9e9d1317af458070993a",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-02-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-02-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-04-adam7-0-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "ff5b8968fa38562a4fa3685c333c409c8fcaec0f8ddfec545040cb2f4a7e0fa2",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-04-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-04-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-04-adam7-0-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "3d382045750d8258fd13e2e9e66b1ff31c72afc298bc7f528604473bbe3b0703",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-04-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-04-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-04-adam7-1-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "ff5b8968fa38562a4fa3685c333c409c8fcaec0f8ddfec545040cb2f4a7e0fa2",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-04-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-04-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-04-adam7-1-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "3d382045750d8258fd13e2e9e66b1ff31c72afc298bc7f528604473bbe3b0703",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-04-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-04-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-08-adam7-0-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "acc1440b5e313219671bf618b890fdd939e9c55d26bfa6ff83a3833a238ace4d",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-08-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-08-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-08-adam7-0-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "e1371a296fa2e40b176ebd6d22e0c59e495b4b2621ea35b02ead600086fd526f",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-08-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-08-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-08-adam7-1-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "acc1440b5e313219671bf618b890fdd939e9c55d26bfa6ff83a3833a238ace4d",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-08-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-08-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-08-adam7-1-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "e1371a296fa2e40b176ebd6d22e0c59e495b4b2621ea35b02ead600086fd526f",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-08-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-08-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-16-adam7-0-noise-0.samples",
+      "bytes": 66306,
+      "sha256": "65f4ba204bc817e0225e9c710128a50cbf28b7282a6448d9c2181263b45eeca8",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-16-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-16-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-16-adam7-0-noise-1.samples",
+      "bytes": 66306,
+      "sha256": "66077b6c4bb3fcf13298afbc7c09c3b1587079a5b5b520f268309b94d588fd1c",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-16-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-16-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-16-adam7-1-noise-0.samples",
+      "bytes": 66306,
+      "sha256": "65f4ba204bc817e0225e9c710128a50cbf28b7282a6448d9c2181263b45eeca8",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-16-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-16-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-0-depth-16-adam7-1-noise-1.samples",
+      "bytes": 66306,
+      "sha256": "66077b6c4bb3fcf13298afbc7c09c3b1587079a5b5b520f268309b94d588fd1c",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-0-depth-16-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-0-depth-16-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-2-depth-08-adam7-0-noise-0.samples",
+      "bytes": 99459,
+      "sha256": "56a16b557abfc604c59e18911614a2e9cad8ab3f3d68f6557bafbba1989606b2",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-2-depth-08-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-2-depth-08-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-2-depth-08-adam7-0-noise-1.samples",
+      "bytes": 99459,
+      "sha256": "cb80d82a8b56cb6d98383c7aabd26ce1584181c13dacf85b0cbc532d21e0df93",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-2-depth-08-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-2-depth-08-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-2-depth-08-adam7-1-noise-0.samples",
+      "bytes": 99459,
+      "sha256": "56a16b557abfc604c59e18911614a2e9cad8ab3f3d68f6557bafbba1989606b2",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-2-depth-08-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-2-depth-08-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-2-depth-08-adam7-1-noise-1.samples",
+      "bytes": 99459,
+      "sha256": "cb80d82a8b56cb6d98383c7aabd26ce1584181c13dacf85b0cbc532d21e0df93",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-2-depth-08-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-2-depth-08-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-2-depth-16-adam7-0-noise-0.samples",
+      "bytes": 198918,
+      "sha256": "7f56f835821082083331e9733eeee482e646fecdf66031183fd2ffdb3d63c6e7",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-2-depth-16-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-2-depth-16-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-2-depth-16-adam7-0-noise-1.samples",
+      "bytes": 198918,
+      "sha256": "b00d0021e86f0337d545e05002689c18a2038242f601a85b8e03d6581f5a0f7d",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-2-depth-16-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-2-depth-16-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-2-depth-16-adam7-1-noise-0.samples",
+      "bytes": 198918,
+      "sha256": "7f56f835821082083331e9733eeee482e646fecdf66031183fd2ffdb3d63c6e7",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-2-depth-16-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-2-depth-16-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-2-depth-16-adam7-1-noise-1.samples",
+      "bytes": 198918,
+      "sha256": "b00d0021e86f0337d545e05002689c18a2038242f601a85b8e03d6581f5a0f7d",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-2-depth-16-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-2-depth-16-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-01-adam7-0-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "6e472c0f884290720654c8ee4409cfaf035b53f925207586644a7c82af1fd703",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-01-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-01-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-01-adam7-0-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "2da8f189f3639a6ec8049dcf9b78d21eb96ecb647a321e21282d62b1708557f4",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-01-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-01-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-01-adam7-1-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "6e472c0f884290720654c8ee4409cfaf035b53f925207586644a7c82af1fd703",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-01-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-01-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-01-adam7-1-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "2da8f189f3639a6ec8049dcf9b78d21eb96ecb647a321e21282d62b1708557f4",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-01-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-01-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-02-adam7-0-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "c1ac56b5f3f6436c63968ccae576f33431b179d48196c3729f97391a2c97a2a9",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-02-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-02-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-02-adam7-0-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "0fbc627ce98e2f5cb4b3e78726c8b8198e1ed390e3fc9e9d1317af458070993a",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-02-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-02-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-02-adam7-1-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "c1ac56b5f3f6436c63968ccae576f33431b179d48196c3729f97391a2c97a2a9",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-02-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-02-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-02-adam7-1-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "0fbc627ce98e2f5cb4b3e78726c8b8198e1ed390e3fc9e9d1317af458070993a",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-02-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-02-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-04-adam7-0-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "ff5b8968fa38562a4fa3685c333c409c8fcaec0f8ddfec545040cb2f4a7e0fa2",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-04-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-04-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-04-adam7-0-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "3d382045750d8258fd13e2e9e66b1ff31c72afc298bc7f528604473bbe3b0703",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-04-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-04-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-04-adam7-1-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "ff5b8968fa38562a4fa3685c333c409c8fcaec0f8ddfec545040cb2f4a7e0fa2",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-04-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-04-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-04-adam7-1-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "3d382045750d8258fd13e2e9e66b1ff31c72afc298bc7f528604473bbe3b0703",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-04-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-04-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-08-adam7-0-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "acc1440b5e313219671bf618b890fdd939e9c55d26bfa6ff83a3833a238ace4d",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-08-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-08-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-08-adam7-0-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "e1371a296fa2e40b176ebd6d22e0c59e495b4b2621ea35b02ead600086fd526f",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-08-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-08-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-08-adam7-1-noise-0.samples",
+      "bytes": 33153,
+      "sha256": "acc1440b5e313219671bf618b890fdd939e9c55d26bfa6ff83a3833a238ace4d",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-08-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-08-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-3-depth-08-adam7-1-noise-1.samples",
+      "bytes": 33153,
+      "sha256": "e1371a296fa2e40b176ebd6d22e0c59e495b4b2621ea35b02ead600086fd526f",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-3-depth-08-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-3-depth-08-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-4-depth-08-adam7-0-noise-0.samples",
+      "bytes": 66306,
+      "sha256": "9484e787ad0ac257572569ce5b1cf8bea0c65da3d5ab56d13de6f96ebc5dcf9d",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-4-depth-08-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-4-depth-08-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-4-depth-08-adam7-0-noise-1.samples",
+      "bytes": 66306,
+      "sha256": "25878aa30c3cb459d709c0c964a1ef3d0e6708fa6b8157e2c1c050c069753e69",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-4-depth-08-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-4-depth-08-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-4-depth-08-adam7-1-noise-0.samples",
+      "bytes": 66306,
+      "sha256": "9484e787ad0ac257572569ce5b1cf8bea0c65da3d5ab56d13de6f96ebc5dcf9d",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-4-depth-08-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-4-depth-08-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-4-depth-08-adam7-1-noise-1.samples",
+      "bytes": 66306,
+      "sha256": "25878aa30c3cb459d709c0c964a1ef3d0e6708fa6b8157e2c1c050c069753e69",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-4-depth-08-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-4-depth-08-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-4-depth-16-adam7-0-noise-0.samples",
+      "bytes": 132612,
+      "sha256": "6c29744c9b2ad62335b39cf0ec87a08e88348f9d6067c0e64d5ab8b277b3186b",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-4-depth-16-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-4-depth-16-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-4-depth-16-adam7-0-noise-1.samples",
+      "bytes": 132612,
+      "sha256": "be4daff59f1b74cbace2bb01b0101c50887411a5beab07e7a2ea4608032617b4",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-4-depth-16-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-4-depth-16-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-4-depth-16-adam7-1-noise-0.samples",
+      "bytes": 132612,
+      "sha256": "6c29744c9b2ad62335b39cf0ec87a08e88348f9d6067c0e64d5ab8b277b3186b",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-4-depth-16-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-4-depth-16-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-4-depth-16-adam7-1-noise-1.samples",
+      "bytes": 132612,
+      "sha256": "be4daff59f1b74cbace2bb01b0101c50887411a5beab07e7a2ea4608032617b4",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-4-depth-16-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-4-depth-16-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-6-depth-08-adam7-0-noise-0.samples",
+      "bytes": 132612,
+      "sha256": "84b2261bb253b85efcb729f6a384d2999d3c18b060def007b000d8da8335b3b6",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-6-depth-08-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-6-depth-08-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-6-depth-08-adam7-0-noise-1.samples",
+      "bytes": 132612,
+      "sha256": "db53a543cee6148140a83a166d7b6f9becf42df8672fa1d26cb6733f252f5f65",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-6-depth-08-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-6-depth-08-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-6-depth-08-adam7-1-noise-0.samples",
+      "bytes": 132612,
+      "sha256": "84b2261bb253b85efcb729f6a384d2999d3c18b060def007b000d8da8335b3b6",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-6-depth-08-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-6-depth-08-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-6-depth-08-adam7-1-noise-1.samples",
+      "bytes": 132612,
+      "sha256": "db53a543cee6148140a83a166d7b6f9becf42df8672fa1d26cb6733f252f5f65",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-6-depth-08-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-6-depth-08-adam7-1-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-6-depth-16-adam7-0-noise-0.samples",
+      "bytes": 265224,
+      "sha256": "66ea9050a51913c6a75f49863a15494c5fb086546cb731736efefe2dff2aba18",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-6-depth-16-adam7-0-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-6-depth-16-adam7-0-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-6-depth-16-adam7-0-noise-1.samples",
+      "bytes": 265224,
+      "sha256": "1dc2680f6dd7d88fa9f0fe2d8299d48f565f1f3ea189771cc8e4694994e14255",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-6-depth-16-adam7-0-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-6-depth-16-adam7-0-noise-1.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-6-depth-16-adam7-1-noise-0.samples",
+      "bytes": 265224,
+      "sha256": "66ea9050a51913c6a75f49863a15494c5fb086546cb731736efefe2dff2aba18",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-6-depth-16-adam7-1-noise-0.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-6-depth-16-adam7-1-noise-0.samples"
+    },
+    {
+      "corpus": "formats",
+      "file": "color-6-depth-16-adam7-1-noise-1.samples",
+      "bytes": 265224,
+      "sha256": "1dc2680f6dd7d88fa9f0fe2d8299d48f565f1f3ea189771cc8e4694994e14255",
+      "baseline": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline-formats-samples\\color-6-depth-16-adam7-1-noise-1.samples",
+      "candidate": "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate-formats-samples\\color-6-depth-16-adam7-1-noise-1.samples"
+    }
+  ],
+  "scope": "Untimed observed Vec capacities on the normal global allocator, plus exact saved native sample bytes. Raw and image probes are separate calls: their capacities are not a measured simultaneous allocation peak or process RSS.",
+  "setup_recovery": {
+    "initial_log": "row-reuse-buffers.log",
+    "initial_log_sha256": "1f09702ccfcd6795bc3b071905b910a978a050e015d34f71998d0a380136b07d",
+    "reason": "The first isolated baseline manifest parse required its declared pipeline bench source. Added that exact baseline file; no probe binary or measurement had run.",
+    "initial_as_run_log_sha256": "1f09702ccfcd6795bc3b071905b910a978a050e015d34f71998d0a380136b07d"
+  },
+  "log": "row-reuse-buffers-resume.log",
+  "log_sha256": "d690077db6179bb763ee54123d673ce2d7b4737243b53f0cd683bded33ca8e83",
+  "as_run_log_sha256": "d690077db6179bb763ee54123d673ce2d7b4737243b53f0cd683bded33ca8e83"
+}

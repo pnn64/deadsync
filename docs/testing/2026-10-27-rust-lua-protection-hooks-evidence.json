@@ -1,0 +1,54 @@
+{
+  "reports": {
+    "boundary-current": {
+      "path": "docs/testing/2026-10-27-rust-lua-protection-hooks-boundary-current.json",
+      "sha256": "b61ce065d7e74022ae67a37a96128164a87a142be74e67954e2a4b9ce84be72f",
+      "source_hashes_match_current": true
+    },
+    "validation": {
+      "path": "docs/testing/2026-10-27-rust-lua-protection-hooks-validation.json",
+      "sha256": "9edbe4668e274373c46a7af470ca2a27254c8af8f667ec8001cc9398eb445953",
+      "source_hashes_match_current": true
+    },
+    "windows-suite": {
+      "path": "docs/testing/2026-10-27-rust-lua-protection-hooks-windows-suite.json",
+      "sha256": "2ca9d67a732ff2f42e6d1cfaf06b73b3e2748f37a6faa3d3f93c7a9db9dc6615",
+      "source_hashes_match_current": true
+    },
+    "i686-suite": {
+      "path": "docs/testing/2026-10-27-rust-lua-protection-hooks-i686-suite.json",
+      "sha256": "e6ff5d3fc8aea404faaf04159e15d741b50143e240505220a644f6c0e781ab05",
+      "source_hashes_match_current": true
+    }
+  },
+  "baseline": {
+    "path": "docs/testing/2026-10-27-rust-lua-protection-hooks-before.json",
+    "sha256": "e63fd94a78c524801ab89369a2287a8cc6bac40457180f52b8ac9652d10aaa64",
+    "runner_sha256": "d518db9c39774871789fe686aa992dbea8699655a79f4a8a0c84125815bb9517",
+    "prebuilt_runner": true,
+    "provenance": "docs/testing/2026-10-27-rust-lua-protection-hooks-inputs/before-provenance.json",
+    "provenance_sha256": "004787a41af6f7acc2b7951952c9a5841466c6d6d3b7ec9a9e81a871c9a609ad",
+    "native_before_snapshot_sha256": "108748e2d38e313ee6b1a4836d1ea6c4acbc194456ce0e1c61789255593a4a89",
+    "prior_source_build_digest_verified": true,
+    "mismatched_cases": 18,
+    "total_cases": 39
+  },
+  "all_current_source_hashes_match": true,
+  "full_lua_51_parity_proven": false,
+  "core_c_api": {
+    "implemented": 74,
+    "total": 80,
+    "missing": [
+      "lua_atpanic",
+      "lua_close",
+      "lua_getallocf",
+      "lua_newstate",
+      "lua_setallocf",
+      "lua_tocfunction"
+    ],
+    "complete_semantics_proven": false
+  },
+  "production_native_loading_complete": false,
+  "windows_files_rename_failure_retained": true,
+  "stock_suite_internal_T_module": false
+}

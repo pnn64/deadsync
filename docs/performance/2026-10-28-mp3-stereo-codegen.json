@@ -1,0 +1,97 @@
+{
+  "stages": {
+    "round5-cold-base": {
+      "standalone_function_found": true,
+      "manifest_sha256": "f0c2d262b811182baa9462ebf9b9e38b6ef803f7bbb200667e19bf595e8595cc",
+      "path": "target\\mp3-perf-20261028\\stereo-round5-cold-base.s",
+      "sha256": "270650370a96574e9c6ba49bc657962b9977ed016e647147ee5abca054f404dc",
+      "direct_stack_allocations": [
+        872
+      ],
+      "packed_float_operations": {
+        "addpd": 2,
+        "subpd": 2,
+        "mulpd": 8
+      },
+      "scalar_float_operations": {
+        "addsd": 5,
+        "subsd": 1,
+        "mulsd": 14
+      },
+      "instruction_lines": 870
+    },
+    "fused-stereo": {
+      "standalone_function_found": true,
+      "manifest_sha256": "27d759c32845f50015900b5724f60a216caa539b4f12ab1996ac3063d52a0a60",
+      "path": "target\\mp3-perf-20261028\\stereo-fused-stereo.s",
+      "sha256": "7a94b63628706281d152be07893fdba50651b2e2554cd0b98f5e3bd984dc07db",
+      "direct_stack_allocations": [
+        280
+      ],
+      "packed_float_operations": {
+        "addpd": 3,
+        "subpd": 3,
+        "mulpd": 10
+      },
+      "scalar_float_operations": {
+        "addsd": 4,
+        "subsd": 2,
+        "mulsd": 10
+      },
+      "instruction_lines": 731
+    },
+    "cached-intensity": {
+      "standalone_function_found": true,
+      "manifest_sha256": "20633889d175701175a0c2f60596db2eba1ac7c218351e5a6b4e98e00350c298",
+      "path": "target\\mp3-perf-20261028\\stereo-cached-intensity.s",
+      "sha256": "2178197696ef4a2b4004a3b80c094ccfbeed9060313c2e4960004d13498e68a4",
+      "direct_stack_allocations": [
+        216
+      ],
+      "packed_float_operations": {
+        "addpd": 3,
+        "subpd": 3,
+        "mulpd": 8
+      },
+      "scalar_float_operations": {
+        "addsd": 2,
+        "subsd": 2,
+        "mulsd": 12
+      },
+      "instruction_lines": 744
+    }
+  },
+  "command": [
+    "cargo",
+    "rustc",
+    "--offline",
+    "--manifest-path",
+    "target\\mp3-perf-20261028\\build\\Cargo.toml",
+    "-p",
+    "deadlib-audio-decode-mp3",
+    "--bench",
+    "kernels",
+    "--profile",
+    "bench",
+    "--",
+    "--emit=asm"
+  ],
+  "cache_layout": {
+    "size": 88,
+    "alignment": 8,
+    "numeric_bytes": 80,
+    "command": [
+      "rustc",
+      "--edition=2024",
+      "target\\mp3-perf-20261028\\intensity-cache-layout.rs",
+      "-C",
+      "panic=abort",
+      "-C",
+      "target-feature=+crt-static",
+      "-o",
+      "target\\mp3-perf-20261028\\intensity-cache-layout.exe"
+    ],
+    "probe_sha256": "f855cf4e9bdf7668fe75203e269dabdc3bf35464ffe7397665f95540be8d2d4c"
+  },
+  "count_method": "Static instruction lines with lowercase alphanumeric mnemonics; excludes directives, labels and comments. This is not a hardware retired-instruction count. Stack reservations come from the standalone Windows x64 function prologue."
+}

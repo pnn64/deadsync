@@ -355,12 +355,12 @@ pub fn decode_with_options(mut input: &[u8], options: &DecodeOptions) -> Result<
     }
     crate::metadata::validate(&ancillary, header, palette.len(), limits)?;
     // PNG Third Edition 11.2.3 recommends ignoring unused bytes in final IDAT.
-    let (mut raw, _) = zlib::decompress_prefix(&compressed, expected)?;
+    let (raw, _) = zlib::decompress_prefix(&compressed, expected)?;
     if raw.len() != expected {
         return Err(Error::Invalid("image data length"));
     }
     let image = scanline::decode(
-        &mut raw,
+        raw,
         header.width,
         header.height,
         header.color,

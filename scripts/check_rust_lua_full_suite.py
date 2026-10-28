@@ -92,6 +92,7 @@ def main() -> None:
     parser.add_argument("--timeout", type=float, default=180)
     parser.add_argument("--run-root", type=Path,
                         help="Parent of retained run directories; use a native filesystem")
+    parser.add_argument('--native-libraries',action='store_true',help='Compile the unchanged official native suite libraries (Linux)')
     parser.add_argument("--entries", nargs="+", choices=["main.lua", "all.lua"],
                         default=["main.lua", "all.lua"])
     parser.add_argument("--rust-binary", type=Path,
@@ -101,6 +102,7 @@ def main() -> None:
     parser.add_argument("--reference-fp-model", choices=['sse2'],
                         help="Explicit i686 C arithmetic profile; default compiler flags remain unchanged")
     args = parser.parse_args()
+    if args.native_libraries and sys.platform!='linux':parser.error('native suite libraries currently require Linux')
     if args.timeout <= 0:
         parser.error("timeout must be positive")
     if args.target and sys.platform != 'linux':
@@ -110,7 +112,7 @@ def main() -> None:
     root = Path(__file__).resolve().parents[1]
     if Path("/a/b/c/d").resolve().parent.is_dir():
         raise SystemExit("unchanged files.lua requires /a/b/c to be absent")
-    sources = list((root / "crates/deadlib-lua").rglob("*.rs"))
+    sources = [p for p in (root/"crates/deadlib-lua").rglob('*')if p.suffix in {'.rs','.c','.h'}]
     sources += [root / "crates/deadlib-lua/Cargo.toml", Path(__file__).resolve(),
                 root / "scripts/build_lua_cli_reference.py", root / "scripts/check_rust_lua_suite.py"]
 
@@ -152,14 +154,28 @@ def main() -> None:
             suite_before = {p.relative_to(suite).as_posix(): sha(p) for p in suite_sources}
             binaries = directory / "bin"
             binaries.mkdir()
+            native_builds=[]
+            if args.native_libraries:
+                headers=reference.parent/'lua-5.1.5/src'
+                for name in ['lib1','lib11','lib2','lib21']:
+                    module=suite/'libs'/(name+'.so')
+                    command=['cc','-shared','-fPIC','-O2','-I'+str(headers),str(suite/'libs'/(name+'.c')),'-o',str(module)]
+                    if args.target:command[1:1]=['-m32','-msse2','-mfpmath=sse']
+                    compiled=subprocess.run(command,cwd=suite/'libs',capture_output=True,timeout=60)
+                    if compiled.returncode:raise SystemExit('native suite library build failed: '+compiled.stderr.decode(errors='replace'))
+                    native_builds.append(dict(command=command,path=str(module),sha256=sha(module)))
+                shutil.copyfile(suite/'libs/lib2.so',suite/'libs/-lib2.so')
             binary = binaries / ("lua.exe" if os.name == "nt" else "lua")
             shutil.copyfile(executable, binary)
             if os.name != "nt":
                 binary.chmod(0o755)
             result = run(binary, entry, suite, args.timeout)
+            if args.native_libraries and entry=='all.lua':
+                result['native_library_skip_seen']=b'cannot load dynamic library'in bytes.fromhex(result['stdout_hex'])
+                if result['native_library_skip_seen']:result['status']='native-library-skipped'
             if suite_before != {p.relative_to(suite).as_posix(): sha(p) for p in suite_sources}:
                 raise SystemExit("official suite source changed during execution")
-            results.append(dict(engine=engine, entry=entry, suite_source_hashes=suite_before, **result))
+            results.append(dict(engine=engine, entry=entry, suite_source_hashes=suite_before,native_library_builds=native_builds, **result))
             print(engine, entry, result["status"], "exit", result["returncode"], flush=True)
     if before != hashes():
         raise SystemExit("sources changed during full-suite probes")
@@ -167,6 +183,7 @@ def main() -> None:
                   platform=sys.platform, timeout_seconds=args.timeout, bootstrap=None,
                   suite_environment=dict(LUA_PATH="?;./?.lua", LUA_INIT=None, LUA_CPATH=None),
                   internal_test_module=False, rust_build_command=build_command,
+                  native_libraries_enabled=args.native_libraries,
                   rust_binary=dict(path=str(rust), sha256=sha(rust), prebuilt=args.rust_binary is not None),
                   reference=metadata, results=results,
                   limitations="Stock standalone suite mode without the internal T module. No Lua source, assertion, bootstrap or version output is rewritten. Raw process output is retained, not asserted equal: timing, memory counts and temporary filenames vary. Failures, timeouts and absent completion markers remain failures.")

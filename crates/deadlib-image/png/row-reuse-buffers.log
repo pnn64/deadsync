@@ -1,0 +1,3 @@
+COMMAND: ["cargo", "build", "--offline", "--manifest-path", "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline\\Cargo.toml", "--target-dir", "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-baseline"]
+error: C:\GitHub\deadsync\target\png-row-reuse-buffer-probe\baseline-image\png\Cargo.toml: can't find `pipeline` bench at `benches\pipeline.rs` or `benches\pipeline\main.rs`. Please specify bench.path if you want to use a non-default path.
+error: could not parse `deadlib-image-png` (manifest) due to 1 previous error

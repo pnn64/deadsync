@@ -8,6 +8,7 @@ use std::{
 };
 mod number;
 mod output;
+mod returns;
 mod stream;
 use number::read_number;
 pub(super) fn stdout_write(bytes: &[u8]) -> std::io::Result<()> {
@@ -72,6 +73,18 @@ pub(super) struct Io {
 impl Io {
     pub fn heap_bytes(&self) -> usize {
         self.files.iter().map(Stream::heap_bytes).sum()
+    }
+}
+impl Vm {
+    pub(super) fn flush_process_streams(&mut self) {
+        // Process exit flushes C streams without closing the Lua state or
+        // invoking finalizers. Match that for the streams owned by this VM.
+        for stream in self.io.files.iter_mut() {
+            let _ = stream.flush();
+        }
+        use std::io::Write;
+        let _ = stdout_flush();
+        let _ = std::io::stderr().flush();
     }
 }
 pub(super) fn c_bytes(bytes: &[u8]) -> &[u8] {
@@ -355,10 +368,18 @@ impl Vm {
         }
     }
     fn checked_file(&self, value: Value, check_meta: bool) -> Result<u64, Error> {
+        let missing = self
+            .active_native
+            .is_some_and(|i| self.frames[i].argc() == 0);
+        self.checked_file_value(value, check_meta, missing)
+    }
+    fn checked_file_value(
+        &self,
+        value: Value,
+        check_meta: bool,
+        missing: bool,
+    ) -> Result<u64, Error> {
         let key = self.file_key(value, check_meta).ok_or_else(|| {
-            let missing = self
-                .active_native
-                .is_some_and(|i| self.frames[i].argc() == 0);
             self.argument_error(
                 0,
                 format!(
@@ -378,7 +399,7 @@ impl Vm {
         Ok(key)
     }
     fn default_file(&self, id: u64, output: bool) -> Result<Value, Error> {
-        let env = self.native_environment(id);
+        let env = self.builtin_environment(id);
         let value =
             self.tables[slot_index(env.0)].get(Value::Number(if output { 2.0 } else { 1.0 }));
         let key = self
@@ -529,6 +550,11 @@ impl Vm {
                 let s = self.string_argument(base, count, 1)?;
                 self.strings.bytes[slot_index(s.0)].to_vec()
             };
+            // Lua roots a closed userdata before attempting the OS open.
+            let value = self.file_value(Stream::closed(), self.builtin_environment(id));
+            let pending = base + count.max(3) + 1;
+            self.resize_registers(self.registers.len().max(pending + 1));
+            self.registers[pending] = value;
             let result = match id {
                 TMPFILE => temporary(),
                 POPEN => pipe(path.as_deref().unwrap(), &mode),
@@ -536,14 +562,16 @@ impl Vm {
             };
             return Ok(match result {
                 Ok(file) => {
-                    self.registers[base] = self.file_value(file, self.native_environment(id));
+                    let key = self.file_key(value, false).expect("new file userdata");
+                    self.io.files[slot_index(key)] = file;
+                    self.registers[base] = value;
                     1
                 }
                 Err(code) => self.io_failure(base, code, path.as_deref()),
             });
         }
         if matches!(id, INPUT | OUTPUT) {
-            let env = self.native_environment(id);
+            let env = self.builtin_environment(id);
             let index = Value::Number(if id == INPUT { 1.0 } else { 2.0 });
             if arg != Value::Nil {
                 let value = if matches!(arg, Value::String(_) | Value::Number(_)) {
@@ -571,7 +599,7 @@ impl Vm {
                 ERRNO.set(code);
                 self.file_argument_error(&path, code)
             })?;
-            let Value::Userdata(file) = self.file_value(file, self.native_environment(id)) else {
+            let Value::Userdata(file) = self.file_value(file, self.builtin_environment(id)) else {
                 unreachable!()
             };
             self.registers[base] = self.new_native(
@@ -580,8 +608,18 @@ impl Vm {
             )?;
             return Ok(1);
         }
-        let default = matches!(id, READ | WRITE | FLUSH | LINES) || (id == CLOSE && count == 0);
-        let value = if default {
+        let default = matches!(id, READ | WRITE | FLUSH | LINES)
+            || (matches!(id, CLOSE | FCLOSE) && count == 0);
+        if id == LINES && arg == Value::Nil && count != 0 {
+            // io_lines appends the default file, but f_lines still checks slot 1.
+            self.checked_file(arg, true)?;
+        }
+        let pushed_default = default && matches!(id, LINES | CLOSE | FCLOSE);
+        let value = if pushed_default {
+            self.tables[slot_index(self.builtin_environment(id).0)].get(Value::Number(
+                if matches!(id, CLOSE | FCLOSE) { 2. } else { 1. },
+            ))
+        } else if default {
             self.default_file(id, matches!(id, WRITE | FLUSH | CLOSE))?
         } else {
             arg
@@ -589,6 +627,8 @@ impl Vm {
         let key = if id == GC || id == TO_STRING {
             self.file_key(value, true)
                 .ok_or_else(|| self.argument_type_error(base, count, 0, "FILE*"))?
+        } else if pushed_default {
+            self.checked_file_value(value, true, false)?
         } else {
             self.checked_file(value, !default || id == LINES)?
         };

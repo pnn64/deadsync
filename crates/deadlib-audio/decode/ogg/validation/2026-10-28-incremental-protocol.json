@@ -1,0 +1,65 @@
+{
+  "probe_sha256": "3524b2262900ad850bc6c3f868bbe4732954610d473d31100a0f0181cdd83af9",
+  "cases": 435,
+  "workers": {
+    "recent": {
+      "command": [
+        "rustc",
+        "--crate-name",
+        "ogg_incremental_trace",
+        "--edition",
+        "2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=yes",
+        "-C",
+        "panic=abort",
+        "-C",
+        "target-feature=+crt-static",
+        "--extern",
+        "deadlib_audio_decode_ogg=C:\\GitHub\\deadsync\\target\\ogg-transitions-20261028\\recent\\target\\release\\deps\\libdeadlib_audio_decode_ogg-7b241ee5bc617107.rlib",
+        "-L",
+        "dependency=C:\\GitHub\\deadsync\\target\\ogg-transitions-20261028\\recent\\target\\release\\deps",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-incremental-probe.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\ogg-transitions-20261028\\recent-probe.exe"
+      ],
+      "library_sha256": "a574285c6e046f214a1b434bf706965293c9e3bf4e54b8f113ec25f23c742812",
+      "executable_sha256": "e1902c59788a6fd627ec06f57f41e982300bc24842e802e4ee21aab300fe904c",
+      "trace_sha256": "2e0fc461ed8c30e0c28bb58aa21e65a47efdbc6cf376503578f6dd44eb2f49cb",
+      "trace_bytes": 5808523,
+      "type_size": "PageDecoder bytes: 32"
+    },
+    "incremental": {
+      "command": [
+        "rustc",
+        "--crate-name",
+        "ogg_incremental_trace",
+        "--edition",
+        "2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "lto=yes",
+        "-C",
+        "panic=abort",
+        "-C",
+        "target-feature=+crt-static",
+        "--extern",
+        "deadlib_audio_decode_ogg=C:\\GitHub\\deadsync\\target\\ogg-transitions-20261028\\incremental\\target\\release\\deps\\libdeadlib_audio_decode_ogg-7b241ee5bc617107.rlib",
+        "-L",
+        "dependency=C:\\GitHub\\deadsync\\target\\ogg-transitions-20261028\\incremental\\target\\release\\deps",
+        "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-28-incremental-probe.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\ogg-transitions-20261028\\incremental-probe.exe"
+      ],
+      "library_sha256": "3f1d19afd5f3155ae1135c7b72e97e1e5d597e36b798b7ee8a80828ed2e15ebd",
+      "executable_sha256": "eb43d5c55d916880ef09ea861877a9a7e6a05e93b3f65c6b6f36c6ddef9e0ea6",
+      "trace_sha256": "2e0fc461ed8c30e0c28bb58aa21e65a47efdbc6cf376503578f6dd44eb2f49cb",
+      "trace_bytes": 5808523,
+      "type_size": "PageDecoder bytes: 40"
+    }
+  },
+  "complete_traces_equal": true
+}

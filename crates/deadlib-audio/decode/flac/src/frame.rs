@@ -22,19 +22,22 @@ pub struct FrameHeader {
 impl FrameHeader {
     pub fn parse(data: &[u8], info: Option<&StreamInfo>) -> Result<Self, Error> {
         let mut r = BitReader::new(data);
-        if r.read(15)? != 0x7ffc {
+        let sync = r.read(16)?;
+        if sync >> 1 != 0x7ffc {
             return Err(Error::Invalid("frame sync"));
         }
-        let variable_block_size = r.read(1)? != 0;
-        let block_code = r.read(4)? as u8;
-        let rate_code = r.read(4)? as usize;
-        let channel_assignment = r.read(4)? as u8;
+        let variable_block_size = sync & 1 != 0;
+        let codes = r.read(8)? as u8;
+        let block_code = codes >> 4;
+        let rate_code = (codes & 15) as usize;
+        let format = r.read(8)? as u8;
+        let channel_assignment = format >> 4;
         let channels = match channel_assignment {
             0..=7 => channel_assignment + 1,
             8..=10 => 2,
             _ => return Err(Error::Invalid("channel assignment")),
         };
-        let bits_per_sample = match r.read(3)? {
+        let bits_per_sample = match (format >> 1) & 7 {
             0 => {
                 info.ok_or(Error::Invalid("bit depth requires STREAMINFO"))?
                     .bits_per_sample
@@ -50,7 +53,7 @@ impl FrameHeader {
         if !(4..=32).contains(&bits_per_sample) {
             return Err(Error::Invalid("bit depth"));
         }
-        if r.read(1)? != 0 {
+        if format & 1 != 0 {
             return Err(Error::Invalid("frame reserved bit"));
         }
         let number = read_number(&mut r)?;
@@ -724,6 +727,8 @@ fn verbatim<T: Sample>(r: &mut BitReader<'_>, output: &mut [T], width: u32) -> R
 }
 
 fn restore_fixed<T: Sample>(output: &mut [T], order: usize, width: u32) -> Result<(), Error> {
+    // Integrate successive differences instead of recomputing weighted sums.
+    // With at most 33-bit samples all differences fit i64; check before reuse.
     match order {
         0 => {
             for &sample in output.iter() {
@@ -740,35 +745,42 @@ fn restore_fixed<T: Sample>(output: &mut [T], order: usize, width: u32) -> Resul
             }
         }
         2 => {
-            let (mut a, mut b) = (output[1].wide(), output[0].wide());
+            let mut value = output[1].wide();
+            let mut delta = value - output[0].wide();
             for sample in &mut output[2..] {
-                let value = sample.wide() + 2 * a - b;
+                delta += sample.wide();
+                value += delta;
                 check_sample(value, width)?;
                 *sample = T::store(value);
-                (a, b) = (value, a);
             }
         }
         3 => {
-            let (mut a, mut b, mut c) = (output[2].wide(), output[1].wide(), output[0].wide());
+            let (a, b, c) = (output[2].wide(), output[1].wide(), output[0].wide());
+            let (mut value, mut d1, mut d2) = (a, a - b, a - 2 * b + c);
             for sample in &mut output[3..] {
-                let value = sample.wide() + 3 * a - 3 * b + c;
+                d2 += sample.wide();
+                d1 += d2;
+                value += d1;
                 check_sample(value, width)?;
                 *sample = T::store(value);
-                (a, b, c) = (value, a, b);
             }
         }
         4 => {
-            let (mut a, mut b, mut c, mut d) = (
+            let (a, b, c, d) = (
                 output[3].wide(),
                 output[2].wide(),
                 output[1].wide(),
                 output[0].wide(),
             );
+            let (mut value, mut d1, mut d2, mut d3) =
+                (a, a - b, a - 2 * b + c, a - 3 * b + 3 * c - d);
             for sample in &mut output[4..] {
-                let value = sample.wide() + 4 * a - 6 * b + 4 * c - d;
+                d3 += sample.wide();
+                d2 += d3;
+                d1 += d2;
+                value += d1;
                 check_sample(value, width)?;
                 *sample = T::store(value);
-                (a, b, c, d) = (value, a, b, c);
             }
         }
         _ => unreachable!(),
@@ -811,6 +823,76 @@ fn residual<T: Sample>(r: &mut BitReader<'_>, output: &mut [T], order: usize) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fixed_differences_match_closed_form_at_all_widths_and_error_positions() {
+        const COEFF: [&[i64]; 5] = [&[], &[1], &[2, -1], &[3, -3, 1], &[4, -6, 4, -1]];
+        fn reference(output: &mut [i64], order: usize, width: u32) -> Result<(), Error> {
+            for i in order..output.len() {
+                let prediction: i64 = COEFF[order]
+                    .iter()
+                    .enumerate()
+                    .map(|(j, c)| c * output[i - j - 1])
+                    .sum();
+                let value = output[i] + prediction;
+                check_sample(value, width)?;
+                output[i] = value;
+            }
+            Ok(())
+        }
+        let mut random = 9639u64;
+        for width in 1..=33 {
+            let bound = 1i64 << (width - 1);
+            for order in 2..=4 {
+                for len in [order + 1, 65, 257] {
+                    let pcm: Vec<_> = (0..len)
+                        .map(|_| {
+                            random = random.wrapping_mul(6364136223846793005).wrapping_add(1);
+                            (random % (2 * bound) as u64) as i64 - bound
+                        })
+                        .collect();
+                    let mut residual = pcm.clone();
+                    for i in order..len {
+                        residual[i] -= COEFF[order]
+                            .iter()
+                            .enumerate()
+                            .map(|(j, c)| c * pcm[i - j - 1])
+                            .sum::<i64>();
+                    }
+                    if width <= 32
+                        && let Ok(mut narrow) = residual
+                            .iter()
+                            .copied()
+                            .map(i32::try_from)
+                            .collect::<Result<Vec<_>, _>>()
+                    {
+                        restore_fixed(&mut narrow, order, width).unwrap();
+                        assert!(
+                            narrow
+                                .iter()
+                                .copied()
+                                .map(i64::from)
+                                .eq(pcm.iter().copied())
+                        );
+                    }
+                    restore_fixed(&mut residual, order, width).unwrap();
+                    assert_eq!(residual, pcm);
+                }
+                for sign in [-1, 1] {
+                    for position in [0, 1, 7, 31] {
+                        let mut residual = vec![0; 65];
+                        residual[..order].fill(if sign < 0 { -bound } else { bound - 1 });
+                        residual[order + position] = sign;
+                        let mut expected = residual.clone();
+                        let result = reference(&mut expected, order, width);
+                        assert!(result.is_err());
+                        assert_eq!(restore_fixed(&mut residual, order, width), result);
+                        assert_eq!(residual, expected);
+                    }
+                }
+            }
+        }
+    }
 
     #[test]
     fn packed_md5_covers_every_width_channel_count_batch_tail_and_trim() {

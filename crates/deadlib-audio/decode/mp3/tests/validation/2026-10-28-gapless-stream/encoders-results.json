@@ -1,0 +1,4265 @@
+{
+  "method": "Non-seekable gapless output against pinned independently verified file PCM.",
+  "records": [
+    {
+      "file": "libmp3lame-11025-1.mp3",
+      "input_sha256": "71ccabcda3e607c91d7248c39b594ca92c362b643f24d4cabf83acaa7a8486d1",
+      "reference_sha256": "9ce2c20c6676c49f01bccbc797d43384f56cb9c89a667a3e66f07caeef28e472",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-11025-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "225fa6eb837e7a8ed9c0673a7f2d2b613a691a997c341f0c2594e74c0c923f1f"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-11025-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "225fa6eb837e7a8ed9c0673a7f2d2b613a691a997c341f0c2594e74c0c923f1f"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-11025-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "225fa6eb837e7a8ed9c0673a7f2d2b613a691a997c341f0c2594e74c0c923f1f"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-11025-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "225fa6eb837e7a8ed9c0673a7f2d2b613a691a997c341f0c2594e74c0c923f1f"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-11025-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 33212,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "225fa6eb837e7a8ed9c0673a7f2d2b613a691a997c341f0c2594e74c0c923f1f"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-11025-2.mp3",
+      "input_sha256": "27ed695a411e0d00da8056215a70701692a8e03e7a920d07aa23ca908cb9c167",
+      "reference_sha256": "4b6d8196939706a4903479a9e8d462b6a16dcee0edcc42a4e5e229cdc6d03d3b",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-11025-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "df5bb2d9da4dd4dd7fe29dc27a1c3f3362464f74465174b243d4bb8fb46f9d91"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-11025-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "df5bb2d9da4dd4dd7fe29dc27a1c3f3362464f74465174b243d4bb8fb46f9d91"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-11025-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "df5bb2d9da4dd4dd7fe29dc27a1c3f3362464f74465174b243d4bb8fb46f9d91"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-11025-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "df5bb2d9da4dd4dd7fe29dc27a1c3f3362464f74465174b243d4bb8fb46f9d91"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-11025-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            33212,
+            35136,
+            61,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66424,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "df5bb2d9da4dd4dd7fe29dc27a1c3f3362464f74465174b243d4bb8fb46f9d91"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-12000-1.mp3",
+      "input_sha256": "d8cf4453c5b73cb988246a65ac73bc7171f86bfb0d54a90c228a876789f58b5a",
+      "reference_sha256": "7211f6c55d915803304f0c5306acf48b433fdc667d00bb9510187f76c5ba9fe7",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-12000-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "07ea65751249fc04a521f4ea9a62ef940fa5ada92ae3bd39abd0fa9ad88e7629"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-12000-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "07ea65751249fc04a521f4ea9a62ef940fa5ada92ae3bd39abd0fa9ad88e7629"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-12000-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "07ea65751249fc04a521f4ea9a62ef940fa5ada92ae3bd39abd0fa9ad88e7629"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-12000-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "07ea65751249fc04a521f4ea9a62ef940fa5ada92ae3bd39abd0fa9ad88e7629"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-12000-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 36137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "07ea65751249fc04a521f4ea9a62ef940fa5ada92ae3bd39abd0fa9ad88e7629"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-12000-2.mp3",
+      "input_sha256": "c60a909f16dd95f3a46f45d6c478f0c23d271226647710c54740c337521ef366",
+      "reference_sha256": "8c460ca2c910771151f2201d43d7e27cda82488167220df64cbb56418fdfda32",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-12000-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "340b272c52950209cee0c8832769c97bdc9980944ee35094e21105d48dbcbec2"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-12000-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "340b272c52950209cee0c8832769c97bdc9980944ee35094e21105d48dbcbec2"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-12000-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "340b272c52950209cee0c8832769c97bdc9980944ee35094e21105d48dbcbec2"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-12000-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "340b272c52950209cee0c8832769c97bdc9980944ee35094e21105d48dbcbec2"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-12000-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            36137,
+            38016,
+            66,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "340b272c52950209cee0c8832769c97bdc9980944ee35094e21105d48dbcbec2"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-16000-1.mp3",
+      "input_sha256": "4b8fd27058e131cc25305e1f07f5fe23fafe38cb74daab3ccec49851c9542886",
+      "reference_sha256": "8637db8ae386d3449b5fb51effbfeb9e48fc60460a36567df29fb6a50509f441",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-16000-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6122cfe96691147b54ec75ab07aa6254f818af2e79a8c2b9733e16ed188352f7"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-16000-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6122cfe96691147b54ec75ab07aa6254f818af2e79a8c2b9733e16ed188352f7"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-16000-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6122cfe96691147b54ec75ab07aa6254f818af2e79a8c2b9733e16ed188352f7"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-16000-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6122cfe96691147b54ec75ab07aa6254f818af2e79a8c2b9733e16ed188352f7"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-16000-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6122cfe96691147b54ec75ab07aa6254f818af2e79a8c2b9733e16ed188352f7"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-16000-2.mp3",
+      "input_sha256": "e469607badf57d146c544c0fa7218db30b3e282e114388f4aa0d8f90c8d800b1",
+      "reference_sha256": "4f21b49e7f8300e3aa83db806b15abc1f87b25f15a757f0a2e966099e09b6ca9",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-16000-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "205164157801d046ee5aa4e11fadf11164ad9b1b9aee77f6b92a8371d5ff3d31"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-16000-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "205164157801d046ee5aa4e11fadf11164ad9b1b9aee77f6b92a8371d5ff3d31"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-16000-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "205164157801d046ee5aa4e11fadf11164ad9b1b9aee77f6b92a8371d5ff3d31"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-16000-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "205164157801d046ee5aa4e11fadf11164ad9b1b9aee77f6b92a8371d5ff3d31"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-16000-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            48137,
+            50112,
+            87,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "205164157801d046ee5aa4e11fadf11164ad9b1b9aee77f6b92a8371d5ff3d31"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-22050-1.mp3",
+      "input_sha256": "1a5831394f41416c4676f006ed25e409cce0938ab5299b8c6f7244d31962ea11",
+      "reference_sha256": "fd639a71f8bc82c860a487ce6935dd6b1cd910e036618e3020f28a216bd7f5b0",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-22050-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd639a71f8bc82c860a487ce6935dd6b1cd910e036618e3020f28a216bd7f5b0"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-22050-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd639a71f8bc82c860a487ce6935dd6b1cd910e036618e3020f28a216bd7f5b0"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-22050-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd639a71f8bc82c860a487ce6935dd6b1cd910e036618e3020f28a216bd7f5b0"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-22050-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd639a71f8bc82c860a487ce6935dd6b1cd910e036618e3020f28a216bd7f5b0"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-22050-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 66287,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fd639a71f8bc82c860a487ce6935dd6b1cd910e036618e3020f28a216bd7f5b0"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-22050-2.mp3",
+      "input_sha256": "66973ce80e6458bff4852753bb2e5739fd1c1f58331c79b26094d1b88d5982c1",
+      "reference_sha256": "4d12c0b6fa19a85c1fdb594fd754f48b7e73ea28f415a7efa3da124f532678aa",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-22050-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4d12c0b6fa19a85c1fdb594fd754f48b7e73ea28f415a7efa3da124f532678aa"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-22050-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4d12c0b6fa19a85c1fdb594fd754f48b7e73ea28f415a7efa3da124f532678aa"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-22050-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4d12c0b6fa19a85c1fdb594fd754f48b7e73ea28f415a7efa3da124f532678aa"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-22050-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4d12c0b6fa19a85c1fdb594fd754f48b7e73ea28f415a7efa3da124f532678aa"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-22050-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            66287,
+            68544,
+            119,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132574,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4d12c0b6fa19a85c1fdb594fd754f48b7e73ea28f415a7efa3da124f532678aa"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-24000-1.mp3",
+      "input_sha256": "4de4cd4dbe26416b44db49ef1afad3e91889ca1b71af6d336478840e3a5d63f9",
+      "reference_sha256": "af0bf76796ceceff645d61c33c163e17c79da28589f8239cedf81ee3b2eb3bc3",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-24000-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "a50bb7a28e5c4df89d23a0b006192bad30fa18bec9084810cb6fce6d09fc8c69"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-24000-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "a50bb7a28e5c4df89d23a0b006192bad30fa18bec9084810cb6fce6d09fc8c69"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-24000-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "a50bb7a28e5c4df89d23a0b006192bad30fa18bec9084810cb6fce6d09fc8c69"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-24000-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "a50bb7a28e5c4df89d23a0b006192bad30fa18bec9084810cb6fce6d09fc8c69"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-24000-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 72137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "a50bb7a28e5c4df89d23a0b006192bad30fa18bec9084810cb6fce6d09fc8c69"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-24000-2.mp3",
+      "input_sha256": "cb7fb0b163724427c2809c66c9681549c5bb2fcf0b3592018dea7cce3abe3404",
+      "reference_sha256": "3b3f9a68ee108d28e9e9bcb4d246c2290fb2c04f08f22b97ddd5fe3f85d88132",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-24000-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fa1f1d0a2f0ceb0e1dc540a6a71d063b2dcc9357ffb008063585984973b05213"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-24000-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fa1f1d0a2f0ceb0e1dc540a6a71d063b2dcc9357ffb008063585984973b05213"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-24000-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fa1f1d0a2f0ceb0e1dc540a6a71d063b2dcc9357ffb008063585984973b05213"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-24000-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fa1f1d0a2f0ceb0e1dc540a6a71d063b2dcc9357ffb008063585984973b05213"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-24000-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            72137,
+            74304,
+            129,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "fa1f1d0a2f0ceb0e1dc540a6a71d063b2dcc9357ffb008063585984973b05213"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-32000-1.mp3",
+      "input_sha256": "9e1dfd28253b857f37868088060dba4bfedaf5d48979de75db9a94a72ce9da27",
+      "reference_sha256": "837fedfd7615b16957e96318780e7453abf128ffdd02c81b7467f78953cade92",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-32000-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f0dbe07845efb78907e62da04bbaee922877dcbdff4ef4964473ae80f3282160"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-32000-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f0dbe07845efb78907e62da04bbaee922877dcbdff4ef4964473ae80f3282160"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-32000-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f0dbe07845efb78907e62da04bbaee922877dcbdff4ef4964473ae80f3282160"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-32000-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f0dbe07845efb78907e62da04bbaee922877dcbdff4ef4964473ae80f3282160"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-32000-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f0dbe07845efb78907e62da04bbaee922877dcbdff4ef4964473ae80f3282160"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-32000-2.mp3",
+      "input_sha256": "8fe5576bc68a0376e15b57c94e4edb7db1d9f6cc9beff3172f83e4a9edb5b95c",
+      "reference_sha256": "452977f297a7374832618875cc9e9facf5f482ac7659d5a7f6e89fca69b93816",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-32000-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "7fd3c792a2bee0ce379538c7395e350627ef57d75cf597693c0b60a60eb145d5"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-32000-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "7fd3c792a2bee0ce379538c7395e350627ef57d75cf597693c0b60a60eb145d5"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-32000-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "7fd3c792a2bee0ce379538c7395e350627ef57d75cf597693c0b60a60eb145d5"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-32000-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "7fd3c792a2bee0ce379538c7395e350627ef57d75cf597693c0b60a60eb145d5"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-32000-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96137,
+            99072,
+            86,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "7fd3c792a2bee0ce379538c7395e350627ef57d75cf597693c0b60a60eb145d5"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-44100-1.mp3",
+      "input_sha256": "712a98745fd292d7c13f8aa3c674a79ba93da6544c2f1c474d424cadd93b3800",
+      "reference_sha256": "66d76d449bbcdf835c6c7f2bf05d6cc7bc20b410c67a0a45c78bd5d3dff2e054",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-44100-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c744afe202f0de596e1c700dee9d70e6cdceae6d81d094fa8fdee57e045385d3"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-44100-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c744afe202f0de596e1c700dee9d70e6cdceae6d81d094fa8fdee57e045385d3"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-44100-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c744afe202f0de596e1c700dee9d70e6cdceae6d81d094fa8fdee57e045385d3"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-44100-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c744afe202f0de596e1c700dee9d70e6cdceae6d81d094fa8fdee57e045385d3"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-44100-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 132437,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c744afe202f0de596e1c700dee9d70e6cdceae6d81d094fa8fdee57e045385d3"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-44100-2.mp3",
+      "input_sha256": "fe6b10386312be7c6b3a516a66b38ec0ab14033885f6c3ed4824c9b629fbb88b",
+      "reference_sha256": "e454c9a931485f51f4618528b43b41e5364dde1378e837b168163024c0cf8147",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-44100-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2fd3e3df90711729d2887cbddfbad1db52e506ae61883495d4806ffb03cb9859"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-44100-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2fd3e3df90711729d2887cbddfbad1db52e506ae61883495d4806ffb03cb9859"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-44100-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2fd3e3df90711729d2887cbddfbad1db52e506ae61883495d4806ffb03cb9859"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-44100-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2fd3e3df90711729d2887cbddfbad1db52e506ae61883495d4806ffb03cb9859"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-44100-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            132437,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 264874,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "2fd3e3df90711729d2887cbddfbad1db52e506ae61883495d4806ffb03cb9859"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-48000-1.mp3",
+      "input_sha256": "4165619854635a6d68b3abf5cd452cacf299b59d268750a1d64f1d6c9321c564",
+      "reference_sha256": "5f08e3ea96f2205c79ef21c9e144ef48cdb84e4db88e47ae0848163e75b2e371",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-48000-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c653570bf807f18def4319627c8863ea75c823324689ca0f57f2a0d1f017e855"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-48000-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c653570bf807f18def4319627c8863ea75c823324689ca0f57f2a0d1f017e855"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-48000-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c653570bf807f18def4319627c8863ea75c823324689ca0f57f2a0d1f017e855"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-48000-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c653570bf807f18def4319627c8863ea75c823324689ca0f57f2a0d1f017e855"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-48000-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "c653570bf807f18def4319627c8863ea75c823324689ca0f57f2a0d1f017e855"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-48000-2.mp3",
+      "input_sha256": "adb52295d5bc64cdf36115db774f36c282680eee7d0bad841adde6c35a362add",
+      "reference_sha256": "e84723d50406609d19f9bb9694cce69a5fc735d67dbbf94a03fa2db1a1c43995",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-48000-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3d72cdd1aba2ab0a191b534eab97c069543ea1b552ff3b542405bd484954661b"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-48000-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3d72cdd1aba2ab0a191b534eab97c069543ea1b552ff3b542405bd484954661b"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-48000-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3d72cdd1aba2ab0a191b534eab97c069543ea1b552ff3b542405bd484954661b"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-48000-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3d72cdd1aba2ab0a191b534eab97c069543ea1b552ff3b542405bd484954661b"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-48000-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144137,
+            147456,
+            128,
+            0
+          ],
+          "comparison": {
+            "sample_values": 288274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3d72cdd1aba2ab0a191b534eab97c069543ea1b552ff3b542405bd484954661b"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-8000-1.mp3",
+      "input_sha256": "31ea4a8682e13ed9e0c91075caae0e1a938c34432fc7a638171dfd169e5c7a69",
+      "reference_sha256": "542bb6697d375ca2f222cfafc0a1968ca4c803c3777a4e424b34337f5bb91515",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-8000-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d947e604d85fb7eb367354078c16331cfb8e817f607d3492c7de04a156ca8639"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-8000-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d947e604d85fb7eb367354078c16331cfb8e817f607d3492c7de04a156ca8639"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-8000-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d947e604d85fb7eb367354078c16331cfb8e817f607d3492c7de04a156ca8639"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-8000-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d947e604d85fb7eb367354078c16331cfb8e817f607d3492c7de04a156ca8639"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-8000-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 24137,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d947e604d85fb7eb367354078c16331cfb8e817f607d3492c7de04a156ca8639"
+        }
+      ]
+    },
+    {
+      "file": "libmp3lame-8000-2.mp3",
+      "input_sha256": "12803a5c50a9f49034107b824913279306206d339b5024067f477f24d94b018d",
+      "reference_sha256": "b47e79bcd80e52301a6a646d527d16b6f011c529d29b3b22cd58cca4986a2cca",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-8000-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d5e952021f472ab5570806e43f32ef394338dc7ee72b7d41d87d452f2ff350c1"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-8000-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d5e952021f472ab5570806e43f32ef394338dc7ee72b7d41d87d452f2ff350c1"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-8000-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d5e952021f472ab5570806e43f32ef394338dc7ee72b7d41d87d452f2ff350c1"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-8000-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d5e952021f472ab5570806e43f32ef394338dc7ee72b7d41d87d452f2ff350c1"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libmp3lame-8000-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            24137,
+            25920,
+            45,
+            0
+          ],
+          "comparison": {
+            "sample_values": 48274,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "d5e952021f472ab5570806e43f32ef394338dc7ee72b7d41d87d452f2ff350c1"
+        }
+      ]
+    },
+    {
+      "file": "libshine-32000-1.mp3",
+      "input_sha256": "8a63f9615534448b1a16f1b4bdea6234c31c54b5d8f7cafedffc9f98f6945c76",
+      "reference_sha256": "f95a1e755871ad74bab12bf88d8c4fa0e475a319cc7269717d0e890257f3eddf",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-32000-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96239,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96239,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f95a1e755871ad74bab12bf88d8c4fa0e475a319cc7269717d0e890257f3eddf"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-32000-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96239,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96239,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f95a1e755871ad74bab12bf88d8c4fa0e475a319cc7269717d0e890257f3eddf"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-32000-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96239,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96239,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f95a1e755871ad74bab12bf88d8c4fa0e475a319cc7269717d0e890257f3eddf"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-32000-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96239,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96239,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f95a1e755871ad74bab12bf88d8c4fa0e475a319cc7269717d0e890257f3eddf"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-32000-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96239,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 96239,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f95a1e755871ad74bab12bf88d8c4fa0e475a319cc7269717d0e890257f3eddf"
+        }
+      ]
+    },
+    {
+      "file": "libshine-32000-2.mp3",
+      "input_sha256": "d34f86a0a546ef8579e70800cc8a0a41ede75c499ec6a949b7e450802e41497a",
+      "reference_sha256": "8ebffcddfcbd295fce064fbe278af4a77c57cbc4cc1d4b25ec6ea9b575b9560b",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-32000-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96239,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192478,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "8ebffcddfcbd295fce064fbe278af4a77c57cbc4cc1d4b25ec6ea9b575b9560b"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-32000-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96239,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192478,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "8ebffcddfcbd295fce064fbe278af4a77c57cbc4cc1d4b25ec6ea9b575b9560b"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-32000-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96239,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192478,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "8ebffcddfcbd295fce064fbe278af4a77c57cbc4cc1d4b25ec6ea9b575b9560b"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-32000-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96239,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192478,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "8ebffcddfcbd295fce064fbe278af4a77c57cbc4cc1d4b25ec6ea9b575b9560b"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-32000-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            96239,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 192478,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "8ebffcddfcbd295fce064fbe278af4a77c57cbc4cc1d4b25ec6ea9b575b9560b"
+        }
+      ]
+    },
+    {
+      "file": "libshine-44100-1.mp3",
+      "input_sha256": "7b47fa5a6c2eb18884158c7849c5926a02e411f701d3235f5f2c9e40837d40ac",
+      "reference_sha256": "3ad80f81c1e7613c9d81522d3e27c2d2efad5cfbd1f308b5bbdb6312be578587",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-44100-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            130799,
+            132480,
+            115,
+            0
+          ],
+          "comparison": {
+            "sample_values": 130799,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3ad80f81c1e7613c9d81522d3e27c2d2efad5cfbd1f308b5bbdb6312be578587"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-44100-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            130799,
+            132480,
+            115,
+            0
+          ],
+          "comparison": {
+            "sample_values": 130799,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3ad80f81c1e7613c9d81522d3e27c2d2efad5cfbd1f308b5bbdb6312be578587"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-44100-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            130799,
+            132480,
+            115,
+            0
+          ],
+          "comparison": {
+            "sample_values": 130799,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3ad80f81c1e7613c9d81522d3e27c2d2efad5cfbd1f308b5bbdb6312be578587"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-44100-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            130799,
+            132480,
+            115,
+            0
+          ],
+          "comparison": {
+            "sample_values": 130799,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3ad80f81c1e7613c9d81522d3e27c2d2efad5cfbd1f308b5bbdb6312be578587"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-44100-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            130799,
+            132480,
+            115,
+            0
+          ],
+          "comparison": {
+            "sample_values": 130799,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "3ad80f81c1e7613c9d81522d3e27c2d2efad5cfbd1f308b5bbdb6312be578587"
+        }
+      ]
+    },
+    {
+      "file": "libshine-44100-2.mp3",
+      "input_sha256": "bf4e10346edf004c2ad2c5ad4f4fcce43a39e486646c7079800c9688223e3b00",
+      "reference_sha256": "28e6cf3dbc1787886286c1c98b60ef83169eefb12f8305c54c8fb0354c36a600",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-44100-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            130799,
+            132480,
+            115,
+            0
+          ],
+          "comparison": {
+            "sample_values": 261598,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "28e6cf3dbc1787886286c1c98b60ef83169eefb12f8305c54c8fb0354c36a600"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-44100-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            130799,
+            132480,
+            115,
+            0
+          ],
+          "comparison": {
+            "sample_values": 261598,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "28e6cf3dbc1787886286c1c98b60ef83169eefb12f8305c54c8fb0354c36a600"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-44100-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            130799,
+            132480,
+            115,
+            0
+          ],
+          "comparison": {
+            "sample_values": 261598,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "28e6cf3dbc1787886286c1c98b60ef83169eefb12f8305c54c8fb0354c36a600"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-44100-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            130799,
+            132480,
+            115,
+            0
+          ],
+          "comparison": {
+            "sample_values": 261598,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "28e6cf3dbc1787886286c1c98b60ef83169eefb12f8305c54c8fb0354c36a600"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-44100-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            130799,
+            132480,
+            115,
+            0
+          ],
+          "comparison": {
+            "sample_values": 261598,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "28e6cf3dbc1787886286c1c98b60ef83169eefb12f8305c54c8fb0354c36a600"
+        }
+      ]
+    },
+    {
+      "file": "libshine-48000-1.mp3",
+      "input_sha256": "c6bbf395a90a72974d17e3a6eee516ba0b7348d0a287e5570cefbed19bea3e69",
+      "reference_sha256": "6ea17f8d6085c079509edc6e93c257cd5c6d2b9a402a15dbc517048c34762651",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-48000-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144623,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144623,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6ea17f8d6085c079509edc6e93c257cd5c6d2b9a402a15dbc517048c34762651"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-48000-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144623,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144623,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6ea17f8d6085c079509edc6e93c257cd5c6d2b9a402a15dbc517048c34762651"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-48000-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144623,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144623,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6ea17f8d6085c079509edc6e93c257cd5c6d2b9a402a15dbc517048c34762651"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-48000-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144623,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144623,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6ea17f8d6085c079509edc6e93c257cd5c6d2b9a402a15dbc517048c34762651"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-48000-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144623,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 144623,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "6ea17f8d6085c079509edc6e93c257cd5c6d2b9a402a15dbc517048c34762651"
+        }
+      ]
+    },
+    {
+      "file": "libshine-48000-2.mp3",
+      "input_sha256": "5341a76b34b06d3f278826d963818a44f1228e29d10746f610fdc64d7f1c8501",
+      "reference_sha256": "e2a9798c90663fb633fb118d17a9ccf8be60b0b457bdc611bf6ff329a98eb093",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-48000-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144623,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 289246,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e2a9798c90663fb633fb118d17a9ccf8be60b0b457bdc611bf6ff329a98eb093"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-48000-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144623,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 289246,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e2a9798c90663fb633fb118d17a9ccf8be60b0b457bdc611bf6ff329a98eb093"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-48000-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144623,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 289246,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e2a9798c90663fb633fb118d17a9ccf8be60b0b457bdc611bf6ff329a98eb093"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-48000-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144623,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 289246,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e2a9798c90663fb633fb118d17a9ccf8be60b0b457bdc611bf6ff329a98eb093"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/libshine-48000-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            144623,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 289246,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "e2a9798c90663fb633fb118d17a9ccf8be60b0b457bdc611bf6ff329a98eb093"
+        }
+      ]
+    },
+    {
+      "file": "mp3_mf-32000-1.mp3",
+      "input_sha256": "9100c1f1871a7051e29885f9ac15937180570efb8b64f232b684289a301fa9b7",
+      "reference_sha256": "4f83b51d29406089978b4a544dc38ea0886074864b94958f691b9888b21b44c4",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-32000-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            97920,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 97920,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4f83b51d29406089978b4a544dc38ea0886074864b94958f691b9888b21b44c4"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-32000-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            97920,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 97920,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4f83b51d29406089978b4a544dc38ea0886074864b94958f691b9888b21b44c4"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-32000-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            97920,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 97920,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4f83b51d29406089978b4a544dc38ea0886074864b94958f691b9888b21b44c4"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-32000-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            97920,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 97920,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4f83b51d29406089978b4a544dc38ea0886074864b94958f691b9888b21b44c4"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-32000-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            97920,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 97920,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4f83b51d29406089978b4a544dc38ea0886074864b94958f691b9888b21b44c4"
+        }
+      ]
+    },
+    {
+      "file": "mp3_mf-32000-2.mp3",
+      "input_sha256": "62f4693dc4adeb565da271f42e17f00463c57ebf8f4ac2cee53a17001363e3b6",
+      "reference_sha256": "ce555e29d378b077d928022363b034f8b3b07f94bc0b7049c05c16f391bf493f",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-32000-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            97920,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 195840,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ce555e29d378b077d928022363b034f8b3b07f94bc0b7049c05c16f391bf493f"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-32000-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            97920,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 195840,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ce555e29d378b077d928022363b034f8b3b07f94bc0b7049c05c16f391bf493f"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-32000-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            97920,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 195840,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ce555e29d378b077d928022363b034f8b3b07f94bc0b7049c05c16f391bf493f"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-32000-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            97920,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 195840,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ce555e29d378b077d928022363b034f8b3b07f94bc0b7049c05c16f391bf493f"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-32000-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            97920,
+            97920,
+            85,
+            0
+          ],
+          "comparison": {
+            "sample_values": 195840,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "ce555e29d378b077d928022363b034f8b3b07f94bc0b7049c05c16f391bf493f"
+        }
+      ]
+    },
+    {
+      "file": "mp3_mf-44100-1.mp3",
+      "input_sha256": "68854250d04c94ef4f6b14b8b10db0cd3faa9435fcc3b938b972053758965705",
+      "reference_sha256": "f2c9efb6f273f7c7fc07345e43f61ed2b81bafb594abf29d491849d4cb1981f0",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-44100-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            134784,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 134784,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f2c9efb6f273f7c7fc07345e43f61ed2b81bafb594abf29d491849d4cb1981f0"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-44100-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            134784,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 134784,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f2c9efb6f273f7c7fc07345e43f61ed2b81bafb594abf29d491849d4cb1981f0"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-44100-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            134784,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 134784,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f2c9efb6f273f7c7fc07345e43f61ed2b81bafb594abf29d491849d4cb1981f0"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-44100-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            134784,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 134784,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f2c9efb6f273f7c7fc07345e43f61ed2b81bafb594abf29d491849d4cb1981f0"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-44100-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            134784,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 134784,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "f2c9efb6f273f7c7fc07345e43f61ed2b81bafb594abf29d491849d4cb1981f0"
+        }
+      ]
+    },
+    {
+      "file": "mp3_mf-44100-2.mp3",
+      "input_sha256": "7324bbe145b70e6fff95039c23a01f79daeb6136e46f0e150d4b7a05a38e780e",
+      "reference_sha256": "4c6c95ab445f67c2d50d0ad624712140c1ae5a70770bbde9482fd059eaf5aa5c",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-44100-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            134784,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 269568,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4c6c95ab445f67c2d50d0ad624712140c1ae5a70770bbde9482fd059eaf5aa5c"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-44100-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            134784,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 269568,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4c6c95ab445f67c2d50d0ad624712140c1ae5a70770bbde9482fd059eaf5aa5c"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-44100-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            134784,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 269568,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4c6c95ab445f67c2d50d0ad624712140c1ae5a70770bbde9482fd059eaf5aa5c"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-44100-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            134784,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 269568,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4c6c95ab445f67c2d50d0ad624712140c1ae5a70770bbde9482fd059eaf5aa5c"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-44100-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            134784,
+            134784,
+            117,
+            0
+          ],
+          "comparison": {
+            "sample_values": 269568,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "4c6c95ab445f67c2d50d0ad624712140c1ae5a70770bbde9482fd059eaf5aa5c"
+        }
+      ]
+    },
+    {
+      "file": "mp3_mf-48000-1.mp3",
+      "input_sha256": "a04ccf1c76815ad49f6000478f1980ffa2daed41c78ad81bff33819abb0cabc9",
+      "reference_sha256": "00390ce86691988fc05641dba3ada8f77c35939609467190f15a4ed4d3fc301f",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-48000-1-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            146304,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 146304,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "00390ce86691988fc05641dba3ada8f77c35939609467190f15a4ed4d3fc301f"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-48000-1-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            146304,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 146304,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "00390ce86691988fc05641dba3ada8f77c35939609467190f15a4ed4d3fc301f"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-48000-1-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            146304,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 146304,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "00390ce86691988fc05641dba3ada8f77c35939609467190f15a4ed4d3fc301f"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-48000-1-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            146304,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 146304,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "00390ce86691988fc05641dba3ada8f77c35939609467190f15a4ed4d3fc301f"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-48000-1-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            146304,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 146304,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "00390ce86691988fc05641dba3ada8f77c35939609467190f15a4ed4d3fc301f"
+        }
+      ]
+    },
+    {
+      "file": "mp3_mf-48000-2.mp3",
+      "input_sha256": "d50ce13a42a4687bb005163313d376db1a3d241e846c1b772a423295468ba169",
+      "reference_sha256": "37b442e8329c1ef996adff07b59f2e514fb0fe7d41256b4e12c35d6143b750b0",
+      "schedules": [
+        {
+          "chunk": 0,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-48000-2-0.bin",
+            "0"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            146304,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 292608,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "37b442e8329c1ef996adff07b59f2e514fb0fe7d41256b4e12c35d6143b750b0"
+        },
+        {
+          "chunk": 1,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-48000-2-1.bin",
+            "1"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            146304,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 292608,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "37b442e8329c1ef996adff07b59f2e514fb0fe7d41256b4e12c35d6143b750b0"
+        },
+        {
+          "chunk": 7,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-48000-2-7.bin",
+            "7"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            146304,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 292608,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "37b442e8329c1ef996adff07b59f2e514fb0fe7d41256b4e12c35d6143b750b0"
+        },
+        {
+          "chunk": 127,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-48000-2-127.bin",
+            "127"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            146304,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 292608,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "37b442e8329c1ef996adff07b59f2e514fb0fe7d41256b4e12c35d6143b750b0"
+        },
+        {
+          "chunk": 4096,
+          "command": [
+            "wsl",
+            "-d",
+            "Debian",
+            "--",
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/gapless",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/gapless-encoders-initial/mp3_mf-48000-2-4096.bin",
+            "4096"
+          ],
+          "exit_code": 0,
+          "statistics": [
+            146304,
+            146304,
+            127,
+            0
+          ],
+          "comparison": {
+            "sample_values": 292608,
+            "rms": 0.0,
+            "max": 0.0,
+            "bit_identical": true
+          },
+          "output_sha256": "37b442e8329c1ef996adff07b59f2e514fb0fe7d41256b4e12c35d6143b750b0"
+        }
+      ]
+    }
+  ]
+}

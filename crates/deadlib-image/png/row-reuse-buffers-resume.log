@@ -1,0 +1,24 @@
+COMMAND: ["cargo", "build", "--offline", "--manifest-path", "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\baseline\\Cargo.toml", "--target-dir", "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-baseline"]
+     Locking 9 packages to highest Rust 1.99.1 compatible versions
+   Compiling crc32fast v1.5.3
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling cfg-if v1.0.5
+   Compiling miniz_oxide v0.9.1
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync\target\png-row-reuse-buffer-probe\baseline-image)
+   Compiling flate2 v1.1.10
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\target\png-row-reuse-buffer-probe\baseline-image\png)
+   Compiling png-buffer-probe v0.0.0 (C:\GitHub\deadsync\target\png-row-reuse-buffer-probe\baseline)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.44s
+COMMAND: ["cargo", "build", "--offline", "--manifest-path", "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\candidate\\Cargo.toml", "--target-dir", "C:\\GitHub\\deadsync\\target\\png-row-reuse-buffer-probe\\target-candidate"]
+     Locking 9 packages to highest Rust 1.99.1 compatible versions
+   Compiling crc32fast v1.5.3
+   Compiling adler2 v2.0.1
+   Compiling simd-adler32 v0.3.10
+   Compiling cfg-if v1.0.5
+   Compiling miniz_oxide v0.9.1
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image)
+   Compiling flate2 v1.1.10
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync\crates\deadlib-image\png)
+   Compiling png-buffer-probe v0.0.0 (C:\GitHub\deadsync\target\png-row-reuse-buffer-probe\candidate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.10s

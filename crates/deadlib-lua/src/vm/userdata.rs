@@ -52,6 +52,7 @@ impl AsMut<[u8]> for Bytes {
 
 #[derive(Debug)]
 pub(super) struct Userdata {
+    pub library: Option<Arc<dyn package::NativeLibrary>>,
     pub file: Option<std::num::NonZeroU64>,
     pub env: TableId,
     pub metatable: Option<TableId>,
@@ -133,6 +134,7 @@ impl Vm {
             self.registers[base] = finalizer;
             self.registers[base + 1] = value;
             self.enter_gc_finalizer(owner);
+            self.gc.tag_calls = self.gc.tag_calls.wrapping_add(1);
             if let Some(actual) = self.start_call(base, 1, 0, false)? {
                 self.finish_call(base, actual, 0);
             }
@@ -242,6 +244,7 @@ impl Vm {
             .expect("userdata creation order exhausted");
         self.userdata.note_alloc(bytes.storage_bytes());
         let id = UserdataId(self.userdata.insert(Userdata {
+            library: None,
             file: None,
             env,
             metatable: None,

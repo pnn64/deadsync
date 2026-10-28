@@ -632,3 +632,310 @@ Reports: [Windows 27-class trials](benches/validation/2026-10-27-platforms/windo
 [Linux primed seeks](benches/validation/2026-10-27-platforms/linux-seek-warm-raw.tsv),
 [heap checks](benches/validation/2026-10-27-platforms/memory-checkpoints.json),
 [provenance and validation](benches/validation/2026-10-27-platforms/final-validation.json).
+
+## Exact encoder search and LPC work, 2026-10-28
+
+Three safe-Rust changes reduce repeated work in `FrameEncoder`:
+
+1. Combine the residual sum and escape-width scan. Zigzag bit length equals
+   signed sample width, and an OR reduction retains the maximum bit length.
+   This removes the separate per-sample width calculation and its branches.
+2. Skip Rice method 1 when every method-0 partition chose `k < 14`. Convex
+   Rice cost means those parameters are already unrestricted optima; method 1
+   can only add one header bit per partition. Boundary parameters and escapes
+   retain the full search, including the original tie decisions.
+3. Compute Hann-weighted PCM once per plane, reusing it across LPC correlation
+   lags. The cosine closure, sample conversion and window multiplication leave
+   the inner loop. Arithmetic and summation order remain unchanged.
+
+Each change was built separately and measured against the preceding preserved
+binary. On the same 4,096-sample, stereo 16-bit smooth/noisy signal at level 5:
+
+| Change | Before cycles/frame | After cycles/frame | CPU throughput | PCM Msamples/s, before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Combined residual statistics | 18,479,892 | 13,070,740 | 1.414x | 0.83 → 1.18 |
+| Skip redundant Rice method | 13,081,264 | 9,913,760 | 1.320x | 1.17 → 1.55 |
+| Reuse Hann-weighted PCM | 9,908,080 | 6,303,152 | 1.572x | 1.55 → 2.44 |
+
+Final build versus the original `9e8f72ac0` encoder:
+
+| Case | Before cycles/frame | After cycles/frame | CPU throughput | PCM Msamples/s, before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Smooth 16-bit stereo, level 0 | 897,148 | 583,497 | 1.538x | 17.15 → 26.37 |
+| Smooth 16-bit stereo, level 2 | 5,901,446 | 2,505,130 | 2.356x | 2.59 → 6.08 |
+| Smooth 16-bit stereo, level 5 | 18,475,349 | 6,299,192 | 2.933x | 0.83 → 2.44 |
+| Smooth 16-bit stereo, level 8 | 78,509,418 | 33,193,964 | 2.365x | 0.20 → 0.46 |
+| Noise 16-bit stereo, level 2 | 3,387,361 | 1,976,098 | 1.714x | 4.54 → 7.79 |
+| Noise 24-bit stereo, level 2 | 3,665,044 | 2,256,545 | 1.624x | 4.20 → 6.82 |
+| Smooth 32-bit mono, level 5 | 4,521,837 | 2,276,339 | 1.986x | 1.70 → 3.38 |
+| Smooth 16-bit stereo, level 2, block 16 | 19,457 | 11,945 | 1.629x | 3.09 → 5.03 |
+
+Host: Intel Core i7-1250U, Windows x86-64 MSVC, rustc 1.97.1, existing Cargo
+bench profile and static CRT. The benchmark pins its thread to logical CPU 2.
+Cycles are current-thread `QueryThreadCycleTime` differences; throughput uses
+`Instant`. PCM generation, roundtrip verification and heap accounting are
+outside timing. Each trial warms and reuses one encoder. Trials interleave the
+two executables in seeded random order: 11 rounds at approximately 60 ms per
+variant for individual changes, 15 rounds at approximately 100 ms for the final
+comparison. Tables report medians. An initial unchanged-binary control stayed
+within 0.24%. The host is not frequency-locked: absolute counts vary across
+measurement sessions, so compare paired variants within each report.
+
+The second change's initial wide-input differences of -3.5% and -1.4% did not
+repeat: 21 rounds at 100 ms measured both within 0.1%. The initial Hann change
+measured -1.8% on block-16 level-2 encoding, which does not enter the LPC path;
+the final comparison retains a 1.629x gain on that case. All raw trials, including
+these initial results, are retained.
+
+All eight cases allocate and reallocate zero times per frame after warmup.
+The first two changes leave cold heap counts unchanged. The LPC change adds
+one reusable `Vec<f64>` allocation of `8 * block_size` bytes: 32,768 bytes for
+these 4,096-sample blocks, shared across channels. At level 5 stereo, cold
+allocation calls increase from 10 to 11 and cumulative requested bytes from
+169,406 to 202,174. No buffer is allocated for levels 0–2. Requested bytes include
+reallocation requests; they do not represent RSS or retained heap.
+
+Correctness: each intermediate and final binary emits exactly the same 635,954
+bytes as the baseline over 1,044 generated frames (depths 4–32, channels 1/2/8,
+levels 0/2/5/8, block sizes 16/67/257). The larger benchmark frames additionally
+match the baseline's encoded-frame digest and original integer PCM. Two new
+tests check signed-width boundaries and 1,920 Rice plans against exhaustive
+parameter, method and partition-order enumeration. Debug and release suites
+pass all 14 unit tests, 35 integration tests and three doctests; Clippy and
+format checks pass. The eight external corpus/oracle gates remain ignored and
+were not rerun. No production unsafe code was added.
+
+The evidence concerns synthetic resident-frame **encoding** on this host.
+It does not establish full music-file encoding, decoder or playback speed.
+The benchmark and preserved build manifests are reproducible with:
+
+```powershell
+python crates/deadlib-audio/decode/flac/benches/build_native.py --bench encoding --target-dir target --output target/flac-perf/current.exe
+python crates/deadlib-audio/decode/flac/benches/encoding_perf.py --before target/flac-perf/baseline.exe --after target/flac-perf/current.exe --rounds 15 --milliseconds 100 --output target/flac-perf/comparison.json
+target/flac-perf/current.exe matrix target/flac-perf/current-matrix.bin
+fc.exe /B target\flac-perf\baseline-matrix.bin target\flac-perf\current-matrix.bin
+```
+
+To rebuild the baseline, use `src/encode.rs` from `9e8f72ac0` in an isolated
+checkout with the current encoding benchmark, shared test support and benchmark
+registration. Use the same Cargo profile and target configuration for both.
+`--case` selects individual cases; the cycle counter currently supports Windows.
+
+Evidence: [per-change residual statistics](benches/validation/2026-10-28-encoding/width.json),
+[Rice method](benches/validation/2026-10-28-encoding/rice.json),
+[Rice repeat](benches/validation/2026-10-28-encoding/rice-repeat.json),
+[Hann reuse](benches/validation/2026-10-28-encoding/window.json),
+[final trials](benches/validation/2026-10-28-encoding/final.json),
+[unchanged control](benches/validation/2026-10-28-encoding/control.json),
+[validation scope](benches/validation/2026-10-28-encoding/validation.json).
+The same directory preserves source/toolchain hashes and build logs for every
+binary. Executables and generated PCM/output remain under `target/flac-perf`.
+
+## Direct frame output and word packing, 2026-10-28
+
+The next pass uses `55ea6aaa2` as its baseline and retains three safe-Rust changes:
+
+1. Write headers, subframes and CRC into the bit writer's single buffer. This
+   removes `FrameEncoder::output`, its allocation and the completed-payload copy.
+2. Emit each unary tail and its terminating one bit with one `write` call.
+   This removes the second field write and its capacity check.
+3. Align each field in a `u64` once and append its big-endian bytes, replacing
+   the byte-at-a-time packing loop. Zero/one-byte appends have direct paths.
+   An unaligned 64-bit field explicitly emits its ninth byte; zero-width writes
+   return immediately without reserving storage. All stores remain checked.
+
+Each change was measured against its predecessor. The allocation improvement
+does not depend on a CPU-speed claim; its measured CPU cost is largely unchanged.
+
+| Change and case | Before cycles/frame | After cycles/frame | CPU throughput | PCM Msamples/s, before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Single buffer, 24-bit noise, level 2 | 2,253,080 | 2,259,333 | 0.997x | 6.83 → 6.81 |
+| Fused unary, smooth 16-bit, level 0 | 586,126 | 514,653 | 1.139x | 26.25 → 29.90 |
+| Word packing, 32-bit noise, level 0 | 467,208 | 404,297 | 1.156x | 32.91 → 38.08 |
+
+The single-buffer case reduces cold allocation calls from 8 to 7, reallocations
+from 14 to 12, and cumulative requested bytes from 235,976 to 213,024. Every one
+of the nine final cases removes one cold allocation. All retain zero allocations
+and reallocations per frame after warmup. Requested-byte totals include repeated
+reallocation requests and do not measure RSS or retained heap. The existing Hann
+scratch buffer from the preceding pass is unchanged.
+
+Final comparison against the starting encoder, with 4,096 samples/channel except
+the explicitly short case:
+
+| Case | Before cycles/frame | After cycles/frame | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Smooth 16-bit stereo, level 0 | 582,899 | 502,612 | 1.160x |
+| Smooth 16-bit stereo, level 2 | 2,381,354 | 2,122,344 | 1.122x |
+| Smooth 16-bit stereo, level 5 | 6,306,574 | 6,217,710 | 1.014x |
+| Smooth 16-bit stereo, level 8 | 33,220,100 | 33,431,378 | 0.994x |
+| Noise 16-bit stereo, level 2 | 1,969,506 | 1,964,086 | 1.003x |
+| Noise 24-bit stereo, level 2 | 2,256,599 | 2,117,926 | 1.065x |
+| Smooth 32-bit mono, level 5 | 2,271,061 | 2,211,086 | 1.027x |
+| Smooth 16-bit stereo, level 2, block 16 | 11,964 | 11,797 | 1.014x |
+| Noise 32-bit stereo, level 0 | 604,978 | 404,809 | 1.494x |
+
+The largest final gains raise PCM throughput from 26.39 to 30.62 Msamples/s on
+smooth 16-bit level 0 and from 25.43 to 38.00 Msamples/s on 32-bit noise level 0.
+LPC-heavy level 8 remains dominated by analysis; its -0.6% result is recorded.
+
+These measurements use the preceding host, compiler, Cargo profile and logical
+CPU 2. Initial process comparisons varied substantially with CPU power state.
+The maintained harness now performs a 200 ms untimed encoding warmup and gives
+both variants the same iteration count. Per-change trials use 11 rounds at about
+100 ms per variant. The added 32-bit noise case uses 21 rounds at 150 ms; the
+final nine-case comparison uses 15 rounds at 150 ms. Windows thread cycles are
+the primary metric; PCM throughput uses elapsed time. Each process independently
+checks original PCM and encoded-frame digests outside timing. The host still has
+variable frequency and raw rows retain outliers; these are paired comparisons,
+not portable absolute performance claims.
+
+The first word-packing implementation regressed smooth 16-bit level 0 by 4.8%.
+It was discarded. Direct zero/one-byte appends remove that regression; the
+revised comparison is 1.004x on that case and improves wide-field encoding.
+Initial measurements and the rejected candidate's report remain in the evidence.
+
+Correctness: the 1,044-frame matrix is still byte-identical (635,954 bytes with
+the same SHA-256 as the preceding pass). A new independent bit-at-a-time test
+checks 7,800 fields over widths 0–64, every initial bit offset, high discarded
+bits, three clear/reuse passes, long unary prefixes, padding and invalid-width
+failure state. Debug and release pass all 14 unit tests, 36 integration tests and
+three doctests. Clippy and formatting pass. Eight external oracle/corpus gates
+remain ignored and were not rerun. No production unsafe code was added.
+
+Reproduce with the preceding commands and the updated encoding harness. To
+rebuild the baseline, check out `55ea6aaa2` in isolation and copy the current
+`benches/encoding.rs` and `benches/encoding_perf.py` into that checkout before
+building. The benchmark is already registered at that revision. `--case
+noise32-l0` selects the new wide-field case. Saved binaries and complete encoded
+matrices remain under `target/flac-pass2`.
+
+Evidence: [single-buffer trials](benches/validation/2026-10-28-bitwriter/direct-warm.json),
+[unary fusion](benches/validation/2026-10-28-bitwriter/unary.json),
+[rejected word packing](benches/validation/2026-10-28-bitwriter/word.json),
+[small-field append paths](benches/validation/2026-10-28-bitwriter/word-small.json),
+[wide-field trials](benches/validation/2026-10-28-bitwriter/word-wide.json),
+[final comparison](benches/validation/2026-10-28-bitwriter/final.json),
+[validation scope](benches/validation/2026-10-28-bitwriter/validation.json).
+Build manifests, compiler logs, complete check results and the initial protocol
+diagnostics are preserved in the same directory. These results measure synthetic
+resident-frame encoding; they do not establish decoder or playback throughput.
+
+## Decoder predictors and header reads, 2026-10-28
+
+This pass starts at `887dcb628` and changes decoder execution only:
+
+1. Fixed predictors of orders 2–4 integrate successive differences. Their hot
+   loops use additions instead of repeated weighted sample sums. Every sample
+   is still range checked before storage or reuse, with i64 arithmetic retaining
+   the full 33-bit side-channel range.
+2. Scalar LPC orders 1 and 2 keep preceding samples in registers, eliminating
+   indexed feedback loads from the output buffer. Coefficients, shifts, rounding
+   and per-sample checks are unchanged. Higher-order dispatch is unchanged.
+3. The fixed frame-header prefix uses three grouped reads (16/8/8 bits) instead
+   of seven individual field reads. Direct shifts/masks extract the same fields
+   while keeping the original validation order and errors.
+
+Each retained change was measured against its predecessor. Representative raw
+frame results, including header/footer CRC checks:
+
+| Change and case | Before cycles/frame | After cycles/frame | CPU throughput | PCM Msamples/s, before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Fixed order 3, mono 16-bit, block 4096 | 34,217 | 26,462 | 1.293x | 224.85 → 290.85 |
+| LPC order 2, mono 16-bit, block 4096 | 49,698 | 34,553 | 1.438x | 154.82 → 222.71 |
+| Grouped header, fixed order 4, block 32 | 551.4 | 536.5 | 1.028x | 108.94 → 110.77 |
+
+The first fixed-predictor comparison improves orders 2/3/4 by 1.095x/1.293x/
+1.154x and the 33-bit side-channel case by 1.191x. The first short-LPC comparison
+improves orders 1/2 by 1.454x/1.438x. An early header comparison measured 1.213x
+using an earlier harness; the table uses the final identical-harness comparison.
+
+Final comparison against the starting decoder:
+
+| Synthetic case | Before cycles/frame | After cycles/frame | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Fixed order 2 | 46,749 | 43,163 | 1.083x |
+| Fixed order 3 | 57,225 | 44,414 | 1.288x |
+| Fixed order 4 | 56,413 | 48,255 | 1.169x |
+| Fixed order 4, 33-bit side | 77,481 | 64,289 | 1.205x |
+| Fixed order 4, block 32 | 566.6 | 524.0 | 1.081x |
+| LPC order 1 | 78,155 | 55,332 | 1.412x |
+| LPC order 2 | 83,128 | 59,111 | 1.406x |
+| LPC order 12 control | 79,287 | 80,067 | 0.990x |
+| Left/side control | 10,280 | 10,469 | 0.982x |
+| Right/side control | 9,847 | 9,463 | 1.041x |
+| Mid/side control | 14,510 | 13,854 | 1.047x |
+| Mid/side 33-bit control | 15,556 | 15,583 | 0.998x |
+| Verbatim 24-bit control | 7,005 | 6,950 | 1.008x |
+| Verbatim 32-bit control | 5,768 | 5,767 | 1.000x |
+
+Synthetic blocks contain 4096 samples/channel except the short case. Fixed/LPC
+signals use deterministic wave/noise input and explicit subframes, independent
+of encoder mode selection. Stereo controls use constant planes to isolate
+decorrelation. All synthetic and music cases have unchanged cold heap counts
+and zero allocations/reallocations after warmup. No production unsafe code was
+added. The encoder and stereo reconstruction implementations are unchanged.
+
+A resident 49,843,225-byte, stereo 24-bit/44.1 kHz music file verifies its stored
+PCM MD5 `61b98d1894401920953dfd5a2af52e12` before timing. It contains 10,343,813
+samples/channel. Raw-frame CPU counts are 507,887,622 → 506,551,402 per complete
+file (1.003x), and throughput is 76.35 → 76.33 Msamples/s. This is essentially
+unchanged; the synthetic low-order gains do not establish faster general music
+decoding. File I/O, native reader buffering and whole-stream MD5 are untimed.
+
+Host/compiler/profile match the preceding pass: Intel i7-1250U, Windows x86-64
+MSVC, rustc 1.97.1, static CRT, existing bench profile, pinned logical CPU 2.
+Windows `QueryThreadCycleTime` is the primary metric and `Instant` supplies PCM
+throughput. Both processes receive identical iteration counts after a 200 ms
+untimed warmup. Per-change trials use 11 rounds at roughly 100–150 ms per variant;
+the final synthetic comparison uses 11 rounds at 150 ms and music uses seven
+rounds at 300 ms. Values are medians; CPU-cycle and elapsed-time medians are
+independent. An unchanged-binary control stayed within 0.3%. The host has variable
+frequency and other activity, so absolute counts differ across sessions. Compare
+paired variants within each report and retain the raw distributions.
+
+Stereo range batching was also evaluated and completely discarded. It improved
+left/side and right/side cases, but mid/side regressions remained across full-frame,
+per-pair and separated-control-flow variants. `stereo()` matches the starting
+revision exactly. Reports for the rejected variants are retained for review.
+
+Correctness checks:
+
+- All 1,279 explicit wire cases match independently generated integer PCM and
+  verify their original MD5. Every byte prefix produces identical PCM/error
+  output: 280,908 records, 4,250,075 bytes, compared directly with the baseline.
+- Another 174,080 header results compare sync/block/rate/descriptor combinations,
+  with and without STREAMINFO, at every generated byte prefix. Accepted headers
+  and error precedence match exactly across 4,909,667 snapshot bytes.
+- A new closed-form oracle checks fixed reconstruction at all widths 1–33:
+  297 valid configurations and 792 overflow configurations, including the
+  samples written before the first error. Existing LPC scalar/dispatch tests
+  cover every order and width, coefficient extremes and reconstructed overflow.
+- All 15 unit tests, 36 integration tests and three doctests pass in debug and
+  release. Clippy and formatting pass. Eight external corpus/oracle gates remain
+  ignored and were not rerun.
+
+Build and preserve both variants with the same benchmark source/profile:
+
+```powershell
+python crates/deadlib-audio/decode/flac/benches/build_native.py --bench decoding --target-dir target --output target/decoder-current.exe
+python crates/deadlib-audio/decode/flac/benches/encoding_perf.py --before target/decoder-before.exe --after target/decoder-current.exe --case fixed3 --case lpc2 --case short-fixed4 --rounds 11 --milliseconds 150 --output target/decoder-comparison.json
+target/decoder-current.exe matrix target/decoder-pcm-errors.bin
+target/decoder-current.exe headers target/decoder-header-errors.bin
+```
+
+For a baseline build, use decoder sources from `887dcb628` in an isolated
+checkout with the current `decoding` bench registration, benchmark source,
+shared test support and build helper. A file path supplied through `--case`
+selects resident raw-frame decoding of that file. Windows is required for the
+cycle-comparison driver. Binaries and snapshots remain in `target/flac-decode-pass`.
+
+Evidence: [fixed differences](benches/validation/2026-10-28-decoder-reconstruction/fixed-differences.json),
+[short LPC registers](benches/validation/2026-10-28-decoder-reconstruction/lpc-registers.json),
+[grouped header reads](benches/validation/2026-10-28-decoder-reconstruction/header-groups.json),
+[final synthetic trials](benches/validation/2026-10-28-decoder-reconstruction/final.json),
+[music control](benches/validation/2026-10-28-decoder-reconstruction/music.json),
+[validation and input hashes](benches/validation/2026-10-28-decoder-reconstruction/validation.json).
+The same directory preserves compiler/build manifests, complete check logs and
+rejected stereo measurements. These are decoder measurements on one host, not
+playback or cross-platform performance claims.

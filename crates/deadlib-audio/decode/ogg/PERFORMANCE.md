@@ -1,5 +1,38 @@
 # Container performance
 
+The latest [index-count and synchronization-state measurements](STATE_REUSE.md)
+cover reused packet counts, deferred buffer moves and cached waiting-page polls,
+with CPU/heap comparisons and exact state, capacity and index checks.
+
+The earlier [encoding and page-view measurements](ENCODING.md) cover direct owned
+encoding, a contiguous CRC update and smaller borrowed page values, including
+CPU/heap comparisons and exact byte, debug-format and IO checks.
+
+The earlier [page-buffer and packet-start measurements](BUFFERS.md) cover complete
+page copies, short-read initialization and reused index searches, including CPU
+cycles, allocation counters and exact behavior comparisons.
+
+The earlier [buffered verification and recovery measurements](RECOVERY.md) cover
+reused page validation and word scans for synchronization and pull recovery,
+with exact parser/IO comparisons and isolated CPU/heap measurements.
+
+The earlier [word-loop measurements](WORD_LOOPS.md) cover wide fragment scans,
+sixteen-byte CRC updates and page-level packet bounds, including isolated and
+combined CPU/heap results, slower controls and exact policy comparisons.
+
+The earlier [lacing-result measurements](LACING.md) cover count reuse,
+constant-time packet-origin tracking and cached synchronization lengths, with
+CPU/heap comparisons and independent reference validation.
+
+The earlier [direct streaming measurements](DIRECT_STREAMING.md) cover borrowed
+packet writes, recent-stream searches and cached incremental page lengths.
+They resolve the earlier large-writer CPU regression and include exact IO and
+decoder-state comparisons, CPU cycles and heap counters.
+
+The [2026-10-28 kernel measurements](KERNELS.md) cover fragment traversal,
+packet-writing allocations and masked-header CRC, with isolated CPU-cycle
+comparisons, complete-byte verification and an explicit large-writer CPU tradeoff.
+
 The initial Ogg-only baseline exposes a CRC bottleneck: native CRC reaches about
 341 MiB/s on 4 KiB input versus libogg's 1,558 MiB/s, and native song packet
 demux is about four times slower. This is a valid-input, warm-process API

@@ -104,6 +104,7 @@ pub(super) struct Collector {
     last_live: usize,
     threshold: usize,
     pub(super) collections: u64,
+    pub(super) tag_calls: u64,
     reclaimed: u64,
     peak: usize,
     work: Vec<Trace>,
@@ -129,6 +130,7 @@ impl Default for Collector {
             last_live: 0,
             threshold: 64 * 1024,
             collections: 0,
+            tag_calls: 0,
             reclaimed: 0,
             peak: 0,
             work: Vec::new(),
@@ -523,6 +525,15 @@ impl Vm {
             + self.sorts.capacity() * std::mem::size_of::<tables::Sort>();
         control += loads::storage_bytes(&self.loads);
         control += self.tracebacks.capacity() * std::mem::size_of::<traces::Traceback>();
+        control += self.native_bodies.capacity() * std::mem::size_of::<host::Body>();
+        control += self.api_calls.capacity() * std::mem::size_of::<host::ApiCall>();
+        control += self.library_loads.capacity() * size_of::<package::LoadingLibrary>()
+            + self
+                .library_loads
+                .iter()
+                .map(package::LoadingLibrary::heap_bytes)
+                .sum::<usize>();
+        control += self.hooks.hidden.capacity() * std::mem::size_of::<Value>();
         control += self.object_pointers.capacity()
             * (std::mem::size_of::<((u8, u64), Box<usize>)>() + 1)
             + self.object_pointers.len() * std::mem::size_of::<usize>();
@@ -535,6 +546,7 @@ impl Vm {
                 + t.sorts.capacity() * std::mem::size_of::<tables::Sort>();
             control += loads::storage_bytes(&t.loads);
             control += t.tracebacks.capacity() * std::mem::size_of::<traces::Traceback>();
+            control += t.hooks.hidden.capacity() * std::mem::size_of::<Value>();
             control += t.host_states.capacity() * std::mem::size_of::<host::ThreadData>()
                 + t.host_states
                     .iter()
@@ -806,6 +818,25 @@ impl Vm {
     }
     fn trace_thread(&mut self, id: ThreadId, work: &mut Vec<Trace>) {
         let t = &self.threads[slot_index(id.0)];
+        let hooks = if id == self.thread {
+            &self.hooks
+        } else {
+            &t.hooks
+        };
+        if let hooks::Callback::Host(function) = hooks.callback {
+            work.push(Trace::Value(Value::Native(function)));
+        }
+        if let Some(function) = hooks.host_running {
+            work.push(Trace::Value(Value::Native(function)));
+        }
+        work.extend(
+            hooks
+                .hidden
+                .iter()
+                .copied()
+                .filter(|&v| self.is_live_value(v))
+                .filter_map(edge),
+        );
         for state in &t.host_states {
             work.extend(state.roots().iter().copied().filter_map(edge));
         }
@@ -849,6 +880,20 @@ impl Vm {
         };
         let mut live = vec![0; registers.len().div_ceil(64)];
         frames_roots(self, registers, frames, top, cutoff, &mut live, work);
+        // A Lua activation resumed from an instruction hook retains its
+        // additional resume arguments until a stack-normalizing instruction.
+        let hook_top = hooks.resumed_top.or_else(|| {
+            hooks
+                .yield_owner
+                .filter(|_| t.resumed_values.is_some())
+                .map(|owner| (owner, top))
+        });
+        if let Some((owner, end)) = hook_top
+            && let Some(frame) = frames.get(owner)
+        {
+            let end = end.min(registers.len()).min(cutoff);
+            register_roots(registers, frame.base.min(end)..end, &mut live, work);
+        }
         if id != self.thread && t.status != threads::Status::Normal {
             let end = t.api_stack.end.min(registers.len());
             register_roots(registers, t.api_stack.start.min(end)..end, &mut live, work);

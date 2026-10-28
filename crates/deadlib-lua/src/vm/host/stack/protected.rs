@@ -6,12 +6,47 @@ use super::*;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum NativeCallStatus {
-    /// Call completed normally.
+    /// The API call succeeded; a selected-thread call may have yielded.
     Ok = 0,
     /// Call failed; the error value is on the stack.
     RuntimeError = 2,
     /// The error handler failed; its diagnostic is on the stack.
     ErrorHandler = 5,
+}
+
+impl Vm {
+    pub(super) fn complete_native_protection(
+        &mut self,
+        base: usize,
+        prefix: usize,
+        range: std::ops::Range<usize>,
+        results: Option<usize>,
+    ) -> Result<(NativeCallStatus, usize), Error> {
+        let status = match self.registers[range.start] {
+            Value::Number(0.) => NativeCallStatus::Ok,
+            Value::Number(2.) => NativeCallStatus::RuntimeError,
+            Value::Number(5.) => NativeCallStatus::ErrorHandler,
+            _ => unreachable!("protected native status"),
+        };
+        let actual = range.len() - 1;
+        let count = if status == NativeCallStatus::Ok {
+            results.unwrap_or(actual)
+        } else {
+            1
+        };
+        if count > limits::MAX_CSTACK - prefix {
+            self.registers.truncate(base + prefix);
+            return Err(Error::new(ErrorKind::Runtime, 0, "native stack overflow"));
+        }
+        self.relocate_native_error_functions(range.start + 1..range.end, base + prefix);
+        self.registers
+            .copy_within(range.start + 1..range.end, base + prefix);
+        self.resize_registers(base + prefix + count);
+        if count > actual {
+            self.registers[base + prefix + actual..base + prefix + count].fill(Value::Nil);
+        }
+        Ok((status, prefix + count))
+    }
 }
 
 impl NativeStack<'_, '_> {
@@ -61,37 +96,13 @@ impl NativeStack<'_, '_> {
             .run_action(Action::ProtectedCall(function, &values, handler), true);
         match outcome {
             Ok(range) => {
-                let status = match self.call.vm.registers[range.start] {
-                    Value::Number(0.) => NativeCallStatus::Ok,
-                    Value::Number(2.) => NativeCallStatus::RuntimeError,
-                    Value::Number(5.) => NativeCallStatus::ErrorHandler,
-                    _ => unreachable!("protected native status"),
-                };
-                let actual = range.len() - 1;
-                let count = if status == NativeCallStatus::Ok {
-                    results.unwrap_or(actual)
-                } else {
-                    1
-                };
-                if count > limits::MAX_CSTACK - prefix {
-                    self.call.vm.registers.truncate(self.base + prefix);
-                    return Err(self.error(b"native stack overflow"));
-                }
-                self.call.vm.relocate_native_error_functions(
-                    range.start + 1..range.end,
-                    self.base + prefix,
-                );
-                self.call
+                let (status, top) = self
+                    .call
                     .vm
-                    .registers
-                    .copy_within(range.start + 1..range.end, self.base + prefix);
-                self.call.vm.resize_registers(self.base + prefix + count);
-                if count > actual {
-                    self.call.vm.registers[self.base + prefix + actual..self.base + prefix + count]
-                        .fill(Value::Nil);
-                }
-                self.call.results = prefix + count;
+                    .complete_native_protection(self.base, prefix, range, results)?;
+                self.call.results = top;
                 self.sync();
+                self.restore_window_call_base();
                 Ok(status)
             }
             Err(error) => {

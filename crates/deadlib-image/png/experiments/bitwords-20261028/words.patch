@@ -1,0 +1,39 @@
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index b27137057..9f7bd6fd5 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -360,9 +360,32 @@ fn filter_bytes<const FILTER: u8, const SCORE: bool>(
+ }
+ 
+ fn pack_bits<const DEPTH: u8>(samples: &[u8], row: &mut [u8]) {
+-    for (out, values) in row.iter_mut().zip(samples.chunks(8 / DEPTH as usize)) {
++    let group = 8 / DEPTH as usize;
++    let full = samples.len() / group;
++    let (words, tail) = row.split_at_mut(full);
++    // Validated low sample bits are gathered into the high word byte in PNG
++    // order. Each product bit has one contributor, so there are no carries.
++    match DEPTH {
++        1 => {
++            for (out, &bytes) in words.iter_mut().zip(samples.as_chunks::<8>().0) {
++                *out = (u64::from_le_bytes(bytes).wrapping_mul(0x8040_2010_0804_0201) >> 56) as u8;
++            }
++        }
++        2 => {
++            for (out, &bytes) in words.iter_mut().zip(samples.as_chunks::<4>().0) {
++                *out = (u32::from_le_bytes(bytes).wrapping_mul(0x4010_0401) >> 24) as u8;
++            }
++        }
++        4 => {
++            for (out, &[high, low]) in words.iter_mut().zip(samples.as_chunks::<2>().0) {
++                *out = (high << 4) | low;
++            }
++        }
++        _ => unreachable!("validated packed PNG depth"),
++    }
++    if let Some(out) = tail.first_mut() {
+         let mut byte = 0;
+-        for (n, &value) in values.iter().enumerate() {
++        for (n, &value) in samples[full * group..].iter().enumerate() {
+             byte |= value << (8 - DEPTH - n as u8 * DEPTH);
+         }
+         *out = byte;

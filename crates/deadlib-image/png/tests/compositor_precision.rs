@@ -39,6 +39,173 @@ fn image(values: Vec<u16>) -> Image {
 }
 
 #[test]
+fn every_palette_size_transparency_length_and_expansion_boundary_matches_model() {
+    for depth in [1, 2, 4, 8] {
+        for palette_len in 1..=1u32 << depth {
+            for width in [1, 17, 255, 256, 257] {
+                let mut png = Png::new(Image {
+                    width,
+                    height: 1,
+                    color_type: ColorType::Indexed,
+                    bit_depth: depth,
+                    samples: Samples::U8(
+                        (0..width)
+                            .map(|n| ((n * 73 + 19) & ((1 << depth) - 1)) as u8)
+                            .collect(),
+                    ),
+                });
+                png.palette = (0..palette_len)
+                    .map(|n| [n as u8, (n * 71 + 19) as u8, (n * 113 + 27) as u8])
+                    .collect();
+                for length in [0, 1, palette_len / 2, palette_len] {
+                    png.transparency = Some(deadlib_image_png::Transparency::Palette(
+                        (0..length).map(|n| (n * 173) as u8).collect(),
+                    ));
+                    let expected: Vec<_> = oracle::expand(&png, &png.image)
+                        .into_iter()
+                        .flatten()
+                        .collect();
+                    let limits = Limits {
+                        max_output_bytes: width as usize * 8,
+                        ..Limits::default()
+                    };
+                    assert_eq!(
+                        png.to_rgba16(limits).unwrap().samples,
+                        Samples::U16(expected)
+                    );
+                    assert_eq!(
+                        png.to_rgba16(Limits {
+                            max_output_bytes: limits.max_output_bytes - 1,
+                            ..limits
+                        }),
+                        Err(Error::LimitExceeded)
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn opaque_white_blends_stay_white_at_every_source_alpha() {
+    let mut png = Png::new(image(vec![65535; 65536 * 4]));
+    png.animation = Some(Animation {
+        plays: 0,
+        default_is_frame: true,
+        frames: vec![
+            Frame {
+                control: control(65536, 1),
+                image: None,
+            },
+            Frame {
+                control: FrameControl {
+                    blend: BlendOp::Over,
+                    ..control(65536, 1)
+                },
+                image: Some(image(
+                    (0..=u16::MAX)
+                        .flat_map(|a| [65535, 65535, 65535, a])
+                        .collect(),
+                )),
+            },
+        ],
+    });
+    let mut compositor = png.compositor(Limits::default()).unwrap();
+    for _ in 0..2 {
+        assert!(
+            compositor
+                .next_frame()
+                .unwrap()
+                .unwrap()
+                .samples
+                .iter()
+                .all(|&v| v == 65535)
+        );
+    }
+}
+
+#[test]
+fn native_rgba_source_rows_preserve_offsets_transparent_rgb_and_disposal() {
+    for depth in [8, 16] {
+        for width in [1, 3, 17, 257] {
+            let make = |w: u32, h: u32, salt: u16| {
+                let max = if depth == 16 { 65535 } else { 255 };
+                let values: Vec<u16> = (0..w as usize * h as usize * 4)
+                    .map(|n| {
+                        if n % 4 == 3 {
+                            [0, 1, max / 2, max][n / 4 % 4]
+                        } else {
+                            (n as u16).wrapping_mul(913) ^ salt
+                        }
+                    })
+                    .collect();
+                Image {
+                    width: w,
+                    height: h,
+                    color_type: ColorType::Rgba,
+                    bit_depth: depth,
+                    samples: if depth == 16 {
+                        Samples::U16(values)
+                    } else {
+                        Samples::U8(values.into_iter().map(|v| v as u8).collect())
+                    },
+                }
+            };
+            for dispose in [DisposeOp::None, DisposeOp::Background, DisposeOp::Previous] {
+                let mut png = Png::new(make(width + 4, 7, 19));
+                png.animation = Some(Animation {
+                    plays: 0,
+                    default_is_frame: true,
+                    frames: vec![
+                        Frame {
+                            control: control(width + 4, 7),
+                            image: None,
+                        },
+                        Frame {
+                            control: FrameControl {
+                                x_offset: 2,
+                                y_offset: 1,
+                                dispose,
+                                ..control(width, 3)
+                            },
+                            image: Some(make(width, 3, 71)),
+                        },
+                        Frame {
+                            control: FrameControl {
+                                x_offset: 1,
+                                y_offset: 4,
+                                dispose: DisposeOp::Previous,
+                                ..control(width, 2)
+                            },
+                            image: Some(make(width, 2, 137)),
+                        },
+                        Frame {
+                            control: FrameControl {
+                                x_offset: width + 3,
+                                y_offset: 6,
+                                ..control(1, 1)
+                            },
+                            image: Some(make(1, 1, 227)),
+                        },
+                    ],
+                });
+                let expected = oracle::render(&png);
+                let mut compositor = png.compositor(Limits::default()).unwrap();
+                for frame in &expected {
+                    assert_eq!(compositor.next_frame().unwrap().unwrap().samples, frame);
+                }
+                assert!(compositor.next_frame().unwrap().is_none());
+                compositor.reset();
+                assert_eq!(
+                    compositor.next_frame().unwrap().unwrap().samples,
+                    expected[0]
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn every_source_alpha_at_fifteen_destination_boundaries_matches_exact_fractions() {
     let mut checked = 0;
     for da in [

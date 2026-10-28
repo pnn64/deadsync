@@ -20,6 +20,12 @@ pub enum ItemId {
     CourseOptions,
     ManageLocalProfiles,
     OnlineScoreServices,
+    StreamingServices,
+    TwitchEnabled,
+    TwitchChannel,
+    TwitchBadges,
+    TwitchEmotes,
+    TwitchGameplay,
     NullOrDieOptions,
     FoldersOptions,
     DownloadPacks,
@@ -579,6 +585,14 @@ pub const ITEMS: &[Item] = &[
             HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "ScoreImport")),
             HelpEntry::Bullet(lookup_key("OptionsOnlineScoring", "ShareRips")),
         ],
+    },
+    Item {
+        id: ItemId::StreamingServices,
+        name: lookup_key("Options", "StreamingServices"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsHelp",
+            "StreamingServicesHelp",
+        ))],
     },
     Item {
         id: ItemId::NullOrDieOptions,

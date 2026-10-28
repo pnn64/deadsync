@@ -42,6 +42,55 @@ fn packed_fields_at_every_bit_offset() {
 }
 
 #[test]
+fn bit_writer_matches_bitwise_reference_through_64_bits_and_reuse() {
+    fn append(bytes: &mut Vec<u8>, position: &mut usize, value: u64, width: u32) {
+        for bit in (0..width).rev() {
+            if position.is_multiple_of(8) {
+                bytes.push(0);
+            }
+            *bytes.last_mut().unwrap() |= ((value >> bit & 1) as u8) << (7 - *position % 8);
+            *position += 1;
+        }
+    }
+    let mut writer = BitWriter::new();
+    for offset in 0..8 {
+        for _ in 0..3 {
+            writer.clear();
+            let mut expected = Vec::new();
+            let mut position = 0;
+            writer.write(0x55, offset).unwrap();
+            append(&mut expected, &mut position, 0x55, offset);
+            for width in 0..=64 {
+                for value in [0, 1, u64::MAX, 0x0123456789abcdef, 0xaaaaaaaaaaaaaaaa] {
+                    writer.write(value, width).unwrap();
+                    append(&mut expected, &mut position, value, width);
+                    assert_eq!(writer.position(), position);
+                    assert_eq!(writer.as_bytes(), expected);
+                }
+            }
+            for zeros in [0, 1, 7, 8, 63, 64, 65, 127, 128, 129, 1024, 4096] {
+                writer.unary(zeros).unwrap();
+                for _ in 0..zeros {
+                    append(&mut expected, &mut position, 0, 1);
+                }
+                append(&mut expected, &mut position, 1, 1);
+                assert_eq!(writer.position(), position);
+                assert_eq!(writer.as_bytes(), expected);
+            }
+            assert_eq!(writer.write(0, 65), Err(Error::Invalid("bit write width")));
+            assert_eq!(writer.position(), position);
+            assert_eq!(writer.as_bytes(), expected);
+            writer.align_zero();
+            while !position.is_multiple_of(8) {
+                append(&mut expected, &mut position, 0, 1);
+            }
+            assert_eq!(writer.position(), position);
+            assert_eq!(writer.as_bytes(), expected);
+        }
+    }
+}
+
+#[test]
 fn checksum_known_answers_and_chunking() {
     assert_eq!(crc8(b"123456789"), 0xf4);
     assert_eq!(crc16(b"123456789"), 0xfee8);

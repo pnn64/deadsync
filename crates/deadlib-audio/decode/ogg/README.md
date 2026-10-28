@@ -33,6 +33,12 @@ streams.finish()?; // Require complete logical streams, including EOS.
 * `PageReader` handles fragmented/Interrupted IO. `SyncMode::Recover` scans to a
   CRC-verified capture, including captures inside corrupt/truncated candidates.
   It reports discarded bytes. Strict parsing never silently recovers.
+* `SyncBuffer` exposes libogg-compatible buffered page seeking, exact discarded
+  byte counts and pageout hole notifications. `SyncReader` adds cached-only and
+  bounded searches, read-ahead and repeated seek behavior. CRC-verified
+  `SyncedPage` preserves raw versions/flags; `validated()` applies the strict
+  page rules before use with the normal container APIs. See
+  [buffered synchronization](BUFFERED_SYNC.md).
 * `PageDecoder::push` is the incremental equivalent: it consumes at most one
   page, returns an exact consumed count and lends the page until the next call.
   `finish` checks transport truncation; use `Demuxer::finish` for stream closure.

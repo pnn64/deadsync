@@ -1,0 +1,13 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--offline",
+    "--manifest-path",
+    "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\extracted-regions-final\\Cargo.toml",
+    "--target-dir",
+    "C:\\GitHub\\deadsync\\target\\deadlib-mp3-extracted-final"
+  ],
+  "exit_code": 0
+}

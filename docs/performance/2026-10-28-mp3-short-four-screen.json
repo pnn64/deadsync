@@ -1,0 +1,1927 @@
+{
+  "stages": {
+    "region-zero-final": {
+      "binary": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\region-zero-final\\kernels-e85b1e6e007c747e.exe",
+      "binary_sha256": "de9312e09aa44c8d6bf7c8cc9405f5ce33c00339b9e3953defad2e25444ec077",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "source_stage": null,
+      "build_root": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build",
+      "head": "b842e81a53eb202f93ab2d9efa7a72f62a5e3243",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "config": {
+        "target": {
+          "cfg(target_os = \"macos\")": {
+            "rustflags": [
+              "-L",
+              "native=/opt/homebrew/lib",
+              "-L",
+              "native=/opt/homebrew/opt/vulkan-loader/lib",
+              "-L",
+              "native=/usr/local/lib",
+              "-L",
+              "native=/usr/local/opt/vulkan-loader/lib"
+            ]
+          },
+          "cfg(all(target_os = \"windows\", target_env = \"msvc\"))": {
+            "rustflags": [
+              "-C",
+              "target-feature=+crt-static"
+            ]
+          }
+        },
+        "env": {
+          "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:/opt/homebrew/opt/vulkan-loader/lib:/usr/local/lib:/usr/local/opt/vulkan-loader/lib"
+        }
+      },
+      "rustflags": {
+        "RUSTFLAGS": null,
+        "CARGO_ENCODED_RUSTFLAGS": null
+      },
+      "sources": {
+        "tests\\support\\asset_upload_pairs.rs": "55a6e5f538332846e0dda77bf51c8dd7b3a0839f0aedd997d99148dd5ae80554",
+        "tests\\support\\draw_batching.rs": "60d2acf121fec7254b729eb76a38e8401b12f1afce8ec2b80e92fef62d4b1a19",
+        "tests\\support\\kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "tests\\support\\paired_bench.rs": "b7f64377a3665aee3272f72ea7c531d2fcddd4d02c84f4a62ea0125a194bfcf8",
+        "tests\\support\\paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+        "tests\\support\\perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+        "tests\\support\\perf_1870_popular.rs": "31de29d77dc79572ed1fd36ca34a520f4d3eadbc8175534f1d4fca4f60379467",
+        "tests\\support\\perf_1870_ranges.rs": "1c58cfa11b49819906b51da3a1209f22512d8ff56b38799a43adf934291cec3f",
+        "tests\\support\\perf_1870_subline.rs": "bea5fb660547eab8471c88a77ed786d30d5e9af45c4de0deaee65c5058bc3430",
+        "tests\\support\\song_fixture.rs": "e822e40be30452002a647d4af57f07a5d38e57771e6220c9781736a91eabbb2c",
+        "tests\\support\\song_lua_metrics.rs": "54c3654a3f8df64b0d17e1a1fbc89d9207184dba6f65aa56c255e2217a5e8e59",
+        "tests\\support\\song_lua_progress.rs": "43905891d5a03bb02c35b832df93a54cc95a159c610c4ac3508e2799cd54c45f",
+        "tests\\support\\song_lua_source_identity.rs": "f42774066bfd4dac9a2e465ff991593a0e2a83c3f22f8b8a4077551e985fa1d8",
+        "tests\\support\\workshop_fixture.rs": "1a0de4a2e3dea82e80927ec3a215452a51fc2c84218dca34e3f953d083b30412",
+        "crates\\deadlib-audio\\decode\\mp3\\benches\\kernels.rs": "f2daf3cd169ab91317238db8b4fb624911004f9ee80d1690b6921c0f1e216bff",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\bands.rs": "2a3902d77a7af0d2a44ddb5a89c3cafbd8937145cf1978c684c48c1744d953b7",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\bits.rs": "718d8a88b1ed1bb8a8bc9fc09a81d82f40f01570c39ad8147437d2b0cc13a1e4",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\checksum.rs": "1ff6111ab8d798e4784b1ef298e7cf976831c73bf30efeb44c3e31da03e545f4",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\decoder.rs": "5ca2e1b35e8e6981d00cf3137a0c5afd6d090f1c8db6b6cb7e30e034b7b97250",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\dsp_tables.rs": "f68f3fa6b68197042ac97c5cda4ace1e0defe72f4d36477340a41f9c54a976ef",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\frame.rs": "25dbd80c1108c1aeb7ad511dacec4b6d5b4acebcdfb793c5bc1bff3ae06d9206",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\gapless.rs": "2130ece93da52a08638e269b9ffa9268b85f4737cd67ca0b7817748c4e7779ed",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\huffman.rs": "a7b812ed64e954540ed1e74e8e7638206b6eddc40d44d8f3cee76f1c3c135e39",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\huffman_tables.rs": "103b9ac25e082f50e4dee01de21ea072824ce8cf7a6016c1f0dcc6dee476c6ec",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\indexed.rs": "a726fd3a7c1fa1730519b409623a4c29e517218e40957f842f460ab035c52b0e",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\lib.rs": "44faa59484b773468ce01f47c42bcd20f6d9c5fa4a41ab07bf2b9fd5819df9dc",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\reader.rs": "052b5fde2727cefb8ce951fc1ed3a8c2e87b5a5bc08d7fcd0685f81225c5b2d2",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\reservoir.rs": "4a63bd5c8bb970dee297c3e4ff6e64fda219fcc49a96fe1fdd6283dff7726540",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\scalefactors.rs": "5f4815b8b828d8378b61ef92127b11d1b3cf2b986522269ac571e92bf851be8a",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\side.rs": "eab3a1d3b6449a025944ecb200d6855f254f30828cf7f98adf87a1c6405efcca",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\spectral.rs": "e69b6c41126d3a42df33dbf37720f17967e5a6444978dc30b4dc928baf6f8ea2",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\stream.rs": "1b32b8a6bd9f44f3dd5bb228846e51b637c6450ae713eb7ec931f58cb773ce2b",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\synthesis.rs": "b649cf3da1028bb4b320545ef5b17fa959ab30a2d807b4854e70ddc38c3053e3",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\tags.rs": "b55da852b248663a586be072fe2fce89d3eb5b0287341f715a56d3e63aceb6ab"
+      },
+      "fixtures": {
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\libmp3lame-44100-2.mp3": "fe6b10386312be7c6b3a516a66b38ec0ab14033885f6c3ed4824c9b629fbb88b",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\libshine-44100-2.mp3": "bf4e10346edf004c2ad2c5ad4f4fcce43a39e486646c7079800c9688223e3b00",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\mp3_mf-44100-2.mp3": "0b2856ad9bc0dd94801a2538d4522e0823557f39692a5c6ee3172548b4341425",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\mp3_mf-8000-2.mp3": "74cfcca7d4af1851d18c6d15583704ceca82c699f03f4e8c833712137c0cd83c",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\seek-corpus\\44100-2-vbr.mp3": "2a2e9b470975cb6d039a2eb213d00f17ea5d23692ea6b9258d80b4942351f4da",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\seek-corpus\\8000-2-cbr.mp3": "3458c2c1619fb3cb6370cf6b7e3d4fad965ec7f5aa1a6779902e60565ff968a5",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\stereo-input\\44100-long-1-0.mp3": "f44ddf713677a089996ee6c1e5ecf1585588aa6aef9ea6703e161e1334da967a",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\stereo-input\\8000-short-1-1.mp3": "a4d094f49360478d965e7777dfb7d8109dac6d12e2a42524f46252ca6d31dd51",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\crc-fixtures\\protected-44100-2.mp3": "d2862094a6b4fbb1ebb5e272a1efe5a6328b0399db16d417482c3b3f8162ee26",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\crc-fixtures\\protected-22050-1.mp3": "02189ce79870741eb340e8dac746b3d65bbb9dbb7a323ff55932588ce84ce088"
+      },
+      "output_sha256": "34b6061d85932611c75bced6e9c326674c4f3608504ea829fa1016d288e2e333",
+      "output_bytes": 290848960,
+      "workloads": [
+        "synthesis/slot",
+        "hybrid/0/0",
+        "hybrid/1/0",
+        "hybrid/3/0",
+        "hybrid/2/0",
+        "hybrid/2/2",
+        "hybrid/2/4",
+        "crc/2",
+        "crc/17",
+        "crc/32",
+        "crc/1024",
+        "bits/1",
+        "bits/4",
+        "bits/9",
+        "bits/16",
+        "bits/24",
+        "bits/32",
+        "bits/flag",
+        "huffman/1",
+        "huffman/13",
+        "huffman/23",
+        "huffman/31",
+        "huffman/count1/false",
+        "huffman/count1/true",
+        "quantized/0/0",
+        "quantized/7/7",
+        "quantized/15/7",
+        "quantized/zero",
+        "quantized/zero-middle",
+        "requantize/0/false/false",
+        "requantize/0/false/true",
+        "requantize/2/false/false",
+        "requantize/2/false/true",
+        "requantize/2/true/false",
+        "requantize/2/true/true",
+        "stereo/1",
+        "stereo/2",
+        "stereo/3",
+        "decode/libmp3lame-44100-2.mp3",
+        "decode/libshine-44100-2.mp3",
+        "decode/mp3_mf-44100-2.mp3",
+        "decode/mp3_mf-8000-2.mp3",
+        "decode/44100-2-vbr.mp3",
+        "decode/8000-2-cbr.mp3",
+        "decode/44100-long-1-0.mp3",
+        "decode/8000-short-1-1.mp3",
+        "decode/protected-44100-2.mp3",
+        "decode/protected-22050-1.mp3"
+      ]
+    },
+    "short-four-final": {
+      "binary": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\short-four-final\\kernels-e85b1e6e007c747e.exe",
+      "binary_sha256": "51a95db53f0dfce4831d9d93dd64c546c52034e4870ff8e1e20745edd1f6fe6c",
+      "profile": {
+        "opt_level": "3",
+        "debuginfo": 1,
+        "debug_assertions": false,
+        "overflow_checks": false,
+        "test": true
+      },
+      "source_stage": null,
+      "build_root": "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\build",
+      "head": "b842e81a53eb202f93ab2d9efa7a72f62a5e3243",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+      "config": {
+        "target": {
+          "cfg(target_os = \"macos\")": {
+            "rustflags": [
+              "-L",
+              "native=/opt/homebrew/lib",
+              "-L",
+              "native=/opt/homebrew/opt/vulkan-loader/lib",
+              "-L",
+              "native=/usr/local/lib",
+              "-L",
+              "native=/usr/local/opt/vulkan-loader/lib"
+            ]
+          },
+          "cfg(all(target_os = \"windows\", target_env = \"msvc\"))": {
+            "rustflags": [
+              "-C",
+              "target-feature=+crt-static"
+            ]
+          }
+        },
+        "env": {
+          "DYLD_FALLBACK_LIBRARY_PATH": "/opt/homebrew/lib:/opt/homebrew/opt/vulkan-loader/lib:/usr/local/lib:/usr/local/opt/vulkan-loader/lib"
+        }
+      },
+      "rustflags": {
+        "RUSTFLAGS": null,
+        "CARGO_ENCODED_RUSTFLAGS": null
+      },
+      "sources": {
+        "tests\\support\\asset_upload_pairs.rs": "55a6e5f538332846e0dda77bf51c8dd7b3a0839f0aedd997d99148dd5ae80554",
+        "tests\\support\\draw_batching.rs": "60d2acf121fec7254b729eb76a38e8401b12f1afce8ec2b80e92fef62d4b1a19",
+        "tests\\support\\kernel_bench.rs": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+        "tests\\support\\paired_bench.rs": "b7f64377a3665aee3272f72ea7c531d2fcddd4d02c84f4a62ea0125a194bfcf8",
+        "tests\\support\\paths.rs": "368d466e5b2190047a07f87c62c2f8725b5e45c780d4323577cb05ed82b9afe7",
+        "tests\\support\\perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+        "tests\\support\\perf_1870_popular.rs": "31de29d77dc79572ed1fd36ca34a520f4d3eadbc8175534f1d4fca4f60379467",
+        "tests\\support\\perf_1870_ranges.rs": "1c58cfa11b49819906b51da3a1209f22512d8ff56b38799a43adf934291cec3f",
+        "tests\\support\\perf_1870_subline.rs": "bea5fb660547eab8471c88a77ed786d30d5e9af45c4de0deaee65c5058bc3430",
+        "tests\\support\\song_fixture.rs": "e822e40be30452002a647d4af57f07a5d38e57771e6220c9781736a91eabbb2c",
+        "tests\\support\\song_lua_metrics.rs": "54c3654a3f8df64b0d17e1a1fbc89d9207184dba6f65aa56c255e2217a5e8e59",
+        "tests\\support\\song_lua_progress.rs": "43905891d5a03bb02c35b832df93a54cc95a159c610c4ac3508e2799cd54c45f",
+        "tests\\support\\song_lua_source_identity.rs": "f42774066bfd4dac9a2e465ff991593a0e2a83c3f22f8b8a4077551e985fa1d8",
+        "tests\\support\\workshop_fixture.rs": "1a0de4a2e3dea82e80927ec3a215452a51fc2c84218dca34e3f953d083b30412",
+        "crates\\deadlib-audio\\decode\\mp3\\benches\\kernels.rs": "f2daf3cd169ab91317238db8b4fb624911004f9ee80d1690b6921c0f1e216bff",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\bands.rs": "2a3902d77a7af0d2a44ddb5a89c3cafbd8937145cf1978c684c48c1744d953b7",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\bits.rs": "718d8a88b1ed1bb8a8bc9fc09a81d82f40f01570c39ad8147437d2b0cc13a1e4",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\checksum.rs": "1ff6111ab8d798e4784b1ef298e7cf976831c73bf30efeb44c3e31da03e545f4",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\decoder.rs": "5ca2e1b35e8e6981d00cf3137a0c5afd6d090f1c8db6b6cb7e30e034b7b97250",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\dsp_tables.rs": "8beacafda35ce2e63d31e07bcacb0271028fd13c31a4b9f85312df1ffd690128",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\frame.rs": "25dbd80c1108c1aeb7ad511dacec4b6d5b4acebcdfb793c5bc1bff3ae06d9206",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\gapless.rs": "2130ece93da52a08638e269b9ffa9268b85f4737cd67ca0b7817748c4e7779ed",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\huffman.rs": "a7b812ed64e954540ed1e74e8e7638206b6eddc40d44d8f3cee76f1c3c135e39",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\huffman_tables.rs": "103b9ac25e082f50e4dee01de21ea072824ce8cf7a6016c1f0dcc6dee476c6ec",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\indexed.rs": "a726fd3a7c1fa1730519b409623a4c29e517218e40957f842f460ab035c52b0e",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\lib.rs": "44faa59484b773468ce01f47c42bcd20f6d9c5fa4a41ab07bf2b9fd5819df9dc",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\reader.rs": "052b5fde2727cefb8ce951fc1ed3a8c2e87b5a5bc08d7fcd0685f81225c5b2d2",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\reservoir.rs": "4a63bd5c8bb970dee297c3e4ff6e64fda219fcc49a96fe1fdd6283dff7726540",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\scalefactors.rs": "5f4815b8b828d8378b61ef92127b11d1b3cf2b986522269ac571e92bf851be8a",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\side.rs": "eab3a1d3b6449a025944ecb200d6855f254f30828cf7f98adf87a1c6405efcca",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\spectral.rs": "e69b6c41126d3a42df33dbf37720f17967e5a6444978dc30b4dc928baf6f8ea2",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\stream.rs": "1b32b8a6bd9f44f3dd5bb228846e51b637c6450ae713eb7ec931f58cb773ce2b",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\synthesis.rs": "cad14b15ef0eedc4b60ff9f83249df454f4d578bb8bf90b580c0e631882447ed",
+        "crates\\deadlib-audio\\decode\\mp3\\src\\tags.rs": "b55da852b248663a586be072fe2fce89d3eb5b0287341f715a56d3e63aceb6ab"
+      },
+      "fixtures": {
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\libmp3lame-44100-2.mp3": "fe6b10386312be7c6b3a516a66b38ec0ab14033885f6c3ed4824c9b629fbb88b",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\libshine-44100-2.mp3": "bf4e10346edf004c2ad2c5ad4f4fcce43a39e486646c7079800c9688223e3b00",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\mp3_mf-44100-2.mp3": "0b2856ad9bc0dd94801a2538d4522e0823557f39692a5c6ee3172548b4341425",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\encoder-corpus\\mp3_mf-8000-2.mp3": "74cfcca7d4af1851d18c6d15583704ceca82c699f03f4e8c833712137c0cd83c",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\seek-corpus\\44100-2-vbr.mp3": "2a2e9b470975cb6d039a2eb213d00f17ea5d23692ea6b9258d80b4942351f4da",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\seek-corpus\\8000-2-cbr.mp3": "3458c2c1619fb3cb6370cf6b7e3d4fad965ec7f5aa1a6779902e60565ff968a5",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\stereo-input\\44100-long-1-0.mp3": "f44ddf713677a089996ee6c1e5ecf1585588aa6aef9ea6703e161e1334da967a",
+        "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\stereo-input\\8000-short-1-1.mp3": "a4d094f49360478d965e7777dfb7d8109dac6d12e2a42524f46252ca6d31dd51",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\crc-fixtures\\protected-44100-2.mp3": "d2862094a6b4fbb1ebb5e272a1efe5a6328b0399db16d417482c3b3f8162ee26",
+        "C:\\GitHub\\deadsync\\target\\mp3-perf-20261028\\crc-fixtures\\protected-22050-1.mp3": "02189ce79870741eb340e8dac746b3d65bbb9dbb7a323ff55932588ce84ce088"
+      },
+      "output_sha256": "34b6061d85932611c75bced6e9c326674c4f3608504ea829fa1016d288e2e333",
+      "output_bytes": 290848960,
+      "workloads": [
+        "synthesis/slot",
+        "hybrid/0/0",
+        "hybrid/1/0",
+        "hybrid/3/0",
+        "hybrid/2/0",
+        "hybrid/2/2",
+        "hybrid/2/4",
+        "crc/2",
+        "crc/17",
+        "crc/32",
+        "crc/1024",
+        "bits/1",
+        "bits/4",
+        "bits/9",
+        "bits/16",
+        "bits/24",
+        "bits/32",
+        "bits/flag",
+        "huffman/1",
+        "huffman/13",
+        "huffman/23",
+        "huffman/31",
+        "huffman/count1/false",
+        "huffman/count1/true",
+        "quantized/0/0",
+        "quantized/7/7",
+        "quantized/15/7",
+        "quantized/zero",
+        "quantized/zero-middle",
+        "requantize/0/false/false",
+        "requantize/0/false/true",
+        "requantize/2/false/false",
+        "requantize/2/false/true",
+        "requantize/2/true/false",
+        "requantize/2/true/true",
+        "stereo/1",
+        "stereo/2",
+        "stereo/3",
+        "decode/libmp3lame-44100-2.mp3",
+        "decode/libshine-44100-2.mp3",
+        "decode/mp3_mf-44100-2.mp3",
+        "decode/mp3_mf-8000-2.mp3",
+        "decode/44100-2-vbr.mp3",
+        "decode/8000-2-cbr.mp3",
+        "decode/44100-long-1-0.mp3",
+        "decode/8000-short-1-1.mp3",
+        "decode/protected-44100-2.mp3",
+        "decode/protected-22050-1.mp3"
+      ]
+    }
+  },
+  "runs": 3,
+  "summary": [
+    {
+      "workload": "synthesis/slot",
+      "stage": "region-zero-final",
+      "median_cycles": 1325.96,
+      "min_cycles": 1263.97,
+      "max_cycles": 1339.81,
+      "mad_cycles": 13.849999999999909,
+      "median_ns": 604.25,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "synthesis/slot",
+      "stage": "short-four-final",
+      "median_cycles": 1463.74,
+      "min_cycles": 1434.17,
+      "max_cycles": 1659.95,
+      "mad_cycles": 29.569999999999936,
+      "median_ns": 668.77,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/0/0",
+      "stage": "region-zero-final",
+      "median_cycles": 9067.98,
+      "min_cycles": 8484.77,
+      "max_cycles": 9193.76,
+      "mad_cycles": 125.78000000000065,
+      "median_ns": 4135.8,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/0/0",
+      "stage": "short-four-final",
+      "median_cycles": 11903.27,
+      "min_cycles": 10893.78,
+      "max_cycles": 11923.9,
+      "mad_cycles": 20.6299999999992,
+      "median_ns": 5429.7,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/1/0",
+      "stage": "region-zero-final",
+      "median_cycles": 8923.55,
+      "min_cycles": 8708.22,
+      "max_cycles": 9389.77,
+      "mad_cycles": 215.32999999999993,
+      "median_ns": 4066.1,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/1/0",
+      "stage": "short-four-final",
+      "median_cycles": 12033.43,
+      "min_cycles": 10779.43,
+      "max_cycles": 12462.33,
+      "mad_cycles": 428.89999999999964,
+      "median_ns": 5490.7,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/3/0",
+      "stage": "region-zero-final",
+      "median_cycles": 9206.93,
+      "min_cycles": 9123.96,
+      "max_cycles": 9480.2,
+      "mad_cycles": 82.97000000000116,
+      "median_ns": 4201.9,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/3/0",
+      "stage": "short-four-final",
+      "median_cycles": 12139.89,
+      "min_cycles": 11104.72,
+      "max_cycles": 12504.7,
+      "mad_cycles": 364.8100000000013,
+      "median_ns": 5534.3,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/2/0",
+      "stage": "region-zero-final",
+      "median_cycles": 3632.51,
+      "min_cycles": 3493.56,
+      "max_cycles": 3639.97,
+      "mad_cycles": 7.459999999999582,
+      "median_ns": 1654.9,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/2/0",
+      "stage": "short-four-final",
+      "median_cycles": 5386.31,
+      "min_cycles": 4481.53,
+      "max_cycles": 5579.25,
+      "mad_cycles": 192.9399999999996,
+      "median_ns": 2456.1,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/2/2",
+      "stage": "region-zero-final",
+      "median_cycles": 3947.05,
+      "min_cycles": 3850.47,
+      "max_cycles": 4101.8,
+      "mad_cycles": 96.58000000000038,
+      "median_ns": 1798.3,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/2/2",
+      "stage": "short-four-final",
+      "median_cycles": 5657.17,
+      "min_cycles": 5119.62,
+      "max_cycles": 5670.78,
+      "mad_cycles": 13.609999999999673,
+      "median_ns": 2584.3,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/2/4",
+      "stage": "region-zero-final",
+      "median_cycles": 4405.8,
+      "min_cycles": 4291.66,
+      "max_cycles": 4620.26,
+      "mad_cycles": 114.14000000000033,
+      "median_ns": 2008.9,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "hybrid/2/4",
+      "stage": "short-four-final",
+      "median_cycles": 5581.23,
+      "min_cycles": 5336.48,
+      "max_cycles": 6077.08,
+      "mad_cycles": 244.75,
+      "median_ns": 2543.1,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "crc/2",
+      "stage": "region-zero-final",
+      "median_cycles": 6.67,
+      "min_cycles": 6.48,
+      "max_cycles": 7.64,
+      "mad_cycles": 0.1899999999999995,
+      "median_ns": 2.98,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "crc/2",
+      "stage": "short-four-final",
+      "median_cycles": 6.67,
+      "min_cycles": 6.45,
+      "max_cycles": 6.89,
+      "mad_cycles": 0.21999999999999975,
+      "median_ns": 2.98,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "crc/17",
+      "stage": "region-zero-final",
+      "median_cycles": 68.0,
+      "min_cycles": 65.13,
+      "max_cycles": 75.35,
+      "mad_cycles": 2.8700000000000045,
+      "median_ns": 30.98,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "crc/17",
+      "stage": "short-four-final",
+      "median_cycles": 65.13,
+      "min_cycles": 63.81,
+      "max_cycles": 80.27,
+      "mad_cycles": 1.3199999999999932,
+      "median_ns": 29.59,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "crc/32",
+      "stage": "region-zero-final",
+      "median_cycles": 161.24,
+      "min_cycles": 152.29,
+      "max_cycles": 162.32,
+      "mad_cycles": 1.079999999999984,
+      "median_ns": 73.39,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "crc/32",
+      "stage": "short-four-final",
+      "median_cycles": 157.51,
+      "min_cycles": 156.9,
+      "max_cycles": 183.17,
+      "mad_cycles": 0.6099999999999852,
+      "median_ns": 71.69,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "crc/1024",
+      "stage": "region-zero-final",
+      "median_cycles": 6512.35,
+      "min_cycles": 6432.67,
+      "max_cycles": 6853.01,
+      "mad_cycles": 79.68000000000029,
+      "median_ns": 2971.9,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "crc/1024",
+      "stage": "short-four-final",
+      "median_cycles": 6777.5,
+      "min_cycles": 6280.77,
+      "max_cycles": 6916.45,
+      "mad_cycles": 138.94999999999982,
+      "median_ns": 3088.5,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/1",
+      "stage": "region-zero-final",
+      "median_cycles": 4126.82,
+      "min_cycles": 3792.08,
+      "max_cycles": 4339.07,
+      "mad_cycles": 212.25,
+      "median_ns": 1888.1,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/1",
+      "stage": "short-four-final",
+      "median_cycles": 4172.04,
+      "min_cycles": 4163.69,
+      "max_cycles": 4751.52,
+      "mad_cycles": 8.350000000000364,
+      "median_ns": 1900.9,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/4",
+      "stage": "region-zero-final",
+      "median_cycles": 4205.62,
+      "min_cycles": 3785.5,
+      "max_cycles": 4309.88,
+      "mad_cycles": 104.26000000000022,
+      "median_ns": 1917.4,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/4",
+      "stage": "short-four-final",
+      "median_cycles": 4280.69,
+      "min_cycles": 3789.01,
+      "max_cycles": 4498.65,
+      "mad_cycles": 217.96000000000004,
+      "median_ns": 1950.6,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/9",
+      "stage": "region-zero-final",
+      "median_cycles": 4375.29,
+      "min_cycles": 4218.35,
+      "max_cycles": 4771.05,
+      "mad_cycles": 156.9399999999996,
+      "median_ns": 1993.2,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/9",
+      "stage": "short-four-final",
+      "median_cycles": 4533.33,
+      "min_cycles": 4137.58,
+      "max_cycles": 5145.08,
+      "mad_cycles": 395.75,
+      "median_ns": 2071.8,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/16",
+      "stage": "region-zero-final",
+      "median_cycles": 4243.37,
+      "min_cycles": 4194.21,
+      "max_cycles": 4714.2,
+      "mad_cycles": 49.159999999999854,
+      "median_ns": 1940.5,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/16",
+      "stage": "short-four-final",
+      "median_cycles": 4521.48,
+      "min_cycles": 4130.55,
+      "max_cycles": 4984.85,
+      "mad_cycles": 390.9299999999994,
+      "median_ns": 2060.5,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/24",
+      "stage": "region-zero-final",
+      "median_cycles": 4536.19,
+      "min_cycles": 4485.48,
+      "max_cycles": 5015.8,
+      "mad_cycles": 50.710000000000036,
+      "median_ns": 2073.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/24",
+      "stage": "short-four-final",
+      "median_cycles": 4938.75,
+      "min_cycles": 4434.56,
+      "max_cycles": 5491.23,
+      "mad_cycles": 504.1899999999996,
+      "median_ns": 2256.5,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/32",
+      "stage": "region-zero-final",
+      "median_cycles": 3961.97,
+      "min_cycles": 3877.25,
+      "max_cycles": 4545.62,
+      "mad_cycles": 84.7199999999998,
+      "median_ns": 1805.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/32",
+      "stage": "short-four-final",
+      "median_cycles": 4151.18,
+      "min_cycles": 3850.25,
+      "max_cycles": 4863.9,
+      "mad_cycles": 300.9300000000003,
+      "median_ns": 1891.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/flag",
+      "stage": "region-zero-final",
+      "median_cycles": 1507.53,
+      "min_cycles": 1442.12,
+      "max_cycles": 1556.26,
+      "mad_cycles": 48.73000000000002,
+      "median_ns": 687.7,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "bits/flag",
+      "stage": "short-four-final",
+      "median_cycles": 1433.12,
+      "min_cycles": 1390.31,
+      "max_cycles": 1719.12,
+      "mad_cycles": 42.809999999999945,
+      "median_ns": 652.1,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "huffman/1",
+      "stage": "region-zero-final",
+      "median_cycles": 10294.99,
+      "min_cycles": 10258.11,
+      "max_cycles": 10421.2,
+      "mad_cycles": 36.8799999999992,
+      "median_ns": 4692.4,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "huffman/1",
+      "stage": "short-four-final",
+      "median_cycles": 10165.7,
+      "min_cycles": 9987.69,
+      "max_cycles": 11795.93,
+      "mad_cycles": 178.01000000000022,
+      "median_ns": 4632.2,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "huffman/13",
+      "stage": "region-zero-final",
+      "median_cycles": 12065.04,
+      "min_cycles": 11995.46,
+      "max_cycles": 13865.82,
+      "mad_cycles": 69.58000000000175,
+      "median_ns": 5505.5,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "huffman/13",
+      "stage": "short-four-final",
+      "median_cycles": 11844.88,
+      "min_cycles": 11815.47,
+      "max_cycles": 13520.98,
+      "mad_cycles": 29.409999999999854,
+      "median_ns": 5398.2,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "huffman/23",
+      "stage": "region-zero-final",
+      "median_cycles": 12078.43,
+      "min_cycles": 11703.74,
+      "max_cycles": 13807.87,
+      "mad_cycles": 374.6900000000005,
+      "median_ns": 5508.2,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "huffman/23",
+      "stage": "short-four-final",
+      "median_cycles": 12743.07,
+      "min_cycles": 12239.98,
+      "max_cycles": 14043.17,
+      "mad_cycles": 503.09000000000015,
+      "median_ns": 5811.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "huffman/31",
+      "stage": "region-zero-final",
+      "median_cycles": 19293.17,
+      "min_cycles": 17409.64,
+      "max_cycles": 20367.41,
+      "mad_cycles": 1074.2400000000016,
+      "median_ns": 8801.4,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "huffman/31",
+      "stage": "short-four-final",
+      "median_cycles": 19180.35,
+      "min_cycles": 17428.96,
+      "max_cycles": 19921.38,
+      "mad_cycles": 741.0300000000025,
+      "median_ns": 8741.6,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "huffman/count1/false",
+      "stage": "region-zero-final",
+      "median_cycles": 7256.67,
+      "min_cycles": 6358.91,
+      "max_cycles": 7291.79,
+      "mad_cycles": 35.11999999999989,
+      "median_ns": 3312.6,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "huffman/count1/false",
+      "stage": "short-four-final",
+      "median_cycles": 7461.46,
+      "min_cycles": 6437.72,
+      "max_cycles": 7603.7,
+      "mad_cycles": 142.23999999999978,
+      "median_ns": 3400.2,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "huffman/count1/true",
+      "stage": "region-zero-final",
+      "median_cycles": 6195.17,
+      "min_cycles": 5626.22,
+      "max_cycles": 6431.35,
+      "mad_cycles": 236.1800000000003,
+      "median_ns": 2823.4,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "huffman/count1/true",
+      "stage": "short-four-final",
+      "median_cycles": 6576.44,
+      "min_cycles": 5547.2,
+      "max_cycles": 6903.06,
+      "mad_cycles": 326.6200000000008,
+      "median_ns": 2996.5,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "quantized/0/0",
+      "stage": "region-zero-final",
+      "median_cycles": 15525.67,
+      "min_cycles": 14007.83,
+      "max_cycles": 16687.49,
+      "mad_cycles": 1161.8200000000015,
+      "median_ns": 7077.2,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "quantized/0/0",
+      "stage": "short-four-final",
+      "median_cycles": 14994.7,
+      "min_cycles": 14319.74,
+      "max_cycles": 15871.17,
+      "mad_cycles": 674.960000000001,
+      "median_ns": 6838.9,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "quantized/7/7",
+      "stage": "region-zero-final",
+      "median_cycles": 14104.85,
+      "min_cycles": 13538.76,
+      "max_cycles": 14780.69,
+      "mad_cycles": 566.0900000000001,
+      "median_ns": 6427.3,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "quantized/7/7",
+      "stage": "short-four-final",
+      "median_cycles": 13943.52,
+      "min_cycles": 13580.25,
+      "max_cycles": 15432.17,
+      "mad_cycles": 363.27000000000044,
+      "median_ns": 6357.4,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "quantized/15/7",
+      "stage": "region-zero-final",
+      "median_cycles": 13686.26,
+      "min_cycles": 13159.68,
+      "max_cycles": 14868.27,
+      "mad_cycles": 526.5799999999999,
+      "median_ns": 6240.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "quantized/15/7",
+      "stage": "short-four-final",
+      "median_cycles": 13813.58,
+      "min_cycles": 13330.02,
+      "max_cycles": 15688.76,
+      "mad_cycles": 483.5599999999995,
+      "median_ns": 6295.6,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "quantized/zero",
+      "stage": "region-zero-final",
+      "median_cycles": 50.92,
+      "min_cycles": 49.39,
+      "max_cycles": 58.17,
+      "mad_cycles": 1.5300000000000011,
+      "median_ns": 22.5,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "quantized/zero",
+      "stage": "short-four-final",
+      "median_cycles": 50.92,
+      "min_cycles": 50.27,
+      "max_cycles": 54.22,
+      "mad_cycles": 0.6499999999999986,
+      "median_ns": 22.5,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "quantized/zero-middle",
+      "stage": "region-zero-final",
+      "median_cycles": 12143.62,
+      "min_cycles": 10615.24,
+      "max_cycles": 12315.92,
+      "mad_cycles": 172.29999999999927,
+      "median_ns": 5535.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "quantized/zero-middle",
+      "stage": "short-four-final",
+      "median_cycles": 11704.84,
+      "min_cycles": 10661.99,
+      "max_cycles": 12834.6,
+      "mad_cycles": 1042.8500000000004,
+      "median_ns": 5332.8,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "requantize/0/false/false",
+      "stage": "region-zero-final",
+      "median_cycles": 2862.5,
+      "min_cycles": 2490.23,
+      "max_cycles": 2904.64,
+      "mad_cycles": 42.13999999999987,
+      "median_ns": 1303.4,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "requantize/0/false/false",
+      "stage": "short-four-final",
+      "median_cycles": 2897.84,
+      "min_cycles": 2634.66,
+      "max_cycles": 3179.9,
+      "mad_cycles": 263.1800000000003,
+      "median_ns": 1320.2,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "requantize/0/false/true",
+      "stage": "region-zero-final",
+      "median_cycles": 32390.74,
+      "min_cycles": 30325.9,
+      "max_cycles": 32897.56,
+      "mad_cycles": 506.81999999999607,
+      "median_ns": 14774.9,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "requantize/0/false/true",
+      "stage": "short-four-final",
+      "median_cycles": 32027.03,
+      "min_cycles": 30983.52,
+      "max_cycles": 36181.28,
+      "mad_cycles": 1043.5099999999984,
+      "median_ns": 14600.5,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "requantize/2/false/false",
+      "stage": "region-zero-final",
+      "median_cycles": 3254.31,
+      "min_cycles": 3051.05,
+      "max_cycles": 3473.15,
+      "mad_cycles": 203.25999999999976,
+      "median_ns": 1485.1,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "requantize/2/false/false",
+      "stage": "short-four-final",
+      "median_cycles": 3639.75,
+      "min_cycles": 3469.42,
+      "max_cycles": 3972.95,
+      "mad_cycles": 170.32999999999993,
+      "median_ns": 1658.1,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "requantize/2/false/true",
+      "stage": "region-zero-final",
+      "median_cycles": 32588.94,
+      "min_cycles": 31646.85,
+      "max_cycles": 34023.6,
+      "mad_cycles": 942.0900000000001,
+      "median_ns": 14864.7,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "requantize/2/false/true",
+      "stage": "short-four-final",
+      "median_cycles": 32894.05,
+      "min_cycles": 31734.21,
+      "max_cycles": 37694.51,
+      "mad_cycles": 1159.8400000000038,
+      "median_ns": 15003.8,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "requantize/2/true/false",
+      "stage": "region-zero-final",
+      "median_cycles": 2981.69,
+      "min_cycles": 2964.79,
+      "max_cycles": 3324.33,
+      "mad_cycles": 16.90000000000009,
+      "median_ns": 1357.7,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "requantize/2/true/false",
+      "stage": "short-four-final",
+      "median_cycles": 3312.26,
+      "min_cycles": 3011.98,
+      "max_cycles": 4005.22,
+      "mad_cycles": 300.2800000000002,
+      "median_ns": 1508.7,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "requantize/2/true/true",
+      "stage": "region-zero-final",
+      "median_cycles": 33356.98,
+      "min_cycles": 31739.7,
+      "max_cycles": 33983.65,
+      "mad_cycles": 626.6699999999983,
+      "median_ns": 15209.2,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "requantize/2/true/true",
+      "stage": "short-four-final",
+      "median_cycles": 32214.26,
+      "min_cycles": 31634.34,
+      "max_cycles": 37644.03,
+      "mad_cycles": 579.9199999999983,
+      "median_ns": 14688.2,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "stereo/1",
+      "stage": "region-zero-final",
+      "median_cycles": 332.37,
+      "min_cycles": 330.08,
+      "max_cycles": 567.21,
+      "mad_cycles": 2.2900000000000205,
+      "median_ns": 151.42,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "stereo/1",
+      "stage": "short-four-final",
+      "median_cycles": 427.89,
+      "min_cycles": 324.42,
+      "max_cycles": 537.27,
+      "mad_cycles": 103.46999999999997,
+      "median_ns": 196.76,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "stereo/2",
+      "stage": "region-zero-final",
+      "median_cycles": 786.14,
+      "min_cycles": 784.03,
+      "max_cycles": 1036.85,
+      "mad_cycles": 2.1100000000000136,
+      "median_ns": 360.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "stereo/2",
+      "stage": "short-four-final",
+      "median_cycles": 924.45,
+      "min_cycles": 859.34,
+      "max_cycles": 984.15,
+      "mad_cycles": 59.69999999999993,
+      "median_ns": 421.42,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "stereo/3",
+      "stage": "region-zero-final",
+      "median_cycles": 2036.89,
+      "min_cycles": 1938.6,
+      "max_cycles": 2347.62,
+      "mad_cycles": 98.29000000000019,
+      "median_ns": 929.37,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "stereo/3",
+      "stage": "short-four-final",
+      "median_cycles": 2314.65,
+      "min_cycles": 2257.1,
+      "max_cycles": 2318.25,
+      "mad_cycles": 3.599999999999909,
+      "median_ns": 1055.66,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/libmp3lame-44100-2.mp3",
+      "stage": "region-zero-final",
+      "median_cycles": 22556369.5,
+      "min_cycles": 21780656.5,
+      "max_cycles": 22634510.5,
+      "mad_cycles": 78141.0,
+      "median_ns": 10285150.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/libmp3lame-44100-2.mp3",
+      "stage": "short-four-final",
+      "median_cycles": 26397840.5,
+      "min_cycles": 26131146.5,
+      "max_cycles": 28236040.5,
+      "mad_cycles": 266694.0,
+      "median_ns": 12042050.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/libshine-44100-2.mp3",
+      "stage": "region-zero-final",
+      "median_cycles": 23216515.0,
+      "min_cycles": 22728347.0,
+      "max_cycles": 23728498.5,
+      "mad_cycles": 488168.0,
+      "median_ns": 10595750.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/libshine-44100-2.mp3",
+      "stage": "short-four-final",
+      "median_cycles": 26760122.5,
+      "min_cycles": 26026992.0,
+      "max_cycles": 29717007.5,
+      "mad_cycles": 733130.5,
+      "median_ns": 12208150.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/mp3_mf-44100-2.mp3",
+      "stage": "region-zero-final",
+      "median_cycles": 23244611.5,
+      "min_cycles": 23222989.5,
+      "max_cycles": 24062138.5,
+      "mad_cycles": 21622.0,
+      "median_ns": 10603350.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/mp3_mf-44100-2.mp3",
+      "stage": "short-four-final",
+      "median_cycles": 27332359.5,
+      "min_cycles": 24731833.0,
+      "max_cycles": 28831654.5,
+      "mad_cycles": 1499295.0,
+      "median_ns": 12465150.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/mp3_mf-8000-2.mp3",
+      "stage": "region-zero-final",
+      "median_cycles": 57399.5,
+      "min_cycles": 55862.5,
+      "max_cycles": 59265.0,
+      "mad_cycles": 1537.0,
+      "median_ns": 25800.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/mp3_mf-8000-2.mp3",
+      "stage": "short-four-final",
+      "median_cycles": 74410.5,
+      "min_cycles": 65301.0,
+      "max_cycles": 80666.5,
+      "mad_cycles": 6256.0,
+      "median_ns": 33500.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/44100-2-vbr.mp3",
+      "stage": "region-zero-final",
+      "median_cycles": 26285235.5,
+      "min_cycles": 26012945.5,
+      "max_cycles": 28822654.0,
+      "mad_cycles": 272290.0,
+      "median_ns": 11992600.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/44100-2-vbr.mp3",
+      "stage": "short-four-final",
+      "median_cycles": 29149161.0,
+      "min_cycles": 27561187.5,
+      "max_cycles": 33042102.5,
+      "mad_cycles": 1587973.5,
+      "median_ns": 13300350.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/8000-2-cbr.mp3",
+      "stage": "region-zero-final",
+      "median_cycles": 5061451.0,
+      "min_cycles": 4817256.5,
+      "max_cycles": 5380274.5,
+      "mad_cycles": 244194.5,
+      "median_ns": 2306600.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/8000-2-cbr.mp3",
+      "stage": "short-four-final",
+      "median_cycles": 5364361.0,
+      "min_cycles": 5286328.5,
+      "max_cycles": 6040640.0,
+      "mad_cycles": 78032.5,
+      "median_ns": 2445100.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/44100-long-1-0.mp3",
+      "stage": "region-zero-final",
+      "median_cycles": 30017394.0,
+      "min_cycles": 29486861.5,
+      "max_cycles": 31036971.0,
+      "mad_cycles": 530532.5,
+      "median_ns": 13683600.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/44100-long-1-0.mp3",
+      "stage": "short-four-final",
+      "median_cycles": 30295830.0,
+      "min_cycles": 30130108.0,
+      "max_cycles": 34518899.0,
+      "mad_cycles": 165722.0,
+      "median_ns": 13814300.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/8000-short-1-1.mp3",
+      "stage": "region-zero-final",
+      "median_cycles": 29654340.5,
+      "min_cycles": 28499768.5,
+      "max_cycles": 29669156.5,
+      "mad_cycles": 14816.0,
+      "median_ns": 13526150.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/8000-short-1-1.mp3",
+      "stage": "short-four-final",
+      "median_cycles": 30051635.5,
+      "min_cycles": 28965109.0,
+      "max_cycles": 33606657.0,
+      "mad_cycles": 1086526.5,
+      "median_ns": 13724350.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/protected-44100-2.mp3",
+      "stage": "region-zero-final",
+      "median_cycles": 22532552.0,
+      "min_cycles": 21950768.0,
+      "max_cycles": 24197130.5,
+      "mad_cycles": 581784.0,
+      "median_ns": 10285850.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/protected-44100-2.mp3",
+      "stage": "short-four-final",
+      "median_cycles": 24003203.0,
+      "min_cycles": 23869087.5,
+      "max_cycles": 26948892.5,
+      "mad_cycles": 134115.5,
+      "median_ns": 10944750.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/protected-22050-1.mp3",
+      "stage": "region-zero-final",
+      "median_cycles": 7416795.0,
+      "min_cycles": 7273571.5,
+      "max_cycles": 8640727.0,
+      "mad_cycles": 143223.5,
+      "median_ns": 3380250.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    },
+    {
+      "workload": "decode/protected-22050-1.mp3",
+      "stage": "short-four-final",
+      "median_cycles": 8023713.0,
+      "min_cycles": 7981788.5,
+      "max_cycles": 9296593.5,
+      "mad_cycles": 41924.5,
+      "median_ns": 3660100.0,
+      "heap": {
+        "allocs": 0,
+        "reallocs": 0,
+        "frees": 0,
+        "allocated_bytes": 0,
+        "freed_bytes": 0,
+        "peak_bytes": 0
+      }
+    }
+  ]
+}
