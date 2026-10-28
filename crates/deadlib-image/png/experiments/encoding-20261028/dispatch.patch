@@ -1,0 +1,27 @@
+diff --git a/crates/deadlib-image/png/src/scanline.rs b/crates/deadlib-image/png/src/scanline.rs
+index 5cd4a4aad..23d3dcd6b 100644
+--- a/crates/deadlib-image/png/src/scanline.rs
++++ b/crates/deadlib-image/png/src/scanline.rs
+@@ -288,11 +288,21 @@ pub(crate) fn decode(
+ }
+ 
+ pub(crate) fn filter_into(row: &[u8], prev: &[u8], bpp: usize, filter: u8, out: &mut [u8]) -> u64 {
++    match filter {
++        0 => filter_bytes::<0>(row, prev, bpp, out),
++        1 => filter_bytes::<1>(row, prev, bpp, out),
++        2 => filter_bytes::<2>(row, prev, bpp, out),
++        3 => filter_bytes::<3>(row, prev, bpp, out),
++        _ => filter_bytes::<4>(row, prev, bpp, out),
++    }
++}
++
++fn filter_bytes<const FILTER: u8>(row: &[u8], prev: &[u8], bpp: usize, out: &mut [u8]) -> u64 {
+     let mut score = 0u64;
+     for n in 0..row.len() {
+         let left = if n >= bpp { row[n - bpp] } else { 0 };
+         let up_left = if n >= bpp { prev[n - bpp] } else { 0 };
+-        let predictor = match filter {
++        let predictor = match FILTER {
+             0 => 0,
+             1 => left,
+             2 => prev[n],

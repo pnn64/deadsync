@@ -21,9 +21,13 @@ def main():
     manifest = EVIDENCE / f"{prefix}.json"
     assert not manifest.exists()
     records = {label: json.loads((EVIDENCE / f"{label}.json").read_text()) for label in [before_label, selected_label]}
-    evidence = dict(driver_sha256=sha(Path(__file__)), measurements=[])
+    assert records[before_label]["benchmark_sha256"] == records[selected_label]["benchmark_sha256"]
+    iterations = int(os.environ.get("DEADLIB_PNG_PAIR_ITERS", "12"))
+    assert iterations > 0
+    evidence = dict(driver_sha256=sha(Path(__file__)), iterations=iterations,
+                    benchmark_stage=os.environ.get("DEADLIB_PNG_BENCH_STAGE", "reconstruction"), measurements=[])
     groups = {label: {} for label in records}
-    env = dict(os.environ, DEADLIB_PNG_BENCH_ITERS="12")
+    env = dict(os.environ, DEADLIB_PNG_BENCH_ITERS=str(iterations))
     for round in range(4):
         order = [before_label, selected_label] if round % 2 == 0 else [selected_label, before_label]
         for label in order:
@@ -45,12 +49,17 @@ def main():
     for key, before_rows in groups[before_label].items():
         after_rows = groups[selected_label][key]
         assert {row["fingerprint"] for row in before_rows + after_rows} == {before_rows[0]["fingerprint"]}
+        for group in [before_rows, after_rows]:
+            for field in ["fingerprint", "allocations", "reallocations", "requested_bytes"]:
+                assert len({row[field] for row in group}) == 1
         before = statistics.median(float(row["cycles_per_image"]) for row in before_rows)
         after = statistics.median(float(row["cycles_per_image"]) for row in after_rows)
         rows.append(dict(case=key[0], operation=key[1], before_cycles=before, after_cycles=after,
                          cpu_throughput=before / after,
                          before_MiB=statistics.median(float(row["MiB_per_second"]) for row in before_rows),
-                         after_MiB=statistics.median(float(row["MiB_per_second"]) for row in after_rows)))
+                         after_MiB=statistics.median(float(row["MiB_per_second"]) for row in after_rows),
+                         **{f"{side}_{field}": group[0][field] for side, group in [("before", before_rows), ("after", after_rows)]
+                            for field in ["allocations", "reallocations", "requested_bytes"]}))
     stream = io.StringIO(newline="")
     writer = csv.DictWriter(stream, fieldnames=list(rows[0]), delimiter="\t", lineterminator="\n")
     writer.writeheader()

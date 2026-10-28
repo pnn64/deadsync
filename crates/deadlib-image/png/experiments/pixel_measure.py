@@ -71,15 +71,16 @@ def main():
         summarize(sys.argv[2:] or ["baseline", "rgba", "palette", "opaque"])
         return
     label = sys.argv[2]
-    assert mode in ["build", "control"] and label.replace("-", "").isalnum()
+    assert mode in ["build", "freeze", "control"] and label.replace("-", "").isalnum()
     EVIDENCE.mkdir(exist_ok=True)
-    name = label if mode == "build" else label + "-control"
+    building = mode != "control"
+    name = label if building else label + "-control"
     manifest = EVIDENCE / f"{name}.json"
     assert not manifest.exists()
     for run in range(1, 4):
         assert not (EVIDENCE / f"{label}-{'run' if mode == 'build' else 'control'}{run}.tsv").exists()
     env = dict(os.environ, CARGO_BUILD_JOBS="4", DEADLIB_PNG_BENCH_ITERS="12")
-    if mode == "build":
+    if building:
         destination = WORK / label
         destination.mkdir(parents=True, exist_ok=False)
         before = sources()
@@ -105,6 +106,7 @@ def main():
                       executable=str(saved), executable_sha256=sha(saved), patch_sha256=sha(patch),
                       command=command, build_log_sha256=sha(build_log), driver_sha256=sha(Path(__file__)),
                       rustc=subprocess.check_output(["rustc", "--version"], text=True).strip(), platform=platform.platform(),
+                      benchmark_stage=env.get("DEADLIB_PNG_BENCH_STAGE", "reconstruction"),
                       workspace_manifest_sha256=sha(ROOT / "Cargo.toml"), lock_sha256=sha(ROOT / "Cargo.lock"),
                       scope="CPU 2; Windows thread cycles; 3 warmups, 7 batches per process; 12 iterations, minimum 2048 for outputs below 4096 bytes; separate untimed allocation probe; independent rational/palette oracle outside timing; shared host and frequency uncontrolled.", outputs=[])
     else:
@@ -115,6 +117,9 @@ def main():
         record = dict(record, control_of=original.name, control_of_sha256=sha(original),
                       control_runner_sha256=sha(Path(__file__)), outputs=[])
     save(manifest, record)
+    if mode == "freeze":
+        print(f"{label} frozen; measurements deferred", flush=True)
+        return
     for run in range(1, 4):
         result = subprocess.run([str(saved)], cwd=ROOT, env=env, capture_output=True)
         assert result.returncode == 0, result.stderr.decode(errors="replace")

@@ -1451,3 +1451,111 @@ and source/binary hashes are relative to `e96e16343`. `selected-validation.json`
 records the final source and verification commands. The existing measurement,
 pairing and validation scripts now accept `DEADLIB_PNG_PERF_SERIES` so independent
 series preserve separate evidence; `DEADLIB_PNG_PERF_BASE` selects the patch base.
+
+## Encoder filtering and reusable pass rows (2026-10-28)
+
+Three retained changes remove repeated encoder work:
+
+1. Dispatch the filter once per row into a constant filter kernel, removing the
+   dynamic match from the byte loop. Predictor arithmetic and adaptive tie order
+   are unchanged.
+2. Compile score accumulation only for adaptive selection. Fixed filters no
+   longer calculate signed-byte magnitudes and a discarded 64-bit sum.
+3. Reuse buffered encoder rows across Adam7 passes and omit the candidate buffer
+   for fixed filters in both encoders. Capacity is bounded by the widest nonempty
+   pass, including one-row images. Checked equal row spans and zipped writes
+   avoid repeated output indexing in the filter kernels; the small dispatch
+   wrapper is inline. No unsafe code, runtime dependencies or public APIs were
+   added.
+
+The following are isolated, alternating comparisons: each row uses four
+processes before and four after its component change. Cycle values are medians
+of the process medians. These component ratios must not be multiplied.
+
+| Change and case | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Row dispatch, adaptive gray8 513x257 buffered | 6,904,007 | 4,856,950 | 1.42x |
+| Row dispatch, adaptive RGB8 513x257 buffered | 17,879,445 | 13,467,935 | 1.33x |
+| Omit score, None RGBA8 513x257 buffered | 5,137,215 | 4,312,151 | 1.19x |
+| Omit score, None gray8 513x257 writer | 1,678,919 | 1,480,308 | 1.13x |
+| Reuse/check spans, None RGBA8 9x9 Adam7 buffered | 9,452 | 5,380 | 1.76x |
+| Reuse/check spans, adaptive RGBA8 33x9 Adam7 writer | 65,852 | 58,055 | 1.13x |
+
+The last component reduces full seven-pass adaptive buffered allocation calls
+from 31 to 7, with output reallocations unchanged. For RGBA16 513x257 Adam7,
+requested bytes fall from 6,419,218 to 6,390,450. Fixed filters use three row
+buffers rather than four: the 9x9 Adam7 case falls from 31 to 6 allocation calls,
+with three output reallocations unchanged. Fixed writer paths also remove one
+allocation, including its later growth across passes. Requested bytes count
+allocator requests, not peak resident memory.
+
+The combined selected implementation (`bounded`) was then replayed directly
+against the original source with the same balanced four-process protocol:
+
+| Complete Stored pipeline | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Adaptive RGB8 513x257 buffered | 17,696,859 | 13,365,172 | 1.32x |
+| Adaptive RGB8 513x257 writer | 15,096,844 | 14,568,617 | 1.04x |
+| None RGBA8 513x257 buffered | 5,913,806 | 2,880,133 | 2.05x |
+| None RGBA8 513x257 writer | 5,431,089 | 3,552,571 | 1.53x |
+| Adaptive RGBA16 513x257 Adam7 buffered | 51,736,590 | 39,100,524 | 1.32x |
+| None RGBA8 9x9 Adam7 buffered | 10,973 | 5,357 | 2.05x |
+| Adaptive RGBA8 33x9 Adam7 buffered | 57,276 | 42,126 | 1.36x |
+
+These are targeted filtering/row-layout measurements with Stored compression,
+including PNG validation, checksums, allocation and framing. They do not predict
+Fast DEFLATE throughput or compression ratios. The 116 cases cover all six
+native byte strides, all filters, packed 1/2/4-bit samples, plain/Adam7 layout,
+buffered/writer encoding and small rows. Native images are pseudorandom and
+fixture construction stays outside timing. Every process compares complete
+inflated IDAT bytes against independent normative filtering and adaptive
+selection, and verifies decoded native images before measuring.
+
+The first allocation-reuse trial (`buffers`) slowed many large adaptive
+buffered cases by about 13%, despite reducing allocations. It is rejected in
+favor of checked spans plus bounded capacity (`bounded`). Some tradeoffs remain
+relative to the preceding `score` checkpoint: GA8 Average, RGB8 Average and
+RGB16 Sub buffered cases have throughput ratios 0.78x, 0.83x and 0.84x. All three
+are faster than the original source in the combined comparison, by 1.07x,
+1.28x and 1.18x. The final corpus has no median regression above 5%; changes near
+1% are within shared-host variance and are not treated as established gains.
+Large plain adaptive RGBA16 baseline timings varied substantially across
+comparisons, so its unusually high final ratio is not used as a headline result.
+
+Measurements use Windows thread cycles on logical CPU 2, Rust 1.99.1 and the
+existing optimized/LTO bench profile. Every measured process has three warmups
+and seven batches, with three iterations for large outputs and at least 2,048
+for outputs below 4,096 bytes. Allocation probes run separately, untimed.
+Frequency, preemption and unrelated host workloads remain uncontrolled; CPU
+cycles take precedence over wall-clock throughput. All retained comparisons
+run sequentially in alternating A/B, B/A order.
+
+The selected source passes 20 release tests and 19 debug tests, strict
+all-target Clippy and scoped formatting. Debug skips the optional C encoder
+audit that passed in release. A new independent filter-byte test checks 8,640
+format/width/height/pattern/filter/interlace configurations through both
+encoders: 17,280 encoded outputs, including one- and two-row images, partial
+packed bytes, zero/full rows and deterministic adaptive ties. Existing checks
+include every Paeth triplet, filter scores and short boundaries, 1,620 C encoder
+reference files, 8,640 native APNG outputs, input/ordering/resource limits,
+literal wire answers, and exact writer prefixes under interrupted/short writes.
+
+The production-source diff is 49 lines net (64 added, 15 removed, including
+unit-test call formatting). Removed execution includes a per-byte filter
+switch, discarded score arithmetic, repeated pass allocation and unused fixed
+candidate storage. The five constant filter kernels share one local safe Rust
+implementation rather than duplicating predictor logic.
+
+Evidence is in [`experiments/encoding-20261028`](experiments/encoding-20261028).
+`dispatch-paired-summary.tsv`, `score-paired-summary.tsv` and
+`bounded-paired-summary.tsv` record component comparisons;
+`selected-paired-summary.tsv` is the final baseline comparison. Checkpoints
+carry cumulative patches relative to `e372c77f0`, source/harness/binary hashes,
+build logs and raw process data. `final-validation.json` and
+`scanline-validation.json` record checks and oracle hashes. `exclusions.json`
+identifies overlapping exploratory runs, the disk-interrupted comparison,
+superseded validation failures and intermediate candidates. The measurement
+driver's `freeze` mode separates builds from timing; use
+`DEADLIB_PNG_PERF_SERIES=encoding-20261028`,
+`DEADLIB_PNG_BENCH_STAGE=encode`, and `DEADLIB_PNG_PAIR_ITERS=3` to replay this
+protocol without running competing measurement jobs.

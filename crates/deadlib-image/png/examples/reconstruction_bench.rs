@@ -141,6 +141,10 @@ fn main() {
     println!(
         "case\toperation\titerations\tsample_bytes\tcycles_per_image\tns_per_image\tMiB_per_second\tallocations\treallocations\trequested_bytes\tfingerprint"
     );
+    if std::env::var("DEADLIB_PNG_BENCH_STAGE").as_deref() == Ok("encode") {
+        encoding();
+        return;
+    }
     for (name, color) in [
         ("gray", ColorType::Grayscale),
         ("ga", ColorType::GrayscaleAlpha),
@@ -366,5 +370,76 @@ fn main() {
             fingerprint(&png.image.samples),
             || decode(black_box(&bytes)).unwrap(),
         );
+    }
+}
+
+fn encoding() {
+    let mut cases = Vec::new();
+    for color in [
+        ColorType::Grayscale,
+        ColorType::GrayscaleAlpha,
+        ColorType::Rgb,
+        ColorType::Rgba,
+    ] {
+        for depth in [8, 16] {
+            for filter in [
+                Filter::None,
+                Filter::Sub,
+                Filter::Up,
+                Filter::Average,
+                Filter::Paeth,
+                Filter::Adaptive,
+            ] {
+                cases.push((513, 257, color, depth, false, filter));
+            }
+            cases.push((513, 257, color, depth, true, Filter::Adaptive));
+        }
+    }
+    for depth in [1, 2, 4] {
+        for interlaced in [false, true] {
+            for filter in [Filter::None, Filter::Adaptive] {
+                cases.push((4097, 129, ColorType::Grayscale, depth, interlaced, filter));
+            }
+        }
+    }
+    for width in [1, 9, 33] {
+        for filter in [Filter::None, Filter::Adaptive] {
+            cases.push((width, 9, ColorType::Rgba, 8, true, filter));
+        }
+    }
+    for (width, height, color, depth, interlaced, filter) in cases {
+        let png = fixture(width, height, color, depth);
+        let opts = EncodeOptions {
+            interlaced,
+            filter,
+            compression: deadlib_image_png::zlib::Compression::Stored,
+            ..Default::default()
+        };
+        let expected = apng_recovery::filtered_with(&png.image, interlaced, filter);
+        let hash = fingerprint(&Samples::U8(expected.clone()));
+        let buffered = encode(&png, &opts).unwrap();
+        let mut streamed = Vec::new();
+        deadlib_image_png::encode_writer(&png, &opts, &mut streamed).unwrap();
+        assert_eq!(apng_recovery::inflate_idat(&buffered), expected);
+        assert_eq!(apng_recovery::inflate_idat(&streamed), expected);
+        assert_eq!(decode(&buffered).unwrap().image, png.image);
+        assert_eq!(decode(&streamed).unwrap().image, png.image);
+        let case = format!(
+            "c{}-d{depth}-{width}x{height}-i{}-f{}",
+            color as u8,
+            u8::from(interlaced),
+            filter as u8
+        );
+        measure(&case, "encode", expected.len(), hash, || {
+            encode(black_box(&png), black_box(&opts)).unwrap()
+        });
+        if matches!(filter, Filter::None | Filter::Adaptive) {
+            measure(&case, "encode-writer", expected.len(), hash, || {
+                let mut output = Vec::new();
+                deadlib_image_png::encode_writer(black_box(&png), black_box(&opts), &mut output)
+                    .unwrap();
+                output
+            });
+        }
     }
 }

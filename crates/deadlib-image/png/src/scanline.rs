@@ -287,20 +287,46 @@ pub(crate) fn decode(
     })
 }
 
-pub(crate) fn filter_into(row: &[u8], prev: &[u8], bpp: usize, filter: u8, out: &mut [u8]) -> u64 {
+#[inline]
+pub(crate) fn filter_into<const SCORE: bool>(
+    row: &[u8],
+    prev: &[u8],
+    bpp: usize,
+    filter: u8,
+    out: &mut [u8],
+) -> u64 {
+    match filter {
+        0 => filter_bytes::<0, SCORE>(row, prev, bpp, out),
+        1 => filter_bytes::<1, SCORE>(row, prev, bpp, out),
+        2 => filter_bytes::<2, SCORE>(row, prev, bpp, out),
+        3 => filter_bytes::<3, SCORE>(row, prev, bpp, out),
+        _ => filter_bytes::<4, SCORE>(row, prev, bpp, out),
+    }
+}
+
+fn filter_bytes<const FILTER: u8, const SCORE: bool>(
+    row: &[u8],
+    prev: &[u8],
+    bpp: usize,
+    out: &mut [u8],
+) -> u64 {
+    let prev = &prev[..row.len()];
+    let out = &mut out[..row.len()];
     let mut score = 0u64;
-    for n in 0..row.len() {
+    for (n, (&value, out)) in row.iter().zip(out).enumerate() {
         let left = if n >= bpp { row[n - bpp] } else { 0 };
         let up_left = if n >= bpp { prev[n - bpp] } else { 0 };
-        let predictor = match filter {
+        let predictor = match FILTER {
             0 => 0,
             1 => left,
             2 => prev[n],
             3 => ((u16::from(left) + u16::from(prev[n])) / 2) as u8,
             _ => paeth(left, prev[n], up_left),
         };
-        out[n] = row[n].wrapping_sub(predictor);
-        score += u64::from((out[n] as i8).unsigned_abs());
+        *out = value.wrapping_sub(predictor);
+        if SCORE {
+            score += u64::from((*out as i8).unsigned_abs());
+        }
     }
     score
 }
@@ -368,6 +394,21 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
     let channels = image.color_type.channels();
     let depth = image.bit_depth;
     let bpp = (channels * depth as usize).div_ceil(8);
+    let width = passes(interlaced)
+        .iter()
+        .filter(|&&(_, y, _, _)| y < image.height)
+        .map(|&(x, _, dx, _)| extent(image.width, x, dx))
+        .max()
+        .unwrap_or(0);
+    let capacity = row_bytes(width, channels, depth)?;
+    let mut row = vec![0; capacity];
+    let mut previous = vec![0; capacity];
+    let mut candidate = if filter == Filter::Adaptive {
+        vec![0; capacity]
+    } else {
+        Vec::new()
+    };
+    let mut best = vec![0; capacity];
     for &(x, y, dx, dy) in passes(interlaced) {
         let w = extent(image.width, x, dx);
         let h = extent(image.height, y, dy);
@@ -375,10 +416,13 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
             continue;
         }
         let stride = row_bytes(w, channels, depth)?;
-        let mut row = vec![0; stride];
-        let mut previous = vec![0; stride];
-        let mut candidate = vec![0; stride];
-        let mut best = vec![0; stride];
+        row.resize(stride, 0);
+        previous.resize(stride, 0);
+        previous.fill(0);
+        if filter == Filter::Adaptive {
+            candidate.resize(stride, 0);
+        }
+        best.resize(stride, 0);
         for row_index in 0..h {
             let src_y = y as usize + row_index * dy as usize;
             pack_row(image, src_y, x as usize, dx as usize, w, &mut row);
@@ -386,7 +430,7 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
             if filter == Filter::Adaptive {
                 let mut score = u64::MAX;
                 for kind in 0..5 {
-                    let value = filter_into(&row, &previous, bpp, kind, &mut candidate);
+                    let value = filter_into::<true>(&row, &previous, bpp, kind, &mut candidate);
                     if value < score {
                         score = value;
                         selected = kind;
@@ -395,7 +439,7 @@ pub(crate) fn encode(image: &Image, interlaced: bool, filter: Filter) -> Result<
                 }
             } else {
                 selected = filter as u8;
-                filter_into(&row, &previous, bpp, selected, &mut best);
+                filter_into::<false>(&row, &previous, bpp, selected, &mut best);
             }
             out.push(selected);
             out.extend_from_slice(&best);
@@ -477,7 +521,10 @@ mod tests {
                             .map(|&v| u64::from((v as i8).unsigned_abs()))
                             .sum();
                         let mut actual = vec![0xa5; len];
-                        assert_eq!(filter_into(&row, &prev, bpp, filter, &mut actual), score);
+                        assert_eq!(
+                            filter_into::<true>(&row, &prev, bpp, filter, &mut actual),
+                            score
+                        );
                         assert_eq!(actual, expected);
                         unfilter(&mut actual, &prev, bpp, filter).unwrap();
                         assert_eq!(actual, row);

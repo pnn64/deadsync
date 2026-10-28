@@ -73,7 +73,9 @@ impl<'a> Rows<'a> {
                 resize(&mut self.row, bytes)?;
                 resize(&mut self.previous, bytes)?;
                 self.previous.fill(0);
-                resize(&mut self.candidate, bytes + 1)?;
+                if self.filter == Filter::Adaptive {
+                    resize(&mut self.candidate, bytes + 1)?;
+                }
                 resize(&mut self.output, bytes + 1)?;
                 return Ok(true);
             }
@@ -103,7 +105,7 @@ impl<'a> Rows<'a> {
         if self.filter == Filter::Adaptive {
             let mut best = u64::MAX;
             for kind in 0..5 {
-                let score = scanline::filter_into(
+                let score = scanline::filter_into::<true>(
                     &self.row,
                     &self.previous,
                     bpp,
@@ -117,7 +119,7 @@ impl<'a> Rows<'a> {
                 }
             }
         } else {
-            scanline::filter_into(
+            scanline::filter_into::<false>(
                 &self.row,
                 &self.previous,
                 bpp,

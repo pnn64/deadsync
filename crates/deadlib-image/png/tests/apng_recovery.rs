@@ -7,6 +7,7 @@ use std::io::{self, Read};
 #[allow(dead_code)]
 #[path = "support/chunks.rs"]
 mod chunks;
+#[allow(dead_code)]
 #[path = "support/apng_recovery.rs"]
 mod fixtures;
 use fixtures::{Chunk, Fixture};
