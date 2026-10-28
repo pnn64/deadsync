@@ -202,37 +202,39 @@ pub fn read(
             // describe every band, and the supplied cursor stays untouched.
             return Ok(factors);
         }
-        let mut flat = [0u8; 36];
-        let mut widths = [0u8; 36];
+        let mut counts = plan.counts;
+        if factors.mixed_block {
+            // The first six transmitted factors are long bands. They occupy
+            // one complete chunk of the first partition in every LSF class.
+            let width = plan.widths[0];
+            if width != 0 {
+                read_values(&mut cursor, width, &mut factors.long[..6])?;
+                factors.long_width[..6].fill(width);
+            }
+            counts[0] -= 6;
+        }
+        let (values, widths): (&mut [u8], &mut [u8]) = if factors.short_block {
+            let first = if factors.mixed_block { 9 } else { 0 };
+            (
+                &mut factors.short.as_flattened_mut()[first..36],
+                &mut factors.short_width.as_flattened_mut()[first..36],
+            )
+        } else {
+            (&mut factors.long[..21], &mut factors.long_width[..21])
+        };
         let mut n = 0;
-        for (&count, &width) in plan.counts.iter().zip(&plan.widths) {
+        for (&count, &width) in counts.iter().zip(&plan.widths) {
             if width == 0 {
                 n += count as usize;
                 continue;
             }
             let end = n + count as usize;
             // Six maximum-width (five-bit) factors fit in one field.
-            for values in flat[n..end].chunks_mut(6) {
-                read_values(&mut cursor, width, values)?;
+            for chunk in values[n..end].chunks_mut(6) {
+                read_values(&mut cursor, width, chunk)?;
             }
             widths[n..end].fill(width);
             n = end;
-        }
-        if factors.short_block {
-            let long = if factors.mixed_block { 6 } else { 0 };
-            factors.long[..long].copy_from_slice(&flat[..long]);
-            factors.long_width[..long].copy_from_slice(&widths[..long]);
-            let mut n = long;
-            for band in if factors.mixed_block { 3 } else { 0 }..12 {
-                for window in 0..3 {
-                    factors.short[band][window] = flat[n];
-                    factors.short_width[band][window] = widths[n];
-                    n += 1;
-                }
-            }
-        } else {
-            factors.long[..21].copy_from_slice(&flat[..21]);
-            factors.long_width[..21].copy_from_slice(&widths[..21]);
         }
     }
     factors.encoded_bits = cursor.position() - start;
