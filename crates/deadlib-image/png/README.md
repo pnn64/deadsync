@@ -4,10 +4,12 @@ Independent pure-Rust PNG implementation. The only production dependency is
 `deadlib-image` for native sample storage. PNG framing, CRC-32, Adler-32,
 zlib/DEFLATE, filters and Adam7 are implemented locally in safe Rust.
 
-The current deliverable focuses on decoding, native sample precision, PNG
-conformance, APNG rendering and decoder performance. Existing encoding utilities
-remain available, but encoder feature completeness and speed are outside the
-completion requirements clarified by the user on 2026-10-27.
+PNG/APNG decoding is complete for the native-sample API described below. The
+[decoder validation](DECODER-VALIDATION.md) records the final correctness audit,
+full test runs and independent decoder comparisons. The user clarified on
+2026-10-28 that performance is outside this completion goal. Existing encoding
+utilities remain available; encoder feature completeness and speed are also
+outside the decoder deliverable.
 
 ```rust
 use deadlib_image_png::decode;
@@ -86,9 +88,10 @@ an explicit development script; decoding and encoding perform no network access.
 Encoding zeroes unused tRNS/bKGD sample bits and rejects hIST zero frequencies
 for palette indices used by the default image or animation frames.
 
-See [COVERAGE.md](COVERAGE.md) for evidence and current limitations. Broader
-conformance and competitive performance validation remain under development.
-The [clause audit](CONFORMANCE.md) records supported behavior and remaining gates.
+See [COVERAGE.md](COVERAGE.md) for evidence and historical milestones.
+The [clause audit](CONFORMANCE.md) records supported behavior and application
+responsibilities; [decoder validation](DECODER-VALIDATION.md) closes the current
+correctness requirements. Performance experiments are historical evidence.
 This crate is registered in the workspace but is not used by DeadSync loaders.
 
 APNG frame images retain their original formats. `Animation::default_is_frame`

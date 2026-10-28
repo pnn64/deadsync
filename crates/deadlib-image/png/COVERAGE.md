@@ -1,10 +1,13 @@
 # PNG Third Edition implementation and verification
 
-This is an incremental implementation, not yet a claim of complete conformance.
-The current deliverable is independent PNG/APNG decoding, exact native samples,
-rendering and measured competitive decoder performance. Encoder features,
-compression ratio and encoder speed are outside the completion requirements.
-Milestones are committed only after their relevant checks pass.
+The PNG/APNG decoder correctness deliverable is complete. The
+[final validation](DECODER-VALIDATION.md) records the requirement audit and fresh
+full-suite/reference checks. On 2026-10-28 the user explicitly excluded
+performance from completion. Encoder features, compression ratio and encoder
+speed are also outside the decoder deliverable.
+Milestones are committed only after their relevant checks pass. Sections below
+the current requirement table are a chronological development record: earlier
+statements about pending work describe those snapshots, not current gates.
 The [clause audit](CONFORMANCE.md) maps the Third Edition to current code,
 evidence, application responsibilities and explicitly open items.
 
@@ -26,9 +29,9 @@ evidence, application responsibilities and explicitly open items.
 | APNG frame decoding and compositing | `apng.rs`, `composite.rs`, APNG/compositing/recovery/rendered tests | Exact native frames, 4,530 independent faults, legal fcTL-before-acTL ordering, 983,040 rational alpha pairs and 2,121 independent RGBA16 canvases pass, including replay/reset |
 | Bounded streaming with arbitrary input boundaries | `zlib::Inflater`, `StreamDecoder`, `decode_reader` | PNG/APNG native row pipelines, arbitrary IO fragments, finish/errors and capacity bounds verified |
 | Differential tests: Rust png, libpng, PNGSuite | Rust png 0.18.1, libpng 1.6.50 + zlib 1.3.1, vendored PNGSuite | 1,061 native-sample plus 480 exact ICC/Exif libpng comparisons; format matrices and PNGSuite pass |
-| Independent fixtures / malformed streams / properties | Independent stored-stream known answers, 6,005 chunk-framing/grammar cases across three parser entry patterns, malformed fixtures, mutation campaign | These equivalence classes pass; larger campaigns pending |
+| Independent fixtures / malformed streams / properties | Independent stored-stream known answers, chunk/field/order/resource matrices, malformed fixtures and sanitizer campaigns | Correctness checks pass; systematic boundary classes and recorded native coverage gaps reviewed in the final audit |
 | Fuzz targets and reproducible campaigns | Isolated `fuzz/`, generated-image properties, deterministic seeds and reports | Twelve harnesses; latest PNG/raw decoder campaigns complete 100,000 executions each with native-crate feedback and artifact-verified isolation. `fuzz/reports/huffman-permutations-source.json` retains actual counts. Historical reports include earlier encoder runs; bounded campaigns are not universal conformance proof |
-| Benchmarks and profile-guided optimization | Decoder-only harnesses, `BENCHMARKS.md`, checked-in TSV and profiles | Bulk copying, filter reconstruction and buffered Adler-32 improvements measured; competitive decoder performance still pending |
+| Benchmarks and profile-guided optimization | Decoder-only harnesses, `BENCHMARKS.md`, checked-in TSV and profiles | Historical measurements; performance is excluded from the current goal |
 
 Historical milestones: (1) shared primitives and native compression; (2) static PNG codec and
 sample matrix; (3) metadata and APNG; (4) streaming and external conformance;
@@ -2038,3 +2041,28 @@ sanitizer execution or full candidate suite is claimed. `BENCHMARKS.md`, both
 `experiments/literal-refill-selection.json` retain the measurement boundaries,
 source reconstruction, binary/input hashes and unchanged-control results.
 Competitive decoder performance and the final requirement audit remain open.
+
+## Decoder correctness completion (2026-10-28)
+
+The user explicitly removed performance from the current completion goal. The
+[final decoder validation](DECODER-VALIDATION.md) audits all remaining correctness
+requirements against current code and authoritative results. The fresh full
+release run passes 138 tests; the explicit reference run executes all twenty
+normally ignored checks with zero failures or skips. A fresh isolated offline
+debug build passes the same 138 regular tests. Separate strict-window and
+extended-count C zlib checks pass, as do all-target Clippy with warnings denied
+and scoped rustfmt.
+
+The independent run regenerates all 35 WPT and 240 native-precision animation
+answers using C libpng frames and Python rational composition. Native sample,
+metadata, APNG control and raw compression comparisons also pass. All 57 source
+identities from the latest 200,000-execution ASan decoder campaigns match the
+current worktree. The recorded decoder coverage gaps and the twelve PNG decoder
+conditions have been reviewed; no missing required decoder feature or known
+correctness defect remains. No production code change was needed.
+
+`decoder-completion-validation.json` and companion logs retain the exact source,
+reference, command and result identities. Earlier open-performance statements
+above are historical and do not block this correctness deliverable. The goal is
+complete for independent PNG/APNG decoding and stored-sample rendering; caller
+color management and animation scheduling retain their documented API roles.
