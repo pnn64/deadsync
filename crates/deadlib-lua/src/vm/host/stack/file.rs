@@ -3,8 +3,22 @@ use super::*;
 
 impl NativeStack<'_, '_> {
     #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-    pub(crate) fn install_file_backend(&mut self, backend: Arc<dyn io::native::FileBackend>) {
+    pub(crate) fn install_file_backend(
+        &mut self,
+        backend: Arc<dyn io::native::FileBackend>,
+    ) -> Result<(), Error> {
+        if self
+            .call
+            .vm
+            .io
+            .backend
+            .as_ref()
+            .is_some_and(|old| old.identity() != backend.identity())
+        {
+            return Err(self.error(b"one Lua state cannot mix C API images"));
+        }
         self.call.vm.io.backend = Some(backend);
+        Ok(())
     }
     #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
     pub(crate) fn attach_standard_stream(

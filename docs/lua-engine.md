@@ -1494,9 +1494,21 @@ the C runtime's buffers, scanner, positions and error state. Close handlers clea
 the payload, while borrowed resource records do not close a handle on their own.
 Comparisons match 47 observations per profile on Windows debug/release and Linux
 i686 SSE2 release, with separate process-exit checks. Signed `ftell` failures and
-nonzero child exit statuses are covered. Rust-created file payloads, shared
-C/Rust standard-stream buffering, lifecycle/allocator APIs and the broader
-standalone parity gates remain unfinished.
+nonzero child exit statuses are covered. Rust-created file payloads are extended
+below. Shared C/Rust standard-stream buffering, lifecycle/allocator APIs and the
+broader standalone parity gates remain unfinished.
+
+The [Rust-created file payload checks](testing/2026-10-29-rust-lua-file-payloads.md)
+extend real `FILE **` payloads to `io.open`, `io.tmpfile`, named input/output,
+named line iterators and `io.popen` when the native C feature is enabled.
+Constructors use the selected C API image from the first open, including files
+created before any C API activation. `NativeLibraryLoader::as_any` lets a
+configured C adapter provide that runtime; incompatible late image changes are
+rejected while existing files remain usable. Comparisons cover 26 constructor
+observations plus the prior 47 native-file observations per profile on Windows
+debug/release and Linux i686 SSE2 release. Standard-stream payloads and shared
+C/Rust buffering, the four lifecycle/allocator APIs, collector accounting and
+the broader full Lua 5.1 parity gates remain open.
 
 ## Reference contract
 

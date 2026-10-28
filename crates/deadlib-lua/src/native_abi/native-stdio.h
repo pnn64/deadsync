@@ -2,6 +2,7 @@
 #include <errno.h>
 #ifndef _WIN32
 extern int pclose(FILE *);
+extern FILE *popen(const char *,const char *);
 #endif
 #define STDIO_ERROR (errno?errno:-1)
 API int boundary_stdio(int op,void *pointer,BoundaryValue *value) {
@@ -40,6 +41,17 @@ API int boundary_stdio(int op,void *pointer,BoundaryValue *value) {
       value->length=value->integer?strlen(value->bytes):0;
       if(value->length&&value->bytes[value->length-1]=='\n'){value->integer|=2;value->length--;}
       value->wide_integer=ferror(file)?STDIO_ERROR:0;return 0;
+    case 13:
+      if(!value->bytes)file=tmpfile();
+      else if(value->integer) {
+#ifdef _WIN32
+        file=_popen(value->bytes,(const char *)value->userdata);
+#else
+        file=popen(value->bytes,(const char *)value->userdata);
+#endif
+      }
+      else file=fopen(value->bytes,(const char *)value->userdata);
+      value->userdata=file;return file?0:STDIO_ERROR;
     default: return EINVAL;
   }
 }

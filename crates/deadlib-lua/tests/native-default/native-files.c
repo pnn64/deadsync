@@ -114,6 +114,7 @@ int main(int argc,char **argv) {
 #endif
   luaL_openlibs(L);luaopen_native_files(L);lua_setglobal(L,"native_files");
   lua_pushstring(L,argv[1]);lua_setglobal(L,"native_files_source");
+  if(luaL_dostring(L,"early=assert(io.tmpfile());assert(early:write('early\\n')and early:seek('set')==0 and early:read(2)=='ea')"))return 4;
   if(luaL_loadfile(L,argv[1])||lua_pcall(L,0,1,0)){
     fprintf(stderr,"%s\n",lua_tostring(L,-1));lua_close(L);return 1;
   }

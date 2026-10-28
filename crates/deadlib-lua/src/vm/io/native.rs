@@ -2,10 +2,14 @@
 use std::fmt::Debug;
 
 pub(crate) trait FileBackend: Debug + Send + Sync {
+    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+    fn identity(&self) -> usize;
     fn attach(&self, pointer: usize) -> Box<dyn File>;
+    fn open(&self, path: Option<&[u8]>, mode: &[u8], pipe: bool) -> Result<Box<dyn File>, i32>;
 }
 pub(crate) trait File: Debug + Send + Sync {
     fn pointer(&self) -> usize;
+    fn publish(&mut self);
     fn get(&mut self, peek: bool) -> Result<Option<u8>, i32>;
     fn read(&mut self, bytes: &mut [u8]) -> Result<usize, i32>;
     fn line(&mut self, bytes: &mut Vec<u8>) -> Result<bool, i32>;

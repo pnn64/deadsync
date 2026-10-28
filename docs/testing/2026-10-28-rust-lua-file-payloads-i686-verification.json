@@ -1,0 +1,26 @@
+{
+  "reports": {
+    "file-payloads": {
+      "path": "docs/testing/2026-10-28-rust-lua-file-payloads-i686-current.json",
+      "sha256": "5a558156d757f31fb80e178a390fa289761f788e8e2719fb5836b7f53d5f9ca6",
+      "observations": 26
+    },
+    "file-payloads-native": {
+      "path": "docs/testing/2026-10-28-rust-lua-file-payloads-native-i686-current.json",
+      "sha256": "ab7942b7e763e28cda916f670264755283ee76865b047d3753d2e0d3fa7ae63d",
+      "observations": 47
+    }
+  },
+  "artifact_hashes_verified": true,
+  "source_hashes_verified": true,
+  "pointer_bits": 32,
+  "elf32_checks": 8,
+  "checked_references_enabled": true,
+  "observations": 73,
+  "preactivation_file_verified": true,
+  "signed_ftell_verified": true,
+  "exit_processes": 6,
+  "suite_report": "docs/testing/2026-10-28-rust-lua-file-payloads-i686-suite.json",
+  "suite_report_sha256": "f23ba13904f34d8d130a273da1b64f5068aa37f0163ad21b88b14357447abdff",
+  "audit_script_sha256": "9efdbb12677d698ccafe380f50821b13d53c2059df1e91beceec4179757572b9"
+}

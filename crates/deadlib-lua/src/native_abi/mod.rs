@@ -79,6 +79,21 @@ mod library;
 use library::Library;
 mod bundle;
 mod stdio;
+pub(crate) fn file_backend(
+    loader: Option<&dyn NativeLibraryLoader>,
+) -> Result<Arc<dyn crate::vm::io::native::FileBackend>, Box<[u8]>> {
+    let fallback = NativeCAbiLoader::default();
+    let loader = loader
+        .and_then(|loader| loader.as_any())
+        .and_then(|loader| loader.downcast_ref::<NativeCAbiLoader>())
+        .unwrap_or(&fallback);
+    let bridge = loader
+        .bridge
+        .get_or_init(Bridge::bundled)
+        .as_ref()
+        .map_err(Clone::clone)?;
+    Ok(bridge.stdio.clone())
+}
 
 fn matching_version(pointer: usize) -> bool {
     // SAFETY: only a symbol from the Lua C ABI image is passed here.
@@ -235,6 +250,9 @@ struct LoadedLibrary {
     bridge: Arc<Bridge>,
 }
 impl NativeLibraryLoader for NativeCAbiLoader {
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
     fn open(&self, path: &[u8]) -> Result<Arc<dyn NativeLibrary>, Box<[u8]>> {
         let bridge = self
             .bridge
@@ -320,7 +338,7 @@ fn state_for(
     bridge: &Arc<Bridge>,
     thread: ThreadId,
 ) -> Result<usize, Error> {
-    stack.install_file_backend(bridge.stdio.clone());
+    stack.install_file_backend(bridge.stdio.clone())?;
     if let Some(owner) = stack.thread_state::<StateOwner>(thread) {
         assert!(Arc::ptr_eq(&owner.bridge, bridge));
         return Ok(owner.state);

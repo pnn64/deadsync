@@ -89,6 +89,30 @@ impl Io {
     }
 }
 impl Vm {
+    fn open_stream(
+        &mut self,
+        path: Option<&[u8]>,
+        mode: &[u8],
+        pipe_file: bool,
+    ) -> Result<Result<Stream, i32>, Error> {
+        #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+        if self.io.backend.is_none() {
+            self.io.backend = Some(
+                crate::native_abi::file_backend(self.native_library_loader.as_deref())
+                    .map_err(|bytes| Error::from_bytes(ErrorKind::Runtime, 0, bytes.into_vec()))?,
+            );
+        }
+        if let Some(backend) = &self.io.backend {
+            return Ok(backend
+                .open(path, mode, pipe_file)
+                .map(|file| Stream::new(Resource::Native(file), true, true, false)));
+        }
+        Ok(match path {
+            None => temporary(),
+            Some(path) if pipe_file => pipe(path, mode),
+            Some(path) => open(path, mode),
+        })
+    }
     pub(super) fn standard_stream(&mut self, kind: usize) -> NonZeroU64 {
         let (slot, resource, read, write) = match kind {
             0 => (&mut self.io.stdin, Resource::Input, true, false),
@@ -382,7 +406,17 @@ impl Vm {
         if let Some(table) = metatable {
             self.gc_barrier(Value::Userdata(id), Value::Table(table));
         }
+        self.publish_file(id, file);
         Value::Userdata(id)
+    }
+    fn publish_file(&mut self, id: UserdataId, key: u64) {
+        if let Some(Resource::Native(file)) = self.io.files[slot_index(key)].resource.as_mut() {
+            let user = &mut self.userdata[slot_index(id.0)];
+            user.bytes.as_mut()[..std::mem::size_of::<usize>()]
+                .copy_from_slice(&file.pointer().to_ne_bytes());
+            user.native_file = true;
+            file.publish();
+        }
     }
     pub(in crate::vm) fn file_key(&mut self, value: Value, check_meta: bool) -> Option<u64> {
         let Value::Userdata(id) = value else {
@@ -586,15 +620,15 @@ impl Vm {
             let pending = base + count.max(3) + 1;
             self.resize_registers(self.registers.len().max(pending + 1));
             self.registers[pending] = value;
-            let result = match id {
-                TMPFILE => temporary(),
-                POPEN => pipe(path.as_deref().unwrap(), &mode),
-                _ => open(path.as_deref().unwrap(), &mode),
-            };
+            let result = self.open_stream(path.as_deref(), &mode, id == POPEN)?;
             return Ok(match result {
                 Ok(file) => {
                     let key = self.file_key(value, false).expect("new file userdata");
                     self.io.files[slot_index(key)] = file;
+                    let Value::Userdata(id) = value else {
+                        unreachable!()
+                    };
+                    self.publish_file(id, key);
                     self.registers[base] = value;
                     1
                 }
@@ -608,8 +642,9 @@ impl Vm {
                 let value = if matches!(arg, Value::String(_) | Value::Number(_)) {
                     let s = self.string_argument(base, count, 0)?;
                     let path = self.strings.bytes[slot_index(s.0)].to_vec();
-                    let file =
-                        open(&path, if id == INPUT { b"r" } else { b"w" }).map_err(|code| {
+                    let file = self
+                        .open_stream(Some(&path), if id == INPUT { b"r" } else { b"w" }, false)?
+                        .map_err(|code| {
                             ERRNO.set(code);
                             self.file_argument_error(&path, code)
                         })?;
@@ -626,10 +661,12 @@ impl Vm {
         if id == LINES && arg != Value::Nil {
             let s = self.string_argument(base, count, 0)?;
             let path = self.strings.bytes[slot_index(s.0)].to_vec();
-            let file = open(&path, b"r").map_err(|code| {
-                ERRNO.set(code);
-                self.file_argument_error(&path, code)
-            })?;
+            let file = self
+                .open_stream(Some(&path), b"r", false)?
+                .map_err(|code| {
+                    ERRNO.set(code);
+                    self.file_argument_error(&path, code)
+                })?;
             let Value::Userdata(file) = self.file_value(file, self.builtin_environment(id)) else {
                 unreachable!()
             };

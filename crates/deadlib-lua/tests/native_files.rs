@@ -96,8 +96,9 @@ fn native_file_payloads_preserve_stdio_buffers_ownership_and_close_state() {
         String::from_utf8_lossy(&output.stderr)
     );
     // SAFETY: the image is built above from this exact private protocol.
-    let loader =
-        unsafe { NativeCAbiLoader::from_library(image.to_string_lossy().as_bytes()) }.unwrap();
+    let loader = std::sync::Arc::new(
+        unsafe { NativeCAbiLoader::from_library(image.to_string_lossy().as_bytes()) }.unwrap(),
+    );
     let mut vm = Vm::new_bare();
     let open = vm
         .new_native_function(loader.open_libraries().unwrap())
@@ -122,4 +123,53 @@ fn native_file_payloads_preserve_stdio_buffers_ownership_and_close_state() {
     );
     vm.set_global(b"native_files_source", path).unwrap();
     vm.execute(&program).unwrap();
+    drop(vm);
+    let mut vm = Vm::new();
+    vm.set_native_library_loader(Some(loader.clone()));
+    let before = NativeCAbiLoader::statistics().states_created;
+    vm.execute(&compile_named(b"early=assert(io.tmpfile());assert(early:write('early\\n')and early:seek('set')==0 and early:read(2)=='ea')",b"=before C activation").unwrap()).unwrap();
+    assert_eq!(NativeCAbiLoader::statistics().states_created, before);
+    let library = loader.open(image.to_string_lossy().as_bytes()).unwrap();
+    let entry = vm
+        .new_native_function(library.symbol(b"luaopen_native_files").unwrap())
+        .unwrap();
+    let module = vm.call(entry, &[]).unwrap()[0];
+    vm.set_global(b"native_files", module).unwrap();
+    let program = compile_named(
+        include_bytes!("native-boundary/file-payloads.lua"),
+        b"@file-payloads.lua",
+    )
+    .unwrap();
+    vm.execute(&program).unwrap();
+    drop(vm);
+    // Existing file pointers stay in their original C image after a late
+    // adapter change. Reject the foreign callback before it can use them.
+    let mut vm = Vm::new();
+    vm.execute(
+        &compile_named(
+            b"keep=assert(io.tmpfile());assert(keep:write('same image')and keep:seek('set')==0)",
+            b"=original image",
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    vm.set_native_library_loader(Some(loader.clone()));
+    let library = loader.open(image.to_string_lossy().as_bytes()).unwrap();
+    let entry = vm
+        .new_native_function(library.symbol(b"luaopen_native_files").unwrap())
+        .unwrap();
+    assert!(
+        vm.call(entry, &[])
+            .unwrap_err()
+            .message()
+            .contains("one Lua state cannot mix C API images")
+    );
+    vm.execute(
+        &compile_named(
+            b"assert(keep:read('*a')=='same image'and keep:close())",
+            b"=retained file",
+        )
+        .unwrap(),
+    )
+    .unwrap();
 }

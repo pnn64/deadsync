@@ -43,6 +43,11 @@ pub trait NativeLibrary: std::fmt::Debug + Send + Sync {
 /// Opening and resolving never execute Lua. Returned functions run through the
 /// ordinary host boundary, with their actual Lua closure environment.
 pub trait NativeLibraryLoader: std::fmt::Debug + Send + Sync {
+    /// Expose a concrete adapter for resources that must share its runtime.
+    /// Wrappers can forward this to their underlying adapter.
+    fn as_any(&self) -> Option<&dyn Any> {
+        None
+    }
     /// Open a NUL-free path. Errors contain the platform loader's message bytes.
     fn open(&self, path: &[u8]) -> Result<Arc<dyn NativeLibrary>, Box<[u8]>>;
 }
@@ -68,6 +73,8 @@ impl Vm {
     /// Existing library userdata and resolved functions retain their owners.
     /// The default `native-c-api` feature installs the bundled adapter on
     /// Windows and Linux; embedders can replace it or disable future opens.
+    /// Select a custom C adapter before opening files so their native handles
+    /// use that adapter's C runtime.
     pub fn set_native_library_loader(&mut self, loader: Option<Arc<dyn NativeLibraryLoader>>) {
         self.native_library_support |= loader.is_some();
         self.native_library_loader = loader;

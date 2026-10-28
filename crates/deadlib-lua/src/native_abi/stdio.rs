@@ -21,17 +21,48 @@ impl Backend {
     }
 }
 impl FileBackend for Backend {
+    fn identity(&self) -> usize {
+        self._library.0
+    }
     fn attach(&self, pointer: usize) -> Box<dyn File> {
         Box::new(Handle {
             backend: self.clone(),
             pointer,
+            owned: false,
+            pipe: false,
         })
+    }
+    fn open(&self, path: Option<&[u8]>, mode: &[u8], pipe: bool) -> Result<Box<dyn File>, i32> {
+        let string = |bytes: &[u8]| {
+            CString::new(bytes.split(|&b| b == 0).next().unwrap()).expect("C prefix")
+        };
+        let path = path.map(string);
+        let mode = string(mode);
+        let mut value = BoundaryValue {
+            bytes: path.as_ref().map_or(std::ptr::null(), |s| s.as_ptr()),
+            userdata: mode.as_ptr() as *mut c_void,
+            integer: c_int::from(pipe),
+            ..Default::default()
+        };
+        // SAFETY: these C strings remain live through this synchronous factory.
+        let code = unsafe { (self.operation)(13, std::ptr::null_mut(), &mut value) };
+        if code != 0 {
+            return Err(if code == -1 { 0 } else { code });
+        }
+        Ok(Box::new(Handle {
+            backend: self.clone(),
+            pointer: value.userdata as usize,
+            owned: true,
+            pipe,
+        }))
     }
 }
 #[derive(Debug)]
 struct Handle {
     backend: Backend,
     pointer: usize,
+    owned: bool,
+    pipe: bool,
 }
 impl Handle {
     fn call(&self, op: c_int, value: &mut BoundaryValue) -> Result<(), i32> {
@@ -48,6 +79,9 @@ impl Handle {
 impl File for Handle {
     fn pointer(&self) -> usize {
         self.pointer
+    }
+    fn publish(&mut self) {
+        self.owned = false;
     }
     fn get(&mut self, peek: bool) -> Result<Option<u8>, i32> {
         let mut value = BoundaryValue::default();
@@ -126,7 +160,9 @@ impl File for Handle {
         let _ = self.call(9, &mut BoundaryValue::default());
     }
     fn close(&mut self, pipe: bool) -> Result<(), i32> {
-        self.call(if pipe { 8 } else { 7 }, &mut BoundaryValue::default())
+        let result = self.call(if pipe { 8 } else { 7 }, &mut BoundaryValue::default());
+        self.owned = false;
+        result
     }
     fn display(&self) -> Vec<u8> {
         let mut bytes = vec![0; 64];
@@ -138,5 +174,12 @@ impl File for Handle {
         self.call(11, &mut value).expect("file pointer formatting");
         bytes.truncate(value.length);
         bytes
+    }
+}
+impl Drop for Handle {
+    fn drop(&mut self) {
+        if self.owned {
+            let _ = self.close(self.pipe);
+        }
     }
 }
