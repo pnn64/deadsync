@@ -50,6 +50,33 @@ fn copy(call: &mut HostCall<'_>) -> Result<(), Error> {
 }
 
 #[test]
+fn coroutine_bodies_reconstruct_the_complete_c_stack_before_selecting_results() {
+    let mut vm = setup();
+    vm.execute(
+        &compile(
+            br#"
+local fn=function()return 17 end
+local a,b,c,co,n=body(coroutine.create,fn,'extra',nil)
+assert(a==fn and b=='extra'and c==nil and type(co)=='thread'and n==1)
+local a,b,c,status,n=body(coroutine.status,co,'extra',nil)
+assert(a==co and b=='extra'and c==nil and status=='suspended'and n==1)
+local a,b,current,result,n=body(coroutine.running,'extra',nil)
+assert(a=='extra'and b==nil and type(current)=='thread'and result==nil and n==1)
+local a,b,c,wrap,n=body(coroutine.wrap,fn,'extra',nil)
+assert(a==fn and b=='extra'and c==nil and type(wrap)=='function'and n==1 and wrap()==17)
+local child=coroutine.create(function()
+  local a,b,current,n=body(coroutine.running,'extra',nil)
+  assert(a=='extra'and b==nil and current==coroutine.running()and n==1)
+end)
+assert(coroutine.resume(child))
+"#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+}
+
+#[test]
 fn a_body_code_does_not_retain_the_original_closures_environment() {
     let mut vm = setup();
     vm.execute(

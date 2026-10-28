@@ -55,7 +55,7 @@ passed 629 Rust tests on each platform after fixing the remaining fixture
 assumptions. Crashing GNU C `unpack` inputs run in a separate strict audit;
 five native crashes remain recorded, with signed-overflow diagnostics and an
 independent wrapping control. The default reference flags remain unchanged.
-The current runs pass 805 Rust tests on Windows x64 and 806 on Linux x64 and
+The current runs pass 809 Rust tests on Windows x64 and 810 on Linux x64 and
 Linux i686 SSE2. The default x87 arithmetic baseline and five bounded traceback
 requests retain failed/incomplete observations. Complete C/auxiliary APIs and
 remaining language, library, debug, GC and resource behavior must also be
@@ -1443,6 +1443,18 @@ A portable regression repeats 760 observations without the default C feature.
 Broader resumptions retain checked-reference invariant failures and reference
 crashes; arbitrary reader/body/API interleavings, GC accounting, lifecycle and
 allocator APIs, resource behavior and full Lua 5.1 parity remain open.
+
+The [library initializer checks](testing/2026-10-28-rust-lua-library-init.md)
+add `Vm::new_bare()` and the public C entrypoints for base, math, string, table,
+OS and debug libraries. Bare states have empty globals and registry and no
+string metatable. Opening uses the current C environment, preserves registry
+table reuse and creates fresh closures; base also opens coroutine functions.
+The checks match 66 transcript rows in each of twelve opening orders against
+release and checked references on Windows x64 and Linux i686 SSE2. They cover
+full C windows, intermediate registration values, setters and errors, closure
+environments, reopening and initialization on fresh, yielded and dead threads.
+`luaopen_io`, `luaopen_package`, `luaL_openlibs`, the four core lifecycle/allocator
+declarations and the broader standalone parity gates remain unfinished.
 
 ## Reference contract
 

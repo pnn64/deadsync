@@ -11,6 +11,10 @@ impl Vm {
         count: usize,
     ) -> Option<Vec<Value>> {
         let supported = (tables::TAB_FIRST..=tables::TAB_SORT).contains(&code)
+            || matches!(
+                code,
+                threads::CO_CREATE | threads::CO_RUNNING | threads::CO_STATUS | threads::CO_WRAP
+            )
             || (os::FIRST..=os::LAST).contains(&code)
             || (io::FIRST..=io::LAST).contains(&code)
             || (debug::GET_INFO..=hooks::SET_HOOK).contains(&code)
@@ -33,6 +37,10 @@ impl Vm {
             return Some(stack);
         }
         match code {
+            threads::CO_RUNNING if self.thread == self.main => {
+                stack.push(Value::Thread(self.main));
+                stack.extend_from_slice(&results);
+            }
             tables::TAB_INSERT => {
                 stack.pop();
             }

@@ -492,7 +492,7 @@ impl Vm {
             Value::Native(id) if id >= strings::ITERATOR_FIRST => self.native_closures.contains(id),
             Value::Native(id) => {
                 !matches!(id, PAIRS | IPAIRS | NEW_PROXY)
-                    && (matches!(id,0..=59|64..=77|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|DO_FILE|debug::CONSOLE|io::FIRST..=io::LAST|os::FIRST..=os::LAST)
+                    && (matches!(id,0..=59|64..=78|80..=85|96..=104|debug::GET_INFO..=debug::GET_REGISTRY|DO_FILE|debug::CONSOLE|io::FIRST..=io::LAST|os::FIRST..=os::LAST)
                         || package::contains(id))
                     && (self.gc.collections == 0
                         || self.marked_value(value)

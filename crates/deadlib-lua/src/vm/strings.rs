@@ -17,6 +17,7 @@ pub(super) const STR_GMATCH: u64 = 74;
 pub(super) const STR_GSUB: u64 = 75;
 pub(super) const STR_FORMAT: u64 = 76;
 pub(super) const STR_DUMP: u64 = 77;
+pub(super) const STR_GFIND_REMOVED: u64 = 78;
 pub(super) const ITERATOR_FIRST: u64 = 1u64 << 32;
 
 #[derive(Debug)]
@@ -202,6 +203,13 @@ impl Vm {
         base: usize,
         count: usize,
     ) -> Result<usize, Error> {
+        if id == STR_GFIND_REMOVED {
+            return Err(Error::new(
+                ErrorKind::Runtime,
+                0,
+                "'string.gfind' was renamed to 'string.gmatch'",
+            ));
+        }
         if id == STR_DUMP {
             let value = self.argument(base, count, 0);
             if !matches!(value, Value::Function(_) | Value::Native(_)) {

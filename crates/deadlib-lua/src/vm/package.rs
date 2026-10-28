@@ -70,6 +70,15 @@ fn initial_path(variable: &str, default: &[u8]) -> Vec<u8> {
 }
 
 impl Vm {
+    /// Bind a resolved native symbol as a fresh Lua closure in this environment.
+    /// The adapter's private data stays separate from its Lua upvalues.
+    ///
+    /// # Errors
+    /// Propagates errors while creating the host closure.
+    pub fn new_native_function(&mut self, symbol: NativeSymbol) -> Result<Value, Error> {
+        self.host_function(symbol.callback, &[], symbol.data)
+    }
+
     fn module_step(&mut self, mut frame: Frame) -> Result<Option<usize>, Error> {
         let owner = self.frames.len() - 1;
         let base = frame.base;

@@ -90,6 +90,36 @@ fn matching_version(pointer: usize) -> bool {
 /// Platform adapter for the implemented Lua 5.1 C API. The bundled C image is
 /// opened lazily; normal/build Cargo dependencies remain empty.
 impl NativeCAbiLoader {
+    /// Resolve an initializer from this VM build's C API image.
+    /// Supported names are `base`, `math`, `string`, `table`, `os` and `debug`.
+    /// Bind the result with [`crate::Vm::new_native_function`] and call it with
+    /// the ordinary VM API. Initialization uses the current thread's globals,
+    /// registry and function environment; repeated calls create fresh closures.
+    pub fn standard_library(&self, name: &[u8]) -> Result<NativeSymbol, Box<[u8]>> {
+        let symbol: &[u8] = match name {
+            b"base" => b"luaopen_base",
+            b"math" => b"luaopen_math",
+            b"string" => b"luaopen_string",
+            b"table" => b"luaopen_table",
+            b"os" => b"luaopen_os",
+            b"debug" => b"luaopen_debug",
+            _ => return Err(b"unsupported standard library".as_slice().into()),
+        };
+        let bridge = self
+            .bridge
+            .get_or_init(Bridge::bundled)
+            .as_ref()
+            .map_err(Clone::clone)?
+            .clone();
+        Ok(NativeSymbol::with_data(
+            native,
+            Binding {
+                function: bridge._library.try_symbol(symbol)?,
+                bridge,
+                owner: None,
+            },
+        ))
+    }
     /// Use an explicitly supplied jump-boundary image.
     ///
     /// # Safety

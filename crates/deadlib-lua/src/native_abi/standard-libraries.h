@@ -1,0 +1,164 @@
+/* Library construction over the public C API; builtin execution stays in Rust. */
+#include <math.h>
+
+static const luaL_Reg open_base_functions[]={
+  {"assert",builtin_body_0},
+  {"collectgarbage",builtin_body_27},
+  {"dofile",builtin_body_121},
+  {"error",builtin_body_1},
+  {"gcinfo",builtin_body_28},
+  {"getfenv",builtin_body_22},
+  {"getmetatable",builtin_body_13},
+  {"loadfile",builtin_body_31},
+  {"load",builtin_body_30},
+  {"loadstring",builtin_body_24},
+  {"next",builtin_body_9},
+  {"pcall",builtin_body_15},
+  {"print",builtin_body_18},
+  {"rawequal",builtin_body_4},
+  {"rawget",builtin_body_5},
+  {"rawset",builtin_body_6},
+  {"select",builtin_body_7},
+  {"setfenv",builtin_body_23},
+  {"setmetatable",builtin_body_14},
+  {"tonumber",builtin_body_3},
+  {"tostring",builtin_body_17},
+  {"type",builtin_body_2},
+  {"unpack",builtin_body_8},
+  {"xpcall",builtin_body_16},
+  {NULL,NULL}
+};
+
+static const luaL_Reg open_coroutine_functions[]={
+  {"create",builtin_body_80},
+  {"resume",builtin_body_81},
+  {"running",builtin_body_82},
+  {"status",builtin_body_83},
+  {"wrap",builtin_body_84},
+  {"yield",builtin_body_85},
+  {NULL,NULL}
+};
+
+static const luaL_Reg open_math_functions[]={
+  {"abs",builtin_body_32},
+  {"acos",builtin_body_47},
+  {"asin",builtin_body_46},
+  {"atan2",builtin_body_52},
+  {"atan",builtin_body_48},
+  {"ceil",builtin_body_34},
+  {"cosh",builtin_body_50},
+  {"cos",builtin_body_37},
+  {"deg",builtin_body_53},
+  {"exp",builtin_body_39},
+  {"floor",builtin_body_33},
+  {"fmod",builtin_body_45},
+  {"frexp",builtin_body_56},
+  {"ldexp",builtin_body_57},
+  {"log10",builtin_body_41},
+  {"log",builtin_body_40},
+  {"max",builtin_body_44},
+  {"min",builtin_body_43},
+  {"modf",builtin_body_55},
+  {"pow",builtin_body_42},
+  {"rad",builtin_body_54},
+  {"random",builtin_body_58},
+  {"randomseed",builtin_body_59},
+  {"sinh",builtin_body_49},
+  {"sin",builtin_body_36},
+  {"sqrt",builtin_body_35},
+  {"tanh",builtin_body_51},
+  {"tan",builtin_body_38},
+  {NULL,NULL}
+};
+
+static const luaL_Reg open_string_functions[]={
+  {"byte",builtin_body_68},
+  {"char",builtin_body_69},
+  {"dump",builtin_body_77},
+  {"find",builtin_body_72},
+  {"format",builtin_body_76},
+  {"gfind",builtin_body_78},
+  {"gmatch",builtin_body_74},
+  {"gsub",builtin_body_75},
+  {"len",builtin_body_64},
+  {"lower",builtin_body_70},
+  {"match",builtin_body_73},
+  {"rep",builtin_body_66},
+  {"reverse",builtin_body_67},
+  {"sub",builtin_body_65},
+  {"upper",builtin_body_71},
+  {NULL,NULL}
+};
+
+static const luaL_Reg open_table_functions[]={
+  {"concat",builtin_body_96},
+  {"foreach",builtin_body_97},
+  {"foreachi",builtin_body_98},
+  {"getn",builtin_body_99},
+  {"maxn",builtin_body_100},
+  {"insert",builtin_body_101},
+  {"remove",builtin_body_102},
+  {"setn",builtin_body_103},
+  {"sort",builtin_body_104},
+  {NULL,NULL}
+};
+
+static const luaL_Reg open_os_functions[]={
+  {"clock",builtin_body_165},
+  {"date",builtin_body_168},
+  {"difftime",builtin_body_159},
+  {"execute",builtin_body_163},
+  {"exit",builtin_body_164},
+  {"getenv",builtin_body_160},
+  {"remove",builtin_body_161},
+  {"rename",builtin_body_166},
+  {"setlocale",builtin_body_169},
+  {"time",builtin_body_167},
+  {"tmpname",builtin_body_162},
+  {NULL,NULL}
+};
+
+static const luaL_Reg open_debug_functions[]={
+  {"debug",builtin_body_122},
+  {"getfenv",builtin_body_25},
+  {"gethook",builtin_body_118},
+  {"getinfo",builtin_body_112},
+  {"getlocal",builtin_body_115},
+  {"getregistry",builtin_body_120},
+  {"getmetatable",builtin_body_19},
+  {"getupvalue",builtin_body_113},
+  {"setfenv",builtin_body_26},
+  {"sethook",builtin_body_119},
+  {"setlocal",builtin_body_116},
+  {"setmetatable",builtin_body_20},
+  {"setupvalue",builtin_body_114},
+  {"traceback",builtin_body_117},
+  {NULL,NULL}
+};
+
+API int luaopen_base(lua_State *L) {
+  lua_pushvalue(L,LUA_GLOBALSINDEX);lua_setfield(L,LUA_GLOBALSINDEX,"_G");
+  luaL_register(L,"_G",open_base_functions);
+  lua_pushstring(L,"Lua 5.1");lua_setfield(L,LUA_GLOBALSINDEX,"_VERSION");
+  lua_pushcclosure(L,builtin_body_12,0);lua_pushcclosure(L,builtin_body_11,1);lua_setfield(L,-2,"ipairs");
+  lua_pushcclosure(L,builtin_body_9,0);lua_pushcclosure(L,builtin_body_10,1);lua_setfield(L,-2,"pairs");
+  lua_createtable(L,0,1);lua_pushvalue(L,-1);lua_setmetatable(L,-2);
+  lua_pushstring(L,"kv");lua_setfield(L,-2,"__mode");
+  lua_pushcclosure(L,builtin_body_29,1);lua_setfield(L,LUA_GLOBALSINDEX,"newproxy");
+  luaL_register(L,"coroutine",open_coroutine_functions);return 2;
+}
+API int luaopen_math(lua_State *L) {
+  luaL_register(L,"math",open_math_functions);
+  lua_pushnumber(L,3.14159265358979323846);lua_setfield(L,-2,"pi");
+  lua_pushnumber(L,HUGE_VAL);lua_setfield(L,-2,"huge");
+  lua_getfield(L,-1,"fmod");lua_setfield(L,-2,"mod");return 1;
+}
+API int luaopen_string(lua_State *L) {
+  luaL_register(L,"string",open_string_functions);
+  lua_getfield(L,-1,"gmatch");lua_setfield(L,-2,"gfind");
+  lua_createtable(L,0,1);lua_pushstring(L,"");lua_pushvalue(L,-2);lua_setmetatable(L,-2);
+  lua_settop(L,-2);lua_pushvalue(L,-2);lua_setfield(L,-2,"__index");lua_settop(L,-2);return 1;
+}
+API int luaopen_table(lua_State *L) {luaL_register(L,"table",open_table_functions);return 1;}
+API int luaopen_os(lua_State *L) {luaL_register(L,"os",open_os_functions);return 1;}
+API int luaopen_debug(lua_State *L) {luaL_register(L,"debug",open_debug_functions);return 1;}

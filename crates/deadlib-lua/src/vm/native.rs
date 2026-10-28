@@ -824,7 +824,7 @@ impl Vm {
         if (math::MATH_FIRST..=math::MATH_LAST).contains(&id) {
             return self.math_native(id, base, count);
         }
-        if (strings::STR_FIRST..=strings::STR_DUMP).contains(&id) {
+        if (strings::STR_FIRST..=strings::STR_GFIND_REMOVED).contains(&id) {
             return self.string_native(id, base, count);
         }
         if (tables::TAB_FIRST..=tables::TAB_SORT).contains(&id) {

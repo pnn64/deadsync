@@ -1,0 +1,16 @@
+{
+  "commit": "a2057303b1ddae58ea819bf1a56e97547763cd9d",
+  "artifacts": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\library-init-before\\deadlua.exe": "12bae730fdcab5406956769b805aaa772e74f89c9fc81c616d4b33d19dd4e239",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\library-init-before\\lua51.dll": "b2c19f3df4dad6067f6023e50e9c5572a6947ecc3a8457f3e09d98759895fd5c",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\library-init-before\\lua51.lib": "635b4328a9d0a63e1cbbf94d19b93734648a6b3d6d381fb217c5c3eea6e6131d"
+  },
+  "exports": {
+    "luaopen_base": false,
+    "luaopen_math": false,
+    "luaopen_string": false,
+    "luaopen_table": false,
+    "luaopen_os": false,
+    "luaopen_debug": false
+  }
+}

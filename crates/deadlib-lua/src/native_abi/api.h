@@ -187,6 +187,12 @@ API void luaL_addstring(luaL_Buffer *, const char *);
 API void luaL_addvalue(luaL_Buffer *);
 API void luaL_pushresult(luaL_Buffer *);
 API const char *luaL_gsub(lua_State *, const char *, const char *, const char *);
+API int luaopen_base(lua_State *);
+API int luaopen_math(lua_State *);
+API int luaopen_string(lua_State *);
+API int luaopen_table(lua_State *);
+API int luaopen_os(lua_State *);
+API int luaopen_debug(lua_State *);
 #define luaL_addchar(B,c) \
   ((void)((B)->p < (B)->buffer + LUAL_BUFFERSIZE || luaL_prepbuffer(B)), \
    (*(B)->p++ = (char)(c)))

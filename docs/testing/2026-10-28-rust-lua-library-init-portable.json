@@ -1,0 +1,19 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--target-dir",
+    "target/lua-native-hooks",
+    "-p",
+    "deadlib-lua",
+    "--no-default-features",
+    "--test",
+    "native_bodies",
+    "--test",
+    "library_initializers"
+  ],
+  "returncode": 0,
+  "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\library-init-portable.log",
+  "log_sha256": "6dc67295fbc0a3430eb60bac9d3ce872a43912376114b3cf9d9b68c4b6a96e0f"
+}

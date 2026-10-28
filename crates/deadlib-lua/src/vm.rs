@@ -422,6 +422,17 @@ impl Default for Vm {
 impl Vm {
     /// Create a state with the currently implemented Lua 5.1 libraries.
     pub fn new() -> Self {
+        Self::create(true)
+    }
+
+    /// Create a Lua state without opening its standard libraries.
+    /// Its globals and registry start empty, and strings have no metatable.
+    /// The compiler and core language operations remain available to the host.
+    pub fn new_bare() -> Self {
+        Self::create(false)
+    }
+
+    fn create(libraries: bool) -> Self {
         let mut tables = Arena::default();
         let globals = TableId(tables.insert(Table::default()));
         let registry = TableId(tables.insert(Table::default()));
@@ -490,6 +501,11 @@ impl Vm {
             userdata_order: 0,
             standalone: 0,
         };
+        if !libraries {
+            vm.meta_names = META_NAMES.map(|name| vm.strings.intern(name));
+            vm.reset_gc_debt();
+            return vm;
+        }
         for (id, name) in [
             b"assert".as_slice(),
             b"error",

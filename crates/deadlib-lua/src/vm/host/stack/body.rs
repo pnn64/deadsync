@@ -12,7 +12,7 @@ impl NativeBuiltinBody {
     /// Decode an implementation code supplied by this version's native adapter.
     /// This does not create or retain a Lua closure.
     pub fn from_implementation_code(code: u64) -> Option<Self> {
-        matches!(code, 0..=59 | 64..=77 | 80..=85 | 96..=104 | 112..=122 | 128..=170 | MATCH..=TRACEBACK)
+        matches!(code, 0..=59 | 64..=78 | 80..=85 | 96..=104 | 112..=122 | 128..=170 | MATCH..=TRACEBACK)
             .then_some(Self(match code { 21 => 9, 139 => 128, _ => code }))
     }
 }
