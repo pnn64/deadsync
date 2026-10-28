@@ -50,3 +50,11 @@ no artifacts. Original failure/fixed replay logs, source/binary hashes, the
 and 18 legacy-vector regressions are retained in
 `../tests/validation/2026-10-28-fuzz`. These bounded campaigns do not prove that
 every malformed input or decoder completion requirement has been covered.
+
+Later gapless and entropy milestones add exact non-seekable gapless invariants
+and mixed-region seeds. The final correction campaign passes 20,980 frame
+inputs, 622 stream seed replays and 1,467 inputs in an extended stream campaign
+with new mutations. The initial stream run used its time budget during corpus
+initialization; the extended run is retained separately. Both complete without
+failures or artifacts. See `../tests/validation/2026-10-28-regions` and the
+current [decoder completion audit](../DECODE_STATUS.md).

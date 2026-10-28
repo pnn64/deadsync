@@ -1,8 +1,10 @@
 # deadlib-audio-decode-mp3
 
-Independent pure-Rust MPEG Audio Layer III implementation in development.
+Independent pure-Rust MPEG Audio Layer III decoder and codec primitives.
 Registered in the Cargo workspace only; no playback integration and no
 production dependencies. References are confined to tests and benchmarks.
+The decoding goal is complete for the documented scope; see the
+[completion audit and limits](DECODE_STATUS.md) and [source audit](SOURCES.md).
 
 The current foundation implements checked MSB bit fields, MPEG-1/2/2.5 Layer III
 headers, CBR frame boundaries, free-format length inference, side information,
@@ -25,8 +27,7 @@ truncation are explicit policies; [STREAMING.md](STREAMING.md) documents them.
 physical indexing and sample-accurate repeated seeks; see [SEEKING.md](SEEKING.md).
 `GaplessDecoder<R: Read>` provides bounded tagged trimming without seeking;
 see [GAPLESS_STREAMING.md](GAPLESS_STREAMING.md).
-Encoding remains unfinished.
-No complete standards-conformance or performance-completion claim is made.
+Encoding remains unfinished. Formal complete ISO conformance is not asserted.
 See [PLAN.md](PLAN.md) for the full requested scope and verification gates.
 The foundation's eight tests and 84-file/732-frame libmad comparison are recorded
 in [COVERAGE.md](COVERAGE.md).

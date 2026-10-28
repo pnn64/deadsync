@@ -1,4 +1,4 @@
-//! Independent MPEG Audio Layer III primitives. The PCM codec is in development.
+//! Independent MPEG Audio Layer III framing and stateful PCM decoding.
 //!
 //! No production codec dependencies and no DeadSync playback integration.
 #![deny(unsafe_code)]

@@ -70,8 +70,12 @@ Shine/Media Foundation/FFmpeg-LAME interoperability, two sanitizer campaigns, an
 full historical music/rejection/recovery checks; see ENCODER_COMPATIBILITY.md,
 fuzz/README.md and HISTORICAL.md. MPEG25.md and STEREO.md independently verify
 the selected equations while preserving reference implementation disagreements.
-The decoding completion audit remains active. Native encoding and measured
-optimization remain future roadmap work outside the current goal.
+The decoding goal is now complete within the documented elementary MP3 scope.
+[DECODE_STATUS.md](DECODE_STATUS.md) audits every decoder requirement and links
+its evidence. [SOURCES.md](SOURCES.md) reconciles publication identities,
+corrigendum scope, draft provenance and compatibility choices without claiming
+formal full ISO certification. Native encoding and measured optimization remain
+future roadmap work outside the current goal.
 
 The cross-codebook entropy audit subsequently exposed and corrected mixed LSF
 Huffman boundaries. [REGIONS.md](REGIONS.md) records the failing-before native
