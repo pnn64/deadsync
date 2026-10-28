@@ -1,0 +1,13 @@
+[package]
+name = "deadlib-audio-decode-wav"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "GPL-3.0"
+description = "Independent pure-Rust WAV container and bit-preserving audio codec"
+repository = "https://github.com/pnn64/deadsync"
+
+[dependencies]
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }

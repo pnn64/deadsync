@@ -23,6 +23,7 @@ members = [
     "crates/deadlib-audio/decode/flac",
     "crates/deadlib-audio/decode/mp3",
     "crates/deadlib-audio/decode/vorbis",
+    "crates/deadlib-audio/decode/wav",
     "crates/deadlib-audio-backend-pipewire",
     "crates/deadlib-audio-backend-pulse",
     "crates/deadlib-audio-backend-wasapi",

@@ -1331,6 +1331,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadlib-audio-decode-wav"
+version = "0.1.0"
+
+[[package]]
 name = "deadlib-bincode"
 version = "2.0.1"
 dependencies = [
