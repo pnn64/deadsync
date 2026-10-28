@@ -6,6 +6,7 @@ use std::{
     num::NonZeroU64,
     sync::atomic::{AtomicU64, Ordering},
 };
+pub(crate) mod native;
 mod number;
 mod output;
 mod returns;
@@ -75,6 +76,7 @@ static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Default)]
 pub(super) struct Io {
+    pub backend: Option<Arc<dyn native::FileBackend>>,
     pub files: Arena<Stream>,
     pub file_tag: Option<StringId>,
     pub stdin: Option<NonZeroU64>,
@@ -107,7 +109,11 @@ impl Vm {
         // Process exit flushes C streams without closing the Lua state or
         // invoking finalizers. Match that for the streams owned by this VM.
         for stream in self.io.files.iter_mut() {
-            let _ = stream.flush();
+            // C exit flushes native FILEs in its own CRT. A C extension may
+            // already have closed a borrowed handle without another Lua call.
+            if !matches!(stream.resource, Some(Resource::Native(_))) {
+                let _ = stream.flush();
+            }
         }
         use std::io::Write;
         let _ = stdout_flush();
@@ -378,7 +384,7 @@ impl Vm {
         }
         Value::Userdata(id)
     }
-    pub(in crate::vm) fn file_key(&self, value: Value, check_meta: bool) -> Option<u64> {
+    pub(in crate::vm) fn file_key(&mut self, value: Value, check_meta: bool) -> Option<u64> {
         let Value::Userdata(id) = value else {
             return None;
         };
@@ -389,7 +395,43 @@ impl Vm {
                 return None;
             }
         }
-        user.file.map(NonZeroU64::get)
+        if user.file.is_some() && !user.native_file {
+            return user.file.map(NonZeroU64::get);
+        }
+        let bytes = user.bytes.as_ref().get(..std::mem::size_of::<usize>())?;
+        let pointer = usize::from_ne_bytes(bytes.try_into().ok()?);
+        let key = user.file.map(NonZeroU64::get);
+        let cached = key
+            .and_then(
+                |key| match self.io.files[slot_index(key)].resource.as_ref() {
+                    Some(Resource::Native(file)) => Some(file.pointer()),
+                    _ => None,
+                },
+            )
+            .unwrap_or(0);
+        if key.is_some() && cached == pointer {
+            return key;
+        }
+        let stream = if pointer == 0 {
+            Stream::closed()
+        } else {
+            Stream::new(
+                Resource::Native(self.io.backend.as_ref()?.attach(pointer)),
+                true,
+                true,
+                false,
+            )
+        };
+        let key = if let Some(key) = key {
+            self.io.files[slot_index(key)] = stream;
+            key
+        } else {
+            self.io.files.insert(stream)
+        };
+        let user = &mut self.userdata[slot_index(id.0)];
+        user.file = NonZeroU64::new(key);
+        user.native_file = true;
+        Some(key)
     }
     fn file_metatable(&self) -> Option<TableId> {
         let tag = self.io.file_tag.or_else(|| self.strings.find(b"FILE*"))?;
@@ -398,14 +440,18 @@ impl Vm {
             _ => None,
         }
     }
-    pub(in crate::vm) fn checked_file(&self, value: Value, check_meta: bool) -> Result<u64, Error> {
+    pub(in crate::vm) fn checked_file(
+        &mut self,
+        value: Value,
+        check_meta: bool,
+    ) -> Result<u64, Error> {
         let missing = self
             .active_native
             .is_some_and(|i| self.frames[i].argc() == 0);
         self.checked_file_value(value, check_meta, missing)
     }
     fn checked_file_value(
-        &self,
+        &mut self,
         value: Value,
         check_meta: bool,
         missing: bool,
@@ -429,7 +475,7 @@ impl Vm {
         }
         Ok(key)
     }
-    fn default_file(&self, id: u64, output: bool) -> Result<Value, Error> {
+    fn default_file(&mut self, id: u64, output: bool) -> Result<Value, Error> {
         let env = self.builtin_environment(id);
         let value =
             self.tables[slot_index(env.0)].get(Value::Number(if output { 2.0 } else { 1.0 }));
@@ -476,8 +522,20 @@ impl Vm {
             Err(code) => self.io_failure(base, code, None),
         }
     }
-    fn close_backend(&mut self, key: u64, base: usize) -> usize {
-        let result = self.io.files[slot_index(key)].close();
+    fn close_backend(&mut self, key: u64, base: usize, pipe: bool, value: Value) -> usize {
+        let result = if let Some(Resource::Native(file)) =
+            self.io.files[slot_index(key)].resource.as_mut()
+        {
+            let result = file.close(pipe);
+            self.io.files[slot_index(key)].resource = None;
+            if let Value::Userdata(id) = value {
+                self.userdata[slot_index(id.0)].bytes.as_mut()[..std::mem::size_of::<usize>()]
+                    .fill(0);
+            }
+            result.map(|()| None)
+        } else {
+            self.io.files[slot_index(key)].close()
+        };
         match result {
             Ok(_) => self.io_result(base, Ok(())),
             Err(code) => self.io_failure(base, code, None),
@@ -494,7 +552,7 @@ impl Vm {
         }
         if matches!(id, REAL_CLOSE | PIPE_CLOSE) {
             let key = self.checked_file(arg, true)?;
-            return Ok(self.close_backend(key, base));
+            return Ok(self.close_backend(key, base, id == PIPE_CLOSE, arg));
         }
         if id == TYPE {
             if count == 0 {
@@ -610,7 +668,14 @@ impl Vm {
                 self.registers[base] = if self.io.files[slot].resource.is_none() {
                     self.intern(b"file (closed)")
                 } else {
-                    self.intern(format!("file ({key:016X})").as_bytes())
+                    let bytes = if let Some(Resource::Native(file)) =
+                        self.io.files[slot].resource.as_ref()
+                    {
+                        file.display()
+                    } else {
+                        format!("file ({key:016X})").into_bytes()
+                    };
+                    self.intern(&bytes)
                 };
                 Ok(1)
             }
@@ -660,7 +725,7 @@ impl Vm {
                 Ok(match self.io.files[slot].seek(mode, offset) {
                     Ok(n) => {
                         self.registers[base] =
-                            Value::Number(if cfg!(windows) && n > i32::MAX as u64 {
+                            Value::Number(if cfg!(windows) && n > i64::from(i32::MAX) {
                                 -1.0
                             } else {
                                 n as f64
@@ -700,7 +765,7 @@ impl Vm {
                 for index in first..count {
                     let value = self.argument(base, count, index);
                     let s = match value {
-                        Value::Number(n) => self.intern(native::format_number(n).as_slice()),
+                        Value::Number(n) => self.intern(super::native::format_number(n).as_slice()),
                         _ => Value::String(self.string_argument(base, count, index)?),
                     };
                     let Value::String(s) = s else { unreachable!() };

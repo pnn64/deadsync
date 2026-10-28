@@ -54,6 +54,7 @@ impl AsMut<[u8]> for Bytes {
 pub(super) struct Userdata {
     pub library: Option<Arc<dyn package::NativeLibrary>>,
     pub file: Option<std::num::NonZeroU64>,
+    pub native_file: bool,
     pub env: TableId,
     pub metatable: Option<TableId>,
     pub bytes: Bytes,
@@ -246,6 +247,7 @@ impl Vm {
         let id = UserdataId(self.userdata.insert(Userdata {
             library: None,
             file: None,
+            native_file: false,
             env,
             metatable: None,
             bytes,

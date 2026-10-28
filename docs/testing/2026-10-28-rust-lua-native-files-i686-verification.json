@@ -1,0 +1,17 @@
+{
+  "report": "docs/testing/2026-10-28-rust-lua-native-files-i686-current.json",
+  "report_sha256": "f25ef9228f45c652caf2fee0215d210bc1337cbdacb9d5ec029af1945b07af9a",
+  "artifact_hashes_verified": true,
+  "source_hashes_verified": true,
+  "pointer_bits": 32,
+  "elf32_checks": 4,
+  "checked_reference_enabled": true,
+  "observations": 47,
+  "signed_ftell_verified": true,
+  "exit_processes": 3,
+  "edge_report": "docs/testing/2026-10-28-rust-lua-native-files-i686-edges-before.json",
+  "edge_report_sha256": "d9825fd7c32244367242fd8b8a02e3bef4c4f032eb51325b7f7601e74a13c490",
+  "suite_report": "docs/testing/2026-10-28-rust-lua-native-files-i686-suite.json",
+  "suite_report_sha256": "960398f736b473ec2be437d6aa1dde63aa9bf9acbaa5ded80d1ec3d0c0fa7c43",
+  "audit_script_sha256": "cdcce09845441473c4e2f329ed8bb3bba432008aaa36c5bab315d86e47e8cb2f"
+}

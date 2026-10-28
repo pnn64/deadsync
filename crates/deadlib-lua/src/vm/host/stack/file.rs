@@ -3,6 +3,10 @@ use super::*;
 
 impl NativeStack<'_, '_> {
     #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+    pub(crate) fn install_file_backend(&mut self, backend: Arc<dyn io::native::FileBackend>) {
+        self.call.vm.io.backend = Some(backend);
+    }
+    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
     pub(crate) fn attach_standard_stream(
         &mut self,
         index: isize,

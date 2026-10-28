@@ -1,0 +1,6 @@
+local f=native_files.new('closed before process exit')
+assert(f:read(1)=='c'and native_files.close(f))
+local g=native_files.new('left for C exit to flush')
+assert(g:seek('end')and g:write('buffered'))
+io.write('native-files-exit')
+os.exit(7)

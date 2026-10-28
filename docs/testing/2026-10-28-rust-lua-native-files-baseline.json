@@ -1,0 +1,24 @@
+{
+  "commit": "870863f114f4918b491d94a417da8d911ebb08f6",
+  "command": [
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-files-before\\library_initializers.exe",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-files-before\\native.dll",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-files-before\\closed.lua",
+    "1"
+  ],
+  "returncode": 0,
+  "stdout_hex": "6e696c0a",
+  "stderr_hex": "4c4942524152595f494e4954206f7065726174696f6e733d393132207374617465733d312067726f7570733d31206c69627261726965733d310a",
+  "expected_stdout_hex": "636c6f7365642066696c650a",
+  "artifacts": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-files-before\\library_initializers.exe": "f9d7ecd8ad71404f80561fd61200c88044c869a4a2d8a49a3be7fbc3ed32fe71",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-files-before\\lua51.dll": "5365f1a94e1301ccec43dcc0cc938b42bbfe1d41d61f349ede79907f5974c8f6",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-files-before\\lua51.lib": "66c62f0f429ee52d8c6720feb90c0a70464a9aee470a858ef2da3d820b7d3ffe",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-files-before\\native.dll": "c10bb8e49a7d129c0e1f5500712358cb7fc4098027ed74f4b3c3857c499ee74b",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-files-before\\closed.lua": "da58b98c4678f8232fd76c098e6345d41d56d7753c9e1dfecc8f051daf47457d"
+  },
+  "reference_report": "docs/testing/2026-10-28-rust-lua-io-init-evidence.json",
+  "reference_report_sha256": "2a7be0d0f69ffe060a274fcc15b42ed2f83b94919d269e39758f3056107cbe00",
+  "fixture_sha256": "e3d0926a92a47492e5015f3d4cc720ccc7b1666496bd10019a92e0f1c65c522d",
+  "audit_script_sha256": "8f893d27d89315e98c2a979489f79bfb8415129bc1cec87fadc941cb4fca2d21"
+}

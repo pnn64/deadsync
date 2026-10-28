@@ -1487,6 +1487,17 @@ construction and stream cases; arbitrary native `FILE *` interoperability,
 strict callback interleavings, collector accounting, lifecycle/allocator APIs
 and full Lua 5.1 parity remain open.
 
+The [native file userdata checks](testing/2026-10-28-rust-lua-native-files.md)
+add real stdio resources for C-created `FILE **` userdata. Native payloads remain
+authoritative across C-side closure, replacement and transfer; C and Lua share
+the C runtime's buffers, scanner, positions and error state. Close handlers clear
+the payload, while borrowed resource records do not close a handle on their own.
+Comparisons match 47 observations per profile on Windows debug/release and Linux
+i686 SSE2 release, with separate process-exit checks. Signed `ftell` failures and
+nonzero child exit statuses are covered. Rust-created file payloads, shared
+C/Rust standard-stream buffering, lifecycle/allocator APIs and the broader
+standalone parity gates remain unfinished.
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the

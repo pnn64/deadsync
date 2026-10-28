@@ -78,6 +78,7 @@ type FreeState = unsafe extern "C" fn(*mut c_void) -> c_int;
 mod library;
 use library::Library;
 mod bundle;
+mod stdio;
 
 fn matching_version(pointer: usize) -> bool {
     // SAFETY: only a symbol from the Lua C ABI image is passed here.
@@ -180,6 +181,7 @@ impl Bridge {
         // SAFETY: the constructor's caller guarantees these protocol signatures.
         unsafe {
             Ok(Arc::new(Self {
+                stdio: Arc::new(stdio::Backend::new(image.clone())?),
                 hook: std::mem::transmute::<usize, InvokeHook>(image.try_symbol(b"boundary_hook")?),
                 invoke: std::mem::transmute::<usize, Invoke>(image.try_symbol(b"boundary_invoke")?),
                 read: std::mem::transmute::<usize, Read>(image.try_symbol(b"boundary_read")?),
@@ -202,6 +204,7 @@ impl Bridge {
 
 #[derive(Debug)]
 struct Bridge {
+    stdio: Arc<stdio::Backend>,
     hook: InvokeHook,
     _library: Arc<Library>,
     invoke: Invoke,
@@ -317,6 +320,7 @@ fn state_for(
     bridge: &Arc<Bridge>,
     thread: ThreadId,
 ) -> Result<usize, Error> {
+    stack.install_file_backend(bridge.stdio.clone());
     if let Some(owner) = stack.thread_state::<StateOwner>(thread) {
         assert!(Arc::ptr_eq(&owner.bridge, bridge));
         return Ok(owner.state);

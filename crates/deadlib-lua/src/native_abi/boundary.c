@@ -757,3 +757,4 @@ API const char *luaL_gsub(lua_State *L, const char *string, const char *pattern,
   return lua_tolstring(L, -1, NULL);
 }
 #include "standard-libraries.h"
+#include "native-stdio.h"

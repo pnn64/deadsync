@@ -26,6 +26,9 @@ fn word(file: &mut Stream, bytes: &mut Vec<u8>, text: &[u8]) -> Result<bool, i32
     Ok(true)
 }
 pub(super) fn read_number(file: &mut Stream, bytes: &mut Vec<u8>) -> Result<Option<f64>, i32> {
+    if let Some(super::stream::Resource::Native(native)) = file.resource.as_mut() {
+        return native.number();
+    }
     let result = scan_number(file, bytes);
     #[cfg(windows)]
     if result.is_ok() {

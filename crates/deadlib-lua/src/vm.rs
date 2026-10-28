@@ -15,7 +15,7 @@ mod gc;
 mod hooks;
 mod host;
 mod identity;
-mod io;
+pub(crate) mod io;
 mod limits;
 mod loads;
 mod math;
