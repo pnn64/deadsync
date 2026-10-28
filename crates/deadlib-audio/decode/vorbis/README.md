@@ -222,6 +222,12 @@ There is no synthetic final flush; the container mapping supplies final length.
 Do not replace the existing decoding
 pipeline. Application integration remains outside this task.
 See [COVERAGE.md](COVERAGE.md) and the parent work plan for the remaining scope.
+`SeekOptions::seek_behavior = SeekBehavior::Libvorbis` now selects reference
+page/packet scheduling and the granule-aware synthesis queue. It matches the
+172 previously recorded seek-position/count disagreements, including retained
+restart history and continued-packet fallback. The default `Retained` mode
+continues to address sequential PCM exactly. See [reference seeking](REFERENCE_SEEKING.md)
+for policy, independent comparisons and remaining scope.
 The separate [fuzz workspace](../fuzz/README.md) covers headers, raw packet
 synthesis, streaming/reset and indexed seek error recovery under AddressSanitizer.
 
@@ -254,5 +260,5 @@ finite PCM still uses the original numerical bounds.
 
 The [EOS count follow-up](EOS_CLAMPING.md) adds explicit bounded reference EOS
 clipping and separates declared duration from emitted PCM. It retains the
-remaining libvorbisfile seek-position/count differences as an exact inventory;
-the overall parity goal remains open.
+original retained-PCM/libvorbisfile differences as an exact inventory. The
+explicit reference seek mode checks all of those requests against C directly.

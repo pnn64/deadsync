@@ -47,6 +47,13 @@ scope while implementation progresses.
 
 ## Current checkpoint
 
+The explicit [reference file seek mode](vorbis/REFERENCE_SEEKING.md) now uses
+the native synthesis queue, including retained block timing/PCM after failed
+track-only preroll. It matches the 172 previously recorded EOS seek differences,
+broadcast offsets and continued-packet fallback. The default seek timeline still
+addresses exact sequential PCM suffixes. Broader completion validation remains
+active; performance is deferred.
+
 Ogg framing/streaming, Vorbis raw-packet PCM synthesis and the Ogg Vorbis mapping are implemented, with
 libogg, libvorbis and Symphonia differential evidence. Both packages are Cargo
 workspace members. Raw synthesis includes both floors, all residues, inverse

@@ -92,6 +92,9 @@ EOS seeds cover decreasing/excessive final granules, declared durations differen
 from emitted PCM, empty EOS pages and discarded final/intermediate packets.
 Indexed replay checks emitted suffixes independently of declared seek bounds; the
 endpoint-repair policy is disabled when bounded reference EOS is selected.
+The same reference control also runs paired indexed reference-seek schedules.
+Both readers have identical histories so retained synthesis buffers after
+restart are compared correctly; this mode is not compared to sequential PCM.
 The harness permits 131,072 declared codebook entries so sparse scalar books can
 return values above 65,535; its separate tree and memory caps still apply.
 Header control bit four raises the codebook extent cap from 24 to the full

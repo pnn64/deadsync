@@ -12,8 +12,9 @@ work. Performance measurements do not establish completion.
 The [synthesis-state follow-up](SYNTHESIS_STATE.md) adds raw reference packet
 clocks, track-only insertion, partial PCM consumption and retained-buffer
 restarts. Actual vorbisfile traces provide independent queue/clock and PCM
-checks. This is a prerequisite for closing the 172 recorded seek differences;
-the indexed reader does not yet use this state machine.
+checks. The indexed reader now uses this state machine under explicit
+`SeekBehavior::Libvorbis`; [reference seeking](REFERENCE_SEEKING.md) closes the
+172 recorded seek-position/count differences for that mode.
 
 The [bit-mutation follow-up](BIT_MUTATIONS.md) adds 55,845 finite-reference
 cases and corrects floor-zero selector/rounding plus VQ sequence offsets.
@@ -293,19 +294,25 @@ counts match without discarding comparison samples.
   Native strict counts and the initial-trimmed samples match libvorbisfile.
 * Strict final trimming is limited to the last packet's overlap span. Synthetic
   larger trims make libvorbisfile's declared total disagree with its emitted PCM;
-  strict decoding rejects them. Indexed `trim_to_final_granule` can clip across
+  strict decoding rejects them. Explicit `EosBehavior::Libvorbis` matches bounded
+  reference clipping and preserves declared/emitted totals separately. Indexed
+  `trim_to_final_granule` can clip across
   packets/pages using the endpoint known in advance. Synthetic tests check both
-  layouts, repeated seeks and invalid endpoints. Streaming stays strict.
+  layouts, repeated seeks and invalid endpoints. Streaming defaults stay strict.
 * libvorbisfile 1.3.7 reports PCM position 900 after requesting retained frame 1
   in the generated stream with broadcast offset +900. A named external regression
   records this discrepancy. Native seeking preserves frame 1 / granule 901 and
   matches sequential PCM; the Symphonia pre-roll comparison also covers this case.
+  Explicit `SeekBehavior::Libvorbis` instead matches the reference's position
+  900 and returned PCM, including repeated seek history.
 * The pinned ITGmania shipped song `Mecha-Tribe Assault.ogg` (libVorbis 20040629)
   has final granule 4,630,500 after a preceding page at 4,692,672. Strict decoding
   rejects this decreasing granule. Explicit indexed endpoint clipping emits
   4,630,500 frames per channel; libvorbisfile reports that length but emits
   4,762,304. Native PCM matches the reference prefix inside the declared interval,
-  including endpoint seeks. `Goin' Under.ogg` (libVorbis 20070622) passes
+  including endpoint seeks. The separate reference EOS and seek options now
+  match the complete emitted PCM and reference seek decisions as well.
+  `Goin' Under.ogg` (libVorbis 20070622) passes
   strict PCM/count comparison against libvorbisfile and Symphonia: 10,886,400
   channel samples, peak errors 7.152557373e-7 / 4.768371582e-7. Sources/hashes and
   paired SSC charts are pinned in `validation/corpus.json`. Policy details and
@@ -387,6 +394,6 @@ finite PCM still uses the original numerical bounds.
 
 The [EOS count follow-up](EOS_CLAMPING.md) checks bounded reference clipping,
 discarded-packet clock resets, declared/emitted duration differences and real
-historical endpoints. It records 172 remaining libvorbisfile seek-position/count
-differences. Current work targets full parity with original PCM tolerances;
-performance work is deferred.
+historical endpoints. Its 172 retained-PCM/libvorbisfile differences remain a
+guard for the default retained timeline; the reference seek mode separately
+matches all C results. Broader acceptance/conformance coverage remains open.

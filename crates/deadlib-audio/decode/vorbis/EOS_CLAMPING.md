@@ -1,5 +1,9 @@
 # EOS clamping and declared versus emitted counts
 
+Follow-up: [reference seeking](REFERENCE_SEEKING.md) now matches the recorded
+172 seek differences through an explicit reference mode. The inventory below
+continues to guard the default retained sequential PCM timeline.
+
 The target remains exact behavior, counts and positions with the original PCM
 tolerances. This milestone closes reproduced sequential EOS clipping/count
 differences. It also retains a failing-parity inventory for libvorbisfile seek

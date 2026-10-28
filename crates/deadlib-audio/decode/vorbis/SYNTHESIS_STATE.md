@@ -1,5 +1,9 @@
 # Raw synthesis clocks and PCM queues
 
+Follow-up: [reference seeking](REFERENCE_SEEKING.md) integrates this state into
+the indexed reader's explicit reference mode and matches all 172 recorded seek
+differences. The rest of this document records the earlier synthesis milestone.
+
 The target is complete parity: exact acceptance, behavior, counts and positions,
 with the original PCM bounds. This milestone adds `SynthesisDecoder`, the raw
 state required to reproduce libvorbisfile's seek scheduling. **The 172 recorded

@@ -12,8 +12,24 @@ use deadlib_audio_decode_ogg::{
 };
 use std::io::{Read, Seek, SeekFrom};
 
+#[path = "seek_reference.rs"]
+mod reference;
+
+/// Indexed seek timeline and synthesis scheduling.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum SeekBehavior {
+    /// Address the retained PCM of a sequential decode exactly.
+    #[default]
+    Retained,
+    /// Reproduce libvorbisfile's page selection, track-only preroll and clocks.
+    /// On malformed endpoints or broadcast offsets its position and output can
+    /// differ from a slice of sequential PCM. Codec policies remain separate.
+    Libvorbis,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct SeekOptions {
+    pub seek_behavior: SeekBehavior,
     pub limits: Limits,
     pub container_limits: container::Limits,
     pub allow_zero_span_granules: bool,
@@ -41,12 +57,14 @@ pub struct SeekOptions {
     /// Retained Vorbis metadata, setup packets and seek entries. The native
     /// container index has its own page-count bound, separately from this budget.
     pub max_index_memory: usize,
-    /// Setup and synthesis elements of the single selected decoder.
+    /// Setup and synthesis elements of the single selected decoder, including
+    /// the reference scheduler's retained time arena and packet scratch.
     pub max_stream_memory: usize,
 }
 impl Default for SeekOptions {
     fn default() -> Self {
         Self {
+            seek_behavior: SeekBehavior::Retained,
             limits: Limits::default(),
             container_limits: container::Limits::default(),
             allow_zero_span_granules: false,
@@ -439,7 +457,11 @@ impl IndexBuilder {
 }
 
 fn check_decoder_memory(setup: &Setup, options: SeekOptions) -> Result<(), Error> {
-    let decode = PacketDecoder::required_storage(setup);
+    let decode = if options.seek_behavior == SeekBehavior::Libvorbis {
+        reference::required_storage(setup)
+    } else {
+        PacketDecoder::required_storage(setup)
+    };
     if decode > options.limits.max_decode_memory {
         return Err(Error::LimitExceeded("decode memory"));
     }
@@ -515,6 +537,7 @@ pub struct OggSeekReader<R> {
     index: VorbisIndex,
     selected: Option<usize>,
     decoder: Option<PacketDecoder>,
+    reference: Option<reference::ReferenceSeek>,
     capture: PacketCapture,
     next_page: usize,
     page_pending: bool,
@@ -550,6 +573,7 @@ impl<R: Read + Seek> OggSeekReader<R> {
             index,
             selected: None,
             decoder: None,
+            reference: None,
             capture: PacketCapture::with_validation(id.serial, limits, validation),
             next_page: 0,
             page_pending: false,
@@ -575,6 +599,9 @@ impl<R: Read + Seek> OggSeekReader<R> {
         self.position
     }
     pub fn decoder_storage_bytes(&self) -> usize {
+        if let Some(reference) = &self.reference {
+            return reference.storage_bytes();
+        }
         self.decoder
             .as_ref()
             .map_or(0, |d| d.setup().storage_bytes() + d.storage_bytes())
@@ -592,6 +619,11 @@ impl<R: Read + Seek> OggSeekReader<R> {
         let stream = &self.index.streams[stream_id];
         if frame > stream.end.frames {
             return Err(Error::Invalid("seek beyond Vorbis end"));
+        }
+        if self.index.options.seek_behavior == SeekBehavior::Libvorbis {
+            let result = self.seek_reference(stream_id, frame);
+            self.failed = result.is_err();
+            return result;
         }
         let result = (|| {
             if self.selected != Some(stream_id) || self.decoder.is_none() {
@@ -676,6 +708,9 @@ impl<R: Read + Seek> OggSeekReader<R> {
     /// Process at most one selected-stream page. All output begins at the exact
     /// requested retained frame. Start/end events are repeated after each seek;
     /// StreamEnd describes the whole logical stream, not only the sought suffix.
+    /// With `SeekBehavior::Libvorbis`, process through the next nonempty
+    /// synthesis queue (which may require multiple pages); positions follow
+    /// reference clock updates rather than a retained sequential PCM slice.
     pub fn read_next(&mut self, emit: impl FnMut(OggEvent<'_>)) -> Result<bool, Error> {
         self.read_step(false, emit)
     }
@@ -689,6 +724,8 @@ impl<R: Read + Seek> OggSeekReader<R> {
     /// CRC work. Calls may alternate with read_next, which drains the remaining
     /// page. Page granule and EOS validation occur when its final fragment is
     /// consumed; output remains provisional until those checks complete.
+    /// Reference seek mode has the same behavior as its `read_next`: return
+    /// the next queued PCM block, skipping discarded/priming packets and pages.
     pub fn read_packet(&mut self, emit: impl FnMut(OggEvent<'_>)) -> Result<bool, Error> {
         self.read_step(true, emit)
     }
@@ -714,6 +751,9 @@ impl<R: Read + Seek> OggSeekReader<R> {
         one_packet: bool,
         emit: &mut impl FnMut(OggEvent<'_>),
     ) -> Result<bool, Error> {
+        if self.index.options.seek_behavior == SeekBehavior::Libvorbis {
+            return self.read_reference(emit);
+        }
         let stream = &self.index.streams[self.selected.unwrap()];
         if self.announce {
             if let Some(error) = &stream.comment_error {

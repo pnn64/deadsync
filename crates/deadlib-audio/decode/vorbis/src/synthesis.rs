@@ -181,6 +181,32 @@ impl SynthesisDecoder {
         self.insert(header.block_size, timing, false, false)?;
         Ok(true)
     }
+    // vorbisfile calls blockin even when trackonly rejects a window prefix.
+    // Its block object then retains the previous timing and PCM pointers. Keep
+    // this file-layer behavior separate from the transactional raw track API.
+    pub(crate) fn retain_time(&self, arena: &mut [f32]) -> usize {
+        let size = self.previous_size;
+        for channel in 0..self.setup().channels() as usize {
+            arena[channel * size..(channel + 1) * size].copy_from_slice(
+                &self.decoder.current[channel * self.size..channel * self.size + size],
+            );
+        }
+        size
+    }
+    pub(crate) fn insert_retained(
+        &mut self,
+        size: usize,
+        timing: PacketTiming,
+        time: Option<(&[f32], usize)>,
+    ) -> Result<(), Error> {
+        if let Some((arena, stride)) = time {
+            for channel in 0..self.setup().channels() as usize {
+                self.decoder.current[channel * self.size..channel * self.size + size]
+                    .copy_from_slice(&arena[channel * stride..channel * stride + size]);
+            }
+        }
+        self.insert(size, timing, time.is_some(), self.truncated)
+    }
     fn insert(
         &mut self,
         size: usize,
