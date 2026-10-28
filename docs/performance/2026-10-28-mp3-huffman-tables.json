@@ -1,0 +1,88 @@
+{
+  "passed": true,
+  "checks": 5876,
+  "all_pair_codewords_and_prefix_slots": true,
+  "reachable_residual_nodes": 1180,
+  "signed_quadruple_records": 81,
+  "all_quadruples_and_count1_prefix_slots": true,
+  "csv_unchanged": true,
+  "generation_byte_reproducible": true,
+  "command": [
+    "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+    "crates\\deadlib-audio\\decode\\mp3\\scripts\\generate_huffman.py",
+    "--input",
+    "target/deadlib-mp3-reference/huffcode",
+    "--crate",
+    "target\\mp3-perf-20261028\\round7-regenerated"
+  ],
+  "sha256": {
+    "crates\\deadlib-audio\\decode\\mp3\\scripts\\generate_huffman.py": "6bd87df4150c9bf8f43422cd8188d84fa37ab38bf2e6290461c964085f70071e",
+    "crates\\deadlib-audio\\decode\\mp3\\src\\huffman_tables.rs": "1e2a1725cdd17999c7afaa2d38fb9248c38d31e0110be6becfd92ca9890df7eb",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\data\\huffman.csv": "18554b47454c0c06e72c39f53e37f0eabca4410bd6fe330f0d009f90a73f3d3c",
+    "crates\\deadlib-audio\\decode\\mp3\\tests\\data\\huffman.json": "b763cc71f99cf6de98fd90215c010008bec7ff672b3160d3a851e82b6e452596",
+    "target\\deadlib-mp3-reference\\huffcode": "ffe34a6725227e4649eb6104b772e4a96203da2b8a08c5a9912aef403f53cdb7"
+  },
+  "table_sizes": {
+    "round7-base": {
+      "elements_bytes": {
+        "ROOTS": 66,
+        "LINBITS": 32,
+        "NODES": 5512
+      },
+      "total_bytes": 5610
+    },
+    "quad-sign-table": {
+      "elements_bytes": {
+        "ROOTS": 66,
+        "LINBITS": 32,
+        "NODES": 5512,
+        "SIGN_LAYOUT": 32,
+        "COUNT1_SIGNS": 648
+      },
+      "total_bytes": 6290
+    },
+    "round7-count1-direct": {
+      "elements_bytes": {
+        "ROOTS": 64,
+        "LINBITS": 32,
+        "COUNT1": 64,
+        "NODES": 5452,
+        "SIGN_LAYOUT": 32,
+        "COUNT1_SIGNS": 648
+      },
+      "total_bytes": 6292
+    },
+    "round7-pair-prefix": {
+      "elements_bytes": {
+        "LINBITS": 32,
+        "COUNT1": 64,
+        "PAIR_PREFIX": 2048,
+        "NODES": 4720,
+        "SIGN_LAYOUT": 32,
+        "COUNT1_SIGNS": 648
+      },
+      "total_bytes": 7544
+    },
+    "round7-pair-head-final": {
+      "elements_bytes": {
+        "LINBITS": 32,
+        "COUNT1": 64,
+        "PAIR_HEAD": 128,
+        "PAIR_PREFIX": 2048,
+        "NODES": 4720,
+        "SIGN_LAYOUT": 32,
+        "COUNT1_SIGNS": 648
+      },
+      "total_bytes": 7672
+    }
+  },
+  "frozen_generator": "target\\mp3-perf-20261028\\round7-head-final-generator.py",
+  "replay_command": [
+    "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+    "target\\mp3-perf-20261028\\round7-head-final-generator.py",
+    "--input",
+    "target/deadlib-mp3-reference/huffcode",
+    "--crate",
+    "target\\mp3-perf-20261028\\round7-regenerated"
+  ]
+}

@@ -3,6 +3,7 @@ use crate::{Error, bits::BitReader};
 #[path = "huffman_tables.rs"]
 mod tables;
 
+#[inline(always)]
 fn symbol(bits: &mut BitReader<'_>, mut node: u16) -> Result<u8, Error> {
     loop {
         let next = tables::NODES[node as usize][bits.read(1)? as usize];
@@ -31,7 +32,21 @@ pub fn pair(bits: &mut BitReader<'_>, book: u8) -> Result<[i16; 2], Error> {
         return Err(Error::Invalid("Layer III pair codebook"));
     }
     let mut cursor = *bits;
-    let value = symbol(&mut cursor, tables::ROOTS[book as usize])?;
+    let value = if book >= 24 {
+        let width = cursor.remaining().min(5) as u32;
+        let mut lookahead = cursor;
+        let prefix = lookahead.read(width)? << (5 - width);
+        let entry = tables::ESCAPE_PREFIX[prefix as usize];
+        if entry & 0x8000 != 0 {
+            cursor.skip(((entry >> 8) & 7) as usize)?;
+            entry as u8
+        } else {
+            cursor.skip(5)?;
+            symbol(&mut cursor, entry)?
+        }
+    } else {
+        symbol(&mut cursor, tables::ROOTS[book as usize])?
+    };
     let lin = tables::LINBITS[book as usize] as u32;
     let mut x = (value >> 4) as u16;
     let mut y = (value & 15) as u16;

@@ -7,10 +7,20 @@ Failed pair/quad reads leave the bit cursor unchanged, including an incomplete
 count1 symbol at the part2_3 boundary. The later granule parser must distinguish
 this count1 stuffing condition from an invalid/truncated big-values region.
 
-Pair books and count1 table A use a native flat prefix tree: 1,378 two-child
-nodes with a high-bit leaf tag, plus root and linbits arrays. Count1 table B
-reads its fixed four-bit code directly and complements it. Its unused tree and
-root are omitted. The immutable tables occupy 5,610 bytes of elements and need
+Pair books 1..23 use a native flat prefix tree. Escape books 24..31 share a
+five-bit prefix lookup, followed by a residual tree walk for longer words.
+The generated forest retains 1,337 two-child nodes with high-bit leaf tags;
+unreachable parents and duplicate escape-family roots are omitted. Short tails
+peek only their available bits and zero-pad the lookup index. The stored code
+length must still fit before it is consumed, preserving truncation errors.
+The small tree walker stays inlined to avoid a per-pair helper call.
+
+Count1 table A's one-bit all-zero code returns directly. Its other codes start
+with zero and have at most five further bits, resolved by a 32-entry lookup.
+Table B reads its fixed four-bit code directly and complements it. A compact
+layout table specifies the sign count and output offset for each magnitude
+mask. One sign-field read then selects an eight-byte record from the 81 possible
+signed quadruples. The immutable tables occupy 6,236 bytes of elements and need
 no runtime construction, allocation or pointer chasing through heap nodes.
 
 ## Numeric data provenance
@@ -48,11 +58,16 @@ missing pages were inspected.
 
 ## Validation
 
-Fourteen integration tests now pass. Huffman tests exercise 175,680 pair
+All 65 crate tests pass. Huffman tests exercise 175,680 pair
 configurations across every codeword, both sign bits, all eight initial bit
 offsets and independent zero/maximum escape extensions for x and y. All 4,096
 quadruple/code/sign/offset configurations pass. Truncation at every bit of
-selected longest/escape symbols leaves the input cursor unchanged.
+every pair codeword is also checked at offsets 0/3/7 with positive/negative
+signs and maximum escape extensions. Incomplete pair and quadruple reads leave
+the input cursor unchanged. The exact-output benchmark trace includes another
+1,179,648 bounded Huffman result/cursor observations. Performance comparisons
+and rejected variants are recorded in the
+[seventh optimization pass](../../../../docs/performance/2026-10-28-mp3-round7.md).
 
 An independent gate embeds every codebook and sign/escape boundary in valid
 MPEG-1 frames, with two/four isolated coefficients in subband zero and a zero
