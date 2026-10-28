@@ -7,6 +7,8 @@ mod audio_requests;
 mod browser_skin;
 mod commands;
 mod config_requests;
+#[cfg(test)]
+mod course_transition_tests;
 mod evaluation_views;
 mod graphics;
 mod input_routing;
@@ -6792,32 +6794,6 @@ impl App {
         color_index: i32,
         prewarm_noteskin_catalog: bool,
     ) -> bool {
-        let reroll_endless = self
-            .state
-            .session
-            .course_run
-            .as_ref()
-            .is_some_and(|course| {
-                course.course_type == deadsync_theme::views::CourseTypeView::Endless
-                    && course.next_stage_index == course.stages.len()
-            });
-        if reroll_endless {
-            let selection = select_course::reroll_selected_endless_plan(
-                &self.state.screens.select_course_state,
-            )
-            .or_else(|| {
-                select_course::selected_course_plan(&self.state.screens.select_course_state)
-            });
-            if let Some(selection) = selection
-                && let Some(course) = self.state.session.course_run.as_mut()
-            {
-                let _ = append_endless_cycle(
-                    course,
-                    selection,
-                    profile::get_session_play_style().chart_type(),
-                );
-            }
-        }
         let Some(course_run) = self.state.session.course_run.as_ref() else {
             return false;
         };

@@ -60,12 +60,12 @@ Quatre nouveaux tests de cours utilisent de vrais simfiles SM synthétiques et l
 | deadsync-profile | 236 | 0 | 4 |
 | deadsync-rules | 128 | 0 | 4 |
 | deadsync-score | 254 | 0 | 4 |
-| deadsync-shell, exécution finale | 413 | 0 | 11 |
+| deadsync-shell, exécution finale | 415 | 0 | 11 |
 | deadsync-simfile | 289 | 0 | 21 |
 | deadsync-smx | 104 | 0 | 1 |
 | deadsync-theme-simply-love | 1453 | 14 | 54 |
 
-Au total, ces contrôles comptent **4 404 tests réussis, 14 échecs préexistants et 113 tests ignorés**. Les répétitions ciblées et les comparaisons ne sont pas ajoutées à ce total.
+Au total, ces contrôles comptent **4 406 tests réussis, 14 échecs préexistants et 113 tests ignorés**. Les répétitions ciblées et les comparaisons ne sont pas ajoutées à ce total.
 
 Les 14 échecs du thème sont exactement les mêmes dans une exécution de comparaison du code fusionné `ebc8eaa`, sans le correctif de cours. Ils concernent les projections de téléchargements, les textes/allocations du navigateur de contenu et les statistiques d'entrée. Ils ne sont pas corrigés par ce suivi des modes partenaires. Le dépôt complet n'a donc pas une suite entièrement verte.
 
@@ -90,9 +90,21 @@ cargo test --locked --no-fail-fast -p deadsync-score -p deadsync-simfile -p dead
 
 Les tests ignorés existants comprennent notamment des benchmarks et des captures longues. Ils ne sont pas comptés comme réussis. La validation ne constitue pas une session à deux personnes sur pads, ni une preuve de parité sur tous les modcharts.
 
+## Suivi de relecture : transition Endless
+
+La relecture a trouvé un défaut supplémentaire dans l'appelant : malgré l'annulation atomique du cycle, `prepare_player_options_for_course_stage` ignorait l'échec de renouvellement. L'accès modulo de `next_stage()` relançait les anciennes étapes ; après avancement du curseur au-delà de la liste, la condition de renouvellement par égalité ne se présentait plus et les totaux restaient ceux de l'ancien cycle.
+
+Le renouvellement est désormais contrôlé **avant** de valider la transition d'écran. En cas d'échec de chargement, de sélection absente ou de curseur hors limites, la destination devient `SelectCourse`. Un message indique l'échec. Le cycle de sortie normal enregistre la chanson achevée, arrête le gameplay et libère le cours interrompu. Les anciens charts ne sont pas relancés et aucun nouvel état de gameplay n'est initialisé. Les remplacements d'écran demandés par Song Lua gardent leur traitement existant.
+
+Les tests de `app/course_transition_tests.rs` construisent la vraie `App` sans GPU ni audio, une roue de sélection avec deux chansons et un cours Endless réels, ainsi qu'un état de gameplay terminé. Ils empruntent `prepare_global_fade_entry`, le chemin de préparation employé par `on_fade_complete`, et vérifient le changement d'écran, les commandes d'entrée, l'enregistrement du résultat, le nettoyage du cours et l'absence de relance. Pour Dance et Pump, ils couvrent le simfile supprimé après sélection, l'absence de plan et le curseur invalide. Le contrôle nominal démarre réellement les chansons successives et franchit deux frontières de cycles ; les curseurs et totaux sont vérifiés après initialisation.
+
+Le test d'échec a aussi été exécuté avec l'ancienne transition rétablie temporairement : il échoue avec `Gameplay` obtenu au lieu de `SelectCourse`. Les sources corrigées ont ensuite été restaurées et les deux tests passent, y compris les trois variantes d'échec. La suite du shell passe **415 tests**, avec 11 tests préexistants ignorés. Les commandes de rendu et la boucle de fenêtre restent réservées à l'essai manuel ; ces tests valident le chemin d'état complet de la transition de l'application.
+
+Journaux de ce suivi : `target/pr845-endless-before-fix.log`, `target/pr845-endless-transition-final.log`, `target/pr845-endless-shell-final.log`, `target/pr845-endless-clippy.log` et `target/pr845-endless-release.log`. La relecture des chemins normal, erreur, curseur hors limites et remplacement Song Lua n'a pas identifié d'autre défaut dans ce changement.
+
 ## Essai manuel préparé
 
-`cargo build --locked --release --bin deadsync` a terminé avec succès, avec LTO, en 6 min 14 s sur ce Mac ARM64. Le binaire copié pour l'essai est un exécutable Mach-O arm64 ; `codesign --verify --strict` passe. SHA-256 : `570d8fc62620643de88c0cd508d62acd887a953a4121e061f9fed0dac834579a`.
+La version d’essai est reconstruite avec le profil `release` et LTO pour macOS ARM64. Le build porte le commit source dans `DEADSYNC_BUILD_HASH` et le marqueur `pr845-endless-transition-2026-10-28` dans `DEADSYNC_BUILD_STAMP`. Le manifeste local `target/pr845-playtest/validation.json` contient le commit source exact, les empreintes des fichiers et le SHA-256 du binaire ; `deadsync.sha256` permet de contrôler la copie du dossier d’essai.
 
 Le dossier local `target/pr845-playtest` utilise le mode portable du jeu : ses réglages, profils et scores sont isolés. `Tester-PR845.command` lance le binaire optimisé placé à côté. Les assets viennent du worktree par lien symbolique.
 

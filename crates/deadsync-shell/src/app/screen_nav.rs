@@ -54,6 +54,60 @@ pub(super) fn overscan_view() -> OverscanAdjustmentView {
 }
 
 impl App {
+    /// Resolve a failed Endless renewal before committing a screen change.
+    /// Replaying by modulo here would reuse an old cycle without its totals.
+    fn resolve_course_stage_transition(
+        &mut self,
+        previous: CurrentScreen,
+        target: CurrentScreen,
+    ) -> CurrentScreen {
+        if previous != CurrentScreen::Gameplay
+            || target != CurrentScreen::Gameplay
+            || self.pending_song_lua_reload.is_some()
+        {
+            return target;
+        }
+        let Some(course) = self.state.session.course_run.as_ref() else {
+            return target;
+        };
+        if course.course_type != deadsync_theme::views::CourseTypeView::Endless
+            || course.next_stage_index < course.stages.len()
+        {
+            return target;
+        }
+        // A cursor beyond the prepared history cannot be repaired by silently
+        // skipping songs. A normal boundary is exactly the end of that history.
+        let renewed = course.next_stage_index == course.stages.len()
+            && select_course::reroll_selected_endless_plan(&self.state.screens.select_course_state)
+                .or_else(|| {
+                    select_course::selected_course_plan(&self.state.screens.select_course_state)
+                })
+                .is_some_and(|selection| {
+                    super::append_endless_cycle(
+                        self.state
+                            .session
+                            .course_run
+                            .as_mut()
+                            .expect("active course checked"),
+                        selection,
+                        profile::get_session_play_style().chart_type(),
+                    )
+                });
+        if renewed {
+            return target;
+        }
+        warn!("Unable to renew Endless course; returning to course selection.");
+        self.state.shell.interaction.show_message(
+            "Unable to prepare next course stage".to_string(),
+            std::time::Instant::now(),
+        );
+        self.state.screens.player_options_state = None;
+        self.pending_gameplay_init = None;
+        // The normal Gameplay -> SelectCourse lifecycle records the finished
+        // song, exits gameplay, and then clears the interrupted course.
+        CurrentScreen::SelectCourse
+    }
+
     fn reject_missing_course_plan(
         &mut self,
         previous: CurrentScreen,
@@ -373,6 +427,27 @@ impl App {
         if self.reject_missing_course_plan(prev, target) {
             return;
         }
+        let (target, commands) = self.prepare_global_fade_entry(target);
+
+        if target == CurrentScreen::Options {
+            self.update_options_monitor_specs(event_loop);
+        }
+
+        let (_, in_duration) = self.get_in_transition_for_screen(target);
+        apply_global_entry_transition(&mut self.state.shell, prev, target, in_duration);
+        self.sync_gameplay_input_capture();
+        deadlib_present::runtime::clear_all();
+        self.run_commands(commands, event_loop);
+    }
+
+    /// Application state changes for a completed global fade. The event-loop
+    /// wrapper only applies window effects, fade timing and returned commands.
+    pub(super) fn prepare_global_fade_entry(
+        &mut self,
+        requested: CurrentScreen,
+    ) -> (CurrentScreen, Vec<Command>) {
+        let prev = self.state.screens.current_screen;
+        let target = self.resolve_course_stage_transition(prev, requested);
         if prev == CurrentScreen::SelectMusic && target != CurrentScreen::Gameplay {
             self.gameplay_preload = None;
         }
@@ -399,15 +474,7 @@ impl App {
         self.prepare_screen_state(prev, target);
         commands.extend(self.handle_screen_entry_on_fade(prev, target));
 
-        if target == CurrentScreen::Options {
-            self.update_options_monitor_specs(event_loop);
-        }
-
-        let (_, in_duration) = self.get_in_transition_for_screen(target);
-        apply_global_entry_transition(&mut self.state.shell, prev, target, in_duration);
-        self.sync_gameplay_input_capture();
-        deadlib_present::runtime::clear_all();
-        self.run_commands(commands, event_loop);
+        (target, commands)
     }
 
     pub(super) fn get_out_transition_for_route(
