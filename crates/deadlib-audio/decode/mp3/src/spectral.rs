@@ -141,10 +141,15 @@ pub fn requantize(
         0
     };
     for (band, &pre) in PRETAB.iter().enumerate().take(long_bands) {
+        let start = bands.long()[band] as usize;
+        let end = bands.long()[band + 1] as usize;
+        if input[start..end].iter().all(|&value| value == 0) {
+            continue;
+        }
         let exponent =
             scale * (factors.long[band] as i32 + if factors.preflag { pre as i32 } else { 0 });
         let amplitude = gain * (-0.5 * exponent as f64).exp2();
-        for line in bands.long()[band] as usize..bands.long()[band + 1] as usize {
+        for line in start..end {
             output[line] = power(input[line], amplitude, powers);
         }
     }
@@ -155,13 +160,19 @@ pub fn requantize(
             0
         };
         for band in if info.mixed_block { 3 } else { 0 }..13 {
+            let start = bands.short()[band] as usize;
+            let end = bands.short()[band + 1] as usize;
             for window in 0..3 {
+                let values = &input[source..source + end - start];
+                source += values.len();
+                if values.iter().all(|&value| value == 0) {
+                    continue;
+                }
                 let exponent = scale * factors.short[band][window] as i32
                     + 4 * info.subblock_gain[window] as i32;
                 let amplitude = gain * (-0.5 * exponent as f64).exp2();
-                for line in bands.short()[band] as usize..bands.short()[band + 1] as usize {
-                    output[3 * line + window] = power(input[source], amplitude, powers);
-                    source += 1;
+                for (line, &value) in (start..end).zip(values) {
+                    output[3 * line + window] = power(value, amplitude, powers);
                 }
             }
         }

@@ -340,6 +340,22 @@ fn verify(paths: &[String]) {
             }
         }
     }
+    for (kind, mixed) in [(0, 0), (1, 0), (3, 0), (2, 0), (2, 2), (2, 4)] {
+        let mut hybrid = Hybrid::new();
+        for position in 0..576 {
+            let mut input = [0.0; 576];
+            input[position] = f64::from_bits(0x7ff8_0000_0000_0001);
+            input[(position + 3) % 576] = f64::from_bits(0xfff8_0000_0000_0002);
+            input[(position + 18) % 576] = f64::INFINITY;
+            let mut output = [0.0; 576];
+            hybrid
+                .process(&mut input, kind, mixed, &mut output)
+                .unwrap();
+            for value in input.into_iter().chain(output) {
+                out.write_all(&value.to_le_bytes()).unwrap();
+            }
+        }
+    }
     for pattern in 0..2 {
         let data: [u8; 40] = std::array::from_fn(|n| {
             if pattern == 0 {
@@ -513,6 +529,37 @@ fn verify(paths: &[String]) {
                     for value in output {
                         out.write_all(&value.to_le_bytes()).unwrap();
                     }
+                }
+            }
+        }
+    }
+    for rate in [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000] {
+        let bands = Bands::for_rate(rate).unwrap();
+        for (kind, mixed) in [(0, false), (1, false), (3, false), (2, false), (2, true)] {
+            for position in 0..576 {
+                let mut input = [0; 576];
+                input[position] = [1, -1, i16::MIN][position % 3];
+                let info = GranuleChannel {
+                    global_gain: (position % 256) as u8,
+                    block_type: kind,
+                    mixed_block: mixed,
+                    scalefac_scale: position & 2 != 0,
+                    subblock_gain: [0, 2, 7],
+                    ..Default::default()
+                };
+                let factors = ScaleFactors {
+                    long: std::array::from_fn(|n| (n % 16) as u8),
+                    short: std::array::from_fn(|n| {
+                        std::array::from_fn(|w| ((n * 3 + w) % 16) as u8)
+                    }),
+                    preflag: position & 1 != 0,
+                    ..Default::default()
+                };
+                let mut output =
+                    std::array::from_fn(|n| f64::from_bits(0x7ff8_0000_0000_0000 | n as u64));
+                spectral::requantize(&input, &info, &factors, bands, &mut output).unwrap();
+                for value in output {
+                    out.write_all(&value.to_le_bytes()).unwrap();
                 }
             }
         }
