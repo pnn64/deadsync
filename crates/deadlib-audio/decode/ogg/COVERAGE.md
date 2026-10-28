@@ -88,22 +88,23 @@ Evidence on Windows x86-64, rustc 1.99.1:
   [fuzz workspace](../fuzz/README.md) and its pinned campaign evidence. This is
   an initial bounded campaign, not exhaustive validation.
 
-## Outstanding work
+## Contract limits and future work
 
-* Codec-specific pre-roll/sample-accurate seeking remains in the codec crate.
-  `PageReader::seek` resets transport only; pair it with PacketCapture reset and
-  an independent codec reset. Index-free CRC capture cannot prove full physical
-  validity or exclude a deliberately embedded valid page inside a packet payload;
-  use the fully validated index for trusted page boundaries.
-* Additional independent generated multiplexed/chained and malformed-stream
-  differential corpora, official conformance material, longer fuzz campaigns and
-  wider ITGmania/StepMania song-pack validation beyond two pinned shipped songs
-  covered by the Vorbis tests (theme assets are not song packs).
-* The [initial container benchmark](PERFORMANCE.md) now measures throughput,
-  first-packet startup and CRC against libogg with exact wire verification.
-  Ogg-only allocation/memory/index-seek measurements and subsequent optimization
-  remain; no competitive performance claim yet.
-* Broader platforms and benchmark targets.
+The [Vorbis decoding completion audit](../vorbis/DECODING_COMPLETION.md)
+records the current container and codec gates, including 32 additional real
+StepMania songs checked against libogg. The full release suite, extracted
+offline packages, dependency trees and benchmark-target compilation pass.
+
+Codec-specific pre-roll/sample-accurate seeking belongs to the codec crate.
+`PageReader::seek` resets transport only; pair it with packet capture and codec
+reset. Index-free CRC capture cannot prove full physical validity or exclude
+a deliberately embedded valid page inside a packet payload; use the fully
+validated index for trusted page boundaries.
+
+Additional independent corpora, longer sanitizer campaigns and broader platforms
+remain useful maintenance. Container performance and further memory/IO/seek
+measurements are future work outside the decoding request; existing benchmark
+evidence is preserved and no competitive performance claim is made.
 
 Transport validation does not validate codec headers or mapping-specific packet
 ordering. Metadata, channel layout, sample counts and exact seeking belong to

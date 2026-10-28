@@ -244,5 +244,6 @@ The [scalar-book evaluation](SCALAR_BOOK_EVALUATION.md) adds paired decoding
 costs for native, Symphonia and libvorbisfile. It rejects a further smaller-book
 candidate as the default because its decode throughput cost outweighs the
 default-stage size saving; production encoding remains unchanged.
-The broader decoder conformance, sparse seeking and performance work in
-[COVERAGE.md](COVERAGE.md) also remains part of the requested goal.
+The [decoding completion audit](DECODING_COMPLETION.md) records the separate
+completed decoder goal. Sparse seek strategies, performance and the encoder
+quality work above are future tasks outside that decoding request.

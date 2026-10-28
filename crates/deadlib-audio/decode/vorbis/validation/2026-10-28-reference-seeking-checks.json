@@ -73,7 +73,10 @@
   "upstream": {
     "files": 528,
     "verified_all": true,
-    "manifest_sha256": "e298a0a8b65b2f10fb7ad870bab4de6ed6f22c43756153617bea81a091da6308"
+    "manifest_sha256": "e298a0a8b65b2f10fb7ad870bab4de6ed6f22c43756153617bea81a091da6308",
+    "final_manifest_path": "crates/deadlib-audio/decode/vorbis/validation/2026-10-26-upstream.sha256",
+    "final_manifest_sha256": "e298a0a8b65b2f10fb7ad870bab4de6ed6f22c43756153617bea81a091da6308",
+    "final_files_reverified": 528
   },
   "validation_commands": [
     {
@@ -671,7 +674,7 @@
     }
   },
   "baseline_full_reference_suite": {
-    "phase": "Before retained-block correction; current-source rerun pending",
+    "phase": "Before retained-block correction; final retained-block rerun completed below.",
     "exit_code": 0,
     "passed": 218,
     "failed": 0,
@@ -710,11 +713,9 @@
     "old_failure_log": "2026-10-28-reference-seeking-synthetic-reference-seeks.log"
   },
   "pending_goal_validation": {
-    "full_reference_suite": {
-      "tool_session_id": 31858,
-      "log": "target/vorbis-completion/final-full-reference-tests.log"
-    },
-    "remaining_scope": "Finish current-source full/extracted checks and broader acceptance/conformance audit."
+    "resolved": true,
+    "completion_receipt": "2026-10-28-completion-checks.json",
+    "note": "Original session 31858 completed successfully; later current-source gates recorded separately."
   },
   "pre_retained_block_gates": {
     "offline-tests": {
@@ -769,5 +770,19 @@
     "production_tree": "vorbis -> sibling ogg only; no external codec dependencies",
     "scratch": "target/deadlib-audio-reference/reference-seeking-retained-independent"
   },
-  "milestone_commit": "61ca7e6ab06d5cce91f0999ec642f05daaffaed6"
+  "milestone_commit": "61ca7e6ab06d5cce91f0999ec642f05daaffaed6",
+  "completed_retained_block_full_reference_suite": {
+    "phase": "After retained-block fix, before song-pack and unknown-nil-EOS additions",
+    "exit_code": 0,
+    "passed": 219,
+    "failed": 0,
+    "ignored": 0,
+    "filtered_out": 17,
+    "log": {
+      "path": "crates/deadlib-audio/decode/vorbis/validation/2026-10-28-completion-retained-block-full-reference.log",
+      "sha256": "a22c273facdcf1db570d387341f7ecc411d992b74654f4491ef3516de2b11a3e",
+      "original_path": "target/vorbis-completion/final-full-reference-tests.log",
+      "original_sha256": "505fe9de7b42c05c10338bd068a9ea7c86a5686fa82789f0229a769521c7ed1f"
+    }
+  }
 }

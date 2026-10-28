@@ -1,6 +1,6 @@
 # deadlib-audio-decode-vorbis
 
-Independent, in-development Vorbis I implementation. The only production
+Independent Vorbis I implementation with [completed decoding validation](DECODING_COMPLETION.md). The only production
 dependency is the sibling `deadlib-audio-decode-ogg` container. Symphonia and
 libvorbis serve only as test oracles. Neither new crate is integrated into
 DeadSync's decoder or playback pipeline.

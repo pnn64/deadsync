@@ -1,9 +1,9 @@
 # Behavioral parity
 
-The active goal is complete Ogg/Vorbis behavior parity, rather than performance.
-Packet decisions, counts, positions, timestamps, channel order, streaming,
-resets and seeking require exact agreement. Existing performance reports remain
-historical diagnostics.
+The decoding goal is complete; the [final audit](DECODING_COMPLETION.md)
+records the full scope and current gates. Packet decisions, counts, positions,
+timestamps, channel order, streaming, resets and seeking require exact agreement
+under each documented policy. Existing performance reports remain diagnostics.
 
 The user confirmed the original decoder-to-reference PCM tolerances: normal
 peak/RMS bounds are `3e-6` / `5e-7`, scaled by `max(1, reference peak)`;
@@ -119,15 +119,16 @@ before/after failures, commands, reports and sanitizer evidence.
 [case-runner verification](validation/2026-10-27-concealment-oracle-selfcheck.json)
 record the independent reference checks. External audio stays in ignored storage.
 
-## Remaining work
+## Completion audit
 
-This does not prove 100% parity. Beyond the recorded prefix/bit-mutation fixtures,
-continue independent comparisons for malformed codewords, unusual legal setup/mode/partition
-combinations, wider official conformance material and real songs. Review all
-documented strict/legacy/reference acceptance differences, including historical
-endpoint discrepancies, instead of hiding them in PCM tolerances. Named
-reference disagreements need individual assessment. Performance results cannot
-close these gaps. Application integration remains outside the requested scope.
+The subsequent component/packet matrices, reference EOS/seeking work, invalid
+granule rejection checks, valid untimed EOS handling and expanded 32-song corpus
+resolve this ledger's earlier follow-ups. The
+[final audit](DECODING_COMPLETION.md) reviews the named acceptance/count
+differences individually and retains original PCM tolerances. Additional
+conformance inputs and longer fuzz campaigns remain maintenance; sparse seek
+strategies, performance, competitive encoder quality and application integration
+are separate future tasks. No exhaustive all-bitstream certification is claimed.
 
 The [floor-zero parameter follow-up](FLOOR0_PARAMETERS.md) records amplitude-width,
 Bark-map and incomplete-LSP reader differences, plus the IEEE transform-class

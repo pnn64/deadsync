@@ -37,141 +37,60 @@ primitive or passing unit test does not establish completion of its parent item.
    reconstruction criteria. Container writing alone is not codec encoding.
 6. Retain existing reproducible measurements as diagnostics. Further performance
    work is deferred while parity gaps remain; speed is not a completion criterion.
-7. Independently build/test/benchmark both packages by package name and extracted
-   manifests, with no production codec dependencies. Maintain coverage, numeric
-   tolerance, benchmark and remaining-limitations documents.
+7. Independently build/test both packages by package name and extracted
+   manifests, with no production codec dependencies. Keep benchmark targets
+   buildable and preserve existing measurements; new performance work is outside
+   the current request. Maintain coverage, numeric criteria and limitations.
 
 Each tested milestone is committed separately. Per-crate coverage documents
 record current evidence and outstanding work; this checklist preserves the full
-scope while implementation progresses.
+scope and its completion evidence.
 
 ## Current checkpoint
 
-The explicit [reference file seek mode](vorbis/REFERENCE_SEEKING.md) now uses
-the native synthesis queue, including retained block timing/PCM after failed
-track-only preroll. It matches the 172 previously recorded EOS seek differences,
-broadcast offsets and continued-packet fallback. The default seek timeline still
-addresses exact sequential PCM suffixes. Broader completion validation remains
-active; performance is deferred.
+**The Vorbis decoding goal is complete.** The
+[completion audit](vorbis/DECODING_COMPLETION.md) maps all seven work-plan items
+to current independent evidence and final source-hashed checks. Counts,
+positions, timestamps and channel identity are exact under each documented
+policy; the original PCM bounds are unchanged.
 
-Ogg framing/streaming, Vorbis raw-packet PCM synthesis and the Ogg Vorbis mapping are implemented, with
-libogg, libvorbis and Symphonia differential evidence. Both packages are Cargo
-workspace members. Raw synthesis includes both floors, all residues, inverse
-coupling, native FFT MDCT, windows and overlap, with zero packet/reset allocations.
-The mapping adds metadata/header lifecycle, exact initial/final trimming,
-timestamps, arbitrary byte streaming, independent multiplexed streams and chains.
-All 38 repository assets have exact retained counts against libvorbisfile and
-Symphonia; strict behavior remains separate from legacy compatibility. Native
-Ogg now provides a validated page/packet index, index-free granule bisection and
-strict packet capture after seeks, including continuation and multiplexing.
-Vorbis now provides prefix-based indexing and sample-accurate retained-frame
-seeking with overlap pre-roll, initial/final trimming and repeated stream selection.
-All 1,900 corpus seeks match libvorbisfile positions/counts and PCM criteria.
-The pinned upstream coded test grid adds 528 rate/channel/quality combinations,
-with exact counts, reference PCM parity, 17-byte streaming and 2,640 native seeks.
-External historical/song media is hash-pinned and downloaded only to ignored
-scratch storage. Strict decoding exposes malformed granules in one shipped
-ITGmania song and a historical setup page. Two explicit, disabled-by-default
-policies handle these cases; the indexed endpoint policy can trim across prior
-pages using the final length known in advance. Four historical/shipped files
-and 36 native seeks validate those policies; see [vorbis/LEGACY.md](vorbis/LEGACY.md).
-Seven additional pinned FFmpeg samples add strict 2000-era floor-zero and
-six-channel aoTuV comparisons, 512 native seeks, and 40 rejection paths for
-invalid endpoints, sequence gaps and CRCs; see
-[vorbis/HISTORICAL.md](vorbis/HISTORICAL.md). This adds historical encoder
-coverage without expanding the two-song ITGmania sample.
-The requested goal remains open: broader conformance/legacy/fuzzing, index-free
-codec seeking, comparative performance and competitive native encoding remain.
+The full release gate enables all external reference/corpus tests, excluding
+only manual fixture generators. Extracted offline builds/tests, lint, fuzz
+harness checks and benchmark-target compilation also pass. Independent
+comparisons cover libogg, libvorbis/libvorbisfile and Symphonia, all 38 repository
+assets, 528 upstream coded vectors, historical/legacy media, two shipped ITGmania
+songs and 32 additional chart-linked StepMania songs. Component and full-packet
+matrices cover malformed/recovery behavior and unusual legal configurations.
 
-The independent [fuzz workspace](fuzz/README.md) supplies five coverage-guided
-AddressSanitizer targets, seeded from normal and optional floor-zero fixtures,
-generated multiplexing/chains and spanning packets. Its Windows runner retains
-replayable corpora, hashes, logs and statistics without changing production
-dependencies or the application workspace.
+The native mapping supports exact trim/timing, arbitrary byte streaming, reset,
+multiplexing/chains and indexed sample-accurate seeking. Explicit
+[reference seeking](vorbis/REFERENCE_SEEKING.md) reproduces C file scheduling,
+including retained block PCM after failed preroll. The default addresses exact
+sequential PCM suffixes. [Untimed empty EOS pages](vorbis/UNTIMED_EOS.md) now
+decode successfully, with declared and emitted durations kept separate when
+the reference reports different values. Named strict/reference/legacy policies
+and other-decoder defects remain documented and tested.
 
-The initial [Vorbis performance baseline](vorbis/PERFORMANCE.md) measures full
-decode, 4 KiB fragmented reads and warm-process startup against libvorbisfile and
-Symphonia with exact decoded counts. It exposes a substantial native throughput
-gap. Component profiling, memory/allocation/seek measurements, optimization and
-competitive native encoding remain required.
-The independent [Ogg-only baseline](ogg/PERFORMANCE.md) now isolates CRC, page
-scanning, packet demux, fragmented reads and first-container-packet startup
-against pinned libogg, with byte-exact page/packet verification.
-Its eight-byte CRC update then improves paired song demux 4.12x / 3.89x and
-Vorbis indexed open 2.81x / 2.01x, for 7 KiB additional read-only table elements.
-Native requested heap and source IO remain unchanged; full Vorbis decoding
-improves about 4% on both songs and still trails Symphonia.
-The first measured transform optimization replaces a length-N complex FFT with
-a paired-spectrum N/4 FFT. Its isolated kernel is 3.2–3.8x faster, transform
-elements shrink 65%, and observed full-file times improve 1.35–1.67x on the two
-longer tracks, with the same PCM/count/seek gates. Reference timing drift and
-remaining throughput gaps are documented in the performance report.
-The bounded Huffman prefix lookup adds another observed 1.08–1.19x full-file
-speedup on the longer tracks in interleaved baseline/current trials, at about
-6% higher stream-startup time. Tables fit the existing tree buffer and remaining
-setup budget. Scalar, full PCM, seeking and sanitizer gates remain unchanged;
-the short-clip tradeoff is explicit in the report.
-Removing unit-twiddle FFT multiplications then improves the isolated kernel
-1.14-1.27x, with observed longer-track full decoding gains of 1.03x / 1.11x.
-Transform storage and the numerical gates stay unchanged; mixed short-clip
-movements and overlapping trial ranges remain explicit in the report.
-A [bit-checked synthesis diagnostic](vorbis/SYNTHESIS_PROFILE.md) now separates
-actual song packet stages and identifies residue as the next throughput target.
-The resulting [residue cursor update](vorbis/RESIDUE_PERFORMANCE.md) improves
-paired full-file song medians 1.24x / 1.03x and fragmented reads 1.09x / 1.10x.
-Heap/IO and PCM digests remain unchanged; small-file movements remain mixed.
+The [native encoder](vorbis/ENCODING.md) remains independently validated,
+including the 144-case decoder matrix. Competitive encoding quality/rate
+control, sparse/index-free codec seek strategies, additional platforms and
+application integration are future tasks outside the current decoding request.
+The indexed API is complete for its documented contract.
 
-The [resource and arbitrary-seek baseline](vorbis/RESOURCES.md) separates
-requested-heap instrumentation, fresh-process memory and uninstrumented timing.
-Five files pass 500 shared reference-PCM seek requests. Native's requested heap
-is smaller than Symphonia's here, while eager two-pass indexing and page-sized
-decoding leave clear seek performance gaps. Raw trials, counter rows and hashes
-are retained; this milestone changes no production decoder behavior.
-The following packet-read update adds generic resumable Ogg capture and
-`OggSeekReader::read_packet`, sharing the existing page API's exact timing and
-overlap logic. Paired trials improve seek batches 1.16-1.76x, with zero warmed
-native seek allocations on all five inputs. Eager indexing and pre-roll still
-leave performance work. Full differential, packet/mixed-read and sanitizer
-evidence is recorded in the resource report.
-The compact packet-mode index then selects the nearest overlap pre-roll packet
-from two logical bits per packet. Paired longer-file seek batches improve another
-1.99x/3.18x for 4,224 additional live requested bytes per track, beating both
-references on those two seek workloads in this run. Short files, eager index
-construction, and full-file throughput still have performance gaps. The
-page-only pre-roll option preserves a lower-storage strategy with exact PCM.
-One-pass container/Vorbis construction now halves indexed-open source bytes.
-Paired song open medians improve 1.86x / 1.66x with unchanged retained heap;
-mixed seek-batch movements and their recheck remain in the resource report.
+The independent [fuzz workspace](fuzz/README.md) preserves bounded sanitizer
+campaigns and replayable evidence. Additional media and longer campaigns remain
+useful maintenance; these tests are not exhaustive certification of every input.
 
-The initial [native encoder](vorbis/ENCODING.md) now generates setup and audio
-packets directly from PCM, with a native forward MDCT, fixed blocks, an adaptive
-flat floor and one to four additive residue stages. Raw and Ogg APIs support
-arbitrary input chunks and exact final trimming; normal raw encode/reset has
-zero allocations after construction. Independent libvorbisfile and Symphonia
-decoding validate the output, including large packets and 255-channel streams.
-Source SNR and size measurements document its lossy precision tradeoffs. The
-encoder still needs perceptual analysis, rate control, compression optimization
-and comparative performance/real-music quality work.
-The first [encoding comparison](vorbis/ENCODING_PERFORMANCE.md) adds 42
-independently decoded native/Xiph outputs, 294 timing trials and exact shared
-PCM excerpts from real songs. Source SNR, bitrate and CPU time are separate
-measurements. The reference encoder exposes a compression gap; symbol profiling
-identifies a candidate lossless change to the native packet representation.
-The [compact first-stage book](vorbis/ENCODING_ENTROPY.md) implements that change:
-two-stage song outputs shrink 26–29% in paired runs with bit-identical PCM through
-three decoders. Larger headers increase tiny-file sizes; raw retained buffers
-grow modestly and warmed encoding still allocates nothing. Competitive quality,
-rate control and broader decoder/encoder performance work remain open.
-The [scalar-book evaluation](vorbis/SCALAR_BOOK_EVALUATION.md) adds 1,008 paired
-decoder timing rows and rejects a candidate that saves less than 1% at default
-precision while slowing native song decoding 12–15%. The validated pair book
-remains in production; the candidate and measurements are preserved.
-
-The [bounded Huffman prefix update](vorbis/PREFIX_PATHS.md) improves paired
-song full-decode medians 1.047x/1.052x while preserving allocation/IO counters
-and 42.7 million raw PCM sample bit patterns. Small-file/startup results are
-mixed, and native song throughput still trails Symphonia. Rejected experiments,
-full validation and the original sanitizer timeout plus replays are documented.
+Historical measurements and rejected experiments remain available in the
+[Vorbis performance report](vorbis/PERFORMANCE.md),
+[container report](ogg/PERFORMANCE.md), [resource/seek report](vorbis/RESOURCES.md),
+[synthesis profile](vorbis/SYNTHESIS_PROFILE.md),
+[residue report](vorbis/RESIDUE_PERFORMANCE.md),
+[encoding comparison](vorbis/ENCODING_PERFORMANCE.md),
+[entropy update](vorbis/ENCODING_ENTROPY.md),
+[scalar-book evaluation](vorbis/SCALAR_BOOK_EVALUATION.md) and
+[prefix-path report](vorbis/PREFIX_PATHS.md). Performance is not a completion
+criterion for this request.
 
 ## Normative sources
 

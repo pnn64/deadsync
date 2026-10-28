@@ -65,8 +65,11 @@ criterion across all returned samples, including one-frame reads; it does not
 renormalize the block error budget to a near-zero one-frame crop. Counts and
 positions remain exact for every request. No numerical bounds were widened.
 
-This milestone does not prove complete Vorbis conformance or arbitrary
-libvorbisfile recovery equivalence. Broader malformed acceptance/negative-granule
-behavior and the full parent completion audit remain open. Performance is not
-a completion criterion. Validation commands and hashes are retained with the
-milestone evidence under `validation/`.
+The subsequent 48-stream repeated-block matrix checks pending/failed preroll
+with reads past the declared end. A complete 32-song pack adds 544 repeated
+reference requests. [Untimed EOS](UNTIMED_EOS.md) checks readable PCM despite
+zero reference duration; completed audio pages with negative/unknown granules
+remain rejected in every policy. The [final audit](DECODING_COMPLETION.md)
+closes the parent decoding goal. Arbitrary corrupt-file recovery equivalence
+and exhaustive conformance are not claimed. Performance is excluded.
+Validation commands and hashes remain under `validation/`.
