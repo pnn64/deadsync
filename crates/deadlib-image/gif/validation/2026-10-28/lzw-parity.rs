@@ -49,6 +49,29 @@ fn main() {
         }
     }
     println!("{cases} exact encoded-byte comparisons and decoder roundtrips passed");
+    let mut tails = 0;
+    let mut old_encoder = original::Encoder::new();
+    let mut new_encoder = current::Encoder::new();
+    for minimum in 2..=8 {
+        let mask = ((1u16 << minimum) - 1) as usize;
+        for length in 0..=256 {
+            let input: Vec<_> = (0..length)
+                .map(|i| ((i * 71 + i / 7) & mask) as u8)
+                .collect();
+            // Word flushes must append correctly even at an unaligned offset.
+            let mut before = vec![0x55, 0xaa, 0];
+            let mut after = before.clone();
+            old_encoder.encode(&input, minimum, &mut before).unwrap();
+            new_encoder.encode(&input, minimum, &mut after).unwrap();
+            assert_eq!(before, after, "minimum={minimum} short length={length}");
+            assert_eq!(
+                current::decode(&after[3..], minimum, length).unwrap(),
+                input
+            );
+            tails += 1;
+        }
+    }
+    println!("{tails} short-tail append comparisons with reused encoders passed");
     let mut streams = 0;
     for minimum in 2..=8 {
         for word in 0u32..=65535 {

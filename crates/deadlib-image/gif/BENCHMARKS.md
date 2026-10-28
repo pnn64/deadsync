@@ -266,3 +266,39 @@ Raw data: `05-before-init.tsv`, `05-paired-init.tsv`, and
 The ordinary animation tests additionally check exact logical/transparent/custom
 backgrounds, palette fallback, clipped rectangles, disposal and repeated text
 rendering without allocation churn.
+
+The LZW writer now flushes little-endian 32-bit words instead of looping over
+individual bytes. A u64 holds at most 31 pending bits plus the next 12-bit code;
+one word flush leaves at most 11 bits. The final partial word writes exactly
+ceil(pending bits / 8) bytes. This removes the per-byte loop and amortizes
+fallible growth across codes. Production diff: 12 added / 7 removed lines;
+all writes remain safe Rust, and GIF sub-block framing is unchanged.
+
+| Workload / operation (confirmation) | Before cycles | After cycles | CPU throughput |
+|---|---:|---:|---:|
+| noise256 / encode | 6,764,971 | 6,270,193 | 1.14x paired; 1.08x ratio of medians |
+| interlaced-noise / encode | 11,810,665 | 10,889,106 | 1.09x paired; 1.08x ratio of medians |
+| tiles16-palette / encode | 6,011,249 | 5,971,115 | effectively unchanged |
+
+Use roughly 7-8% lower cycles on noise as the conservative local result. The
+initial tile comparison suggested a much larger improvement, but it crossed
+two host-performance regimes and did not reproduce, so no tile speedup is
+claimed. Solid/tiled/animation timings moved by roughly 1-2% and are treated as
+unchanged. Allocation/reallocation counts, requested bytes and compressed sizes
+are identical on all eight fixtures. Raw data: `06-before-encode.tsv`,
+`06-paired-encode.tsv`, and `06-paired-encode-confirm.tsv`.
+
+The standalone parity driver additionally checks every short length 0..=256
+at minimum code sizes 2..=8 using reused encoders and a three-byte output prefix,
+exercising word boundaries, partial-word padding and unaligned appends. Against
+`94d80f58a`, all 336 original encoded-byte/roundtrip cases, 1,799 short append
+cases and the 1,376,256 decode output/error comparisons pass. The command above
+can use `94d80f58a` for its original snapshot; `06-lzw-parity.log` records this
+run. The production encoder's bytes are unchanged in the existing independent
+gif decoder tests, including all palette sizes, interlacing and sub-block sizes
+1, 7 and 255.
+
+Final checks for the second batch: all 20 ordinary integration tests pass in
+debug and release; `cargo clippy -p deadlib-image-gif --all-targets -- -D warnings`
+and `cargo fmt -p deadlib-image-gif -- --check` pass. The optional external
+giflib oracle remains unexecuted in this session.

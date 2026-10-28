@@ -204,8 +204,10 @@ impl Encoder {
         }
         bits.code(clear + 1)?;
         if bits.count != 0 {
-            reserve(bits.output, 1)?;
-            bits.output.push(bits.bits as u8);
+            let count = bits.count.div_ceil(8) as usize;
+            reserve(bits.output, count)?;
+            bits.output
+                .extend_from_slice(&bits.bits.to_le_bytes()[..count]);
         }
         Ok(())
     }
@@ -224,11 +226,14 @@ impl BitWriter<'_> {
     fn code(&mut self, code: u16) -> Result<(), Error> {
         self.bits |= u64::from(code) << self.count;
         self.count += self.width;
-        reserve(self.output, 2)?;
-        while self.count >= 8 {
-            self.output.push(self.bits as u8);
-            self.bits >>= 8;
-            self.count -= 8;
+        // At most 31 buffered bits plus a 12-bit code fit in u64. Flush a
+        // whole word, amortizing fallible growth and writes across codes.
+        if self.count >= 32 {
+            reserve(self.output, 4)?;
+            self.output
+                .extend_from_slice(&(self.bits as u32).to_le_bytes());
+            self.bits >>= 32;
+            self.count -= 32;
         }
         let clear = 1 << self.minimum;
         if code == clear {
