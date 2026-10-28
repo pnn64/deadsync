@@ -143,3 +143,20 @@ now scans the whole buffer before rejecting an invalid small-palette frame.
 Raw comparisons: `validation/2026-10-28/01-paired-{decode,composite}.tsv`.
 Production change: one validation predicate, removing the branch on each
 pixel. All production code retains `forbid(unsafe_code)`.
+
+Plain-text rendering now uses the compositor's existing global/external
+palette directly. Removing the temporary local-palette Vec also removes its
+reserve, copy, and drop on every graphic (12 requested bytes for a two-color
+palette, up to 768 for a 256-color palette). The missing-palette check still
+runs before invoking the caller's rasterizer. A regression test checks exact
+colors, Previous disposal, and zero allocation churn on repeated global and
+external palette rendering.
+
+| Workload / operation | Before cycles | After cycles | CPU throughput | Allocations / bytes |
+|---|---:|---:|---:|---:|
+| text-small / render-text-reuse | 338 | 282 | 1.20x | 1 / 12 -> 0 / 0 |
+| text-grid / render-text-reuse | 89,550 | 88,906 | effectively unchanged | 1 / 12 -> 0 / 0 |
+
+Raw comparison: `validation/2026-10-28/02-paired-text.tsv`, immediately after
+the validation change. Production change: delete the palette allocation/copy
+and temporary local-palette field (10 lines removed, 3 added).

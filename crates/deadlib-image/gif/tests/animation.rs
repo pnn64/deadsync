@@ -1,5 +1,8 @@
 use deadlib_image_gif::*;
 
+#[path = "../../../../tests/support/perf.rs"]
+mod alloc;
+
 fn header() -> Header {
     let mut h = Header::new(4, 3);
     h.global_palette = Some(vec![[0, 0, 0], [255, 0, 0], [0, 255, 0], [0, 0, 255]]);
@@ -108,6 +111,44 @@ impl TextRasterizer for Font {
             mask[0] = 1;
         }
         Ok(())
+    }
+}
+#[test]
+fn repeated_text_uses_active_palette_without_allocation_churn() {
+    for external in [false, true] {
+        let palette = vec![[1, 2, 3], [4, 5, 6]];
+        let mut h = Header::new(2, 1);
+        let mut options = CompositeOptions::default();
+        if external {
+            options.external_palette = Some(palette);
+        } else {
+            h.global_palette = Some(palette);
+        }
+        let text = PlainText {
+            left: 0,
+            top: 0,
+            width: 2,
+            height: 1,
+            cell_width: 1,
+            cell_height: 1,
+            foreground_index: 1,
+            background_index: 0,
+            control: Some(GraphicControl {
+                disposal: Disposal::Previous,
+                ..Default::default()
+            }),
+            data: vec![b"A ".to_vec()],
+        };
+        let mut c = Compositor::with_options(&h, options).unwrap();
+        c.render_text(&text, &mut Font).unwrap();
+        alloc::assert_no_churn(|| {
+            for _ in 0..3 {
+                assert_eq!(
+                    c.render_text(&text, &mut Font).unwrap().rgba,
+                    [4, 5, 6, 255, 1, 2, 3, 255]
+                );
+            }
+        });
     }
 }
 #[test]
