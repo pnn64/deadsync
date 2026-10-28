@@ -250,6 +250,18 @@ The two block-buffer allocations are unchanged; inline x64 state grows 24 bytes.
 WAVL.md records exact duration/finalization rules; PERFORMANCE.md retains both
 flat paired runs and narrow segmented measurements without an overall speed claim.
 
+The broad native benchmark now validates all six widths across 52 cases, with
+25 same-output Hound gates, 34 fresh-process memory probes and 22 dense real-file
+stream runs. It preserves independent truth periods, reconstructable fixture
+archives and exact source snapshots. The measured PCM32 stream bottleneck now
+uses the existing native i32 path, preserving bits and allocation behavior.
+Two additional alternating before/after repetitions confirm the recorded gain.
+All 92 tests, Clippy, two million checked mutations, 1839 prior corpus inputs,
+100000 ASan executions and all 708 native gates/1912 writer outputs pass.
+NATIVE_PERFORMANCE.md distinguishes warm file cache, process memory, requested
+heap, matching output semantics and unsupported Hound paths. AUDIT.md retains
+the full completion criteria and remaining regression/reference/profile work.
+
 Remaining work: metadata profile/semantic validation,
 broader fuzzing and representative comparative performance/RSS coverage
 (the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); additional

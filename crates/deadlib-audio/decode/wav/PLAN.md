@@ -235,3 +235,22 @@ segmented streaming/finish measurements, including run variance and no overall
 speed claim. The remaining work is the full requirement audit, broader comparative
 performance/RSS and profile/format coverage, and measured optimization targets;
 this milestone does not prove completion of the requested WAV implementation.
+
+The requirement audit is now in AUDIT.md. Native performance evidence expands
+from PCM16 to a fixed 52-case matrix with all six widths, 1/2/6 channels,
+RIFF/RIFX/RF64/BW64, reduced precision, metadata and unaligned input. Independent
+truth checks precede measurement; 25 supported Hound cases match the same output.
+Both before/after runs pass 34 fresh-process memory probes and 22 real-file stream
+measurements. File allocation/attributes and all 64 fixture hashes are verified.
+Reconstructable fixture/source archives and raw trials preserve exact inputs.
+
+The matrix exposes a redundant in-place PCM32 integer reconstruction. Reusing
+the existing native i32 read/byte-swap path removes it with no allocation or new
+unsafe code. Two further alternating paired repetitions confirm 16–20-times
+little-endian and 4.1–4.5-times RIFX streaming gains in the recorded cases.
+All 92 tests pass x64 debug/release and i686 debug with Clippy, 708 retained native
+gates/1912 writer outputs, two million checked mutations, 1839 prior corpus inputs
+and 100000 ASan executions. NATIVE_PERFORMANCE.md retains Hound comparisons,
+process memory and opening/encoding tradeoffs. Remaining work includes the
+earlier regression candidates, wider reference/profile assessment and a final
+requirement-by-requirement completion audit.

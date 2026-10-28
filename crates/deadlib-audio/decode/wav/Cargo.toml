@@ -38,3 +38,7 @@ harness = false
 [[bench]]
 name = "adpcm_forward"
 harness = false
+
+[[bench]]
+name = "native"
+harness = false

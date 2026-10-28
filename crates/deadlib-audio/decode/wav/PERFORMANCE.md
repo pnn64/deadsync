@@ -1,5 +1,11 @@
 # Native PCM baseline and memory evidence
 
+The current six-width native/Hound matrix, physical cached-file timings,
+fresh-process memory comparison and retained PCM32 optimization are documented
+in [NATIVE_PERFORMANCE.md](NATIVE_PERFORMANCE.md). The sections below preserve
+earlier measurements and outstanding regression candidates; their original
+scope statements describe those historical runs.
+
 This is the first narrow baseline, not a completion claim for the performance
 objective. Resident stereo PCM16, 1,048,576 frames (4 MiB audio), Intel Xeon
 E5-2696 v4, Windows 11 x86_64, rustc 1.99.1. Workspace bench profile and flags are

@@ -123,8 +123,10 @@ See [COVERAGE.md](COVERAGE.md) for evidence and limitations and [PLAN.md](PLAN.m
 for the full outstanding objective. The current implementation is under development.
 Bounded mutation, coverage-guided fuzzing and sanitizer evidence is recorded in
 [FUZZING.md](FUZZING.md).
-The first resident PCM16 comparison and allocation/cycle evidence is recorded in
-[PERFORMANCE.md](PERFORMANCE.md); wider formats and platforms remain unmeasured.
+Performance history and remaining targets are in [PERFORMANCE.md](PERFORMANCE.md).
+[NATIVE_PERFORMANCE.md](NATIVE_PERFORMANCE.md) records all six native widths,
+same-output Hound comparisons, dense real-file streaming, process memory and the
+measured PCM32 integer-path optimization. [AUDIT.md](AUDIT.md) tracks the full goal.
 Native PCM/float sample and encoder comparisons against four references are in
 [PCM.md](PCM.md). Real NTFS files over 16 GiB, 32/64-bit seek checks and scoped
 whole-process memory measurements are in [LARGE_FILES.md](LARGE_FILES.md).

@@ -1,0 +1,358 @@
+{
+  "before_report_sha256": "421ea1701f62b193f34082ab3a03ecc87afdcdd550e601e6c7b62d42d48df862",
+  "after_report_sha256": "59806e8fbfcbcf18f890cf31cc9f6512dfdced2553e364d7286fbfb0c28d1cda",
+  "tool_sha256": "2b17dbcfcf50c32b87f17ddf35c32c52580902c6d1335f6497fb94f5c7a16a88",
+  "source_changes": {
+    "crates/deadlib-audio/decode/wav/src/native_io.rs": [
+      "cb1080b22befafa43c7dbe165b8705327c80654f00e5155f279b631411872181",
+      "697bf6693ac4bab011226cd804a1cc4ab3d4940e0bea98f8edb9bc555b95c6f1"
+    ]
+  },
+  "binary_sha256": [
+    "58b025fbe9212b09796e545ba7c34f03406d4f6ae00ec598e0d274f572e80f03",
+    "13c63072ee57967a8febf6fc114ab7056b381cfb2473da798b55320ec87ff13a"
+  ],
+  "runs": [
+    {
+      "repeat": 0,
+      "case": "RIFF-i32-c2-v32-m0-o0",
+      "version": "before",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-full-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RIFF-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "f7d1271a50918ea427e5910b250e294108b3729835e3dd102e60ae567b274162",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 0,
+      "case": "RIFF-i32-c2-v32-m0-o0",
+      "version": "after",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RIFF-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "14e8f49de41c1ff62a6e5c5b59181642e20b6e4a174d2ec32d2a84df0bea2713",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 0,
+      "case": "RIFX-i32-c2-v32-m0-o0",
+      "version": "before",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-full-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RIFX-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "88ebaea6bfbc570372cb303fe2fb9d51a55f696c3e15a572c474e5edd6d5fab0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 0,
+      "case": "RIFX-i32-c2-v32-m0-o0",
+      "version": "after",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RIFX-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "f1b62ca8941e777b35889ad2f6a514f499498664aec154e097fa7e4d81183dee",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 0,
+      "case": "RF64-i32-c2-v32-m0-o0",
+      "version": "before",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-full-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RF64-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "fd54565b3c0421ed4e36766397e394f265c8ab6c4fc646807ca7bc99c3904532",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 0,
+      "case": "RF64-i32-c2-v32-m0-o0",
+      "version": "after",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RF64-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "9048a429500e7a0a8121d47a2c47b20665f11cea92197fa4bc6cba03c1fefada",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 0,
+      "case": "BW64-i32-c2-v32-m0-o0",
+      "version": "before",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-full-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\BW64-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "7035a04cfa9cb423eb77320ea036993faffcbace23f1f0de795906a4b9509450",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 0,
+      "case": "BW64-i32-c2-v32-m0-o0",
+      "version": "after",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\BW64-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "d1f50e688b3f3b1dd7066aca552ab7fe13f8b1d59a7e6dee2764db3dfd50099b",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 0,
+      "case": "RIFF-i32-c2-v32-m0-o1",
+      "version": "before",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-full-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RIFF-i32-c2-v32-m0-o1.wav",
+        "i32",
+        "2",
+        "524288",
+        "1"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "e711b71d381522c06b3ed7f2fa9abd8a196e502ec91ec29d7883a8e71c1b9163",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 0,
+      "case": "RIFF-i32-c2-v32-m0-o1",
+      "version": "after",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RIFF-i32-c2-v32-m0-o1.wav",
+        "i32",
+        "2",
+        "524288",
+        "1"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "9513f0542341239b9c32bdee4c7f04277877625306c1f4504cf93f68f155ca96",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 1,
+      "case": "RIFF-i32-c2-v32-m0-o0",
+      "version": "before",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-full-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RIFF-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "47876df6eec08d21e000e986e0cbd250b4f0a2cc7961c8c262bffd2f52a20b77",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 1,
+      "case": "RIFF-i32-c2-v32-m0-o0",
+      "version": "after",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RIFF-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "62a89118f042af4ef131bd1b85343e97ab07badf263fc43f683d052b36e3967d",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 1,
+      "case": "RIFX-i32-c2-v32-m0-o0",
+      "version": "before",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-full-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RIFX-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "c0d4cd15bdee890465d0a22477f24d33b449b62a7d0e0bb123242c27af52bac7",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 1,
+      "case": "RIFX-i32-c2-v32-m0-o0",
+      "version": "after",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RIFX-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "679ce9a4d10bbd96a2a44ade54db819494582f6f9301c31890412f0dc9221ab5",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 1,
+      "case": "RF64-i32-c2-v32-m0-o0",
+      "version": "before",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-full-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RF64-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "f2c8daa722cbbb1f47dd8a11b2936c42fda07f20c377f5efe6e8fcfddefa8946",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 1,
+      "case": "RF64-i32-c2-v32-m0-o0",
+      "version": "after",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RF64-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "6fcafbbeb75b0c7f79c8b4ecb685adc9f5c5455ac9598e2f5272d2d4d1b7d297",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 1,
+      "case": "BW64-i32-c2-v32-m0-o0",
+      "version": "before",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-full-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\BW64-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "a0c6171f63c6d8f568350ac39846f717528f9a371451366d39873e627427c95a",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 1,
+      "case": "BW64-i32-c2-v32-m0-o0",
+      "version": "after",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\BW64-i32-c2-v32-m0-o0.wav",
+        "i32",
+        "2",
+        "524288",
+        "0"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "878e6beb3b43c0e5dc6258f4b72158a31c21fb9cee9db8a9fdd2831de9a645c9",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 1,
+      "case": "RIFF-i32-c2-v32-m0-o1",
+      "version": "before",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-full-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RIFF-i32-c2-v32-m0-o1.wav",
+        "i32",
+        "2",
+        "524288",
+        "1"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "4e1a2d2591869b214541f6994469b703308099ec7baf14dfb9a8bba8395c4309",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "repeat": 1,
+      "case": "RIFF-i32-c2-v32-m0-o1",
+      "version": "after",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-bin\\native-210f575a24874274.exe",
+        "bench",
+        "C:\\GitHub\\deadsync\\target\\wav\\native-widths-i32-native-fixtures\\RIFF-i32-c2-v32-m0-o1.wav",
+        "i32",
+        "2",
+        "524288",
+        "1"
+      ],
+      "exit_code": 0,
+      "stdout_sha256": "fee87c3f52207cff35adeffe829a288e439eef3b08da65fc1527d0c5ca5df2b0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "scope": "immutable private binaries from completed source-fingerprinted runs; two alternating paired repetitions; identical fixture bytes; three warmed internal trials; no affinity/frequency control"
+}

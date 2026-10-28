@@ -100,6 +100,9 @@ impl NativeIo {
         out: &mut [i32],
         read: impl FnOnce(&mut [u8]) -> Result<usize, Error>,
     ) -> Result<usize, Error> {
+        if self.sample == SampleFormat::I32 {
+            return self.read_i32(out, read);
+        }
         if self.sample.is_float() {
             return Err(Error::Unsupported("float to integer conversion"));
         }

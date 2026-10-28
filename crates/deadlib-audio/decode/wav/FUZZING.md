@@ -335,3 +335,23 @@ Clippy, 216 independent fixture gates/3024 three-API checks, 432 earlier real-fi
 forward outputs and the 708-case native byte/sample replay pass. WAVL.md records
 the known-duration and finalization contract; PERFORMANCE.md records state growth,
 unchanged block-buffer allocation and narrow timing scope.
+
+The native-width matrix identified redundant in-place PCM32 reconstruction in
+the shared integer reader. PCM32 now uses the already-tested native i32 byte
+read/swap path; narrower expansion and float rejection are unchanged. Existing
+properties cover aligned/unaligned, both byte orders, flat/wavl, valid-bit
+padding, partial caller frames and all native reader variants. No new unsafe
+code or production dependency is added.
+
+`validation/native-widths-mutation-{x64,i686}.*` each pass one million checked
+mutations. All 1839 preceding archived inputs pass (`native-widths-prior-replay.*`).
+`native-widths-asan.*` passes 100000 executions in 119.07 seconds, adds 1952 units
+and produces no failure artifact. Its final 1869-file corpus is retained in
+`native-widths-asan-corpus.zip`, SHA-256
+`4c7fb9111288391baacb219338c7c0d231608e9fb52af54bda79b67955293dd8`,
+with the verified archive/report sidecar. The 265 MiB instrumented peak is not
+normal codec RSS. All listed campaign inputs remain unchanged. All 92 tests
+pass x64 debug/release and i686 debug with Clippy; all 708 retained native gates,
+4484 descriptor/read/range checks and 1912 full writer outputs retain their hashes.
+NATIVE_PERFORMANCE.md records exact-output performance/heap/process-memory
+comparisons, reconstructed fixtures and source-pinned repeated control binaries.

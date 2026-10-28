@@ -1,3 +1,4 @@
 # Preserve the exact bytes hashed by these campaign reports and source archives.
 adpcm-wavl-reader-* -text
 adpcm-wavl-forward-* -text
+native-widths-* -text
