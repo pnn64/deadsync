@@ -311,6 +311,12 @@ impl PageDecoder {
         }
     }
     fn fill_page(&mut self, input: &[u8]) -> Result<(usize, bool), Error> {
+        // A partial body chunk needs no header planning or input split.
+        if self.length != 0 && input.len() < self.length - self.buffer.len() {
+            reserve(&mut self.buffer, input.len())?;
+            self.buffer.extend_from_slice(input);
+            return Ok((input.len(), false));
+        }
         // A complete page can be copied once into its final-sized buffer.
         if self.buffer.is_empty()
             && let Ok(length) = page::page_size(input)
