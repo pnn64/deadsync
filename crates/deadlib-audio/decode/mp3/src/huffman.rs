@@ -24,6 +24,7 @@ fn signed(bits: &mut BitReader<'_>, magnitude: u16) -> Result<i16, Error> {
 /// Decodes one pair, including linbits and signs. Failure is cursor-atomic.
 /// Book zero emits two zeros without consuming bits. Books 4 and 14 are invalid
 /// only when a coded pair actually requests them; unused region ids are ignored.
+#[inline(always)]
 pub fn pair(bits: &mut BitReader<'_>, book: u8) -> Result<[i16; 2], Error> {
     if book == 0 {
         return Ok([0; 2]);
