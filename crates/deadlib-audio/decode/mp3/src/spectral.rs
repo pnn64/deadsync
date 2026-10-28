@@ -11,6 +11,15 @@ static POWERS: std::sync::LazyLock<[f64; 16]> = std::sync::LazyLock::new(|| {
     std::array::from_fn(|n| std::hint::black_box(n as f64).powf(4.0 / 3.0))
 });
 
+static MPEG1_INTENSITY: std::sync::LazyLock<[(f64, f64); 5]> = std::sync::LazyLock::new(|| {
+    std::array::from_fn(|n| {
+        // Use runtime tan so cached gains retain the uncached math rounding.
+        let position = std::hint::black_box((n + 1) as f64);
+        let ratio = (std::f64::consts::PI * position / 12.0).tan();
+        (ratio / (1.0 + ratio), 1.0 / (1.0 + ratio))
+    })
+});
+
 /// Decodes big-values pairs and count1 quads. Incomplete final count1 words are
 /// stuffing; incomplete big-values words are errors. On error, output is invalid
 /// and the bit cursor remains at its original position.
@@ -162,10 +171,7 @@ fn intensity(version: MpegVersion, position: u8, width: u8, scale: bool) -> Opti
         match position {
             0 => Some((0.0, 1.0)),
             6 => Some((1.0, 0.0)),
-            1..=5 => {
-                let ratio = (std::f64::consts::PI * position as f64 / 12.0).tan();
-                Some((ratio / (1.0 + ratio), 1.0 / (1.0 + ratio)))
-            }
+            1..=5 => Some(MPEG1_INTENSITY[(position - 1) as usize]),
             _ => None,
         }
     } else if width > 7 || (width != 0 && position as u16 == ((1u16 << width) - 1)) {
