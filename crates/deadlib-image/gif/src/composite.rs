@@ -234,15 +234,9 @@ impl Compositor {
             self.options.external_palette.as_deref(),
             false,
         )?;
-        let p = self
-            .header
-            .global_palette
-            .as_deref()
-            .or(self.options.external_palette.as_deref())
-            .ok_or(Error::MissingPalette)?;
-        let mut palette = Vec::new();
-        reserve(&mut palette, p.len())?;
-        palette.extend_from_slice(p);
+        if self.header.global_palette.is_none() && self.options.external_palette.is_none() {
+            return Err(Error::MissingPalette);
+        }
         let count = text.width as usize * text.height as usize;
         if count > self.options.max_pixels {
             return Err(Error::LimitExceeded);
@@ -286,7 +280,6 @@ impl Compositor {
             width: text.width,
             height: text.height,
             indices: std::mem::take(&mut self.text_indices),
-            local_palette: Some(palette),
             control: text.control,
             ..Default::default()
         };
