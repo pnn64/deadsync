@@ -1,0 +1,115 @@
+{
+  "timestamp_utc": "2026-10-28T11:54:27Z",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "cpu": "{\"Name\":\"Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz\",\"NumberOfCores\":22,\"NumberOfLogicalProcessors\":44}",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "reference": {
+    "commit": "a466dbe88fe2576d46c43877d602f3d66b8561a7",
+    "header_sha256": "34109aa9605f657d35c02f853f283d1f231883d9397e6a24b6504cc05cc1cafd",
+    "binary_sha256": "2b34c06ba033c507eedb93787d73fccec4285027fb53fda5515636e381bd19bb",
+    "driver_sha256": "b29e86c3f52a9680f4b54c9810e301772e817ef5b7ab4a503b6097a8bdfb95db"
+  },
+  "binary_sha256": "6f25c1345df86219a642bb30823041b7bbcd03aeb223d7513d5e43e83f30cd89",
+  "sources": {
+    "crates/deadlib-audio/decode/wav/src/adpcm.rs": "a4f787397db0bc28329b6cb2878167f4658c5e9ea1d76a200f459905395c3986",
+    "crates/deadlib-audio/decode/wav/src/adpcm_encode.rs": "4929c6da23351d39cfc867092283c3b904eb6ad392c95f5c9ff31bea0a9b255a",
+    "crates/deadlib-audio/decode/wav/src/adpcm_reader.rs": "c242cdc1180f15a98513e91ba1c8f606a077a264df41195e51da53a044368244",
+    "crates/deadlib-audio/decode/wav/src/container.rs": "cfb08cf9d64828ff5e78c5b1ee1493338bd2800bfa6b65bf6d7816f1edcbdf1c",
+    "crates/deadlib-audio/decode/wav/src/encode.rs": "4bf3aa5539bd7881a93fa489a38c256f58794155d8eb59c2ea4db6857cc6f316",
+    "crates/deadlib-audio/decode/wav/src/format.rs": "2dfeac755edae4aee38301b77dd5b1cdbc99d385b0a1429d9a9564577f6c2b1c",
+    "crates/deadlib-audio/decode/wav/src/lib.rs": "ff545b7a02ca7e3ec4402c04917e598be7e6044705eac8364a1b432fc85cd6c9",
+    "crates/deadlib-audio/decode/wav/src/metadata/bext.rs": "f52c4775f678f9e89796d887e47ff42a2fbab9cb615d1d772f4c1a1b576c9f23",
+    "crates/deadlib-audio/decode/wav/src/metadata/bw64.rs": "e13eeb145d1adef0cf3f220cf8492e90b2077b217bc99f5185516cd9b6157cba",
+    "crates/deadlib-audio/decode/wav/src/metadata/markers.rs": "366a3c3e21ab0fe35032204ae131969867ea7f6aaa61ef5c546a76f1c979286b",
+    "crates/deadlib-audio/decode/wav/src/metadata/mod.rs": "b0b07e5e227d06392de1acc72a9651fc8885e2927b2992a94e09ec04041603f8",
+    "crates/deadlib-audio/decode/wav/src/metadata/riff.rs": "fb573495e2b29f328fc43cf66dd2f0e75246b83fa1cf95e69120790c1c474cd5",
+    "crates/deadlib-audio/decode/wav/src/mux.rs": "95e99906f17194fcaff360b4022062a1e640d7c483bcd2033b7d86f4032c450b",
+    "crates/deadlib-audio/decode/wav/src/pcm.rs": "8ea75a806a95f7b5df55c26419d0423165f8adc9fb2dea15e7942a1962451c86",
+    "crates/deadlib-audio/decode/wav/src/reader.rs": "e71a94ecb7374940208e12c04878bee2f7dd1a8ca82bee7c8a0f19ed19c8d133",
+    "crates/deadlib-audio/decode/wav/src/stream.rs": "52f0895d47c3362e8d3de2c1a67f0f2af0d69d976b8b2c537ad1ce0fde803ce9",
+    "crates/deadlib-audio/decode/wav/Cargo.toml": "929502416f2e89e11e3b0d33da8cb78ebc763c09d3faf462691b2a36d96172bd",
+    "crates/deadlib-audio/decode/wav/benches/metadata.rs": "9e668725104e057e18d401da691ded25381f584da46894df014f72ece8cb0888",
+    "crates/deadlib-audio/decode/wav/benches/support/mod.rs": "2b5fce67dc2e6ed05080c98e8ff8171f451499e0d54cbe18283b8b023e8e4cdd",
+    "crates/deadlib-audio/decode/wav/benches/run_metadata.py": "35c009870556b9c622e9002143d6221feda2515265f39a89ca5096419ec824b4",
+    "crates/deadlib-audio/decode/wav/tests/oracle/dr_wav_metadata_bench.c": "b29e86c3f52a9680f4b54c9810e301772e817ef5b7ab4a503b6097a8bdfb95db",
+    "crates/deadlib-audio/decode/wav/tests/reference_support.py": "a2d5792ecf89967781758d4cddbacaa5dd8bbcbeb4f5433993dda806591a3e61",
+    "Cargo.toml": "65b586de3e57b853a4a428a0a137b62ba94666fa48f3eeabe99cd0eaeb06749f",
+    "Cargo.lock": "b22402b93599e6b383c1a749cd1532c1046429e21168a10babbda9cd317c3a19",
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+  },
+  "inputs_unchanged": true,
+  "cases": [
+    {
+      "name": "small",
+      "fixture_sha256": "a55a528e8751e6a2706f8b46ca7eb89809bec2e510ff41f33542c1e89334ea94",
+      "file_bytes": 3184,
+      "iterations": 50000,
+      "order": [
+        "rust",
+        "dr_wav"
+      ],
+      "cues": 32,
+      "info_entries": 4,
+      "text_bytes_per_entry": 32,
+      "metadata_bytes": 960,
+      "audio_bytes": 2180,
+      "checksum": 31600
+    },
+    {
+      "name": "medium",
+      "fixture_sha256": "dab9fbdf2232d43debcf1ff90970d7266dbdf72315fea04cf6b646b0ab904113",
+      "file_bytes": 381640,
+      "iterations": 5000,
+      "order": [
+        "dr_wav",
+        "rust"
+      ],
+      "cues": 4096,
+      "info_entries": 64,
+      "text_bytes_per_entry": 64,
+      "metadata_bytes": 103064,
+      "audio_bytes": 278532,
+      "checksum": 152982756
+    },
+    {
+      "name": "large",
+      "fixture_sha256": "052bf6943211fece43fda3dd07b14a1537c1344d01209cc4c7c37059821fb608",
+      "file_bytes": 1643592,
+      "iterations": 1000,
+      "order": [
+        "rust",
+        "dr_wav"
+      ],
+      "cues": 16384,
+      "info_entries": 512,
+      "text_bytes_per_entry": 256,
+      "metadata_bytes": 529432,
+      "audio_bytes": 1114116,
+      "checksum": 2432762068
+    }
+  ],
+  "exit_codes": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "command": [
+    "cargo",
+    "bench",
+    "--locked",
+    "-p",
+    "deadlib-audio-decode-wav",
+    "--bench",
+    "metadata",
+    "--no-run",
+    "--message-format=json",
+    "--target-dir",
+    "target/wav"
+  ],
+  "timing_scope": "five warmed trials per operation; resident leading RIFF metadata; no disk I/O, affinity or frequency control; processes run sequentially",
+  "heap_scope": "single warmed operation; requested allocator bytes only; input and retained views excluded; not process RSS",
+  "checksum_scope": "all six cue fields including FourCC bytes, and all INFO text bytes excluding final NUL"
+}

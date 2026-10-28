@@ -36,6 +36,8 @@ pub fn exercise(input: &[u8]) -> u64 {
     if input.is_empty() || input.len() > MAX_INPUT {
         return 0;
     }
+    let expected = input.iter().position(|&b| b == 0).unwrap_or(input.len());
+    assert_eq!(metadata::nul_terminated(input), &input[..expected]);
     let data = &input[1..];
     match input[0] % 4 {
         0 => container(data),

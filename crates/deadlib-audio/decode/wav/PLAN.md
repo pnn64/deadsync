@@ -26,12 +26,18 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    profile/ADM semantics, XML compression and broader metadata benchmarks remain open.
    A resident cue/INFO comparison with dr_wav is recorded in PERFORMANCE.md;
    open+walk wins in the measured cases, retained-view walks remain slower.
+   A measured native-word NUL scan reduces large open+walk time by 33–40% and
+   retained walks by 41–49% across two paired runs; all 44 tests pass on x64
+   debug/release and i686 debug. Retained dr_wav walks still win in the repeat.
 5. Differential validation against libsndfile, dr_wav, Symphonia; independent
    fixtures, malformed corpus, streaming split matrix and bounded fuzz campaigns.
    Four million checked deterministic mutations pass across x64/i686, plus two
    million x64 libFuzzer/AddressSanitizer executions. The shared harness checks
    container/stream/seek agreement and metadata/codec state properties. See
    FUZZING.md for hashes, limits and remaining coverage; this is not exhaustive.
+   After the metadata optimization, the checked campaigns are repeated, all 1474
+   retained corpus files replay, and 500000 fresh ASan executions pass. Both
+   coverage-generated corpora are archived with verified manifests.
 6. Reproducible comparative benchmarks: open/metadata/full read/stream/seek/encode,
    CPU cycles, allocations, peak memory; optimize measured bottlenecks with parity.
    Initial resident PCM16 Hound baseline and scoped heap/Windows cycle counts are

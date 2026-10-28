@@ -20,6 +20,7 @@ def main():
     ap.add_argument('--iterations',type=int,default=1000000)
     ap.add_argument('--seed',type=int,default=20261028)
     ap.add_argument('--target',help='optional Cargo target, for example i686-pc-windows-msvc')
+    ap.add_argument('--corpus',type=Path,help='replay/mutate copies of an existing flat corpus instead of fresh independent seeds')
     args=ap.parse_args()
     if args.iterations<0 or not 0<args.seed<2**64: ap.error('invalid iteration count/seed')
     root=Path(__file__).resolve().parents[1];workspace=root.parents[3]
@@ -28,7 +29,16 @@ def main():
     before={p.relative_to(workspace).as_posix():sha(p) for p in paths}
     for suffix in ('.json','.stdout','.stderr','.build.log','-corpus'):
         if Path(str(stem)+suffix).exists(): ap.error('choose a new output stem')
-    seeds=write_corpus(Path(str(stem)+'-corpus'))
+    if args.corpus:
+        directory=Path(str(stem)+'-corpus');directory.mkdir()
+        seeds={}
+        for path in sorted(args.corpus.iterdir()):
+            if path.is_file():
+                data=path.read_bytes();(directory/path.name).write_bytes(data)
+                seeds[path.name]=hashlib.sha256(data).hexdigest()
+        if not seeds: ap.error('corpus is empty')
+    else:
+        seeds=write_corpus(Path(str(stem)+'-corpus'))
     command=['cargo','build','--locked','--release','-p','deadlib-audio-decode-wav','--example','mutate','--target-dir','target/wav','--message-format=json']
     if args.target: command+=['--target',args.target]
     # The main workspace's release profile aborts on panic. This test-only
@@ -45,7 +55,7 @@ def main():
     run=subprocess.run(command,cwd=workspace,capture_output=True)
     Path(str(stem)+'.stdout').write_bytes(run.stdout);Path(str(stem)+'.stderr').write_bytes(run.stderr)
     after={p.relative_to(workspace).as_posix():sha(p) for p in paths}
-    report=dict(timestamp_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),engine='deterministic xorshift64 mutation; not coverage guided',profile_overrides=overrides,seed=args.seed,platform=platform.platform(),target=args.target,rustc=subprocess.check_output(['rustc','-Vv'],text=True),sources=before,seeds=seeds,binary_sha256=sha(binary),command=command,exit_code=run.returncode,inputs_unchanged=before==after)
+    report=dict(timestamp_utc=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime()),engine='deterministic xorshift64 mutation; not coverage guided',profile_overrides=overrides,seed=args.seed,seed_source=str(args.corpus.resolve()) if args.corpus else 'independent fuzz_corpus.py fixtures',platform=platform.platform(),target=args.target,rustc=subprocess.check_output(['rustc','-Vv'],text=True),sources=before,seeds=seeds,binary_sha256=sha(binary),command=command,exit_code=run.returncode,inputs_unchanged=before==after)
     if run.returncode==0: report['result']=json.loads(run.stdout)
     Path(str(stem)+'.json').write_text(json.dumps(report,indent=2)+'\n')
     print(run.stdout.decode(),end='')

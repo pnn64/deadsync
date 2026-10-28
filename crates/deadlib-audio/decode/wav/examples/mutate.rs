@@ -25,12 +25,7 @@ fn main() {
         .iter()
         .map(|p| fs::read(p).unwrap())
         .collect::<Vec<_>>();
-    assert!(
-        !corpus.is_empty()
-            && corpus
-                .iter()
-                .all(|v| !v.is_empty() && v.len() <= fuzz_support::MAX_INPUT)
-    );
+    assert!(!corpus.is_empty() && corpus.iter().all(|v| v.len() <= fuzz_support::MAX_INPUT));
     let iterations: u64 = args[1].parse().unwrap();
     let mut state: u64 = args[2].parse().unwrap();
     assert_ne!(state, 0);
@@ -45,7 +40,7 @@ fn main() {
             (random(&mut state) as usize) % corpus.len()
         };
         let mut input = corpus[index].clone();
-        if i >= corpus.len() as u64 {
+        if i >= corpus.len() as u64 && !input.is_empty() {
             match random(&mut state) % 7 {
                 0 => {
                     let n = random(&mut state) as usize % (input.len() + 1);

@@ -7,7 +7,7 @@ use deadlib_audio_decode_wav::{
 };
 use std::{env, fs, hint::black_box};
 
-fn checksum(cues: Cues<'_>, info: List<'_>) -> u64 {
+fn cue_sum(cues: Cues<'_>) -> u64 {
     let mut sum = 0u64;
     for c in cues.iter() {
         sum = sum.wrapping_add(
@@ -21,12 +21,19 @@ fn checksum(cues: Cues<'_>, info: List<'_>) -> u64 {
             sum = sum.wrapping_add(u64::from(b));
         }
     }
+    sum
+}
+fn info_sum(info: List<'_>) -> u64 {
+    let mut sum = 0u64;
     for text in info.entries() {
         for &b in text.unwrap().text_bytes() {
             sum = sum.wrapping_add(u64::from(b));
         }
     }
     sum
+}
+fn checksum(cues: Cues<'_>, info: List<'_>) -> u64 {
+    cue_sum(cues).wrapping_add(info_sum(info))
 }
 fn views<'a>(wave: &Wave<'a>) -> (Cues<'a>, List<'a>) {
     let mut cues = None;
@@ -69,5 +76,13 @@ fn main() {
             black_box(checksum(black_box(cues), black_box(info))),
             expected
         );
+    });
+    let expected_cues = cue_sum(cues);
+    let expected_info = info_sum(info);
+    support::bench("wav/walk_cues_only", iters, || {
+        assert_eq!(black_box(cue_sum(black_box(cues))), expected_cues);
+    });
+    support::bench("wav/walk_info_only", iters, || {
+        assert_eq!(black_box(info_sum(black_box(info))), expected_info);
     });
 }

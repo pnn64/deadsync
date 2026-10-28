@@ -127,3 +127,41 @@ are outside the scoped allocation counts. No native codec RSS claim is made.
 This comparison covers little-endian leading cue/INFO metadata only. Broader
 metadata families, trailing RF64/BW64 metadata, disks, other references/platforms,
 and controlled confidence intervals remain outstanding.
+
+## Retained metadata word scan
+
+Component rows isolated INFO walking as the largest cost in the large fixture:
+90.3 us for INFO versus 30.7 us for cues. `metadata::nul_terminated` now checks
+one native machine word at a time using checked slices and zero-byte detection,
+then locates the first zero in a matched word in physical byte order. It adds no
+unsafe code, alignment assumption, overread, allocation or production dependency.
+Empty/tail slices retain the scalar path.
+
+The benchmark adds separate cue/INFO rows. Matching scalar baselines and word-scan
+candidates were run twice with that same benchmark. Raw reports are
+`validation/metadata-profile{,-repeat}.*` and
+`validation/metadata-word-scan{,-repeat}.*`; source/binary fingerprints identify
+each version. The scalar repeat temporarily restores the metadata module from
+commit `02c7f7d76`, and the candidate is restored before its run. This is sequential
+measurement without affinity/frequency control, not a controlled confidence interval.
+
+| Large fixture, median us | Scalar run 1 | Word scan run 1 | Scalar repeat | Word scan repeat |
+| --- | ---: | ---: | ---: | ---: |
+| INFO only | 90.332 | 42.952 | 92.512 | 45.778 |
+| Open + full metadata walk | 126.304 | 84.759 | 142.317 | 85.695 |
+| Retained full metadata walk | 144.345 | 74.247 | 139.578 | 82.965 |
+
+Large open+walk time decreased 33–40%, and retained walking decreased 41–49%.
+INFO-only medians decreased in small/medium cases too; all raw rows and cycles
+are retained. No header-opening or cue-only speed improvement is claimed.
+Scoped heap counts remain zero. In the final repeat, dr_wav's retained large
+walk is still faster (69.378 us versus 82.965 us); fresh open+walk remains faster
+here (85.695 us versus 328.179 us). Materializing metadata once has an explicit
+reuse/memory tradeoff, and this change does not erase it.
+
+The matching scalar tests check every byte pair around word boundaries, every
+short tail, unaligned long fields, termination absence and subtraction-borrow
+cases. All 44 integration tests pass in x64 debug/release and i686 debug, including
+the zero-allocation metadata probe; Clippy with denied warnings passes. The new
+helper is also compared with a scalar search by the shared fuzz harness. See
+FUZZING.md for additional mutation/sanitizer and retained-corpus replay evidence.

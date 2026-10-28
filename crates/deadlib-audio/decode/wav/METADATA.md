@@ -83,5 +83,5 @@ no unverified combined-integer interpretation. Its sample and byte positions hav
 unambiguous 64-bit access. Full BWF/BW64 application profile validation remains
 open, as do broader metadata throughput and RSS measurements. The first resident
 cue/INFO comparison is recorded in PERFORMANCE.md, including slower retained-view
-walks. Bounded metadata
+walks and the measured safe native-word string-scan optimization. Bounded metadata
 mutation and coverage-guided/AddressSanitizer evidence is recorded in FUZZING.md.

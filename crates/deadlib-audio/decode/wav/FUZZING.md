@@ -101,6 +101,34 @@ The two checked portable reports are `validation/fuzz-mutation-{x64,i686}-2m.jso
 All 42 integration tests pass on x86_64; the new mutation test also passes in
 release and on i686, alongside the earlier 41-test release/i686 checks.
 
+After the measured metadata word-scan optimization, all 44 tests pass in x64
+debug/release and i686 debug, as does Clippy. The checked deterministic campaigns
+were repeated: four million mutations plus 324 seed replays pass. Each bounded
+nonempty input also compares the NUL search against a scalar oracle. The complete 1,474-file
+earlier libFuzzer corpus replays successfully and matches its original hashes.
+A fresh ASan campaign with a different seed passes 500,000 executions in 184.64
+seconds, adds 2,867 units, and produces no failure artifact. These final-source
+reports are `validation/fuzz-word-*.json`; raw ASan logs are retained alongside them.
+Metadata field truth remains exact for all 12 independent external fixtures, with
+the same nine exact dr_wav comparisons and three documented trailing-RF64 gaps.
+
+Both complete coverage-generated corpora are preserved as deterministic ZIPs in
+`validation/fuzz-asan-2m-corpus.zip` and `fuzz-word-asan-500k-corpus.zip`. Sidecars
+record archive/report hashes and byte counts. `tests/archive_fuzz_corpus.py`
+verifies every file against the completed run manifest before archiving, then
+verifies the archive contents again. The archives contain generated fixture and
+mutated bytes only; no external codec source is embedded. Replay without depending
+on the original target directory:
+
+```sh
+python -m zipfile -e crates/deadlib-audio/decode/wav/validation/fuzz-asan-2m-corpus.zip target/wav/replay-corpus
+python crates/deadlib-audio/decode/wav/tests/run_mutation.py --iterations 0 --corpus target/wav/replay-corpus --output target/wav/replay-result
+```
+
+Use fresh extraction/output directories. The optional `--corpus` mode copies and
+hashes supplied seeds into each new run; its report identifies those seeds as an
+existing corpus rather than independent fixture generation.
+
 Engine edge/feature counts are not source line-coverage percentages.
 Sanitizer process memory includes instrumentation/runtime overhead and must not be
 reported as the normal codec's peak RSS. Longer corpora, more architectures,

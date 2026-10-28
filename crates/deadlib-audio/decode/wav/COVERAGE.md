@@ -92,6 +92,15 @@ and two million x64 libFuzzer/AddressSanitizer executions with no failures. All
 and i686, supplementing the 41-test release/i686 runs. See FUZZING.md for exact
 properties, seed provenance, hashes, raw logs and resource/coverage limits.
 
+A safe native-word NUL scan is retained after component benchmarks and two paired
+metadata runs. Large open+walk time falls 33–40%, retained walks 41–49%; dr_wav
+retained walking still wins in the final repeat. All 44 tests pass on x64
+debug/release and i686 debug, and Clippy passes. PERFORMANCE.md records raw
+trials, requested heap counts, CPU cycles and the precise scope of those results.
+The optimized source also passes repeated checked mutation campaigns, all 1474
+retained corpus inputs, 500000 fresh ASan executions, and the metadata oracle
+campaign. Verified corpus archives and raw reports are preserved; see FUZZING.md.
+
 Remaining work: forward-only audio convenience, metadata profile/semantic validation,
 wavl/slnt and multiple-data handling, oracle comparisons, broader fuzzing, sparse >4 GiB
 evidence and broad performance coverage (the first PCM16 baseline is in

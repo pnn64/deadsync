@@ -72,7 +72,22 @@ impl<'a> Chunk<'a> {
 }
 
 pub fn nul_terminated(bytes: &[u8]) -> &[u8] {
-    &bytes[..bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len())]
+    // Check a native word at a time without alignment assumptions or overreads.
+    // The subtraction/mask detects the presence of a zero byte in either byte
+    // order. Borrow propagation can mark later bytes, so locate the first zero
+    // in the original byte order only after a word has matched.
+    const WIDTH: usize = core::mem::size_of::<usize>();
+    const ONES: usize = usize::MAX / 255;
+    const HIGHS: usize = ONES * 128;
+    let (words, tail) = bytes.as_chunks::<WIDTH>();
+    for (i, &word) in words.iter().enumerate() {
+        let value = usize::from_ne_bytes(word);
+        if value.wrapping_sub(ONES) & !value & HIGHS != 0 {
+            return &bytes[..i * WIDTH + word.iter().position(|&b| b == 0).unwrap()];
+        }
+    }
+    let offset = words.len() * WIDTH;
+    &bytes[..offset + tail.iter().position(|&b| b == 0).unwrap_or(tail.len())]
 }
 pub(crate) fn count(n: usize, limits: Limits) -> Result<(), Error> {
     if n > limits.chunks {
