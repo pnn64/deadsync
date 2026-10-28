@@ -156,7 +156,7 @@ fn tagged_gapless_counts_ranges_and_seeks_follow_delay_and_padding() {
 }
 
 #[test]
-fn short_padding_drains_dsp_and_seeking_into_the_tail_is_exact() {
+fn tagged_short_padding_stops_at_physical_eof_and_explicit_trim_can_drain() {
     for version in [3, 2, 0] {
         let mut bytes = info(version, 0, 2, 4, 576, 0);
         for n in 0..4 {
@@ -168,7 +168,39 @@ fn short_padding_drains_dsp_and_seeking_into_the_tail_is_exact() {
         let mut extended = bytes.clone();
         extended.extend(zero);
         let raw = raw_pcm(&extended);
-        let mut reader = IndexedDecoder::new(Cursor::new(bytes.as_slice())).unwrap();
+        let mut tagged = IndexedDecoder::new(Cursor::new(bytes.as_slice())).unwrap();
+        let range = tagged.sample_range();
+        assert_eq!(range.raw_end(), raw_count);
+        let expected: Vec<_> = raw
+            .iter()
+            .map(|p| p[range.raw_start() as usize..range.raw_end() as usize].to_vec())
+            .collect();
+        assert_eq!(collect(&mut tagged), expected);
+        for position in [range.samples() - 1, 0, range.samples()] {
+            tagged.seek_sample(position).unwrap();
+            if position == range.samples() {
+                assert!(tagged.next_frame().unwrap().is_none());
+            } else {
+                let out = tagged.next_frame().unwrap().unwrap();
+                for (c, p) in out.pcm.planes().enumerate() {
+                    assert_eq!(
+                        p,
+                        &expected[c][position as usize..position as usize + p.len()]
+                    );
+                }
+            }
+        }
+        let mut reader = IndexedDecoder::with_options(
+            Cursor::new(bytes.as_slice()),
+            FileOptions {
+                samples: SampleMode::Trim(tags::Gapless {
+                    encoder_delay: 576,
+                    encoder_padding: 0,
+                }),
+                ..Default::default()
+            },
+        )
+        .unwrap();
         let range = reader.sample_range();
         assert_eq!(range.raw_end(), raw_count + DECODER_DELAY);
         let expected: Vec<_> = raw

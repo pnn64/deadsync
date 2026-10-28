@@ -214,7 +214,20 @@ impl FrameIndex {
         let end = start
             .checked_add(samples)
             .ok_or(Error::LimitExceeded("gapless sample position"))?;
-        Ok(SampleRange { start, end })
+        // A zero/short padding field occurs in real non-LAME files (e.g.
+        // FFmpeg/Shine). Public file decoders stop at the last physical sample;
+        // that field does not request synthesized samples after physical EOF.
+        // Caller-supplied Trim can explicitly request reconstruction of the
+        // finite DSP tail when its encoder timing is known independently.
+        let end = if mode == SampleMode::Gapless {
+            end.min(self.raw_samples)
+        } else {
+            end
+        };
+        Ok(SampleRange {
+            start: start.min(end),
+            end,
+        })
     }
 }
 fn recoverable(error: &Error, recovery: Recovery) -> bool {

@@ -9,11 +9,14 @@ opening is not a full-file PCM validation pass. The index is bounded by
 The default `SampleMode::Gapless` removes recognized Xing/Info frames and uses
 recognized LAME-compatible encoder delay/padding. Its retained length is the
 physical audio length minus encoder delay and padding. The PCM start additionally
-accounts for the native synthesis delay of 529 samples. If padding is smaller
-than that delay, a zero-spectrum granule drains the remaining DSP history.
+accounts for the native synthesis delay of 529 samples. Tagged output ends at
+physical EOF if padding is smaller than that delay, matching mpg123/Symphonia's
+file behavior on real FFmpeg/Shine files.
 Without recognized trim metadata, only the Xing/Info frame is removed. Unknown
 encoder signatures do not supply invented delay/padding. `SampleMode::Trim`
-allows an explicit caller-supplied trim; `SampleMode::Raw` retains all physical
+allows an explicit caller-supplied trim and can drain a zero-spectrum granule
+after physical EOF when that trim requests the finite DSP tail;
+`SampleMode::Raw` retains all physical
 samples, matching `StreamDecoder`.
 
 Tagged frame-count mismatches and trim lengths exceeding the audio length error.

@@ -1,0 +1,1958 @@
+{
+  "limits": {
+    "rms": 2e-06,
+    "max": 2e-05
+  },
+  "records": [
+    {
+      "case": "libmp3lame-11025-1.mp3",
+      "sha256": "71ccabcda3e607c91d7248c39b594ca92c362b643f24d4cabf83acaa7a8486d1",
+      "frames": 61,
+      "comparisons": {
+        "mad": {
+          "samples": 35136,
+          "rms": 1.200185068488695e-07,
+          "max": 1.2069940567016602e-06
+        },
+        "mpg123": {
+          "samples": 35136,
+          "rms": 6.443417254324442e-08,
+          "max": 7.37607479095459e-07
+        },
+        "symphonia": {
+          "samples": 35136,
+          "rms": 5.963150998586794e-08,
+          "max": 3.7997961044311523e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-11025-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-11025-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-11025-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-11025-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-11025-2.mp3",
+      "sha256": "27ed695a411e0d00da8056215a70701692a8e03e7a920d07aa23ca908cb9c167",
+      "frames": 61,
+      "comparisons": {
+        "mad": {
+          "samples": 70272,
+          "rms": 1.0970014118902914e-07,
+          "max": 1.125037670135498e-06
+        },
+        "mpg123": {
+          "samples": 70272,
+          "rms": 5.728429896024959e-08,
+          "max": 6.034970283508301e-07
+        },
+        "symphonia": {
+          "samples": 70272,
+          "rms": 5.565128615640941e-08,
+          "max": 3.650784492492676e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-11025-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-11025-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-11025-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-11025-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-11025-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-12000-1.mp3",
+      "sha256": "d8cf4453c5b73cb988246a65ac73bc7171f86bfb0d54a90c228a876789f58b5a",
+      "frames": 66,
+      "comparisons": {
+        "mad": {
+          "samples": 38016,
+          "rms": 1.192444024473927e-07,
+          "max": 1.1324882507324219e-06
+        },
+        "mpg123": {
+          "samples": 38016,
+          "rms": 6.404187309735436e-08,
+          "max": 6.034970283508301e-07
+        },
+        "symphonia": {
+          "samples": 38016,
+          "rms": 7.972889009686215e-08,
+          "max": 4.470348358154297e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-12000-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-12000-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-12000-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-12000-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-12000-2.mp3",
+      "sha256": "c60a909f16dd95f3a46f45d6c478f0c23d271226647710c54740c337521ef366",
+      "frames": 66,
+      "comparisons": {
+        "mad": {
+          "samples": 76032,
+          "rms": 1.0645883639541847e-07,
+          "max": 1.0132789611816406e-06
+        },
+        "mpg123": {
+          "samples": 76032,
+          "rms": 6.89544847459267e-08,
+          "max": 7.450580596923828e-07
+        },
+        "symphonia": {
+          "samples": 76032,
+          "rms": 6.635090459590989e-08,
+          "max": 4.3213367462158203e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-12000-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-12000-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-12000-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-12000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-12000-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-16000-1.mp3",
+      "sha256": "4b8fd27058e131cc25305e1f07f5fe23fafe38cb74daab3ccec49851c9542886",
+      "frames": 87,
+      "comparisons": {
+        "mad": {
+          "samples": 50112,
+          "rms": 1.2896458303490344e-07,
+          "max": 1.2814998626708984e-06
+        },
+        "mpg123": {
+          "samples": 50112,
+          "rms": 4.602162079382745e-08,
+          "max": 3.67872416973114e-07
+        },
+        "symphonia": {
+          "samples": 50112,
+          "rms": 6.413851389788872e-08,
+          "max": 3.8743019104003906e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-16000-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-16000-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-16000-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-16000-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-16000-2.mp3",
+      "sha256": "e469607badf57d146c544c0fa7218db30b3e282e114388f4aa0d8f90c8d800b1",
+      "frames": 87,
+      "comparisons": {
+        "mad": {
+          "samples": 100224,
+          "rms": 1.3443409264246807e-07,
+          "max": 1.4603137969970703e-06
+        },
+        "mpg123": {
+          "samples": 100224,
+          "rms": 4.962339338821658e-08,
+          "max": 4.76837158203125e-07
+        },
+        "symphonia": {
+          "samples": 100224,
+          "rms": 8.182453289676399e-08,
+          "max": 5.289912223815918e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-16000-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-16000-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-16000-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-16000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-16000-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-22050-1.mp3",
+      "sha256": "1a5831394f41416c4676f006ed25e409cce0938ab5299b8c6f7244d31962ea11",
+      "frames": 119,
+      "comparisons": {
+        "mad": {
+          "samples": 68544,
+          "rms": 1.223481405918177e-07,
+          "max": 1.1622905731201172e-06
+        },
+        "mpg123": {
+          "samples": 68544,
+          "rms": 5.3393568052122784e-08,
+          "max": 4.470348358154297e-07
+        },
+        "symphonia": {
+          "samples": 68544,
+          "rms": 6.661948035756698e-08,
+          "max": 4.172325134277344e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-22050-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-22050-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-22050-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-22050-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-22050-2.mp3",
+      "sha256": "66973ce80e6458bff4852753bb2e5739fd1c1f58331c79b26094d1b88d5982c1",
+      "frames": 119,
+      "comparisons": {
+        "mad": {
+          "samples": 137088,
+          "rms": 1.1697712879682626e-07,
+          "max": 1.4901161193847656e-06
+        },
+        "mpg123": {
+          "samples": 137088,
+          "rms": 5.2534766841535384e-08,
+          "max": 4.76837158203125e-07
+        },
+        "symphonia": {
+          "samples": 137088,
+          "rms": 5.360416568505015e-08,
+          "max": 4.917383193969727e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-22050-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-22050-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-22050-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-22050-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-22050-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-24000-1.mp3",
+      "sha256": "4de4cd4dbe26416b44db49ef1afad3e91889ca1b71af6d336478840e3a5d63f9",
+      "frames": 129,
+      "comparisons": {
+        "mad": {
+          "samples": 74304,
+          "rms": 1.2576206314252214e-07,
+          "max": 1.1920928955078125e-06
+        },
+        "mpg123": {
+          "samples": 74304,
+          "rms": 5.583877908004468e-08,
+          "max": 5.662441253662109e-07
+        },
+        "symphonia": {
+          "samples": 74304,
+          "rms": 6.254360282704818e-08,
+          "max": 4.172325134277344e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-24000-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-24000-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-24000-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-24000-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-24000-2.mp3",
+      "sha256": "cb7fb0b163724427c2809c66c9681549c5bb2fcf0b3592018dea7cce3abe3404",
+      "frames": 129,
+      "comparisons": {
+        "mad": {
+          "samples": 148608,
+          "rms": 1.1131586940000393e-07,
+          "max": 1.2889504432678223e-06
+        },
+        "mpg123": {
+          "samples": 148608,
+          "rms": 5.634100772922091e-08,
+          "max": 7.003545761108398e-07
+        },
+        "symphonia": {
+          "samples": 148608,
+          "rms": 5.6783654347358705e-08,
+          "max": 3.948807716369629e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-24000-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-24000-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-24000-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-24000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-24000-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-32000-1.mp3",
+      "sha256": "9e1dfd28253b857f37868088060dba4bfedaf5d48979de75db9a94a72ce9da27",
+      "frames": 86,
+      "comparisons": {
+        "mad": {
+          "samples": 99072,
+          "rms": 1.332399712620648e-07,
+          "max": 1.3634562492370605e-06
+        },
+        "mpg123": {
+          "samples": 99072,
+          "rms": 5.704554151947459e-08,
+          "max": 5.513429641723633e-07
+        },
+        "symphonia": {
+          "samples": 99072,
+          "rms": 6.255917953094006e-08,
+          "max": 3.2782554626464844e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-32000-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-32000-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-32000-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-32000-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-32000-2.mp3",
+      "sha256": "8fe5576bc68a0376e15b57c94e4edb7db1d9f6cc9beff3172f83e4a9edb5b95c",
+      "frames": 86,
+      "comparisons": {
+        "mad": {
+          "samples": 198144,
+          "rms": 1.4001995483770304e-07,
+          "max": 1.6726553440093994e-06
+        },
+        "mpg123": {
+          "samples": 198144,
+          "rms": 5.3601084412137603e-08,
+          "max": 6.48200511932373e-07
+        },
+        "symphonia": {
+          "samples": 198144,
+          "rms": 5.9251223763838636e-08,
+          "max": 3.5762786865234375e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-32000-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-32000-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-32000-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-32000-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-44100-1.mp3",
+      "sha256": "712a98745fd292d7c13f8aa3c674a79ba93da6544c2f1c474d424cadd93b3800",
+      "frames": 117,
+      "comparisons": {
+        "mad": {
+          "samples": 134784,
+          "rms": 1.2692301964777752e-07,
+          "max": 1.2665987014770508e-06
+        },
+        "mpg123": {
+          "samples": 134784,
+          "rms": 6.013025510062322e-08,
+          "max": 6.258487701416016e-07
+        },
+        "symphonia": {
+          "samples": 134784,
+          "rms": 7.033682183070804e-08,
+          "max": 3.8743019104003906e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-44100-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-44100-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-44100-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-44100-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-44100-2.mp3",
+      "sha256": "fe6b10386312be7c6b3a516a66b38ec0ab14033885f6c3ed4824c9b629fbb88b",
+      "frames": 117,
+      "comparisons": {
+        "mad": {
+          "samples": 269568,
+          "rms": 1.0981850712307013e-07,
+          "max": 1.2665987014770508e-06
+        },
+        "mpg123": {
+          "samples": 269568,
+          "rms": 6.43862077287236e-08,
+          "max": 8.344650268554688e-07
+        },
+        "symphonia": {
+          "samples": 269568,
+          "rms": 6.085231895570354e-08,
+          "max": 4.470348358154297e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-44100-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-44100-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-44100-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-44100-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-48000-1.mp3",
+      "sha256": "4165619854635a6d68b3abf5cd452cacf299b59d268750a1d64f1d6c9321c564",
+      "frames": 128,
+      "comparisons": {
+        "mad": {
+          "samples": 147456,
+          "rms": 1.2259462717669138e-07,
+          "max": 1.2218952178955078e-06
+        },
+        "mpg123": {
+          "samples": 147456,
+          "rms": 6.734968404008437e-08,
+          "max": 8.642673492431641e-07
+        },
+        "symphonia": {
+          "samples": 147456,
+          "rms": 6.7315640564373e-08,
+          "max": 3.725290298461914e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-48000-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-48000-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-48000-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-48000-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-48000-2.mp3",
+      "sha256": "adb52295d5bc64cdf36115db774f36c282680eee7d0bad841adde6c35a362add",
+      "frames": 128,
+      "comparisons": {
+        "mad": {
+          "samples": 294912,
+          "rms": 1.0799984824396598e-07,
+          "max": 1.1324882507324219e-06
+        },
+        "mpg123": {
+          "samples": 294912,
+          "rms": 6.187359945546026e-08,
+          "max": 7.599592208862305e-07
+        },
+        "symphonia": {
+          "samples": 294912,
+          "rms": 6.307904429072838e-08,
+          "max": 3.5762786865234375e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-48000-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-48000-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-48000-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-48000-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-8000-1.mp3",
+      "sha256": "31ea4a8682e13ed9e0c91075caae0e1a938c34432fc7a638171dfd169e5c7a69",
+      "frames": 45,
+      "comparisons": {
+        "mad": {
+          "samples": 25920,
+          "rms": 1.308632675689045e-07,
+          "max": 1.4603137969970703e-06
+        },
+        "mpg123": {
+          "samples": 25920,
+          "rms": 4.9234145318361435e-08,
+          "max": 3.725290298461914e-07
+        },
+        "symphonia": {
+          "samples": 25920,
+          "rms": 5.605794876243934e-08,
+          "max": 3.8743019104003906e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-8000-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-8000-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-8000-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-8000-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libmp3lame-8000-2.mp3",
+      "sha256": "12803a5c50a9f49034107b824913279306206d339b5024067f477f24d94b018d",
+      "frames": 45,
+      "comparisons": {
+        "mad": {
+          "samples": 51840,
+          "rms": 1.2113835872569104e-07,
+          "max": 1.1920928955078125e-06
+        },
+        "mpg123": {
+          "samples": 51840,
+          "rms": 5.505048502611155e-08,
+          "max": 4.6193599700927734e-07
+        },
+        "symphonia": {
+          "samples": 51840,
+          "rms": 6.637148273763782e-08,
+          "max": 4.246830940246582e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-8000-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-8000-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-8000-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libmp3lame-8000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libmp3lame-8000-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libshine-32000-1.mp3",
+      "sha256": "8a63f9615534448b1a16f1b4bdea6234c31c54b5d8f7cafedffc9f98f6945c76",
+      "frames": 85,
+      "comparisons": {
+        "mad": {
+          "samples": 97920,
+          "rms": 1.3665142771680778e-07,
+          "max": 1.341104507446289e-06
+        },
+        "mpg123": {
+          "samples": 97920,
+          "rms": 6.845652339882106e-08,
+          "max": 7.227063179016113e-07
+        },
+        "symphonia": {
+          "samples": 97920,
+          "rms": 7.939885010593735e-08,
+          "max": 3.8743019104003906e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-32000-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-32000-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-32000-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-32000-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libshine-32000-2.mp3",
+      "sha256": "d34f86a0a546ef8579e70800cc8a0a41ede75c499ec6a949b7e450802e41497a",
+      "frames": 85,
+      "comparisons": {
+        "mad": {
+          "samples": 195840,
+          "rms": 1.0298558383509116e-07,
+          "max": 8.940696716308594e-07
+        },
+        "mpg123": {
+          "samples": 195840,
+          "rms": 6.710147725367253e-08,
+          "max": 8.344650268554688e-07
+        },
+        "symphonia": {
+          "samples": 195840,
+          "rms": 7.633326763828662e-08,
+          "max": 5.662441253662109e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-32000-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-32000-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-32000-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-32000-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libshine-44100-1.mp3",
+      "sha256": "7b47fa5a6c2eb18884158c7849c5926a02e411f701d3235f5f2c9e40837d40ac",
+      "frames": 115,
+      "comparisons": {
+        "mad": {
+          "samples": 132480,
+          "rms": 1.2897073986534366e-07,
+          "max": 1.2814998626708984e-06
+        },
+        "mpg123": {
+          "samples": 132480,
+          "rms": 7.924754211643893e-08,
+          "max": 9.834766387939453e-07
+        },
+        "symphonia": {
+          "samples": 132480,
+          "rms": 8.423365501784282e-08,
+          "max": 5.066394805908203e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-44100-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-44100-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-44100-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-44100-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libshine-44100-2.mp3",
+      "sha256": "bf4e10346edf004c2ad2c5ad4f4fcce43a39e486646c7079800c9688223e3b00",
+      "frames": 115,
+      "comparisons": {
+        "mad": {
+          "samples": 264960,
+          "rms": 9.938249440869705e-08,
+          "max": 6.854534149169922e-07
+        },
+        "mpg123": {
+          "samples": 264960,
+          "rms": 7.451970891129994e-08,
+          "max": 8.419156074523926e-07
+        },
+        "symphonia": {
+          "samples": 264960,
+          "rms": 7.898026686978854e-08,
+          "max": 5.960464477539062e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-44100-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-44100-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-44100-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-44100-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libshine-48000-1.mp3",
+      "sha256": "c6bbf395a90a72974d17e3a6eee516ba0b7348d0a287e5570cefbed19bea3e69",
+      "frames": 127,
+      "comparisons": {
+        "mad": {
+          "samples": 146304,
+          "rms": 1.2764741364982607e-07,
+          "max": 1.2218952178955078e-06
+        },
+        "mpg123": {
+          "samples": 146304,
+          "rms": 6.977087759394014e-08,
+          "max": 6.854534149169922e-07
+        },
+        "symphonia": {
+          "samples": 146304,
+          "rms": 8.028249193211968e-08,
+          "max": 4.172325134277344e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-48000-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-48000-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-48000-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-48000-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "libshine-48000-2.mp3",
+      "sha256": "5341a76b34b06d3f278826d963818a44f1228e29d10746f610fdc64d7f1c8501",
+      "frames": 127,
+      "comparisons": {
+        "mad": {
+          "samples": 292608,
+          "rms": 1.0146202616169848e-07,
+          "max": 6.258487701416016e-07
+        },
+        "mpg123": {
+          "samples": 292608,
+          "rms": 6.967349529653602e-08,
+          "max": 8.493661880493164e-07
+        },
+        "symphonia": {
+          "samples": 292608,
+          "rms": 7.930931460946216e-08,
+          "max": 5.066394805908203e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-48000-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-48000-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-48000-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/libshine-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/libshine-48000-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "mp3_mf-32000-1.mp3",
+      "sha256": "9100c1f1871a7051e29885f9ac15937180570efb8b64f232b684289a301fa9b7",
+      "frames": 85,
+      "comparisons": {
+        "mad": {
+          "samples": 97920,
+          "rms": 1.3523975156331247e-07,
+          "max": 1.385807991027832e-06
+        },
+        "mpg123": {
+          "samples": 97920,
+          "rms": 6.071819012360851e-08,
+          "max": 5.960464477539062e-07
+        },
+        "symphonia": {
+          "samples": 97920,
+          "rms": 6.078926275054844e-08,
+          "max": 3.2782554626464844e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-32000-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-32000-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-32000-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-32000-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "mp3_mf-32000-2.mp3",
+      "sha256": "62f4693dc4adeb565da271f42e17f00463c57ebf8f4ac2cee53a17001363e3b6",
+      "frames": 85,
+      "comparisons": {
+        "mad": {
+          "samples": 195840,
+          "rms": 1.4133082165508784e-07,
+          "max": 1.564621925354004e-06
+        },
+        "mpg123": {
+          "samples": 195840,
+          "rms": 5.817211151915496e-08,
+          "max": 6.332993507385254e-07
+        },
+        "symphonia": {
+          "samples": 195840,
+          "rms": 5.9088202086985834e-08,
+          "max": 4.023313522338867e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-32000-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-32000-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-32000-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-32000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-32000-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "mp3_mf-44100-1.mp3",
+      "sha256": "68854250d04c94ef4f6b14b8b10db0cd3faa9435fcc3b938b972053758965705",
+      "frames": 117,
+      "comparisons": {
+        "mad": {
+          "samples": 134784,
+          "rms": 1.1886468481524645e-07,
+          "max": 1.1920928955078125e-06
+        },
+        "mpg123": {
+          "samples": 134784,
+          "rms": 6.950022574971831e-08,
+          "max": 8.344650268554688e-07
+        },
+        "symphonia": {
+          "samples": 134784,
+          "rms": 7.295177543022407e-08,
+          "max": 4.470348358154297e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-44100-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-44100-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-44100-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-44100-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "mp3_mf-44100-2.mp3",
+      "sha256": "7324bbe145b70e6fff95039c23a01f79daeb6136e46f0e150d4b7a05a38e780e",
+      "frames": 117,
+      "comparisons": {
+        "mad": {
+          "samples": 269568,
+          "rms": 1.178607140256614e-07,
+          "max": 1.214444637298584e-06
+        },
+        "mpg123": {
+          "samples": 269568,
+          "rms": 6.708166696470853e-08,
+          "max": 8.642673492431641e-07
+        },
+        "symphonia": {
+          "samples": 269568,
+          "rms": 6.506712369808378e-08,
+          "max": 4.76837158203125e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-44100-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-44100-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-44100-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-44100-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-44100-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "mp3_mf-48000-1.mp3",
+      "sha256": "a04ccf1c76815ad49f6000478f1980ffa2daed41c78ad81bff33819abb0cabc9",
+      "frames": 127,
+      "comparisons": {
+        "mad": {
+          "samples": 146304,
+          "rms": 1.128782693681235e-07,
+          "max": 1.0728836059570312e-06
+        },
+        "mpg123": {
+          "samples": 146304,
+          "rms": 6.396100008788398e-08,
+          "max": 7.972121238708496e-07
+        },
+        "symphonia": {
+          "samples": 146304,
+          "rms": 6.670650185738093e-08,
+          "max": 3.5762786865234375e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-48000-1-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-48000-1-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-48000-1-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-1.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-48000-1-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    },
+    {
+      "case": "mp3_mf-48000-2.mp3",
+      "sha256": "d50ce13a42a4687bb005163313d376db1a3d241e846c1b772a423295468ba169",
+      "frames": 127,
+      "comparisons": {
+        "mad": {
+          "samples": 292608,
+          "rms": 1.15400617302518e-07,
+          "max": 1.087784767150879e-06
+        },
+        "mpg123": {
+          "samples": 292608,
+          "rms": 6.445126464201886e-08,
+          "max": 8.940696716308594e-07
+        },
+        "symphonia": {
+          "samples": 292608,
+          "rms": 6.750294946154363e-08,
+          "max": 4.470348358154297e-07
+        }
+      },
+      "commands": [
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "native",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-48000-2-native.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mad",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-48000-2-mad.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/decode-reference-final",
+            "mpg123",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-48000-2-mpg123.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        },
+        {
+          "command": [
+            "/home/perfecttaste/.cache/deadlib-mp3/build/release/examples/decode",
+            "symphonia",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-corpus-verified/mp3_mf-48000-2.mp3",
+            "/mnt/c/GitHub/deadsync/target/deadlib-mp3-reference/encoder-pcm-v2/mp3_mf-48000-2-symphonia.bin"
+          ],
+          "exit_code": 0,
+          "stderr": ""
+        }
+      ],
+      "unsupported": []
+    }
+  ]
+}

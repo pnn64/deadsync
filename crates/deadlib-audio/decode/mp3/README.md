@@ -36,6 +36,9 @@ Native hybrid/IMDCT and polyphase synthesis kernels now pass independent
 all-frequency checks; [SYNTHESIS.md](SYNTHESIS.md) records their scope.
 Raw PCM comparisons, pinned legacy conformance vectors, stereo disagreements
 and current limitations are recorded in [RAW_PCM.md](RAW_PCM.md).
+Additional Shine, Windows Media Foundation and FFmpeg/LAME comparisons are
+recorded in [ENCODER_COMPATIBILITY.md](ENCODER_COMPATIBILITY.md), including the
+short-padding gapless correction and unusable encoder configurations.
 
 ```sh
 cargo test --locked -p deadlib-audio-decode-mp3 --target-dir target/deadlib-mp3
