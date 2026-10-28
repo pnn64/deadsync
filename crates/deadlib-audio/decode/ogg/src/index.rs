@@ -254,7 +254,7 @@ impl OggIndex {
                 index
                     .streams
                     .iter()
-                    .position(|s| s.serial == header.serial)
+                    .rposition(|s| s.serial == header.serial)
                     .ok_or(Error::Invalid("unindexed logical stream"))?
             };
             let stream = &mut index.streams[stream_index];

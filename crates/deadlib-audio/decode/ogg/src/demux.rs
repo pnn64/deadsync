@@ -140,7 +140,7 @@ impl Demuxer {
     ) -> Result<(), Error> {
         let header = page.header();
         let complete = page.completed_packets();
-        let index = match self.streams.iter().position(|s| s.serial == header.serial) {
+        let index = match self.streams.iter().rposition(|s| s.serial == header.serial) {
             Some(index) => {
                 let stream = &self.streams[index];
                 if header.is_bos() {
