@@ -162,3 +162,61 @@ API int luaopen_string(lua_State *L) {
 API int luaopen_table(lua_State *L) {luaL_register(L,"table",open_table_functions);return 1;}
 API int luaopen_os(lua_State *L) {luaL_register(L,"os",open_os_functions);return 1;}
 API int luaopen_debug(lua_State *L) {luaL_register(L,"debug",open_debug_functions);return 1;}
+
+static const luaL_Reg open_package_functions[]={
+  {"loadlib",builtin_body_158},{"seeall",builtin_body_153},{NULL,NULL}
+};
+static const luaL_Reg open_module_functions[]={
+  {"module",builtin_body_152},{"require",builtin_body_151},{NULL,NULL}
+};
+static const lua_CFunction open_package_loaders[]={
+  builtin_body_154,builtin_body_155,builtin_body_156,builtin_body_157
+};
+#ifdef _WIN32
+#define OPEN_PACKAGE_PATH ".\\?.lua;!\\lua\\?.lua;!\\lua\\?\\init.lua;!\\?.lua;!\\?\\init.lua"
+#define OPEN_PACKAGE_CPATH ".\\?.dll;!\\?.dll;!\\loadall.dll"
+#define OPEN_PACKAGE_CONFIG "\\\n;\n?\n!\n-"
+#else
+#define OPEN_PACKAGE_PATH "./?.lua;/usr/local/share/lua/5.1/?.lua;/usr/local/share/lua/5.1/?/init.lua;/usr/local/lib/lua/5.1/?.lua;/usr/local/lib/lua/5.1/?/init.lua"
+#define OPEN_PACKAGE_CPATH "./?.so;/usr/local/lib/lua/5.1/?.so;/usr/local/lib/lua/5.1/loadall.so"
+#define OPEN_PACKAGE_CONFIG "/\n;\n?\n!\n-"
+#endif
+static void open_package_path(lua_State *L,const char *field,const char *variable,const char *fallback) {
+  const char *path=getenv(variable);
+  if(!path)lua_pushstring(L,fallback);
+  else {
+    path=luaL_gsub(L,path,";;",";\1;");
+    luaL_gsub(L,path,"\1",fallback);lua_remove(L,-2);
+  }
+#ifdef _WIN32
+  {
+    char directory[MAX_PATH+1],*separator;
+    DWORD size=sizeof(directory),length=GetModuleFileNameA(NULL,directory,size);
+    if(!length||length==size||(separator=strrchr(directory,'\\'))==NULL)
+      luaL_error(L,"unable to get ModuleFileName");
+    else {
+      *separator='\0';luaL_gsub(L,lua_tolstring(L,-1,NULL),"!",directory);lua_remove(L,-2);
+    }
+  }
+#endif
+  lua_setfield(L,-2,field);
+}
+API int luaopen_package(lua_State *L) {
+  size_t i;
+  luaL_newmetatable(L,"_LOADLIB");
+  lua_pushcclosure(L,builtin_body_170,0);lua_setfield(L,-2,"__gc");
+  luaL_register(L,"package",open_package_functions);
+  lua_pushvalue(L,-1);lua_replace(L,LUA_ENVIRONINDEX);
+  lua_createtable(L,4,0);
+  for(i=0;i<sizeof(open_package_loaders)/sizeof(open_package_loaders[0]);i++){
+    lua_pushcclosure(L,open_package_loaders[i],0);lua_rawseti(L,-2,(int)i+1);
+  }
+  lua_setfield(L,-2,"loaders");
+  open_package_path(L,"path","LUA_PATH",OPEN_PACKAGE_PATH);
+  open_package_path(L,"cpath","LUA_CPATH",OPEN_PACKAGE_CPATH);
+  lua_pushstring(L,OPEN_PACKAGE_CONFIG);lua_setfield(L,-2,"config");
+  luaL_findtable(L,LUA_REGISTRYINDEX,"_LOADED",2);lua_setfield(L,-2,"loaded");
+  lua_createtable(L,0,0);lua_setfield(L,-2,"preload");
+  lua_pushvalue(L,LUA_GLOBALSINDEX);luaL_register(L,NULL,open_module_functions);lua_settop(L,-2);
+  return 1;
+}

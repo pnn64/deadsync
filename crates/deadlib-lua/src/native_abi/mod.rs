@@ -91,7 +91,8 @@ fn matching_version(pointer: usize) -> bool {
 /// opened lazily; normal/build Cargo dependencies remain empty.
 impl NativeCAbiLoader {
     /// Resolve an initializer from this VM build's C API image.
-    /// Supported names are `base`, `math`, `string`, `table`, `os` and `debug`.
+    /// Supported names are `base`, `math`, `string`, `table`, `os`, `debug`
+    /// and `package`.
     /// Bind the result with [`crate::Vm::new_native_function`] and call it with
     /// the ordinary VM API. Initialization uses the current thread's globals,
     /// registry and function environment; repeated calls create fresh closures.
@@ -103,6 +104,7 @@ impl NativeCAbiLoader {
             b"table" => b"luaopen_table",
             b"os" => b"luaopen_os",
             b"debug" => b"luaopen_debug",
+            b"package" => b"luaopen_package",
             _ => return Err(b"unsupported standard library".as_slice().into()),
         };
         let bridge = self

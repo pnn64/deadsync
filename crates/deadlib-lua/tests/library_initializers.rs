@@ -160,33 +160,74 @@ fn bare_states_run_the_public_c_initializer_corpus_in_twelve_orders() {
     );
     let loader = NativeCAbiLoader::default();
     let library = loader.open(module.to_string_lossy().as_bytes()).unwrap();
-    let program = compile_named(
-        include_bytes!("native-boundary/library-initializers.lua"),
-        b"@library-initializers.lua",
-    )
-    .unwrap();
-    for order in 1..=12 {
-        let mut vm = Vm::new_bare();
+    for source in [
+        include_bytes!("native-boundary/library-initializers.lua").as_slice(),
+        include_bytes!("native-boundary/package-initializer.lua").as_slice(),
+    ] {
+        let program = compile_named(source, b"@library-initializers.lua").unwrap();
+        for order in 1..=12 {
+            let mut vm = Vm::new_bare();
+            let function = vm
+                .new_native_function(
+                    library
+                        .clone()
+                        .symbol(b"luaopen_library_initializers")
+                        .unwrap(),
+                )
+                .unwrap();
+            vm.call(function, &[]).unwrap();
+            vm.set_global(b"library_order", Value::Number(f64::from(order)))
+                .unwrap();
+            let path = vm.intern(module.to_string_lossy().as_bytes());
+            vm.set_global(b"library_module_path", path).unwrap();
+            let result = vm.execute(&program).unwrap();
+            let [Value::String(text)] = result else {
+                panic!("comparison transcript")
+            };
+            let text = *text;
+            assert!(
+                vm.string_bytes(text)
+                    .unwrap()
+                    .starts_with(b"bare\ttrue\ttrue\ttrue\ttrue\n")
+            );
+        }
+    }
+}
+
+#[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+#[test]
+fn package_initializer_binds_its_own_environment_and_supports_imports() {
+    let mut vm = Vm::new_bare();
+    let loader = deadlib_lua::NativeCAbiLoader::default();
+    for name in [
+        b"base".as_slice(),
+        b"string",
+        b"table",
+        b"debug",
+        b"package",
+    ] {
         let function = vm
-            .new_native_function(
-                library
-                    .clone()
-                    .symbol(b"luaopen_library_initializers")
-                    .unwrap(),
-            )
+            .new_native_function(loader.standard_library(name).unwrap())
             .unwrap();
         vm.call(function, &[]).unwrap();
-        vm.set_global(b"library_order", Value::Number(f64::from(order)))
-            .unwrap();
-        let result = vm.execute(&program).unwrap();
-        let [Value::String(text)] = result else {
-            panic!("comparison transcript")
-        };
-        let text = *text;
-        assert!(
-            vm.string_bytes(text)
-                .unwrap()
-                .starts_with(b"bare\ttrue\ttrue\ttrue\ttrue\n")
-        );
+        if name == b"package" {
+            vm.set_global(b"open_package", function).unwrap();
+        }
     }
+    vm.execute(
+        &compile(
+            br#"
+assert(debug.getfenv(open_package)==package and debug.getfenv(require)==package)
+assert(package.loaded==debug.getregistry()._LOADED and package.loaded.package==package)
+package.preload.probe=function(name)collectgarbage();return{name=name}end
+local result=require('probe');assert(result.name=='probe'and require('probe')==result)
+local old,preload,loaders=package.loadlib,package.preload,package.loaders
+assert(open_package()==package and old~=package.loadlib)
+assert(package.preload~=preload and package.loaders~=loaders and package.loaded.probe==result)
+assert(debug.getfenv(package.loadlib)==package)
+"#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
 }

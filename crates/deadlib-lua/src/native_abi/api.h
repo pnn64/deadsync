@@ -193,6 +193,7 @@ API int luaopen_string(lua_State *);
 API int luaopen_table(lua_State *);
 API int luaopen_os(lua_State *);
 API int luaopen_debug(lua_State *);
+API int luaopen_package(lua_State *);
 #define luaL_addchar(B,c) \
   ((void)((B)->p < (B)->buffer + LUAL_BUFFERSIZE || luaL_prepbuffer(B)), \
    (*(B)->p++ = (char)(c)))

@@ -3,6 +3,11 @@
 #include "lauxlib.h"
 #include "lualib.h"
 #include <string.h>
+#include <stdlib.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 static lua_CFunction library_initializer(lua_State *L,int index) {
   const char *name=luaL_checkstring(L,index);
@@ -12,6 +17,7 @@ static lua_CFunction library_initializer(lua_State *L,int index) {
   if(!strcmp(name,"table"))return luaopen_table;
   if(!strcmp(name,"os"))return luaopen_os;
   if(!strcmp(name,"debug"))return luaopen_debug;
+  if(!strcmp(name,"package"))return luaopen_package;
   luaL_error(L,"unknown standard library");return NULL;
 }
 static int library_snapshot(lua_State *L,int results) {
@@ -32,6 +38,21 @@ static int library_registry(lua_State *L) {
   lua_pushvalue(L,LUA_REGISTRYINDEX);lua_pushinteger(L,count);return 2;
 }
 static int library_metatable(lua_State *L) {return lua_getmetatable(L,1);}
+static int library_environment(lua_State *L) {
+  lua_pushstring(L,getenv(luaL_checkstring(L,1)));return 1;
+}
+static int library_program_directory(lua_State *L) {
+#ifdef _WIN32
+  char buffer[MAX_PATH+1],*separator;
+  DWORD size=sizeof(buffer),length=GetModuleFileNameA(NULL,buffer,size);
+  if(!length||length==size||(separator=strrchr(buffer,'\\'))==NULL)
+    return luaL_error(L,"cannot inspect program directory");
+  *separator='\0';lua_pushstring(L,buffer);
+#else
+  lua_pushnil(L);
+#endif
+  return 1;
+}
 static int library_rawcall(lua_State *L) {
   lua_CFunction f=lua_tocfunction(L,1);int results;
   luaL_argcheck(L,f,1,"C function expected");lua_remove(L,1);
@@ -57,10 +78,19 @@ static int library_open_thread(lua_State *L) {
 #else
 #define LIBRARY_EXPORT __attribute__((visibility("default")))
 #endif
+static int library_identity(lua_State *L) {return lua_gettop(L);}
+LIBRARY_EXPORT int luaopen_package_probe(lua_State *L) {
+  lua_createtable(L,0,3);
+  lua_pushvalue(L,1);lua_setfield(L,-2,"name");
+  lua_pushvalue(L,LUA_ENVIRONINDEX);lua_setfield(L,-2,"environment");
+  lua_pushcfunction(L,library_identity);lua_setfield(L,-2,"identity");return 1;
+}
+LIBRARY_EXPORT int luaopen_package_probe_child(lua_State *L) {return luaopen_package_probe(L);}
 LIBRARY_EXPORT int luaopen_library_initializers(lua_State *L) {
   static const luaL_Reg helpers[]={
     {"library_open",library_open},{"library_rawcall",library_rawcall},
     {"library_registry",library_registry},{"library_metatable",library_metatable},
+    {"library_environment",library_environment},{"library_program_directory",library_program_directory},
     {"library_open_thread",library_open_thread},{NULL,NULL}
   };
   const luaL_Reg *entry;

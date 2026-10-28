@@ -15,6 +15,8 @@ fn run() {
     vm.call(function, &[]).unwrap();
     vm.set_global(b"library_order", Value::Number(order.parse().unwrap()))
         .unwrap();
+    let path = vm.intern(module.as_bytes());
+    vm.set_global(b"library_module_path", path).unwrap();
     let program = compile_named(
         &std::fs::read(source).unwrap(),
         b"@library-initializers.lua",

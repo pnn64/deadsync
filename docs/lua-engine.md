@@ -55,7 +55,7 @@ passed 629 Rust tests on each platform after fixing the remaining fixture
 assumptions. Crashing GNU C `unpack` inputs run in a separate strict audit;
 five native crashes remain recorded, with signed-overflow diagnostics and an
 independent wrapping control. The default reference flags remain unchanged.
-The current runs pass 809 Rust tests on Windows x64 and 810 on Linux x64 and
+The current runs pass 810 Rust tests on Windows x64 and 811 on Linux x64 and
 Linux i686 SSE2. The default x87 arithmetic baseline and five bounded traceback
 requests retain failed/incomplete observations. Complete C/auxiliary APIs and
 remaining language, library, debug, GC and resource behavior must also be
@@ -1453,8 +1453,17 @@ The checks match 66 transcript rows in each of twelve opening orders against
 release and checked references on Windows x64 and Linux i686 SSE2. They cover
 full C windows, intermediate registration values, setters and errors, closure
 environments, reopening and initialization on fresh, yielded and dead threads.
-`luaopen_io`, `luaopen_package`, `luaL_openlibs`, the four core lifecycle/allocator
+`luaopen_io`, `luaL_openlibs`, the four core lifecycle/allocator
 declarations and the broader standalone parity gates remain unfinished.
+
+The [package initializer](testing/2026-10-28-rust-lua-package-init.md) now exports
+`luaopen_package`. It preserves registry table reuse, registration order, C
+closure environments, path expansion, fresh loaders and preload tables, and
+cached imports. Comparisons match 3,024 transcript rows per profile across
+twelve opening orders and nine environment settings, including native loading,
+partial errors and initialization on yielded or waiting C activations. I/O's
+direct C close-handler path, I/O/openlibs initialization, lifecycle/allocator
+APIs and the other full Lua 5.1 parity gates remain open.
 
 ## Reference contract
 
