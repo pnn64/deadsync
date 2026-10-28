@@ -292,8 +292,43 @@ fn verify(paths: &[String]) {
     }
 }
 
+fn cold_intensity() {
+    cpu::pin_thread();
+    let header = joint(44100, 1);
+    let bands = Bands::for_rate(44100).unwrap();
+    let info = [GranuleChannel::default(); 2];
+    let factors = std::array::from_fn(|_| ScaleFactors {
+        long: [3; 22],
+        long_width: [3; 22],
+        ..Default::default()
+    });
+    let mut input = [signal::<576>(19), [0.0; 576]];
+    heap::measure(|| ());
+    black_box(cpu::cycles());
+    let start = cpu::cycles();
+    let clock = std::time::Instant::now();
+    let (_, counts) = heap::measure(|| {
+        spectral::stereo(
+            black_box(header),
+            black_box(&info),
+            black_box(&factors),
+            bands,
+            black_box(&mut input),
+        )
+        .unwrap();
+    });
+    let ns = clock.elapsed().as_nanos();
+    let cycles = cpu::cycles() - start;
+    println!("cold/intensity: cycles/op {cycles}; ns/op {ns}");
+    println!("cold/intensity: allocation {counts:?}");
+}
+
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|s| s == "cold-intensity") {
+        cold_intensity();
+        return;
+    }
     if args.first().is_some_and(|s| s == "cold") {
         cpu::pin_thread();
         let input = [0; 576];
@@ -476,6 +511,52 @@ fn main() {
             )
             .unwrap();
         });
+    }
+    for (rate, kind, mixed) in [(44100, 0, false), (44100, 2, false), (8000, 2, true)] {
+        for mode in [1, 3] {
+            for live in [0, 384] {
+                let mut source = [signal::<576>(19), signal::<576>(31)];
+                source[1][live..].fill(0.0);
+                let info = [GranuleChannel {
+                    block_type: kind,
+                    mixed_block: mixed,
+                    ..Default::default()
+                }; 2];
+                let factors = [
+                    ScaleFactors {
+                        long: [3; 22],
+                        short: [[3; 3]; 13],
+                        long_width: [3; 22],
+                        short_width: [[3; 3]; 13],
+                        ..Default::default()
+                    },
+                    ScaleFactors {
+                        long: [3; 22],
+                        short: [[3; 3]; 13],
+                        long_width: [3; 22],
+                        short_width: [[3; 3]; 13],
+                        ..Default::default()
+                    },
+                ];
+                let header = joint(rate, mode);
+                let bands = Bands::for_rate(rate).unwrap();
+                probe(
+                    &format!("stereo-shape/{rate}/{kind}/{mixed}/{mode}/{live}"),
+                    10_000,
+                    || {
+                        let mut input = source;
+                        spectral::stereo(
+                            header,
+                            black_box(&info),
+                            black_box(&factors),
+                            bands,
+                            black_box(&mut input),
+                        )
+                        .unwrap();
+                    },
+                );
+            }
+        }
     }
     for path in &args {
         let frames = packets(Path::new(path));

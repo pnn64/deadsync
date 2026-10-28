@@ -218,13 +218,14 @@ pub fn stereo(
         let mut short_bounds = [if mixed { 3 } else { 0 }; 3];
         let mut short_nonzero = false;
         if short {
-            for band in if mixed { 3 } else { 0 }..13 {
-                for (window, bound) in short_bounds.iter_mut().enumerate() {
+            for (window, bound) in short_bounds.iter_mut().enumerate() {
+                for band in (if mixed { 3 } else { 0 }..13).rev() {
                     if (bands.short()[band] as usize..bands.short()[band + 1] as usize)
                         .any(|n| right[3 * n + window] != 0.0)
                     {
                         *bound = band + 1;
                         short_nonzero = true;
+                        break;
                     }
                 }
             }
@@ -239,12 +240,13 @@ pub fn stereo(
             22
         };
         let mut long_bound = 0;
-        for band in 0..long_count {
+        for band in (0..long_count).rev() {
             if right[bands.long()[band] as usize..bands.long()[band + 1] as usize]
                 .iter()
                 .any(|&v| v != 0.0)
             {
                 long_bound = band + 1;
+                break;
             }
         }
         for band in long_bound..long_count {

@@ -98,8 +98,12 @@ def main():
     parser.add_argument("--verify-corpus", action="append", type=Path, default=[],
                         help="compare exact PCM for every MP3 in these directories instead of timing")
     parser.add_argument("--runs", type=int, default=7)
+    parser.add_argument("--first-use", choices=["cold", "cold-intensity"],
+                        help="measure one first-use operation per fresh process instead of warmed probes")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
+    if args.first_use and args.verify_corpus:
+        parser.error("--first-use cannot be combined with --verify-corpus")
     for fixture in args.fixture:
         if not fixture.is_file():
             parser.error(f"fixture does not exist: {fixture}")
@@ -148,12 +152,16 @@ def main():
     for run in range(args.runs):
         order = args.stage[run % len(args.stage):] + args.stage[:run % len(args.stage)]
         for stage in order:
-            output = invoke([manifests[stage]["binary"], *first["fixtures"]]).decode()
+            inputs = [args.first_use] if args.first_use else list(first["fixtures"])
+            output = invoke([manifests[stage]["binary"], *inputs]).decode()
             counts = {label: dict(re.findall(r"(\w+): (\d+)", fields))
                       for label, fields in allocation.findall(output)}
             measurements = timing.findall(output)
             assert len(measurements) == len(counts)
-            if "workloads" in first:
+            if args.first_use:
+                expected = "cold/zero" if args.first_use == "cold" else "cold/intensity"
+                assert {m[0] for m in measurements} == {expected}
+            elif "workloads" in first:
                 assert {m[0] for m in measurements} == set(first["workloads"])
             else:
                 assert len(measurements) == 13 + len(first["fixtures"])
@@ -183,7 +191,8 @@ def main():
         print(f"{label}: " + " -> ".join(f"{v:.2f}" for v in values)
               + f" cycles/op; {values[0] / values[-1]:.3f}x CPU throughput")
     args.output.with_suffix(".json").write_text(
-        json.dumps(dict(stages=manifests, runs=args.runs, summary=summary), indent=2) + "\n")
+        json.dumps(dict(stages=manifests, runs=args.runs, first_use=args.first_use,
+                        driver_sha256=sha(Path(__file__)), summary=summary), indent=2) + "\n")
 
 
 if __name__ == "__main__":

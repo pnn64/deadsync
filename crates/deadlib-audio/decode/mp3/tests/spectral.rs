@@ -241,7 +241,13 @@ fn big_values_errors_and_partial_count1_stuffing() {
 fn joint_header(rate: u32, mode: u8) -> FrameHeader {
     let (version, index) = match rate {
         44100 => (3, 0),
+        48000 => (3, 1),
+        32000 => (3, 2),
         22050 => (2, 0),
+        24000 => (2, 1),
+        16000 => (2, 2),
+        11025 => (0, 0),
+        12000 => (0, 1),
         8000 => (0, 2),
         _ => panic!("test rate"),
     };
@@ -423,4 +429,124 @@ fn short_intensity_bounds_are_independent_per_window() {
     assert!((spectra[0][1] - 0.5).abs() < 1e-14);
     assert_eq!(spectra[1][15], 2.0);
     assert!((spectra[0][24] - 0.5).abs() < 1e-14);
+}
+
+#[test]
+fn combined_stereo_matches_known_independent_window_and_mixed_boundaries() {
+    for rate in [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000] {
+        let bands = Bands::for_rate(rate).unwrap();
+        for (kind, mixed, short_data) in [
+            (0, false, true),
+            (1, false, true),
+            (3, false, true),
+            (2, false, true),
+            (2, true, true),
+            (2, true, false),
+        ] {
+            let mut source = [[0.0; 576], [-0.0; 576]];
+            source[0] = std::array::from_fn(|n| {
+                [0.0, -0.0, 1.0, -2.0, f64::from_bits(1), f64::MIN_POSITIVE][n % 6]
+            });
+            let mut intensity_lines = [false; 576];
+            if kind != 2 {
+                source[1][bands.long()[4] as usize] = 1.0;
+                intensity_lines[bands.long()[5] as usize..].fill(true);
+            } else if short_data {
+                for (window, last_band) in [4, 7, 10].into_iter().enumerate() {
+                    source[1][3 * bands.short()[last_band] as usize + window] = 1.0;
+                    for frequency in bands.short()[last_band + 1] as usize..192 {
+                        intensity_lines[3 * frequency + window] = true;
+                    }
+                }
+            } else {
+                source[1][bands.long()[2] as usize] = 1.0;
+                intensity_lines[bands.long()[3] as usize..bands.mixed_lines()].fill(true);
+                intensity_lines[bands.mixed_lines()..].fill(true);
+            }
+            for mode in [1, 3] {
+                let header = joint_header(rate, mode);
+                let info = [GranuleChannel {
+                    block_type: kind,
+                    mixed_block: mixed,
+                    ..Default::default()
+                }; 2];
+                for pan in [0, 7] {
+                    let factors = std::array::from_fn(|_| ScaleFactors {
+                        long: [pan; 22],
+                        short: [[pan; 3]; 13],
+                        long_width: [3; 22],
+                        short_width: [[3; 3]; 13],
+                        ..Default::default()
+                    });
+                    let mut output = source;
+                    spectral::stereo(header, &info, &factors, bands, &mut output).unwrap();
+                    for line in 0..576 {
+                        let (left, right) = (source[0][line], source[1][line]);
+                        let expected = if pan == 0 && intensity_lines[line] {
+                            (
+                                left * if header.version() == MpegVersion::Mpeg1 {
+                                    0.0
+                                } else {
+                                    1.0
+                                },
+                                left * 1.0,
+                            )
+                        } else if mode == 3 {
+                            (
+                                (left + right) * std::f64::consts::FRAC_1_SQRT_2,
+                                (left - right) * std::f64::consts::FRAC_1_SQRT_2,
+                            )
+                        } else {
+                            (left, right)
+                        };
+                        assert_eq!(
+                            (output[0][line].to_bits(), output[1][line].to_bits()),
+                            (expected.0.to_bits(), expected.1.to_bits()),
+                            "rate={rate} kind={kind} mixed={mixed} short_data={short_data} mode={mode} pan={pan} line={line}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn cached_mpeg1_intensity_gains_match_runtime_tangent_bits() {
+    let header = joint_header(44100, 1);
+    let bands = Bands::for_rate(44100).unwrap();
+    let info = [GranuleChannel::default(); 2];
+    let values = [
+        0.0,
+        -0.0,
+        1.0,
+        -2.0,
+        f64::from_bits(1),
+        f64::MIN_POSITIVE,
+        f64::MAX,
+        f64::INFINITY,
+    ];
+    let source = std::array::from_fn(|n| values[n % values.len()]);
+    for pan in 1..=5 {
+        let ratio = (std::f64::consts::PI * std::hint::black_box(pan as f64) / 12.0).tan();
+        let expected = [ratio / (1.0 + ratio), 1.0 / (1.0 + ratio)];
+        let factors = std::array::from_fn(|_| ScaleFactors {
+            long: [pan; 22],
+            long_width: [3; 22],
+            ..Default::default()
+        });
+        for _ in 0..3 {
+            let mut output = [source, [0.0; 576]];
+            spectral::stereo(header, &info, &factors, bands, &mut output).unwrap();
+            for channel in 0..2 {
+                for (line, &sample) in source.iter().enumerate() {
+                    assert_eq!(
+                        output[channel][line].to_bits(),
+                        (sample * expected[channel]).to_bits(),
+                        "pan={pan} channel={channel} line={line}"
+                    );
+                }
+            }
+        }
+    }
 }
