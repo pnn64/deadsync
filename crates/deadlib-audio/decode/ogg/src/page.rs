@@ -231,7 +231,16 @@ impl<'a> Iterator for Fragments<'a> {
         } else if self.lacing.len() <= 4 {
             (self.lacing.len(), self.lacing.len() * 255, false)
         } else {
-            let count = fragment_segment_count(self.lacing);
+            let count = if self.lacing.len() < 8 {
+                // The four inline probes already established this prefix is all 255.
+                let tail = &self.lacing[4..];
+                4 + tail
+                    .iter()
+                    .position(|&n| n < 255)
+                    .map_or(tail.len(), |n| n + 1)
+            } else {
+                fragment_segment_count(self.lacing)
+            };
             let last = self.lacing[count - 1];
             // Every segment before the terminator is exactly 255 bytes.
             (count, (count - 1) * 255 + last as usize, last < 255)
