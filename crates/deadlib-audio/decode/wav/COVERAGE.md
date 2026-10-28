@@ -151,6 +151,15 @@ All 69 tests pass on x64 debug/release and i686 debug, with Clippy, two million
 checked mutations, 100000 fresh ASan executions and 2507 earlier corpus files.
 All 460 ordinary native fixtures and 204 ADPCM file/range regressions also pass.
 
+The compact native view retains identical established native truth: the 708-case
+flat/wavl replay passes 4484 descriptor/read/range checks and 1912 exact encoded
+outputs against immutable earlier reports and fixture archives. The full 69-test
+suite passes on x64 debug/release and i686 debug; Clippy, two million checked
+mutations, 2507 prior corpus inputs and 100000 fresh ASan executions pass.
+`validation/compact-*` records source/binary hashes, logs and the new corpus.
+PERFORMANCE.md records the paired size/construction measurements and slower
+on-demand full-format queries. External references were not rerun for this replay.
+
 Remaining work: metadata profile/semantic validation, compressed wavl routing,
 broader fuzzing and representative comparative performance/RSS coverage
 (the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); extensible

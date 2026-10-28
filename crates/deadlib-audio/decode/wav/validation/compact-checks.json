@@ -1,0 +1,98 @@
+{
+  "sources": {
+    "src\\adpcm.rs": "20007f17bffde949bdfe52c099a930235a62a4fa0f9d6dbe06c2fd2c78d455b1",
+    "src\\adpcm_encode.rs": "b27ead85b6e2f92124f195b80112fd707f917ae13222a549322052be339390f6",
+    "src\\adpcm_forward.rs": "11eb483cfea72c31b6bce7b45bdfc5dcde61d701ad54448c7be22cb1f28c5e66",
+    "src\\adpcm_reader.rs": "0e3c08d369b8ceb9c71dc87f9665b536a7db8f3f1613e20b30c40dbf5b7d59bc",
+    "src\\container.rs": "f159a67ce3c36237c5db242970cdeb58067db57df215314a80786d6e5959bb68",
+    "src\\encode.rs": "ab10eb8b844792401abd0b739c6af9d8ea82b819689805fdfe01daaefca2c381",
+    "src\\format.rs": "2dfeac755edae4aee38301b77dd5b1cdbc99d385b0a1429d9a9564577f6c2b1c",
+    "src\\forward.rs": "8944408830f71c78dca32b9e526b2dc936a63dbeab00e729f9e3dc552f82a334",
+    "src\\lib.rs": "3a1d2d39217e21a7052d98288c207be9b5da4784bb36957d3c5ef62ba63f1bf3",
+    "src\\metadata\\bext.rs": "f52c4775f678f9e89796d887e47ff42a2fbab9cb615d1d772f4c1a1b576c9f23",
+    "src\\metadata\\bw64.rs": "e13eeb145d1adef0cf3f220cf8492e90b2077b217bc99f5185516cd9b6157cba",
+    "src\\metadata\\markers.rs": "366a3c3e21ab0fe35032204ae131969867ea7f6aaa61ef5c546a76f1c979286b",
+    "src\\metadata\\mod.rs": "b0b07e5e227d06392de1acc72a9651fc8885e2927b2992a94e09ec04041603f8",
+    "src\\metadata\\riff.rs": "fb573495e2b29f328fc43cf66dd2f0e75246b83fa1cf95e69120790c1c474cd5",
+    "src\\mux.rs": "1a881714e9d013a51228a5b15090bf5ab65216aea6af011618474731f13a1c7f",
+    "src\\native_io.rs": "cb1080b22befafa43c7dbe165b8705327c80654f00e5155f279b631411872181",
+    "src\\pcm.rs": "d0f0241669603341d73d8a6b5e381a8f405e8631292beaa62e2354adafc26dfe",
+    "src\\reader.rs": "8c9120857d0baa74d767e15226476ee593dd88b8ac7244751c19b95f1cd513f9",
+    "src\\stream.rs": "31fdbd16af1f869e4c7a79291de44acc29d753a7147de59e051f8b714c67d3ab",
+    "src\\timeline.rs": "b6e79f3fade91aff466bf43209591ed4539b2547a3b9bf6692f9ec1f7bc13f7a",
+    "src\\wavl_encode.rs": "701e7949dc4dadd61bf28196fcc5ef9d4cf73728df5a34a7cd3105a682f42215"
+  },
+  "inputs_unchanged": true,
+  "checks": [
+    {
+      "label": "debug",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-wav",
+        "--tests",
+        "--target-dir",
+        "target/wav"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 12.308267400134355,
+      "log_sha256": "76091339f0489da113431c4e7b22ab7da12b4937bfd505b8b9d37e3d7dbe1db8"
+    },
+    {
+      "label": "release",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-wav",
+        "--tests",
+        "--target-dir",
+        "target/wav",
+        "--release"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 1.6332857999950647,
+      "log_sha256": "b5349019d900766ad6aafa56fde621b51b8512bc02712a40a9b30c21a06fda68"
+    },
+    {
+      "label": "i686",
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-wav",
+        "--tests",
+        "--target-dir",
+        "target/wav",
+        "--target",
+        "i686-pc-windows-msvc"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 6.787369200028479,
+      "log_sha256": "c2b547d6bad4468c71b2e482ad8d73d9235a9dedec3ceeef880ff10e4fd3561c"
+    },
+    {
+      "label": "clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-wav",
+        "--all-targets",
+        "--target-dir",
+        "target/wav",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "exit_code": 0,
+      "elapsed_seconds": 3.000582299893722,
+      "log_sha256": "2f755308de1bc8c4007a0597d63d8fca1e7bae567372f834d7d0d8708fd8167b"
+    }
+  ]
+}

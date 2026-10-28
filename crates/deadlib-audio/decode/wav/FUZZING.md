@@ -180,3 +180,15 @@ new properties. `wavl-prior-corpus-provenance.json` records both archive hashes;
 source inputs remained unchanged during these campaigns. The full 69-test suite,
 Clippy, the 248-case wavl oracle, 460-case flat native regression and 204-case
 earlier ADPCM range regression also pass. WAVL.md records exact API/format scope.
+
+The compact PCM view repeats the 318-seed campaign without changing the shared
+properties: `validation/compact-mutation-{x64,i686}.*` each pass one million
+checked mutations, and `compact-prior-replay.*` passes all 2507 earlier unique
+inputs. `compact-asan.*` passes 100000 executions in 121.34 seconds, adds 2010
+units and produces no failure artifact. Its complete 1443-file corpus is retained
+in `compact-asan-corpus.zip` with the verified archive/report sidecar. The 270 MiB
+ASan peak includes instrumentation/runtime overhead; it is not normal codec RSS.
+All campaign source hashes remain unchanged. The 708-case native replay retains
+4484 descriptor/decode/range hashes and 1912 exact writer outputs, and all 69
+tests pass in x64 debug/release and i686 debug along with Clippy. PERFORMANCE.md
+records the fixed-state size reduction and the full-format-query time tradeoff.

@@ -228,3 +228,52 @@ thread-cycle counts warrant profiling the added state and dispatch. No opening
 speed improvement is claimed; this retained result is the baseline for that work.
 Segmented throughput, allocation inventories and comparative memory still need
 their own measurements.
+
+## Compact PCM view state
+
+The native view now retains validated sample/layout fields and the borrowed raw
+format bytes, reconstructing the complete Format only on `Pcm::format()` calls.
+On x64, Pcm decreases from 128 to 64 bytes. Wave (248), Reader (232) and
+ForwardReader (256) retain their previous sizes. This is object/stack state,
+not a reduction in heap allocation or measured process RSS. Native frame loops
+use cached fields; constructor validation and public behavior are unchanged.
+
+The PCM16 harness now reports these sizes and separates retained view creation
+from full-format queries. Short-operation rows run one million iterations per
+trial, with three trials per operation. `validation/pcm-layout-control-long.*`
+and `pcm-layout-control-repeat.*` use the original Pcm/native_io sources from
+`f729d7a64`; `pcm-compact-view{,-repeat}.*` use the retained compact state. All
+four use the same instrumented benchmark, including sample/pointer/output checks.
+
+| Median ns/op | Original 1 | Compact 1 | Original repeat | Compact repeat |
+| --- | ---: | ---: | ---: | ---: |
+| Borrowed open | 100.685 | 101.134 | 104.848 | 100.402 |
+| Direct view including open | 150.367 | 135.609 | 145.255 | 125.211 |
+| View from retained Wave | 50.867 | 36.051 | 47.977 | 34.190 |
+| Full format query from retained Pcm | 10.397 | 25.006 | 10.132 | 22.532 |
+
+Retained view creation takes about 29% less time in both pairs; direct access
+including open takes 9.8–13.8% less time. A full-format query instead costs about
+23–25 ns versus 10 ns. Creating a view and immediately querying that descriptor
+therefore has roughly unchanged combined cost. Callers repeatedly inspecting
+metadata can retain the returned Format. No opening, full-copy, streaming or
+encoding improvement is claimed. Separate runs lack affinity/frequency control;
+raw trial variation, CPU cycles and every other workload row remain available.
+Requested allocation counts remain zero for borrowed/direct/caller-copy paths,
+two calls/112 bytes for Reader streaming and one call/16 bytes for forward input.
+
+The initial shorter 100000-iteration `pcm-layout-control.*` run was noisy and
+is retained without supporting a speed claim. Its exact benchmark source is
+`pcm-layout-control-bench.rs.txt`. A separate experiment sharing the top-level
+and child chunk budget produced a 103.710 ns opening median against 100.685 ns
+in the first long control. It was reverted: `pcm-shared-budget.*` and its exact
+`pcm-shared-budget-container.rs.txt` snapshot preserve that rejected experiment.
+The final parser keeps the earlier independent budget checks.
+
+`validation/compact-native-replay.json` checks the immutable flat/wavl oracle
+archives and prior independently expected hashes: 708 fixture gates, 4484
+descriptor/read/range checks and 1912 exact encoded-file outputs pass. This is a
+replay of established sample truth, not a fresh external-library comparison.
+All 69 integration tests pass in x64 debug/release and i686 debug; denied-warning
+Clippy passes (`compact-checks*`). Two million checked mutations, 2507 earlier
+corpus inputs and 100000 fresh ASan executions also pass; see FUZZING.md.

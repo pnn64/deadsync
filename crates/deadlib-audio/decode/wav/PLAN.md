@@ -102,6 +102,14 @@ ASan executions and 2507 unique retained corpus files pass. The earlier 460 nati
 and 204 ADPCM file/range regressions also pass. WAVL.md records u64 silence/physical
 offset evidence, the Option-based contiguous accessors, metadata and limits.
 
+The compact PCM view halves x64 state from 128 to 64 bytes and reduces retained
+view construction time about 29% in two paired runs. Full-format queries cost
+23–25 ns instead of 10 ns; PERFORMANCE.md retains that tradeoff, every trial and
+the reverted shared-budget experiment. All 708 retained native fixture gates,
+4484 descriptor/read/range checks and 1912 exact encoded outputs pass. All 69
+tests pass on x64 debug/release and i686 debug; Clippy, two million checked
+mutations, 2507 earlier corpus inputs and 100000 fresh ASan executions pass too.
+
 Required work still includes extensible ADPCM, compressed wavl routing,
 representative comparative benchmarks, comparative RSS and sequential
 disk evidence, and broader native/reference fixtures. Metadata profile/semantic certification

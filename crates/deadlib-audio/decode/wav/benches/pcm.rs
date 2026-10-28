@@ -137,6 +137,14 @@ fn main() {
     }
     assert_eq!(decoded, samples);
     println!(
+        "# state_bytes: Format={} Wave={} Pcm={} Reader={} ForwardReader={}",
+        std::mem::size_of::<deadlib_audio_decode_wav::Format<'static>>(),
+        std::mem::size_of::<Wave<'static>>(),
+        std::mem::size_of::<deadlib_audio_decode_wav::Pcm<'static>>(),
+        std::mem::size_of::<Reader<Cursor<&'static [u8]>>>(),
+        std::mem::size_of::<ForwardReader<&'static [u8]>>(),
+    );
+    println!(
         "# frames={frames}; channels=2; sample=i16; encoded_bytes={}; caller_full_output_bytes={}; stream_output_bytes=8192",
         encoded.len(),
         samples.len() * 2
@@ -144,13 +152,13 @@ fn main() {
     println!(
         "operation\ttrial\titers\tns_per_op\tthread_cycles_per_op\tMiB_per_s\talloc_calls\trequested_bytes\tpeak_requested_live_bytes"
     );
-    bench("wav/open_borrowed", 100_000, 0, || {
+    bench("wav/open_borrowed", 1_000_000, 0, || {
         black_box(Wave::parse(black_box(&encoded)).unwrap());
     });
-    bench("hound/open", 100_000, 0, || {
+    bench("hound/open", 1_000_000, 0, || {
         black_box(hound::WavReader::new(Cursor::new(black_box(&encoded))).unwrap());
     });
-    bench("wav/direct_view", 100_000, 0, || {
+    bench("wav/direct_view", 1_000_000, 0, || {
         black_box(
             Wave::parse(black_box(&encoded))
                 .unwrap()
@@ -159,6 +167,13 @@ fn main() {
                 .as_i16()
                 .unwrap(),
         );
+    });
+    bench("wav/view_retained", 1_000_000, 0, || {
+        black_box(black_box(&wave).pcm().unwrap());
+    });
+    let view = wave.pcm().unwrap();
+    bench("wav/format_retained", 1_000_000, 0, || {
+        black_box(black_box(view).format());
     });
     bench("wav/read_caller_i16", 128, samples.len() * 2, || {
         let wave = Wave::parse(black_box(&encoded)).unwrap();

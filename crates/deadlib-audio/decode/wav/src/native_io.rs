@@ -8,11 +8,19 @@ pub(crate) struct NativeIo {
 }
 impl NativeIo {
     pub(crate) fn new(format: Format<'_>) -> Result<Self, Error> {
-        Ok(Self {
-            sample: format.sample_format()?,
-            channels: usize::from(format.channels),
-            endian: format.endian,
-        })
+        Ok(Self::from_parts(
+            format.sample_format()?,
+            usize::from(format.channels),
+            format.endian,
+        ))
+    }
+    /// Private callers supply already validated native layout fields.
+    pub(crate) fn from_parts(sample: SampleFormat, channels: usize, endian: Endian) -> Self {
+        Self {
+            sample,
+            channels,
+            endian,
+        }
     }
     pub(crate) fn read_i16(
         self,

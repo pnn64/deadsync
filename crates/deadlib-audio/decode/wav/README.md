@@ -21,6 +21,9 @@ NaN payloads, signed zero, and subnormals. No implicit float normalization occur
 `Wave::data()`/`data_offset()`, reader `data_chunk()` and `Pcm::as_bytes()` return
 Some only for contiguous data; segmented audio returns None. `Pcm::read_frames`
 copies raw whole frames, and `Pcm::samples()` returns the logical count as u128.
+The view caches its native layout in compact state. `Pcm::format()` reconstructs
+the complete descriptor from validated borrowed bytes; retain that result when
+querying format metadata repeatedly. Frame reads do not repeat that parsing.
 
 `Reader<R: Read + Seek>` scans chunk headers, retains format and metadata offsets,
 and seeks over audio. `seek_frame` addresses native PCM/float frames exactly with
