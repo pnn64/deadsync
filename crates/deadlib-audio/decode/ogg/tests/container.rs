@@ -50,6 +50,43 @@ fn fixture() -> (Vec<u8>, Vec<Vec<u8>>) {
 }
 
 #[test]
+fn fragment_ranges_match_independent_lace_accumulation() {
+    for segments in 0..=255 {
+        for flags in [0, CONTINUED] {
+            for seed in 0..8 {
+                let lacing: Vec<_> = (0..segments)
+                    .map(|i| [255, 255, 0, 1, 254, 255, 17, 255][(i + seed) % 8])
+                    .collect();
+                let body: Vec<_> = (0..lacing.iter().map(|&n| n as usize).sum())
+                    .map(|i| (i * 37) as u8)
+                    .collect();
+                let bytes = page(flags, 0, 1, 0, &lacing, &body);
+                let parsed = Page::parse(&bytes).unwrap().0;
+                let mut fragments = parsed.fragments();
+                let mut offset = 0;
+                let mut length = 0;
+                let mut starts = flags == 0;
+                for (i, &lace) in lacing.iter().enumerate() {
+                    length += lace as usize;
+                    if lace < 255 || i + 1 == segments {
+                        let fragment = fragments.next().unwrap();
+                        assert_eq!(fragment.data, &body[offset..offset + length]);
+                        assert_eq!(fragment.data.as_ptr(), parsed.body()[offset..].as_ptr());
+                        assert_eq!(fragment.starts_packet, starts);
+                        assert_eq!(fragment.ends_packet, lace < 255);
+                        offset += length;
+                        length = 0;
+                        starts = true;
+                    }
+                }
+                assert!(fragments.next().is_none());
+                assert_eq!(offset, body.len());
+            }
+        }
+    }
+}
+
+#[test]
 fn crc_matches_independent_bitwise_polynomial() {
     let data: Vec<u8> = (0..65536).map(|n| (n * 13 + n / 17) as u8).collect();
     let mut crc = 0u32;
