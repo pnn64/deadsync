@@ -61,14 +61,34 @@ Chunk/Wave views when exact original pad bytes must be retained. The callback
 chooses whether to copy, parse or discard payloads, and its errors are propagated.
 
 AdpcmForwardReader retains one encoded and one decoded block, shared by arbitrary
-caller read sizes. It knows the exact decoded length before emitting samples from
-a leading fact, ds64 sample count, or an explicit external frame count supplied
-to from_reader_with_frames. Finish checks the final encountered fact/ds64 against
-that count and rejects a missing required duration. Trailing fact therefore works
-with ds64 or an externally known count. A plain RIFF stream whose count is only
-available after data needs that explicit count; this API does not buffer the
-whole encoded stream or emit untrimmed speculative samples. Its initial and final
-duration checks do not decode intentionally unread compressed blocks.
+caller read sizes. It trims output to a leading fact, a provisional raw ds64 count,
+or an explicit external frame count supplied to from_reader_with_frames. Finish
+checks the final encountered fact/ds64 against that count and rejects a missing
+required duration. A plain RIFF stream whose count is only available after data
+needs the explicit count. This API does not buffer the whole encoded stream.
+Its initial and final duration checks do not decode intentionally unread blocks.
+
+[EBU Tech 3306, section 3.4](https://tech.ebu.ch/docs/tech/tech3306v1_1.pdf)
+selects ds64 sampleCount only when the corresponding 32-bit fact field is
+0xFFFFFFFF; an ordinary fact count takes precedence. Until a trailing fact is
+encountered, the raw ds64 field may therefore be unused and arbitrary. The
+explicit-count constructor checks a leading fact immediately, ignores that raw
+hint when fact is still unknown, and validates the encountered fact during finish.
+The inferred-count constructor retains its existing ds64 fallback; if the later
+ordinary fact differs, finish rejects that inference. Supply the explicit count
+when the unused raw field differs from the known duration. ds64_sample_count()
+exposes the raw field without claiming that it is authoritative.
+
+For native wavl, frames() returns a leading fact (including an RF64-resolved
+sentinel), or the observed sequence length after its boundary is reached. It
+returns Unsupported before either is known, including RF64 input. Reading native
+frames does not need that upfront duration; finish validates the required fact.
+The equivalent BW64 tests exercise the crate's existing RF64-style compatibility
+extensions. BW64 profile conformance is not established by those cases:
+[ITU-R BS.2088-2, Annex 1 section 4.2](https://www.itu.int/dms_pubrec/itu-r/rec/bs/R-REC-BS.2088-2-202511-I!!PDF-E.pdf)
+treats the corresponding ds64 words as ignored dummy fields and does
+not use fact in its current profile. Correct BW64 dummy-field output and profile
+validation remain separate work.
 
 ## Known-length Write-only output
 

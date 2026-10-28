@@ -52,8 +52,9 @@ visits ancillary children encountered between audio segments. Leading/trailing
 metadata callbacks retain their full payload, including LIST type bytes inspected
 internally. Typed reads use the same native frame source. `position()` counts
 logical output frames; `data_bytes_read()` counts physical data payload bytes,
-excluding virtual silence. `frames()` uses leading fact/ds64 information when
-available and otherwise becomes available at the wavl boundary. Call finish to
+excluding virtual silence. `frames()` uses an encountered leading fact (resolving
+its RF64 sentinel through ds64) and otherwise becomes available at the wavl
+boundary. An unselected raw ds64 count is not an upfront duration. Call finish to
 check the required fact and remaining form; finish skips unread silence without
 materializing it. Structural/I/O/callback failures poison forward reads.
 

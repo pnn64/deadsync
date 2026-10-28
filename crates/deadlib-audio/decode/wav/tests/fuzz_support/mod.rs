@@ -2,8 +2,8 @@
 //! Input and codec scratch are capped here, independently of production limits.
 use deadlib_audio_decode_wav::{
     Adpcm, AdpcmData, AdpcmForwardReader, AdpcmKind, AdpcmReader, AdpcmSpec, Container, DataLength,
-    Endian, Format, ForwardReader, Limits, Pcm, RawChunk, Reader, SampleFormat, Spec, Stream, Wave,
-    WavlWriter, WriteOptions, Writer,
+    Endian, Error, Format, ForwardReader, Limits, Pcm, RawChunk, Reader, SampleFormat, Spec,
+    Stream, Wave, WavlWriter, WriteOptions, Writer,
     metadata::{self, Metadata},
 };
 use std::io::{self, Cursor, Read, Seek, SeekFrom};
@@ -129,6 +129,13 @@ fn container(data: &[u8]) -> u64 {
     }) {
         let mut forward = ForwardReader::with_limits(ShortReads::new(data), LIMITS).unwrap();
         if let Ok(pcm) = wave.pcm() {
+            match forward.frames() {
+                Ok(n) => assert_eq!(n, pcm.frames()),
+                Err(Error::Unsupported(_)) => {
+                    assert!(wave.data().is_none() && forward.fact().is_none());
+                }
+                Err(e) => panic!("valid native forward duration: {e}"),
+            }
             let align = usize::from(wave.format.block_align);
             let mut out = [0; 1027];
             if align <= out.len() {

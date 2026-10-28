@@ -1,0 +1,45 @@
+{
+  "base_commit": "76a01fa6d",
+  "tests": {
+    "tests\\wavl.rs": "bfceeb54413bc19fbfe1d9c755e3be66cb4344c3607fd8f98d452f9aadf237d1",
+    "tests\\forward.rs": "34e00cc816697c24b6f01b363ccd6a28a57e1286c43fc34883667b5fb4e6737b"
+  },
+  "results": [
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-wav",
+        "--target-dir",
+        "target/wav",
+        "--test",
+        "wavl",
+        "rf64_wavl_duration_uses_fact_or_observed_frames_not_unused_ds64",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 101,
+      "log_sha256": "5c6e2306fd102e5d18550a49789b9059af97c15af78140a4161b9e9faa26599e"
+    },
+    {
+      "command": [
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "deadlib-audio-decode-wav",
+        "--target-dir",
+        "target/wav",
+        "--test",
+        "forward",
+        "rf64_explicit_adpcm_duration_ignores_unused_ds64_until_fact_is_known",
+        "--",
+        "--exact"
+      ],
+      "exit_code": 101,
+      "log_sha256": "b1a12b030c10c9360e8dc9cdaff396d44931325ec98d1c285f9b21594bf54f82"
+    }
+  ]
+}

@@ -115,3 +115,23 @@ representative comparative benchmarks, comparative RSS and sequential
 disk evidence, and broader native/reference fixtures. Metadata profile/semantic certification
 and broader fuzz coverage remain unproven. Forward PCM16 streaming currently
 allocates one 16-byte format buffer; the benchmark records that boundary.
+
+RF64 forward duration handling now respects the ordinary fact count over unused
+ds64 sampleCount. Native wavl queries wait for fact or the observed boundary;
+explicit ADPCM counts defer unknown fact validation to finish. The inferred
+ADPCM constructor still offers a provisional ds64 fallback and rejects a later
+conflicting fact. Two regressions cover leading/trailing/sentinel counts, ignored
+raw values and exact output. The new 40-seed duration matrix joins the shared
+property harness. STREAMING.md records these API contracts.
+All 71 tests pass on x64 debug/release and i686 debug with Clippy. All 708 native
+fixture gates and 432 retained forward ADPCM outputs pass. Two million checked
+mutations, 1443 prior corpus inputs and 100000 fresh ASan executions pass; the
+1414-file generated corpus and all hashes/logs are preserved in validation.
+
+A fresh standards check identified a concrete BW64 gap: ITU-R BS.2088-2 (2025),
+Annex 1 section 4.2, requires the RF64 sampleCount-equivalent ds64 words to be
+ignored on read and zero on write. The current generic RF64-style BW64 output
+still writes decoded counts there. Current fact/compressed/wavl BW64 cases are
+compatibility extensions, not normative BW64 profile evidence. Correct this
+primitive and audit affected fixtures/writers before claiming BW64 conformance.
+Source: https://www.itu.int/dms_pubrec/itu-r/rec/bs/R-REC-BS.2088-2-202511-I!!PDF-E.pdf

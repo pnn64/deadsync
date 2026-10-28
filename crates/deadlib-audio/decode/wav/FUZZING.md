@@ -192,3 +192,21 @@ All campaign source hashes remain unchanged. The 708-case native replay retains
 4484 descriptor/decode/range hashes and 1912 exact writer outputs, and all 69
 tests pass in x64 debug/release and i686 debug along with Clippy. PERFORMANCE.md
 records the fixed-state size reduction and the full-format-query time tradeoff.
+
+The RF64 duration correction adds 40 independently packed seeds (358 total),
+crossing ordinary/sentinel fact, leading/trailing placement, native wavl and flat
+IMA, both RF64/BW64 spellings and unused zero/small/u64::MAX ds64 fields. The
+shared native-forward property now checks that any reported duration equals the
+borrowed sequence length; a duration may remain unavailable until its boundary.
+Explicit forward ADPCM parity exercises the independent unused-field cases too.
+
+`validation/rf64-count-mutation-{x64,i686}.*` each pass one million checked
+mutations. `rf64-count-prior-replay.*` passes all 1443 inputs from the immediately
+preceding archived ASan corpus. `rf64-count-asan.*` passes 100000 fresh executions
+in 137.16 seconds, adds 1915 units and produces no failure artifact. The complete
+generated corpus is retained in `rf64-count-asan-corpus.zip` with a verified
+archive/report sidecar. Its 259 MiB instrumented peak is not normal codec RSS.
+All campaign source inputs remain unchanged. All 71 tests pass on x64
+debug/release and i686 debug; Clippy, all 708 retained native gates and all 432
+retained forward ADPCM outputs also pass. STREAMING.md records the duration API
+contract and distinguishes RF64 rules from BW64 compatibility extensions.

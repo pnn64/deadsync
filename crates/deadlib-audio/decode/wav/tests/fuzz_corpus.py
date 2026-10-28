@@ -97,6 +97,25 @@ def corpus():
         for channels in (1,2,6):
             result[f'encode-ima3-{kind.decode()}-{channels}']=b'\3'+bytes([(b'RIFF',b'RIFX',b'RF64',b'BW64').index(kind),3,channels-1,2])+struct.pack('<I',7999)+bytes([2*channels-2,3])+bytes(range(256))
 
+    # RF64's raw ds64 sample count replaces fact only for the 32-bit sentinel.
+    # Keep fmt before audio and vary fact placement independently of metadata.
+    for kind in (b'RF64',b'BW64'):
+        for wavl in (False,True):
+            if wavl:
+                fmt=struct.pack('<HHIIHH',1,2,8000,32000,4,16)
+                data=ck(b'LIST',b'wavl'+ck(b'slnt',struct.pack('<I',3))+ck(b'data',struct.pack('<4h',-32768,32767,-1,1))+ck(b'slnt',struct.pack('<I',4)))
+                frames=9
+            else:
+                fmt=struct.pack('<HHIIHHHH',17,1,8000,8000*8//9,8,4,2,9)
+                data=ck(b'data',struct.pack('<hBB',-12345,20,0)+b'\x12\x34\x56\x78')
+                frames=7
+            for trailing in (False,True):
+                for count,sentinel in [(0,False),(1,False),(frames,False),(0xffffffffffffffff,False),(frames,True)]:
+                    fact=ck(b'fact',struct.pack('<I',0xffffffff if sentinel else frames))
+                    body=ck(b'fmt ',fmt)+(data+fact if trailing else fact+data)
+                    ds=ck(b'ds64',struct.pack('<QQQI',4+36+len(body),0xffffffffffffffff,count,0))
+                    result[f'duration-{kind.decode()}-{wavl}-{trailing}-{count}-{sentinel}']=b'\0'+kind+b'\xff'*4+b'WAVE'+ds+body
+
     metadata=[]
     for e in ('<','>'):
         metadata.extend([

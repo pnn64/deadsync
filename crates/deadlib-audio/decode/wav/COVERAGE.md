@@ -160,6 +160,19 @@ mutations, 2507 prior corpus inputs and 100000 fresh ASan executions pass.
 PERFORMANCE.md records the paired size/construction measurements and slower
 on-demand full-format queries. External references were not rerun for this replay.
 
+RF64 forward duration handling now distinguishes an ordinary fact from an unused
+raw ds64 sampleCount. Two regressions first fail against `76a01fa6d`, then pass
+with the correction; `validation/rf64-duration-before*` preserves those failures
+and test hashes. Leading/trailing fact, sentinel replacement, arbitrary raw
+values, decoded trimming, observed native length and final mismatch rejection
+are covered. The full 71-test suite passes on x64 debug/release and i686 debug,
+and Clippy passes. The 708 native gates/4484 descriptor-read-range checks/1912
+exact writer outputs and all 432 retained forward ADPCM outputs pass too.
+Two million checked mutations over 358 seeds, 1443 earlier corpus files and
+100000 fresh ASan executions pass (`validation/rf64-count-*`). BW64 cases in this
+matrix retain the existing RF64-style compatibility behavior; PLAN.md records
+the separately identified normative BW64 dummy-field gap.
+
 Remaining work: metadata profile/semantic validation, compressed wavl routing,
 broader fuzzing and representative comparative performance/RSS coverage
 (the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); extensible

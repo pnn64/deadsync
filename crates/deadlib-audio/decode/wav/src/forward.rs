@@ -187,6 +187,8 @@ impl<R: Read> ForwardReader<R> {
     pub fn fact(&self) -> Option<u64> {
         self.fact
     }
+    /// Raw ds64 field. An ordinary fact count overrides it; only the fact
+    /// sentinel selects this value as the authoritative sample count.
     pub fn ds64_sample_count(&self) -> Option<u64> {
         self.stream.ds64().map(|d| d.sample_count)
     }
@@ -205,7 +207,6 @@ impl<R: Read> ForwardReader<R> {
         if let Some(w) = &self.wavl {
             return self
                 .fact
-                .or(self.ds64_sample_count())
                 .or_else(|| matches!(w.state, WavlState::End).then_some(w.seen))
                 .ok_or(Error::Unsupported(
                     "wavl duration is unknown before trailing fact or end",

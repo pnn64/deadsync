@@ -424,6 +424,51 @@ fn trailing_fact_is_validated_without_requiring_a_forward_duration_up_front() {
 }
 
 #[test]
+fn rf64_wavl_duration_uses_fact_or_observed_frames_not_unused_ds64() {
+    for container in [Container::Rf64, Container::Bw64] {
+        for trailing in [false, true] {
+            let (base, _, truth) = fixture(container, SampleFormat::I16, 2, trailing);
+            let fact_at = Wave::parse(&base)
+                .unwrap()
+                .chunks()
+                .unwrap()
+                .map(Result::unwrap)
+                .find(|c| c.id == *b"fact")
+                .unwrap()
+                .offset as usize;
+            for ds_count in [0, 1, 19, 20, 21, u64::MAX] {
+                let mut bytes = base.clone();
+                bytes[36..44].copy_from_slice(&ds_count.to_le_bytes());
+                assert_eq!(Wave::parse(&bytes).unwrap().pcm().unwrap().frames(), 20);
+                assert_eq!(
+                    Reader::new(Cursor::new(&bytes)).unwrap().frames().unwrap(),
+                    20
+                );
+                let mut reader = ForwardReader::new(Short::new(&bytes, 1)).unwrap();
+                assert_eq!(reader.ds64_sample_count(), Some(ds_count));
+                if trailing {
+                    assert!(reader.frames().is_err());
+                } else {
+                    assert_eq!(reader.frames().unwrap(), 20);
+                }
+                let mut out = [0; 80];
+                assert_eq!(reader.read_frames(&mut out).unwrap(), 20);
+                assert_eq!(out, truth.as_slice());
+                assert_eq!(reader.read_frames(&mut out).unwrap(), 0);
+                assert_eq!(reader.frames().unwrap(), 20);
+                reader.finish().unwrap();
+                // The same ds64 field is authoritative when fact uses its sentinel.
+                bytes[fact_at..fact_at + 4].fill(255);
+                assert_eq!(Wave::parse(&bytes).is_ok(), ds_count == 20);
+                let result =
+                    ForwardReader::new(Short::new(&bytes, 3)).and_then(ForwardReader::finish);
+                assert_eq!(result.is_ok(), ds_count == 20);
+            }
+        }
+    }
+}
+
+#[test]
 fn large_virtual_silence_seeks_remain_u64_and_forward_finish_does_not_expand_it() {
     for container in [Container::Rf64, Container::Bw64] {
         let e = Endian::Little;

@@ -23,6 +23,8 @@ impl<R: Read> AdpcmForwardReader<R> {
     /// Exact forward decoding needs a duration known before audio. For a
     /// trailing fact, supply the externally known count via from_reader_with_frames;
     /// finish checks that the encountered fact/ds64 agrees with that count.
+    /// Without leading fact, a raw ds64 count is only a hint: a different ordinary
+    /// trailing fact overrides it and causes finish to reject the inferred count.
     pub fn from_reader(reader: ForwardReader<R>) -> Result<Self, Error> {
         let frames = reader
             .fact()
@@ -36,7 +38,9 @@ impl<R: Read> AdpcmForwardReader<R> {
         if reader.data_bytes_read() != 0 {
             return Err(Error::Invalid("forward ADPCM requires unread data"));
         }
-        if let Some(actual) = reader.fact().or(reader.ds64_sample_count())
+        // Only an encountered fact determines whether ds64 replaces its count.
+        // An ordinary trailing fact may override any unused raw ds64 value.
+        if let Some(actual) = reader.fact()
             && actual != frames
         {
             return Err(Error::Invalid("forward ADPCM duration mismatch"));

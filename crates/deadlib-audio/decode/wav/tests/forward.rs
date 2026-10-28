@@ -358,6 +358,70 @@ fn trailing_fact_requires_explicit_duration_and_is_checked_at_finish() {
 }
 
 #[test]
+fn rf64_explicit_adpcm_duration_ignores_unused_ds64_until_fact_is_known() {
+    let flat = compressed(Some(65), false);
+    let wave = Wave::parse(&flat).unwrap();
+    let audio = AdpcmData::new(&wave).unwrap();
+    let mut expected = [0; 65];
+    audio.read_frames(0, &mut expected, &mut [0; 57]).unwrap();
+    for container in [Container::Rf64, Container::Bw64] {
+        for trailing in [false, true] {
+            for (fact, ds_count) in [
+                (65u32, 0u64),
+                (65, 1),
+                (65, 65),
+                (65, u64::MAX),
+                (u32::MAX, 65),
+            ] {
+                let riff = compressed(Some(fact), trailing);
+                let mut bytes = if container == Container::Rf64 {
+                    b"RF64".to_vec()
+                } else {
+                    b"BW64".to_vec()
+                };
+                bytes.extend([255; 4]);
+                bytes.extend(b"WAVE");
+                let mut ds = vec![0; 28];
+                // The ordinary data size is also used instead of its unused ds64 field.
+                ds[8..16].copy_from_slice(&u64::MAX.to_le_bytes());
+                ds[16..24].copy_from_slice(&ds_count.to_le_bytes());
+                append(&mut bytes, b"ds64", &ds, Endian::Little);
+                bytes.extend_from_slice(&riff[12..]);
+                let size = bytes.len() as u64 - 8;
+                bytes[20..28].copy_from_slice(&size.to_le_bytes());
+                let wave = Wave::parse(&bytes).unwrap();
+                assert_eq!(wave.fact, Some(65));
+                assert_eq!(AdpcmData::new(&wave).unwrap().frames(), 65);
+                let raw = ForwardReader::new(Input::new(&bytes, 1)).unwrap();
+                assert_eq!(raw.ds64_sample_count(), Some(ds_count));
+                let mut reader = AdpcmForwardReader::from_reader_with_frames(raw, 65).unwrap();
+                let mut out = [0; 66];
+                assert_eq!(reader.read_i16(&mut out).unwrap(), 65);
+                assert_eq!(&out[..65], &expected);
+                assert_eq!(reader.read_i16(&mut out).unwrap(), 0);
+                reader.finish().unwrap();
+                let raw = ForwardReader::new(Input::new(&bytes, 3)).unwrap();
+                let wrong = AdpcmForwardReader::from_reader_with_frames(raw, 64);
+                if trailing {
+                    assert!(wrong.unwrap().finish().is_err());
+                } else {
+                    assert!(wrong.is_err());
+                }
+                // Without an explicit count, leading fact takes precedence;
+                // a raw ds64 hint alone is checked against the trailing fact.
+                let inferred = AdpcmForwardReader::new(Input::new(&bytes, 3));
+                if !trailing || ds_count == 65 {
+                    assert_eq!(inferred.as_ref().unwrap().frames(), 65);
+                    inferred.unwrap().finish().unwrap();
+                } else {
+                    assert!(inferred.and_then(AdpcmForwardReader::finish).is_err());
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn incomplete_forms_and_deferred_structural_errors_fail_during_finish() {
     let mut writer = Writer::with_frames(
         Vec::new(),
