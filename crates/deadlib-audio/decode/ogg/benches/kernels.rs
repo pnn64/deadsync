@@ -72,6 +72,51 @@ fn main() {
         }
         return;
     }
+    for n in [0, 17, 4096] {
+        let mut lacing = vec![255; n / 255];
+        lacing.push((n % 255) as u8);
+        let frame = encode_page(
+            PageHeader {
+                flags: 0,
+                granule_position: 0,
+                serial: 42,
+                sequence: 0,
+            },
+            &lacing,
+            &vec![37; n],
+        )
+        .unwrap();
+        for window in [8, 128] {
+            let warm = frame.repeat(window * 2);
+            probe(&format!("sync-window/{n}/{window}"), 1, || {
+                let mut sync = SyncBuffer::with_limit(warm.len());
+                sync.push(black_box(&warm)).unwrap();
+                let capacity = sync.storage_bytes();
+                for _ in 0..window {
+                    let PageSeek::Page(page) = sync.page_seek().unwrap() else {
+                        panic!("warm page missing");
+                    };
+                    black_box(page);
+                }
+                for _ in 0..1024 {
+                    let PageSeek::Page(page) = sync.page_seek().unwrap() else {
+                        panic!("window page missing");
+                    };
+                    black_box(page);
+                    sync.push(black_box(&frame)).unwrap();
+                }
+                let mut tail = 0;
+                while let PageSeek::Page(page) = sync.page_seek().unwrap() {
+                    black_box(page);
+                    tail += 1;
+                }
+                assert_eq!(tail, window);
+                assert_eq!(sync.position(), ((window * 2 + 1024) * frame.len()) as u64);
+                assert_eq!(sync.buffered_bytes(), 0);
+                assert_eq!(sync.storage_bytes(), capacity);
+            });
+        }
+    }
     for n in [4096, 1048576] {
         for stride in [0, 31, 1, 2, 3] {
             let mut bytes = vec![37; n];

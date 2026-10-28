@@ -1,5 +1,9 @@
 # Owned encoding and compact page views, 2026-10-28
 
+The later [index-count and synchronization-state pass](STATE_REUSE.md) measures
+reused packet counts, deferred buffer moves and cached waiting-page polls against
+this baseline.
+
 This pass follows [page buffers and packet starts](BUFFERS.md), using production
 source `13407a274` as its baseline. Three separately measured commits remove
 intermediate encoding work and cached copies of immutable page metadata.

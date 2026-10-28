@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [encoding and page-view measurements](ENCODING.md) cover direct owned
+The latest [index-count and synchronization-state measurements](STATE_REUSE.md)
+cover reused packet counts, deferred buffer moves and cached waiting-page polls,
+with CPU/heap comparisons and exact state, capacity and index checks.
+
+The earlier [encoding and page-view measurements](ENCODING.md) cover direct owned
 encoding, a contiguous CRC update and smaller borrowed page values, including
 CPU/heap comparisons and exact byte, debug-format and IO checks.
 
