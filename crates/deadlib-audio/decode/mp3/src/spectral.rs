@@ -182,7 +182,7 @@ fn intensity(version: MpegVersion, position: u8, width: u8, scale: bool) -> Opti
     }
 }
 /// Applies intensity stereo above independently determined right-channel zero
-/// bounds, then mid/side only on lines not handled by intensity stereo.
+/// bounds and mid/side only on lines not handled by intensity stereo.
 pub fn stereo(
     header: FrameHeader,
     info: &[GranuleChannel; 2],
@@ -210,51 +210,52 @@ pub fn stereo(
         }
         return Ok(());
     }
-    let mut coupled = [false; 576];
-    if mode & 1 != 0 {
-        let right = &spectra[1];
-        let short = info[1].block_type == 2;
-        let mixed = info[1].mixed_block;
-        let mut short_bounds = [if mixed { 3 } else { 0 }; 3];
-        let mut short_nonzero = false;
-        if short {
-            for (window, bound) in short_bounds.iter_mut().enumerate() {
-                for band in (if mixed { 3 } else { 0 }..13).rev() {
-                    if (bands.short()[band] as usize..bands.short()[band + 1] as usize)
-                        .any(|n| right[3 * n + window] != 0.0)
-                    {
-                        *bound = band + 1;
-                        short_nonzero = true;
-                        break;
-                    }
+    let [left, right] = spectra;
+    let short = info[1].block_type == 2;
+    let mixed = info[1].mixed_block;
+    let mid_side = mode & 2 != 0;
+    let mut short_bounds = [if mixed { 3 } else { 0 }; 3];
+    let mut short_nonzero = false;
+    if short {
+        for (window, bound) in short_bounds.iter_mut().enumerate() {
+            for band in (if mixed { 3 } else { 0 }..13).rev() {
+                if (bands.short()[band] as usize..bands.short()[band + 1] as usize)
+                    .any(|n| right[3 * n + window] != 0.0)
+                {
+                    *bound = band + 1;
+                    short_nonzero = true;
+                    break;
                 }
             }
         }
-        let long_count = if short {
-            if mixed && !short_nonzero {
-                bands.mixed_long_bands()
-            } else {
-                0
-            }
-        } else {
-            22
-        };
-        let mut long_bound = 0;
-        for band in (0..long_count).rev() {
-            if right[bands.long()[band] as usize..bands.long()[band + 1] as usize]
-                .iter()
-                .any(|&v| v != 0.0)
-            {
-                long_bound = band + 1;
-                break;
-            }
+    }
+    let long_bands = if short {
+        if mixed { bands.mixed_long_bands() } else { 0 }
+    } else {
+        22
+    };
+    let long_count = if short_nonzero { 0 } else { long_bands };
+    let mut long_bound = 0;
+    for band in (0..long_count).rev() {
+        if right[bands.long()[band] as usize..bands.long()[band + 1] as usize]
+            .iter()
+            .any(|&v| v != 0.0)
+        {
+            long_bound = band + 1;
+            break;
         }
-        for band in long_bound..long_count {
+    }
+    // Every line belongs to one long band or one short-window band. Select
+    // its transform once, without flags or a second pass over the spectra.
+    let first_long = if mid_side { 0 } else { long_bound };
+    let last_long = if mid_side { long_bands } else { long_count };
+    for band in first_long..last_long {
+        let gains = if band >= long_bound && band < long_count {
             let sf = band.min(20);
-            // If only the uncoded top band remains, the preceding factor is
-            // an ordinary right-channel scale, not a transmitted pan.
+            // The uncoded top band inherits pan only if its predecessor is
+            // intensity coded; otherwise retain the ordinary top-band rule.
             let top_only = long_bound == 21;
-            if let Some((left_gain, right_gain)) = intensity(
+            intensity(
                 header.version(),
                 if top_only {
                     if header.version() == MpegVersion::Mpeg1 {
@@ -271,26 +272,41 @@ pub fn stereo(
                     factors[1].long_width[sf]
                 },
                 factors[1].intensity_scale,
-            ) {
-                for (line, flag) in coupled
-                    .iter_mut()
-                    .enumerate()
-                    .take(bands.long()[band + 1] as usize)
-                    .skip(bands.long()[band] as usize)
-                {
-                    let value = spectra[0][line];
-                    spectra[0][line] = value * left_gain;
-                    spectra[1][line] = value * right_gain;
-                    *flag = true;
-                }
+            )
+        } else {
+            None
+        };
+        let start = bands.long()[band] as usize;
+        let end = bands.long()[band + 1] as usize;
+        let left = &mut left[start..end];
+        let right = &mut right[start..end];
+        if let Some((left_gain, right_gain)) = gains {
+            for (left, right) in left.iter_mut().zip(right) {
+                let value = *left;
+                *left = value * left_gain;
+                *right = value * right_gain;
+            }
+        } else if mid_side {
+            for (left, right) in left.iter_mut().zip(right) {
+                let mid = *left;
+                let side = *right;
+                *left = (mid + side) * std::f64::consts::FRAC_1_SQRT_2;
+                *right = (mid - side) * std::f64::consts::FRAC_1_SQRT_2;
             }
         }
-        if short {
-            for (window, &bound) in short_bounds.iter().enumerate() {
-                for band in bound..13 {
+    }
+    if short {
+        for (window, &bound) in short_bounds.iter().enumerate() {
+            let first = if mid_side {
+                if mixed { 3 } else { 0 }
+            } else {
+                bound
+            };
+            for band in first..13 {
+                let gains = if band >= bound {
                     let sf = band.min(11);
                     let top_only = bound == 12;
-                    if let Some((left_gain, right_gain)) = intensity(
+                    intensity(
                         header.version(),
                         if top_only {
                             if header.version() == MpegVersion::Mpeg1 {
@@ -307,28 +323,28 @@ pub fn stereo(
                             factors[1].short_width[sf][window]
                         },
                         factors[1].intensity_scale,
-                    ) {
-                        for frequency in
-                            bands.short()[band] as usize..bands.short()[band + 1] as usize
-                        {
-                            let line = 3 * frequency + window;
-                            let value = spectra[0][line];
-                            spectra[0][line] = value * left_gain;
-                            spectra[1][line] = value * right_gain;
-                            coupled[line] = true;
-                        }
+                    )
+                } else {
+                    None
+                };
+                if let Some((left_gain, right_gain)) = gains {
+                    for frequency in bands.short()[band] as usize..bands.short()[band + 1] as usize
+                    {
+                        let line = 3 * frequency + window;
+                        let value = left[line];
+                        left[line] = value * left_gain;
+                        right[line] = value * right_gain;
+                    }
+                } else if mid_side {
+                    for frequency in bands.short()[band] as usize..bands.short()[band + 1] as usize
+                    {
+                        let line = 3 * frequency + window;
+                        let mid = left[line];
+                        let side = right[line];
+                        left[line] = (mid + side) * std::f64::consts::FRAC_1_SQRT_2;
+                        right[line] = (mid - side) * std::f64::consts::FRAC_1_SQRT_2;
                     }
                 }
-            }
-        }
-    }
-    if mode & 2 != 0 {
-        for (line, &is_intensity) in coupled.iter().enumerate() {
-            if !is_intensity {
-                let mid = spectra[0][line];
-                let side = spectra[1][line];
-                spectra[0][line] = (mid + side) * std::f64::consts::FRAC_1_SQRT_2;
-                spectra[1][line] = (mid - side) * std::f64::consts::FRAC_1_SQRT_2;
             }
         }
     }
