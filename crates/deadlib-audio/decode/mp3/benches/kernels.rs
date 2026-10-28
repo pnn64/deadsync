@@ -150,10 +150,15 @@ fn verify(paths: &[String]) {
     }
     for seed in [1, 0x73429, 0x982374ab] {
         let mut synthesis = Synthesis::new();
-        for slot in 0..40 {
+        for slot in 0..64 {
             let mut input = signal::<32>(seed + slot);
-            if slot > 30 {
+            if (31..=47).contains(&slot) {
                 input.fill(0.0);
+            } else if (48..=55).contains(&slot) {
+                input.fill(-0.0);
+            } else if slot >= 56 {
+                input.fill(0.0);
+                input[(slot - 56) as usize] = f64::from_bits(1);
             }
             let mut pcm = [0.0; 32];
             synthesis.process(&input, &mut pcm);
@@ -325,6 +330,29 @@ fn cold_intensity() {
 
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|s| s == "reservoir-profile") {
+        println!("file\tframes\tzero_back\tzero_back_nonempty\tassembled_bytes\tzero_back_bytes");
+        for path in &args[1..] {
+            let frames = packets(Path::new(path));
+            let (mut zero, mut nonempty, mut total_bytes, mut direct_bytes) = (0, 0, 0, 0);
+            for (data, free) in &frames {
+                let frame = Frame::parse(data, *free, true, Limits::default()).unwrap();
+                let bytes = frame.side_info.main_data_bits(frame.header).div_ceil(8);
+                total_bytes += bytes;
+                if frame.side_info.main_data_begin == 0 {
+                    zero += 1;
+                    nonempty += usize::from(bytes != 0);
+                    direct_bytes += bytes;
+                }
+            }
+            println!(
+                "{}\t{}\t{zero}\t{nonempty}\t{total_bytes}\t{direct_bytes}",
+                Path::new(path).file_name().unwrap().to_string_lossy(),
+                frames.len()
+            );
+        }
+        return;
+    }
     if args.first().is_some_and(|s| s == "cold-intensity") {
         cold_intensity();
         return;
@@ -368,6 +396,18 @@ fn main() {
     let mut synthesis = Synthesis::new();
     probe("synthesis/slot", 10_000, || {
         synthesis.process(black_box(&input), black_box(&mut pcm));
+    });
+    let zero = [0.0; 32];
+    probe("synthesis/zero", 10_000, || {
+        synthesis.process(black_box(&zero), black_box(&mut pcm));
+    });
+    let mut history = Synthesis::new();
+    for _ in 0..16 {
+        history.process(&input, &mut pcm);
+    }
+    probe("synthesis/zero-history", 10_000, || {
+        let mut state = history.clone();
+        state.process(black_box(&zero), black_box(&mut pcm));
     });
     for (kind, mixed) in [(0, 0), (1, 0), (3, 0), (2, 0), (2, 2), (2, 4)] {
         let source = signal::<576>(0x73429);
@@ -422,6 +462,40 @@ fn main() {
                 black_box(huffman::quad(&mut bits, table_b).unwrap());
             }
         });
+    }
+    for (kind, mixed) in [(0, false), (2, false), (2, true)] {
+        for intensity in [false, true] {
+            for compress in [0, 399, 511] {
+                let header = joint(22050, u8::from(intensity));
+                let channel = usize::from(intensity);
+                let mut side = SideInfo::default();
+                side.granules[0][channel] = GranuleChannel {
+                    block_type: kind,
+                    mixed_block: mixed,
+                    scalefac_compress: compress,
+                    part2_3_bits: 4095,
+                    ..Default::default()
+                };
+                probe(
+                    &format!("scalefactors/lsf/{kind}/{mixed}/{intensity}/{compress}"),
+                    10_000,
+                    || {
+                        let mut cursor = BitReader::new(black_box(&bytes));
+                        black_box(
+                            scalefactors::read(
+                                &mut cursor,
+                                header,
+                                black_box(&side),
+                                0,
+                                channel,
+                                None,
+                            )
+                            .unwrap(),
+                        );
+                    },
+                );
+            }
+        }
     }
     for (region0_count, region1_count) in [(0, 0), (7, 7), (15, 7)] {
         let info = GranuleChannel {
@@ -561,6 +635,19 @@ fn main() {
     for path in &args {
         let frames = packets(Path::new(path));
         let label = Path::new(path).file_name().unwrap().to_string_lossy();
+        if let Some((data, free)) = frames.iter().find(|(data, free)| {
+            let frame = Frame::parse(data, *free, true, Limits::default()).unwrap();
+            frame.side_info.main_data_begin == 0
+                && frame.side_info.main_data_bits(frame.header) != 0
+        }) {
+            probe(&format!("decode-first/{label}"), 16, || {
+                let mut decoder = FrameDecoder::new();
+                let frame = decoder.decode(black_box(data), *free).unwrap();
+                for plane in frame.pcm.planes() {
+                    black_box(plane);
+                }
+            });
+        }
         let mut decoder = FrameDecoder::new();
         probe(&format!("decode/{label}"), 2, || {
             decoder.reset();

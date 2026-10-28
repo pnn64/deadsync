@@ -220,7 +220,7 @@ impl FrameDecoder {
         // Missing/truncated main data still retains the physical payload.
         // Allocation/limit failures are fatal and are never concealed.
         self.payload_consumed = true;
-        let main = self.reservoir.push(
+        let main = self.reservoir.push_frame(
             frame.side_info.main_data_begin as usize,
             frame.main_data,
             frame.side_info.main_data_bits(header),

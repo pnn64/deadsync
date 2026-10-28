@@ -67,6 +67,39 @@ fn impulse(version: u32, channels: usize, crc: bool, back: u32, part_bits: Optio
     data
 }
 #[test]
+fn caller_payload_can_change_before_a_later_frame_reuses_its_tail() {
+    for version in [3, 2, 0] {
+        for channels in [1, 2] {
+            let mut first = impulse(version, channels, false, 0, None);
+            let header = FrameHeader::parse(&first).unwrap();
+            let tail = first.len() - 1;
+            first[tail] = first[header.main_data_offset()];
+            let second = impulse(version, channels, false, 1, None);
+            let mut reference = FrameDecoder::new();
+            reference.decode(&first, None).unwrap();
+            let expected: Vec<Vec<_>> = reference
+                .decode(&second, None)
+                .unwrap()
+                .pcm
+                .planes()
+                .map(|plane| plane.iter().map(|v| v.to_bits()).collect())
+                .collect();
+            let mut decoder = FrameDecoder::new();
+            decoder.decode(&first, None).unwrap();
+            first.fill(0);
+            let actual: Vec<Vec<_>> = decoder
+                .decode(&second, None)
+                .unwrap()
+                .pcm
+                .planes()
+                .map(|plane| plane.iter().map(|v| v.to_bits()).collect())
+                .collect();
+            assert_eq!(actual, expected, "version={version} channels={channels}");
+        }
+    }
+}
+
+#[test]
 fn raw_pcm_shape_prefix_retries_and_reset() {
     for version in [3, 2, 0] {
         for channels in [1, 2] {
