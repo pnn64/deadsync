@@ -4,8 +4,15 @@
 //! the shared image model has no 12-bit, CMYK or subsampled representation.
 #![forbid(unsafe_code)]
 
+mod decode;
+mod entropy;
 mod marker;
 mod model;
+mod reconstruct;
+mod transform;
+
+pub use decode::{CoefficientComponent, CoefficientImage, decode_coefficients};
+pub use reconstruct::{ColorSpace, ComponentPlane, PlanarImage, Upsampling};
 
 pub use marker::{Event, MarkerReader};
 pub use model::*;

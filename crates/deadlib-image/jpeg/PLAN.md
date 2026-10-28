@@ -40,3 +40,13 @@ Completion evidence must identify each supported process, precision, entropy
 mode and API, external oracle versions/commands, fixture provenance, numerical
 error bounds and actual benchmark/fuzz runs. Unsupported features must return
 explicit errors until implemented.
+
+Verified milestones:
+- `cdc8e854d`: package registration, complete SOF process model, native borrowed
+  marker/entropy segment reader, marker/precision/truncation tests.
+- Sequential decoder milestone: native Huffman, sequential 8/12-bit coefficients,
+  bounded allocations, integer IDCT, component planes and initial color pipeline.
+  All 25 pinned libjpeg-turbo cases have exact coefficients/tables and native
+  IDCT error <=1. Twelve Rust tests pass in debug, release and isolated builds;
+  rustfmt and Clippy with warnings denied pass. See tests/oracle/README.md.
+  Progressive, encoding, rare modes and remaining gates are still open.

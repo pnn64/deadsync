@@ -104,7 +104,7 @@ impl FrameHeader {
         components
             .try_reserve_exact(count)
             .map_err(|_| Error::Allocation)?;
-        for c in data[6..].chunks_exact(3) {
+        for c in data[6..].as_chunks::<3>().0 {
             let horizontal_sampling = c[1] >> 4;
             let vertical_sampling = c[1] & 15;
             if !(1..=4).contains(&horizontal_sampling)

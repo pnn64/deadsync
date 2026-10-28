@@ -1,0 +1,472 @@
+{
+  "reference": "libjpeg-turbo version 3.2.1 (build 20261028)",
+  "cases": [
+    {
+      "file": "8-444.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-sample",
+        "1x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-444.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.015053763440860216,
+      "sha256": "a8b7fa2af52ecef117d2d522b400fb47403e6d2077909b921e34c56a83f3504d"
+    },
+    {
+      "file": "8-422.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-sample",
+        "2x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-422.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.012063492063492064,
+      "sha256": "0e92dd469453167144fc11145aabfd683421494b249287001ca2e236992b6c67"
+    },
+    {
+      "file": "8-420.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-sample",
+        "2x2,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-420.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.0109151973131822,
+      "sha256": "4fe868ed2973986bbcf72b8babf345e9ac619c42929a7ead30dcef4237cb88f1"
+    },
+    {
+      "file": "8-411.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-sample",
+        "4x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-411.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.009361702127659575,
+      "sha256": "dcdffaef08d5eaec536c1c08c8cc71664eded6d6f4c2d9e6c64cac1d9fccbed2"
+    },
+    {
+      "file": "8-440.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-sample",
+        "1x2,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-440.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.013282732447817837,
+      "sha256": "e99c08532b5ae88f2139b979af6197a5154885a3bffec3118ecfe818026de48d"
+    },
+    {
+      "file": "8-410.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-sample",
+        "4x2,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-410.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.014242115971515769,
+      "sha256": "e42a22374ac49f115edd1afa06b44558e9e97a56fe460794b993e0e873f7edf9"
+    },
+    {
+      "file": "8-rgb.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-rgb",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-rgb.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.012473118279569893,
+      "sha256": "5b279fe320bd5a2662eefcf5383a94f0aff81a7c589e396538affd4551f39a09"
+    },
+    {
+      "file": "8-gray.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-grayscale",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-gray.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.011612903225806452,
+      "sha256": "eac7883abb81aaeadca166fc9b0247a4a6d47ba4bb07fa2de1299c8f29165df8"
+    },
+    {
+      "file": "8-restart.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-restart",
+        "1B",
+        "-sample",
+        "1x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-restart.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.015053763440860216,
+      "sha256": "c4fb3367d79c5054e47c8119bc76c17a8e788cd9aa4bca7f1b18d4d2a950d50e"
+    },
+    {
+      "file": "8-optimized.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-optimize",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-optimized.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.0109151973131822,
+      "sha256": "14b289159d8d820207606b87746770a4631616df0f1303c261c15631e1807b2c"
+    },
+    {
+      "file": "8-wide-quant.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-quality",
+        "83",
+        "-quality",
+        "1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-wide-quant.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 0,
+      "mean_idct_error": 0.0,
+      "sha256": "c59bc6da30f5356f432788678c356d097a3195625301bd11baee5ee7d2f87888"
+    },
+    {
+      "file": "8-multiscan.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "8",
+        "-scans",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\sequential.scans",
+        "-restart",
+        "2B",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\8-multiscan.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-8.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.014273719563392108,
+      "sha256": "668e8102cd29e876ae41672ed0d854796e86aae7debbab3bfcb8b23f43bf151e"
+    },
+    {
+      "file": "12-444.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-sample",
+        "1x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-444.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.011612903225806452,
+      "sha256": "8664165e2e027ad24c9bd77fed02ff0312717b3d9a397c9790b1b6bd939ea337"
+    },
+    {
+      "file": "12-422.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-sample",
+        "2x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-422.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.013968253968253968,
+      "sha256": "a840e93236421d151855d7c8c23ab8b5d1a0360a3afcf97ab4b600cc08038e94"
+    },
+    {
+      "file": "12-420.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-sample",
+        "2x2,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-420.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.01595298068849706,
+      "sha256": "331d608440b5ace9bd1ac20ecbe9615b5d1ec9275912d6f86d10c59840da89cb"
+    },
+    {
+      "file": "12-411.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-sample",
+        "4x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-411.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.013617021276595745,
+      "sha256": "d65e4a1fb1bc994f82e7cca5e1094479f07c1c7a644a28e9874263fe09108f77"
+    },
+    {
+      "file": "12-440.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-sample",
+        "1x2,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-440.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.012017710309930424,
+      "sha256": "69d3b7338db60024ff048bba8a36884fc5f5800bcad5b79e6012f923d68c4ba0"
+    },
+    {
+      "file": "12-410.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-sample",
+        "4x2,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-410.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.01627670396744659,
+      "sha256": "574b3c23e9d156c6d0938bc5b20557e09dd28df911cfefd605b84b07f024f54b"
+    },
+    {
+      "file": "12-rgb.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-rgb",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-rgb.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.01935483870967742,
+      "sha256": "a84579b2c47a1ac54b310896c926347377bc23c2009035a7be9ce25d962e0944"
+    },
+    {
+      "file": "12-gray.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-grayscale",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-gray.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.014193548387096775,
+      "sha256": "906f3f928d3385071b6bb03f8dc45365d39505e26b3f76a300771255f03c487f"
+    },
+    {
+      "file": "12-restart.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-restart",
+        "1B",
+        "-sample",
+        "1x1,1x1,1x1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-restart.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.011612903225806452,
+      "sha256": "b468668ac17da4d89d195e5d3661df9c94996052f7da680219be993659991103"
+    },
+    {
+      "file": "12-optimized.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-optimize",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-optimized.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.01595298068849706,
+      "sha256": "331d608440b5ace9bd1ac20ecbe9615b5d1ec9275912d6f86d10c59840da89cb"
+    },
+    {
+      "file": "12-wide-quant.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-quality",
+        "83",
+        "-quality",
+        "1",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-wide-quant.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.0109151973131822,
+      "sha256": "409dfa90c3f80027cd02f693622ca7f6b56655d36624dbbce7734b1a5ecf7ef6"
+    },
+    {
+      "file": "12-multiscan.jpg",
+      "command": [
+        "crates\\deadlib-image\\jpeg\\experiments\\turbo-build\\Release\\cjpeg-static.exe",
+        "-precision",
+        "12",
+        "-scans",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\sequential.scans",
+        "-restart",
+        "2B",
+        "-outfile",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\12-multiscan.jpg",
+        "crates\\deadlib-image\\jpeg\\tests\\fixtures\\sequential\\source-12.ppm"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.007556675062972292,
+      "sha256": "eb94678189331f3d65e61dedea95ac256db62a1dc60139acdc6ae01e3f49e0d1"
+    },
+    {
+      "file": "8-cmyk.jpg",
+      "command": [
+        "Pillow",
+        "12.3.0",
+        "CMYK",
+        "quality=83"
+      ],
+      "coefficient_match": true,
+      "max_idct_error": 1,
+      "mean_idct_error": 0.012580645161290323,
+      "sha256": "476d2f2c1e7a3545433812a5bd3895e233a116d1e4df074824d16877ead40c67"
+    }
+  ]
+}
