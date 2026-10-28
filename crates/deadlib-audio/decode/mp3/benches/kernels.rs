@@ -7,7 +7,7 @@ mod heap;
 
 use deadlib_audio_decode_mp3::{
     bands::Bands,
-    bits::BitReader,
+    bits::{BitReader, BitWriter},
     scalefactors::ScaleFactors,
     synthesis::{Hybrid, Synthesis},
     *,
@@ -76,6 +76,60 @@ fn empty_frame(mut word: u32, channels: usize) -> Vec<u8> {
     let mut data = vec![0; header.frame_bytes().unwrap()];
     data[..4].copy_from_slice(&word.to_be_bytes());
     data
+}
+
+fn side_fixture(version: u32, channels: usize, shape: u32) -> (FrameHeader, Vec<u8>) {
+    let word = 0xffe00000
+        | version << 19
+        | 1 << 17
+        | 1 << 16
+        | 9 << 12
+        | if channels == 1 { 3 << 6 } else { 0 };
+    let header = FrameHeader::parse(&word.to_be_bytes()).unwrap();
+    let v1 = version == 3;
+    let mut bits = BitWriter::new();
+    bits.write(19, if v1 { 9 } else { 8 }).unwrap();
+    let private = match (v1, channels) {
+        (true, 1) => 5,
+        (true, _) => 3,
+        (false, 1) => 1,
+        _ => 2,
+    };
+    bits.write((1 << private) - 1, private).unwrap();
+    if v1 {
+        for channel in 0..channels {
+            bits.write(if channel == 0 { 10 } else { 5 }, 4).unwrap();
+        }
+    }
+    for index in 0..header.granules() * channels {
+        for (value, width) in [
+            (111 + index as u32, 12),
+            (123 + index as u32, 9),
+            (210 + index as u32, 8),
+            (7 + index as u32, if v1 { 4 } else { 9 }),
+            (u32::from(shape != 0), 1),
+        ] {
+            bits.write(value, width).unwrap();
+        }
+        if shape != 0 {
+            bits.write(if shape == 4 { 2 } else { shape }, 2).unwrap();
+            bits.write(u32::from(shape == 4), 1).unwrap();
+            for (value, width) in [(7, 5), (16, 5), (1, 3), (2, 3), (3, 3)] {
+                bits.write(value, width).unwrap();
+            }
+        } else {
+            for (value, width) in [(1, 5), (2, 5), (3, 5), (6, 4), (5, 3)] {
+                bits.write(value, width).unwrap();
+            }
+        }
+        if v1 {
+            bits.write(1, 1).unwrap();
+        }
+        bits.write((index & 1) as u32, 1).unwrap();
+        bits.write(1, 1).unwrap();
+    }
+    assert_eq!(bits.len_bits(), header.side_info_bytes() * 8);
+    (header, bits.as_bytes().to_vec())
 }
 
 fn verify(paths: &[String]) {
@@ -334,6 +388,43 @@ fn verify(paths: &[String]) {
             }
         }
     }
+    for version in [3, 2, 0] {
+        for channels in [1, 2] {
+            for shape in 0..=4 {
+                let (header, data) = side_fixture(version, channels, shape);
+                for bit in 0..=data.len() * 8 {
+                    let mut input = data.clone();
+                    input.push(0x73);
+                    if bit < data.len() * 8 {
+                        input[bit / 8] ^= 1 << (7 - bit % 8);
+                    }
+                    for size in [0, data.len() - 1, data.len(), data.len() + 1] {
+                        writeln!(out, "{:?}", SideInfo::parse(header, &input[..size])).unwrap();
+                    }
+                }
+            }
+            let (header, _) = side_fixture(version, channels, 0);
+            for seed in 0..4096u64 {
+                let mut state = seed + 1;
+                let input: Vec<u8> = (0..=header.side_info_bytes())
+                    .map(|_| {
+                        state ^= state << 13;
+                        state ^= state >> 7;
+                        state ^= state << 17;
+                        state as u8
+                    })
+                    .collect();
+                for size in [
+                    0,
+                    header.side_info_bytes() - 1,
+                    header.side_info_bytes(),
+                    header.side_info_bytes() + 1,
+                ] {
+                    writeln!(out, "{:?}", SideInfo::parse(header, &input[..size])).unwrap();
+                }
+            }
+        }
+    }
     for path in paths {
         let frames = packets(Path::new(path));
         let mut decoder = FrameDecoder::new();
@@ -569,6 +660,21 @@ fn main() {
     if args.first().is_some_and(|s| s == "verify") {
         verify(&args[1..]);
         return;
+    }
+    for version in [3, 2, 0] {
+        for channels in [1, 2] {
+            for shape in [0, 2, 4] {
+                let (header, data) = side_fixture(version, channels, shape);
+                SideInfo::parse(header, &data).unwrap();
+                probe(
+                    &format!("side/{version}/{channels}/{shape}"),
+                    10_000,
+                    || {
+                        black_box(SideInfo::parse(black_box(header), black_box(&data)).unwrap());
+                    },
+                );
+            }
+        }
     }
     let input = signal::<32>(0x73429);
     let mut pcm = [0.0; 32];

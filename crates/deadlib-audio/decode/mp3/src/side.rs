@@ -30,45 +30,60 @@ impl SideInfo {
             .ok_or(Error::Truncated)?;
         let mut bits = BitReader::new(data);
         let v1 = header.version() == MpegVersion::Mpeg1;
+        let channels = header.channels();
+        let private_width = match (v1, channels) {
+            (true, 1) => 5,
+            (true, _) => 3,
+            (false, 1) => 1,
+            _ => 2,
+        };
+        let scfsi_width = if v1 { channels as u32 * 4 } else { 0 };
+        let prefix = bits.read(if v1 { 9 } else { 8 } + private_width + scfsi_width)?;
         let mut info = Self {
-            main_data_begin: bits.read(if v1 { 9 } else { 8 })? as u16,
-            private: bits.read(match (v1, header.channels()) {
-                (true, 1) => 5,
-                (true, _) => 3,
-                (false, 1) => 1,
-                _ => 2,
-            })? as u8,
+            main_data_begin: (prefix >> (private_width + scfsi_width)) as u16,
+            private: ((prefix >> scfsi_width) & ((1 << private_width) - 1)) as u8,
             ..Self::default()
         };
         if v1 {
-            for ch in 0..header.channels() {
-                for flag in &mut info.scfsi[ch] {
-                    *flag = bits.flag()?;
-                }
+            for ch in 0..channels {
+                let flags = prefix >> (4 * (channels - 1 - ch));
+                info.scfsi[ch] = [
+                    flags & 8 != 0,
+                    flags & 4 != 0,
+                    flags & 2 != 0,
+                    flags & 1 != 0,
+                ];
             }
         }
         for gr in 0..header.granules() {
-            for ch in 0..header.channels() {
+            for ch in 0..channels {
                 let g = &mut info.granules[gr][ch];
-                g.part2_3_bits = bits.read(12)? as u16;
-                g.big_values = bits.read(9)? as u16;
+                // The complete side-info slice is present; every granule has
+                // 59 MPEG-1 bits or 63 LSF bits, regardless of block shape.
+                let prefix = bits.read(29)?;
+                g.part2_3_bits = (prefix >> 17) as u16;
+                g.big_values = ((prefix >> 8) & 511) as u16;
                 if g.big_values > 288 {
                     return Err(Error::Invalid("Layer III big_values"));
                 }
-                g.global_gain = bits.read(8)? as u8;
-                g.scalefac_compress = bits.read(if v1 { 4 } else { 9 })? as u16;
-                if bits.flag()? {
-                    g.block_type = bits.read(2)? as u8;
-                    g.mixed_block = bits.flag()?;
+                g.global_gain = prefix as u8;
+                let compression = bits.read(if v1 { 5 } else { 10 })?;
+                g.scalefac_compress = (compression >> 1) as u16;
+                let fields = bits.read(if v1 { 25 } else { 24 })?;
+                let body = fields >> (2 + u32::from(v1));
+                if compression & 1 != 0 {
+                    g.block_type = (body >> 20) as u8;
+                    g.mixed_block = body & (1 << 19) != 0;
                     if g.block_type == 0 {
                         return Err(Error::Invalid("Layer III switched block"));
                     }
-                    for t in &mut g.table_select[..2] {
-                        *t = bits.read(5)? as u8;
-                    }
-                    for s in &mut g.subblock_gain {
-                        *s = bits.read(3)? as u8;
-                    }
+                    g.table_select[..2]
+                        .copy_from_slice(&[((body >> 14) & 31) as u8, ((body >> 9) & 31) as u8]);
+                    g.subblock_gain = [
+                        ((body >> 6) & 7) as u8,
+                        ((body >> 3) & 7) as u8,
+                        (body & 7) as u8,
+                    ];
                     g.region0_count = if g.block_type == 2 && !g.mixed_block {
                         8
                     } else {
@@ -76,19 +91,21 @@ impl SideInfo {
                     };
                     g.region1_count = 20 - g.region0_count;
                 } else {
-                    for t in &mut g.table_select {
-                        *t = bits.read(5)? as u8;
-                    }
-                    g.region0_count = bits.read(4)? as u8;
-                    g.region1_count = bits.read(3)? as u8;
+                    g.table_select = [
+                        (body >> 17) as u8,
+                        ((body >> 12) & 31) as u8,
+                        ((body >> 7) & 31) as u8,
+                    ];
+                    g.region0_count = ((body >> 3) & 15) as u8;
+                    g.region1_count = (body & 7) as u8;
                 }
                 // Table identifiers only matter for regions with coded pairs.
                 // LAME's CRC-protected Info frame can put marker bytes in the
                 // final side-info bits of an otherwise empty granule. Preserve
                 // unused selectors; reject reserved books when actually used.
-                g.preflag = v1 && bits.flag()?;
-                g.scalefac_scale = bits.flag()?;
-                g.count1_table = bits.flag()?;
+                g.preflag = v1 && fields & 4 != 0;
+                g.scalefac_scale = fields & 2 != 0;
+                g.count1_table = fields & 1 != 0;
             }
         }
         debug_assert_eq!(bits.remaining(), 0);
