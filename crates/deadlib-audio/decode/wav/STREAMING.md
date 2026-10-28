@@ -7,9 +7,9 @@ any remainder and padding. A caller can supply its own codec and metadata policy
 `ForwardReader<R: Read>` adds native frame reads and raw encoded-data access;
 `AdpcmForwardReader<R: Read>` adds Microsoft and 3/4-bit IMA frame decoding. Seekable
 Reader and AdpcmReader provide arbitrary exact seeks.
-AdpcmReader and AdpcmForwardReader currently require flat compressed data.
-Borrowed compressed wavl sequences now have exact range access through
-AdpcmWavl; see WAVL.md. Segment-aware file/forward ADPCM routing remains open.
+AdpcmReader and borrowed AdpcmWavl support compressed wavl sequences with exact
+range access and held-frame seeks; see WAVL.md. AdpcmForwardReader currently
+requires flat compressed data. Forward segmented ADPCM routing remains open.
 
 ## Forward-only frame reading
 

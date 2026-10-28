@@ -1,4 +1,6 @@
-use deadlib_audio_decode_wav::{AdpcmData, AdpcmWavl, Muxer, Wave, WavlMuxer, WriteOptions};
+use deadlib_audio_decode_wav::{
+    AdpcmData, AdpcmReader, AdpcmWavl, Muxer, Reader, Wave, WavlMuxer, WriteOptions,
+};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     hint::black_box,
@@ -86,6 +88,23 @@ fn borrowed_sequence_index_is_compact_reads_allocate_nothing_and_flat_state_is_u
         }
     });
     assert_eq!((calls, bytes), (0, 0));
+    let reader = Reader::new(Cursor::new(wave.as_bytes())).unwrap();
+    let (mut file, calls, bytes) = measure(|| AdpcmReader::from_reader(reader).unwrap());
+    assert_eq!((calls, bytes), (2, 52)); // 16 encoded bytes + 18 decoded i16 samples.
+    let ((), calls, bytes) = measure(|| {
+        for start in [0, 8, 9, 10, 11, 12, 47, 48] {
+            let mut out = [1234; 25];
+            file.seek_frame(black_box(start)).unwrap();
+            let n = file.read_i16(&mut out).unwrap();
+            assert!(out[..n].iter().all(|&n| n == 0));
+            assert!(out[n..].iter().all(|&n| n == 1234));
+        }
+    });
+    assert_eq!((calls, bytes), (0, 0));
+    println!(
+        "owning wavl wrapper: reused index, 2 requested allocations/52 bytes for block buffers; reads 0; object bytes reader={}",
+        std::mem::size_of::<AdpcmReader<Cursor<&[u8]>>>()
+    );
     let mut mux = Muxer::new(
         Cursor::new(Vec::new()),
         &format,

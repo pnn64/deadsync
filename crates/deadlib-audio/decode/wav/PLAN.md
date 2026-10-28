@@ -193,5 +193,25 @@ eight-child index probe requests one allocation/128 bytes and reads allocate
 nothing; flat AdpcmData state/zero-allocation creation is preserved. Resident
 Microsoft/IMA indexing, full-read and seek timings are recorded in PERFORMANCE.md
 with their narrow low-entropy scope and corrected benchmark-fixture failure.
-Compressed file-backed/forward routing, cached segmented reads, broader profile
+At that milestone, compressed file-backed/forward routing, cached segmented reads, broader profile
 validation, the native writer slowdown and comparative performance/RSS remain open.
+
+File-backed compressed wavl now works through AdpcmReader. It initializes frame
+offsets/holds in the consumed generic inventory, adding no second index, and keys
+its one-block cache by physical offset. Exact data/silence seeks, short tails,
+metadata child access, poisoning and recovery pass the expanded scalar matrix
+and two direct cache/virtual-offset tests. All 89 tests pass x64 debug/release and
+i686 debug with Clippy; 216 independent fixtures pass 2592 borrowed/file/range
+checks. All 204 prior real-file ADPCM ranges, 708 native gates and 1912 complete
+writer outputs retain their hashes. Two million checked mutations, 1827 prior
+corpus inputs and 100000 ASan executions pass; the new 1857-file corpus is archived.
+
+The wrapper adds only its existing two block-buffer allocations (52 requested
+bytes in the eight-child stereo probe), and later reads/seeks allocate nothing.
+Standalone before/current source archives and paired flat/resident wavl timings
+are recorded in PERFORMANCE.md. MS stereo full-read and several 3-bit flat rows
+show regressions and remain optimization targets; overall speed parity is not
+claimed. A validation-driver shared executable race was corrected with private
+binary snapshots and the interrupted corpus retained. Forward segmented ADPCM,
+broader profiles/fuzzing, competitive broad-format performance/RSS and both the
+reader and earlier native-writer regression candidates remain unfinished.

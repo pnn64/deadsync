@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -20,10 +21,17 @@ def main():
     workspace=root.parents[3]
     reference=args.reference or root/'validation/adpcm-encoding-references.json'
     report=json.loads(reference.read_text())
-    subprocess.run(['cargo','build','--locked','-p','deadlib-audio-decode-wav','--examples','--target-dir','target/wav'],cwd=workspace,check=True,capture_output=True)
+    if args.output.exists() or Path(str(args.output)+'-bin').exists():ap.error('preserve evidence; choose a new output stem')
+    args.output.parent.mkdir(parents=True,exist_ok=True)
+    command=['cargo','build','--locked','-p','deadlib-audio-decode-wav','--example','adpcm_file','--example','adpcm','--target-dir','target/wav']
+    process=subprocess.run(command,cwd=workspace,capture_output=True)
+    Path(str(args.output)+'.build.log').write_bytes(process.stdout+process.stderr)
+    if process.returncode:raise RuntimeError('driver build failed; inspect preserved build log')
     suffix='.exe' if sys.platform=='win32' else ''
-    binary=workspace/f'target/wav/debug/examples/adpcm_file{suffix}'
-    borrowed=workspace/f'target/wav/debug/examples/adpcm{suffix}'
+    binaries=Path(str(args.output)+'-bin');binaries.mkdir()
+    for name in ('adpcm_file','adpcm'):
+        shutil.copyfile(workspace/f'target/wav/debug/examples/{name}{suffix}',binaries/(name+suffix))
+    binary=binaries/f'adpcm_file{suffix}';borrowed=binaries/f'adpcm{suffix}'
     results=[]
     for case in report['cases']:
         path=workspace/'target/wav/encoded-adpcm'/f"{case['name']}.wav"

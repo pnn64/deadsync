@@ -30,3 +30,7 @@ harness = false
 [[bench]]
 name = "adpcm_wavl"
 harness = false
+
+[[bench]]
+name = "adpcm_file"
+harness = false

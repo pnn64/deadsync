@@ -360,8 +360,8 @@ These timings have no affinity/frequency control or confidence intervals and do
 not establish comparative performance. Full-read throughput counts decoded i16
 bytes, including held silence. The implementation decodes a final block again
 when entering silence, even after the preceding range decoded it; caller scratch
-does not retain a cross-call cache. Caching and segment-aware file/forward readers
-remain future work. The earlier measured native wavl output regression also
+does not retain a cross-call cache. The file-backed cache is now described below;
+forward segmented reading remains future work. The earlier measured native wavl output regression also
 remains unresolved; this new benchmark does not address it.
 
 The dedicated allocator test separates allocation from timing. View construction
@@ -384,4 +384,86 @@ sample/byte replay pass. WAVL.md documents the decoded-count/padding contract.
 
 ```sh
 python crates/deadlib-audio/decode/wav/benches/run_adpcm_wavl.py --output target/wav/new-adpcm-wavl-bench
+```
+
+## File-backed wavl cache and flat-reader regression
+
+`benches/adpcm_file.rs` uses resident Cursor input, caller output and the same
+four block geometries/zero-source reconstructions as the borrowed benchmark.
+It checks every decoded sample before timing. Flat input has 2048 blocks; wavl
+has 512 four-block children, each followed by three held frames. `full_retained`
+seeks an already opened reader to zero and decodes into a full caller buffer;
+`stream127_retained` uses a reusable 127-frame buffer. Data range queries request
+62 samples; rotating held queries request one frame, and `same_held_cached`
+repeatedly seeks/reads the same held frame after warmup. Output throughput counts
+decoded i16 bytes including silence. Heap/RSS are excluded from the timing harness.
+
+`validation/adpcm-wavl-reader-bench.*` contains two isolated source copies and
+matching profiles/harnesses. Baseline is commit `491b3c88d`; current is the new
+file-backed segmented implementation. Both complete source trees, the exact
+standalone manifest/benchmark and their hashes are archived. The explicit bench
+profile matches workspace opt-level 3/LTO/debug=1, and both builds inherit the
+workspace static MSVC-runtime config. Only this crate and std are compiled.
+Separate source copies avoid mutating the active workspace during a control run.
+Baseline/current flat runs alternate twice; a final current run also exercises
+wavl. Three warmed trials are retained for every row, with QueryThreadCycleTime,
+CPU/compiler/binary/config hashes and unchanged-input checks. There is no
+affinity/frequency control or confidence interval; these are regression candidates
+on this workload, not statistical or platform-wide performance claims.
+
+Flat median ns/op (full/stream rows include roughly 2 MiB of decoded output):
+
+| Row | Baseline 1 | Current 1 | Baseline 2 | Current 2 |
+| --- | ---: | ---: | ---: | ---: |
+| MS mono open | 646.590 | 659.390 | 730.490 | 671.110 |
+| MS mono full read | 6206350.000 | 6406606.250 | 6964912.500 | 6412800.000 |
+| MS mono stream 127 | 6505962.500 | 6756900.000 | 6794187.500 | 6742468.750 |
+| MS mono data range | 3020.020 | 3176.243 | 3504.460 | 3183.580 |
+| MS stereo open | 657.590 | 657.760 | 652.610 | 648.640 |
+| MS stereo full read | 6067062.500 | 6250700.000 | 6063025.000 | 6243125.000 |
+| MS stereo stream 127 | 6243693.750 | 6456618.750 | 6642456.250 | 6495656.250 |
+| MS stereo data range | 2972.617 | 3085.360 | 3200.673 | 3091.717 |
+| IMA 4-bit open | 638.000 | 643.200 | 663.500 | 632.500 |
+| IMA 4-bit full read | 6571262.500 | 6625556.250 | 7055831.250 | 6593243.750 |
+| IMA 4-bit stream 127 | 6695906.250 | 7638318.750 | 7552756.250 | 6756175.000 |
+| IMA 4-bit data range | 3243.553 | 3761.710 | 3566.127 | 3220.837 |
+| IMA 3-bit open | 653.070 | 770.650 | 629.130 | 664.610 |
+| IMA 3-bit full read | 8356693.750 | 8452581.250 | 8474250.000 | 8231093.750 |
+| IMA 3-bit stream 127 | 8441743.750 | 8739243.750 | 8528543.750 | 8613918.750 |
+| IMA 3-bit data range | 4122.667 | 4129.153 | 4065.470 | 4130.027 |
+
+Several rows reverse direction between runs. MS stereo full reads are about 3%
+slower in both pairs; IMA 3-bit opening is 5.6–18% slower, streaming is 1.0–3.5%
+slower and data ranges are 0.2–1.6% slower. These remain explicit optimization
+targets. No overall flat speed improvement or parity is claimed. Neither this
+comparison nor the new functionality resolves the earlier native-writer slowdown.
+
+Current wavl medians, same narrow low-entropy input:
+
+| Case | Open us | Full decoded MiB/s | Stream 127 MiB/s | Data range us | Rotating held seek us | Same cached held ns |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Microsoft mono | 35.118 | 297.733 | 271.626 | 3.278 | 3.290 | 129.041 |
+| Microsoft stereo | 37.298 | 284.183 | 268.652 | 3.405 | 3.388 | 127.989 |
+| IMA 4-bit stereo | 36.811 | 293.085 | 279.333 | 3.367 | 3.144 | 129.469 |
+| IMA 3-bit stereo | 36.764 | 301.731 | 281.898 | 4.250 | 4.253 | 128.667 |
+
+The owned reader reuses the container's existing timeline and caches blocks by
+their physical offsets. It adds no second segment index and no extra held-frame
+allocation. A preopened eight-child stereo probe requests two allocations/52 bytes
+for block buffers and zero for later reads/seeks. AdpcmReader state remains 344
+bytes on x64 (both standalone versions) and measures 248 on i686. Underlying
+format/inventory and caller buffers are excluded, as is process RSS. The cache
+I/O test proves repeated held seeks do not read audio again; the timing alone
+would not prove that. Physical-file/RSS and external performance comparisons
+remain unfinished.
+
+All 89 tests pass in x64 debug/release and i686 debug with Clippy. The 216-case
+independent campaign passes 2592 borrowed/file/range checks; 204 prior real-file
+flat ranges and all 708 native gates/1912 writer outputs retain their hashes.
+Two million checked mutations, 1827 previous corpus inputs and 100000 ASan
+executions pass. WAVL.md records global trimming, error recovery, u64 virtual
+offset scope and the remaining forward-only implementation.
+
+```sh
+python crates/deadlib-audio/decode/wav/benches/compare_adpcm_file.py --output target/wav/new-adpcm-file-bench
 ```

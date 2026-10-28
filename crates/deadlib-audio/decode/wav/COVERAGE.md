@@ -221,10 +221,24 @@ flat component gates pass under the documented arithmetic policies. An allocator
 probe records one allocation/128 bytes for eight index entries and zero for reads.
 Two million checked mutations, 1581 prior corpus files, 100000 ASan executions
 and all 708 retained native gates/1912 writer outputs pass. WAVL.md documents
-interior padding, lazy block errors and missing file/forward routing; PERFORMANCE.md
+interior padding, lazy block errors and then-missing file/forward routing; PERFORMANCE.md
 records narrow resident timings and the outstanding native-writer regression.
 
-Remaining work: metadata profile/semantic validation, compressed wavl file/forward routing,
+File-backed segmented ADPCM now reuses Reader's timeline and one encoded/decoded
+block cache, including exact held-frame seeks and metadata child access. Two
+tests bring the total to 89, passing x64 debug/release and i686 debug with Clippy.
+The fixed scalar matrix checks both APIs at every position/split; independent
+fixtures pass 216 gates/2592 borrowed-file-range checks. Cache identity, reuse,
+metadata restore failure, explicit recovery, u64 virtual silence and encoded
+payload offsets above 4 GiB have direct tests. A preopened eight-child probe
+requests only two allocations/52 bytes for block buffers and zero for later reads.
+All 204 earlier real-file ADPCM checks and 708 native gates/1912 writer outputs
+retain their hashes. Two million checked mutations, 1827 previous corpus files
+and 100000 ASan executions pass, with the new 1857-file archive retained. WAVL.md
+distinguishes virtual offset evidence from physical files. PERFORMANCE.md records
+paired flat slowdown candidates as open work rather than claiming parity.
+
+Remaining work: metadata profile/semantic validation, compressed wavl forward routing,
 broader fuzzing and representative comparative performance/RSS coverage
 (the first PCM16 baseline is in [PERFORMANCE.md](PERFORMANCE.md)); additional
 extensible compressed mappings. BW64 shares 64-bit container mechanics; ADM profile

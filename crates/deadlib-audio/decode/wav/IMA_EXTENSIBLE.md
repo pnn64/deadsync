@@ -95,4 +95,6 @@ pass with the newly effective extensible flag, including real offsets above
 records geometry and whole-process memory scope. Two million checked mutations,
 1490 prior corpus inputs and 100000 fresh ASan executions pass; FUZZING.md records
 limits and the complete preserved corpus. Broader comparative ADPCM performance,
-additional extensible mappings and compressed wavl routing remain open.
+additional extensible mappings and forward compressed wavl routing remain open.
+Borrowed and file-backed segmented IMA now work, including this extensible
+mapping; WAVL.md records their independent fixture and cache/seek evidence.

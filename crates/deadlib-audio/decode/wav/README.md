@@ -83,8 +83,10 @@ one decoded block. It reads interleaved i16 into caller storage and supports exa
 frame seeks, including RF64 positions above 4 GiB. Its memory depends on block
 geometry and metadata descriptors. Metadata access preserves the logical audio
 position. I/O or decode errors require a successful seek before reading again.
-AdpcmReader and AdpcmForwardReader currently require a flat data chunk;
-compressed wavl decoding is available through the borrowed AdpcmWavl view.
+AdpcmReader also handles compressed wavl children and held-frame seeks, reusing
+the container's inventory and the same one-block cache. Its wavl_chunks method
+exposes child descriptors for metadata reads. AdpcmForwardReader currently
+requires flat compressed data; forward segmented routing remains open.
 
 `Muxer<W: Write + Seek>` accepts a raw format descriptor, encoded bytes and
 decoded frame counts. It preserves the descriptor without codec dispatch and

@@ -288,3 +288,26 @@ normal codec RSS. All listed campaign inputs remain unchanged. The complete
 87-test suite and Clippy pass on the recorded configurations; 216 independent
 fixtures/1296 borrowed ranges and all 708 retained native gates also pass.
 WAVL.md records the count/padding and file/forward limitations.
+
+The owning segmented reader adds a twentieth family, adpcm_wavl_reader, using
+the same 700 seeds. Before decoding, the harness compares bounded borrowed/file
+descriptor and fact acceptance. Its sequential prefix model now checks both
+implementations under short/Interrupted I/O, then compares exact seeks, EOF,
+partial caller frames and child inventory. The owned wrapper reuses the original
+inventory; invalid block headers and explicit seek recovery share the existing
+failure contract. Input, scratch, sample-expansion and child-count limits remain
+those recorded above. The new properties do not cover forward segmented ADPCM.
+
+`validation/adpcm-wavl-reader-mutation-{x64,i686}.*` each pass one million checked
+mutations, with 102370/102958 successful owning-reader family entries. All 1827
+previous archived inputs pass (`adpcm-wavl-reader-prior-replay.*`), including 244
+successful entries into both segmented ADPCM families. `adpcm-wavl-reader-asan.*`
+passes 100000 executions in 135.19 seconds, adds 1861 units and produces no
+failure artifact. Its final 1857-file corpus is retained in
+`adpcm-wavl-reader-asan-corpus.zip`, SHA-256
+`9ee28fce216e810eea4601b0f054d3046c10de349fed618006746fc43fdffc7a`,
+with the verified archive/report sidecar. The 261 MiB instrumented peak is not
+normal codec RSS. Listed campaign inputs remain unchanged. All 89 tests, Clippy,
+216 independent fixtures/2592 borrowed-file-range checks, 204 prior real-file
+ADPCM ranges and the 708-case native byte/sample replay pass. WAVL.md and
+PERFORMANCE.md retain the error/cache/memory contract and measured regressions.

@@ -1,0 +1,184 @@
+{
+  "timestamp_utc": "2026-10-28T18:04:26Z",
+  "baseline_revision": "491b3c88d",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "cpu": "{\"Name\":\"Intel(R) Xeon(R) CPU E5-2696 v4 @ 2.20GHz\",\"NumberOfCores\":22,\"NumberOfLogicalProcessors\":44}",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "sources": {
+    "crates/deadlib-audio/decode/wav/src/adpcm.rs": "f0064391857fdfa2ec0c14994ffe55dbba939115e9fc865a9143ed2d2fd73470",
+    "crates/deadlib-audio/decode/wav/src/adpcm_encode.rs": "a2a14d3fccd4af943c68a8995e26fc9a9fa8ce51b68d18fb0a41d05593401f01",
+    "crates/deadlib-audio/decode/wav/src/adpcm_forward.rs": "910f185a1a715911ba51ada6d8b061ea107351bdae51028714bc2807ecf860e8",
+    "crates/deadlib-audio/decode/wav/src/adpcm_reader.rs": "e74419969cd519d840a548552a34b37e441e30f829e73277adea0d3c9828a349",
+    "crates/deadlib-audio/decode/wav/src/adpcm_wavl.rs": "0689722915ba5bd2dcaca0b11ce2b55c0a31bf98ee4edfc6c8ae10f0603ac8f7",
+    "crates/deadlib-audio/decode/wav/src/container.rs": "9580a1352677f9a49a57d3c93c305d5516488c18dbbc04503593418e83caaca6",
+    "crates/deadlib-audio/decode/wav/src/encode.rs": "ab10eb8b844792401abd0b739c6af9d8ea82b819689805fdfe01daaefca2c381",
+    "crates/deadlib-audio/decode/wav/src/format.rs": "349c7b4851129d44397bed323cfaf1a7ba788979a474965c7b310d48cb1d3a91",
+    "crates/deadlib-audio/decode/wav/src/forward.rs": "ca6366aee050f476b0453ba63401f4a4f7f3ebf767ce1423b465f51c51b21bc7",
+    "crates/deadlib-audio/decode/wav/src/lib.rs": "ef2aad2ff92e517b7114d0bd88c3e12f653b9fbf43be42b0bbdf56de3c125673",
+    "crates/deadlib-audio/decode/wav/src/metadata/bext.rs": "f52c4775f678f9e89796d887e47ff42a2fbab9cb615d1d772f4c1a1b576c9f23",
+    "crates/deadlib-audio/decode/wav/src/metadata/bw64.rs": "e13eeb145d1adef0cf3f220cf8492e90b2077b217bc99f5185516cd9b6157cba",
+    "crates/deadlib-audio/decode/wav/src/metadata/markers.rs": "366a3c3e21ab0fe35032204ae131969867ea7f6aaa61ef5c546a76f1c979286b",
+    "crates/deadlib-audio/decode/wav/src/metadata/mod.rs": "b0b07e5e227d06392de1acc72a9651fc8885e2927b2992a94e09ec04041603f8",
+    "crates/deadlib-audio/decode/wav/src/metadata/riff.rs": "fb573495e2b29f328fc43cf66dd2f0e75246b83fa1cf95e69120790c1c474cd5",
+    "crates/deadlib-audio/decode/wav/src/mux.rs": "76c9d500458b6e4c99be6e711cdc9c7ff759cf27372c9e615843928365c1e18c",
+    "crates/deadlib-audio/decode/wav/src/native_io.rs": "cb1080b22befafa43c7dbe165b8705327c80654f00e5155f279b631411872181",
+    "crates/deadlib-audio/decode/wav/src/pcm.rs": "d0f0241669603341d73d8a6b5e381a8f405e8631292beaa62e2354adafc26dfe",
+    "crates/deadlib-audio/decode/wav/src/reader.rs": "f3e756c511a8af04ce5cfe843a063e2393616540e3e90ecd057c816f22a8d92b",
+    "crates/deadlib-audio/decode/wav/src/stream.rs": "31fdbd16af1f869e4c7a79291de44acc29d753a7147de59e051f8b714c67d3ab",
+    "crates/deadlib-audio/decode/wav/src/timeline.rs": "db89c70ef6c853e5339d008ad416cc7e180d5b5a4f789b43fa54d7919ba922ef",
+    "crates/deadlib-audio/decode/wav/src/wavl_encode.rs": "15acfc0d5a56e8685299fa2915847f736ede893c5ddd45f631071169a46c7488",
+    "crates/deadlib-audio/decode/wav/src/wavl_mux.rs": "e6177715ff6ee44daad4f59e57a3d20da12f2265b84d3cef4e783b702c3df61a",
+    "crates/deadlib-audio/decode/wav/README.md": "3f22766402fd1227c741bce8def18582b7813bc817f867fd98765fde7895be7e",
+    "crates/deadlib-audio/decode/wav/Cargo.toml": "78d1e99ee69267c602faa3ee09166d10ea91a7bbbce5f57382dca1df9759a11e",
+    "crates/deadlib-audio/decode/wav/benches/adpcm_file.rs": "a4f00d921c531bc6f770a41b0e098ee8eeb1e0f2fcecdbcf9cb18196d5d41fae",
+    "crates/deadlib-audio/decode/wav/benches/compare_adpcm_file.py": "95f179693909be29883b43ca4b0dddc6552596b55a2d4eb73305794a1bd49283",
+    "Cargo.toml": "65b586de3e57b853a4a428a0a137b62ba94666fa48f3eeabe99cd0eaeb06749f",
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a"
+  },
+  "inputs_unchanged": true,
+  "builds": {
+    "baseline": {
+      "binary": "C:\\GitHub\\deadsync\\target\\wav\\adpcm-wavl-reader-bench-sources\\baseline\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe",
+      "binary_sha256": "cf365b56d3a56aaee220620ae36b5d767964cdbe6fa4ae7de79b6215bcab479c",
+      "sources": {
+        "Cargo.toml": "f988f75c64603e43a0749a1ed4fe5504262b49ad46d07a1d4643a1fb8530875e",
+        "benches/adpcm_file.rs": "a4f00d921c531bc6f770a41b0e098ee8eeb1e0f2fcecdbcf9cb18196d5d41fae",
+        "src/adpcm.rs": "f0064391857fdfa2ec0c14994ffe55dbba939115e9fc865a9143ed2d2fd73470",
+        "src/adpcm_encode.rs": "a2a14d3fccd4af943c68a8995e26fc9a9fa8ce51b68d18fb0a41d05593401f01",
+        "src/adpcm_forward.rs": "910f185a1a715911ba51ada6d8b061ea107351bdae51028714bc2807ecf860e8",
+        "src/adpcm_reader.rs": "bcb744afee6ed766fcdbaa823bc24a1373a648e27c70695f4fb3fa0dbfac4f14",
+        "src/adpcm_wavl.rs": "0689722915ba5bd2dcaca0b11ce2b55c0a31bf98ee4edfc6c8ae10f0603ac8f7",
+        "src/container.rs": "9580a1352677f9a49a57d3c93c305d5516488c18dbbc04503593418e83caaca6",
+        "src/encode.rs": "ab10eb8b844792401abd0b739c6af9d8ea82b819689805fdfe01daaefca2c381",
+        "src/format.rs": "349c7b4851129d44397bed323cfaf1a7ba788979a474965c7b310d48cb1d3a91",
+        "src/forward.rs": "ca6366aee050f476b0453ba63401f4a4f7f3ebf767ce1423b465f51c51b21bc7",
+        "src/lib.rs": "ef2aad2ff92e517b7114d0bd88c3e12f653b9fbf43be42b0bbdf56de3c125673",
+        "src/metadata/bext.rs": "f52c4775f678f9e89796d887e47ff42a2fbab9cb615d1d772f4c1a1b576c9f23",
+        "src/metadata/bw64.rs": "e13eeb145d1adef0cf3f220cf8492e90b2077b217bc99f5185516cd9b6157cba",
+        "src/metadata/markers.rs": "366a3c3e21ab0fe35032204ae131969867ea7f6aaa61ef5c546a76f1c979286b",
+        "src/metadata/mod.rs": "b0b07e5e227d06392de1acc72a9651fc8885e2927b2992a94e09ec04041603f8",
+        "src/metadata/riff.rs": "fb573495e2b29f328fc43cf66dd2f0e75246b83fa1cf95e69120790c1c474cd5",
+        "src/mux.rs": "76c9d500458b6e4c99be6e711cdc9c7ff759cf27372c9e615843928365c1e18c",
+        "src/native_io.rs": "cb1080b22befafa43c7dbe165b8705327c80654f00e5155f279b631411872181",
+        "src/pcm.rs": "d0f0241669603341d73d8a6b5e381a8f405e8631292beaa62e2354adafc26dfe",
+        "src/reader.rs": "acafafbbd9ed80a496b0eb0602f86f96f9fbac3081b3076ec33ff3bc751fea52",
+        "src/stream.rs": "31fdbd16af1f869e4c7a79291de44acc29d753a7147de59e051f8b714c67d3ab",
+        "src/timeline.rs": "635e19cd6a180e14d2c5092b5fcced302a9fee8f6295830f6a6be7f6f0ef0cc9",
+        "src/wavl_encode.rs": "15acfc0d5a56e8685299fa2915847f736ede893c5ddd45f631071169a46c7488",
+        "src/wavl_mux.rs": "e6177715ff6ee44daad4f59e57a3d20da12f2265b84d3cef4e783b702c3df61a",
+        "README.md": "3f22766402fd1227c741bce8def18582b7813bc817f867fd98765fde7895be7e"
+      },
+      "lock_sha256": "474844f4e7790a768d24a40bfc3e00e33c1ae7187877c3748564164cf1d7f9fb",
+      "archive_sha256": "cb31c620471d4e6c8a73d140a351833e8f04edd1c533890e440b1f147d23387b",
+      "command": [
+        "cargo",
+        "bench",
+        "--locked",
+        "--bench",
+        "adpcm_file",
+        "--no-run",
+        "--message-format=json"
+      ]
+    },
+    "current": {
+      "binary": "C:\\GitHub\\deadsync\\target\\wav\\adpcm-wavl-reader-bench-sources\\current\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe",
+      "binary_sha256": "374108262c02530c696b24d5ba44505690489da3a6959d6d1a5f0588e313ebf6",
+      "sources": {
+        "Cargo.toml": "f988f75c64603e43a0749a1ed4fe5504262b49ad46d07a1d4643a1fb8530875e",
+        "benches/adpcm_file.rs": "a4f00d921c531bc6f770a41b0e098ee8eeb1e0f2fcecdbcf9cb18196d5d41fae",
+        "src/adpcm.rs": "f0064391857fdfa2ec0c14994ffe55dbba939115e9fc865a9143ed2d2fd73470",
+        "src/adpcm_encode.rs": "a2a14d3fccd4af943c68a8995e26fc9a9fa8ce51b68d18fb0a41d05593401f01",
+        "src/adpcm_forward.rs": "910f185a1a715911ba51ada6d8b061ea107351bdae51028714bc2807ecf860e8",
+        "src/adpcm_reader.rs": "e74419969cd519d840a548552a34b37e441e30f829e73277adea0d3c9828a349",
+        "src/adpcm_wavl.rs": "0689722915ba5bd2dcaca0b11ce2b55c0a31bf98ee4edfc6c8ae10f0603ac8f7",
+        "src/container.rs": "9580a1352677f9a49a57d3c93c305d5516488c18dbbc04503593418e83caaca6",
+        "src/encode.rs": "ab10eb8b844792401abd0b739c6af9d8ea82b819689805fdfe01daaefca2c381",
+        "src/format.rs": "349c7b4851129d44397bed323cfaf1a7ba788979a474965c7b310d48cb1d3a91",
+        "src/forward.rs": "ca6366aee050f476b0453ba63401f4a4f7f3ebf767ce1423b465f51c51b21bc7",
+        "src/lib.rs": "ef2aad2ff92e517b7114d0bd88c3e12f653b9fbf43be42b0bbdf56de3c125673",
+        "src/metadata/bext.rs": "f52c4775f678f9e89796d887e47ff42a2fbab9cb615d1d772f4c1a1b576c9f23",
+        "src/metadata/bw64.rs": "e13eeb145d1adef0cf3f220cf8492e90b2077b217bc99f5185516cd9b6157cba",
+        "src/metadata/markers.rs": "366a3c3e21ab0fe35032204ae131969867ea7f6aaa61ef5c546a76f1c979286b",
+        "src/metadata/mod.rs": "b0b07e5e227d06392de1acc72a9651fc8885e2927b2992a94e09ec04041603f8",
+        "src/metadata/riff.rs": "fb573495e2b29f328fc43cf66dd2f0e75246b83fa1cf95e69120790c1c474cd5",
+        "src/mux.rs": "76c9d500458b6e4c99be6e711cdc9c7ff759cf27372c9e615843928365c1e18c",
+        "src/native_io.rs": "cb1080b22befafa43c7dbe165b8705327c80654f00e5155f279b631411872181",
+        "src/pcm.rs": "d0f0241669603341d73d8a6b5e381a8f405e8631292beaa62e2354adafc26dfe",
+        "src/reader.rs": "f3e756c511a8af04ce5cfe843a063e2393616540e3e90ecd057c816f22a8d92b",
+        "src/stream.rs": "31fdbd16af1f869e4c7a79291de44acc29d753a7147de59e051f8b714c67d3ab",
+        "src/timeline.rs": "db89c70ef6c853e5339d008ad416cc7e180d5b5a4f789b43fa54d7919ba922ef",
+        "src/wavl_encode.rs": "15acfc0d5a56e8685299fa2915847f736ede893c5ddd45f631071169a46c7488",
+        "src/wavl_mux.rs": "e6177715ff6ee44daad4f59e57a3d20da12f2265b84d3cef4e783b702c3df61a",
+        "README.md": "3f22766402fd1227c741bce8def18582b7813bc817f867fd98765fde7895be7e"
+      },
+      "lock_sha256": "474844f4e7790a768d24a40bfc3e00e33c1ae7187877c3748564164cf1d7f9fb",
+      "archive_sha256": "d48559421ba117cf3cdb7867a37f6a8e98f549f5e763861d65902f1c62694ef2",
+      "command": [
+        "cargo",
+        "bench",
+        "--locked",
+        "--bench",
+        "adpcm_file",
+        "--no-run",
+        "--message-format=json"
+      ]
+    }
+  },
+  "runs": [
+    {
+      "label": "control1",
+      "version": "baseline",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\adpcm-wavl-reader-bench-sources\\baseline\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe",
+        "--flat-only"
+      ],
+      "exit_code": 0,
+      "output_sha256": "660ac7d423d501beacf8246ffdb54d351626b1d50cd929898f4855b1b31bf665",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "current1",
+      "version": "current",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\adpcm-wavl-reader-bench-sources\\current\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe",
+        "--flat-only"
+      ],
+      "exit_code": 0,
+      "output_sha256": "91a585c2d3812ba177b5ba0828955e9d325eade2fecbfef380e70074dcc3e8d2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "control2",
+      "version": "baseline",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\adpcm-wavl-reader-bench-sources\\baseline\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe",
+        "--flat-only"
+      ],
+      "exit_code": 0,
+      "output_sha256": "ba84249ff31846f6cfc97ed4703f4620fbfd4aeb5fc11fe4e7c4e5810ae6c4d0",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "current2",
+      "version": "current",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\adpcm-wavl-reader-bench-sources\\current\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe",
+        "--flat-only"
+      ],
+      "exit_code": 0,
+      "output_sha256": "3497f52db4f5f86e1b80ff95f37437796a5de7e3eac51c7b272954b82dd63e2c",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "label": "segmented",
+      "version": "current",
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\wav\\adpcm-wavl-reader-bench-sources\\current\\target\\release\\deps\\adpcm_file-c5d446a0a0859276.exe"
+      ],
+      "exit_code": 0,
+      "output_sha256": "d38c2e392e5d051f40546811482ca8680b4ff9cf87feb2a90609f77a52d324f2",
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "scope": "three warmed trials; resident Cursor input; static MSVC runtime via workspace .cargo config; no affinity/frequency control; heap/RSS excluded; standalone copies use identical explicit bench profiles"
+}

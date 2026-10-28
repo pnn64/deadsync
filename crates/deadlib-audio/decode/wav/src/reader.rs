@@ -174,6 +174,17 @@ impl<R: Read + Seek> Reader<R> {
             .as_ref()
             .map(|t| t.entries.iter().map(|e| e.chunk))
     }
+    pub(crate) fn timeline(&self) -> Option<&Timeline> {
+        self.timeline.as_ref()
+    }
+    // Owning codec wrappers may reuse the generic inventory's frame fields.
+    // Split borrows keep format bytes independent of those mutable fields.
+    pub(crate) fn format_and_timeline(&mut self) -> (Format<'_>, Option<&mut Timeline>) {
+        (
+            Format::parse(&self.format, self.container.endian()).unwrap(),
+            self.timeline.as_mut(),
+        )
+    }
     pub fn into_inner(self) -> R {
         self.inner
     }
@@ -319,22 +330,24 @@ impl<R: Read + Seek> Reader<R> {
     }
     // The compressed wrapper addresses bytes independently of native PCM pos.
     // Keep native reads poisoned until a native seek, if this Reader is reused.
-    pub(crate) fn seek_encoded(&mut self, offset: u64) -> Result<(), Error> {
-        if self.timeline.is_some() {
-            return Err(Error::Unsupported("segmented encoded data"));
-        }
-        if offset > self.data.size {
-            return Err(Error::Invalid("encoded data offset"));
+    pub(crate) fn seek_audio(&mut self, offset: u64) -> Result<(), Error> {
+        if offset < self.data.offset || offset > self.data.offset + self.data.size {
+            return Err(Error::Invalid("audio byte offset"));
         }
         self.failed = true;
-        self.inner
-            .seek(SeekFrom::Start(self.base + self.data.offset + offset))?;
+        self.inner.seek(SeekFrom::Start(self.base + offset))?;
         Ok(())
     }
-    pub(crate) fn read_encoded(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, Error> {
-        self.seek_encoded(offset)?;
-        let n = (self.data.size - offset).min(out.len() as u64) as usize;
-        self.inner.read_exact(&mut out[..n])?;
-        Ok(n)
+    // Private callers select a retained child and clamp the span to its payload.
+    pub(crate) fn read_audio(&mut self, offset: u64, out: &mut [u8]) -> Result<(), Error> {
+        if offset
+            .checked_add(out.len() as u64)
+            .is_none_or(|end| end > self.data.offset + self.data.size)
+        {
+            return Err(Error::Invalid("audio byte extent"));
+        }
+        self.seek_audio(offset)?;
+        self.inner.read_exact(out)?;
+        Ok(())
     }
 }

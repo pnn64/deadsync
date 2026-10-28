@@ -6,7 +6,8 @@ pub(crate) struct Entry {
     pub chunk: ChunkInfo,
     pub start: u64,
     pub frames: u64,
-    /// Last complete preceding data frame, or zero for initial digital silence.
+    /// Native: preceding physical frame offset. An owning compressed wrapper
+    /// reuses this as a preceding data-entry index plus one. Zero means silence.
     pub hold: u64,
 }
 #[derive(Debug, Default)]

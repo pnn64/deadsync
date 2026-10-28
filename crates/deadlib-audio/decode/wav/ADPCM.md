@@ -16,8 +16,9 @@ compact frame index and caller-owned block scratch. It implements exact borrowed
 range reads, including direct seeks into held silence. `Adpcm::data_frames`
 reports a payload's decoded capacity without reading its block headers. Per-child
 padding, the global fact limit and evidence are documented in [WAVL.md](WAVL.md).
-File-backed/forward ADPCM wrappers still require flat data; segmented routing
-through those wrappers remains unfinished.
+AdpcmReader also supports segmented data and held-frame seeks with its one-block
+cache. AdpcmForwardReader still requires flat data; its segmented routing remains
+unfinished.
 Extensible IMA now uses its GUID and samples-per-block union through every block
 and file API. `AdpcmSpec::format_extensible` serializes speaker masks, and IMA
 writers honor force_extensible. [IMA_EXTENSIBLE.md](IMA_EXTENSIBLE.md) records the
@@ -128,10 +129,19 @@ channels, exact fact trimming and invalid-input atomicity. Total crate tests: 27
 `AdpcmReader` consumes the shared `Reader` scan, allocates an encoded and decoded
 block once, and fills caller-owned interleaved i16 output. It caches decoded PCM
 for repeated reads or seeks within a block. `seek_frame` uses fixed block
-addressing and decodes the block prefix when necessary. File opening skips audio;
+addressing within data and binary search for wavl children, decoding a block
+prefix or held final frame when necessary. File opening skips audio;
 fact or ds64 counts trim final padding. Metadata access keeps the logical audio
 position intact. Errors poison reads until a successful seek. This reader does
 not allocate PCM for the entire file.
+For wavl it reuses the consumed Reader's existing timeline, with no second index
+allocation. Empty data/unknown children preserve the held frame, and metadata
+child descriptors remain accessible through wavl_chunks. Global fact trimming and
+interior padding follow the borrowed policy documented in WAVL.md. Two new tests
+and the expanded independent matrix exercise cache identity across children,
+metadata restore failure, exact seeks, u64 silence and virtual offsets above
+4 GiB. The narrow resident timings and observed flat regression candidates are
+recorded in PERFORMANCE.md; broad comparative performance remains unproven.
 
 Four added integration tests cover sequential/random ranges in all container
 spellings, mono/stereo, unaligned caller capacity, nonzero source bases, metadata

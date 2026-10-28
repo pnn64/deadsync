@@ -14,7 +14,7 @@ const LIMITS: Limits = Limits {
     size_table_entries: 16,
     format_bytes: 4096,
 };
-pub const PATHS: [&str; 19] = [
+pub const PATHS: [&str; 20] = [
     "container",
     "pcm",
     "adpcm_file",
@@ -34,6 +34,7 @@ pub const PATHS: [&str; 19] = [
     "wavl",
     "wavl_mux",
     "adpcm_wavl",
+    "adpcm_wavl_reader",
 ];
 
 /// Returns a bit for each successfully entered family, not a code-coverage count.
@@ -266,14 +267,28 @@ fn container(data: &[u8]) -> u64 {
 }
 
 fn adpcm_wavl(wave: &Wave<'_>) -> u64 {
-    let Ok(audio) = AdpcmWavl::new(wave) else {
+    let Ok(codec) = Adpcm::from_format(wave.format) else {
         return 0;
     };
-    let codec = audio.codec();
     let channels = codec.channels();
     if codec.scratch_samples() > 8192 || codec.block_bytes() > 4096 || channels > 256 {
         return 0;
     }
+    let audio = AdpcmWavl::new(wave);
+    let file = AdpcmReader::with_limits(ShortReads::new(wave.as_bytes()), LIMITS);
+    assert_eq!(
+        audio.is_ok(),
+        file.is_ok(),
+        "compressed wavl descriptor/count acceptance"
+    );
+    let (Ok(audio), Ok(mut file)) = (audio, file) else {
+        return 0;
+    };
+    assert_eq!(audio.frames(), file.frames());
+    assert_eq!(
+        wave.wavl_chunks().unwrap().count(),
+        file.wavl_chunks().unwrap().count()
+    );
     // Independent sequential prefix model: no index, random access or data_frames.
     // Bound expansion even when a tiny input declares billions of silent frames.
     let frames = audio.frames().min((1024 / channels) as u64) as usize;
@@ -313,12 +328,21 @@ fn adpcm_wavl(wave: &Wave<'_>) -> u64 {
     })();
     let mut out = [0x1234; 1025];
     let actual = audio.read_frames(0, &mut out[..frames * channels], &mut scratch);
+    let mut file_out = [0x1234; 1025];
+    let file_result = file.read_i16(&mut file_out[..frames * channels]);
+    assert_eq!(
+        actual.is_ok(),
+        file_result.is_ok(),
+        "compressed wavl borrowed/file prefix acceptance"
+    );
     assert_eq!(
         result.is_ok(),
         actual.is_ok(),
         "compressed wavl prefix acceptance"
     );
     if let Ok(n) = actual {
+        assert_eq!(file_result.unwrap(), n);
+        assert_eq!(&file_out[..n], &out[..n]);
         assert_eq!(n, expected.len());
         assert_eq!(&out[..n], expected);
         for start in [0, frames / 2, frames] {
@@ -328,6 +352,10 @@ fn adpcm_wavl(wave: &Wave<'_>) -> u64 {
                 .unwrap();
             assert_eq!(n, count * channels);
             assert_eq!(&out[..n], &expected[start * channels..start * channels + n]);
+            file.seek_frame(start as u64).unwrap();
+            let m = file.read_i16(&mut file_out[..count * channels]).unwrap();
+            assert_eq!(n, m);
+            assert_eq!(&file_out[..m], &out[..n]);
         }
     }
     assert!(
@@ -336,7 +364,10 @@ fn adpcm_wavl(wave: &Wave<'_>) -> u64 {
             .is_err()
     );
     assert!(audio.read_frames(0, &mut out, &mut []).is_err());
-    1 << 18
+    assert!(file.seek_frame(audio.frames() + 1).is_err());
+    file.seek_frame(audio.frames()).unwrap();
+    assert_eq!(file.read_i16(&mut file_out).unwrap(), 0);
+    (1 << 18) | (1 << 19)
 }
 
 fn pcm_ranges(pcm: Pcm<'_>, reader: &mut Reader<ShortReads<'_>>) {

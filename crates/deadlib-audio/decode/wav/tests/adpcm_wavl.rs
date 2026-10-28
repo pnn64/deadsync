@@ -1,4 +1,5 @@
-use deadlib_audio_decode_wav::{Adpcm, AdpcmWavl, Container, Endian, Format, Wave};
+use deadlib_audio_decode_wav::{Adpcm, AdpcmReader, AdpcmWavl, Container, Endian, Format, Wave};
+use std::io::Cursor;
 
 fn w(n: u16, e: Endian) -> [u8; 2] {
     if e == Endian::Little {
@@ -269,6 +270,12 @@ fn independent_compressed_children_short_blocks_holds_and_exact_ranges() {
                         let bytes = form(c, &fmt, &list, frames as u64, frames & 1 != 0);
                         let wave = Wave::parse(&bytes).unwrap();
                         let audio = AdpcmWavl::new(&wave).unwrap();
+                        let mut embedded = vec![0x81; 7];
+                        embedded.extend(&bytes);
+                        let mut source = Cursor::new(embedded);
+                        source.set_position(7);
+                        let mut file = AdpcmReader::new(source).unwrap();
+                        assert_eq!(file.frames(), frames as u64);
                         assert_eq!(audio.frames(), frames as u64);
                         let mut scratch = vec![0; audio.codec().scratch_samples()];
                         for start in 0..=frames {
@@ -292,6 +299,10 @@ fn independent_compressed_children_short_blocks_holds_and_exact_ranges() {
                                     "{c:?} bits={bits} ch={channels} ext={extensible} fact={frames} start={start}"
                                 );
                                 assert!(out[n..].iter().all(|&n| n == 0x1234));
+                                let mut actual = vec![0x1234; size];
+                                file.seek_frame(start as u64).unwrap();
+                                assert_eq!(file.read_i16(&mut actual).unwrap(), n);
+                                assert_eq!(actual, out);
                             }
                         }
                         assert!(
@@ -303,6 +314,7 @@ fn independent_compressed_children_short_blocks_holds_and_exact_ranges() {
                     }
                     let bytes = form(c, &fmt, &list, total as u64 + 1, false);
                     assert!(AdpcmWavl::new(&Wave::parse(&bytes).unwrap()).is_err());
+                    assert!(AdpcmReader::new(Cursor::new(bytes)).is_err());
                 }
             }
         }
@@ -322,7 +334,9 @@ fn multiword_virtual_silence_empty_forms_and_literal_bw64_fact() {
         let bytes = form(c, &fmt, b"wavl", 0, false);
         let wave = Wave::parse(&bytes).unwrap();
         let a = AdpcmWavl::new(&wave).unwrap();
+        let mut file = AdpcmReader::new(Cursor::new(&bytes)).unwrap();
         assert_eq!(a.read_frames(0, &mut [1; 2], &mut [0; 34]).unwrap(), 0);
+        assert_eq!(file.read_i16(&mut [1; 2]).unwrap(), 0);
         let (data, truth) = block(4, 2, 2, 31000, e);
         let mut list = b"wavl".to_vec();
         list.extend(chunk(b"data", &data, e));
@@ -338,6 +352,7 @@ fn multiword_virtual_silence_empty_forms_and_literal_bw64_fact() {
         let wave = Wave::parse(&bytes).unwrap();
         let a = AdpcmWavl::new(&wave).unwrap();
         assert_eq!(a.frames(), count);
+        let mut file = AdpcmReader::new(Cursor::new(&bytes)).unwrap();
         for start in [17, count / 2, count - 1, count] {
             let mut out = [12; 6];
             let n = a.read_frames(start, &mut out, &mut [0; 34]).unwrap();
@@ -346,6 +361,10 @@ fn multiword_virtual_silence_empty_forms_and_literal_bw64_fact() {
                 assert_eq!(frame, &truth[truth.len() - 2..]);
             }
             assert!(out[n..].iter().all(|&n| n == 12));
+            let mut actual = [12; 6];
+            file.seek_frame(start).unwrap();
+            assert_eq!(file.read_i16(&mut actual).unwrap(), n);
+            assert_eq!(actual, out);
         }
     }
 }
@@ -379,14 +398,22 @@ fn malformed_geometry_lazy_block_headers_and_independent_random_access() {
         let bytes = form(Container::Riff, &fmt, &list, n * 2 + 3, false);
         let wave = Wave::parse(&bytes).unwrap();
         let a = AdpcmWavl::new(&wave).unwrap();
+        let mut file = AdpcmReader::new(Cursor::new(&bytes)).unwrap();
         let mut scratch = vec![0; codec.scratch_samples()];
         assert!(a.read_frames(0, &mut [0; 1], &mut scratch).is_err());
         assert!(a.read_frames(n, &mut [0; 1], &mut scratch).is_err());
+        assert!(file.read_i16(&mut [0; 1]).is_err());
+        file.seek_frame(n).unwrap();
+        assert!(file.read_i16(&mut [0; 1]).is_err());
+        assert!(file.read_i16(&mut [0; 1]).is_err());
         let mut out = vec![0; expected.len()];
         assert_eq!(
             a.read_frames(n + 3, &mut out, &mut scratch).unwrap(),
             expected.len()
         );
+        assert_eq!(out, expected);
+        file.seek_frame(n + 3).unwrap();
+        assert_eq!(file.read_i16(&mut out).unwrap(), expected.len());
         assert_eq!(out, expected);
         // Capacity validation examines geometry even after the fact-trimmed end.
         list.extend(chunk(b"data", &[0], e));

@@ -5,7 +5,8 @@ multiple data/slnt chunks. Borrowed `Wave`/`Pcm`, seekable `Reader`, Read-only
 `ForwardReader` and `WavlWriter` share this layout. The ordinary contiguous data
 path remains available and does not allocate a segment index.
 Borrowed Microsoft/3-bit/4-bit IMA sequences also work through `AdpcmWavl`.
-File-backed and forward ADPCM convenience wrappers still require flat data.
+AdpcmReader also handles compressed children with its reusable block cache.
+Forward ADPCM convenience still requires flat data.
 
 The [IBM/Microsoft WAVE specification, sections 3-26–3-28](https://www.mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/Docs/riffmci.pdf)
 defines wavl, silence, its mandatory fact count and compressed-data cue addressing.
@@ -142,8 +143,8 @@ truth and byte parity, not a new external reader comparison. As documented below
 the reference drivers do not directly support wavl here.
 
 Generic encoded serialization is implemented; borrowed compressed decoding is
-described below. Segment-aware cached file seeking and forward ADPCM routing
-remain open. The measured
+described below. Segment-aware cached file seeking is now implemented too;
+forward ADPCM routing remains open. The measured
 native writer slowdown is retained as an outstanding optimization issue in
 PERFORMANCE.md. This milestone does not claim completion of those requirements.
 
@@ -193,8 +194,8 @@ cargo test --locked -p deadlib-audio-decode-wav --tests --target-dir target/wav
 python crates/deadlib-audio/decode/wav/tests/reference_wavl.py --output target/wav/new-wavl.json
 ```
 
-Compressed file-backed/forward ADPCM wrappers still reject segmented data;
-the borrowed implementation below now decodes it. Broader extensible compressed
+The forward ADPCM wrapper still rejects segmented data; borrowed and file-backed
+implementations below decode it. Broader extensible compressed
 mappings, reference support, comparative segmented
 throughput/RSS and application-profile/metadata semantic certification remain open.
 
@@ -269,3 +270,66 @@ checks disable incremental compilation and pass, with exact source snapshots.
 python crates/deadlib-audio/decode/wav/tests/reference_adpcm_wavl.py --output target/wav/new-adpcm-wavl.json
 cargo run --locked -p deadlib-audio-decode-wav --example adpcm_wavl -- INPUT.wav START FRAMES
 ```
+
+## File-backed compressed sequences
+
+AdpcmReader now accepts the same Microsoft/3-bit/4-bit IMA wavl forms, including
+extensible IMA, short blocks and leading/trailing fact. Its consumed Reader owns
+the generic child inventory, so the wrapper initializes decoded frame offsets
+and preceding-data references in that inventory rather than allocating another
+index. Parsing remains codec independent: these fields are updated only after
+the caller explicitly selects AdpcmReader. The wrapper never exposes that Reader
+for reuse; into_inner returns the original I/O source. Physical descriptors and
+unknown metadata payloads stay unchanged.
+
+Binary search finds the logical child; fixed block arithmetic locates its encoded
+block. Silence uses the last decoded frame of the preceding nonempty data child,
+or zero before any data. The existing encoded/decoded buffers cache one block,
+keyed by its form-relative physical offset so different children cannot alias.
+Reading from data into silence, repeated held-frame reads and seeks into that
+cached block reuse its PCM without more audio reads. Native Reader's private
+byte-span operations check the enclosing audio extent; the codec clamps every
+load to the selected data child. Neither short-block reads nor held-frame loads
+cross child padding or metadata boundaries.
+
+AdpcmReader::wavl_chunks exposes child descriptors. read_metadata accepts them,
+restores the actual underlying cursor and preserves logical position/cache.
+Decode/I/O/metadata errors poison reads until a successful seek_frame; a metadata
+success alone does not clear the wrapper's failure state. Seeking itself performs
+I/O but defers block decoding until samples are requested, as on flat data.
+
+The wrapper still adds only two fallible allocations for one encoded and one
+decoded block. An eight-child stereo probe consumes a preopened Reader, requests
+two allocations/52 bytes (16 encoded bytes plus 18 i16 samples), and records zero
+allocation for subsequent reads/seeks. Container format/inventory allocation and
+caller buffers are excluded. The wrapper object is 344 bytes on x64 and 248 on
+i686; its field layout is unchanged, and the standalone x64 baseline also reports
+344. This is object/requested-allocation evidence, not codec RSS.
+
+The fixed scalar test matrix now checks both borrowed and file-backed output at
+every frame position and caller split, including embedded sources, all container
+spellings, applicable 1/2/6/33-channel formats, empty/fact-trimmed durations and
+complete short blocks. Two new tests prove offset-based cache identity, held-cache
+I/O reuse, short/Interrupted reads, metadata restoration failure and explicit
+recovery. An RF64/BW64 virtual source puts actual encoded payloads above 4 GiB
+and exposes u64 silence; all requested samples are exact with fewer than 512
+physical bytes read. This is virtual-offset evidence, not a physical sparse-file
+or sequential disk-throughput claim.
+
+`validation/adpcm-wavl-reader-references-final.*` passes all 216 independent
+fixture gates and 2592 borrowed/file/full/range checks. The ten paired flat block
+gates and every direct four-reference rejection remain visible under the earlier
+policy. All 204 retained real-file flat ADPCM range checks pass, as do the 708
+native gates/4484 sample-descriptor-range checks/1912 writer outputs. The full
+89-test suite passes x64 debug/release and i686 debug, with Clippy, two million
+checked mutations, 1827 prior corpus inputs and 100000 ASan executions. FUZZING.md
+records the 1857-file new corpus; PERFORMANCE.md retains the standalone paired
+flat regression candidates and cached-seek/resident-streaming measurements.
+
+The initial external campaign was interrupted when overlapping Cargo builds
+replaced a shared executable path. Its partial archive/build log are retained.
+The final campaign uses private binary snapshots, and the flat regression tool
+now builds only its two required examples and snapshots them too. Validation
+uses CARGO_INCREMENTAL=0 where recorded to avoid the earlier compiler cache
+issue. Forward-only segmented ADPCM, further codec/profile coverage, competitive
+broad-format/RSS evidence and the measured native output slowdown remain open.
