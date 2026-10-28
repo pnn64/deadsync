@@ -663,6 +663,11 @@
       "path": "crates/deadlib-audio/decode/vorbis/validation/2026-10-28-reference-seeking-synthetic-reference-seeks-retained.log",
       "sha256": "46fb97e2e46fab163d905898acdd09097c2370016749ebc635cdde2dab4c43bc",
       "original_sha256": "c6fce68c5d4c846ce7013528b1a7b727f8d5dbafe7709d08ddf46195d3802337"
+    },
+    "retained-independent": {
+      "path": "crates/deadlib-audio/decode/vorbis/validation/2026-10-28-reference-seeking-retained-independent.log",
+      "sha256": "28e5cd00df3e18dcdc530954e13df464e4d3381ca0d2172c0062995f44f42457",
+      "original_sha256": "6c5eaa4985d3323f5e5bc2cf4d6113cb76776120c65845ec7419d5723d444d81"
     }
   },
   "baseline_full_reference_suite": {
@@ -708,10 +713,6 @@
     "full_reference_suite": {
       "tool_session_id": 31858,
       "log": "target/vorbis-completion/final-full-reference-tests.log"
-    },
-    "extracted_workspace": {
-      "tool_session_id": 82982,
-      "log": "target/vorbis-completion/retained-independent.log"
     },
     "remaining_scope": "Finish current-source full/extracted checks and broader acceptance/conformance audit."
   },
@@ -759,5 +760,14 @@
       "log_sha256": "4c7042cfbe0ad13bdf5ed9d506f2b40a6b7167a84c196f37e5a84d4979d1820a"
     }
   },
-  "log_export_format": "UTF-8 with LF line endings and line-final whitespace removed. Original file SHA-256 values are recorded separately; unmodified logs remain in ignored scratch storage."
+  "log_export_format": "UTF-8 with LF line endings and line-final whitespace removed. Original file SHA-256 values are recorded separately; unmodified logs remain in ignored scratch storage.",
+  "post_fix_extracted_workspace": {
+    "exit_code": 0,
+    "passed": 144,
+    "failed": 0,
+    "ignored": 92,
+    "production_tree": "vorbis -> sibling ogg only; no external codec dependencies",
+    "scratch": "target/deadlib-audio-reference/reference-seeking-retained-independent"
+  },
+  "milestone_commit": "61ca7e6ab06d5cce91f0999ec642f05daaffaed6"
 }
