@@ -1,0 +1,11 @@
+file	frames	zero_back	zero_back_nonempty	assembled_bytes	zero_back_bytes
+libmp3lame-44100-2.mp3	117	2	1	44035	357
+libshine-44100-2.mp3	115	115	114	43544	43544
+mp3_mf-44100-2.mp3	118	2	1	44066	350
+mp3_mf-8000-2.mp3	1	1	0	0	0
+44100-2-vbr.mp3	117	2	1	76708	621
+8000-2-cbr.mp3	45	2	1	11651	180
+44100-long-1-0.mp3	221	221	221	5478	5478
+8000-short-1-1.mp3	391	391	391	13375	13375
+protected-44100-2.mp3	117	2	1	43802	357
+protected-22050-1.mp3	119	2	1	22492	168

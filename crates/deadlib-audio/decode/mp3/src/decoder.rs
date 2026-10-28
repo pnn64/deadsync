@@ -176,12 +176,17 @@ impl FrameDecoder {
         for channel in 0..header.channels() {
             self.spectra[channel].fill(0.0);
             self.hybrid[channel].process(&mut self.spectra[channel], 0, 0, &mut self.subbands)?;
+            let silent = self.subbands.iter().all(|&value| value == 0.0);
             for t in 0..18 {
                 let mut pcm = [0.0; 32];
-                self.synthesis[channel].process(
-                    self.subbands[t * 32..t * 32 + 32].try_into().unwrap(),
-                    &mut pcm,
-                );
+                if silent {
+                    self.synthesis[channel].process_silence(&mut pcm);
+                } else {
+                    self.synthesis[channel].process(
+                        self.subbands[t * 32..t * 32 + 32].try_into().unwrap(),
+                        &mut pcm,
+                    );
+                }
                 let start = channel * 576 + t * 32;
                 for (out, sample) in self.output[start..start + 32].iter_mut().zip(pcm) {
                     *out = sample as f32;
@@ -272,12 +277,17 @@ impl FrameDecoder {
                     mixed,
                     &mut self.subbands,
                 )?;
+                let silent = self.subbands.iter().all(|&value| value == 0.0);
                 for t in 0..18 {
                     let mut pcm = [0.0; 32];
-                    self.synthesis[channel].process(
-                        self.subbands[t * 32..t * 32 + 32].try_into().unwrap(),
-                        &mut pcm,
-                    );
+                    if silent {
+                        self.synthesis[channel].process_silence(&mut pcm);
+                    } else {
+                        self.synthesis[channel].process(
+                            self.subbands[t * 32..t * 32 + 32].try_into().unwrap(),
+                            &mut pcm,
+                        );
+                    }
                     let start = channel * header.samples() + granule * 576 + t * 32;
                     for (target, sample) in self.output[start..start + 32].iter_mut().zip(pcm) {
                         *target = sample as f32;

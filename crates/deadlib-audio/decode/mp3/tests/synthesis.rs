@@ -45,3 +45,44 @@ fn synthesis_finite_history_and_repeatable_reset() {
     synthesis.process(&source, &mut output);
     assert_eq!(first, output);
 }
+
+#[test]
+fn zero_input_preserves_tail_history_and_signed_zero_bits() {
+    for phase in 0..16 {
+        let mut positive = Synthesis::new();
+        let mut negative = Synthesis::new();
+        let (mut a, mut b) = ([0.0; 32], [0.0; 32]);
+        for slot in 0..16 + phase {
+            let input = std::array::from_fn(|band| ((band + 7 * slot) % 31) as f64 * 0.01 - 0.15);
+            positive.process(&input, &mut a);
+            negative.process(&input, &mut b);
+        }
+        for slot in 0..32 {
+            positive.process(&[0.0; 32], &mut a);
+            negative.process(&[-0.0; 32], &mut b);
+            assert_eq!(
+                a.map(f64::to_bits),
+                b.map(f64::to_bits),
+                "phase={phase} slot={slot}"
+            );
+            if slot == 0 {
+                assert!(a.iter().any(|&v| v != 0.0));
+            }
+            if slot >= 16 {
+                assert_eq!(a.map(f64::to_bits), [0; 32]);
+            }
+        }
+    }
+}
+
+#[test]
+fn subnormal_subbands_still_contribute_to_synthesis() {
+    for band in 0..32 {
+        let mut synthesis = Synthesis::new();
+        let mut input = [0.0; 32];
+        input[band] = f64::from_bits(1 << 30);
+        let mut pcm = [0.0; 32];
+        synthesis.process(&input, &mut pcm);
+        assert!(pcm.iter().any(|&v| v != 0.0), "band={band}");
+    }
+}

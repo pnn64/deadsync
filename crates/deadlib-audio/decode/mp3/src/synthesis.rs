@@ -110,6 +110,7 @@ impl Hybrid {
 pub struct Synthesis {
     values: [f64; 1024],
     offset: usize,
+    remaining: u8,
 }
 impl Default for Synthesis {
     fn default() -> Self {
@@ -121,11 +122,13 @@ impl Synthesis {
         Self {
             values: [0.0; 1024],
             offset: 0,
+            remaining: 0,
         }
     }
     pub fn reset(&mut self) {
         self.values.fill(0.0);
         self.offset = 0;
+        self.remaining = 0;
     }
     /// One time slot: 32 subband values produce 32 PCM samples. The ring retains
     /// sixteen 64-value matrix outputs, avoiding a full history copy per slot.
@@ -142,6 +145,24 @@ impl Synthesis {
                 *value += sample * coefficient;
             }
         }
+        self.window(pcm);
+        self.remaining = 16;
+    }
+    /// Zero subbands still emit the previous sixteen slots' filter tail.
+    pub(crate) fn process_silence(&mut self, pcm: &mut [f64; 32]) {
+        self.offset = (self.offset + 960) & 960;
+        if self.remaining != 0 {
+            self.values[self.offset..self.offset + 64].fill(0.0);
+            self.remaining -= 1;
+            if self.remaining != 0 {
+                self.window(pcm);
+                return;
+            }
+        }
+        pcm.fill(0.0);
+    }
+    #[inline(always)]
+    fn window(&self, pcm: &mut [f64; 32]) {
         pcm.fill(0.0);
         for group in 0..8 {
             // Both 32-value spans are contiguous: the ring offset is a
@@ -154,6 +175,39 @@ impl Synthesis {
                 pcm[n] += tables::DEWINDOW[64 * group + n] * first[n];
                 pcm[n] += tables::DEWINDOW[64 * group + 32 + n] * second[n];
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Synthesis;
+
+    #[test]
+    fn silent_slots_preserve_history_at_every_ring_phase() {
+        for prime in 0..33 {
+            let mut reference = Synthesis::new();
+            let mut fast = Synthesis::new();
+            let mut expected = [0.0; 32];
+            let mut actual = [0.0; 32];
+            for slot in 0..prime {
+                let input =
+                    std::array::from_fn(|band| ((slot * 31 + band * 17) as f64 * 0.13).sin());
+                reference.process(&input, &mut expected);
+                fast.process(&input, &mut actual);
+            }
+            for slot in 0..32 {
+                reference.process(&[if slot & 1 == 0 { 0.0 } else { -0.0 }; 32], &mut expected);
+                fast.process_silence(&mut actual);
+                assert_eq!(expected.map(f64::to_bits), actual.map(f64::to_bits));
+            }
+            let input = std::array::from_fn(|band| (band as f64 * 0.47).cos());
+            reference.process(&input, &mut expected);
+            fast.process(&input, &mut actual);
+            assert_eq!(expected.map(f64::to_bits), actual.map(f64::to_bits));
+            fast.reset();
+            fast.process_silence(&mut actual);
+            assert_eq!(actual.map(f64::to_bits), [0; 32]);
         }
     }
 }

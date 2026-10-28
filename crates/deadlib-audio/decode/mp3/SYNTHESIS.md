@@ -10,13 +10,22 @@ aligned address. Its offset remains a multiple of 64 values; the ring update
 masks the low six bits explicitly so contiguous matrix and window spans have
 provable bounds and alignment. Both states reset without allocation.
 
+The decoder detects exactly zero subband granules once before their eighteen
+time slots. Their matrix outputs are zero, but the window still emits retained
+history. A one-byte countdown records the sixteen slots needed to overwrite
+that history; only after it expires can the window also be skipped. Ordinary
+`Synthesis::process` calls conservatively restart the countdown, and reset
+clears it. The counter fits within the synthesis state's existing padding.
+
 The kernels use f64 arithmetic and fixed arrays. Long IMDCT coefficients are
 stored as three tiles of eighteen rows and twelve output lanes. Each tile
 accumulates twelve outputs while retaining each output's original eighteen-term
 order. This reduces the live accumulator set without changing coefficient bits,
 arithmetic order or table storage. Immutable cosine/window tables are generated
 from the MPEG mathematical equations. No runtime trigonometric initialization
-is required.
+is required. A private 64-byte-aligned wrapper keeps the synthesis matrix's
+contiguous rows aligned independently of linker placement; its numeric payload
+remains 16,384 bytes with identical coefficient bits.
 
 `scripts/generate_dsp.py` reads only the numeric `dewindow` table from the ISO
 simulation distribution described in HUFFMAN.md. That member is
