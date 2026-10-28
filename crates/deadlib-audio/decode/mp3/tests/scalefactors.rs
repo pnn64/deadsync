@@ -147,6 +147,27 @@ fn mpeg1_widths_and_all_scfsi_masks() {
             .unwrap();
             assert_eq!(factors.encoded_bits, bits);
             assert_eq!(reader.position(), bits);
+            for start in 0..8 {
+                for available in 0..=bits {
+                    let mut cursor = BitReader::bounded(&data, start, available).unwrap();
+                    let result = read(
+                        &mut cursor,
+                        header(3, false),
+                        &side(compress as u16, shape),
+                        0,
+                        0,
+                        None,
+                    );
+                    if available == bits {
+                        assert_eq!(result, Ok(factors.clone()));
+                        assert_eq!(cursor.position(), start + bits);
+                    } else {
+                        assert_eq!(result, Err(Error::Truncated));
+                        assert_eq!(cursor.position(), start);
+                        assert_eq!(cursor.remaining(), available);
+                    }
+                }
+            }
             for band in 0..22 {
                 let width = match shape {
                     0 if band < 21 => {

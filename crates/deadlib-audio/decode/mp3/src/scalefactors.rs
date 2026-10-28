@@ -153,11 +153,16 @@ pub fn read(
                 if width == 0 {
                     continue;
                 }
+                let shift = u32::from(width);
+                let mask = (1 << shift) - 1;
                 for band in first..last {
-                    for window in 0..3 {
-                        factors.short[band][window] = cursor.read(width as u32)? as u8;
-                        factors.short_width[band][window] = width;
-                    }
+                    let packed = cursor.read(3 * shift)?;
+                    factors.short[band] = [
+                        ((packed >> (2 * shift)) & mask) as u8,
+                        ((packed >> shift) & mask) as u8,
+                        (packed & mask) as u8,
+                    ];
+                    factors.short_width[band] = [width; 3];
                 }
             }
         } else {

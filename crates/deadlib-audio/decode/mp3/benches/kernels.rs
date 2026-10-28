@@ -286,6 +286,54 @@ fn verify(paths: &[String]) {
             }
         }
     }
+    for pattern in 0..2 {
+        let data: [u8; 40] = std::array::from_fn(|n| {
+            if pattern == 0 {
+                0xff
+            } else {
+                (n * 113 + 0x6c) as u8
+            }
+        });
+        for compress in (0..512).chain([512, u16::MAX]) {
+            for (kind, mixed) in [(0, false), (2, false), (2, true)] {
+                for intensity in [false, true] {
+                    let header = joint(22050, u8::from(intensity));
+                    let channel = usize::from(intensity);
+                    let mut side = SideInfo::default();
+                    side.granules[0][channel] = GranuleChannel {
+                        block_type: kind,
+                        mixed_block: mixed,
+                        scalefac_compress: compress,
+                        ..Default::default()
+                    };
+                    for start in [0, 3, 7] {
+                        for available in [0, 1, 7, 15, 31, 32, 63, 95, 128, 255] {
+                            for limit in [0, 4095] {
+                                side.granules[0][channel].part2_3_bits = limit;
+                                let mut cursor =
+                                    BitReader::bounded(&data, start, available).unwrap();
+                                let result = scalefactors::read(
+                                    &mut cursor,
+                                    header,
+                                    &side,
+                                    0,
+                                    channel,
+                                    None,
+                                );
+                                writeln!(
+                                    out,
+                                    "{result:?} {} {}",
+                                    cursor.position(),
+                                    cursor.remaining()
+                                )
+                                .unwrap();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     for path in paths {
         let frames = packets(Path::new(path));
         let mut decoder = FrameDecoder::new();
@@ -674,7 +722,7 @@ fn main() {
     }
     for (kind, mixed) in [(0, false), (2, false), (2, true)] {
         for intensity in [false, true] {
-            for compress in [0, 399, 511] {
+            for compress in [0, 359, 399, 511] {
                 let header = joint(22050, u8::from(intensity));
                 let channel = usize::from(intensity);
                 let mut side = SideInfo::default();
@@ -708,7 +756,7 @@ fn main() {
     }
     let mpeg1_header = joint(44100, 0);
     for (kind, mixed) in [(0, false), (2, false), (2, true)] {
-        for compress in [0, 4, 15] {
+        for compress in [0, 4, 5, 15] {
             let mut side = SideInfo::default();
             side.granules[0][0] = GranuleChannel {
                 block_type: kind,
@@ -735,7 +783,7 @@ fn main() {
         long_width: std::array::from_fn(|n| (n % 5) as u8),
         ..Default::default()
     };
-    for compress in [0, 4, 15] {
+    for compress in [0, 4, 5, 15] {
         for mask in [0, 5, 15] {
             let mut side = SideInfo::default();
             side.scfsi[0] = std::array::from_fn(|n| mask & (1 << n) != 0);
