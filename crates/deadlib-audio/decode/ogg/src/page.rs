@@ -79,8 +79,13 @@ impl<'a> Page<'a> {
     pub fn checksum(self) -> u32 {
         u32::from_le_bytes(self.bytes[22..26].try_into().unwrap())
     }
+    #[inline]
     pub fn completed_packets(self) -> usize {
-        self.lacing().iter().filter(|&&n| n < 255).count()
+        let lacing = self.lacing();
+        if lacing.len() < 8 {
+            return lacing.iter().filter(|&&n| n < 255).count();
+        }
+        count_packets(lacing)
     }
     pub fn fragments(self) -> Fragments<'a> {
         self.fragments_from(0, 0)
@@ -97,6 +102,23 @@ impl<'a> Page<'a> {
             },
         }
     }
+}
+
+// Keep the wide loop out of consumers that usually see only a few laces.
+#[inline(never)]
+fn count_packets(lacing: &[u8]) -> usize {
+    let (words, tail) = lacing.as_chunks::<8>();
+    let mut continued = 0;
+    for word in words {
+        let word = u64::from_le_bytes(*word);
+        // A byte is 0xff exactly when its low seven bits plus one and
+        // its original high bit both set the high bit. No byte carries.
+        let flags =
+            ((word & 0x7f7f_7f7f_7f7f_7f7f) + 0x0101_0101_0101_0101) & word & 0x8080_8080_8080_8080;
+        continued += ((flags >> 7).wrapping_mul(0x0101_0101_0101_0101) >> 56) as usize;
+    }
+    continued += tail.iter().filter(|&&n| n == 255).count();
+    lacing.len() - continued
 }
 
 // The exact page length and strict header rules must already be verified.

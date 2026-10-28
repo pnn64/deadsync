@@ -62,6 +62,10 @@ fn fragment_ranges_match_independent_lace_accumulation() {
                     .collect();
                 let bytes = page(flags, 0, 1, 0, &lacing, &body);
                 let parsed = Page::parse(&bytes).unwrap().0;
+                assert_eq!(
+                    parsed.completed_packets(),
+                    lacing.iter().filter(|&&n| n < 255).count()
+                );
                 let mut fragments = parsed.fragments();
                 let mut offset = 0;
                 let mut length = 0;
@@ -82,6 +86,25 @@ fn fragment_ranges_match_independent_lace_accumulation() {
                 assert!(fragments.next().is_none());
                 assert_eq!(offset, body.len());
             }
+        }
+    }
+}
+
+#[test]
+fn completed_packet_counts_cover_every_byte_across_word_tails() {
+    for length in [
+        0, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 127, 128, 129, 254, 255,
+    ] {
+        for seed in 0..=255 {
+            let lacing: Vec<_> = (0..length).map(|i| (i * 73 + seed) as u8).collect();
+            let body = vec![37; lacing.iter().map(|&n| n as usize).sum()];
+            let bytes = page(0, 0, 1, 0, &lacing, &body);
+            let parsed = Page::parse(&bytes).unwrap().0;
+            assert_eq!(
+                parsed.completed_packets(),
+                lacing.iter().filter(|&&n| n < 255).count(),
+                "length={length}, seed={seed}"
+            );
         }
     }
 }
