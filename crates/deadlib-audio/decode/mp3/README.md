@@ -41,6 +41,8 @@ streams, including the intensity edge cases on which reference decoders differ.
 Additional Shine, Windows Media Foundation and FFmpeg/LAME comparisons are
 recorded in [ENCODER_COMPATIBILITY.md](ENCODER_COMPATIBILITY.md), including the
 short-padding gapless correction and unusable encoder configurations.
+The full-file [historical music gate](HISTORICAL.md) adds exact file/seek counts,
+three-reference PCM checks and explicit strict/recovery tests on damaged music.
 
 ```sh
 cargo test --locked -p deadlib-audio-decode-mp3 --target-dir target/deadlib-mp3
