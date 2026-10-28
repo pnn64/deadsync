@@ -55,7 +55,7 @@ passed 629 Rust tests on each platform after fixing the remaining fixture
 assumptions. Crashing GNU C `unpack` inputs run in a separate strict audit;
 five native crashes remain recorded, with signed-overflow diagnostics and an
 independent wrapping control. The default reference flags remain unchanged.
-The current runs pass 796 Rust tests on Windows x64 and 797 on Linux x64 and
+The current runs pass 801 Rust tests on Windows x64 and 802 on Linux x64 and
 Linux i686 SSE2. The default x87 arithmetic baseline and five bounded traceback
 requests retain failed/incomplete observations. Complete C/auxiliary APIs and
 remaining language, library, debug, GC and resource behavior must also be
@@ -63,7 +63,7 @@ completed. Selected passing probes and declaration counts do not close these
 gates. Production migration also requires the subsequent performance gates.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 710 differential/adversarial integration tests, eighty-two unit tests and
+crate, 713 differential/adversarial integration tests, eighty-four unit tests and
 four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -72,7 +72,7 @@ traces across all permutations through length six, callback mutations, nested
 sorting, errors and metatables. Coroutine generation exercises 300 resume sequences
 and recursive generators, alongside nested resumers, native callbacks, environments,
 failed/suspended thread cells, result arity, C-call limits and quota recovery.
-A separate [library argument audit](testing/2026-10-28-rust-lua-call-yields-stdlib.json)
+A separate [library argument audit](testing/2026-10-28-rust-lua-gc-integers-stdlib.json)
 matches all 5,507 bounded cases against the standalone Windows/MSVC reference.
 The default native adapter closes the fourteen previously retained native-loading
 argument mismatches; full standard-library parity remains open.
@@ -1412,6 +1412,15 @@ waiting state, repeated yields and a second yielded call that fails on resume.
 Expired handlers remain inactive, and open cells survive until collection. A
 portable regression also executes without default features. General
 interleaved execution and full Lua 5.1 parity remain open.
+
+The [collector integer checks](testing/2026-10-28-rust-lua-gc-integers.md)
+match 1,063 observations on Windows x64 and i686 SSE2 against release and checked
+references. Pause thresholds preserve unsigned wrapping and division order;
+step limits preserve the 32-bit product followed by pointer-sized signed
+assignment. Wide budget conversion also completes a 150,000-table i686 graph.
+Negative/zero controls, finalizer identities, restart behavior and both native
+widths are covered. Heap-count and general collector-work/timing parity remain
+open.
 
 ## Reference contract
 

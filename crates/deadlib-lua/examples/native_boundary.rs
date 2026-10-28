@@ -27,7 +27,11 @@ mod supported {
             vm.set_native_library_loader(Some(loader));
             Some(lifetime)
         };
-        vm.set_instruction_limit(Some(10_000_000));
+        let instructions = std::env::var("DEADLUA_NATIVE_BOUNDARY_INSTRUCTIONS")
+            .map_or(10_000_000, |value| {
+                value.parse().expect("instruction budget")
+            });
+        vm.set_instruction_limit(Some(instructions));
         let mut boot = String::new();
         for name in [
             "boundary_sum",

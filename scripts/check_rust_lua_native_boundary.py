@@ -171,6 +171,7 @@ def main():
     thread_unprotected_runs={}
     thread_unprotected_exit_runs={}
     call_yield_runs={}
+    gc_integer_runs={}
     for engine in ['reference','rust']:
         with tempfile.TemporaryDirectory(prefix='deadlua-native-boundary-')as temporary:
             work=Path(temporary);(work/'boundary.lua').write_bytes((fixture/'cases.lua').read_bytes())
@@ -181,6 +182,7 @@ def main():
             for name,chunk in root_chunks.items():(work/name).write_bytes(chunk)
             env=os.environ.copy()
             for key in ['LUA_INIT','LUA_PATH','LUA_CPATH']:env.pop(key,None)
+            env.pop('DEADLUA_NATIVE_BOUNDARY_INSTRUCTIONS',None)
             env['PATH']=str(directory/engine)+os.pathsep+env.get('PATH','')
             command=[str(reference),'-e',boot,'boundary.lua']if engine=='reference'else[str(runner),str(directory/'rust/boundary.dll')if args.runner is not None else'default',str(directory/'rust/rust_module.dll'),str(work/'boundary.lua')]
             try:
@@ -302,6 +304,11 @@ def main():
             (work/'boundary.lua').write_bytes((fixture/'call-yields.lua').read_bytes())
             run=subprocess.run(command,cwd=work,env=env,capture_output=True,timeout=60)
             call_yield_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex())
+            (work/'boundary.lua').write_bytes((fixture/'gc-integers.lua').read_bytes())
+            gc_integer_env=env.copy()
+            if engine=='rust':gc_integer_env['DEADLUA_NATIVE_BOUNDARY_INSTRUCTIONS']='50000000'
+            run=subprocess.run(command,cwd=work,env=gc_integer_env,capture_output=True,timeout=60)
+            gc_integer_runs[engine]=dict(command=command,returncode=run.returncode,stdout_hex=run.stdout.hex(),stderr_hex=run.stderr.hex(),instruction_limit=50000000 if engine=='rust'else None)
             thread_unprotected_exit_runs[engine]={}
             for kind in ['fresh','completed','yielded','failed','partial']:
                 for native in [False,True]:
@@ -441,6 +448,9 @@ def main():
     call_yields_complete=all(run['returncode']==0 and b'call-yields-complete\t1280'in bytes.fromhex(run['stdout_hex'])for run in call_yield_runs.values())
     call_yields_equal=call_yields_complete and call_yield_runs['reference']['stdout_hex']==call_yield_runs['rust']['stdout_hex']and not call_yield_runs['reference']['stderr_hex']
     result['native_call_yields_probe']=dict(runs=call_yield_runs,completed=call_yields_complete,observations_equal=call_yields_equal,fixture='crates/deadlib-lua/tests/native-boundary/call-yields.lua',complete_interleaved_execution_proven=False)
+    gc_integers_complete=all(run['returncode']==0 and b'gc-integers-complete\t1063'in bytes.fromhex(run['stdout_hex'])for run in gc_integer_runs.values())
+    gc_integers_equal=gc_integers_complete and gc_integer_runs['reference']['stdout_hex']==gc_integer_runs['rust']['stdout_hex']and not gc_integer_runs['reference']['stderr_hex']
+    result['native_gc_integers_probe']=dict(runs=gc_integer_runs,completed=gc_integers_complete,observations_equal=gc_integers_equal,fixture='crates/deadlib-lua/tests/native-boundary/gc-integers.lua',complete_gc_work_and_accounting_proven=False)
     unprotected_exit_equal={key:all(row['returncode']==1 and row['stdout_hex']==row['expected_stdout_hex']and not row['stderr_hex']and row['buffered_file_hex']==b'waiting\0buffered\n'.hex()for row in [thread_unprotected_exit_runs[engine][key]for engine in ['reference','rust']])for key in thread_unprotected_exit_runs['reference']}
     result['native_thread_unprotected_exit_probe']=dict(runs=thread_unprotected_exit_runs,observations_equal=unprotected_exit_equal,expected_exit_code=1,fixture='crates/deadlib-lua/tests/native-boundary/thread-unprotected-exit.lua')
     gc_thread_equal={}
@@ -465,6 +475,6 @@ def main():
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2)+'\n',encoding='utf-8')
     print('program observations equal:',matched,'dispatch/drop guards balanced:',returned,'state lifetimes balanced:',states,flush=True)
-    if not matched or not returned or not states or not scratch_complete or not result['parser_scratch_probe']['observations_equal'] or not roots_equal or not thread_stacks_equal or not resume_equal or not levels_equal or not reader_levels_equal or not debug_equal or not hooks_equal or not context_equal or not return_stacks_equal or not protection_hooks_equal or not library_stacks_equal or not package_stacks_equal or not all(body_stack_equal.values()) or not bodies_equal or not all(library_equal.values()) or not all(library_balanced.values()) or not inactive_objects_equal or not thread_calls_equal or not api_yields_equal or not thread_loads_equal or not reader_continuations_equal or not panic_equal or not all(panic_exit_equal.values()) or not all(thread_files_equal.values()) or not all(file_exit_equal.values()) or not allocation_gc_equal or not all(execution_equal.values()) or not all(gc_thread_equal.values()) or not waiting_errors_equal or not unprotected_equal or not all(unprotected_exit_equal.values()) or not call_yields_equal:raise SystemExit(1)
+    if not matched or not returned or not states or not scratch_complete or not result['parser_scratch_probe']['observations_equal'] or not roots_equal or not thread_stacks_equal or not resume_equal or not levels_equal or not reader_levels_equal or not debug_equal or not hooks_equal or not context_equal or not return_stacks_equal or not protection_hooks_equal or not library_stacks_equal or not package_stacks_equal or not all(body_stack_equal.values()) or not bodies_equal or not all(library_equal.values()) or not all(library_balanced.values()) or not inactive_objects_equal or not thread_calls_equal or not api_yields_equal or not thread_loads_equal or not reader_continuations_equal or not panic_equal or not all(panic_exit_equal.values()) or not all(thread_files_equal.values()) or not all(file_exit_equal.values()) or not allocation_gc_equal or not all(execution_equal.values()) or not all(gc_thread_equal.values()) or not waiting_errors_equal or not unprotected_equal or not all(unprotected_exit_equal.values()) or not call_yields_equal or not gc_integers_equal:raise SystemExit(1)
 
 if __name__=='__main__':main()

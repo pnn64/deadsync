@@ -195,7 +195,7 @@ enabled through `Vm::set_output_capture`.
 and `atan2` check their second operand first on Linux/glibc and their first
 operand first elsewhere. These error orders follow the pinned GCC and MSVC
 reference builds; C itself does not specify the evaluation order. The
-[library argument audit](../../docs/testing/2026-10-28-rust-lua-call-yields-stdlib.json)
+[library argument audit](../../docs/testing/2026-10-28-rust-lua-gc-integers-stdlib.json)
 now matches all 5,507 bounded cases, including native-loading argument errors.
 It does not establish full standard-library parity.
 
@@ -351,6 +351,14 @@ repeated yields, and a second pending call that raises on resume. Native returns
 restore the pending Lua caller's register window after an intervening API call
 shrinks its storage. Release and checked references also match 4,224 C-call count
 controls. Arbitrary interleaved execution and full Lua 5.1 parity remain open.
+
+The [collector integer checks](../../docs/testing/2026-10-28-rust-lua-gc-integers.md)
+match 1,063 observations in 64-bit and 32-bit reference profiles. Pause thresholds
+preserve wrapping and division order; step limits preserve the unsigned product
+and signed target width. A wide intermediate retains large i686 budgets before
+conversion into tracing units. Negative controls, finalizer error identities and
+a 150,000-table graph are covered. Exact heap counts and collector work scheduling
+remain unfinished.
 
 The string library provides byte operations, method lookup, Lua patterns,
 `find`, `match`, independent `gmatch` iterators, `gsub` with string/table/function

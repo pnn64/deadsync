@@ -1,0 +1,2597 @@
+{
+  "reports": {
+    "boundary": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-boundary-current.json",
+      "sha256": "ab1c22fe3568c653d1fa02f35a6e2c2197a0819b74658ff4c4bed2ad1f499f6f",
+      "source_hashes_verified": true
+    },
+    "validation": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-validation.json",
+      "sha256": "0fea4a5f3ff2775acfae9da52ca432b551baf2e5c9e75e41ce29adeb12260adf",
+      "source_hashes_verified": true
+    },
+    "stdlib": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-stdlib.json",
+      "sha256": "6c1bd24e7dd26c6acddf3c4a22f8e6ead85a998ffc0515d9eef308f6ec402f11",
+      "source_hashes_verified": true
+    },
+    "i686": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-i686-suite.json",
+      "sha256": "829ae3a72147854bf61bb8d5119336e94641ace73cf0d1dc81fb847663ea6192",
+      "source_hashes_verified": true
+    },
+    "windows": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-windows-suite.json",
+      "sha256": "92bc362b29e8d6641a004e85b0c36a788e84e06cd0cf6f4295c2c1d0b7e4a340",
+      "source_hashes_verified": true
+    },
+    "integers": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-current.json",
+      "sha256": "ad107323e6bb51dc9eb9e84a5aa0b7deb45869236e129532e633558d8c1a942e",
+      "source_hashes_verified": true
+    },
+    "integer_i686": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-i686-current.json",
+      "sha256": "e4c9388ca54aa37f8c4a56dd0ee5d000e71a78f443d9b372294d54fd37804275",
+      "source_hashes_verified": true
+    },
+    "linux_verification": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-i686-verification.json",
+      "sha256": "2e4b05c11f0788f71467804d5075d59ff0d6c306f99511558c186b9324176c38",
+      "source_hashes_verified": false
+    },
+    "calls": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-call-current.json",
+      "sha256": "594953acd532fe5ff54e1f493399cedf052f55392d9e46d93d3c8e27104eee3a",
+      "source_hashes_verified": true
+    },
+    "unprotected": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-unprotected-current.json",
+      "sha256": "3b45232ad073e086294476398bff1dfc41c26a462b93c5028a75c6ba69869ae2",
+      "source_hashes_verified": true
+    },
+    "unprotected_levels": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-unprotected-level-current.json",
+      "sha256": "365f4fa3f3aa1b9ae86bcf35e958255281b01214b0a2cc5bb57850033a367831",
+      "source_hashes_verified": false
+    },
+    "portable": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-portable-no-default.json",
+      "sha256": "e228310e9efb2c7d48f78fbce951d43afcdf6198827346dd181a4743db2b289b",
+      "source_hashes_verified": true
+    },
+    "checked": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-checked.json",
+      "sha256": "e884bebca6eb8781dacf11744b2d963183014972b93aefa98fc0545240d9e681",
+      "source_hashes_verified": false
+    },
+    "levels": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-call-level-current.json",
+      "sha256": "e34b56edc451c6d0504f4f3d8eb854c08853cf5543467a39e32cd960fda476fa",
+      "source_hashes_verified": false
+    },
+    "exits": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-exits-current.json",
+      "sha256": "f6412d06ab46289df484095bdb78f3899d2106df6c93695851733aee1ada87f0",
+      "source_hashes_verified": true
+    },
+    "waiting": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-waiting-current.json",
+      "sha256": "15a4fd5a9b6b04cad46056da58c3dcfbfd05c2ddb2f680b4ffaa45a8762953e3",
+      "source_hashes_verified": true
+    },
+    "waiting_levels": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-waiting-level-current.json",
+      "sha256": "227ef91d10babf9ff16f52cee83e660cafcb1f095410fd949e60f116a294ef9d",
+      "source_hashes_verified": false
+    },
+    "gc": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-gc-current.json",
+      "sha256": "21890576acbefc926182a39a0fa3400ae8f57bc41b3190dae1b9dd4642af0778",
+      "source_hashes_verified": true
+    },
+    "gc_panic": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-gc-panic-current.json",
+      "sha256": "4c11e9fa5262d10ab59f2a64bd448b56c8ed68005d1e95d0940170c53d8c43a1",
+      "source_hashes_verified": true
+    },
+    "execution": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-execution-current.json",
+      "sha256": "4186175b22b33bf8842a61e3e4d8d23d33c89c686ba072563c782fc92eb4b865",
+      "source_hashes_verified": true
+    },
+    "panic": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-concat-panic-current.json",
+      "sha256": "bbf5a696a840df3d0033634625d58ddb93c54bf0cfe881888d6d96646f851d6d",
+      "source_hashes_verified": true
+    },
+    "concat": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-concat-current.json",
+      "sha256": "12a6f1e17e6a5c787914a1f57150fc2bb75a4ba46422ac9b5c94a4fa8c66ceb2",
+      "source_hashes_verified": true
+    },
+    "allocation": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-allocation-current.json",
+      "sha256": "bc41664437065687dca2005ed80f3e430e8800906e6d26b103808c0a404bef08",
+      "source_hashes_verified": true
+    },
+    "resumes": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-resume-arguments-current.json",
+      "sha256": "ed3814ab58795a9fb744b7fe9cb682418473726803666966380c6a9ab187ecaf",
+      "source_hashes_verified": true
+    },
+    "reader": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-reader-resume-current.json",
+      "sha256": "5b1d6784f7fac33bdfd547d18ec121aa9c8a6a9d9cd57183b96e556685ba0e05",
+      "source_hashes_verified": true
+    },
+    "unsettled": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-unsettled-current.json",
+      "sha256": "585a7d13514142325c8806d98e45995d8fcd4edd2cf8cc883a80e40ba44897de",
+      "source_hashes_verified": true
+    },
+    "counts": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-counts-current.json",
+      "sha256": "4830da60c6c3dbc2e87eb5546b40bc492471140c604d96cb276904311a6b5f97",
+      "source_hashes_verified": false
+    },
+    "integers_checked": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-checked.json",
+      "sha256": "e884bebca6eb8781dacf11744b2d963183014972b93aefa98fc0545240d9e681",
+      "reference_control": true
+    },
+    "calls_checked": {
+      "path": "docs/testing/2026-10-28-rust-lua-call-yields-checked.json",
+      "sha256": "78c2a82917b861ca98a1e33347e1ee494219cb0113a98185da90854b1c9b5340",
+      "reference_control": true
+    },
+    "unprotected_checked": {
+      "path": "docs/testing/2026-10-28-rust-lua-thread-unprotected-checked.json",
+      "sha256": "03e2cedc025d8800271fcbcae89dd2e6ec86ff22d374c4a09a0eb902a97b4b67",
+      "reference_control": true
+    },
+    "waiting_checked": {
+      "path": "docs/testing/2026-10-28-rust-lua-waiting-errors-checked.json",
+      "sha256": "87084d94006f25732e37a6d8ecf68320cb51e919c112b776853b9eec26a74af1",
+      "reference_control": true
+    },
+    "gc_checked": {
+      "path": "docs/testing/2026-10-28-rust-lua-thread-gc-checked.json",
+      "sha256": "59969caee3d8bfc39f4bc44a585e6223d727fe5854e00ce0d9158a151ffe5ff5",
+      "reference_control": true
+    },
+    "gc_panic_checked": {
+      "path": "docs/testing/2026-10-28-rust-lua-thread-gc-panic-checked.json",
+      "sha256": "d57327370806b9ef28bf50cb751c97bde58f52993677324ac42f59e190389058",
+      "reference_control": true
+    },
+    "execution_checked": {
+      "path": "docs/testing/2026-10-28-rust-lua-concat-yields-execution-checked.json",
+      "sha256": "06e124969aa755cfbcb08938cfb2ac7679a92742153e80d96b2c4bb5cdba67b9",
+      "reference_control": true
+    },
+    "panic_checked": {
+      "path": "docs/testing/2026-10-28-rust-lua-concat-yields-panic-checked.json",
+      "sha256": "a9d4be6be0203de964282605cb9ac368e8e447befb69638e818eb521b0633da2",
+      "reference_control": true
+    },
+    "concat_checked": {
+      "path": "docs/testing/2026-10-28-rust-lua-concat-yields-checked.json",
+      "sha256": "3cd86544badb695ca763f8ace11f0222c8d1144d6d03907f15ddd7bdc73fabb3",
+      "reference_control": true
+    },
+    "allocation_checked": {
+      "path": "docs/testing/2026-10-28-rust-lua-concat-yields-allocation-checked.json",
+      "sha256": "e9bb1e352b6eda5a2a99987b3d9f614dd6c9d96dd6a24e5467c5983baf18482e",
+      "reference_control": true
+    }
+  },
+  "source_hashes": {
+    ".cargo/config.toml": "ef00be99ed0c079724faa5a503a1167e4b7a1a12142f99e492ceda81eccb420a",
+    "Cargo.lock": "b22402b93599e6b383c1a749cd1532c1046429e21168a10babbda9cd317c3a19",
+    "Cargo.toml": "65b586de3e57b853a4a428a0a137b62ba94666fa48f3eeabe99cd0eaeb06749f",
+    "crates/deadlib-lua/benches/baseline.rs": "bbe7218e9f362167416114998e9459338606757a3840f4020b06d79736b8e739",
+    "crates/deadlib-lua/benches/cache.rs": "f0ca43283706fe98903f7182a5a9f2103fbf160a4abfef0ed1b06504471abbc6",
+    "crates/deadlib-lua/benches/host_functions.rs": "d1352aace275cf63c5f0a7e2b384127a66ee914234b94aa9f15f4d70b52eaf36",
+    "crates/deadlib-lua/build.rs": "77b6cb431fa4be71988e8842ab2343340d8322a73feddefcc2bded3036e2b5c4",
+    "crates/deadlib-lua/Cargo.toml": "39c6f2714d90cdd41cc7444e607040d361ff3338c74ac95ad3baf92699f852cf",
+    "crates/deadlib-lua/examples/native_boundary.rs": "c4125b1c3f3185b04ba8ad5773b02f1b164bb502681c53275760b89e8c5bb9fe",
+    "crates/deadlib-lua/examples/official_suite.rs": "c3aec2ecd521c2513a01c862b067b11106d480c150dc5f6118e4a9e448d8fe68",
+    "crates/deadlib-lua/examples/os_process.rs": "455cd7c3c926e458d726098f39d203e83f04dcb3eaa4c1c8536886cb19a9e03d",
+    "crates/deadlib-lua/src/arena.rs": "9a8060044c8f89a135788e46924f68082d6e032bc65dfa0bd354c588a7d866c6",
+    "crates/deadlib-lua/src/bin/deadlua/cli.rs": "828b79325069c3d1ba3c90ce04c6ecd17291600bff4bac871ae7bd3d214fcf1d",
+    "crates/deadlib-lua/src/bin/deadlua.rs": "da704b62e14936545c166e18147d400ae7d70a6a3e41fcdb2840ead6669d9996",
+    "crates/deadlib-lua/src/bytecode.rs": "25f15e5868499cde78faddc65ac6ac4ec1cfd8076ae9b112c05c1e300267ea81",
+    "crates/deadlib-lua/src/cache/codec.rs": "4d1f89164ebe82ff47eec19c23bc9e0cde6df8156672580a95cb0e8c81d9724a",
+    "crates/deadlib-lua/src/cache/tests.rs": "df1573e1c833c4f68f9e4f4a3f1115cf5a8b41c7720a0b7c4efaf50a06e1f053",
+    "crates/deadlib-lua/src/cache.rs": "69eda49261a1425e3830af673284cbf526abf3de2217045fbb833126802ebb82",
+    "crates/deadlib-lua/src/chunk51/dump/jumps.rs": "e50dec9a76de807aeed4d54564e6ca34c1034dd5e9adb9131c09d00063dbeae8",
+    "crates/deadlib-lua/src/chunk51/dump/lower.rs": "15c95d36777e0c5ede2b251abdb5b54f7603945ae47b9a083799fa31747df9c6",
+    "crates/deadlib-lua/src/chunk51/dump.rs": "41bcd264f09f950a68ef9ea4148a42d1a5ddbefc3ce70a98b579fd61be64d391",
+    "crates/deadlib-lua/src/chunk51/tests.rs": "b04092bb62be23f1311eeb3d16eafefec8d590ffada9abbab814937eaad344f9",
+    "crates/deadlib-lua/src/chunk51/translate.rs": "fb6a0342e9d2952fef77b83e6b2a3727a91de60612262bb7f359dfca7bbed568",
+    "crates/deadlib-lua/src/chunk51/verify.rs": "1d1291c22f551cb6949a45703c1f290588b47872136a8338819fb7da8103a2c2",
+    "crates/deadlib-lua/src/chunk51.rs": "bad667624328513768b52ac77acc8605d917b191001b59ce5c1f671b64b7981f",
+    "crates/deadlib-lua/src/compiler/boolean.rs": "35f63ff3c5282a817cb61836fc48608248e0620eafae214df327798696af79ec",
+    "crates/deadlib-lua/src/compiler/constants/tests.rs": "524fefc17511230abb117b6d671fc5b36a06b0a300e77cc23df4ad59230d6d07",
+    "crates/deadlib-lua/src/compiler/constants.rs": "47ce5063845745c53a6491e1c17676c0b66a793ef640d891651670332d8bdeef",
+    "crates/deadlib-lua/src/compiler/expressions.rs": "cfdba07c2f28553faa04bd3bd8d2a81cf8c520bf8c0b4fbaeea097c21eae5672",
+    "crates/deadlib-lua/src/compiler/statements.rs": "3b0b686dac75169bfb381252097aa7f962383b07c2da9e32c52275f991a846a1",
+    "crates/deadlib-lua/src/compiler/tasks.rs": "e19956e5ef6df00ba4b216d1e041de6bfa842ed608d9ff9b04a0ed7c3861ddd0",
+    "crates/deadlib-lua/src/compiler.rs": "d560c845238720a24d00f5239787aa0ad6bbc469999ecc73bec1c25292919c9b",
+    "crates/deadlib-lua/src/error.rs": "004af42b89ee1e67061852495b43b013c2b9eab5ec151425a9720f32ef8beb9c",
+    "crates/deadlib-lua/src/format.rs": "4bc48088117a662e64af21306dc78bfac1a0f3717fa3f6ea1b51b077e7f1cd2c",
+    "crates/deadlib-lua/src/lexer/scanner.rs": "4d3524f2463176d0b85b1d7e4070eab807694dbcb3badf4a3055da5cd0024d73",
+    "crates/deadlib-lua/src/lexer.rs": "8754b3cbab2565e52e1297414acfc6d37497414b7182e124430230cfc33e2d0c",
+    "crates/deadlib-lua/src/lib.rs": "d0d48c5d514c962f5115e40cc096a7c9e20806ea0472346fa0231ba57d3bbdd8",
+    "crates/deadlib-lua/src/locale/posix.rs": "9ad4f6a0b6b1cfbba747c9730899158518aba6725812342964e7e3fe9dd0de47",
+    "crates/deadlib-lua/src/locale/windows.rs": "5aade2fe5d823b4a8424eeaa3979817e212c7f1c135f08496197e20b0d2c9ed9",
+    "crates/deadlib-lua/src/locale.rs": "6d898fd26c68725829c2e2b45616d79728f76270dc2e8b77315dc85a408cb634",
+    "crates/deadlib-lua/src/native_abi/api.h": "a8d6ac2e34f8ae06c929cf6efb51195b6e1a648a16d3268b344d8d20636fa960",
+    "crates/deadlib-lua/src/native_abi/boundary.c": "8de8f38421c5c55a67d0419fa001eb7a872781034246bf29ed5eca4e15f58bd0",
+    "crates/deadlib-lua/src/native_abi/builtin-bodies.h": "26840ffdbe24a0f93e989bec408bce524b013e80f4594b2cb59db2df7be1c519",
+    "crates/deadlib-lua/src/native_abi/bundle.rs": "7fb5cfb09d6880c79a4337acf6852a83995e188e32519fe5b6247a03ae877be0",
+    "crates/deadlib-lua/src/native_abi/library.rs": "6b5c824977e72314436ba2b603f77100de68bdee56b52b983b68fbf2d83d69c0",
+    "crates/deadlib-lua/src/native_abi/mod.rs": "33c41d85dbabde7b269948efefb517a7864b456d74a784c3a61080fa337f9393",
+    "crates/deadlib-lua/src/numeric.rs": "2afdcaad6e4659b148667be4db1bafcf6bc5e3b75bd0292916eb3690579e3f12",
+    "crates/deadlib-lua/src/optimizer.rs": "daa6527ab937ecc89e128252cb095ff370dae6b378ab5091513ae72604a71426",
+    "crates/deadlib-lua/src/parser/bindings.rs": "138baf4ef45bb039983e673466bee8e2cbaddad3385913af3ee0a2158315e375",
+    "crates/deadlib-lua/src/parser/resources.rs": "750acb3001bc0745102e474d340561f8d9ae404a499d58d3cff140420375fb25",
+    "crates/deadlib-lua/src/parser/resume.rs": "1b0373affa5f8a87a7a236a15e35707eb5ef919e35043a908ae1724cabef7e22",
+    "crates/deadlib-lua/src/parser.rs": "453f1bd0715b1c73da6d6af612f1012201ec154c78af6f8d07517a211cb4ca7a",
+    "crates/deadlib-lua/src/pattern.rs": "4415a2f2a5e743aa3cdad758f45c229378ca67211aeafa1b74c7cf36e6481627",
+    "crates/deadlib-lua/src/table.rs": "74977623a283c0775e021194c28d1f09aacf1f249467edd77e95766056ca7dda",
+    "crates/deadlib-lua/src/value.rs": "94f8c20c159bb196d65da871d06f14faccf58fc0f8307f273ccee5472e57ea08",
+    "crates/deadlib-lua/src/vm/console.rs": "ba5d2d6fba8a30c653d9f3a8cb4d5074138d89d1bc16e25f5d2603178cb81d9f",
+    "crates/deadlib-lua/src/vm/debug.rs": "2c840dc70e4a798e2083d4f91dfb6eb02e72df03fba1e10d3451c0a2b34bb25a",
+    "crates/deadlib-lua/src/vm/errors.rs": "a5001ed3643bd1602bf9e94c4a32552e9ae620845f1c92e97a86c17493ad4382",
+    "crates/deadlib-lua/src/vm/gc.rs": "77a5f14a12266d2e4ff4e8ae7727aa417fac41030b6269cef9afeaa251eed659",
+    "crates/deadlib-lua/src/vm/hooks/returns/libraries.rs": "e1e6a1030fa3de18dcfb19d18e1b5249e81e552cf51bf04c28cbdc5d23ef07f1",
+    "crates/deadlib-lua/src/vm/hooks/returns.rs": "a71b0fa0102ec7330c8a286c60d19c16d24deb96b028e9faf48095ac4df47b4c",
+    "crates/deadlib-lua/src/vm/hooks.rs": "82e1c6a44182c971cf8b5f5fb5887a0c03c4cac4a2822bc22605808869edfc8c",
+    "crates/deadlib-lua/src/vm/host/api.rs": "501c00e7d4fd4c75ce550743c2d143559309dc0c8fb97a9e21fac1d171edec05",
+    "crates/deadlib-lua/src/vm/host/stack/body.rs": "2b841f9e80515a7784eb720a3bc4e76690af5715ac12d57dd7fa29077cc8ce4a",
+    "crates/deadlib-lua/src/vm/host/stack/coroutine.rs": "7d78fe8b89b7b7882d42e2d211b89cbee6b43fbbe9d4fb6c7bf4ce32c2e4af80",
+    "crates/deadlib-lua/src/vm/host/stack/dump.rs": "5a01c2d892b99d10b57c49f7e8ca7847e1ca51bc1d938f917f912361c46637d0",
+    "crates/deadlib-lua/src/vm/host/stack/file.rs": "d152490da35c5426e8181dd1790805de5ea97136085cc4a76ffaa8980011959f",
+    "crates/deadlib-lua/src/vm/host/stack/hooks.rs": "6a9e46a3f370b62e60a144970b1712a3794ac95413074a2cd98c03c6b0db94c8",
+    "crates/deadlib-lua/src/vm/host/stack/inspection.rs": "37aed223957d93f0a15e75bd720f45a6aed3aabb7466644fa251c313d0b0156b",
+    "crates/deadlib-lua/src/vm/host/stack/loader.rs": "4c12f20fd1112a551922256975e153f7675fab484671c198e1dd79bf3ba0e203",
+    "crates/deadlib-lua/src/vm/host/stack/objects.rs": "b3302bf33bc79efbb54f3588dde96535372652bc8061a9c9eac8e5d9e1bba6c0",
+    "crates/deadlib-lua/src/vm/host/stack/parser_roots.rs": "9d7111b918d234ff54d5160bcd6ed360004a379ae40dd34065a30e53eea7f50c",
+    "crates/deadlib-lua/src/vm/host/stack/protected.rs": "23b2ed6976df698040124bfe6723eae98148ef7e337c70ea64a01feb9fb69fd5",
+    "crates/deadlib-lua/src/vm/host/stack/scalars.rs": "ad768af477900afe0ff46fe6eac38cd1787d52275a2143c602a71223d3a3743b",
+    "crates/deadlib-lua/src/vm/host/stack/tables.rs": "e806fbc72c8399ca21ab8b1a740ade9334d6241a26d74154f4dd73eb75320d1d",
+    "crates/deadlib-lua/src/vm/host/stack/thread.rs": "b8ee9a0e5c06db77a94843a998329b07b91f3f12d6578610dc951e628f1d98a0",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/calls.rs": "dd0d6ef347b153a7b406315d5d3cc0ad9cf06007b90286f2b5b0c18eb2e5b98b",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/execution.rs": "9cf4334caaea9718752611c383f21b20dd57f85432e81117a233b2339d5829fb",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/loader.rs": "78b363ad3bf7195d38456f373039ff4f3cd9af30d644980d3ae47d3bf5414237",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/objects.rs": "43dc1c3a9092c6f00680b38edf16350396830886b52ea3884b01210081f89dbc",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/panic.rs": "14df5bf004965048015185b0915274e3cc127bf761bb9bc3bffd54c68d44066f",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/tables.rs": "95fe4aa0af8fc71d8a3537fc216b6ab3bb358bf15ea11504d9f561d56d9cdf15",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack.rs": "ccb42009b060a4aea576cfdd9acd42cceeb8dd143d580420688a3b9c93f931c2",
+    "crates/deadlib-lua/src/vm/host/stack/upvalues.rs": "5a0a04e70b0e04ecaadeb14d3f9b66df19ed3ed57e3e1774af2581d2393d5fad",
+    "crates/deadlib-lua/src/vm/host/stack.rs": "21fb171aed2d66677971ae5bcc866f6438b866fe21af0fd6ec78e6294bf6626a",
+    "crates/deadlib-lua/src/vm/host/thread.rs": "c3698184771333f983807c5cfc320c0ffc383198dd1427ff26520f31ad577ef2",
+    "crates/deadlib-lua/src/vm/host.rs": "1b8ea0b7a8586b2f735a315dca7d2b357af9f29b6fa8e6f68ed60f6a37464922",
+    "crates/deadlib-lua/src/vm/identity.rs": "c9359466570bec0b2d24a753cc96fa220b2896ca85d2979074728e01f8245d1e",
+    "crates/deadlib-lua/src/vm/io/number.rs": "d2c3459749a329e9a277d584008e05c4b1e017c1f217c195d8dd23d174d61419",
+    "crates/deadlib-lua/src/vm/io/output.rs": "6850ce12b119beae7fbeccc4e9f8e3e946e2cf2cbda2e4a68c35f864e3192aa5",
+    "crates/deadlib-lua/src/vm/io/returns.rs": "12c900526e8416dcca430f10de7ce151e66291ba2efc8cbb9da94d9f4bca550f",
+    "crates/deadlib-lua/src/vm/io/stream.rs": "1422bb92be7bc243b6113b8b329c2bede5f4a2cfe9d22a91f40b7277a7832ea5",
+    "crates/deadlib-lua/src/vm/io.rs": "af2798935b1deec5e296ce9199214416f67b526632c4791e9c8a16d09dc89b05",
+    "crates/deadlib-lua/src/vm/limits.rs": "c78dad498234853ea1277cff6a46ec18cb61e2e27fdcc0bffdf648038e747a0f",
+    "crates/deadlib-lua/src/vm/loads.rs": "c1159f238308999c6a8a9ce5d5eace985b0ec2327daa63f6e957652fc440aee3",
+    "crates/deadlib-lua/src/vm/math.rs": "3d1ff1634e4599996e36d5f5bf386c6a05606ef3e33a083d51d0ae719ae5743a",
+    "crates/deadlib-lua/src/vm/meta.rs": "eda737950093889c32b2886f61910f25c4773a3be397e55f8987649235a12208",
+    "crates/deadlib-lua/src/vm/native.rs": "5ce3d3fdd454a2b8a80ed768ceb53d1f437e78c7ef2e7c1a72b699ca5c265022",
+    "crates/deadlib-lua/src/vm/os/calendar.rs": "ff60b2eb47e74ce136a57506764b7d2dd59461bc1585009f5b7204efff71a0fa",
+    "crates/deadlib-lua/src/vm/os/platform/posix_calendar.rs": "2aefa01ff6bbfa7243bfa64e4f7f7f8406121e472ecda739822570f2959045b1",
+    "crates/deadlib-lua/src/vm/os/platform/windows.rs": "f064bdce5216c465e48b67471afe2721db8a4528a2e7453888cc035a9f4c79d3",
+    "crates/deadlib-lua/src/vm/os/platform.rs": "795f9cf59689a58523b6b6d213741f391bec3ba77126aea5746dae4e74ee9b25",
+    "crates/deadlib-lua/src/vm/os/process.rs": "abedd37df91e057215475c85185bb5daa697b4d15706fff2b69b82508590c0cf",
+    "crates/deadlib-lua/src/vm/os.rs": "10131d697746fb4b8e258c5b98bc92922512144be202b1ef9627fdfc20ae4824",
+    "crates/deadlib-lua/src/vm/package/library.rs": "7e8764332c63ef5845e752b7e87e33117cb7a3e4ec8ce1e9f6e5155532ec503f",
+    "crates/deadlib-lua/src/vm/package/returns.rs": "3b6ec451a547a66b503670c3990470cdd8bca9862478aa3ba47bf6cab3d8cbf2",
+    "crates/deadlib-lua/src/vm/package.rs": "8b961b9c24ea3d732cf99877c7473cf8dbd55ac43b9239d9c87934e524a93d29",
+    "crates/deadlib-lua/src/vm/standalone.rs": "a21dc12535802a813fc77c256a0b5ccf69ae27025a422e190a69a9166d84d2c6",
+    "crates/deadlib-lua/src/vm/strings.rs": "aedfca706ff278793b209af73c9778f056829cb6e98c94927b581b9ac2eabab3",
+    "crates/deadlib-lua/src/vm/tables.rs": "c03b1b69a14dd4bb3980e7953fbb05f6e1b83492b140749e641c0a2edbe34a51",
+    "crates/deadlib-lua/src/vm/threads.rs": "f27227f7d18d738c197a400ec254107721d1f4a796c0769d829d3297c7ea6c8f",
+    "crates/deadlib-lua/src/vm/traces.rs": "58f3a6f448bfb55590f1daf8b1f674930a60b0ca2c08f16bca530a15f89ea46e",
+    "crates/deadlib-lua/src/vm/userdata.rs": "f3fcc73f2a54d1ce324347348f1e2dfb3998929153c2d634072135a3539ac12b",
+    "crates/deadlib-lua/src/vm.rs": "cf8cdee425d5a20ff0ef4ae19f9fadb91ae417dc53fdce3bb81ce586149cc106",
+    "crates/deadlib-lua/tests/cache_persistence.rs": "7fc11c52308d39be02553554104bb147deb2c7b51c30332a9b3bafa1d3fe1003",
+    "crates/deadlib-lua/tests/calendar.rs": "b1d8136acf80be9f9da1780044901caa3fc252784f5b01f91d3d4f8588856939",
+    "crates/deadlib-lua/tests/call_limits.rs": "7c00a96eb8ce34e62529a23d21631ee682e5aa8947543cf6c2c049aaf3b82801",
+    "crates/deadlib-lua/tests/capture_limits.rs": "130d828ef872c72e78c21e3b01a5152791b1d93fd9a972053dce8b0a0af8545d",
+    "crates/deadlib-lua/tests/codegen.rs": "6ce2e1616dbf4c5fe13be05f769a8cf338510ca0914dd1b594a479182ce31196",
+    "crates/deadlib-lua/tests/constant_pool.rs": "470a24da83ff5e6395a3a06b6ce1bf4e3696ada308a261b4b036834006f1ba08",
+    "crates/deadlib-lua/tests/coroutines.rs": "caf53fdc2e4d678e4420984356308f4cf3831519af6c0d1233beb7c0c6f2f20c",
+    "crates/deadlib-lua/tests/debug.rs": "a8324a8552b206a4bd5e7a670833f547b05e81a0d2580a8622e24d2793e61480",
+    "crates/deadlib-lua/tests/debug_console.rs": "bbeb8cb2905bda00f24b9bdf885bd128381b3e27de33ac97576ba9c010953f54",
+    "crates/deadlib-lua/tests/debug_locals.rs": "86544cab77044c20ed9370d99196935f41332d67b67c8733b43fbc7f7ae20061",
+    "crates/deadlib-lua/tests/file_loading.rs": "f0e94dc6a03da16a2f9ff97ed20103a7a3239e89d33726901660ad65a946a7ed",
+    "crates/deadlib-lua/tests/gc.rs": "40205a48e8c196ce4f452aceed95b2911532e4747d52d06ffd993fcc30050fc6",
+    "crates/deadlib-lua/tests/gnu_numbers.rs": "e65a915324102dfbe325bfc746c41b796928145073397e5bd505eca783514abe",
+    "crates/deadlib-lua/tests/hooks.rs": "cfec7bba0ffc0b8c40e99a5ea0de815df512c7a634e3785f315a5f720462a5be",
+    "crates/deadlib-lua/tests/host_calls.rs": "48d2bf2dcf5a5849e79bf64eab081f029c110b1a8f9bab86d33183656f427e2a",
+    "crates/deadlib-lua/tests/host_closures.rs": "05c88dd454f159989f77a6709e4e35feb7fa1aa4f20e7dd6526782a188339af3",
+    "crates/deadlib-lua/tests/host_functions.rs": "a3780f0b8d5fb529c2a063f45983fc15d19fab2d4ccee523fe99523ab8dca94d",
+    "crates/deadlib-lua/tests/host_reentry.rs": "b76ca455be538a5c4ab3e1aa0323c10e225a025a8922db05788d1cd20bc37b60",
+    "crates/deadlib-lua/tests/interning.rs": "aa7c47ed57857d5c43862aa0c7873c44f7a298450a78024d823909877173b4da",
+    "crates/deadlib-lua/tests/io.rs": "9f7cc3d0e79f21bb473989ce51e3b54ea57a23bb36ac63bd7acf7ab801a6aca4",
+    "crates/deadlib-lua/tests/library_return_stacks.rs": "e317e4b05ee2f3a3d306dc6eb54405d9df75339e35b718af6bfeb5e488675b4c",
+    "crates/deadlib-lua/tests/loading.rs": "1db7b969d7677ac24ab2f2e30bb0fb184e8b751027641777589b04451d4ff4d8",
+    "crates/deadlib-lua/tests/lua51.rs": "deda152310c325a1a31c9148fcb82844df24eeb0defd77b9d53fd88b3515cb2f",
+    "crates/deadlib-lua/tests/native-boundary/allocation-gc.lua": "bf998e12f1897914e8e7f7b91618667d2463cc019420a1d0ec0b57583e7d5ccc",
+    "crates/deadlib-lua/tests/native-boundary/api-yields.lua": "53e9b2d30e0d54c1cf61115bfb89c022996e0f2c03cca572c2542bf48030fef9",
+    "crates/deadlib-lua/tests/native-boundary/api.h": "cb2211e3a7cbfba736c10144dffe77eb9f80cbb56730282be507a23c26c28ce7",
+    "crates/deadlib-lua/tests/native-boundary/boundary.c": "a00657189f0d4d57becb115c030833c734b88e412efdb392d22d4107e8bf0e8c",
+    "crates/deadlib-lua/tests/native-boundary/builtin-bodies.h": "539f5315df423708b76a3571c696cccef999482227d42a7a48aa3cc9b692f122",
+    "crates/deadlib-lua/tests/native-boundary/call-yields.lua": "ccb7749ad9699e59df0f87dd016c7a273fb18cd273685784d14ac01d6bc092b9",
+    "crates/deadlib-lua/tests/native-boundary/cases.lua": "452fa678cf2a40b8e032c51fd67fa9b49972123c29e2e17245ac0f66bcac0252",
+    "crates/deadlib-lua/tests/native-boundary/concat-yields.lua": "9da6c05b85bebe9122a2a6e2224cabebaaf5acd68b506d5a48f43beac171cb61",
+    "crates/deadlib-lua/tests/native-boundary/gc-integers.lua": "a56b6b528571943a5a2f57485b5749048311caccab1ce3cf0bcfa5ddb864d6a1",
+    "crates/deadlib-lua/tests/native-boundary/inactive-objects.lua": "67f51b868927086def654a46ae8d2a5439f29b3352617eef96d0e1896eb1696d",
+    "crates/deadlib-lua/tests/native-boundary/library-loading.lua": "50132fa39ac41a737e889bdfc7150a35c6dbd55040cffdc37c6cf99b15eaca51",
+    "crates/deadlib-lua/tests/native-boundary/library-stacks.lua": "d22052b0f360bb904ae552ddcd22d99aa6662a57f73a3d0cff0c2fa987e50f1f",
+    "crates/deadlib-lua/tests/native-boundary/lowered-level-yield.lua": "1284a7b7d46782936dfedfbf3a922c2ef5dcf7d32e5a9c99ec7678ce7447aecc",
+    "crates/deadlib-lua/tests/native-boundary/module.c": "69fc1f1e46d2e9d1e32cbe5492f967a2319d04fee239f3862b577ea721e9bf32",
+    "crates/deadlib-lua/tests/native-boundary/native-bodies.lua": "0847010842277da19b51fbab8d5ae78d365555b1464304f81f12d5b92855571c",
+    "crates/deadlib-lua/tests/native-boundary/native-context.lua": "cb4807ed8ddfdd9effd04a8afceba279b1537939dc0fbd59fbb21a2e2bd066a7",
+    "crates/deadlib-lua/tests/native-boundary/native-debug.lua": "00c0e466ded137e4e91f83350a1ff0ed6557d95ad0d0d1e68d8144778583f192",
+    "crates/deadlib-lua/tests/native-boundary/native-hooks.lua": "fd4d8763fab6dd963fa5aa1321740dec91a7bd2dad4de4b5ad9d89fba74362bc",
+    "crates/deadlib-lua/tests/native-boundary/native-levels.lua": "aca95d99eec70900955f699aa9a64b9281c17704cdeda7479298b7154507f286",
+    "crates/deadlib-lua/tests/native-boundary/native-panic.lua": "4023f4197f6b65651b38c63880138705c008f89f5762d59fc26052012863112a",
+    "crates/deadlib-lua/tests/native-boundary/native-resume.lua": "6d0ccf6bb057bbf5744bec5205bf22f01b53389a498ff06405f6c2db7c34ad87",
+    "crates/deadlib-lua/tests/native-boundary/package-stacks.lua": "cfe749c9cf7de5ac254f02f9a4d05f88287e447a47634b158614f6df92cbe171",
+    "crates/deadlib-lua/tests/native-boundary/protection-hooks.lua": "e3369fe1c4b04976282c47a1d734a525f57a1947e84e6c5a2aff7c25d60c3879",
+    "crates/deadlib-lua/tests/native-boundary/reader-call-levels.lua": "e0d99c567ba2fb44da42441860c408066994269fa97cf8f06ca9c3834eee3431",
+    "crates/deadlib-lua/tests/native-boundary/reader-continuations.lua": "3c03a711ceb1cc434cb5de64a7631e3f2866c66e6f22e66bb15c15df5897cd24",
+    "crates/deadlib-lua/tests/native-boundary/reader-environments.lua": "32f9e4a8ceef2e6cfccf42fcfaf9e1158e4d66fc467b8f9080a61ccbf59696d9",
+    "crates/deadlib-lua/tests/native-boundary/reader-roots.lua": "6e396f4a3dca43c0fd6a2a919fe870c27e98aed9a1ae99326db00dd05a8c5ee5",
+    "crates/deadlib-lua/tests/native-boundary/return-stacks.lua": "c089bddba9392c820dde4399e0fb8e3a07b9a0aa4be9fb61ce0e5a7d45a29406",
+    "crates/deadlib-lua/tests/native-boundary/thread-calls.lua": "44a779cb0a54b7bfc801891a3efd1a20377aaf91ab5919e3d502f114fb0d405d",
+    "crates/deadlib-lua/tests/native-boundary/thread-execution-panic.lua": "dc7dbc4fbe541a445048833ab243b7896510e116fab1ac273b53750953f8a340",
+    "crates/deadlib-lua/tests/native-boundary/thread-execution.lua": "f5daf89a46b989333cace2878a01240d73675fc70cc7f3f62a9cdd242b057762",
+    "crates/deadlib-lua/tests/native-boundary/thread-file-panic.lua": "531c00d649b9ec3b4a26756dfc8e6515e2ab6fc21ff86bdb1410128fd35572f4",
+    "crates/deadlib-lua/tests/native-boundary/thread-file-stdin.lua": "33b07c840025ca50f797fb04ec2a8c015eb7be4f69ca99fe8f0c3203d22faa27",
+    "crates/deadlib-lua/tests/native-boundary/thread-files.lua": "a5f7ac5dd092a74459e0c7e4a871fc42532b346283cf9dc3e94cc53734e38726",
+    "crates/deadlib-lua/tests/native-boundary/thread-gc-panic.lua": "38d6b7de6c497be76ae4a704a530e26dca9a9d935923bda9e492d6c06415c17c",
+    "crates/deadlib-lua/tests/native-boundary/thread-gc.lua": "7189bb823744e6d88c68e614b423af74fe709a348ff4e40fa60345c3c8b055a7",
+    "crates/deadlib-lua/tests/native-boundary/thread-loads.lua": "f17ebb066bfee12a5a1a9205c12d9d7adb4c7f04b57882480d1367ccad103d61",
+    "crates/deadlib-lua/tests/native-boundary/thread-stacks.lua": "d98d7aaa13c8557659bab296ccdba7d1127ccb40b5cb4cde53a468d996e438a7",
+    "crates/deadlib-lua/tests/native-boundary/thread-unprotected-exit.lua": "6bfa4ff009f91036439adb36c5522ec9007cb6b0bc388a8a293d3e305d730699",
+    "crates/deadlib-lua/tests/native-boundary/thread-unprotected.lua": "44ec4e7ab3c2951d2c6272afeb7f53cb54fdaa6e9bd64afb36a8a7355fbd2097",
+    "crates/deadlib-lua/tests/native-boundary/waiting-errors.lua": "cd96c74b433a864111c4f7d34020c533d33e653299ae7eba058ba5ea0564fc76",
+    "crates/deadlib-lua/tests/native-default/allocation-gc.c": "c8cf87ad38b7674dff40e5879ad3af497cd8b9d5d75983eabd6f2e4ed2477794",
+    "crates/deadlib-lua/tests/native-default/call-yields.c": "354028a92ea76f8e977fbc8930aa257230aa810a619f4d9c41555212bee3fa49",
+    "crates/deadlib-lua/tests/native-default/inactive.c": "def7e8030ebc33ed55e853142f9598961bbba27ca19cb48f19dcafa59b057ef1",
+    "crates/deadlib-lua/tests/native-default/module.c": "67d2ddbd4ca0ae5a626d0c28cf3da01188db7aa147e211dda384e2c9011bee76",
+    "crates/deadlib-lua/tests/native-default/panic.c": "30b76301b6ede5504691bc0e32fade6a8ebf26c9bc22e5896ae8603c552f3c07",
+    "crates/deadlib-lua/tests/native-default/thread-calls.c": "8511eefb57a235cc5c2b0c29df2be2c69e3250232b356d88eaf1c11807446458",
+    "crates/deadlib-lua/tests/native-default/thread-execution.c": "c2837dce961b1719e13bbda5077207fd3bd9da3c1a77a020a1cb6ac2fe8ba3a0",
+    "crates/deadlib-lua/tests/native-default/thread-files.c": "471a2d52c7177d9a395cc8719dbeee2788895a57232b7be2e4b24ec23af1ca00",
+    "crates/deadlib-lua/tests/native-default/thread-gc.c": "0d9a45e4814f2463459167174105340d9416002ee1dccb63e39cabf09ab4826b",
+    "crates/deadlib-lua/tests/native-default/thread-loads.c": "d5ddc96b1984ffe7e2f2becd3bf4ada6df3e78bd9a29b187171b8b7b83f0ba8b",
+    "crates/deadlib-lua/tests/native-default/thread-unprotected.c": "6be1b4d1dbdfad7226ac430880de82c387ad910eae2f4dd844c5873f53f1463c",
+    "crates/deadlib-lua/tests/native-default/waiting-errors.c": "eb5138949633217e937f76ec322128fb45c350eb9dbf032db24e103f5ac01faf",
+    "crates/deadlib-lua/tests/native_auxiliary.rs": "cb6ea37c24d1f31f64adf8b490727d324253b5eaea1808c872ff2cd33c878ef5",
+    "crates/deadlib-lua/tests/native_bodies.rs": "fb55a46734fbff355770707bc9b498f7d49821673fb864908211995720828458",
+    "crates/deadlib-lua/tests/native_context.rs": "180624a157dcb4efea4d6345b5917f7c8eca0957596ea68edca961c80d12008f",
+    "crates/deadlib-lua/tests/native_debug.rs": "0d871c595f0f334b5053e5544b2917bdda2c4b69819f7953ad3e99fde9fa786b",
+    "crates/deadlib-lua/tests/native_default.rs": "553c7e431611a57718f21fbf89fe8e645215b160cb0a562dde468630bedb267a",
+    "crates/deadlib-lua/tests/native_dump.rs": "eb389c0a57a6c19d45aad6b7d144285d136360fddea7bf5dd96c1b547da030d0",
+    "crates/deadlib-lua/tests/native_errors.rs": "e726e027a3f0c03b62d2cd6e796c311f6570c33546e4a4305dba0694b9206849",
+    "crates/deadlib-lua/tests/native_file.rs": "805e8a2e4f9560897e3101eb658d1f8b1f3b16e11d956b3852c82adba02dddc5",
+    "crates/deadlib-lua/tests/native_gc.rs": "e39148913effd10d6c8bb043bc8d5dc12c1d98856ad4068bf1a103aa37018693",
+    "crates/deadlib-lua/tests/native_hooks.rs": "00d6339c3bb1b883ddd525bb64895d711c5cd447e31a39a1e96602bff9fe43d3",
+    "crates/deadlib-lua/tests/native_inactive_objects.rs": "f5d0b1558c86a315c6569d3167bad7455551c72cdfe0705f514799899a032502",
+    "crates/deadlib-lua/tests/native_libraries.rs": "2d9402fd7072171ca7413487b8310ccd8669f104632ee45665e6514936db7491",
+    "crates/deadlib-lua/tests/native_load.rs": "3b0f13ca0be1b10ae5c47a17efe4b0961302dadf800f2a2be018ba35b4f11687",
+    "crates/deadlib-lua/tests/native_objects.rs": "aef1ce5a633c94dfbb987aae4912871f9c0e0052c2de2d0126d6969fca864b0c",
+    "crates/deadlib-lua/tests/native_pointers.rs": "a0e2607ce38313fa17d39519567192a6e7ea2b5b35a9cad4201af8e87e2812dc",
+    "crates/deadlib-lua/tests/native_protected.rs": "c974dcea26fbf06764203039f936fbd0d68f5b42feb06913bdbe788d1eb16370",
+    "crates/deadlib-lua/tests/native_stack.rs": "9d48666d51b3e7e43689885f0a1cca97f3bc6beb299f0906247a5ff5f70b8dc3",
+    "crates/deadlib-lua/tests/native_tables.rs": "924ad56634cd92294dd9f96922b931978e801b246b83daaf56382ff0254e1f6d",
+    "crates/deadlib-lua/tests/native_thread_calls.rs": "c97001427ace3a437e5d79986e8757f08120f6a57e3b783f17e5c0683c72b113",
+    "crates/deadlib-lua/tests/native_thread_execution.rs": "da4515e2e12dab82ab60359dd62845df52a82a55e109159c4c8517d821e3e679",
+    "crates/deadlib-lua/tests/native_thread_gc.rs": "f8dd6fb6ebb13fdcba78c6740d8074e90025add49e5c7bfba45888165ae8a0ff",
+    "crates/deadlib-lua/tests/native_thread_loads.rs": "fada8aae2c45ec6f75dad41daf1d7eb1bbaa302b9e591eafebde87aa30a04a11",
+    "crates/deadlib-lua/tests/native_thread_stacks.rs": "e4dc5030c035a3c8ab1b7933a6b524f94d48e48c73996c57329bf9086ab07234",
+    "crates/deadlib-lua/tests/native_threads.rs": "5c36b9164bbb047873b7f7a7ab42289c0cbb2d1732a4653df6d9695d7a0a6d39",
+    "crates/deadlib-lua/tests/native_upvalues.rs": "7f1738de213929b97fefb27a8d47deef77123d6e65126d8d8cf3f1d4131c2471",
+    "crates/deadlib-lua/tests/native_values.rs": "ed248f38a8717e84bdafa7641010670637332ac4f3ee45a3a26885610e0c7558",
+    "crates/deadlib-lua/tests/os.rs": "7524e0851f982b05cb12ae25d29602fd74eba09a047b96b3992dcdbce486194f",
+    "crates/deadlib-lua/tests/package.rs": "44eed4a9aa1862092ca33a14d5aa06fdbacba0182ae5a1fdd9a4351e2dc69c0e",
+    "crates/deadlib-lua/tests/posix_locale.rs": "dd2d18f3e7d967820ef7449ecd875e4ba5681f86254d30a0c624e368c93a16d0",
+    "crates/deadlib-lua/tests/register_limits.rs": "72140b0e817cdd7ba21cbe2d41b2f75685607b09274bd2800bb1fe4ef891ca7f",
+    "crates/deadlib-lua/tests/runtime_errors.rs": "5bc1473504aeb0c653f701608e90bb28696d5e3887abe7fbaeb8475ec4d828e7",
+    "crates/deadlib-lua/tests/standalone.rs": "923cfd4d761dfc70ce3f20aeb38d5456dcd0fc10038c3cd51c01c09830d1c3ed",
+    "crates/deadlib-lua/tests/stdlib.rs": "70a0348ec266eb11733ebf49379d5f602bc7453797db2cb411d0c1f7435c9749",
+    "crates/deadlib-lua/tests/syntax.rs": "0cef3d8108355af80bc52bade3baed22a3bcb86b189ec7a1e8357ff90f9ed724",
+    "crates/deadlib-lua/tests/thread_state.rs": "870f46d9c22e8f205c5e12c1677279674e6227b0795bc3f681fb50501d978a76",
+    "crates/deadlib-lua/tests/tracebacks.rs": "8bdbed8998665c4255f8764e3afa2abe486514a5b02285e45af730d02122b2bb",
+    "crates/deadlib-lua/tests/unprotected_calls.rs": "43839e82dc0542f9ca0ced0151160791eedac1722030a0c36d8e4a7f041ea668",
+    "crates/deadlib-lua/tests/userdata.rs": "c163e9694e6fb04db3bc7e582dd5e9873ebb721f227d635c2761bc04366978cd",
+    "scripts/check_rust_lua_native_boundary.py": "15d14ffa4fa7a72c3b633c0319c390089bda16a62ef20f14dc487c4cdea01138"
+  },
+  "all_current_source_hashes_match": true,
+  "proof_tool_hashes": {
+    "target/lua-native-hooks/check-gc-integers-assertions.py": "812d5819e1ebb2a4f2a07a0bc2b966353b2df77e087e21704a49c8e4bef08ec7",
+    "target/lua-native-hooks/check-gc-integers-portable.py": "bead1a5ddda4c76ae764d6b7b12b0c5215aa837eadfed7ace37714444fbcfa29",
+    "target/lua-native-hooks/compare-gc-integers-allocation.py": "5b430a4ad16555fec5b6810310a84f0d66bab55b45a217cde73ebae9e669fba1",
+    "target/lua-native-hooks/compare-gc-integers-call.py": "57de895f1d0801ed53ee96f75d875c72cd595b229508341a2bcd96907c8c1798",
+    "target/lua-native-hooks/compare-gc-integers-concat-panic.py": "f65173e39305fee666a0a976cde2d0f20262432d47c70161ea56e79d30e96e68",
+    "target/lua-native-hooks/compare-gc-integers-concat.py": "6929072b3c654563f3fa2ff0d927ec15df370e26b787f1c6413d390e11173098",
+    "target/lua-native-hooks/compare-gc-integers-execution.py": "4b50f8050d31970b17de142b0219a665e3974660658912fd2b8d78fff152f192",
+    "target/lua-native-hooks/compare-gc-integers-gc-panic.py": "bc406b37d22e18510a7bc22713dbc44120d4d7f3f6aac23ccff6e1236b7e452b",
+    "target/lua-native-hooks/compare-gc-integers-gc.py": "2f89a451bbf6f6785902d8b2639ec8cc07c2b54d236be5fbc27e8ecd295c9d79",
+    "target/lua-native-hooks/compare-gc-integers-i686.py": "7974cf265155f2ea7d8bb2d508d872fcd7beca533a7dcdba4549ec20866b38e5",
+    "target/lua-native-hooks/compare-gc-integers-unprotected.py": "1bc20750701d8e43633c51fe33c42d63d8a494ae4af4aca386d1237fd2790d8a",
+    "target/lua-native-hooks/compare-gc-integers-waiting.py": "485a98210d27faf7194ea5146a66ca691d28ece72e3178f4ab15225b32700bb3",
+    "target/lua-native-hooks/compare-gc-integers.py": "86870ecca66ef04dd7850838d956b2279db66db36a1fafac55f77b475cb69bce",
+    "target/lua-native-hooks/evidence-gc-integers.py": "6fffacd20ef761567195dde7ca2c60c02c7f959e4650d90bbdd217e0f88cf16f",
+    "target/lua-native-hooks/probe-gc-integers-call-levels.py": "da3aa7bca1228266eb22c9fd6da478ac98568aac542fabe310d9099c854c2bac",
+    "target/lua-native-hooks/probe-gc-integers-counts.py": "76c0870b84383178b73ff5cf1cbc0e32f4646f9d181c4d40d2ed9bcef5d1a4f2",
+    "target/lua-native-hooks/probe-gc-integers-exits.py": "2097c96fe22fe92d8dda1afa397407914afc2f4a76122bb4c45b8250077928e1",
+    "target/lua-native-hooks/probe-gc-integers-reader-resume-current.py": "d153b57cd99dbf4741cf954260aa368544f3be0afee39093c67ddaef4d9afad8",
+    "target/lua-native-hooks/probe-gc-integers-resume-arguments.py": "95b74bdf25eb2a97c8ca4b6d8c34506694f3d69becfcc979c73a71c89ab64a7a",
+    "target/lua-native-hooks/probe-gc-integers-unprotected-levels.py": "a09338d7f236cd39538d604f69ed21f00620489d60746e27a2afdc7321f1da09",
+    "target/lua-native-hooks/probe-gc-integers-unsettled-current.py": "652ff4b48168c8db5ef5e8c6d356790312ccfed59271aab42a83084a94c0559f",
+    "target/lua-native-hooks/probe-gc-integers-waiting-levels.py": "8ed01e817d2ce04d93101e09fdd9de51d6628d852952021a31770e209cd9acd8",
+    "target/lua-native-hooks/probe-gc-integers-wide-budget-before.py": "1688b4d6d4e8250a7697c3c4db58165ac4d74e692274e7a209d8159431fc141e",
+    "target/lua-native-hooks/run-gc-integers-i686-focused.py": "73491d28a34401357ff09c2bb009d009b5169b1022b001523e48b2c91b58d23c",
+    "target/lua-native-hooks/run-gc-integers-i686.py": "a8d5e2c6d5a9838a0f2c36e073005cbc7605aa4548229460cdf7e937e9130514",
+    "target/lua-native-hooks/run-gc-integers-proof.py": "ba460f4f3d7f5f85282339df200afcdfe4f91d1499b086945dbe15fd628566b8",
+    "target/lua-native-hooks/run-gc-integers-rechecks.py": "1226fff1d1b62a0bab016d57e98324912939aad3288a7976832e326d6d65f6df",
+    "target/lua-native-hooks/save-gc-integers-before-wide.py": "45e78d63d4013c18fa6ed39341604bead4eced6990d4b575d2c9b17379dae8c8",
+    "target/lua-native-hooks/validate-gc-integers.py": "715d72fd77e2687fbfc1d5263640981cc4d1c39583cf61ec3388d817f5d0563e",
+    "target/lua-native-hooks/verify-gc-integers-i686.py": "0ebca624d81d6c5e2f496b8348c7bb1801067d8fe47390c30ca57f5fe3d55e1a",
+    "scripts/check_rust_lua_native_boundary.py": "15d14ffa4fa7a72c3b633c0319c390089bda16a62ef20f14dc487c4cdea01138",
+    "scripts/check_rust_lua_stdlib.py": "3aa8fff8e9058b5bd93fe350ba4d87f183d07ad222855699b1e09e26f6a0dbc9",
+    "scripts/check_rust_lua_suite.py": "1d6d74cba7472499e13a1381eee5c8ad5093c8957317e74da926f4529279549d",
+    "scripts/check_rust_lua_full_suite.py": "551b01c32d4059c41a34e771f60036494ba982a752d7f9e70315b8df0b1decde",
+    "scripts/build_lua_cli_reference.py": "dd92d1916090b9c4c11bec33db71852c5b3fd797890403c9a2803664131360ba"
+  },
+  "retained_reports": {
+    "fixture-first": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-fixture-first.json",
+      "sha256": "1ff5ee690644fbd4057b2479b6b41e3395aac109e7192ea74f3c99ca72c443ad"
+    },
+    "before-1062": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-before-1062.json",
+      "sha256": "78fb50a01fd1f0f0bdfe6e96643051c30e5ed35fbe8e387bc03464794f35b33b"
+    },
+    "focused-1062": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-focused-1062.json",
+      "sha256": "f5f00b733b6816a4e33439a0434753d85564155b1d21f1947f9a52d98753da70"
+    },
+    "checked-1062": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-checked-1062.json",
+      "sha256": "4e135084b4f537a46d31105ddcbcdbd8ddeb0306aeb756fdbf94f9c311f8f76a"
+    },
+    "i686-before-1062": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-i686-before-1062.json",
+      "sha256": "70e57adc002c52dd28cdfbf5a8b5ce38d6250b0667c1d022f4ab81c9d1e1b6ae"
+    },
+    "i686-focused-1062": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-i686-focused-1062.json",
+      "sha256": "212473ba10d8e7f050b3dc650e790cec60e40b552e605ce992d81da65e234af1"
+    },
+    "validation-1062": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-validation-1062.json",
+      "sha256": "54bfc03a8179f89554c6f52a63d540831a13e865421eb6a4c9a69a3e458b90d9"
+    },
+    "boundary-current-1062": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-boundary-current-1062.json",
+      "sha256": "149dcf22f8a69f18f07d723b535802fad92143d5a8f605b74c2d901a9aac8f81"
+    },
+    "i686-suite-1062": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-i686-suite-1062.json",
+      "sha256": "69f6d7753e524cdc212c810fd864b2a26963e8edc53ac93f9bb88e80cca41edd"
+    },
+    "windows-suite-1062": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-windows-suite-1062.json",
+      "sha256": "39ff5a94a688d8912ede77bafc6366d46d9842a84ee939e3cd0ec9fed1c752bd"
+    },
+    "wide-budget-before": {
+      "path": "docs/testing/2026-10-28-rust-lua-gc-integers-wide-budget-before.json",
+      "sha256": "6b0f5423ede69858f053eac859805bf50519d2ea6d5db418b37112715297b578"
+    },
+    "call-yields-evidence": {
+      "path": "docs/testing/2026-10-28-rust-lua-call-yields-evidence.json",
+      "sha256": "c866df6919693b47998e515499564a4e29cfba1044d1906704b32ab4d26b5646"
+    },
+    "call-yields-counts-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-call-yields-counts-current.json",
+      "sha256": "91482a66e7762efe66bbb5a780df9326057cfd2f4c3dde327cc82e9b101fa74e"
+    },
+    "call-yields-unsettled-current": {
+      "path": "docs/testing/2026-10-28-rust-lua-call-yields-unsettled-current.json",
+      "sha256": "16751e2d51f9b1e8cc51a46f47b3a26fc5934ef7ab6e46afbf14ac310b1dc4c3"
+    },
+    "reader-continuations-resume-checked": {
+      "path": "docs/testing/2026-10-28-rust-lua-reader-continuations-resume-checked.json",
+      "sha256": "d639a7f2b4c83cc3c73d9a410ccd0d687d2a78995809fe87fead7d50a9828468"
+    },
+    "thread-execution-boundary-current-fixture-before": {
+      "path": "docs/testing/2026-10-28-rust-lua-thread-execution-boundary-current-fixture-before.json",
+      "sha256": "a6cc8a93d7d74f322ef531d4dbb8f93dca75f2f1643f07237fc5893597d148b4"
+    }
+  },
+  "baseline_cli": {
+    "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-before\\deadlua-release.exe",
+    "sha256": "dc3c91e3fbafc31601e0ad41c4da23d41ae25f3874972825fbad7830e24034e9",
+    "matches_source_built_stdlib_report": true
+  },
+  "baseline_sdk": {
+    "deadlua-release.exe": {
+      "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-before\\deadlua-release.exe",
+      "source": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\release\\deadlua.exe",
+      "sha256": "dc3c91e3fbafc31601e0ad41c4da23d41ae25f3874972825fbad7830e24034e9"
+    },
+    "deadlua-debug.exe": {
+      "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-before\\deadlua-debug.exe",
+      "source": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\debug\\deadlua.exe",
+      "sha256": "0ebf6f4f062d8cc8b08f21384398613f6e964e08676fa1c3c05475232acd3108"
+    },
+    "lua51.dll": {
+      "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-before\\lua51.dll",
+      "source": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\release\\build\\deadlib-lua-67a32a912d351b3e\\out\\lua51.dll",
+      "sha256": "ef707d6931d3b0cb0d5cdacad08484c9eb5929aaf6f2555d6ee68f20679087ab"
+    },
+    "lua51.lib": {
+      "path": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-before\\lua51.lib",
+      "source": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\release\\build\\deadlib-lua-67a32a912d351b3e\\out\\lua51.lib",
+      "sha256": "635b4328a9d0a63e1cbbf94d19b93734648a6b3d6d381fb217c5c3eea6e6131d"
+    }
+  },
+  "collector_integer_observations_per_profile": 1063,
+  "collector_integer_profiles": [
+    64,
+    32
+  ],
+  "collector_integer_arithmetic_verified": true,
+  "interleaved_call_yield_observations": 1280,
+  "interleaved_call_yield_level_controls": 4224,
+  "portable_no_default_features_regression_passed": true,
+  "selected_unprotected_call_observations": 960,
+  "selected_unprotected_call_level_controls": 1120,
+  "waiting_error_observations": 736,
+  "waiting_error_level_controls": 800,
+  "unprotected_waiting_exit_cases": 20,
+  "exit_reference_engines": 3,
+  "buffered_stdout_and_file_exit_observations_equal": true,
+  "successful_native_boundary_runs": [
+    {
+      "probe": "/runs/rust",
+      "operations": 161662,
+      "returned": 161662,
+      "states_created": 183,
+      "states_collected": 182,
+      "states_destroyed": 183,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/parser_scratch_probe/runs/rust",
+      "operations": 14,
+      "returned": 14,
+      "states_created": 2,
+      "states_collected": 1,
+      "states_destroyed": 2,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_reader_roots_probe/runs/rust",
+      "operations": 293782,
+      "returned": 293782,
+      "states_created": 2,
+      "states_collected": 1,
+      "states_destroyed": 2,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_stacks_probe/runs/rust",
+      "operations": 72655,
+      "returned": 72655,
+      "states_created": 2023,
+      "states_collected": 2022,
+      "states_destroyed": 2023,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_resume_probe/runs/rust",
+      "operations": 43858,
+      "returned": 43858,
+      "states_created": 1023,
+      "states_collected": 1022,
+      "states_destroyed": 1023,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_call_levels_probe/runs/rust",
+      "operations": 96876,
+      "returned": 96876,
+      "states_created": 1076,
+      "states_collected": 1075,
+      "states_destroyed": 1076,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/reader_call_levels_probe/runs/rust",
+      "operations": 2902,
+      "returned": 2902,
+      "states_created": 77,
+      "states_collected": 76,
+      "states_destroyed": 77,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_debug_probe/runs/rust",
+      "operations": 16692,
+      "returned": 16692,
+      "states_created": 6,
+      "states_collected": 5,
+      "states_destroyed": 6,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_hooks_probe/runs/rust",
+      "operations": 8546,
+      "returned": 8546,
+      "states_created": 7,
+      "states_collected": 6,
+      "states_destroyed": 7,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_context_probe/runs/rust",
+      "operations": 574,
+      "returned": 574,
+      "states_created": 6,
+      "states_collected": 5,
+      "states_destroyed": 6,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_return_stacks_probe/runs/rust",
+      "operations": 13712,
+      "returned": 13712,
+      "states_created": 254,
+      "states_collected": 253,
+      "states_destroyed": 254,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_protection_hooks_probe/runs/rust",
+      "operations": 1918,
+      "returned": 1918,
+      "states_created": 41,
+      "states_collected": 40,
+      "states_destroyed": 41,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_library_stacks_probe/runs/rust",
+      "operations": 14415,
+      "returned": 14415,
+      "states_created": 293,
+      "states_collected": 292,
+      "states_destroyed": 293,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_package_stacks_probe/runs/rust",
+      "operations": 8490,
+      "returned": 8490,
+      "states_created": 137,
+      "states_collected": 136,
+      "states_destroyed": 137,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_body_stacks_probe/runs/rust/return-stacks.lua",
+      "operations": 15599,
+      "returned": 15599,
+      "states_created": 254,
+      "states_collected": 253,
+      "states_destroyed": 254,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_body_stacks_probe/runs/rust/library-stacks.lua",
+      "operations": 16767,
+      "returned": 16767,
+      "states_created": 293,
+      "states_collected": 292,
+      "states_destroyed": 293,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_body_stacks_probe/runs/rust/package-stacks.lua",
+      "operations": 9642,
+      "returned": 9642,
+      "states_created": 137,
+      "states_collected": 136,
+      "states_destroyed": 137,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_bodies_probe/runs/rust",
+      "operations": 466,
+      "returned": 466,
+      "states_created": 8,
+      "states_collected": 7,
+      "states_destroyed": 8,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_library_loading_probe/runs/rust/ordinary",
+      "operations": 435,
+      "returned": 435,
+      "states_created": 8,
+      "states_collected": 7,
+      "states_destroyed": 8,
+      "libraries_opened": 6,
+      "libraries_closed": 6
+    },
+    {
+      "probe": "/native_library_loading_probe/runs/rust/copied",
+      "operations": 505,
+      "returned": 505,
+      "states_created": 8,
+      "states_collected": 7,
+      "states_destroyed": 8,
+      "libraries_opened": 6,
+      "libraries_closed": 6
+    },
+    {
+      "probe": "/native_inactive_objects_probe/runs/rust",
+      "operations": 2093,
+      "returned": 2093,
+      "states_created": 15,
+      "states_collected": 14,
+      "states_destroyed": 15,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_calls_probe/runs/rust",
+      "operations": 2038,
+      "returned": 2038,
+      "states_created": 74,
+      "states_collected": 73,
+      "states_destroyed": 74,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_api_yields_probe/runs/rust",
+      "operations": 1291,
+      "returned": 1291,
+      "states_created": 52,
+      "states_collected": 51,
+      "states_destroyed": 52,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_loads_probe/runs/rust",
+      "operations": 3959,
+      "returned": 3959,
+      "states_created": 48,
+      "states_collected": 47,
+      "states_destroyed": 48,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_reader_continuations_probe/runs/rust",
+      "operations": 16309,
+      "returned": 16309,
+      "states_created": 123,
+      "states_collected": 122,
+      "states_destroyed": 123,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_panic_probe/runs/rust",
+      "operations": 1982,
+      "returned": 1982,
+      "states_created": 55,
+      "states_collected": 54,
+      "states_destroyed": 55,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_file_files_probe/runs/rust",
+      "operations": 1398,
+      "returned": 1398,
+      "states_created": 52,
+      "states_collected": 51,
+      "states_destroyed": 52,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_file_stdin_probe/runs/rust",
+      "operations": 122,
+      "returned": 122,
+      "states_created": 6,
+      "states_collected": 5,
+      "states_destroyed": 6,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_file_panic_probe/runs/rust",
+      "operations": 2225,
+      "returned": 2225,
+      "states_created": 54,
+      "states_collected": 53,
+      "states_destroyed": 54,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_allocation_gc_probe/runs/rust",
+      "operations": 3612,
+      "returned": 3612,
+      "states_created": 293,
+      "states_collected": 292,
+      "states_destroyed": 293,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_execution_probe/runs/rust",
+      "operations": 1164,
+      "returned": 1164,
+      "states_created": 60,
+      "states_collected": 59,
+      "states_destroyed": 60,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_execution_panic_probe/runs/rust",
+      "operations": 364,
+      "returned": 364,
+      "states_created": 11,
+      "states_collected": 10,
+      "states_destroyed": 11,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_concat_yields_probe/runs/rust",
+      "operations": 942,
+      "returned": 942,
+      "states_created": 25,
+      "states_collected": 24,
+      "states_destroyed": 25,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_waiting_errors_probe/runs/rust",
+      "operations": 29186,
+      "returned": 29186,
+      "states_created": 1345,
+      "states_collected": 1344,
+      "states_destroyed": 1345,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_unprotected_probe/runs/rust",
+      "operations": 45714,
+      "returned": 45714,
+      "states_created": 1577,
+      "states_collected": 1576,
+      "states_destroyed": 1577,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_call_yields_probe/runs/rust",
+      "operations": 87970,
+      "returned": 87970,
+      "states_created": 1473,
+      "states_collected": 1472,
+      "states_destroyed": 1473,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_gc_integers_probe/runs/rust",
+      "operations": 33929,
+      "returned": 33929,
+      "states_created": 886,
+      "states_collected": 885,
+      "states_destroyed": 886,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_gc_controls_probe/runs/rust",
+      "operations": 751,
+      "returned": 751,
+      "states_created": 53,
+      "states_collected": 52,
+      "states_destroyed": 53,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    },
+    {
+      "probe": "/native_thread_gc_panic_probe/runs/rust",
+      "operations": 3322,
+      "returned": 3322,
+      "states_created": 101,
+      "states_collected": 100,
+      "states_destroyed": 101,
+      "libraries_opened": 1,
+      "libraries_closed": 1
+    }
+  ],
+  "native_boundary_totals": {
+    "operations": 1017881,
+    "returned": 1017881,
+    "states_created": 12141,
+    "states_destroyed": 12141,
+    "libraries_opened": 49,
+    "libraries_closed": 49
+  },
+  "expected_terminating_processes": [
+    {
+      "probe": "/native_panic_exit_probe/runs/rust/default",
+      "returncode": 1,
+      "stdout_hex": "",
+      "stderr_hex": "50414e49433a20756e70726f746563746564206572726f7220696e2063616c6c20746f204c75612041504920286e6174697665206661696c757265290d0a"
+    },
+    {
+      "probe": "/native_panic_exit_probe/runs/rust/absent",
+      "returncode": 1,
+      "stdout_hex": "",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_panic_exit_probe/runs/rust/returning",
+      "returncode": 1,
+      "stdout_hex": "70616e69632d72657475726e093209310d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_file_exit_probe/runs/rust/absent",
+      "returncode": 1,
+      "stdout_hex": "",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_file_exit_probe/runs/rust/returning",
+      "returncode": 1,
+      "stdout_hex": "70616e69632d72657475726e093209310d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/fresh-False-0",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d657869740966726573680966616c736509300d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/fresh-False-3",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d657869740966726573680966616c736509330d0a70616e69632d72657475726e093209310d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/fresh-True-0",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974096672657368097472756509300d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/fresh-True-3",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974096672657368097472756509330d0a70616e69632d72657475726e093209310d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/completed-False-0",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d6578697409636f6d706c657465640966616c736509300d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/completed-False-3",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d6578697409636f6d706c657465640966616c736509330d0a70616e69632d72657475726e093209310d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/completed-True-0",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d6578697409636f6d706c65746564097472756509300d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/completed-True-3",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d6578697409636f6d706c65746564097472756509330d0a70616e69632d72657475726e093209310d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/yielded-False-0",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974097969656c6465640966616c736509300d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/yielded-False-3",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974097969656c6465640966616c736509330d0a70616e69632d72657475726e093209310d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/yielded-True-0",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974097969656c646564097472756509300d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/yielded-True-3",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974097969656c646564097472756509330d0a70616e69632d72657475726e093209310d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/failed-False-0",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974096661696c65640966616c736509300d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/failed-False-3",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974096661696c65640966616c736509330d0a70616e69632d72657475726e093209310d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/failed-True-0",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974096661696c6564097472756509300d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/failed-True-3",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974096661696c6564097472756509330d0a70616e69632d72657475726e093209310d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/partial-False-0",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974097061727469616c0966616c736509300d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/partial-False-3",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974097061727469616c0966616c736509330d0a70616e69632d72657475726e093209310d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/partial-True-0",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974097061727469616c097472756509300d0a",
+      "stderr_hex": ""
+    },
+    {
+      "probe": "/native_thread_unprotected_exit_probe/runs/rust/partial-True-3",
+      "returncode": 1,
+      "stdout_hex": "77616974696e672d70616e69632d65786974097061727469616c097472756509330d0a70616e69632d72657475726e093209310d0a",
+      "stderr_hex": ""
+    }
+  ],
+  "shared_group_cleanup_asserted_in_every_successful_runner": true,
+  "validation": [
+    {
+      "name": "windows-tests",
+      "command": [
+        "cargo",
+        "test",
+        "--target-dir",
+        "target/lua-native-hooks",
+        "--locked",
+        "-p",
+        "deadlib-lua",
+        "--no-fail-fast"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 146.78762690001167,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-validation-final\\windows-tests.log",
+      "log_sha256": "ec7409995de4d137983cdda1f35f80ad4e65e1d29e0e54d748e14d7a40057354",
+      "test_groups": [
+        {
+          "passed": 84,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 14,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 32,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 35,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 24,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 44,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 23,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 23,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 23,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 18,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 18,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 32,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 35,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 801
+    },
+    {
+      "name": "windows-no-default-features",
+      "command": [
+        "cargo",
+        "check",
+        "--target-dir",
+        "target/lua-native-hooks",
+        "--locked",
+        "-p",
+        "deadlib-lua",
+        "--no-default-features",
+        "--all-targets"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 4.166116900043562,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-validation-final\\windows-no-default-features.log",
+      "log_sha256": "0e117a28e08ace1def52fdf33adf68967c3dbf5c51d5d42dd7eea37ec6c5946d",
+      "test_groups": [],
+      "passed": 0
+    },
+    {
+      "name": "windows-clippy",
+      "command": [
+        "cargo",
+        "clippy",
+        "--target-dir",
+        "target/lua-native-hooks",
+        "--locked",
+        "-p",
+        "deadlib-lua",
+        "--all-targets",
+        "--no-deps",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 9.501040499890223,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-validation-final\\windows-clippy.log",
+      "log_sha256": "1e61b5bd5fb7ad154f4390a77f285123c16049893cd4de441e6e2449473eb611",
+      "test_groups": [],
+      "passed": 0
+    },
+    {
+      "name": "windows-fmt",
+      "command": [
+        "cargo",
+        "fmt",
+        "-p",
+        "deadlib-lua",
+        "--",
+        "--check"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 1.807457400020212,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-validation-final\\windows-fmt.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "test_groups": [],
+      "passed": 0
+    },
+    {
+      "name": "windows-dependencies",
+      "command": [
+        "cargo",
+        "tree",
+        "--locked",
+        "-p",
+        "deadlib-lua",
+        "--edges",
+        "normal,build"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 0.6528527999762446,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-validation-final\\windows-dependencies.log",
+      "log_sha256": "fab9731931113313ef31554a2789a357cde745f5c89b2bb130f75a90468c38d6",
+      "test_groups": [],
+      "passed": 0
+    },
+    {
+      "name": "linux-x64-tests",
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-context/1793130712142473700/native cargo test --locked -p deadlib-lua --no-fail-fast 2>&1"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 129.12710950011387,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-validation-final\\linux-x64-tests.log",
+      "log_sha256": "63f698e1a8f2217a47e64df3abb65fbb048f79358c736523c91b1c498a8147f4",
+      "test_groups": [
+        {
+          "passed": 84,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 14,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 32,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 35,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 24,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 44,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 23,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 23,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 23,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 18,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 32,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 31,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 802
+    },
+    {
+      "name": "linux-x64-no-default-features",
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-context/1793130712142473700/native cargo check --locked -p deadlib-lua --no-default-features --all-targets 2>&1"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 6.760036200052127,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-validation-final\\linux-x64-no-default-features.log",
+      "log_sha256": "e76d18f874efa72efc4cd2e811e95127a36cbc8cef735c1264c11b9164e0950a",
+      "test_groups": [],
+      "passed": 0
+    },
+    {
+      "name": "linux-x64-clippy",
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-context/1793130712142473700/native cargo clippy --locked -p deadlib-lua --all-targets --no-deps -- -D warnings 2>&1"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 9.223892000038177,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-validation-final\\linux-x64-clippy.log",
+      "log_sha256": "addbde79875c23e4c1b75de0855558157ce6beebc351b5cf0b5223e44fecbd67",
+      "test_groups": [],
+      "passed": 0
+    },
+    {
+      "name": "linux-i686-tests",
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-context/1793130712142473700/i686 'CFLAGS_i686_unknown_linux_gnu=-msse2 -mfpmath=sse' cargo test --target i686-unknown-linux-gnu --locked -p deadlib-lua --no-fail-fast 2>&1"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 150.55647789989598,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-validation-final\\linux-i686-tests.log",
+      "log_sha256": "241a5aa3e4bbe8d5db5d75da3461199059cd9ba8ed8b4bc1c3a0f55beb845650",
+      "test_groups": [
+        {
+          "passed": 84,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 14,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 32,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 35,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 24,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 44,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 23,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 23,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 23,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 18,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 32,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 31,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "passed": 802
+    },
+    {
+      "name": "linux-i686-no-default-features",
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-context/1793130712142473700/i686 'CFLAGS_i686_unknown_linux_gnu=-msse2 -mfpmath=sse' cargo check --target i686-unknown-linux-gnu --locked -p deadlib-lua --no-default-features --all-targets 2>&1"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 7.908614800078794,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-validation-final\\linux-i686-no-default-features.log",
+      "log_sha256": "773c2ed6f2ab39e9e0dd0deca2e08baa2287a69ba1912afdce63350f41f1bebb",
+      "test_groups": [],
+      "passed": 0
+    },
+    {
+      "name": "linux-i686-clippy",
+      "command": [
+        "wsl.exe",
+        "-d",
+        "Debian",
+        "--cd",
+        "C:\\GitHub\\deadsync",
+        "--",
+        "sh",
+        "-lc",
+        "exec env CARGO_TARGET_DIR=/home/perfecttaste/.cache/deadlua-native-context/1793130712142473700/i686 'CFLAGS_i686_unknown_linux_gnu=-msse2 -mfpmath=sse' cargo clippy --target i686-unknown-linux-gnu --locked -p deadlib-lua --all-targets --no-deps -- -D warnings 2>&1"
+      ],
+      "returncode": 0,
+      "elapsed_seconds": 11.06723179994151,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-validation-final\\linux-i686-clippy.log",
+      "log_sha256": "e82b5d0f50aef4a78c7d666c78e838b7b5373c7b56f3820a86bbe811cefbff65",
+      "test_groups": [],
+      "passed": 0
+    }
+  ],
+  "stdlib": {
+    "cases": 5507,
+    "matched": 5507
+  },
+  "i686_native_libraries_enabled": true,
+  "i686_internal_test_module": false,
+  "i686_abi": {
+    "reference": {
+      "elf_class": 32,
+      "elf_machine": 3,
+      "byte_order": "little",
+      "size_t_bytes": 4,
+      "command": [
+        "lua",
+        "-e",
+        "io.write(string.dump(function()end):sub(1,12))"
+      ],
+      "returncode": 0,
+      "stdout_hex": "1b4c75615100010404040800",
+      "stderr_hex": ""
+    },
+    "rust": {
+      "elf_class": 32,
+      "elf_machine": 3,
+      "byte_order": "little",
+      "size_t_bytes": 4,
+      "command": [
+        "lua",
+        "-e",
+        "io.write(string.dump(function()end):sub(1,12))"
+      ],
+      "returncode": 0,
+      "stdout_hex": "1b4c75615100010404040800",
+      "stderr_hex": ""
+    }
+  },
+  "windows_independent_passes": {
+    "reference": 17,
+    "rust": 17,
+    "rust_cache_cold": 17,
+    "rust_cache_hit": 17
+  },
+  "proof_exit_codes": {
+    "boundary": 0,
+    "stdlib": 0,
+    "windows-suite": 1,
+    "i686": 0
+  },
+  "supplemental_processes": [
+    {
+      "name": "current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\compare-gc-integers.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-current.log"
+    },
+    {
+      "name": "call-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\compare-gc-integers-call.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-call-current.log"
+    },
+    {
+      "name": "unprotected-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\compare-gc-integers-unprotected.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-unprotected-current.log"
+    },
+    {
+      "name": "waiting-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\compare-gc-integers-waiting.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-waiting-current.log"
+    },
+    {
+      "name": "gc-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\compare-gc-integers-gc.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-gc-current.log"
+    },
+    {
+      "name": "gc-panic-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\compare-gc-integers-gc-panic.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-gc-panic-current.log"
+    },
+    {
+      "name": "execution-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\compare-gc-integers-execution.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-execution-current.log"
+    },
+    {
+      "name": "concat-panic-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\compare-gc-integers-concat-panic.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-concat-panic-current.log"
+    },
+    {
+      "name": "concat-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\compare-gc-integers-concat.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-concat-current.log"
+    },
+    {
+      "name": "allocation-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\compare-gc-integers-allocation.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-allocation-current.log"
+    },
+    {
+      "name": "resume-arguments-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\probe-gc-integers-resume-arguments.py",
+        "current"
+      ],
+      "returncode": 1,
+      "expected_returncode": 1,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-resume-arguments-current.log"
+    },
+    {
+      "name": "reader-resume-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\probe-gc-integers-reader-resume-current.py"
+      ],
+      "returncode": 1,
+      "expected_returncode": 1,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-reader-resume-current.log"
+    },
+    {
+      "name": "unsettled-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\probe-gc-integers-unsettled-current.py"
+      ],
+      "returncode": 1,
+      "expected_returncode": 1,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-unsettled-current.log"
+    },
+    {
+      "name": "call-level-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\probe-gc-integers-call-levels.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-call-level-current.log"
+    },
+    {
+      "name": "counts-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\probe-gc-integers-counts.py"
+      ],
+      "returncode": 1,
+      "expected_returncode": 1,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-counts-current.log"
+    },
+    {
+      "name": "unprotected-level-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\probe-gc-integers-unprotected-levels.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-unprotected-level-current.log"
+    },
+    {
+      "name": "waiting-level-current",
+      "command": [
+        "C:\\Users\\PerfectTaste\\AppData\\Local\\Microsoft\\WindowsApps\\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\\python.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\probe-gc-integers-waiting-levels.py",
+        "current"
+      ],
+      "returncode": 0,
+      "expected_returncode": 0,
+      "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\gc-integers-waiting-level-current.log"
+    }
+  ],
+  "broad_concat_resume_matching_cases": 6,
+  "broad_concat_resume_total_cases": 20,
+  "all_twenty_rust_resume_processes_exit_zero": true,
+  "strict_reader_resume_matching_cases": 19,
+  "strict_reader_resume_total_cases": 24,
+  "raw_heap_count_mismatches": 10,
+  "unsettled_gc_timing_mismatches": [
+    "absent",
+    "returning"
+  ],
+  "unrooted_package_name_mismatch_retained": true,
+  "core_c_api_declarations": {
+    "implemented": 76,
+    "total": 80,
+    "missing": [
+      "lua_close",
+      "lua_getallocf",
+      "lua_newstate",
+      "lua_setallocf"
+    ],
+    "complete_semantics_proven": false
+  },
+  "complete_error_routing_proven": false,
+  "complete_inactive_execution_proven": false,
+  "exact_heap_count_parity_proven": false,
+  "full_lua_51_parity_proven": false,
+  "supplemental_log_hashes": {
+    "target/lua-native-hooks/gc-integers-boundary.log": "47d5f3461710d6c1e379049dc0ea0e964a676a41a6c89929dc8e4687b3b47733",
+    "target/lua-native-hooks/gc-integers-stdlib.log": "6d8c54c86cf5b7e464fadac84921b217396b7754f2ef8d34c895eaa1c8790026",
+    "target/lua-native-hooks/gc-integers-windows-suite.log": "a40fa14a0d40af7945ccd605a300ec1a5ad8f5eae6e33af429888584fb9bcaae",
+    "target/lua-native-hooks/gc-integers-i686.log": "e8eb0750f138648eea74b78b42bba1bbe2103965b6496e30bf8161c04c7fff60",
+    "target/lua-native-hooks/gc-integers-before.log": "a6bae224e1f1d89dc2b0e5d3f309536c204dd8e928eb0c12bdbecaa180acebd5",
+    "target/lua-native-hooks/gc-integers-checked.log": "38102529c0441003269fc08ee032b59f1d2db11c1c47d28bdb6b89590ec08e2b",
+    "target/lua-native-hooks/gc-integers-current.log": "b2221ccc3783030581e1f589cb8ee2b7242c457af69b33008b37b88f75d47392",
+    "target/lua-native-hooks/gc-integers-call-current.log": "6ed5a329e8f2e5e6eeb91e911b7c27b06f8c27f3d230302ad099b44a6ca56405",
+    "target/lua-native-hooks/gc-integers-unprotected-current.log": "7f600286c2ef2035da3c53c0b4999d97a1490c1f3d448e702340f705b31838a5",
+    "target/lua-native-hooks/gc-integers-waiting-current.log": "8bd7b53caf324f07d1a83f1d5ab49285db5b6f85ea73509213a2577dc573b5e4",
+    "target/lua-native-hooks/gc-integers-gc-current.log": "79f923aeea794f73e36a8e4e3a0f3783181d216ba3bb9f28244a187ef3d50d4d",
+    "target/lua-native-hooks/gc-integers-gc-panic-current.log": "c854a25f36daaf231a63da820042c807c30634e3f38879cf3fd2215a20a8bffa",
+    "target/lua-native-hooks/gc-integers-execution-current.log": "69296d7ca5804f4fcc5448ea6aa5a7cae9d5665cd01b7b0a12489a8af2a3648f",
+    "target/lua-native-hooks/gc-integers-concat-panic-current.log": "75567db905d568de86e548091de18f36792458432107aa4844ba6c075e2082dd",
+    "target/lua-native-hooks/gc-integers-concat-current.log": "f43d79d4efb8533f03a69969ba22020fabaee1f0df44152b474ba623c0969b0f",
+    "target/lua-native-hooks/gc-integers-allocation-current.log": "5ef582f5cbd6d10965c1d0b22b91b99b3d33ed369700adc43ae3d0c560edff2b",
+    "target/lua-native-hooks/gc-integers-resume-arguments-current.log": "eeffcc79457965108b35ca0943fef3d9037eba0c0b96c3660c49be47f68147aa",
+    "target/lua-native-hooks/gc-integers-reader-resume-current.log": "da382b54603acd9397d4c0f292dfddebdef2cd62f6c25d2388c92fbbcdb7f9ce",
+    "target/lua-native-hooks/gc-integers-unsettled-current.log": "b76dd6a8f1ce2a0f41203c57ac88e074a1e6521d46f35a75bc5dfb44f2171569",
+    "target/lua-native-hooks/gc-integers-counts-current.log": "cd878e1d76f78a73b4ec10a7fb32e2bb0bcfc25d45c090234c058fe9b92aa513",
+    "target/lua-native-hooks/gc-integers-call-level-current.log": "188b15707f5219a53e33c2e6b7478134755b3a137fcf06617962804d9b297357",
+    "target/lua-native-hooks/gc-integers-unprotected-level-current.log": "4aeba3e26e2be97ce85772718c5fe53cac944be7b2d79ce2cd0d4736c72b4ed6",
+    "target/lua-native-hooks/gc-integers-waiting-level-current.log": "2b5a280acf023561d7addcc2c7c8df1087a9039c8b2d067057221a5ae6005343",
+    "target/lua-native-hooks/gc-integers-exits-current.log": "63e5bcd178fa9804b1d93517fc78745267cba6c6d819809c191f314a49dd2b5b",
+    "target/lua-native-hooks/gc-integers-focused.log": "b2221ccc3783030581e1f589cb8ee2b7242c457af69b33008b37b88f75d47392",
+    "target/lua-native-hooks/gc-integers-i686-before.log": "0e6404afb68fb225b438710764268abe4943de9831ec137e03326dd4ba53b96d",
+    "target/lua-native-hooks/gc-integers-i686-focused.log": "8ccf01c2f2935ac89be267a2cffa4bda17fde29556e419142c80108c851c5fcf",
+    "target/lua-native-hooks/gc-integers-i686-current.log": "1bf1f9e64084af19a04e452f1c606bb414b87674c1b754ee0a3f031147974dee",
+    "target/lua-native-hooks/gc-integers-wide-budget-before.log": "69ad6c365ebe0d25037a770eefefc0ad6dc999e3baa849b1add0777d12bae577",
+    "target/lua-native-hooks/gc-integers-portable-integer-units.log": "a771df9b8c1be6563e931bcb1a9b9b7d0d0d91959bf54b46248ebf39c8e5d756",
+    "target/lua-native-hooks/gc-integers-portable-pause-regression.log": "6d7fca4ed4b2e05e8cfc5918c9d9c7c5056512487f5a4e0e408ff44383928126",
+    "target/lua-native-hooks/gc-integers-portable-wide-budget.log": "419f8365089e4eb4d7a8932edbd96a589c49aeb90cb8aba2820224f71acd6778",
+    "target/lua-native-hooks/gc-integers-boundary-1062.log": "47d5f3461710d6c1e379049dc0ea0e964a676a41a6c89929dc8e4687b3b47733"
+  }
+}

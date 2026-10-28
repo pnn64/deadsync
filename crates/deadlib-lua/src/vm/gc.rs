@@ -29,6 +29,69 @@ pub(super) fn new_vm_identity() -> u64 {
     VM_ID.fetch_add(1, Ordering::Relaxed)
 }
 
+fn pause_threshold(estimate: usize, pause: i32) -> usize {
+    // setthreshold multiplies lu_mem by the signed setting after dividing the
+    // estimate into whole hundreds. The usual unsigned conversion can wrap.
+    (estimate / 100).wrapping_mul(pause as usize)
+}
+
+fn step_limit(multiplier: i32) -> isize {
+    // GCSTEPSIZE is an unsigned int. Its product wraps at 32 bits before Lua
+    // assigns it to l_mem, whose signed width follows the target pointer size.
+    ((1024u32 / 100).wrapping_mul(multiplier as u32) as usize) as isize
+}
+
+#[cfg(test)]
+mod integer_policy_tests {
+    use super::*;
+
+    #[test]
+    fn pause_thresholds_divide_first_and_wrap_at_the_pointer_width() {
+        assert_eq!(pause_threshold(99, i32::MAX), 0);
+        assert_eq!(pause_threshold(199, 1), 1);
+        assert_eq!(pause_threshold(10_099, 200), 20_000);
+        assert_eq!(pause_threshold(10_099, 0), 0);
+        assert_eq!(pause_threshold(10_099, -1), usize::MAX - 99);
+        assert_eq!(pause_threshold(10_099, -100), usize::MAX - 9_999);
+        #[cfg(target_pointer_width = "32")]
+        assert_eq!(pause_threshold(400, 1 << 30), 0);
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(pause_threshold(400, 1 << 30), 4_294_967_296);
+    }
+
+    #[test]
+    fn step_limits_wrap_the_unsigned_product_before_the_signed_assignment() {
+        for (multiplier, wide, narrow) in [
+            (0, 0i64, 0i64),
+            (200, 2_000, 2_000),
+            (-1, 4_294_967_286, -10),
+            (-429_496_729, 6, 6),
+            (429_496_729, 4_294_967_290, -6),
+            (i32::MIN, 0, 0),
+            (i32::MAX, 4_294_967_286, -10),
+            (-2_000_000_000, 1_474_836_480, 1_474_836_480),
+            (2_000_000_000, 2_820_130_816, -1_474_836_480),
+        ] {
+            let expected = if cfg!(target_pointer_width = "64") {
+                wide
+            } else {
+                narrow
+            };
+            assert_eq!(step_limit(multiplier) as i64, expected);
+        }
+        let mut vm = Vm::new();
+        vm.gc.stepmul = i32::MIN;
+        assert_eq!(vm.gc_step_budget(0), usize::MAX);
+        vm.gc.stepmul = -2_000_000_000;
+        assert_eq!(vm.gc_step_budget(0), 92_177_280);
+        #[cfg(target_pointer_width = "32")]
+        {
+            vm.gc.stepmul = -1;
+            assert_eq!(vm.gc_step_budget(0), 1);
+        }
+    }
+}
+
 /// A pinned Lua value. Release it with [`Vm::unpin`] when the host is finished.
 /// Root identities are checked against their originating VM and generation.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -627,12 +690,7 @@ impl Vm {
         self.set_gc_threshold();
     }
     fn set_gc_threshold(&mut self) {
-        self.gc.threshold = self
-            .gc
-            .last_live
-            .saturating_mul(self.gc.pause.max(1) as usize)
-            .saturating_div(100)
-            .max(64 * 1024);
+        self.gc.threshold = pause_threshold(self.gc.last_live, self.gc.pause);
     }
     pub(super) fn finish_gc_cycle(&mut self) {
         self.gc.stopped = false;
@@ -1323,16 +1381,21 @@ impl Vm {
         self.gc.phase == Phase::Finalize
     }
     fn gc_step_budget(&self, extra: i32) -> usize {
-        if self.gc.stepmul == 0 {
+        let limit = step_limit(self.gc.stepmul);
+        if limit == 0 {
             return usize::MAX;
         }
-        (extra as usize)
-            .wrapping_shl(10)
-            .max(1024)
-            .saturating_mul(self.gc.stepmul.max(1) as usize)
-            .saturating_div(100)
-            .saturating_div(16)
-            .max(1)
+        if limit < 0 {
+            // luaC_step still performs its first incremental operation when
+            // the signed work limit is negative.
+            return 1;
+        }
+        // Convert the C limit into tracing units before narrowing. Saturating
+        // the intermediate product at usize would cut a large i686 budget off
+        // before division, even when the final tracing count fits.
+        let requested = (extra as usize).wrapping_shl(10).max(1024) as u128;
+        let budget = requested * limit as u128 / 1024 / 16;
+        budget.clamp(1, usize::MAX as u128) as usize
     }
     fn defer_gc_until_allocation(&mut self) {
         self.gc.threshold = self

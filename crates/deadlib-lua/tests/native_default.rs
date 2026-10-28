@@ -424,6 +424,17 @@ fn selected_calls_resume_after_interleaved_calls_with_expired_handlers_and_live_
 }
 
 #[test]
+fn collector_integer_controls_follow_native_width_and_preserve_finalizer_errors() {
+    let _guard = VMS.lock().unwrap();
+    let f = fixture();
+    let mut vm = Vm::new();
+    let path = vm.intern(f.module.to_string_lossy().as_bytes());
+    vm.set_global(b"library_path", path).unwrap();
+    script(&mut vm,b"local m=assert(package.loadlib(library_path,'luaopen_native'))('collector integers');boundary_gc_thread=m.gc_thread;boundary_gc_thread_panic=m.gc_thread_panic;boundary_execution_yield_tail=m.yield_tail");
+    script(&mut vm, include_bytes!("native-boundary/gc-integers.lua"));
+}
+
+#[test]
 fn default_cli_loads_an_unmodified_public_header_module() {
     let f = fixture();
     for entry in ["direct", "require"] {

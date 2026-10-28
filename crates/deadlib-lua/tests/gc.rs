@@ -154,6 +154,31 @@ fn pause_changes_wait_for_a_cycle_and_restart_discards_the_old_threshold() {
 }
 
 #[test]
+fn negative_pause_settings_suspend_automatic_collection_after_the_cycle() {
+    for pause in [-1, -100, -400] {
+        control_compare(&format!(
+            "collectgarbage('setpause',{pause});collectgarbage();return pressure()"
+        ));
+    }
+}
+
+#[test]
+fn wrapped_positive_step_limits_complete_a_large_live_graph() {
+    compare(
+        br#"
+collectgarbage();collectgarbage('stop')
+local keep={};for i=1,150000 do keep[i]={i}end
+collectgarbage();collectgarbage('stop')
+local visits=0;do local p=newproxy(true);getmetatable(p).__gc=function()visits=visits+1 end end
+collectgarbage('setstepmul',-2000000000)
+local done=collectgarbage('step',0)
+assert(done and visits==1 and keep[150000][1]==150000)
+return done,visits,keep[150000][1]
+"#,
+    );
+}
+
+#[test]
 fn successful_finalizers_restore_controls_and_errors_preserve_the_last_change() {
     for operation in [
         "",
