@@ -73,6 +73,17 @@ the selected equations while preserving reference implementation disagreements.
 The decoding completion audit remains active. Native encoding and measured
 optimization remain future roadmap work outside the current goal.
 
+The final cross-codebook entropy audit found an additional unresolved case:
+MPEG-2/2.5 mixed-block implicit region boundaries. The earlier all-frequency
+tests used the same Huffman book in both regions, so they do not prove that
+boundary. The diagnostic survey in tests/validation/2026-10-28-region-survey
+preserves substantial reference disagreements, including an 8-kHz Huffman
+overrun in libmad. The 1997 Layer3 note describes six long bands plus two short
+window bands in LSF region zero, which must be reconciled with the current
+pure-short boundary and independently encoded/analytical cases before completion.
+This diagnostic is not a passing universal-parity gate; the 47 Rust tests and
+other verified milestones remain separate evidence.
+
 ## Source material
 
 Implementation derives from the MPEG syntax and mathematical algorithms, not

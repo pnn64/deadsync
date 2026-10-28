@@ -1,0 +1,16 @@
+{
+  "passed": false,
+  "survey_only": true,
+  "scope": "Diagnostic cross-codebook switched-block region survey. The writer uses the current native implicit boundary; reference disagreement is not a conformance result. LSF mixed boundaries require independent primary-equation reconciliation before decoding completion.",
+  "files": 36,
+  "source_sha256": {
+    "src/spectral.rs": "9333a66334c0d4a5c026810055b12c30d3206ea2ddc5af2aa89803fac9ee6ab2",
+    "src/bands.rs": "2a3902d77a7af0d2a44ddb5a89c3cafbd8937145cf1978c684c48c1744d953b7",
+    "src/side.rs": "eab3a1d3b6449a025944ecb200d6855f254f30828cf7f98adf87a1c6405efcca",
+    "tests/data/huffman.csv": "18554b47454c0c06e72c39f53e37f0eabca4410bd6fe330f0d009f90a73f3d3c",
+    "tests/data/bands.json": "a291732bebc1754f25335219cc3380fe86661a03eeaac99987d39a7e3388d963"
+  },
+  "results_sha256": "be49d0ef3c57abde2d5baa53ba42f0e73a2dc127e4d991ac5eaf679a7a456413",
+  "probe_sha256": "aaf156e8b0f41838b4980a456873ea1740d861058d260f810c07b5cc25c16798",
+  "reproduction": "Copy probe.py.txt to target/deadlib-mp3-reference/probe-regions.py and run on Windows with the already-built WSL native/C reference CLIs. The original script writes a fresh regions-probe-1 directory."
+}
