@@ -204,7 +204,7 @@ pub(crate) fn predictor(selection: u8, a: i32, b: i32, c: i32) -> i32 {
     }
 }
 
-fn allocate(
+pub(crate) fn allocate(
     frame: &FrameHeader,
     limits: Limits,
     metadata_bytes: usize,
@@ -258,7 +258,10 @@ fn allocate(
             height: (frame.height as usize * spec.vertical_sampling as usize).div_ceil(max_v),
             samples,
         });
-        coding.push(LosslessCoding::default());
+        coding.push(LosslessCoding {
+            predictor: 0,
+            point_transform: u8::MAX,
+        });
     }
     Ok((components, coding, bytes))
 }
@@ -379,21 +382,10 @@ pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>
         return Err(Error::Truncated);
     }
     let frame = frame.ok_or(Error::Invalid("missing frame"))?;
-    if coding.iter().any(|c| c.predictor == 0) {
+    if coding.iter().any(|c| c.point_transform == u8::MAX) {
         return Err(Error::Invalid("missing component scan"));
     }
-    let (max_h, _) = sampling(&frame);
-    for (c, code) in components.iter_mut().zip(&coding) {
-        let stride = (frame.width as usize).div_ceil(max_h) * c.spec.horizontal_sampling as usize;
-        for y in 0..c.height {
-            c.samples
-                .copy_within(y * stride..y * stride + c.width, y * c.width);
-        }
-        c.samples.truncate(c.width * c.height);
-        for value in &mut c.samples {
-            *value <<= code.point_transform;
-        }
-    }
+    finish_samples(&frame, &mut components, &coding);
     Ok(LosslessImage {
         frame,
         components,
@@ -407,7 +399,7 @@ pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>
 }
 
 #[allow(clippy::too_many_arguments)]
-fn scan(
+pub(crate) fn scan(
     header: &[u8],
     entropy: &[u8],
     frame: &FrameHeader,
@@ -427,8 +419,12 @@ fn scan(
     }
     let selection = header[1 + 2 * n];
     let point = header[3 + 2 * n] & 15;
-    if !(1..=7).contains(&selection)
-        || header[2 + 2 * n] != 0
+    let differential = frame.process.is_differential();
+    if (if differential {
+        selection != 0
+    } else {
+        !(1..=7).contains(&selection)
+    }) || header[2 + 2 * n] != 0
         || header[3 + 2 * n] >> 4 != 0
         || point >= frame.precision
     {
@@ -445,11 +441,11 @@ fn scan(
         let table = (pair[1] >> 4) as usize;
         if table > 3
             || pair[1] & 15 != 0
-            || (frame.process == Process::Lossless && tables[table].is_none())
+            || (!frame.process.is_arithmetic() && tables[table].is_none())
         {
             return Err(Error::Invalid("lossless entropy table selector"));
         }
-        if coding[i].predictor != 0 || selected[..j].iter().any(|s| s.0 == i) {
+        if coding[i].point_transform != u8::MAX || selected[..j].iter().any(|s| s.0 == i) {
             return Err(Error::Invalid("duplicate lossless component scan"));
         }
         if j != 0 && i < selected[j - 1].0 {
@@ -476,7 +472,7 @@ fn scan(
         return Err(Error::Invalid("lossless restart row boundary"));
     }
     let mut bits = Bits::new(entropy);
-    let mut arithmetic = if frame.process == Process::ArithmeticLossless {
+    let mut arithmetic = if frame.process.is_arithmetic() {
         let mut shapes = [(0, 0); 4];
         for (j, &(i, _)) in selected[..n].iter().enumerate() {
             let c = &components[i];
@@ -544,7 +540,9 @@ fn scan(
                     } else {
                         i32::from(c.samples[offset - stride - 1])
                     };
-                    let prediction = if y == first_row * v {
+                    let prediction = if differential {
+                        0
+                    } else if y == first_row * v {
                         if x == 0 { initial } else { a }
                     } else if x == 0 {
                         b
@@ -575,7 +573,10 @@ fn scan(
                         }
                     };
                     let value = (prediction + difference) as u16;
-                    if u32::from(value) > maximum {
+                    // Partial-MCU completion values are consumed for entropy
+                    // and prediction state, then discarded (A.2.4). Enforce
+                    // output precision on the visible samples only.
+                    if !differential && x < c.width && y < c.height && u32::from(value) > maximum {
                         return Err(Error::Invalid("lossless sample range"));
                     }
                     c.samples[offset] = value;
@@ -595,6 +596,25 @@ fn scan(
         };
     }
     Ok(())
+}
+
+pub(crate) fn finish_samples(
+    frame: &FrameHeader,
+    components: &mut [ComponentPlane],
+    coding: &[LosslessCoding],
+) {
+    let (max_h, _) = sampling(frame);
+    for (c, code) in components.iter_mut().zip(coding) {
+        let stride = (frame.width as usize).div_ceil(max_h) * c.spec.horizontal_sampling as usize;
+        for y in 0..c.height {
+            c.samples
+                .copy_within(y * stride..y * stride + c.width, y * c.width);
+        }
+        c.samples.truncate(c.width * c.height);
+        for value in &mut c.samples {
+            *value <<= code.point_transform;
+        }
+    }
 }
 
 #[cfg(test)]

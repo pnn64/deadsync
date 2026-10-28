@@ -104,3 +104,13 @@ from Pt header normalization, which avoids an observed reference output bug
 while leaving entropy unchanged. See ../../LOSSLESS-VALIDATION.md for the
 normalization proof, source/build pinning, setup patch and two retained
 reference limitation fixtures. No JPEG XT code is linked into the Rust crate.
+
+The hierarchical decoder gate additionally applies the one-line DHP precision
+parser correction and environment-controlled raw frame observer in the two
+`jpegxt-hierarchy-precision.patch`/`jpegxt-frame-observation.patch` files.
+The observer records ordered visible DCT coefficients and lossless sample or
+residual rows before the C reconstruction pipeline. Those frame values must
+match exactly. An independent integer row-expansion implementation checks pure
+lossless composition; final C raster differences are recorded separately.
+See ../../HIERARCHICAL-VALIDATION.md for syntax normalization, oracle output
+limitations, fixture meanings and full reproduction instructions.

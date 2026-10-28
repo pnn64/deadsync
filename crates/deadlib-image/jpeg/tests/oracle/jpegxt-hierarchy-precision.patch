@@ -1,0 +1,12 @@
+diff --git a/marker/frame.cpp b/marker/frame.cpp
+index eb036f5..369e007 100644
+--- a/marker/frame.cpp
++++ b/marker/frame.cpp
+@@ -121,6 +121,7 @@ void Frame::ParseMarker(class ByteStream *io)
+   m_ucPrecision = io->Get();
+ 
+   switch(m_Type) {
++  case Dimensions: // DHP permits lossless precision, T.81 B.3.2.
+   case Lossless:
+   case DifferentialLossless:
+   case ACLossless:

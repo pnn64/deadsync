@@ -506,6 +506,12 @@ fn cmyk_to_rgb(values: [i32; 4], polarity: CmykPolarity, precision: u8) -> [i32;
 }
 
 pub(crate) fn infer_color(frame: &FrameHeader, metadata: &[MetadataSegment<'_>]) -> ColorSpace {
+    infer_components(&frame.components, metadata)
+}
+pub(crate) fn infer_components(
+    components: &[ComponentSpec],
+    metadata: &[MetadataSegment<'_>],
+) -> ColorSpace {
     let adobe = metadata
         .iter()
         .rev()
@@ -517,12 +523,12 @@ pub(crate) fn infer_color(frame: &FrameHeader, metadata: &[MetadataSegment<'_>])
             && s.data.len() >= 14
             && s.data.starts_with(b"JFIF\0")
     });
-    match (frame.components.len(), adobe) {
+    match (components.len(), adobe) {
         (1, _) => ColorSpace::Grayscale,
         (3, _) if jfif => ColorSpace::YCbCr,
         (3, Some(0)) => ColorSpace::Rgb,
         (3, Some(1)) => ColorSpace::YCbCr,
-        (3, None) if frame.components.iter().map(|c| c.id).eq(*b"RGB") => ColorSpace::Rgb,
+        (3, None) if components.iter().map(|c| c.id).eq(*b"RGB") => ColorSpace::Rgb,
         (3, None) => ColorSpace::YCbCr,
         (4, Some(2)) => ColorSpace::Ycck,
         (4, None | Some(0)) => ColorSpace::Cmyk,

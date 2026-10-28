@@ -29,11 +29,24 @@ const BASIS: [[i64; 8]; 8] = [
 ];
 
 pub(crate) fn idct(block: &[i16; 64], quant: &[u16; 64], precision: u8) -> [u16; 64] {
-    let center = 1i64 << (precision - 1);
-    let max = (1i64 << precision) - 1;
+    idct_mode(block, quant, Some(precision))
+}
+
+/// Annex J residuals have no inverse level shift or unsigned sample clipping.
+/// Preserve their two's-complement result modulo 65536 for frame composition.
+pub(crate) fn idct_differential(block: &[i16; 64], quant: &[u16; 64]) -> [u16; 64] {
+    idct_mode(block, quant, None)
+}
+fn idct_mode(block: &[i16; 64], quant: &[u16; 64], precision: Option<u8>) -> [u16; 64] {
+    let finish = |v: i64| {
+        if let Some(p) = precision {
+            (v + (1i64 << (p - 1))).clamp(0, (1i64 << p) - 1) as u16
+        } else {
+            v as u16
+        }
+    };
     if block[1..].iter().all(|&v| v == 0) {
-        let value = ((i64::from(block[0]) * i64::from(quant[0]) + 4) >> 3) + center;
-        return [value.clamp(0, max) as u16; 64];
+        return [finish((i64::from(block[0]) * i64::from(quant[0]) + 4) >> 3); 64];
     }
     let mut tmp = [[0i64; 8]; 8];
     for v in 0..8 {
@@ -52,7 +65,7 @@ pub(crate) fn idct(block: &[i16; 64], quant: &[u16; 64], precision: u8) -> [u16;
             for v in 0..8 {
                 sum += tmp[v][x] * BASIS[y][v];
             }
-            out[y * 8 + x] = (((sum + (1 << 23)) >> 24) + center).clamp(0, max) as u16;
+            out[y * 8 + x] = finish((sum + (1 << 23)) >> 24);
         }
     }
     out
@@ -142,6 +155,53 @@ mod tests {
         for value in [i16::MIN, i16::MAX] {
             let out = idct(&[value; 64], &[u16::MAX; 64], 12);
             assert!(out.iter().all(|&v| v <= 4095));
+        }
+    }
+
+    #[test]
+    fn differential_idct_matches_signed_mathematical_transform() {
+        assert_eq!(idct_differential(&[0; 64], &[1; 64]), [0; 64]);
+        let mut dc = [0; 64];
+        dc[0] = -80;
+        assert_eq!(idct_differential(&dc, &[1; 64]), [(-10i16) as u16; 64]);
+        let mut state = 0x76543210u32;
+        for _ in 0..100 {
+            let mut block = [0; 64];
+            let mut quant = [0; 64];
+            for i in 0..64 {
+                state = state.wrapping_mul(1664525).wrapping_add(1013904223);
+                block[i] = ((state >> 16) % 255) as i16 - 127;
+                quant[i] = ((state >> 24) % 16 + 1) as u16;
+            }
+            let actual = idct_differential(&block, &quant);
+            for y in 0..8 {
+                for x in 0..8 {
+                    let mut ideal = 0.0;
+                    for v in 0..8 {
+                        for u in 0..8 {
+                            let cu = if u == 0 {
+                                std::f64::consts::FRAC_1_SQRT_2
+                            } else {
+                                1.0
+                            };
+                            let cv = if v == 0 {
+                                std::f64::consts::FRAC_1_SQRT_2
+                            } else {
+                                1.0
+                            };
+                            ideal += f64::from(block[v * 8 + u]) * f64::from(quant[v * 8 + u])
+                                / 4.0
+                                * cu
+                                * cv
+                                * ((2 * x + 1) as f64 * u as f64 * std::f64::consts::PI / 16.0)
+                                    .cos()
+                                * ((2 * y + 1) as f64 * v as f64 * std::f64::consts::PI / 16.0)
+                                    .cos();
+                        }
+                    }
+                    assert!((f64::from(actual[y * 8 + x] as i16) - ideal.round()).abs() <= 1.0);
+                }
+            }
         }
     }
 

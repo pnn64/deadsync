@@ -50,6 +50,7 @@ impl ProgressiveScan {
         predictor: &mut i32,
         eob: &mut u32,
         precision: u8,
+        differential: bool,
     ) -> Result<()> {
         if self.ss == 0 {
             if self.ah == 0 {
@@ -68,7 +69,13 @@ impl ProgressiveScan {
             return Ok(());
         }
         if self.ah == 0 {
-            self.ac_initial(block, bits, ac.unwrap(), eob, precision)
+            self.ac_initial(
+                block,
+                bits,
+                ac.unwrap(),
+                eob,
+                precision + u8::from(differential),
+            )
         } else {
             self.ac_refine(block, bits, ac.unwrap(), eob)
         }

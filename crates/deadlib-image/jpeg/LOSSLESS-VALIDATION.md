@@ -232,7 +232,9 @@ two observed reference failures as native standards regressions. All **4,448
 earlier Huffman lossless encoder byte hashes remain unchanged**; see
 `tests/reports/lossless-arithmetic-refactor-huffman.json`.
 
-Differential/hierarchical lossless, DNL and
-incremental input/output remain required. Independent conformance corpora,
+Differential/hierarchical lossless decoding is now implemented through
+`decode_hierarchical`; see HIERARCHICAL-VALIDATION.md for Annex J rules and the
+separate reference gate. Hierarchical encoding, DNL and incremental input/output
+remain required. Independent conformance corpora,
 IJG/mozjpeg checks, coverage-guided fuzzing and measured lossless performance
 also remain open. No complete-conformance or throughput claim is made.

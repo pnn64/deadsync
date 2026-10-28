@@ -230,7 +230,7 @@ Verified milestones:
   Arithmetic/differential lossless, hierarchy, DNL/abbreviated streams,
   incremental I/O, other reference/conformance corpora, coverage-guided fuzzing
   and all measured performance/optimization work remain required.
-- Arithmetic lossless milestone: native SOF11 decoding/encoding at P=2..16,
+- `b842e81a5`: native SOF11 decoding/encoding at P=2..16,
   Annex H's 25 two-dimensional contexts/158 bins, four decoder destinations,
   per-table DAC/defaults, modulo differences through magnitude 32768, row
   restarts, sample planes, custom scans and shared/native pixel entry points.
@@ -259,3 +259,34 @@ Verified milestones:
   Differential/hierarchical modes, DNL/abbreviated streams, incremental I/O,
   other reference/conformance corpora, coverage-guided fuzzing and all measured
   performance/optimization work remain required.
+
+- Hierarchical decoder milestone: native DHP/EXP and SOF5/6/7/13/14/15,
+  with all supported ordinary initial frames, P=2..16 lossless/P=8,12 DCT,
+  original per-frame coefficient/quantizer or sample-difference retention,
+  direct DC/PSV0, ordered integer expansion, modulo-65536 composition and the
+  common planar/color interface. Metadata remains borrowed with global scan
+  positions. Frame rules include component groups, entropy/family transitions,
+  baseline exceptions, final lossless corrections and completed DHP resolution.
+  Public model and memory/scan/pixel/metadata limits are checked before rendering.
+  Partial-MCU completion values are discarded; visible lossless precision is
+  still enforced. The validation state advances once per frame.
+  An independently instrumented JPEG XT decoder recovers 18,768 DCT blocks
+  and 2,226,363 sample/residual values exactly from 1,798 files. All 1,078
+  pure-lossless compositions also match an independent integer row filter.
+  The full matrix attempts 2,340 cases; 542 explicit reference Huffman encoder
+  failures are recorded separately. Zero runtime reference warnings occur.
+  Forty-two pinned cases, all 49,300 prefixes and 4,200 bounded mutations run
+  without C. Literal tests cover ordered truncation, signed/Pt/wrap arithmetic,
+  differential progressive refinement, additional Huffman AC categories,
+  fractional cropping, 255 components and twelve lossless frames.
+  The gate documents its one-line DHP precision parser fix and observation-only
+  hook, plus empty DAC/EXP00 syntax normalization. Retained minimal examples
+  expose C expansion truncation, missing modulo output and a constant-source
+  hierarchy encoder failure. Final C raster differences are observations,
+  never substituted for exact entropy validation or claimed as IDCT tolerances.
+  See HIERARCHICAL-VALIDATION.md and tests/reports/hierarchical-jpegxt.json.
+  All 104 tests pass in release and isolated debug builds; rustfmt, Clippy and
+  rustdoc with warnings denied pass. Hierarchical encoding, DNL/abbreviated
+  streams, incremental I/O, other reference/conformance corpora,
+  coverage-guided fuzzing and all measured performance/optimization work remain
+  required. The full user goal stays open.

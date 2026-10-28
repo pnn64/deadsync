@@ -1,0 +1,65 @@
+diff --git a/control/blocklineadapter.cpp b/control/blocklineadapter.cpp
+index 7275b61..cf2e877 100644
+--- a/control/blocklineadapter.cpp
++++ b/control/blocklineadapter.cpp
+@@ -59,6 +59,8 @@
+ #include "tools/line.hpp"
+ #include "codestream/tables.hpp"
+ #include "std/string.hpp"
++#include <cstdio>
++#include <cstdlib>
+ ///
+ 
+ /// BlockLineAdapter::BlockLineAdapter
+@@ -194,6 +196,17 @@ struct Line *BlockLineAdapter::GetNextLine(UBYTE comp)
+       class QuantizedRow *qrow = *m_pppQImage[comp];
+       const LONG *src = (qrow)?(qrow->BlockAt(x)->m_Data):(NULL);
+       if (src) {
++        // Test-only observation: entropy-decoded coefficients, before IDCT.
++        if (const char *path = std::getenv("DEADLIB_JPEG_FRAME_DUMP")) {
++          if (FILE *dump = std::fopen(path,"a")) {
++            std::fprintf(dump,"D %d %lu %lu %u",int(m_pFrame->ScanTypeOf()),
++                         m_pFrame->WidthOf(),m_pFrame->HeightOf(),
++                         unsigned(m_pFrame->ComponentOf(comp)->IDOf()));
++            for(unsigned k = 0;k < 64;k++) std::fprintf(dump," %ld",src[k]);
++            std::fprintf(dump,"\n");
++            std::fclose(dump);
++          }
++        }
+         m_ppDCT[comp]->InverseTransformBlock(dst,src,(maxval + 1) >> 1);
+         //
+         // Copy now the buffer temporary buffer into the line. The line is always long enough
+diff --git a/control/linelineadapter.cpp b/control/linelineadapter.cpp
+index e922db7..150a3f6 100644
+--- a/control/linelineadapter.cpp
++++ b/control/linelineadapter.cpp
+@@ -56,6 +56,9 @@
+ #include "codestream/tables.hpp"
+ #include "tools/line.hpp"
+ #include "std/string.hpp"
++#include <cstdio>
++#include <cstdlib>
++#include "colortrafo/colortrafo.hpp"
+ ///
+ 
+ /// LineLineAdapter::LineLineAdapter
+@@ -138,6 +141,19 @@ struct Line *LineLineAdapter::GetNextLine(UBYTE comp)
+     m_pppImage[comp]  = &(line->m_pNext);
+   }
+   
++  // Test-only observation: decoded native sample/residual rows, before EXP.
++  if (const char *path = std::getenv("DEADLIB_JPEG_FRAME_DUMP")) {
++    if (FILE *dump = std::fopen(path,"a")) {
++      class Component *spec = m_pFrame->ComponentOf(comp);
++      ULONG width = (m_pFrame->WidthOf() + spec->SubXOf() - 1) / spec->SubXOf();
++      std::fprintf(dump,"L %d %lu %lu %u",int(m_pFrame->ScanTypeOf()),
++                   m_pFrame->WidthOf(),m_pFrame->HeightOf(),unsigned(spec->IDOf()));
++      for(ULONG x = 0;x < width;x++)
++        std::fprintf(dump," %ld",line->m_pData[x] >> ColorTrafo::COLOR_BITS);
++      std::fprintf(dump,"\n");
++      std::fclose(dump);
++    }
++  }
+   return line;
+ }
+ ///

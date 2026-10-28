@@ -49,11 +49,50 @@
     "reference_first_component_mismatches": 9
   },
   "files": {
+    "hierarchical-truncation-reference.raw": "dd80b71f41bd97e545b66141ed9d8ad2e128fa4af85b3aca4915afd672c7fc32",
+    "hierarchical-truncation.jpg": "9e64f1eec5fddb024d8f60d20ae5d39491e784b34b9f774f2406e9174fd8e12e",
+    "hierarchical-truncation.samples": "934d278ddd63d470653adeb770259341655d935e4d9ec4caa502e9b594842f71",
     "partial-row-first.samples": "19abad02bc0eaac0fe365866d1e3b3ac70bd9981e5fae2c6bd1455fb2b08dd17",
     "partial-row-reference.raw": "08812e0711b0093469611e335b261396726a862bdb7ea464b79bb9758dc2a67e",
     "partial-row.jpg": "11b9bda70ec301e866406343112eb658fd4210a3130bfd88a4b6a357a10dcf3d",
     "pt-huffman.jpg": "56b9ef4ebd08a91e09b2f4ce1455a34d6608d3cca2102a158a94724a649b0ff8",
     "pt-huffman.samples": "30d9f322b9ea7d2f9ca807b079d10d732e75a5bcc52e338ab9ef8a904a9f4c18",
-    "pt-reference.raw": "0a98a88dedd8517e21c2c6f6d1a3485584bb64ea064e4d6a15316c132718671a"
+    "pt-reference.raw": "0a98a88dedd8517e21c2c6f6d1a3485584bb64ea064e4d6a15316c132718671a",
+    "hierarchical-modulo-reference.raw": "96a296d224f285c67bee93c30f8a309157f0daa35dc5b87e410b78630a09cfc7",
+    "hierarchical-modulo.jpg": "60f6071e4e16c2431cbf1986a52f06188f69dd51233fd184c8a715f2f22d7dcd",
+    "hierarchical-modulo.samples": "40a6ece708d08b9cc33fab9b725d13d2e211bcd121fd4c558fdd2a176074f557",
+    "hierarchical-flat-encoder-reference.raw": "c76903cde8580d1c809ac5352aab33af5a310ad05126294d66e06db880c463ed",
+    "hierarchical-flat-encoder.jpg": "72c6adbc371474b1f5a3abb58dd4f20cfc4dab654aa46a2e90861a36167ae9f2",
+    "hierarchical-flat-encoder.samples": "91f800ea98db9d42aa203090d21bdb28922634cd9702ec0ef475626c99d067f5",
+    "hierarchical-flat-encoder.source.samples": "be11387d777c12aad060f07f259cca9eb95f8578822a53d6c03ae61825d9b337"
+  },
+  "hierarchical_expansion": {
+    "input": "hierarchical-truncation.jpg",
+    "expected": "hierarchical-truncation.samples",
+    "expected_source": "literal Annex J horizontal-then-vertical truncation of [0,1;1,2] with a zero differential frame",
+    "reference_output": "hierarchical-truncation-reference.raw",
+    "native_center": 0,
+    "reference_center": 1,
+    "reference_difference": "single 2D truncation rather than two ordered 1D truncations"
+  },
+  "hierarchical_modulo": {
+    "input": "hierarchical-modulo.jpg",
+    "expected": "hierarchical-modulo.samples",
+    "expected_source": "literal Annex J addition: unsigned base 0 plus signed differential -1 modulo 65536",
+    "reference_output": "hierarchical-modulo-reference.raw",
+    "native_sample": 65535,
+    "reference_sample": 0,
+    "reference_difference": "final unsigned clipping replaces required modulo-65536 reconstruction"
+  },
+  "hierarchical_flat_encoder": {
+    "input": "hierarchical-flat-encoder.jpg",
+    "native_composition": "hierarchical-flat-encoder.samples",
+    "reference_output": "hierarchical-flat-encoder-reference.raw",
+    "original_source": "hierarchical-flat-encoder.source.samples",
+    "source_pnm_sha256": "450cddc7ab45f1f336977ec4bca398cbe1ed0b668cc3c29a4d7037677465d92e",
+    "original_constant": 1,
+    "both_decoders_constant": 0,
+    "independent_frame_data": "base is nine ones; intermediate residuals are all zero; final residuals are all -1; Annex J composition is zero",
+    "reference_difference": "reference four-level encoder does not preserve its original constant source"
   }
 }

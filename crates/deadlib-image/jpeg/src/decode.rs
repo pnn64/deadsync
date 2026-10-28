@@ -309,7 +309,7 @@ pub(crate) fn parse_huffman(mut data: &[u8], tables: &mut [Option<Huffman>; 8]) 
 }
 
 #[allow(clippy::too_many_arguments)]
-fn decode_scan(
+pub(crate) fn decode_scan(
     header: &[u8],
     entropy: &[u8],
     frame: &FrameHeader,
@@ -450,6 +450,12 @@ fn decode_scan(
                     let bx = mcu % cols * h + x;
                     let by = mcu / cols * v + y;
                     let block = &mut c.blocks[by * c.blocks_wide + bx];
+                    // Annex J transmits DC directly in every differential
+                    // block. Probability conditioning still follows the prior
+                    // coded DC value, so only the numerical predictor resets.
+                    if frame.process.is_differential() {
+                        predictors[j] = 0;
+                    }
                     if let Some((coder, statistics, classes)) = &mut arithmetic {
                         if let Some(scan) = progression {
                             statistics.progressive(
@@ -482,6 +488,7 @@ fn decode_scan(
                             &mut predictors[j],
                             &mut eob_run,
                             frame.precision,
+                            frame.process.is_differential(),
                         )?;
                     } else {
                         sequential_block(
@@ -491,6 +498,7 @@ fn decode_scan(
                             tables[ac].as_ref().unwrap(),
                             &mut predictors[j],
                             frame.precision,
+                            frame.process.is_differential(),
                         )?;
                     }
                 }
@@ -523,6 +531,7 @@ fn sequential_block(
     ac: &Huffman,
     predictor: &mut i32,
     precision: u8,
+    differential: bool,
 ) -> Result<()> {
     let size = dc.decode(bits)?;
     if size > precision + 3 {
@@ -551,7 +560,7 @@ fn sequential_block(
             }
         } else {
             k += run;
-            if k >= 64 || size > precision + 2 {
+            if k >= 64 || size > precision + 2 + u8::from(differential) {
                 return Err(Error::Invalid("AC run or magnitude"));
             }
             block[ZIGZAG[k]] = bits.receive(size)? as i16;

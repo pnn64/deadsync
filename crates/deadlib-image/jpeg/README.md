@@ -58,6 +58,15 @@ share the same precision, sampling, scripts, metadata and restart controls.
 The JPEG XT reference gate and its documented setup/output limitations are in
 LOSSLESS-VALIDATION.md.
 
+`decode_hierarchical(&jpeg, limits)` parses DHP/EXP and all six differential
+JPEG-1 frame processes. It preserves every original frame's coefficients,
+quantizers or native sample differences and global metadata/scan positions.
+`reconstruct_reference()` composes raw modulo-65536 component planes with the
+ordered Annex J expansion filter; `reconstruct()` provides the shared planar
+color interface. Initial frames may use any supported ordinary process.
+Hierarchical encoding remains pending. Exact independent frame-data gates and
+the reference's raster limitations are documented in HIERARCHICAL-VALIDATION.md.
+
 `encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
 without another lossy transform. It preserves quantizer values, visible blocks,
 and APPn/COM payloads. Controls select sequential or progressive
