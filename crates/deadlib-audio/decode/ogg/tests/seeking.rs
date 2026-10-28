@@ -62,6 +62,102 @@ fn packets(bytes: &[u8]) -> Vec<(Vec<u8>, PacketInfo)> {
 }
 
 #[test]
+fn multiplexed_index_ranges_preserve_physical_bos_and_page_order() {
+    for streams in [1usize, 2, 3, 7, 16, 65] {
+        for rounds in [1, 2, 17] {
+            for mode in 0..3 {
+                let mut bytes = Vec::new();
+                let mut expected = vec![Vec::new(); streams];
+                let mut bos_order = Vec::new();
+                for sequence in 0..rounds {
+                    let mut order: Vec<_> = (0..streams).collect();
+                    if mode == 1 {
+                        order.rotate_left(sequence * 3 % streams);
+                    } else if mode == 2 {
+                        let mut seed = sequence as u32 + 1;
+                        for i in (1..streams).rev() {
+                            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+                            order.swap(i, seed as usize % (i + 1));
+                        }
+                    }
+                    for logical in order {
+                        if sequence == 0 {
+                            bos_order.push(logical);
+                        }
+                        expected[logical].push(bytes.len() as u64);
+                        bytes.extend(
+                            encode_page(
+                                PageHeader {
+                                    flags: if sequence == 0 { BOS } else { 0 }
+                                        | if sequence + 1 == rounds { EOS } else { 0 },
+                                    granule_position: sequence as u64,
+                                    serial: (logical as u32 * 37) ^ 0x1234_5678,
+                                    sequence: sequence as u32,
+                                },
+                                &[1],
+                                &[logical as u8 ^ sequence as u8],
+                            )
+                            .unwrap(),
+                        );
+                    }
+                }
+                let mut observed = Vec::new();
+                let index = OggIndex::read_with_events(
+                    bytes.as_slice(),
+                    IndexOptions::default(),
+                    |event| {
+                        if let IndexEvent::Page { offset, .. } = event {
+                            observed.push(offset);
+                        }
+                        Ok::<_, Error>(())
+                    },
+                )
+                .unwrap();
+                assert_eq!(
+                    observed,
+                    (0..bytes.len() / 29)
+                        .map(|i| (i * 29) as u64)
+                        .collect::<Vec<_>>()
+                );
+                for (id, (stream, &logical)) in index.streams().iter().zip(&bos_order).enumerate() {
+                    let offsets = &expected[logical];
+                    assert_eq!(stream.serial, (logical as u32 * 37) ^ 0x1234_5678);
+                    assert_eq!(stream.bos_offset, offsets[0]);
+                    assert_eq!(stream.eos_offset, *offsets.last().unwrap());
+                    assert_eq!(stream.end_offset, offsets.last().unwrap() + 29);
+                    assert_eq!(stream.packets, rounds as u64);
+                    let pages = index.pages(stream.serial).unwrap();
+                    assert_eq!(pages.len(), rounds);
+                    for (sequence, (page, &offset)) in pages.iter().zip(offsets).enumerate() {
+                        assert_eq!(page.offset, offset);
+                        assert_eq!(page.length, 29);
+                        assert_eq!(page.stream, id);
+                        assert_eq!(page.header.sequence, sequence as u32);
+                        assert_eq!(page.first_packet, sequence as u64);
+                        assert_eq!(page.completed_packets, 1);
+                        assert_eq!(page.first_packet_offset, offset);
+                        assert_eq!(
+                            index
+                                .packet_start_page(stream.serial, sequence as u64)
+                                .unwrap()
+                                .offset,
+                            offset
+                        );
+                        assert_eq!(
+                            index
+                                .granule_at_or_before(stream.serial, sequence as u64)
+                                .unwrap()
+                                .offset,
+                            offset
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn index_events_share_exact_demux_packets_and_finish_every_page_in_physical_order() {
     let bytes = multiplexed_and_chained();
     let mut output = Vec::new();

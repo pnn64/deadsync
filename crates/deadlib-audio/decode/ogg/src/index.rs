@@ -186,6 +186,36 @@ pub struct OggIndex {
     compatibility: CompatibilityStats,
 }
 
+#[inline(never)]
+fn group_pages(pages: &mut [IndexedPage], streams: &mut [StreamIndex]) {
+    if pages.is_sorted_by_key(|page| page.stream) {
+        return;
+    }
+    // Fresh private ranges provide counts, then stable destinations.
+    for page in pages.iter() {
+        streams[page.stream].pages.end += 1;
+    }
+    let mut position = 0;
+    for stream in streams.iter_mut() {
+        stream.pages.start = position;
+        position += stream.pages.end;
+        stream.pages.end = position;
+    }
+    // Physical order is already offset order within each stream. Stable bucket
+    // destinations give the same ordering as (stream, offset), without comparisons.
+    for page in pages.iter_mut() {
+        let next = &mut streams[page.stream].pages.start;
+        page.landmark = *next;
+        *next += 1;
+    }
+    for position in 0..pages.len() {
+        while pages[position].landmark != position {
+            let destination = pages[position].landmark;
+            pages.swap(position, destination);
+        }
+    }
+}
+
 /// Borrowed observations during index construction. Packets precede their
 /// completing page's Page event; nil pages still produce a Page event. Packet
 /// data may borrow either the page or the demultiplexer's span assembly buffer.
@@ -302,9 +332,7 @@ impl OggIndex {
         }
         demux.finish()?;
         index.compatibility = demux.compatibility();
-        index
-            .pages
-            .sort_unstable_by_key(|page| (page.stream, page.offset));
+        group_pages(&mut index.pages, &mut index.streams);
         let mut position = 0;
         for (stream_id, stream) in index.streams.iter_mut().enumerate() {
             let start = position;
