@@ -7,6 +7,7 @@
 mod arithmetic;
 mod arithmetic_encode;
 mod decode;
+mod dnl;
 mod encode;
 mod entropy;
 mod exif;
@@ -29,6 +30,7 @@ mod transform;
 
 pub use arithmetic_encode::ArithmeticConditioning;
 pub use decode::{CoefficientComponent, CoefficientImage, decode_coefficients};
+pub use dnl::HeightDeclaration;
 pub use encode::{
     CodingOptions, EntropyCoding, IccWrite, MetadataOptions, encode_coefficients,
     encode_coefficients_with_metadata,

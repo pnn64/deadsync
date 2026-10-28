@@ -135,3 +135,11 @@ Final mixed DCT/lossless source fidelity uses matching native IDCT references;
 no C raster tolerance substitutes for exact frame data. The report, twelve
 pinned source encodes and full limitations are documented in
 ../../HIERARCHICAL-VALIDATION.md. No production code links a reference codec.
+
+`jpegxt-ordinary-observation.patch` adds the same optional coefficient log to
+ordinary DCT's unsampled reconstruction path, used with `-U`. It observes blocks
+before IDCT and changes no decoder behavior. DNL-VALIDATION.md identifies the
+new four-patch executable, independent `-n` input generation, original-header
+comparisons and explicitly separate known-header C-input workarounds. The
+structural Python helper now resolves DNL/DHP and accepts ordinary frames;
+coefficient/sample comparisons retain their existing exact semantics.

@@ -281,7 +281,7 @@ pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>
     let mut interval = 0;
     let mut scans = 0;
     let mut ended = false;
-    for event in reader.by_ref() {
+    while let Some(event) = reader.next() {
         match event? {
             Event::End { .. } => {
                 ended = true;
@@ -343,10 +343,6 @@ pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>
                 ) {
                     return Err(Error::Unsupported("non-differential lossless frame"));
                 }
-                if header.height == 0 {
-                    return Err(Error::Unsupported("DNL height"));
-                }
-                (components, coding, memory_bytes) = allocate(&header, limits, metadata_bytes)?;
                 frame = Some(header);
             }
             Event::Scan {
@@ -356,10 +352,15 @@ pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>
                 if scans > limits.max_scans {
                     return Err(Error::LimitExceeded("scans"));
                 }
+                let frame = frame.as_mut().ok_or(Error::Invalid("scan before frame"))?;
+                if scans == 1 {
+                    reader.resolve_height(frame)?;
+                    (components, coding, memory_bytes) = allocate(frame, limits, metadata_bytes)?;
+                }
                 scan(
                     header,
                     entropy,
-                    frame.as_ref().ok_or(Error::Invalid("scan before frame"))?,
+                    frame,
                     &mut components,
                     &mut coding,
                     &tables,
@@ -370,7 +371,9 @@ pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>
                         .saturating_sub(memory_bytes + metadata_bytes),
                 )?;
             }
-            Event::Segment { marker: 0xdc, .. } => return Err(Error::Unsupported("DNL height")),
+            Event::Segment { marker: 0xdc, .. } => {
+                return Err(Error::Invalid("DNL outside first scan boundary"));
+            }
             Event::Segment {
                 marker: 0xde | 0xdf,
                 ..
@@ -382,7 +385,7 @@ pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>
         return Err(Error::Truncated);
     }
     let frame = frame.ok_or(Error::Invalid("missing frame"))?;
-    if coding.iter().any(|c| c.point_transform == u8::MAX) {
+    if scans == 0 || coding.iter().any(|c| c.point_transform == u8::MAX) {
         return Err(Error::Invalid("missing component scan"));
     }
     finish_samples(&frame, &mut components, &coding);

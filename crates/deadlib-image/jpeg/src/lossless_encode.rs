@@ -53,6 +53,8 @@ pub struct LosslessOptions<'a> {
     pub point_transform: u8,
     pub restart_rows: u16,
     pub optimize_huffman: bool,
+    /// Declare SOF's final height directly, or use first-scan DNL.
+    pub height_declaration: crate::HeightDeclaration,
     pub entropy_coding: EntropyCoding,
     /// Arithmetic L/U conditioning. The AC split is unused by lossless scans.
     pub arithmetic_conditioning: ArithmeticConditioning,
@@ -72,6 +74,7 @@ impl Default for LosslessOptions<'_> {
             point_transform: 0,
             restart_rows: 0,
             optimize_huffman: true,
+            height_declaration: crate::HeightDeclaration::FrameHeader,
             entropy_coding: EntropyCoding::Huffman,
             arithmetic_conditioning: ArithmeticConditioning::default(),
             separate_components: false,
@@ -629,7 +632,12 @@ pub(crate) fn encode_frame(
     };
     let mut header = [0; 771];
     header[0] = frame.precision;
-    header[1..3].copy_from_slice(&frame.height.to_be_bytes());
+    header[1..3].copy_from_slice(
+        &options
+            .height_declaration
+            .initial(frame.height)
+            .to_be_bytes(),
+    );
     header[3..5].copy_from_slice(&frame.width.to_be_bytes());
     header[5] = frame.components.len() as u8;
     for (i, c) in frame.components.iter().enumerate() {
@@ -740,6 +748,9 @@ pub(crate) fn encode_frame(
             })?;
             coder.finish()?;
         }
+        options
+            .height_declaration
+            .after_scan(out, frame.height, s)?;
     }
     Ok(plan.count)
 }

@@ -1,0 +1,84 @@
+{
+  "scope": "DNL default-output regression audit. Exact byte identity reuses earlier C evidence where C_decoding_rerun is false; separate Turbo C checks are explicit. No performance claim.",
+  "cases": 10612,
+  "C_decoding_rerun_cases": 964,
+  "results": [
+    {
+      "matrix": "hierarchy-native",
+      "cases": 3100,
+      "unchanged_output_sha256": true,
+      "baseline_report": "hierarchical-encode-native-jpegxt.json",
+      "baseline_report_sha256": "fbcff13336967f9bed3b120197b7144b14f12fa02bd818148037989ad9767555",
+      "candidate_report_sha256": "118eb2d8eed91dbfb1087e6de379c5721b84aba799ea8f1216a078acb1eff9c6",
+      "C_decoding_rerun": false,
+      "tools": {
+        "native": "375a350535e17257a58bcc5dc739d0ef36215ab3570ecda8cb08ecdc366c3a06",
+        "inspect": "f5092c0e0ab85449917b99e2636622d749b070a76f0643188262a511e61d2cb8",
+        "reference": "a911595c53a6a49f19a4ff57fddc53bb26798ad4d3b46f035e2cf2dcabe64813"
+      }
+    },
+    {
+      "matrix": "hierarchy-rewrite",
+      "cases": 2100,
+      "unchanged_output_sha256": true,
+      "baseline_report": "hierarchical-encode-rewrite-jpegxt.json",
+      "baseline_report_sha256": "5b8f29d8c8beed5c4da74dda7276ae7f9a6e678dd0d5dff973a86e3d543aa823",
+      "candidate_report_sha256": "e60a1eaca6a5237b80313e1e4fbbad35a85abafac621390197639597b9ce28fe",
+      "C_decoding_rerun": false,
+      "tools": {
+        "native": "375a350535e17257a58bcc5dc739d0ef36215ab3570ecda8cb08ecdc366c3a06",
+        "inspect": "f5092c0e0ab85449917b99e2636622d749b070a76f0643188262a511e61d2cb8",
+        "reference": "a911595c53a6a49f19a4ff57fddc53bb26798ad4d3b46f035e2cf2dcabe64813"
+      }
+    },
+    {
+      "matrix": "lossless",
+      "cases": 4448,
+      "unchanged_output_sha256": true,
+      "baseline_report": "lossless-encode-turbo.json",
+      "baseline_report_sha256": "08168f0ea89fd1dbc8aa2c072766efd4eb2f2295193bff6a3b958bb110709320",
+      "candidate_report_sha256": "902dbb483c929a69ac72f467b88694c43ea55a42d3c3ae5d0f42b4d0aca79c65",
+      "C_decoding_rerun": false,
+      "tools": {
+        "native": "e3d82e9e28a2b71c395c6318256e3e727dff78afea1adcbf3fbfc2c3fbc4cd13",
+        "inspect": "0cee8ce3ce5ed534542c463576f8442341be3ed115b668eb49f14c0000487fab",
+        "oracle": "042fa0a522e9b28c03f2886b21c47ec91ed7885de656ab7fac938ad0b0d07399"
+      }
+    },
+    {
+      "matrix": "pixels",
+      "cases": 172,
+      "unchanged_output_sha256": true,
+      "baseline_report": "pixel-turbo.json",
+      "baseline_report_sha256": "21c5236040283749085bede372e43df697ac29be7e010592585e9dd20598bbbe",
+      "candidate_report_sha256": "21c5236040283749085bede372e43df697ac29be7e010592585e9dd20598bbbe",
+      "C_decoding_rerun": true
+    },
+    {
+      "matrix": "cmyk",
+      "cases": 192,
+      "unchanged_output_sha256": true,
+      "baseline_report": "cmyk-encode-turbo.json",
+      "baseline_report_sha256": "e1ca74fcf8f8b95d4d72c1066d5aa1ebbab06dee303d443ad5e5b32201ac14c9",
+      "candidate_report_sha256": "e1ca74fcf8f8b95d4d72c1066d5aa1ebbab06dee303d443ad5e5b32201ac14c9",
+      "C_decoding_rerun": true
+    },
+    {
+      "matrix": "coefficient-rewrite",
+      "cases": 600,
+      "unchanged_output_sha256": true,
+      "baseline_report": "rewrite-hierarchical-refactor-turbo.json",
+      "baseline_report_sha256": "5702e97496be2f2883a0a391668c4b64881d7af7056a46ea5415661091db07a3",
+      "candidate_report_sha256": "f3b8b69776de82be5049a4c9fa34cd11cb1dd946b897e3646e93a145bbf86f6f",
+      "C_decoding_rerun": true
+    }
+  ],
+  "tool_sha256": {
+    "pixel-generator": "03adb29de84e33787354a1c991c413b00b68f004da5ec66aac5157aac524e65d",
+    "cmyk-generator": "a1357116f5904eb9ecebf7244a91fe1d1a5aee58f6bc1b903ff851daf5290e47",
+    "rewrite": "5e31edb5a317645842ab97f3236e0fc008736ff8ea06463b4a8ff0bc7e1e1c63",
+    "turbo-oracle": "77d29072f4d30abc5386c5886a4147adb0c273fd4665bbb7d12fc96bd72041fc",
+    "cjpeg": "9385ed92fa827b938d2ac058caeea438a133e3cff0f72fbf645d30f685320a32",
+    "cmyk-reference-encoder": "cd69b874650fe9e4555f724e20f799c13225e2fb9b51a81522ba078458054432"
+  }
+}

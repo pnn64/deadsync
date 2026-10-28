@@ -9,6 +9,12 @@ positions; ICC and color interpretation use the completed DHP components.
 Tables and restart settings persist across frames without concatenating or
 rewriting frame byte streams.
 
+First-scan DNL resolves initially zero/provisional SOF heights before allocation.
+Frame models contain resolved heights; `MarkerReader` retains original bytes.
+Zero-height DHP is inferred from the completed full-resolution components.
+Encoder options also emit DNL and optionally zero DHP height. See
+DNL-VALIDATION.md for these rules, separate C-header/entropy evidence and tests.
+
 `HierarchicalImage::reconstruct_reference()` composes native planes with
 modulo-65536 addition. Residual planes contain signed differences represented
 as two's-complement `u16`; differential DCT has neither a level shift nor
@@ -147,7 +153,7 @@ The C reference's raster is not an exact lossless-hierarchy oracle:
 
 These observations do not establish correctness for every hierarchical stream.
 Independent conformance corpora, broader DCT numerical checks,
-DNL/abbreviated streams, incremental I/O, coverage-guided fuzzing and
+abbreviated streams, incremental I/O, coverage-guided fuzzing and
 all measured performance work remain required.
 
 ## Native frame encoding
@@ -258,8 +264,9 @@ python crates/deadlib-image/jpeg/tests/reference_hierarchical_encode.py --native
 
 Omit `--sources` to check the 42 reference-derived fixtures. `--resume` verifies
 the saved executable and source/frame-data hashes. Decoder and encoder matrices
-share `tests/hierarchy_support.py`; its four extracted helper function bodies
-are unchanged from the decoder milestone.
+share `tests/hierarchy_support.py`. The DNL milestone extends its structural
+parser for ordinary frames and resolved DNL/DHP heights; sample, observation
+and independent lossless-composition helpers retain their behavior.
 
 ## Reproduction
 
@@ -385,6 +392,6 @@ cargo build -p deadlib-image-jpeg --release --example pyramid_encode --example h
 python crates/deadlib-image/jpeg/tests/reference_pyramid.py --native crates/deadlib-image/jpeg/experiments/pyramid-target/release/examples/pyramid_encode.exe --inspect crates/deadlib-image/jpeg/experiments/pyramid-target/release/examples/hierarchical_inspect.exe --reference crates/deadlib-image/jpeg/experiments/jpegxt-reference/vs15.0/jpeg/Release/jpeg.exe --out crates/deadlib-image/jpeg/experiments/pyramid-final-gate --fixtures crates/deadlib-image/jpeg/tests/fixtures/pyramid-native
 ```
 
-Broader rare scan/Pt combinations, DNL/abbreviated streams, incremental I/O,
+Broader rare scan/Pt combinations, abbreviated streams, incremental I/O,
 independent standards-conformance and additional reference corpora,
 coverage-guided fuzzing, and measured optimization remain required.

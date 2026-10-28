@@ -47,6 +47,8 @@ pub struct PyramidOptions<'a> {
     pub levels: &'a [PyramidLevel<'a>],
     pub limits: Limits,
     pub max_output_bytes: usize,
+    /// Leave DHP's height zero and infer the completed height from frames.
+    pub omit_dhp_height: bool,
 }
 impl<'a> PyramidOptions<'a> {
     pub fn new(levels: &'a [PyramidLevel<'a>]) -> Self {
@@ -54,6 +56,7 @@ impl<'a> PyramidOptions<'a> {
             levels,
             limits: Limits::default(),
             max_output_bytes: 512 * 1024 * 1024,
+            omit_dhp_height: false,
         }
     }
 }
@@ -707,6 +710,7 @@ pub fn encode_hierarchical_planes_with_metadata(
         &image,
         options.limits,
         options.max_output_bytes,
+        options.omit_dhp_height,
         output_metadata,
         |i, _| Ok(options.levels[i].coding),
     )
@@ -831,6 +835,7 @@ pub fn encode_hierarchical_samples_with_metadata(
         &image,
         options.limits,
         options.max_output_bytes,
+        options.omit_dhp_height,
         metadata,
         |i, _| Ok(options.levels[i].coding),
     )

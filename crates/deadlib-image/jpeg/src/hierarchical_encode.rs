@@ -28,6 +28,9 @@ pub struct HierarchicalOptions<'a> {
     pub frame_options: &'a [HierarchicalFrameOptions<'a>],
     pub limits: Limits,
     pub max_output_bytes: usize,
+    /// Omit the completed height in DHP. Each frame still declares its height
+    /// through SOF or DNL; the decoder infers the final height from components.
+    pub omit_dhp_height: bool,
 }
 impl Default for HierarchicalOptions<'_> {
     fn default() -> Self {
@@ -35,6 +38,7 @@ impl Default for HierarchicalOptions<'_> {
             frame_options: &[],
             limits: Limits::default(),
             max_output_bytes: 512 * 1024 * 1024,
+            omit_dhp_height: false,
         }
     }
 }
@@ -108,6 +112,7 @@ pub fn encode_hierarchical_with_metadata(
         image,
         options.limits,
         options.max_output_bytes,
+        options.omit_dhp_height,
         metadata,
         |index, frame| selected(options, index, frame),
     )
@@ -119,6 +124,7 @@ pub(crate) fn write_hierarchy<'a>(
     image: &HierarchicalImage<'_>,
     limits: Limits,
     max_output_bytes: usize,
+    omit_dhp_height: bool,
     metadata: MetadataOptions<'_>,
     mut controls: impl FnMut(usize, &HierarchicalFrame) -> Result<HierarchicalFrameOptions<'a>>,
 ) -> Result<Vec<u8>> {
@@ -207,7 +213,7 @@ pub(crate) fn write_hierarchy<'a>(
     let h = &image.header;
     let mut header = [0; 771];
     header[0] = h.precision;
-    header[1..3].copy_from_slice(&h.height.to_be_bytes());
+    header[1..3].copy_from_slice(&if omit_dhp_height { 0 } else { h.height }.to_be_bytes());
     header[3..5].copy_from_slice(&h.width.to_be_bytes());
     header[5] = h.components.len() as u8;
     for (i, c) in h.components.iter().enumerate() {

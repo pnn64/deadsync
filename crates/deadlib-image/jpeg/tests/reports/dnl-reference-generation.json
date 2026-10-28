@@ -1,0 +1,5554 @@
+{
+  "reference": "thorfdbg/libjpeg JPEG XT 702114c8130ae818ccd2354cc03e879dac69e579",
+  "reference_executable_sha256": "a911595c53a6a49f19a4ff57fddc53bb26798ad4d3b46f035e2cf2dcabe64813",
+  "attempts": 336,
+  "encoded_sources": 336,
+  "encoder_failures": 0,
+  "scope": "Independent C-authored DNL headers and entropy. Syntax repairs remove only empty DAC and EXP00, not DNL or zero heights. No source-fidelity claim for the reference hierarchical encoder.",
+  "results": [
+    {
+      "case": "seq-p8-a0-gray-yNone-r0",
+      "source_sha256": "7f2e39af134bec16fad77f33dda620e8426d90fe70c846982fc94960a7520704",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "ee5406ae4630667f025bfc8044cb1b5c549b22ed651c0b43bccdeb53963464aa",
+      "original_sha256": "ee5406ae4630667f025bfc8044cb1b5c549b22ed651c0b43bccdeb53963464aa",
+      "bytes": 275,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        193
+      ]
+    },
+    {
+      "case": "seq-p8-a0-gray-yNone-r5",
+      "source_sha256": "aa85ca663cbca42f29417366c7f0c8667e5fb4c655b787b34a2cfb038f1ebd05",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "b041230ce1776bf92b1853416a100403f64103cd5f0209a51dc03963568590f6",
+      "original_sha256": "b041230ce1776bf92b1853416a100403f64103cd5f0209a51dc03963568590f6",
+      "bytes": 631,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        193
+      ]
+    },
+    {
+      "case": "seq-p8-a0-gray-y2-r0",
+      "source_sha256": "7f2e39af134bec16fad77f33dda620e8426d90fe70c846982fc94960a7520704",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4a000f1344d79cd62dd01f699516672bcf9bb59de04fe1c6e997831e806da0e0",
+      "original_sha256": "4a000f1344d79cd62dd01f699516672bcf9bb59de04fe1c6e997831e806da0e0",
+      "bytes": 251,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        193,
+        197
+      ]
+    },
+    {
+      "case": "seq-p8-a0-gray-y2-r5",
+      "source_sha256": "aa85ca663cbca42f29417366c7f0c8667e5fb4c655b787b34a2cfb038f1ebd05",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "bb3c271fe6a06f20d69ab54e74e47a3655868c1fe568c5a99ee765a8329e1e13",
+      "original_sha256": "bb3c271fe6a06f20d69ab54e74e47a3655868c1fe568c5a99ee765a8329e1e13",
+      "bytes": 638,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        193,
+        197
+      ]
+    },
+    {
+      "case": "seq-p8-a0-rgb444-yNone-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "14bf0826ac50e4cccb79e4a1c6da7f62941982d425172e9d9ca4f8ba5f195637",
+      "original_sha256": "14bf0826ac50e4cccb79e4a1c6da7f62941982d425172e9d9ca4f8ba5f195637",
+      "bytes": 358,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        193
+      ]
+    },
+    {
+      "case": "seq-p8-a0-rgb444-yNone-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "94c6bdb23021a7e61cac762b96cacf794e04d8cf35df95d5450fc69b836cebbe",
+      "original_sha256": "94c6bdb23021a7e61cac762b96cacf794e04d8cf35df95d5450fc69b836cebbe",
+      "bytes": 1311,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        193
+      ]
+    },
+    {
+      "case": "seq-p8-a0-rgb444-y2-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "a13d398a2d2f3bd7d9681dae79026e188e64ab24afcb3c3c1b8d5cad9f463bd6",
+      "original_sha256": "a13d398a2d2f3bd7d9681dae79026e188e64ab24afcb3c3c1b8d5cad9f463bd6",
+      "bytes": 286,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        193,
+        197
+      ]
+    },
+    {
+      "case": "seq-p8-a0-rgb444-y2-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "b3397dab2f412b11706bcdfdef42145779f4b93ef7734fc07d8c1bb2be72e30a",
+      "original_sha256": "b3397dab2f412b11706bcdfdef42145779f4b93ef7734fc07d8c1bb2be72e30a",
+      "bytes": 1341,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        193,
+        197
+      ]
+    },
+    {
+      "case": "seq-p8-a0-rgb420-yNone-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "c3f2c1942bcf5c3fb05637f72dc473db52548e8b1c321e85ec96217bec0ceaf9",
+      "original_sha256": "c3f2c1942bcf5c3fb05637f72dc473db52548e8b1c321e85ec96217bec0ceaf9",
+      "bytes": 360,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        193
+      ]
+    },
+    {
+      "case": "seq-p8-a0-rgb420-yNone-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "169d7668c33ec33ca925f8c6d076def09d3f1e69008ba41b023fb493bd63e0d4",
+      "original_sha256": "169d7668c33ec33ca925f8c6d076def09d3f1e69008ba41b023fb493bd63e0d4",
+      "bytes": 913,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        193
+      ]
+    },
+    {
+      "case": "seq-p8-a0-rgb420-y2-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4b03472a9a713d01ae9dffdc71d161c3b3dabaa830ec515f55762ab1c11f138c",
+      "original_sha256": "4b03472a9a713d01ae9dffdc71d161c3b3dabaa830ec515f55762ab1c11f138c",
+      "bytes": 283,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        193,
+        197
+      ]
+    },
+    {
+      "case": "seq-p8-a0-rgb420-y2-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "490dd0dc9ff90034e2c9585f64d0f209aa510ac0149010ca54a4beb30be1b859",
+      "original_sha256": "490dd0dc9ff90034e2c9585f64d0f209aa510ac0149010ca54a4beb30be1b859",
+      "bytes": 883,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        193,
+        197
+      ]
+    },
+    {
+      "case": "prog-p8-a0-gray-yNone-r0",
+      "source_sha256": "7f2e39af134bec16fad77f33dda620e8426d90fe70c846982fc94960a7520704",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4b2d87d85099c86f32d85936d326147e2705e0bb27062a776aa4ba94b90592a2",
+      "original_sha256": "4b2d87d85099c86f32d85936d326147e2705e0bb27062a776aa4ba94b90592a2",
+      "bytes": 399,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        194
+      ]
+    },
+    {
+      "case": "prog-p8-a0-gray-yNone-r5",
+      "source_sha256": "aa85ca663cbca42f29417366c7f0c8667e5fb4c655b787b34a2cfb038f1ebd05",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "2a06bc75d4ad12103fd2b45e2121e221f651b48a142220627c4d0ff44abf7db5",
+      "original_sha256": "2a06bc75d4ad12103fd2b45e2121e221f651b48a142220627c4d0ff44abf7db5",
+      "bytes": 777,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        194
+      ]
+    },
+    {
+      "case": "prog-p8-a0-gray-y2-r0",
+      "source_sha256": "7f2e39af134bec16fad77f33dda620e8426d90fe70c846982fc94960a7520704",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "d67311e63e2ca6691bb2af7134ddafcfe5ae9612ad63eb0bab33489b9823ece5",
+      "original_sha256": "d67311e63e2ca6691bb2af7134ddafcfe5ae9612ad63eb0bab33489b9823ece5",
+      "bytes": 500,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        194,
+        198
+      ]
+    },
+    {
+      "case": "prog-p8-a0-gray-y2-r5",
+      "source_sha256": "aa85ca663cbca42f29417366c7f0c8667e5fb4c655b787b34a2cfb038f1ebd05",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "ec005e1691fa31cf43adc175afe33fb59fc8b1a646f4202f77963ff1a8027c88",
+      "original_sha256": "ec005e1691fa31cf43adc175afe33fb59fc8b1a646f4202f77963ff1a8027c88",
+      "bytes": 926,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        194,
+        198
+      ]
+    },
+    {
+      "case": "prog-p8-a0-rgb444-yNone-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "7c7cd946dc3bcea0f8090fe588f650b576031277a7ee2cfe1433d332a080bbbb",
+      "original_sha256": "7c7cd946dc3bcea0f8090fe588f650b576031277a7ee2cfe1433d332a080bbbb",
+      "bytes": 632,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        194
+      ]
+    },
+    {
+      "case": "prog-p8-a0-rgb444-yNone-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "ca1aefdff48a3d436b92f303e6c181bfc863915229951d5f49492923defda606",
+      "original_sha256": "ca1aefdff48a3d436b92f303e6c181bfc863915229951d5f49492923defda606",
+      "bytes": 1639,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        194
+      ]
+    },
+    {
+      "case": "prog-p8-a0-rgb444-y2-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "e14f3caf98e7f1b5789de2b66700c19d0aeeb34f6c112637ec08dc3d9872ec9e",
+      "original_sha256": "e14f3caf98e7f1b5789de2b66700c19d0aeeb34f6c112637ec08dc3d9872ec9e",
+      "bytes": 807,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        194,
+        198
+      ]
+    },
+    {
+      "case": "prog-p8-a0-rgb444-y2-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "d71242f6b937b8ac114530cb0ca0bcc504b50c8590f2d0f585c291264bb3b37f",
+      "original_sha256": "d71242f6b937b8ac114530cb0ca0bcc504b50c8590f2d0f585c291264bb3b37f",
+      "bytes": 2012,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        194,
+        198
+      ]
+    },
+    {
+      "case": "prog-p8-a0-rgb420-yNone-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "e884773c3b5300e57b71b3ce98790770ac40cfb722bbd747f491450ed84ca160",
+      "original_sha256": "e884773c3b5300e57b71b3ce98790770ac40cfb722bbd747f491450ed84ca160",
+      "bytes": 633,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        194
+      ]
+    },
+    {
+      "case": "prog-p8-a0-rgb420-yNone-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "0cd4df71bc132d481fb840dde36eb085841c32099366d051cdff343f3561f93a",
+      "original_sha256": "0cd4df71bc132d481fb840dde36eb085841c32099366d051cdff343f3561f93a",
+      "bytes": 1219,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        194
+      ]
+    },
+    {
+      "case": "prog-p8-a0-rgb420-y2-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "d757ed32ccf459211094325222d5ceffc611224761a7a9aed4607ce9a3328dc6",
+      "original_sha256": "d757ed32ccf459211094325222d5ceffc611224761a7a9aed4607ce9a3328dc6",
+      "bytes": 803,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        194,
+        198
+      ]
+    },
+    {
+      "case": "prog-p8-a0-rgb420-y2-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "3f02c4b149e6e5e90bd2a7ee8967cc9593a5af1ca7702dfe53736091fa6f18f1",
+      "original_sha256": "3f02c4b149e6e5e90bd2a7ee8967cc9593a5af1ca7702dfe53736091fa6f18f1",
+      "bytes": 1477,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        194,
+        198
+      ]
+    },
+    {
+      "case": "seq-p8-a1-gray-yNone-r0",
+      "source_sha256": "7f2e39af134bec16fad77f33dda620e8426d90fe70c846982fc94960a7520704",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "d833968cc012e649ad7e934ec6015b5be7f17dd46683594ad83c6f08e40e7952",
+      "original_sha256": "d833968cc012e649ad7e934ec6015b5be7f17dd46683594ad83c6f08e40e7952",
+      "bytes": 208,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        201
+      ]
+    },
+    {
+      "case": "seq-p8-a1-gray-yNone-r5",
+      "source_sha256": "aa85ca663cbca42f29417366c7f0c8667e5fb4c655b787b34a2cfb038f1ebd05",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "7d815d05b0be92df01936d083244e77b53d48a0350aa7d84a0235eaadeb17145",
+      "original_sha256": "7d815d05b0be92df01936d083244e77b53d48a0350aa7d84a0235eaadeb17145",
+      "bytes": 616,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        201
+      ]
+    },
+    {
+      "case": "seq-p8-a1-gray-y2-r0",
+      "source_sha256": "7f2e39af134bec16fad77f33dda620e8426d90fe70c846982fc94960a7520704",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "60d54d5694323e0a1148ba004674b67db7e78065300e0095d0c8fa2630868976",
+      "original_sha256": "60d54d5694323e0a1148ba004674b67db7e78065300e0095d0c8fa2630868976",
+      "bytes": 184,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        201,
+        205
+      ]
+    },
+    {
+      "case": "seq-p8-a1-gray-y2-r5",
+      "source_sha256": "aa85ca663cbca42f29417366c7f0c8667e5fb4c655b787b34a2cfb038f1ebd05",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "8be51ad1fa3d05127ce9ac18eb4bd1ddeabffe7dc69b84a20cf9a5e5f0d62232",
+      "original_sha256": "8be51ad1fa3d05127ce9ac18eb4bd1ddeabffe7dc69b84a20cf9a5e5f0d62232",
+      "bytes": 634,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        201,
+        205
+      ]
+    },
+    {
+      "case": "seq-p8-a1-rgb444-yNone-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "ca7e035e87ac23b634cf0a31e7da9369e65a692d00eafe11a98ba928a3db682a",
+      "original_sha256": "ca7e035e87ac23b634cf0a31e7da9369e65a692d00eafe11a98ba928a3db682a",
+      "bytes": 284,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        201
+      ]
+    },
+    {
+      "case": "seq-p8-a1-rgb444-yNone-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "3825b3f86bc13ff893c44a7c26a6da4aa60804d5be95cc113c44290f629eb903",
+      "original_sha256": "3825b3f86bc13ff893c44a7c26a6da4aa60804d5be95cc113c44290f629eb903",
+      "bytes": 1271,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        201
+      ]
+    },
+    {
+      "case": "seq-p8-a1-rgb444-y2-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "5ddecdee424f8b3e3e3cfff16e2b12b065378678b03fc62c0e0e8448885c5891",
+      "original_sha256": "5ddecdee424f8b3e3e3cfff16e2b12b065378678b03fc62c0e0e8448885c5891",
+      "bytes": 215,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        201,
+        205
+      ]
+    },
+    {
+      "case": "seq-p8-a1-rgb444-y2-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "db93d82710265cd2460245f2881f708a3e94031b55f0a4d245381452c5e11a3d",
+      "original_sha256": "db93d82710265cd2460245f2881f708a3e94031b55f0a4d245381452c5e11a3d",
+      "bytes": 1369,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        201,
+        205
+      ]
+    },
+    {
+      "case": "seq-p8-a1-rgb420-yNone-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "5b087fc39820a97029f104723f6a30f921fdcc2dbe5b9db9571e6960a78c8e05",
+      "original_sha256": "5b087fc39820a97029f104723f6a30f921fdcc2dbe5b9db9571e6960a78c8e05",
+      "bytes": 299,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        201
+      ]
+    },
+    {
+      "case": "seq-p8-a1-rgb420-yNone-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "5171662153769fa23c43fdab4376817d23a2b5f5cb8d4fc5fad2214dcc0ff6e3",
+      "original_sha256": "5171662153769fa23c43fdab4376817d23a2b5f5cb8d4fc5fad2214dcc0ff6e3",
+      "bytes": 860,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        201
+      ]
+    },
+    {
+      "case": "seq-p8-a1-rgb420-y2-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "be31ad5e952f3cfc178ba7ef03b6c36d5bc66aafbced9b1ce85fa7874e6e3601",
+      "original_sha256": "be31ad5e952f3cfc178ba7ef03b6c36d5bc66aafbced9b1ce85fa7874e6e3601",
+      "bytes": 215,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        201,
+        205
+      ]
+    },
+    {
+      "case": "seq-p8-a1-rgb420-y2-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "6b7b4d7f82872d2e5868a91d4f59cc7a140ae1a3d0ee762dbce99b528d342ff7",
+      "original_sha256": "6b7b4d7f82872d2e5868a91d4f59cc7a140ae1a3d0ee762dbce99b528d342ff7",
+      "bytes": 852,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        201,
+        205
+      ]
+    },
+    {
+      "case": "prog-p8-a1-gray-yNone-r0",
+      "source_sha256": "7f2e39af134bec16fad77f33dda620e8426d90fe70c846982fc94960a7520704",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "33c99508a8253f57066ed8764235bbd7c19e21389a29504349d3fef110c5a9c4",
+      "original_sha256": "5f75ebe4e2acb7e865ea598a68d8cdded7229186987eb5598544274cf36b0fa7",
+      "bytes": 278,
+      "empty_DAC_removed": 3,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        202
+      ]
+    },
+    {
+      "case": "prog-p8-a1-gray-yNone-r5",
+      "source_sha256": "aa85ca663cbca42f29417366c7f0c8667e5fb4c655b787b34a2cfb038f1ebd05",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "5f0b814b4cd14e3f0220d9ca65c8a0ecdbef7ff42c3f863be6569dcb5525549d",
+      "original_sha256": "3f329a6fd42581be737703b7471ab7235cd86be32931beda29f86e1fa9082820",
+      "bytes": 660,
+      "empty_DAC_removed": 3,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        202
+      ]
+    },
+    {
+      "case": "prog-p8-a1-gray-y2-r0",
+      "source_sha256": "7f2e39af134bec16fad77f33dda620e8426d90fe70c846982fc94960a7520704",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "2a7fe2074e8eb2476d256c7d47d87bf3cd4021da18dd589462d5678c30af59da",
+      "original_sha256": "b14e36164589bdc9c4b0077407a25675f791cacb56d4d338640f16f1b45f5191",
+      "bytes": 325,
+      "empty_DAC_removed": 6,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        202,
+        206
+      ]
+    },
+    {
+      "case": "prog-p8-a1-gray-y2-r5",
+      "source_sha256": "aa85ca663cbca42f29417366c7f0c8667e5fb4c655b787b34a2cfb038f1ebd05",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "e7d070ff4947fbcd95328564d2cff21937118dd29fb397f2b101047347bac151",
+      "original_sha256": "aa95f28439b9991395d9eb7e133708a5fd09c04a477ed5293611b309ab49156b",
+      "bytes": 758,
+      "empty_DAC_removed": 6,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        202,
+        206
+      ]
+    },
+    {
+      "case": "prog-p8-a1-rgb444-yNone-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "b88226eed8b602c1432583ae0ac5e4fae5106d2ea7287d1ac5c0ffb05d6b73e4",
+      "original_sha256": "b38e423a163dae726bcdaf7e06b480bb1e80f966687b1abb614b234c7e12a694",
+      "bytes": 428,
+      "empty_DAC_removed": 5,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        202
+      ]
+    },
+    {
+      "case": "prog-p8-a1-rgb444-yNone-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "f56207c4e5a65ea875b306d41c2aa32199399c3ebdfda2242fb5833a9406d38a",
+      "original_sha256": "5fde2a54bddce9aef2ccd56ca8ab7c6990d37c329fcb289201af2fc813ddc0fd",
+      "bytes": 1492,
+      "empty_DAC_removed": 5,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        202
+      ]
+    },
+    {
+      "case": "prog-p8-a1-rgb444-y2-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "91fa37085474d5f672dd5b1352d3191b0ba96359aea3830e2c55d1c471e6ca65",
+      "original_sha256": "a8d5120a7807e811c8d7e8b9d426eb62f45eccd6212bb7c5338efcd59655c139",
+      "bytes": 488,
+      "empty_DAC_removed": 10,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        202,
+        206
+      ]
+    },
+    {
+      "case": "prog-p8-a1-rgb444-y2-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "8909a91cd1ac52fd66857578e6ee07709713ab61c12fceaa43c7024e1493e69a",
+      "original_sha256": "452f520ab01b3609bebb6973e7539afeed97b27974971ad4c784f9f5d650613f",
+      "bytes": 1747,
+      "empty_DAC_removed": 10,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        202,
+        206
+      ]
+    },
+    {
+      "case": "prog-p8-a1-rgb420-yNone-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "b8cfc5f4a92733ec380d140741f3945fc5f05065c7476ab957cbc0d90ceff179",
+      "original_sha256": "7b4002f4b022b0ae3f2c27df039c6b4b351b24d22e6338c36c20fc5c11f86b7c",
+      "bytes": 446,
+      "empty_DAC_removed": 5,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        202
+      ]
+    },
+    {
+      "case": "prog-p8-a1-rgb420-yNone-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "d99662714aba8e5b364588e2f4ff7d3835cbf1a6b2b0f0e5f9f9897185f7a07a",
+      "original_sha256": "07dd6c031b7e6faa016e56d84fcfcbe4f9921589fc0d86626e7be00449552f79",
+      "bytes": 1012,
+      "empty_DAC_removed": 5,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        202
+      ]
+    },
+    {
+      "case": "prog-p8-a1-rgb420-y2-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "fb663008c29286eef8854e5b42e0899cce5dd68894bb26031699c74182164376",
+      "original_sha256": "87126aa3727106d29aa59227dafe0e38393890fbf7213174e694ae38d72a4dde",
+      "bytes": 485,
+      "empty_DAC_removed": 10,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        202,
+        206
+      ]
+    },
+    {
+      "case": "prog-p8-a1-rgb420-y2-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "e367569a4432e702a83474dc90379d65b461f82f09e537f18b50d7e4b405fa7a",
+      "original_sha256": "81d0253f9a108bcec0b0f41f62f179a71d89761faeeedd0d8e5eb75b3973bbb4",
+      "bytes": 1145,
+      "empty_DAC_removed": 10,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        202,
+        206
+      ]
+    },
+    {
+      "case": "seq-p12-a0-gray-yNone-r0",
+      "source_sha256": "cc332d441f012df9b90494199182864a8a578e7c3980fdff63b5a3c4bed6fec6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "b7c899243e8a5ffbac2548b48970833db85b584b11626fc0d4a28a80bd6d978f",
+      "original_sha256": "b7c899243e8a5ffbac2548b48970833db85b584b11626fc0d4a28a80bd6d978f",
+      "bytes": 275,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        193
+      ]
+    },
+    {
+      "case": "seq-p12-a0-gray-yNone-r5",
+      "source_sha256": "2d25d3b4e05ee100f21f0c5e13557ee67d8aa5ada947eb5d842edcac17ec9b5e",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "e614b21e727f4399e3a582b8acbc39eb0331395491e3e17c03bc0db8b10b6a94",
+      "original_sha256": "e614b21e727f4399e3a582b8acbc39eb0331395491e3e17c03bc0db8b10b6a94",
+      "bytes": 907,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        193
+      ]
+    },
+    {
+      "case": "seq-p12-a0-gray-y2-r0",
+      "source_sha256": "cc332d441f012df9b90494199182864a8a578e7c3980fdff63b5a3c4bed6fec6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "be0be34adc3f02cda331987c2eefda9af59059eafbc035d619634d4a79c78457",
+      "original_sha256": "be0be34adc3f02cda331987c2eefda9af59059eafbc035d619634d4a79c78457",
+      "bytes": 251,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        193,
+        197
+      ]
+    },
+    {
+      "case": "seq-p12-a0-gray-y2-r5",
+      "source_sha256": "2d25d3b4e05ee100f21f0c5e13557ee67d8aa5ada947eb5d842edcac17ec9b5e",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "9d86a4e4f2810e5ef86a1b5c2a68457dfd37482a91a2da1b5af4998d37df7de4",
+      "original_sha256": "9d86a4e4f2810e5ef86a1b5c2a68457dfd37482a91a2da1b5af4998d37df7de4",
+      "bytes": 903,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        193,
+        197
+      ]
+    },
+    {
+      "case": "seq-p12-a0-rgb444-yNone-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "293b76297c0f749c80bf24ac8c22228258b28f2ec6a5a28f43748063cd1ce7e1",
+      "original_sha256": "293b76297c0f749c80bf24ac8c22228258b28f2ec6a5a28f43748063cd1ce7e1",
+      "bytes": 385,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        193
+      ]
+    },
+    {
+      "case": "seq-p12-a0-rgb444-yNone-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "ddbc3f1bf04484c51ba4e4a837dffcd292dfd711e6a274f5a3a069e4a83d3899",
+      "original_sha256": "ddbc3f1bf04484c51ba4e4a837dffcd292dfd711e6a274f5a3a069e4a83d3899",
+      "bytes": 2165,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        193
+      ]
+    },
+    {
+      "case": "seq-p12-a0-rgb444-y2-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "a311a6f1e1154a14021d772457a13a9fc3922594add92d88f428b7d22eb9197f",
+      "original_sha256": "a311a6f1e1154a14021d772457a13a9fc3922594add92d88f428b7d22eb9197f",
+      "bytes": 287,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        193,
+        197
+      ]
+    },
+    {
+      "case": "seq-p12-a0-rgb444-y2-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "780b2267186adab7e0e86392017915aae86358acba3d78636887febbba1a9867",
+      "original_sha256": "780b2267186adab7e0e86392017915aae86358acba3d78636887febbba1a9867",
+      "bytes": 2195,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        193,
+        197
+      ]
+    },
+    {
+      "case": "seq-p12-a0-rgb420-yNone-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "2b5d86195ae16e32d302a2e0511d8d688b66a3a65044fc79b94f4df81130a6c0",
+      "original_sha256": "2b5d86195ae16e32d302a2e0511d8d688b66a3a65044fc79b94f4df81130a6c0",
+      "bytes": 383,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        193
+      ]
+    },
+    {
+      "case": "seq-p12-a0-rgb420-yNone-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "d117b41436bedcde468f1b8b927d19ea94a3d57b926859d2cfcd3a663e6aa037",
+      "original_sha256": "d117b41436bedcde468f1b8b927d19ea94a3d57b926859d2cfcd3a663e6aa037",
+      "bytes": 1461,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        193
+      ]
+    },
+    {
+      "case": "seq-p12-a0-rgb420-y2-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "de986e969f9b67b050aa63ed30afa440d7872b5ba0bfd6e757058b7bd3769c68",
+      "original_sha256": "de986e969f9b67b050aa63ed30afa440d7872b5ba0bfd6e757058b7bd3769c68",
+      "bytes": 284,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        193,
+        197
+      ]
+    },
+    {
+      "case": "seq-p12-a0-rgb420-y2-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "7e3f212acfede814e66049f798ec6f9e3823d3ea3cc026d10dfc8d7eb523f42c",
+      "original_sha256": "7e3f212acfede814e66049f798ec6f9e3823d3ea3cc026d10dfc8d7eb523f42c",
+      "bytes": 1368,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        193,
+        197
+      ]
+    },
+    {
+      "case": "prog-p12-a0-gray-yNone-r0",
+      "source_sha256": "cc332d441f012df9b90494199182864a8a578e7c3980fdff63b5a3c4bed6fec6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "64073e7d7417289b165a8ceeb3e304d57f9e3260ad8c112379caaaf7f8ef1a7c",
+      "original_sha256": "64073e7d7417289b165a8ceeb3e304d57f9e3260ad8c112379caaaf7f8ef1a7c",
+      "bytes": 399,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        194
+      ]
+    },
+    {
+      "case": "prog-p12-a0-gray-yNone-r5",
+      "source_sha256": "2d25d3b4e05ee100f21f0c5e13557ee67d8aa5ada947eb5d842edcac17ec9b5e",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "ad5b41343d60f508d6e703d801cefa885d216819dcf00e9ae39be0b537e4a1c6",
+      "original_sha256": "ad5b41343d60f508d6e703d801cefa885d216819dcf00e9ae39be0b537e4a1c6",
+      "bytes": 1055,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        194
+      ]
+    },
+    {
+      "case": "prog-p12-a0-gray-y2-r0",
+      "source_sha256": "cc332d441f012df9b90494199182864a8a578e7c3980fdff63b5a3c4bed6fec6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "536fdd91457f0c799eaec6390a5662e1d80c6566f49ea389cc9893a8e32132e9",
+      "original_sha256": "536fdd91457f0c799eaec6390a5662e1d80c6566f49ea389cc9893a8e32132e9",
+      "bytes": 500,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        194,
+        198
+      ]
+    },
+    {
+      "case": "prog-p12-a0-gray-y2-r5",
+      "source_sha256": "2d25d3b4e05ee100f21f0c5e13557ee67d8aa5ada947eb5d842edcac17ec9b5e",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "a7280eba52ce4482b046d96189d09f3c6021c2bc17eac1da2aa2e8fe58e2252a",
+      "original_sha256": "a7280eba52ce4482b046d96189d09f3c6021c2bc17eac1da2aa2e8fe58e2252a",
+      "bytes": 1188,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        194,
+        198
+      ]
+    },
+    {
+      "case": "prog-p12-a0-rgb444-yNone-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "d50fd741063e7330672176d44227c867426f2e3d163ce697b7d1b89ddbbb20c9",
+      "original_sha256": "d50fd741063e7330672176d44227c867426f2e3d163ce697b7d1b89ddbbb20c9",
+      "bytes": 651,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        194
+      ]
+    },
+    {
+      "case": "prog-p12-a0-rgb444-yNone-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "9b64ba6980c4790186bf334047f3826f14e77796dc3aebc8c14ae35973bbce87",
+      "original_sha256": "9b64ba6980c4790186bf334047f3826f14e77796dc3aebc8c14ae35973bbce87",
+      "bytes": 2489,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        194
+      ]
+    },
+    {
+      "case": "prog-p12-a0-rgb444-y2-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "617197e2f63df20b5a938ad6986d48ed86ded5646a068dd79896baedc5f1a631",
+      "original_sha256": "617197e2f63df20b5a938ad6986d48ed86ded5646a068dd79896baedc5f1a631",
+      "bytes": 808,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        194,
+        198
+      ]
+    },
+    {
+      "case": "prog-p12-a0-rgb444-y2-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "bfc96d535ee846db2b4933ac048c7378a425dd2403da2a35bf4affbfd8258577",
+      "original_sha256": "bfc96d535ee846db2b4933ac048c7378a425dd2403da2a35bf4affbfd8258577",
+      "bytes": 2812,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        194,
+        198
+      ]
+    },
+    {
+      "case": "prog-p12-a0-rgb420-yNone-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "04d6a42a984cf97e8e0a769211bc545675bd2cd6fe0ef203fb45e0472bb465c8",
+      "original_sha256": "04d6a42a984cf97e8e0a769211bc545675bd2cd6fe0ef203fb45e0472bb465c8",
+      "bytes": 657,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        194
+      ]
+    },
+    {
+      "case": "prog-p12-a0-rgb420-yNone-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "5fd11d1be0dd69780804fba75becc0052319183eacc8789caf5cf0ffd85661bb",
+      "original_sha256": "5fd11d1be0dd69780804fba75becc0052319183eacc8789caf5cf0ffd85661bb",
+      "bytes": 1759,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        194
+      ]
+    },
+    {
+      "case": "prog-p12-a0-rgb420-y2-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4db864061112c0f64c0016a6bc4a76bcdf26c6f9e45ac4eedba39a64a98038b5",
+      "original_sha256": "4db864061112c0f64c0016a6bc4a76bcdf26c6f9e45ac4eedba39a64a98038b5",
+      "bytes": 804,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        194,
+        198
+      ]
+    },
+    {
+      "case": "prog-p12-a0-rgb420-y2-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "714492a0fedb2a68a90e9166b51171aa5aae59ecaf38e3893f8963b5b8f32a0e",
+      "original_sha256": "714492a0fedb2a68a90e9166b51171aa5aae59ecaf38e3893f8963b5b8f32a0e",
+      "bytes": 1959,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        194,
+        198
+      ]
+    },
+    {
+      "case": "seq-p12-a1-gray-yNone-r0",
+      "source_sha256": "cc332d441f012df9b90494199182864a8a578e7c3980fdff63b5a3c4bed6fec6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "5022822adc4e23afabe15e8598dcec55e5952bc0e66e453703eed3c3a00ab549",
+      "original_sha256": "5022822adc4e23afabe15e8598dcec55e5952bc0e66e453703eed3c3a00ab549",
+      "bytes": 208,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        201
+      ]
+    },
+    {
+      "case": "seq-p12-a1-gray-yNone-r5",
+      "source_sha256": "2d25d3b4e05ee100f21f0c5e13557ee67d8aa5ada947eb5d842edcac17ec9b5e",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "a13418e6dfb2322d897b9dbfea0a615eb92b069c0bc5d8e35d8cc8cdc0ca35de",
+      "original_sha256": "a13418e6dfb2322d897b9dbfea0a615eb92b069c0bc5d8e35d8cc8cdc0ca35de",
+      "bytes": 951,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        201
+      ]
+    },
+    {
+      "case": "seq-p12-a1-gray-y2-r0",
+      "source_sha256": "cc332d441f012df9b90494199182864a8a578e7c3980fdff63b5a3c4bed6fec6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "2d2dae1d926ccafcd36ebb83f2dde2d3b5868d542bc37eaab64cca78aad6fa18",
+      "original_sha256": "2d2dae1d926ccafcd36ebb83f2dde2d3b5868d542bc37eaab64cca78aad6fa18",
+      "bytes": 184,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        201,
+        205
+      ]
+    },
+    {
+      "case": "seq-p12-a1-gray-y2-r5",
+      "source_sha256": "2d25d3b4e05ee100f21f0c5e13557ee67d8aa5ada947eb5d842edcac17ec9b5e",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "99dabd1731aebf3663ea567f30c780223a04935b8e210b617b2548abf052cda7",
+      "original_sha256": "99dabd1731aebf3663ea567f30c780223a04935b8e210b617b2548abf052cda7",
+      "bytes": 987,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        201,
+        205
+      ]
+    },
+    {
+      "case": "seq-p12-a1-rgb444-yNone-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "2e7c3d7c6c110656dbd50ca188a6f13835f8a56335abf606c1b3f3a171b9043a",
+      "original_sha256": "2e7c3d7c6c110656dbd50ca188a6f13835f8a56335abf606c1b3f3a171b9043a",
+      "bytes": 318,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        201
+      ]
+    },
+    {
+      "case": "seq-p12-a1-rgb444-yNone-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "22c65ca2a6e33d9fc6670ceac7ae2c497c188e8b25f89e3ac9ada2378de7c6f9",
+      "original_sha256": "22c65ca2a6e33d9fc6670ceac7ae2c497c188e8b25f89e3ac9ada2378de7c6f9",
+      "bytes": 2256,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        201
+      ]
+    },
+    {
+      "case": "seq-p12-a1-rgb444-y2-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "c2a1e6f4614aff41c0446732cdab2a9cbc73d7546f21d790934e9aba8092b853",
+      "original_sha256": "c2a1e6f4614aff41c0446732cdab2a9cbc73d7546f21d790934e9aba8092b853",
+      "bytes": 217,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        201,
+        205
+      ]
+    },
+    {
+      "case": "seq-p12-a1-rgb444-y2-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "220ae5c292d89a0223200959f0694144cbec8941b4a4ca9cfd26e1c4eb71dc46",
+      "original_sha256": "220ae5c292d89a0223200959f0694144cbec8941b4a4ca9cfd26e1c4eb71dc46",
+      "bytes": 2384,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        201,
+        205
+      ]
+    },
+    {
+      "case": "seq-p12-a1-rgb420-yNone-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "b25f59deea1d4a1b826c2e6edd3f6e2a8f3a80e4345888a63d05f0fc5677f9aa",
+      "original_sha256": "b25f59deea1d4a1b826c2e6edd3f6e2a8f3a80e4345888a63d05f0fc5677f9aa",
+      "bytes": 327,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        201
+      ]
+    },
+    {
+      "case": "seq-p12-a1-rgb420-yNone-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "5e04bc25057bd8a67ec1be41dd6dd47116749a723cf43de9a595d7c38ca3287d",
+      "original_sha256": "5e04bc25057bd8a67ec1be41dd6dd47116749a723cf43de9a595d7c38ca3287d",
+      "bytes": 1468,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        201
+      ]
+    },
+    {
+      "case": "seq-p12-a1-rgb420-y2-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "5c45cdeb7309261bbb8ed2c1ff4707d8bd9f7ae9ac770439c2f95e33914cb214",
+      "original_sha256": "5c45cdeb7309261bbb8ed2c1ff4707d8bd9f7ae9ac770439c2f95e33914cb214",
+      "bytes": 217,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        201,
+        205
+      ]
+    },
+    {
+      "case": "seq-p12-a1-rgb420-y2-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "a8f489c602dd714768fa6457b0ce112b653f6e59f1fa222196a912ff24f49c6a",
+      "original_sha256": "a8f489c602dd714768fa6457b0ce112b653f6e59f1fa222196a912ff24f49c6a",
+      "bytes": 1441,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        201,
+        205
+      ]
+    },
+    {
+      "case": "prog-p12-a1-gray-yNone-r0",
+      "source_sha256": "cc332d441f012df9b90494199182864a8a578e7c3980fdff63b5a3c4bed6fec6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "a6d1633b55fd86a185e8771be0ab692adb3c05f99697a3fcb4110eb27c248ac9",
+      "original_sha256": "f8a150f692a4620acbef2176a6b4dca79e834cfc0e2e16b3a0ff5d671f5f85cc",
+      "bytes": 278,
+      "empty_DAC_removed": 3,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        202
+      ]
+    },
+    {
+      "case": "prog-p12-a1-gray-yNone-r5",
+      "source_sha256": "2d25d3b4e05ee100f21f0c5e13557ee67d8aa5ada947eb5d842edcac17ec9b5e",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "6f0af0246be9b311c101fe0ec5921196463d6c66232383904e0550eeb32731f6",
+      "original_sha256": "7fa5cfcdc07878e5576d613a5079bbd68c2074c59d43e22cd026d7a4db0001ec",
+      "bytes": 1020,
+      "empty_DAC_removed": 3,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        202
+      ]
+    },
+    {
+      "case": "prog-p12-a1-gray-y2-r0",
+      "source_sha256": "cc332d441f012df9b90494199182864a8a578e7c3980fdff63b5a3c4bed6fec6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "1a0d48c43351772c283631351ffabb61c252f658ce5fb9d71ed991ae0b58c620",
+      "original_sha256": "c8d0d11eeb026daefa56330f8e43700f5a731545a7c5b3fab2f37e9899de590f",
+      "bytes": 325,
+      "empty_DAC_removed": 6,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        202,
+        206
+      ]
+    },
+    {
+      "case": "prog-p12-a1-gray-y2-r5",
+      "source_sha256": "2d25d3b4e05ee100f21f0c5e13557ee67d8aa5ada947eb5d842edcac17ec9b5e",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "174066ea752a861fa8c0466fc7da5bae08ec22e50b2572971cef4250881f496a",
+      "original_sha256": "2c5d105fb997d3ae0ae1fc6143323bec9d3b2b33aeefa758a79e760014655f41",
+      "bytes": 1132,
+      "empty_DAC_removed": 6,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        202,
+        206
+      ]
+    },
+    {
+      "case": "prog-p12-a1-rgb444-yNone-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "a22f1a1f3478284a2082fc287e76492c2769ec8967ad7f54b5a3a6362ecbf418",
+      "original_sha256": "c400af3af33623d5db46055f8575a434570737f5d1c765579e3de751afdea23e",
+      "bytes": 465,
+      "empty_DAC_removed": 5,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        202
+      ]
+    },
+    {
+      "case": "prog-p12-a1-rgb444-yNone-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "b7ebbf8ada0aa80214555093cff8fd08ff923e2a8ab89327a9daef9864853706",
+      "original_sha256": "70127957dd4fc6e6442f79de4c7ac8696c82c84d43b54d4b068addeadb3bfa0e",
+      "bytes": 2563,
+      "empty_DAC_removed": 5,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        202
+      ]
+    },
+    {
+      "case": "prog-p12-a1-rgb444-y2-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "53df4ec58e6d023efd92f917d3073318d287d1c7767149c2b239dcfa18322b62",
+      "original_sha256": "95141e1139fa2a21b7e71e20179a95fcc42cd08e315ecef84990b93c476dcba0",
+      "bytes": 489,
+      "empty_DAC_removed": 10,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        202,
+        206
+      ]
+    },
+    {
+      "case": "prog-p12-a1-rgb444-y2-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "3f375d8c67daba5f1398f16875c4ec845ef04f2d3ba7e1257cf7fc546aedce03",
+      "original_sha256": "eb191e07bf247618dee0c5113bd94536181788718091f3f7152154659e4cb5b9",
+      "bytes": 2877,
+      "empty_DAC_removed": 10,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        202,
+        206
+      ]
+    },
+    {
+      "case": "prog-p12-a1-rgb420-yNone-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4118f7656390548246ad74b717afeda7f6e04b0abe231d6ff7f8d8ec56f31585",
+      "original_sha256": "cbb90f66a22581066e36ce6422a641892b8e048862a016f8cc276d3274a315b0",
+      "bytes": 487,
+      "empty_DAC_removed": 5,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        202
+      ]
+    },
+    {
+      "case": "prog-p12-a1-rgb420-yNone-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "4cb40ac2fa37c0393805ccfa63b0df107fadaa469b21eaf9eca5e9bcf197d4a0",
+      "original_sha256": "321ac3cf75f809ab6666a93e0b35cb0eb453bfbe9357fae9342ec683f682d538",
+      "bytes": 1716,
+      "empty_DAC_removed": 5,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        202
+      ]
+    },
+    {
+      "case": "prog-p12-a1-rgb420-y2-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "def90665f2e0ed82fd2d71e2e0afe349c7b155e05baff35679b28c0cf2e8dc55",
+      "original_sha256": "00809058b99a43c7f8eebdbaa56c33b1dcbb69ba4a52205b641ded40e7aba488",
+      "bytes": 487,
+      "empty_DAC_removed": 10,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        202,
+        206
+      ]
+    },
+    {
+      "case": "prog-p12-a1-rgb420-y2-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 5,
+      "reference_encoder_error": null,
+      "sha256": "247a5d665a9eeac0c8daa963db07b72aff2e0107265299f2b65dc8d1ba3ee448",
+      "original_sha256": "929d05931f5266cf01395785faab3b333baa3801657af000e3dbc3c190b27d90",
+      "bytes": 1821,
+      "empty_DAC_removed": 10,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        202,
+        206
+      ]
+    },
+    {
+      "case": "lp-p2-a0-gray-yNone-r0",
+      "source_sha256": "450cddc7ab45f1f336977ec4bca398cbe1ed0b668cc3c29a4d7037677465d92e",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "33d014bcbf5dc6e9408933a6f914183f0051f9101d2999026a9261b4630c1d3d",
+      "original_sha256": "33d014bcbf5dc6e9408933a6f914183f0051f9101d2999026a9261b4630c1d3d",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p2-a0-gray-yNone-r5",
+      "source_sha256": "cf1da3ebc53e861f323c7583b06d0d914f9cf01af82b819c5087fb1495495496",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "b640d36fcbfa60ec0577ba35d02697720eedc3867e2f02ebc6153c21c27475ec",
+      "original_sha256": "b640d36fcbfa60ec0577ba35d02697720eedc3867e2f02ebc6153c21c27475ec",
+      "bytes": 223,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p2-a0-gray-y2-r0",
+      "source_sha256": "450cddc7ab45f1f336977ec4bca398cbe1ed0b668cc3c29a4d7037677465d92e",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "57cbc3c07adda4cf989601c92b7867f51a589391a513ba28164c1109b5b12550",
+      "original_sha256": "57cbc3c07adda4cf989601c92b7867f51a589391a513ba28164c1109b5b12550",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p2-a0-gray-y2-r5",
+      "source_sha256": "cf1da3ebc53e861f323c7583b06d0d914f9cf01af82b819c5087fb1495495496",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "a2726466bc118e00b2d9f20e06c621689d7a465a87c9a54dac09a8dfdc9aaff7",
+      "original_sha256": "a2726466bc118e00b2d9f20e06c621689d7a465a87c9a54dac09a8dfdc9aaff7",
+      "bytes": 302,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p2-a0-rgb444-yNone-r0",
+      "source_sha256": "91c4481b907890bfd9b3e37f6c6196cd8f6ba8d5584ba1bfab49d3c317f0d053",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "c6c97b47baabd81a3021aacac8d475ca4574eba18cf3033b9a66c9cdbc3d6cec",
+      "original_sha256": "c6c97b47baabd81a3021aacac8d475ca4574eba18cf3033b9a66c9cdbc3d6cec",
+      "bytes": 237,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p2-a0-rgb444-yNone-r5",
+      "source_sha256": "f6d2ed3bdad03655d69ad98a4d14ea6f5514d73cdb9617aa628f7c21b7899e2a",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "ef6f4f69b9e0268d408aabe513e994be67381bae64f1d29adbea74001eb7b5b4",
+      "original_sha256": "ef6f4f69b9e0268d408aabe513e994be67381bae64f1d29adbea74001eb7b5b4",
+      "bytes": 563,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p2-a0-rgb444-y2-r0",
+      "source_sha256": "91c4481b907890bfd9b3e37f6c6196cd8f6ba8d5584ba1bfab49d3c317f0d053",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "3234b1c00d5b95bccbe9d4417e610ea67e33c7a2ef82c5a6354b2cf20f8fc468",
+      "original_sha256": "3234b1c00d5b95bccbe9d4417e610ea67e33c7a2ef82c5a6354b2cf20f8fc468",
+      "bytes": 363,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p2-a0-rgb444-y2-r5",
+      "source_sha256": "f6d2ed3bdad03655d69ad98a4d14ea6f5514d73cdb9617aa628f7c21b7899e2a",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "547ae1b86c18fcf39f89a30b097844fb30f2386ef1435f43a3197dd421e3ca2e",
+      "original_sha256": "547ae1b86c18fcf39f89a30b097844fb30f2386ef1435f43a3197dd421e3ca2e",
+      "bytes": 620,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p2-a1-gray-yNone-r0",
+      "source_sha256": "450cddc7ab45f1f336977ec4bca398cbe1ed0b668cc3c29a4d7037677465d92e",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "2efe4ceaaa7541dc50444cfd8693bb28eb1a8e54bc52c8a771ed500915dc52b2",
+      "original_sha256": "2efe4ceaaa7541dc50444cfd8693bb28eb1a8e54bc52c8a771ed500915dc52b2",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p2-a1-gray-yNone-r5",
+      "source_sha256": "cf1da3ebc53e861f323c7583b06d0d914f9cf01af82b819c5087fb1495495496",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "aa7a8f53b4e9a0c53a59fbca53d5b0f6aec9ac862bfacd8f695384757e7412c8",
+      "original_sha256": "aa7a8f53b4e9a0c53a59fbca53d5b0f6aec9ac862bfacd8f695384757e7412c8",
+      "bytes": 152,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p2-a1-gray-y2-r0",
+      "source_sha256": "450cddc7ab45f1f336977ec4bca398cbe1ed0b668cc3c29a4d7037677465d92e",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "f2ff85a6e9e09a88a6ff7b7ef6616a4b1c6926a300bded8ea9d943c119a1eee5",
+      "original_sha256": "f2ff85a6e9e09a88a6ff7b7ef6616a4b1c6926a300bded8ea9d943c119a1eee5",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p2-a1-gray-y2-r5",
+      "source_sha256": "cf1da3ebc53e861f323c7583b06d0d914f9cf01af82b819c5087fb1495495496",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "2f264fd8a7c78b1e52c1903352d0d8be9ec16489e3e8d23b098ea4ac125e7f7d",
+      "original_sha256": "2f264fd8a7c78b1e52c1903352d0d8be9ec16489e3e8d23b098ea4ac125e7f7d",
+      "bytes": 211,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p2-a1-rgb444-yNone-r0",
+      "source_sha256": "91c4481b907890bfd9b3e37f6c6196cd8f6ba8d5584ba1bfab49d3c317f0d053",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "76382d4d4827568920057d5852c4ddae338d5d8d6e478de14f3e5ff4ff5cc7bb",
+      "original_sha256": "76382d4d4827568920057d5852c4ddae338d5d8d6e478de14f3e5ff4ff5cc7bb",
+      "bytes": 69,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p2-a1-rgb444-yNone-r5",
+      "source_sha256": "f6d2ed3bdad03655d69ad98a4d14ea6f5514d73cdb9617aa628f7c21b7899e2a",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "f0f01c291de14f6d48d736d3e35f9ee01e8a781a68b9c52ff10d4036e7fdbb82",
+      "original_sha256": "f0f01c291de14f6d48d736d3e35f9ee01e8a781a68b9c52ff10d4036e7fdbb82",
+      "bytes": 309,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p2-a1-rgb444-y2-r0",
+      "source_sha256": "91c4481b907890bfd9b3e37f6c6196cd8f6ba8d5584ba1bfab49d3c317f0d053",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "0c59ec523cf7a029bd035056d5a665e82b864db00c725007ae11153d151a159c",
+      "original_sha256": "0c59ec523cf7a029bd035056d5a665e82b864db00c725007ae11153d151a159c",
+      "bytes": 139,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p2-a1-rgb444-y2-r5",
+      "source_sha256": "f6d2ed3bdad03655d69ad98a4d14ea6f5514d73cdb9617aa628f7c21b7899e2a",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "84c1ffdab01516ea934999a0c7174fc867b2c10a850e0a6dac177b093bedd6f8",
+      "original_sha256": "84c1ffdab01516ea934999a0c7174fc867b2c10a850e0a6dac177b093bedd6f8",
+      "bytes": 460,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p3-a0-gray-yNone-r0",
+      "source_sha256": "f5cee16a478c6e6404ef29d0e482498d3ab5de16b5c4b969d97882f6ca8d6e7f",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4243ae101bdc24710d8a6f818e08e23ccd02127d933cfa999c42e5a3e4bcba0f",
+      "original_sha256": "4243ae101bdc24710d8a6f818e08e23ccd02127d933cfa999c42e5a3e4bcba0f",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p3-a0-gray-yNone-r5",
+      "source_sha256": "615db372c511c2e0e496c19492e61e5ab6aea3056e07c04197cff69c11edfe85",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "f052375905aba87ddeb7b8bc0aecf493b120c0f2cc768342e4e6c84a14dfd3af",
+      "original_sha256": "f052375905aba87ddeb7b8bc0aecf493b120c0f2cc768342e4e6c84a14dfd3af",
+      "bytes": 305,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p3-a0-gray-y2-r0",
+      "source_sha256": "f5cee16a478c6e6404ef29d0e482498d3ab5de16b5c4b969d97882f6ca8d6e7f",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "2796507178bf7bcfc8613937b9ccea82589c0b1e8e65211f9c3bd8c4ad034900",
+      "original_sha256": "2796507178bf7bcfc8613937b9ccea82589c0b1e8e65211f9c3bd8c4ad034900",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p3-a0-gray-y2-r5",
+      "source_sha256": "615db372c511c2e0e496c19492e61e5ab6aea3056e07c04197cff69c11edfe85",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "79933e4c68d1617973e1e3d7994b13671edba9726b98aacf6e9d070a10d63ce1",
+      "original_sha256": "79933e4c68d1617973e1e3d7994b13671edba9726b98aacf6e9d070a10d63ce1",
+      "bytes": 354,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p3-a0-rgb444-yNone-r0",
+      "source_sha256": "eb3067ac68ab081ad06e724147b3c50a917d2f3403835ae4fcb0533e4b2e425a",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "b65ee7844e8406e797dea2e6037c564cc841e77e41ccb33d59c5f9941d9a6efd",
+      "original_sha256": "b65ee7844e8406e797dea2e6037c564cc841e77e41ccb33d59c5f9941d9a6efd",
+      "bytes": 237,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p3-a0-rgb444-yNone-r5",
+      "source_sha256": "e8c0d9eeac816190363200bc3364e39d847773897ef47470e79401cbc89be8a7",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "99b4c72751333debd1572746b360dba99a39cd52ca3de7dd0000bfa44518ff99",
+      "original_sha256": "99b4c72751333debd1572746b360dba99a39cd52ca3de7dd0000bfa44518ff99",
+      "bytes": 723,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p3-a0-rgb444-y2-r0",
+      "source_sha256": "eb3067ac68ab081ad06e724147b3c50a917d2f3403835ae4fcb0533e4b2e425a",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "5e7082fde14a3df452ec34fd1efe464da00576445b6b59597b4aff2cb5f3fbf6",
+      "original_sha256": "5e7082fde14a3df452ec34fd1efe464da00576445b6b59597b4aff2cb5f3fbf6",
+      "bytes": 363,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p3-a0-rgb444-y2-r5",
+      "source_sha256": "e8c0d9eeac816190363200bc3364e39d847773897ef47470e79401cbc89be8a7",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "4bf15907f95458aaefebbc8dd9b5ddc80a5179b070ceabc17ebea6891e7bc30a",
+      "original_sha256": "4bf15907f95458aaefebbc8dd9b5ddc80a5179b070ceabc17ebea6891e7bc30a",
+      "bytes": 811,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p3-a1-gray-yNone-r0",
+      "source_sha256": "f5cee16a478c6e6404ef29d0e482498d3ab5de16b5c4b969d97882f6ca8d6e7f",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "9ac45b8abdb7048eaf81335e6a263bc591f38dceb12c37b0576b9846638082fe",
+      "original_sha256": "9ac45b8abdb7048eaf81335e6a263bc591f38dceb12c37b0576b9846638082fe",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p3-a1-gray-yNone-r5",
+      "source_sha256": "615db372c511c2e0e496c19492e61e5ab6aea3056e07c04197cff69c11edfe85",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "4835145d58f70f28f2d4aeaf9ef9a2875eccc644d5f5cb42419924cd73c93a9c",
+      "original_sha256": "4835145d58f70f28f2d4aeaf9ef9a2875eccc644d5f5cb42419924cd73c93a9c",
+      "bytes": 243,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p3-a1-gray-y2-r0",
+      "source_sha256": "f5cee16a478c6e6404ef29d0e482498d3ab5de16b5c4b969d97882f6ca8d6e7f",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "d3a4dae93019abef6bd3095b1faa1faa72175c6b848920e3e3e0fd668d0253c1",
+      "original_sha256": "d3a4dae93019abef6bd3095b1faa1faa72175c6b848920e3e3e0fd668d0253c1",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p3-a1-gray-y2-r5",
+      "source_sha256": "615db372c511c2e0e496c19492e61e5ab6aea3056e07c04197cff69c11edfe85",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "91530254a8bf31a66c892f72c65dc893ba6ddebc1c87e1548b0bab424f31ada0",
+      "original_sha256": "91530254a8bf31a66c892f72c65dc893ba6ddebc1c87e1548b0bab424f31ada0",
+      "bytes": 304,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p3-a1-rgb444-yNone-r0",
+      "source_sha256": "eb3067ac68ab081ad06e724147b3c50a917d2f3403835ae4fcb0533e4b2e425a",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "950b5524b84bc3fdb616cf94fcb7821736f96077826a5515494aae457aa2be17",
+      "original_sha256": "950b5524b84bc3fdb616cf94fcb7821736f96077826a5515494aae457aa2be17",
+      "bytes": 72,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p3-a1-rgb444-yNone-r5",
+      "source_sha256": "e8c0d9eeac816190363200bc3364e39d847773897ef47470e79401cbc89be8a7",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "f0bcaf00b53016f54f6e18577a5a123b4d26e0544cc396d928faceef64efcdb5",
+      "original_sha256": "f0bcaf00b53016f54f6e18577a5a123b4d26e0544cc396d928faceef64efcdb5",
+      "bytes": 502,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p3-a1-rgb444-y2-r0",
+      "source_sha256": "eb3067ac68ab081ad06e724147b3c50a917d2f3403835ae4fcb0533e4b2e425a",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "b3a0eac46c751ffb21cd356be33153cbaae0b3dd76a579f42cc6137dd07238b0",
+      "original_sha256": "b3a0eac46c751ffb21cd356be33153cbaae0b3dd76a579f42cc6137dd07238b0",
+      "bytes": 142,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p3-a1-rgb444-y2-r5",
+      "source_sha256": "e8c0d9eeac816190363200bc3364e39d847773897ef47470e79401cbc89be8a7",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "f052d535248c395bcdfa38915f422cebcb1f4172dd380278715c3d7048546e2f",
+      "original_sha256": "f052d535248c395bcdfa38915f422cebcb1f4172dd380278715c3d7048546e2f",
+      "bytes": 710,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p4-a0-gray-yNone-r0",
+      "source_sha256": "ef05a3d1603cd170f78d6853b9557975a0cd91c68afdabd13393aab005c7b422",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "6daac6ca9cf80b552827e306c089ce818e3ac8d56f08cb4c8c6f84f86612d8bf",
+      "original_sha256": "6daac6ca9cf80b552827e306c089ce818e3ac8d56f08cb4c8c6f84f86612d8bf",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p4-a0-gray-yNone-r5",
+      "source_sha256": "7f236a4462df396a9f96eac14d218a95a757eba6bcee16ca122330399b1ee367",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "10e5ba3950dc23058bca87a17111ea7910660c213915d5cd3f04240dfedda647",
+      "original_sha256": "10e5ba3950dc23058bca87a17111ea7910660c213915d5cd3f04240dfedda647",
+      "bytes": 333,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p4-a0-gray-y2-r0",
+      "source_sha256": "ef05a3d1603cd170f78d6853b9557975a0cd91c68afdabd13393aab005c7b422",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4e4304c9715c0b87ab2d86fcb5c1e36090cecb8e28e143f555dd876079ba3b45",
+      "original_sha256": "4e4304c9715c0b87ab2d86fcb5c1e36090cecb8e28e143f555dd876079ba3b45",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p4-a0-gray-y2-r5",
+      "source_sha256": "7f236a4462df396a9f96eac14d218a95a757eba6bcee16ca122330399b1ee367",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "142820b42ade3148402b3123fb173653c9f3242aa0f8726eaf356f9ba1976c5a",
+      "original_sha256": "142820b42ade3148402b3123fb173653c9f3242aa0f8726eaf356f9ba1976c5a",
+      "bytes": 412,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p4-a0-rgb444-yNone-r0",
+      "source_sha256": "68380a72ddb86010a1cf0436d12c8cc7a403f37b48a3348ed3294a163ac490c0",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "94b17098c0e6ec07d3b3c2ffc35593a70890db61faa589b29e5fecdccb4c899e",
+      "original_sha256": "94b17098c0e6ec07d3b3c2ffc35593a70890db61faa589b29e5fecdccb4c899e",
+      "bytes": 239,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p4-a0-rgb444-yNone-r5",
+      "source_sha256": "2221b5485ac4ed38576149525363ba325b11848c635947ff718023b04dde782e",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "663a6805f18408e424add2f6506179af65087ebeb109fa5bdc9a8d9f76e864f8",
+      "original_sha256": "663a6805f18408e424add2f6506179af65087ebeb109fa5bdc9a8d9f76e864f8",
+      "bytes": 831,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p4-a0-rgb444-y2-r0",
+      "source_sha256": "68380a72ddb86010a1cf0436d12c8cc7a403f37b48a3348ed3294a163ac490c0",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "a51c65e24bbfff47ba5fdc99dbe149f1ee81f37d117dcef1c50bfd5c1b268d58",
+      "original_sha256": "a51c65e24bbfff47ba5fdc99dbe149f1ee81f37d117dcef1c50bfd5c1b268d58",
+      "bytes": 364,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p4-a0-rgb444-y2-r5",
+      "source_sha256": "2221b5485ac4ed38576149525363ba325b11848c635947ff718023b04dde782e",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "f5c6f568dac3c695e2d30a8aacf4bc313af2520962149e29cc1cb9e7bb188126",
+      "original_sha256": "f5c6f568dac3c695e2d30a8aacf4bc313af2520962149e29cc1cb9e7bb188126",
+      "bytes": 967,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p4-a1-gray-yNone-r0",
+      "source_sha256": "ef05a3d1603cd170f78d6853b9557975a0cd91c68afdabd13393aab005c7b422",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "04570abb1efd9ff2c9c56587f39ab7d1979570ef898f0ae19e8d4ab1ccb98dff",
+      "original_sha256": "04570abb1efd9ff2c9c56587f39ab7d1979570ef898f0ae19e8d4ab1ccb98dff",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p4-a1-gray-yNone-r5",
+      "source_sha256": "7f236a4462df396a9f96eac14d218a95a757eba6bcee16ca122330399b1ee367",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "a0df84b4db87f5bcf4090a594f03aed0c376be77793fd0481f88e180a6a56665",
+      "original_sha256": "a0df84b4db87f5bcf4090a594f03aed0c376be77793fd0481f88e180a6a56665",
+      "bytes": 288,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p4-a1-gray-y2-r0",
+      "source_sha256": "ef05a3d1603cd170f78d6853b9557975a0cd91c68afdabd13393aab005c7b422",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "3190996be673f096c612f8b12c2d4db5a231be893c54a0d19fdd5b3618f92b84",
+      "original_sha256": "3190996be673f096c612f8b12c2d4db5a231be893c54a0d19fdd5b3618f92b84",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p4-a1-gray-y2-r5",
+      "source_sha256": "7f236a4462df396a9f96eac14d218a95a757eba6bcee16ca122330399b1ee367",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "4c002934ba7f5bb8f1f934761d56851869ec5c45ebc10708a9f74b251c06e60c",
+      "original_sha256": "4c002934ba7f5bb8f1f934761d56851869ec5c45ebc10708a9f74b251c06e60c",
+      "bytes": 406,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p4-a1-rgb444-yNone-r0",
+      "source_sha256": "68380a72ddb86010a1cf0436d12c8cc7a403f37b48a3348ed3294a163ac490c0",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "43c65658c60242ab60b5b176dfde3653e51f34573a548e1ff14a03b5f42548d4",
+      "original_sha256": "43c65658c60242ab60b5b176dfde3653e51f34573a548e1ff14a03b5f42548d4",
+      "bytes": 73,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p4-a1-rgb444-yNone-r5",
+      "source_sha256": "2221b5485ac4ed38576149525363ba325b11848c635947ff718023b04dde782e",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "38a0d305d0661f61d13def30222cdb54821e7bda517244852f7035bbc6bb9214",
+      "original_sha256": "38a0d305d0661f61d13def30222cdb54821e7bda517244852f7035bbc6bb9214",
+      "bytes": 664,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p4-a1-rgb444-y2-r0",
+      "source_sha256": "68380a72ddb86010a1cf0436d12c8cc7a403f37b48a3348ed3294a163ac490c0",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "303fbe62dccb47c1c52192dea6f668feba78c19791024234aebb5d29f210192e",
+      "original_sha256": "303fbe62dccb47c1c52192dea6f668feba78c19791024234aebb5d29f210192e",
+      "bytes": 142,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p4-a1-rgb444-y2-r5",
+      "source_sha256": "2221b5485ac4ed38576149525363ba325b11848c635947ff718023b04dde782e",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "a3cb7006ed31d1d4dfbb6f9d5217812c931ed106cbd7fb37e7e5e99828aaea0c",
+      "original_sha256": "a3cb7006ed31d1d4dfbb6f9d5217812c931ed106cbd7fb37e7e5e99828aaea0c",
+      "bytes": 955,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p5-a0-gray-yNone-r0",
+      "source_sha256": "95e30313206b0a98766b191b803f24fef4bc12e226e19e2419e078c13d3c5219",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "5164589ff7d6ccc9ead547bc0fa7cb9e16b5f79d7f55e40b22198e232c668481",
+      "original_sha256": "5164589ff7d6ccc9ead547bc0fa7cb9e16b5f79d7f55e40b22198e232c668481",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p5-a0-gray-yNone-r5",
+      "source_sha256": "9edc2ac28fdbb4352dadcff7186e791511123594cc93dc690f099ff55de322b6",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "f089065711f0e84ed3eba14ad24507d159ad257f6c9fe9387f45a810bfe002f8",
+      "original_sha256": "f089065711f0e84ed3eba14ad24507d159ad257f6c9fe9387f45a810bfe002f8",
+      "bytes": 361,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p5-a0-gray-y2-r0",
+      "source_sha256": "95e30313206b0a98766b191b803f24fef4bc12e226e19e2419e078c13d3c5219",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "01c31ae1ea63b7f80d4acf40444cb93b4370ebeb675ab2ce29d764ecfbd54afd",
+      "original_sha256": "01c31ae1ea63b7f80d4acf40444cb93b4370ebeb675ab2ce29d764ecfbd54afd",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p5-a0-gray-y2-r5",
+      "source_sha256": "9edc2ac28fdbb4352dadcff7186e791511123594cc93dc690f099ff55de322b6",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "1512d584edb28cd79583a08b6582d69eeb1af0e816094f4380175e26fc751d8e",
+      "original_sha256": "1512d584edb28cd79583a08b6582d69eeb1af0e816094f4380175e26fc751d8e",
+      "bytes": 484,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p5-a0-rgb444-yNone-r0",
+      "source_sha256": "dfb2a7a72c77f7c04f9673c39151aa142113e8b203d898d89101db298779499c",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "7a981de54262ac1af877c796425a0c0858283ef6da450bfd3f41bebacecd2edc",
+      "original_sha256": "7a981de54262ac1af877c796425a0c0858283ef6da450bfd3f41bebacecd2edc",
+      "bytes": 239,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p5-a0-rgb444-yNone-r5",
+      "source_sha256": "1c58482f0be5b30384f52d7ab05499980271060f09ee5a76de0dad5b11a017ab",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "55af7f47d1674f17fce362d76570e684a4ac60cadb332b8be1a27e42877a0d89",
+      "original_sha256": "55af7f47d1674f17fce362d76570e684a4ac60cadb332b8be1a27e42877a0d89",
+      "bytes": 916,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p5-a0-rgb444-y2-r0",
+      "source_sha256": "dfb2a7a72c77f7c04f9673c39151aa142113e8b203d898d89101db298779499c",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "28343afb95fde0f585d45808ec8a57532a09a7282e3517462bca3b779191f145",
+      "original_sha256": "28343afb95fde0f585d45808ec8a57532a09a7282e3517462bca3b779191f145",
+      "bytes": 365,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p5-a0-rgb444-y2-r5",
+      "source_sha256": "1c58482f0be5b30384f52d7ab05499980271060f09ee5a76de0dad5b11a017ab",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "9f107538cbd996b89a13a828731e3c49671afef09b9235eb750ae9cf88f8ebb3",
+      "original_sha256": "9f107538cbd996b89a13a828731e3c49671afef09b9235eb750ae9cf88f8ebb3",
+      "bytes": 1167,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p5-a1-gray-yNone-r0",
+      "source_sha256": "95e30313206b0a98766b191b803f24fef4bc12e226e19e2419e078c13d3c5219",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "952b8a6c6513ea69a78a15ae453e3c34b42c3ef3fdc42524521e6c5c4d8d609a",
+      "original_sha256": "952b8a6c6513ea69a78a15ae453e3c34b42c3ef3fdc42524521e6c5c4d8d609a",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p5-a1-gray-yNone-r5",
+      "source_sha256": "9edc2ac28fdbb4352dadcff7186e791511123594cc93dc690f099ff55de322b6",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "5e72a1eada499b9aec6f64eff422eb9c012763bb9a28c5c7aea32d01c3787a44",
+      "original_sha256": "5e72a1eada499b9aec6f64eff422eb9c012763bb9a28c5c7aea32d01c3787a44",
+      "bytes": 318,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p5-a1-gray-y2-r0",
+      "source_sha256": "95e30313206b0a98766b191b803f24fef4bc12e226e19e2419e078c13d3c5219",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "e6a4117f8de593cf91cad1fc10f07f8a06ac68af67a4ec842d786137509c0ef9",
+      "original_sha256": "e6a4117f8de593cf91cad1fc10f07f8a06ac68af67a4ec842d786137509c0ef9",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p5-a1-gray-y2-r5",
+      "source_sha256": "9edc2ac28fdbb4352dadcff7186e791511123594cc93dc690f099ff55de322b6",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "548268bb70c188363671755f52a5a1348ce68d30d6aa3f7d9a7ae977b98f62a1",
+      "original_sha256": "548268bb70c188363671755f52a5a1348ce68d30d6aa3f7d9a7ae977b98f62a1",
+      "bytes": 498,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p5-a1-rgb444-yNone-r0",
+      "source_sha256": "dfb2a7a72c77f7c04f9673c39151aa142113e8b203d898d89101db298779499c",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "1c25ea3f25f2d93bcb22607c9b121b838885978db05a1ca90e6fbced521d59a0",
+      "original_sha256": "1c25ea3f25f2d93bcb22607c9b121b838885978db05a1ca90e6fbced521d59a0",
+      "bytes": 73,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p5-a1-rgb444-yNone-r5",
+      "source_sha256": "1c58482f0be5b30384f52d7ab05499980271060f09ee5a76de0dad5b11a017ab",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "aa337ff2270ac909af27d54258ff0ec9a7e41a418db221bb4cacb0f590cf0db5",
+      "original_sha256": "aa337ff2270ac909af27d54258ff0ec9a7e41a418db221bb4cacb0f590cf0db5",
+      "bytes": 708,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p5-a1-rgb444-y2-r0",
+      "source_sha256": "dfb2a7a72c77f7c04f9673c39151aa142113e8b203d898d89101db298779499c",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "8f691c3aad1be2d320c00b682c8cba4b4dcbbc63685a67e8ca7b02e637a661f3",
+      "original_sha256": "8f691c3aad1be2d320c00b682c8cba4b4dcbbc63685a67e8ca7b02e637a661f3",
+      "bytes": 143,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p5-a1-rgb444-y2-r5",
+      "source_sha256": "1c58482f0be5b30384f52d7ab05499980271060f09ee5a76de0dad5b11a017ab",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "980d6745f7c5bdeabf0a05900aa4cfaa9b5c9711fdb8303033b7072c8b8bf702",
+      "original_sha256": "980d6745f7c5bdeabf0a05900aa4cfaa9b5c9711fdb8303033b7072c8b8bf702",
+      "bytes": 1176,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p6-a0-gray-yNone-r0",
+      "source_sha256": "2a17efe539e6c86e5b203feb3a1ed7d862f3d3596cbbf20bea7cf835a883f279",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "8d19aa9d88d69b85273df328845a2b71751792735b62f3eae2876646532241ee",
+      "original_sha256": "8d19aa9d88d69b85273df328845a2b71751792735b62f3eae2876646532241ee",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p6-a0-gray-yNone-r5",
+      "source_sha256": "23a50d964d0d5784ea392d563d4d6316ec51ef70184975c7a57c07e86d876348",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "d478dc9519029abb24fe3b93930dee2bf6a5368cff66237b193e1678f7b3cebb",
+      "original_sha256": "d478dc9519029abb24fe3b93930dee2bf6a5368cff66237b193e1678f7b3cebb",
+      "bytes": 401,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p6-a0-gray-y2-r0",
+      "source_sha256": "2a17efe539e6c86e5b203feb3a1ed7d862f3d3596cbbf20bea7cf835a883f279",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "01a5ce8ae4c508909cc23b7a7273ab8c402e5fd68a8e4743f6d343de953bf74f",
+      "original_sha256": "01a5ce8ae4c508909cc23b7a7273ab8c402e5fd68a8e4743f6d343de953bf74f",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p6-a0-gray-y2-r5",
+      "source_sha256": "23a50d964d0d5784ea392d563d4d6316ec51ef70184975c7a57c07e86d876348",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "87eeea11da23e87b54bd9a36574fcd660adcbee211c9578c066cc2d60a029bcb",
+      "original_sha256": "87eeea11da23e87b54bd9a36574fcd660adcbee211c9578c066cc2d60a029bcb",
+      "bytes": 549,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p6-a0-rgb444-yNone-r0",
+      "source_sha256": "38753010caf5cedc8f9fb952a548a89eeb8e5febb4e5e35ea4326afd255fa538",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "ed8f15efdefa1105bd8e9d506d583381b816a2957b1397685eccb0dc1ba9d8cc",
+      "original_sha256": "ed8f15efdefa1105bd8e9d506d583381b816a2957b1397685eccb0dc1ba9d8cc",
+      "bytes": 239,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p6-a0-rgb444-yNone-r5",
+      "source_sha256": "3e5aea5cdd1d316fcb41383d6a5a517ad8bb333bedfabc7bcf685a187f822b04",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "39783f16659cde13ff82cd5607a81000c6fea148a89bb3db342cafef6d0f87ed",
+      "original_sha256": "39783f16659cde13ff82cd5607a81000c6fea148a89bb3db342cafef6d0f87ed",
+      "bytes": 1011,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p6-a0-rgb444-y2-r0",
+      "source_sha256": "38753010caf5cedc8f9fb952a548a89eeb8e5febb4e5e35ea4326afd255fa538",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "47c2a838fefce8ca46bc08ba88668e9a675b46af9b196eed4ab3e8e999a369f7",
+      "original_sha256": "47c2a838fefce8ca46bc08ba88668e9a675b46af9b196eed4ab3e8e999a369f7",
+      "bytes": 365,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p6-a0-rgb444-y2-r5",
+      "source_sha256": "3e5aea5cdd1d316fcb41383d6a5a517ad8bb333bedfabc7bcf685a187f822b04",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "328b94e85c5bb34067628572840f6bbe3cff9bee6079528520d128d7bd88ecf8",
+      "original_sha256": "328b94e85c5bb34067628572840f6bbe3cff9bee6079528520d128d7bd88ecf8",
+      "bytes": 1349,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p6-a1-gray-yNone-r0",
+      "source_sha256": "2a17efe539e6c86e5b203feb3a1ed7d862f3d3596cbbf20bea7cf835a883f279",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "2a472d89ae3906735d8d1136b9c42f1d36ec7d85f60f78ce7970844a276ca33e",
+      "original_sha256": "2a472d89ae3906735d8d1136b9c42f1d36ec7d85f60f78ce7970844a276ca33e",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p6-a1-gray-yNone-r5",
+      "source_sha256": "23a50d964d0d5784ea392d563d4d6316ec51ef70184975c7a57c07e86d876348",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "3fb89be5cb0dbdda2e697b9c6db0b88b787bf388ea9fea5743f3cfcd5ee21624",
+      "original_sha256": "3fb89be5cb0dbdda2e697b9c6db0b88b787bf388ea9fea5743f3cfcd5ee21624",
+      "bytes": 351,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p6-a1-gray-y2-r0",
+      "source_sha256": "2a17efe539e6c86e5b203feb3a1ed7d862f3d3596cbbf20bea7cf835a883f279",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "ebd6b15cf2e1134c1b745c49e194e45c1ae0b203801ba246843fb5a56ab88502",
+      "original_sha256": "ebd6b15cf2e1134c1b745c49e194e45c1ae0b203801ba246843fb5a56ab88502",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p6-a1-gray-y2-r5",
+      "source_sha256": "23a50d964d0d5784ea392d563d4d6316ec51ef70184975c7a57c07e86d876348",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "9990d3f64e9fc9f6756e8a3c10f74b6aaba1cca9a913adcd9ae8621af01a401d",
+      "original_sha256": "9990d3f64e9fc9f6756e8a3c10f74b6aaba1cca9a913adcd9ae8621af01a401d",
+      "bytes": 548,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p6-a1-rgb444-yNone-r0",
+      "source_sha256": "38753010caf5cedc8f9fb952a548a89eeb8e5febb4e5e35ea4326afd255fa538",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "215ca402eeba3663718a7b3714fbff874438d9fcacb0c7548d4c9876baec4c3a",
+      "original_sha256": "215ca402eeba3663718a7b3714fbff874438d9fcacb0c7548d4c9876baec4c3a",
+      "bytes": 74,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p6-a1-rgb444-yNone-r5",
+      "source_sha256": "3e5aea5cdd1d316fcb41383d6a5a517ad8bb333bedfabc7bcf685a187f822b04",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "f23435039f1efe6fdacf30f82460c3f600f67f6a83ab33723b1830945a0651f8",
+      "original_sha256": "f23435039f1efe6fdacf30f82460c3f600f67f6a83ab33723b1830945a0651f8",
+      "bytes": 777,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p6-a1-rgb444-y2-r0",
+      "source_sha256": "38753010caf5cedc8f9fb952a548a89eeb8e5febb4e5e35ea4326afd255fa538",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "bc6f45e59208787487187c2353e1aa59ce37884d734bf72ba321dd55278f8d88",
+      "original_sha256": "bc6f45e59208787487187c2353e1aa59ce37884d734bf72ba321dd55278f8d88",
+      "bytes": 143,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p6-a1-rgb444-y2-r5",
+      "source_sha256": "3e5aea5cdd1d316fcb41383d6a5a517ad8bb333bedfabc7bcf685a187f822b04",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "883484ada960318bee7a98d670b7354f7bf064ba3f8d67b7f9ccc6fecb6332fa",
+      "original_sha256": "883484ada960318bee7a98d670b7354f7bf064ba3f8d67b7f9ccc6fecb6332fa",
+      "bytes": 1313,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p7-a0-gray-yNone-r0",
+      "source_sha256": "f22672c94cc4b5da3accd18496adce09fade69cee81efb96af62a97716c80b18",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "14c9772b3b3b63f137252bfd239fb45261af8a1a450f4a9514fe6ad77b86b3ed",
+      "original_sha256": "14c9772b3b3b63f137252bfd239fb45261af8a1a450f4a9514fe6ad77b86b3ed",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p7-a0-gray-yNone-r5",
+      "source_sha256": "7ed50cfce461c004fdcdfac890c2115dce27793f238514570f9a21f22b594e26",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "f8ebc9dd1916a282a97a4141624cc5b44ea1d76b3756e737c1874bfb576ad848",
+      "original_sha256": "f8ebc9dd1916a282a97a4141624cc5b44ea1d76b3756e737c1874bfb576ad848",
+      "bytes": 450,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p7-a0-gray-y2-r0",
+      "source_sha256": "f22672c94cc4b5da3accd18496adce09fade69cee81efb96af62a97716c80b18",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "809bec0dcb27c1c63fa540cabc2812ebaf49ab69522754f7f25d26bf879e680b",
+      "original_sha256": "809bec0dcb27c1c63fa540cabc2812ebaf49ab69522754f7f25d26bf879e680b",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p7-a0-gray-y2-r5",
+      "source_sha256": "7ed50cfce461c004fdcdfac890c2115dce27793f238514570f9a21f22b594e26",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "56770bf912e88afc903ef4a13d3bfdac556bdc71232126558de2277dc8e98089",
+      "original_sha256": "56770bf912e88afc903ef4a13d3bfdac556bdc71232126558de2277dc8e98089",
+      "bytes": 606,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p7-a0-rgb444-yNone-r0",
+      "source_sha256": "db3a7a1d0503f41b02a124f0b42690bb81e913eb7633f49e4223d77d8ce3c6c9",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "ecc193e6c30271b07bccecee7c8fdb58ad49c9f64b6cb39c0f4a87559f6896c2",
+      "original_sha256": "ecc193e6c30271b07bccecee7c8fdb58ad49c9f64b6cb39c0f4a87559f6896c2",
+      "bytes": 240,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p7-a0-rgb444-yNone-r5",
+      "source_sha256": "44755959486ca0619b95620fca7a3ebe991878012ed6db921b04d5a4a8e5e9f3",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "f2189b723a6fab12d2161b756f4c8e27096966bb816be8e70839bb28933a4a80",
+      "original_sha256": "f2189b723a6fab12d2161b756f4c8e27096966bb816be8e70839bb28933a4a80",
+      "bytes": 1161,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p7-a0-rgb444-y2-r0",
+      "source_sha256": "db3a7a1d0503f41b02a124f0b42690bb81e913eb7633f49e4223d77d8ce3c6c9",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "3adcc4460f409b102b358d79880010ae9905d56d24e8f26a241563044e85f8c6",
+      "original_sha256": "3adcc4460f409b102b358d79880010ae9905d56d24e8f26a241563044e85f8c6",
+      "bytes": 365,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p7-a0-rgb444-y2-r5",
+      "source_sha256": "44755959486ca0619b95620fca7a3ebe991878012ed6db921b04d5a4a8e5e9f3",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "0e1cbfb86a560fb86bf08e159b1b77926c2f871eccc12760ef471b5ce8dd7980",
+      "original_sha256": "0e1cbfb86a560fb86bf08e159b1b77926c2f871eccc12760ef471b5ce8dd7980",
+      "bytes": 1520,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p7-a1-gray-yNone-r0",
+      "source_sha256": "f22672c94cc4b5da3accd18496adce09fade69cee81efb96af62a97716c80b18",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "e43b4f47316355742e6e6096b25776a5fe0d0e095214a5d49d5d6297bb14e42b",
+      "original_sha256": "e43b4f47316355742e6e6096b25776a5fe0d0e095214a5d49d5d6297bb14e42b",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p7-a1-gray-yNone-r5",
+      "source_sha256": "7ed50cfce461c004fdcdfac890c2115dce27793f238514570f9a21f22b594e26",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "065fa7e11ff93118e2c9bb8ba4ddff51c85069247945e1c03b8b0cefd95b2d5d",
+      "original_sha256": "065fa7e11ff93118e2c9bb8ba4ddff51c85069247945e1c03b8b0cefd95b2d5d",
+      "bytes": 411,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p7-a1-gray-y2-r0",
+      "source_sha256": "f22672c94cc4b5da3accd18496adce09fade69cee81efb96af62a97716c80b18",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "574b9ed92205607b071f084d4433c1b1d302a8c7850645587a95c759ded1e5ed",
+      "original_sha256": "574b9ed92205607b071f084d4433c1b1d302a8c7850645587a95c759ded1e5ed",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p7-a1-gray-y2-r5",
+      "source_sha256": "7ed50cfce461c004fdcdfac890c2115dce27793f238514570f9a21f22b594e26",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "066dc99a0c1951722b603c68ef3b6aa15a46d9f4e3666c07cdf001550ffa3759",
+      "original_sha256": "066dc99a0c1951722b603c68ef3b6aa15a46d9f4e3666c07cdf001550ffa3759",
+      "bytes": 612,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p7-a1-rgb444-yNone-r0",
+      "source_sha256": "db3a7a1d0503f41b02a124f0b42690bb81e913eb7633f49e4223d77d8ce3c6c9",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "36d69c46e0159757e90b6343107b8f49db258b6acbbcb5e855e731c451f20812",
+      "original_sha256": "36d69c46e0159757e90b6343107b8f49db258b6acbbcb5e855e731c451f20812",
+      "bytes": 75,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p7-a1-rgb444-yNone-r5",
+      "source_sha256": "44755959486ca0619b95620fca7a3ebe991878012ed6db921b04d5a4a8e5e9f3",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "7004cbab170b8c762b2bf089bdc50d7ced17a56aa42457730c77e2dc65f53a70",
+      "original_sha256": "7004cbab170b8c762b2bf089bdc50d7ced17a56aa42457730c77e2dc65f53a70",
+      "bytes": 935,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p7-a1-rgb444-y2-r0",
+      "source_sha256": "db3a7a1d0503f41b02a124f0b42690bb81e913eb7633f49e4223d77d8ce3c6c9",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "0aabed3297474390eaa856b6c70f34e4b5484d1a7a3f80c86b073de1fce9b7bc",
+      "original_sha256": "0aabed3297474390eaa856b6c70f34e4b5484d1a7a3f80c86b073de1fce9b7bc",
+      "bytes": 144,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p7-a1-rgb444-y2-r5",
+      "source_sha256": "44755959486ca0619b95620fca7a3ebe991878012ed6db921b04d5a4a8e5e9f3",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "90c7f341fd9a1f1241c0294e89593725f88136d217f94ebf418eef30871758ae",
+      "original_sha256": "90c7f341fd9a1f1241c0294e89593725f88136d217f94ebf418eef30871758ae",
+      "bytes": 1484,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p8-a0-gray-yNone-r0",
+      "source_sha256": "7f2e39af134bec16fad77f33dda620e8426d90fe70c846982fc94960a7520704",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "3d2c6b6b455bfb42f7ddc9a2136db4436e5ad804891eeabed429ee856caf2219",
+      "original_sha256": "3d2c6b6b455bfb42f7ddc9a2136db4436e5ad804891eeabed429ee856caf2219",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p8-a0-gray-yNone-r5",
+      "source_sha256": "aa85ca663cbca42f29417366c7f0c8667e5fb4c655b787b34a2cfb038f1ebd05",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "383459305e300972f736b142b8307b5d8a67b9473da3b1beb54c76de166fc764",
+      "original_sha256": "383459305e300972f736b142b8307b5d8a67b9473da3b1beb54c76de166fc764",
+      "bytes": 562,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p8-a0-gray-y2-r0",
+      "source_sha256": "7f2e39af134bec16fad77f33dda620e8426d90fe70c846982fc94960a7520704",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "fceba602299524e2836aeb6624593e44cf3e8e493147ceb270bc0c76f9baf44d",
+      "original_sha256": "fceba602299524e2836aeb6624593e44cf3e8e493147ceb270bc0c76f9baf44d",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p8-a0-gray-y2-r5",
+      "source_sha256": "aa85ca663cbca42f29417366c7f0c8667e5fb4c655b787b34a2cfb038f1ebd05",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "4c9487cf3ddcba148eeca235e66f9a1b47866cfb14b13bdba0f8860518a462dc",
+      "original_sha256": "4c9487cf3ddcba148eeca235e66f9a1b47866cfb14b13bdba0f8860518a462dc",
+      "bytes": 679,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p8-a0-rgb444-yNone-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "00ab3578f17f26190a97f27ef487f6184821af1dc4de78717b5b93283ef54d0b",
+      "original_sha256": "00ab3578f17f26190a97f27ef487f6184821af1dc4de78717b5b93283ef54d0b",
+      "bytes": 240,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p8-a0-rgb444-yNone-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "00307484058e11431f129cc990187f56ff952661a0b843ac5a5fee25a83e0fcc",
+      "original_sha256": "00307484058e11431f129cc990187f56ff952661a0b843ac5a5fee25a83e0fcc",
+      "bytes": 1506,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p8-a0-rgb444-y2-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "9b3ba24c56a9853313adc7f1500efe7705276ee9db05148a7b0c5c66bc2cb5cd",
+      "original_sha256": "9b3ba24c56a9853313adc7f1500efe7705276ee9db05148a7b0c5c66bc2cb5cd",
+      "bytes": 365,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p8-a0-rgb444-y2-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "d8f6917df6a58693c1fd5c83f348956772a0bad12d2a280fa36e002600217214",
+      "original_sha256": "d8f6917df6a58693c1fd5c83f348956772a0bad12d2a280fa36e002600217214",
+      "bytes": 1735,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p8-a1-gray-yNone-r0",
+      "source_sha256": "7f2e39af134bec16fad77f33dda620e8426d90fe70c846982fc94960a7520704",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "dfcba3c9eabd66e5168e31e36d1fe298c03824f5301d7dcdfd7105d4732d7120",
+      "original_sha256": "dfcba3c9eabd66e5168e31e36d1fe298c03824f5301d7dcdfd7105d4732d7120",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p8-a1-gray-yNone-r5",
+      "source_sha256": "aa85ca663cbca42f29417366c7f0c8667e5fb4c655b787b34a2cfb038f1ebd05",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "3c49db65d49aae079ad500e2319cae8446c40e7e124f07a080958a6779ca8b5c",
+      "original_sha256": "3c49db65d49aae079ad500e2319cae8446c40e7e124f07a080958a6779ca8b5c",
+      "bytes": 543,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p8-a1-gray-y2-r0",
+      "source_sha256": "7f2e39af134bec16fad77f33dda620e8426d90fe70c846982fc94960a7520704",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "17d025e5316161ff201b9b3179c25892a5b9d68eb95cdb9c2fe85a12a0ad0a5a",
+      "original_sha256": "17d025e5316161ff201b9b3179c25892a5b9d68eb95cdb9c2fe85a12a0ad0a5a",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p8-a1-gray-y2-r5",
+      "source_sha256": "aa85ca663cbca42f29417366c7f0c8667e5fb4c655b787b34a2cfb038f1ebd05",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "8f935e0c4ee3278617c84af0b8f945e6825b745fb26fe502f7119c96b23f5093",
+      "original_sha256": "8f935e0c4ee3278617c84af0b8f945e6825b745fb26fe502f7119c96b23f5093",
+      "bytes": 710,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p8-a1-rgb444-yNone-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "efe87059b349dc2160c290a2e1edbbb99341b90ce9a2afc0036758c5c068db57",
+      "original_sha256": "efe87059b349dc2160c290a2e1edbbb99341b90ce9a2afc0036758c5c068db57",
+      "bytes": 75,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p8-a1-rgb444-yNone-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "daf573fe7b88dfc0f0d87f55c83825a9216d84ee6e53b9572667b4234c165c79",
+      "original_sha256": "daf573fe7b88dfc0f0d87f55c83825a9216d84ee6e53b9572667b4234c165c79",
+      "bytes": 1351,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p8-a1-rgb444-y2-r0",
+      "source_sha256": "857b5bc5fc43ddf3f880dcfe0f1bd19dbc5e889a2b48555de37f03efe186f2d4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "8b29335b1e9e670aed5a2e3b1d4abf25143c42615efc5f913ad982170f566ee3",
+      "original_sha256": "8b29335b1e9e670aed5a2e3b1d4abf25143c42615efc5f913ad982170f566ee3",
+      "bytes": 144,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p8-a1-rgb444-y2-r5",
+      "source_sha256": "079b8bff89737e4519922ef456fad41ad3afb61fc5bcbd44350c2f318b7520e4",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "4dd52280bf2b2dd214b68d522e2547d075da6762a04cff23292c1d0f228bbd90",
+      "original_sha256": "4dd52280bf2b2dd214b68d522e2547d075da6762a04cff23292c1d0f228bbd90",
+      "bytes": 1772,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p9-a0-gray-yNone-r0",
+      "source_sha256": "a9ae8c57c7c2a492558e66e0b62cb067e544d7b0f848687f586af77b786e3a35",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "dbf5b10ff89c302dc73fa345af9ff2d315605ada98db7b5e5a0bc8c717e25de0",
+      "original_sha256": "dbf5b10ff89c302dc73fa345af9ff2d315605ada98db7b5e5a0bc8c717e25de0",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p9-a0-gray-yNone-r5",
+      "source_sha256": "13539da59d6f20adf475d23de0a48a1d80c32dfd2e0bcbf82357f9b8c411c8ee",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "4d2633a6dcb78969347a7049e0a79af12810b5cd2c96c325751f2512cec31ebb",
+      "original_sha256": "4d2633a6dcb78969347a7049e0a79af12810b5cd2c96c325751f2512cec31ebb",
+      "bytes": 597,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p9-a0-gray-y2-r0",
+      "source_sha256": "a9ae8c57c7c2a492558e66e0b62cb067e544d7b0f848687f586af77b786e3a35",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "21259970a4022ec58cf4e2cd17089748975dfb9e9efddd7f621495efb037e54a",
+      "original_sha256": "21259970a4022ec58cf4e2cd17089748975dfb9e9efddd7f621495efb037e54a",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p9-a0-gray-y2-r5",
+      "source_sha256": "13539da59d6f20adf475d23de0a48a1d80c32dfd2e0bcbf82357f9b8c411c8ee",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "5f13a6a48e1a7f452fba1e97252d244851a49bb4b8437eb564ac6e9c68b4635d",
+      "original_sha256": "5f13a6a48e1a7f452fba1e97252d244851a49bb4b8437eb564ac6e9c68b4635d",
+      "bytes": 746,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p9-a0-rgb444-yNone-r0",
+      "source_sha256": "ea553ea5bee0e36116b5feb22af4047be695ca6ae50c99e45fea620c307cf50a",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "86422c7dbb8c2d5980c45c64173a27b9fffdc45d67b80948702b1bc8e421ec06",
+      "original_sha256": "86422c7dbb8c2d5980c45c64173a27b9fffdc45d67b80948702b1bc8e421ec06",
+      "bytes": 240,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p9-a0-rgb444-yNone-r5",
+      "source_sha256": "6391dd2216ef8a1af3fc9f976f363897bf71d31711afc5d531cf4bc776af31d1",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "4d5d067f4929a49bac58eb1253c6b92426a518a9c6db223cd94500a6adba2b6a",
+      "original_sha256": "4d5d067f4929a49bac58eb1253c6b92426a518a9c6db223cd94500a6adba2b6a",
+      "bytes": 1625,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p9-a0-rgb444-y2-r0",
+      "source_sha256": "ea553ea5bee0e36116b5feb22af4047be695ca6ae50c99e45fea620c307cf50a",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "1ff42497561933326e97f290e2f88bd380076f5b5117c3460dea0822b60c90db",
+      "original_sha256": "1ff42497561933326e97f290e2f88bd380076f5b5117c3460dea0822b60c90db",
+      "bytes": 366,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p9-a0-rgb444-y2-r5",
+      "source_sha256": "6391dd2216ef8a1af3fc9f976f363897bf71d31711afc5d531cf4bc776af31d1",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "b407c3cf6e70fbb749d9b121c0dc7d8ffbe18ba62d833f89c82bda0dbd1b7566",
+      "original_sha256": "b407c3cf6e70fbb749d9b121c0dc7d8ffbe18ba62d833f89c82bda0dbd1b7566",
+      "bytes": 1939,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p9-a1-gray-yNone-r0",
+      "source_sha256": "a9ae8c57c7c2a492558e66e0b62cb067e544d7b0f848687f586af77b786e3a35",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "701a6f1d5365e2df8911a63d5bf1eee9c288dac373e42f757fda6b5379081a34",
+      "original_sha256": "701a6f1d5365e2df8911a63d5bf1eee9c288dac373e42f757fda6b5379081a34",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p9-a1-gray-yNone-r5",
+      "source_sha256": "13539da59d6f20adf475d23de0a48a1d80c32dfd2e0bcbf82357f9b8c411c8ee",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "b879e01b89d3e8fc7cd750b239f02a29563be379ab33a14ab4835da6d843531e",
+      "original_sha256": "b879e01b89d3e8fc7cd750b239f02a29563be379ab33a14ab4835da6d843531e",
+      "bytes": 580,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p9-a1-gray-y2-r0",
+      "source_sha256": "a9ae8c57c7c2a492558e66e0b62cb067e544d7b0f848687f586af77b786e3a35",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "47fd45e08e9e9120bec043064fa5b7011f026df84a470335d7b834e022c92d4d",
+      "original_sha256": "47fd45e08e9e9120bec043064fa5b7011f026df84a470335d7b834e022c92d4d",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p9-a1-gray-y2-r5",
+      "source_sha256": "13539da59d6f20adf475d23de0a48a1d80c32dfd2e0bcbf82357f9b8c411c8ee",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "54ce9894e4df0f0ee8130cd8d63a897dde36de488e2c37a2e65a35334cdec69e",
+      "original_sha256": "54ce9894e4df0f0ee8130cd8d63a897dde36de488e2c37a2e65a35334cdec69e",
+      "bytes": 784,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p9-a1-rgb444-yNone-r0",
+      "source_sha256": "ea553ea5bee0e36116b5feb22af4047be695ca6ae50c99e45fea620c307cf50a",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "24a3c1bcf0bcd38a46a58417b3d404a9fda6ca783feaab4c5486fed327f79281",
+      "original_sha256": "24a3c1bcf0bcd38a46a58417b3d404a9fda6ca783feaab4c5486fed327f79281",
+      "bytes": 75,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p9-a1-rgb444-yNone-r5",
+      "source_sha256": "6391dd2216ef8a1af3fc9f976f363897bf71d31711afc5d531cf4bc776af31d1",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "c0f004dc35276e5a33d02ef8556799d4dad3b21a029bce28da16ba8ed73cdf60",
+      "original_sha256": "c0f004dc35276e5a33d02ef8556799d4dad3b21a029bce28da16ba8ed73cdf60",
+      "bytes": 1443,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p9-a1-rgb444-y2-r0",
+      "source_sha256": "ea553ea5bee0e36116b5feb22af4047be695ca6ae50c99e45fea620c307cf50a",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "cfed551b724939d8bfb50b652c463b98dd1fcf0c9778ba8d3a3e9325f025e239",
+      "original_sha256": "cfed551b724939d8bfb50b652c463b98dd1fcf0c9778ba8d3a3e9325f025e239",
+      "bytes": 145,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p9-a1-rgb444-y2-r5",
+      "source_sha256": "6391dd2216ef8a1af3fc9f976f363897bf71d31711afc5d531cf4bc776af31d1",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "993d005357703f15816eb895638bef32e16018c8fd3ce31ff6c92dbd9eb4e0f8",
+      "original_sha256": "993d005357703f15816eb895638bef32e16018c8fd3ce31ff6c92dbd9eb4e0f8",
+      "bytes": 1993,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p10-a0-gray-yNone-r0",
+      "source_sha256": "e7ae2e0b4bbc3e27194e8928219b113b158f9007074aa996c252d006d1418902",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "5b10ea13241a5148e84aff4128039083edebe4f9cb80c889f4b2c1014d10d6e1",
+      "original_sha256": "5b10ea13241a5148e84aff4128039083edebe4f9cb80c889f4b2c1014d10d6e1",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p10-a0-gray-yNone-r5",
+      "source_sha256": "1fedf62d0851cdcc9dba881dd634a76242ee0ea382b69430fd155ab48599ce49",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "3fdaa69c028924e3cf20aee32aab39012113df104e6cb6c73230e984bc43f647",
+      "original_sha256": "3fdaa69c028924e3cf20aee32aab39012113df104e6cb6c73230e984bc43f647",
+      "bytes": 624,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p10-a0-gray-y2-r0",
+      "source_sha256": "e7ae2e0b4bbc3e27194e8928219b113b158f9007074aa996c252d006d1418902",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "9e49211cb4d3488bd58d8f602baec1dfc1207e59d81c99d249dafd920e447556",
+      "original_sha256": "9e49211cb4d3488bd58d8f602baec1dfc1207e59d81c99d249dafd920e447556",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p10-a0-gray-y2-r5",
+      "source_sha256": "1fedf62d0851cdcc9dba881dd634a76242ee0ea382b69430fd155ab48599ce49",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "0e4e68a03b5951f9545d896fc2a2698c0584d33620b8ee0598e2151dbb026ba0",
+      "original_sha256": "0e4e68a03b5951f9545d896fc2a2698c0584d33620b8ee0598e2151dbb026ba0",
+      "bytes": 810,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p10-a0-rgb444-yNone-r0",
+      "source_sha256": "d767a7c793d6910418352ce5699288b7cbc91019c6fcbb682dda004a1c6accb4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4ef94a3ce6abc0817bc67f86f2428622d2228bbca08e511a7b0e411ba4e80050",
+      "original_sha256": "4ef94a3ce6abc0817bc67f86f2428622d2228bbca08e511a7b0e411ba4e80050",
+      "bytes": 240,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p10-a0-rgb444-yNone-r5",
+      "source_sha256": "bc27577849d3b6341edd9e63cc90cb6c04897205016812b38bf3069cedb39962",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "d1e102eb6320d10e1e473cdc85af97219ca5458db2c078fcbc53f5a334f0b98e",
+      "original_sha256": "d1e102eb6320d10e1e473cdc85af97219ca5458db2c078fcbc53f5a334f0b98e",
+      "bytes": 1718,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p10-a0-rgb444-y2-r0",
+      "source_sha256": "d767a7c793d6910418352ce5699288b7cbc91019c6fcbb682dda004a1c6accb4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "ea2d93db2100bdf9e06bdd0ada6c6e6cbc0c586763a9c56de06695539ff3da91",
+      "original_sha256": "ea2d93db2100bdf9e06bdd0ada6c6e6cbc0c586763a9c56de06695539ff3da91",
+      "bytes": 366,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p10-a0-rgb444-y2-r5",
+      "source_sha256": "bc27577849d3b6341edd9e63cc90cb6c04897205016812b38bf3069cedb39962",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "70ed816c21177fd7fd7d958cd30922d86f9ffbe7193d8293d4d17546088bf13f",
+      "original_sha256": "70ed816c21177fd7fd7d958cd30922d86f9ffbe7193d8293d4d17546088bf13f",
+      "bytes": 2133,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p10-a1-gray-yNone-r0",
+      "source_sha256": "e7ae2e0b4bbc3e27194e8928219b113b158f9007074aa996c252d006d1418902",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "8ca7842f470636fb8d9fdc0ed424080c54dcd073095521fa764454c09018ac73",
+      "original_sha256": "8ca7842f470636fb8d9fdc0ed424080c54dcd073095521fa764454c09018ac73",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p10-a1-gray-yNone-r5",
+      "source_sha256": "1fedf62d0851cdcc9dba881dd634a76242ee0ea382b69430fd155ab48599ce49",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "06857a59cb485e137858d928567c303475ecd38df4bb708fab33790edd148502",
+      "original_sha256": "06857a59cb485e137858d928567c303475ecd38df4bb708fab33790edd148502",
+      "bytes": 578,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p10-a1-gray-y2-r0",
+      "source_sha256": "e7ae2e0b4bbc3e27194e8928219b113b158f9007074aa996c252d006d1418902",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "ec654c8c140b9189f621827a3fb5d2d89a330f4f9b66393de91bd5c48319fd3c",
+      "original_sha256": "ec654c8c140b9189f621827a3fb5d2d89a330f4f9b66393de91bd5c48319fd3c",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p10-a1-gray-y2-r5",
+      "source_sha256": "1fedf62d0851cdcc9dba881dd634a76242ee0ea382b69430fd155ab48599ce49",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "b68a3106d75cbed0b073590271afd45e581007a11d1f57ae21a718c15eb8acef",
+      "original_sha256": "b68a3106d75cbed0b073590271afd45e581007a11d1f57ae21a718c15eb8acef",
+      "bytes": 860,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p10-a1-rgb444-yNone-r0",
+      "source_sha256": "d767a7c793d6910418352ce5699288b7cbc91019c6fcbb682dda004a1c6accb4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "b38801e39cf3b4a62f9df2169da99f82e742a5629d61d3cf373c64406a0f6af3",
+      "original_sha256": "b38801e39cf3b4a62f9df2169da99f82e742a5629d61d3cf373c64406a0f6af3",
+      "bytes": 76,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p10-a1-rgb444-yNone-r5",
+      "source_sha256": "bc27577849d3b6341edd9e63cc90cb6c04897205016812b38bf3069cedb39962",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "ab7c4f1d6be795c20f637ed6cd7a58733e8a6a43832d17b9b2f903276d3f3fff",
+      "original_sha256": "ab7c4f1d6be795c20f637ed6cd7a58733e8a6a43832d17b9b2f903276d3f3fff",
+      "bytes": 1453,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p10-a1-rgb444-y2-r0",
+      "source_sha256": "d767a7c793d6910418352ce5699288b7cbc91019c6fcbb682dda004a1c6accb4",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "1569aac0761475b455559234d74a4517190e5e926f8af21e71a5c3ca816ce823",
+      "original_sha256": "1569aac0761475b455559234d74a4517190e5e926f8af21e71a5c3ca816ce823",
+      "bytes": 145,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p10-a1-rgb444-y2-r5",
+      "source_sha256": "bc27577849d3b6341edd9e63cc90cb6c04897205016812b38bf3069cedb39962",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "a7d1f4b665c249bd8b9c078b4020f1605f53a7398fbae1353830bc7d2650c0e7",
+      "original_sha256": "a7d1f4b665c249bd8b9c078b4020f1605f53a7398fbae1353830bc7d2650c0e7",
+      "bytes": 2207,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p11-a0-gray-yNone-r0",
+      "source_sha256": "13f0c97af6445a3b9454673b889ab8b3457f844c5334aea5756b0fcfcbb4ab9e",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "b239dcf721fb915daeadc59f76a5a64f3c8dafeef58534b1d71d75c6d42c4f5f",
+      "original_sha256": "b239dcf721fb915daeadc59f76a5a64f3c8dafeef58534b1d71d75c6d42c4f5f",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p11-a0-gray-yNone-r5",
+      "source_sha256": "fcffdaf09f147286f227bdc16537c8791e7923a907ce3b1a1af6610d4bb2dee5",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "c585487f887751d663a99c15384ef4225784e9c9fbead46a43cb24818bd60a05",
+      "original_sha256": "c585487f887751d663a99c15384ef4225784e9c9fbead46a43cb24818bd60a05",
+      "bytes": 664,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p11-a0-gray-y2-r0",
+      "source_sha256": "13f0c97af6445a3b9454673b889ab8b3457f844c5334aea5756b0fcfcbb4ab9e",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "f8d5a46483a568df8d9d626bbb90293409014c2e44f33110fc2e8eb0f44d7c30",
+      "original_sha256": "f8d5a46483a568df8d9d626bbb90293409014c2e44f33110fc2e8eb0f44d7c30",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p11-a0-gray-y2-r5",
+      "source_sha256": "fcffdaf09f147286f227bdc16537c8791e7923a907ce3b1a1af6610d4bb2dee5",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "d18866081e5f7f4d588ec4e634db8c52a7ef61adad8d4da5e412abefc1ffdcdf",
+      "original_sha256": "d18866081e5f7f4d588ec4e634db8c52a7ef61adad8d4da5e412abefc1ffdcdf",
+      "bytes": 878,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p11-a0-rgb444-yNone-r0",
+      "source_sha256": "db0e8a38289bdce2bf53d47ad329724d00b96898265f3491991ed9d72814d7cc",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "f5dc408d8c528f52678c8551d1a726efb005cba5d1bd43a76a4c14fca9cf44c6",
+      "original_sha256": "f5dc408d8c528f52678c8551d1a726efb005cba5d1bd43a76a4c14fca9cf44c6",
+      "bytes": 241,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p11-a0-rgb444-yNone-r5",
+      "source_sha256": "8ebaf09deda5635b7de07687dfa411c08317e89b288f7e32590cdfb31b52b8cb",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "ee9fe9bc86592e333be0c399f9835b6d8d044a12559a469f7a832e0ae3e91fac",
+      "original_sha256": "ee9fe9bc86592e333be0c399f9835b6d8d044a12559a469f7a832e0ae3e91fac",
+      "bytes": 1808,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p11-a0-rgb444-y2-r0",
+      "source_sha256": "db0e8a38289bdce2bf53d47ad329724d00b96898265f3491991ed9d72814d7cc",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "28ba2b7cd131b8942f3262a8cbf4d248d0bc289efe2a98ffa50287d85c2b124d",
+      "original_sha256": "28ba2b7cd131b8942f3262a8cbf4d248d0bc289efe2a98ffa50287d85c2b124d",
+      "bytes": 366,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p11-a0-rgb444-y2-r5",
+      "source_sha256": "8ebaf09deda5635b7de07687dfa411c08317e89b288f7e32590cdfb31b52b8cb",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "74e42967b5ea98d7bb245b46a583d308eef5e2d1a698af33441bc85d39b91bd6",
+      "original_sha256": "74e42967b5ea98d7bb245b46a583d308eef5e2d1a698af33441bc85d39b91bd6",
+      "bytes": 2328,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p11-a1-gray-yNone-r0",
+      "source_sha256": "13f0c97af6445a3b9454673b889ab8b3457f844c5334aea5756b0fcfcbb4ab9e",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "ee3ede5d5b9bd9cb2bbc1e26049cb7cf9d1ac0e44e9617dd8c21b1c452199886",
+      "original_sha256": "ee3ede5d5b9bd9cb2bbc1e26049cb7cf9d1ac0e44e9617dd8c21b1c452199886",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p11-a1-gray-yNone-r5",
+      "source_sha256": "fcffdaf09f147286f227bdc16537c8791e7923a907ce3b1a1af6610d4bb2dee5",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "ddc260b80fdc8c9b3e425410dd023612e5fac06f52d6de82ac7f77dc0a486883",
+      "original_sha256": "ddc260b80fdc8c9b3e425410dd023612e5fac06f52d6de82ac7f77dc0a486883",
+      "bytes": 598,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p11-a1-gray-y2-r0",
+      "source_sha256": "13f0c97af6445a3b9454673b889ab8b3457f844c5334aea5756b0fcfcbb4ab9e",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "55b862886133e02c2161b07b4b27f731bbde6b54ff4560a348a75f51796809a8",
+      "original_sha256": "55b862886133e02c2161b07b4b27f731bbde6b54ff4560a348a75f51796809a8",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p11-a1-gray-y2-r5",
+      "source_sha256": "fcffdaf09f147286f227bdc16537c8791e7923a907ce3b1a1af6610d4bb2dee5",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "d2824f0d581299cb1466e974fbed2c0698a438e5cdbc4e1df7b6da66c5aaef86",
+      "original_sha256": "d2824f0d581299cb1466e974fbed2c0698a438e5cdbc4e1df7b6da66c5aaef86",
+      "bytes": 924,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p11-a1-rgb444-yNone-r0",
+      "source_sha256": "db0e8a38289bdce2bf53d47ad329724d00b96898265f3491991ed9d72814d7cc",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "0f0d578dd9c54f59238401e782676f83b1d3900e8f61c1d658c74f98dad20289",
+      "original_sha256": "0f0d578dd9c54f59238401e782676f83b1d3900e8f61c1d658c74f98dad20289",
+      "bytes": 76,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p11-a1-rgb444-yNone-r5",
+      "source_sha256": "8ebaf09deda5635b7de07687dfa411c08317e89b288f7e32590cdfb31b52b8cb",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "bd5a6af195e11b7c6cb5c4490ba5041780bf85bc0d5973ae48236fb3eab953cd",
+      "original_sha256": "bd5a6af195e11b7c6cb5c4490ba5041780bf85bc0d5973ae48236fb3eab953cd",
+      "bytes": 1506,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p11-a1-rgb444-y2-r0",
+      "source_sha256": "db0e8a38289bdce2bf53d47ad329724d00b96898265f3491991ed9d72814d7cc",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4443184a7aec56510232faed35bf70f97492cb0e5e0f2f926e56dd0be17421f8",
+      "original_sha256": "4443184a7aec56510232faed35bf70f97492cb0e5e0f2f926e56dd0be17421f8",
+      "bytes": 145,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p11-a1-rgb444-y2-r5",
+      "source_sha256": "8ebaf09deda5635b7de07687dfa411c08317e89b288f7e32590cdfb31b52b8cb",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "6773f63c49a2ee010cfa56ebc1ea8671da5288dbe7004700a01c573014f9cab1",
+      "original_sha256": "6773f63c49a2ee010cfa56ebc1ea8671da5288dbe7004700a01c573014f9cab1",
+      "bytes": 2391,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p12-a0-gray-yNone-r0",
+      "source_sha256": "cc332d441f012df9b90494199182864a8a578e7c3980fdff63b5a3c4bed6fec6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "197abcf77ac1b8b74e4d8919735c5d741267fa4303103a7773a7fa728869f515",
+      "original_sha256": "197abcf77ac1b8b74e4d8919735c5d741267fa4303103a7773a7fa728869f515",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p12-a0-gray-yNone-r5",
+      "source_sha256": "2d25d3b4e05ee100f21f0c5e13557ee67d8aa5ada947eb5d842edcac17ec9b5e",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "2c26657b7af877a3996e52384afb5de247e192075a897ecd41cb23736951edf1",
+      "original_sha256": "2c26657b7af877a3996e52384afb5de247e192075a897ecd41cb23736951edf1",
+      "bytes": 692,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p12-a0-gray-y2-r0",
+      "source_sha256": "cc332d441f012df9b90494199182864a8a578e7c3980fdff63b5a3c4bed6fec6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "ac8b397629742deacb31cc03afe38f776069649e63e2546287688fdd9916411a",
+      "original_sha256": "ac8b397629742deacb31cc03afe38f776069649e63e2546287688fdd9916411a",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p12-a0-gray-y2-r5",
+      "source_sha256": "2d25d3b4e05ee100f21f0c5e13557ee67d8aa5ada947eb5d842edcac17ec9b5e",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "6d184d687e47a5bd1fa40d26e3f45f3481ff613408302433f5be33bd74c5f29c",
+      "original_sha256": "6d184d687e47a5bd1fa40d26e3f45f3481ff613408302433f5be33bd74c5f29c",
+      "bytes": 934,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p12-a0-rgb444-yNone-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "422bb1ee73d2949d84e80dbcf2d30c3272dc51a9edafa3cd1080e337bdcdc65b",
+      "original_sha256": "422bb1ee73d2949d84e80dbcf2d30c3272dc51a9edafa3cd1080e337bdcdc65b",
+      "bytes": 241,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p12-a0-rgb444-yNone-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "49ab3b3d5224b8bc0c8c0179f5720ae5d19216c72987ab258bcc419eeaf9668b",
+      "original_sha256": "49ab3b3d5224b8bc0c8c0179f5720ae5d19216c72987ab258bcc419eeaf9668b",
+      "bytes": 1893,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p12-a0-rgb444-y2-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "ea8f755767c8117713c23491b526ab592f1b227c118f8c824645685064c23ce9",
+      "original_sha256": "ea8f755767c8117713c23491b526ab592f1b227c118f8c824645685064c23ce9",
+      "bytes": 366,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p12-a0-rgb444-y2-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "2bd6a39ef7def4b0bbf87bb1b868e289e37dcff3201f6eef7b5abd17a7557f13",
+      "original_sha256": "2bd6a39ef7def4b0bbf87bb1b868e289e37dcff3201f6eef7b5abd17a7557f13",
+      "bytes": 2503,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p12-a1-gray-yNone-r0",
+      "source_sha256": "cc332d441f012df9b90494199182864a8a578e7c3980fdff63b5a3c4bed6fec6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "3134259016bcdf6f5e0e93bd901a1f9f72ff382a5860b29e0e318df866415741",
+      "original_sha256": "3134259016bcdf6f5e0e93bd901a1f9f72ff382a5860b29e0e318df866415741",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p12-a1-gray-yNone-r5",
+      "source_sha256": "2d25d3b4e05ee100f21f0c5e13557ee67d8aa5ada947eb5d842edcac17ec9b5e",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "f42e666cad14572440fd5268519659ef3e2d36b9ec4f3d66a7f0f51ee3c4d7fb",
+      "original_sha256": "f42e666cad14572440fd5268519659ef3e2d36b9ec4f3d66a7f0f51ee3c4d7fb",
+      "bytes": 615,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p12-a1-gray-y2-r0",
+      "source_sha256": "cc332d441f012df9b90494199182864a8a578e7c3980fdff63b5a3c4bed6fec6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "370c92381ada1674734ded84a1ae87f216fa73076ae717c020643e1b83c3c457",
+      "original_sha256": "370c92381ada1674734ded84a1ae87f216fa73076ae717c020643e1b83c3c457",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p12-a1-gray-y2-r5",
+      "source_sha256": "2d25d3b4e05ee100f21f0c5e13557ee67d8aa5ada947eb5d842edcac17ec9b5e",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "95a8574004e3c75d084885f36f78bf39dd7404640e76e14e006e3af78652235e",
+      "original_sha256": "95a8574004e3c75d084885f36f78bf39dd7404640e76e14e006e3af78652235e",
+      "bytes": 978,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p12-a1-rgb444-yNone-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "a494608e0453e83caf621914084455ac985795bdbfa3f716d0a9781a648405a4",
+      "original_sha256": "a494608e0453e83caf621914084455ac985795bdbfa3f716d0a9781a648405a4",
+      "bytes": 76,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p12-a1-rgb444-yNone-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "9898e9b67da7ee5b18c30ff49a6b24392c3aa733d35c2604da795c6209f44a91",
+      "original_sha256": "9898e9b67da7ee5b18c30ff49a6b24392c3aa733d35c2604da795c6209f44a91",
+      "bytes": 1553,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p12-a1-rgb444-y2-r0",
+      "source_sha256": "886e9431f92769421dcaef137b787ca1bbdd8e89532bb015555dfeca777f9c22",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "e70b370d5ea16b93da8612aa218599ee8a76c28f99621eea1bd565ed13da1771",
+      "original_sha256": "e70b370d5ea16b93da8612aa218599ee8a76c28f99621eea1bd565ed13da1771",
+      "bytes": 145,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p12-a1-rgb444-y2-r5",
+      "source_sha256": "962ebbcdcb25f8b4c4fe27fc49c75e5260fb71497c444799f447ae8d0f1a78d3",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "51122948824248708a91be69f3d49ba4b71c1c6ba8b348d1e4f67a7f55efc26a",
+      "original_sha256": "51122948824248708a91be69f3d49ba4b71c1c6ba8b348d1e4f67a7f55efc26a",
+      "bytes": 2548,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p13-a0-gray-yNone-r0",
+      "source_sha256": "577f8e4806fed5c02a552046708c34de7aa79dd3338d2be67e9456e174b5c342",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "9e3b40271203fd15da4d03bd395bb6f7fe01171d73b6e9c9d5ceb188ad4b68d8",
+      "original_sha256": "9e3b40271203fd15da4d03bd395bb6f7fe01171d73b6e9c9d5ceb188ad4b68d8",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p13-a0-gray-yNone-r5",
+      "source_sha256": "d29fba23252b3670fcbc741492de9800bf7ed6404d9883e1f492547361ddec69",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "98f8d72bd79d744800c539b1802d741190a17e3f3cecc1c2f6c2edea0ac561d5",
+      "original_sha256": "98f8d72bd79d744800c539b1802d741190a17e3f3cecc1c2f6c2edea0ac561d5",
+      "bytes": 680,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p13-a0-gray-y2-r0",
+      "source_sha256": "577f8e4806fed5c02a552046708c34de7aa79dd3338d2be67e9456e174b5c342",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "af2433346afd892313195e4a0c2106693d6f2c1966f6501b2cb719a7717f6a5c",
+      "original_sha256": "af2433346afd892313195e4a0c2106693d6f2c1966f6501b2cb719a7717f6a5c",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p13-a0-gray-y2-r5",
+      "source_sha256": "d29fba23252b3670fcbc741492de9800bf7ed6404d9883e1f492547361ddec69",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "cb6821604acdfe710ae0404b4dd5e9a4c1a4f2e089110b453b5089082b9edfe3",
+      "original_sha256": "cb6821604acdfe710ae0404b4dd5e9a4c1a4f2e089110b453b5089082b9edfe3",
+      "bytes": 1006,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p13-a0-rgb444-yNone-r0",
+      "source_sha256": "53000fa49197a73f115a13f0d90be10663326c0b70403f69e4c6f21e7dc2e6a6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "8ce270ae6944d6e09347c871483c14def8d75a44fb0ca12869c498c6774cda7a",
+      "original_sha256": "8ce270ae6944d6e09347c871483c14def8d75a44fb0ca12869c498c6774cda7a",
+      "bytes": 242,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p13-a0-rgb444-yNone-r5",
+      "source_sha256": "fd10e31ad920a81c7d4744a9c8ce30b9f2636e7e20b734c1f2d8a69ff54012f8",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "d06c634b6d53b921c267b25b3cae4e9fe6debe812ed0c663daeee8bc93229542",
+      "original_sha256": "d06c634b6d53b921c267b25b3cae4e9fe6debe812ed0c663daeee8bc93229542",
+      "bytes": 1860,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p13-a0-rgb444-y2-r0",
+      "source_sha256": "53000fa49197a73f115a13f0d90be10663326c0b70403f69e4c6f21e7dc2e6a6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "68b336c3e83cf1d21a7925abf8d0e2379e0a538854eb1118ef201ccd590d8445",
+      "original_sha256": "68b336c3e83cf1d21a7925abf8d0e2379e0a538854eb1118ef201ccd590d8445",
+      "bytes": 368,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p13-a0-rgb444-y2-r5",
+      "source_sha256": "fd10e31ad920a81c7d4744a9c8ce30b9f2636e7e20b734c1f2d8a69ff54012f8",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "dbd7ed0e0e100d4656533382ef88a28b0a0e6504d97ac1153ac34ab62e299cf2",
+      "original_sha256": "dbd7ed0e0e100d4656533382ef88a28b0a0e6504d97ac1153ac34ab62e299cf2",
+      "bytes": 2687,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p13-a1-gray-yNone-r0",
+      "source_sha256": "577f8e4806fed5c02a552046708c34de7aa79dd3338d2be67e9456e174b5c342",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "787688ce6c7ad0a1a13052d2aa755971b8a68d376643151242871942d3c15b3d",
+      "original_sha256": "787688ce6c7ad0a1a13052d2aa755971b8a68d376643151242871942d3c15b3d",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p13-a1-gray-yNone-r5",
+      "source_sha256": "d29fba23252b3670fcbc741492de9800bf7ed6404d9883e1f492547361ddec69",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "0a77eb6f06cff3f75e9738cc50d6569d7d530b9db6ae30e0860353cf77fdcb7d",
+      "original_sha256": "0a77eb6f06cff3f75e9738cc50d6569d7d530b9db6ae30e0860353cf77fdcb7d",
+      "bytes": 595,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p13-a1-gray-y2-r0",
+      "source_sha256": "577f8e4806fed5c02a552046708c34de7aa79dd3338d2be67e9456e174b5c342",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "9f7fcf80ad5fd7877699a1eea71f88e771b896bd29761b319a79cdb9768d3791",
+      "original_sha256": "9f7fcf80ad5fd7877699a1eea71f88e771b896bd29761b319a79cdb9768d3791",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p13-a1-gray-y2-r5",
+      "source_sha256": "d29fba23252b3670fcbc741492de9800bf7ed6404d9883e1f492547361ddec69",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "6f50e126f320df1c3be5ffa39ff6db30a6eb9b61e43cc460161f88c4d50a5f8b",
+      "original_sha256": "6f50e126f320df1c3be5ffa39ff6db30a6eb9b61e43cc460161f88c4d50a5f8b",
+      "bytes": 1040,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p13-a1-rgb444-yNone-r0",
+      "source_sha256": "53000fa49197a73f115a13f0d90be10663326c0b70403f69e4c6f21e7dc2e6a6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "b943c659f087d12c0d4f18e8300396da027d4523a5ebab4c7bf54722ce9ef4d5",
+      "original_sha256": "b943c659f087d12c0d4f18e8300396da027d4523a5ebab4c7bf54722ce9ef4d5",
+      "bytes": 76,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p13-a1-rgb444-yNone-r5",
+      "source_sha256": "fd10e31ad920a81c7d4744a9c8ce30b9f2636e7e20b734c1f2d8a69ff54012f8",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "8714a7218236d021b0896cb42049dab94987ad69e322cd5241eead222f9c1c31",
+      "original_sha256": "8714a7218236d021b0896cb42049dab94987ad69e322cd5241eead222f9c1c31",
+      "bytes": 1487,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p13-a1-rgb444-y2-r0",
+      "source_sha256": "53000fa49197a73f115a13f0d90be10663326c0b70403f69e4c6f21e7dc2e6a6",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "ba67c6d32099ff9ebbbc189a463c2df8a7e2da2a3c012d9046c87ef45bcb2c0e",
+      "original_sha256": "ba67c6d32099ff9ebbbc189a463c2df8a7e2da2a3c012d9046c87ef45bcb2c0e",
+      "bytes": 145,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p13-a1-rgb444-y2-r5",
+      "source_sha256": "fd10e31ad920a81c7d4744a9c8ce30b9f2636e7e20b734c1f2d8a69ff54012f8",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "8d6eb47397ae83cc4d617aa71e5bcf54f92365266bc5ab66c7e2f4d31653b85d",
+      "original_sha256": "8d6eb47397ae83cc4d617aa71e5bcf54f92365266bc5ab66c7e2f4d31653b85d",
+      "bytes": 2716,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p14-a0-gray-yNone-r0",
+      "source_sha256": "402b70b5b4be0a082c0aaf2f8763b2807527885377a8ff327a63daef0920b247",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "bb14ebad361bb634dd264ec45b4dd558731c31572bc178cd8eb922ef4b6ba6e8",
+      "original_sha256": "bb14ebad361bb634dd264ec45b4dd558731c31572bc178cd8eb922ef4b6ba6e8",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p14-a0-gray-yNone-r5",
+      "source_sha256": "ece16eda7b4eead59cf0744363ee1040309e037e21a925fd36e84a3c587363ce",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "275265f28ac822e4f0e6de337c97b3bf7773a6fc031117b0ff8901eb6a0617b0",
+      "original_sha256": "275265f28ac822e4f0e6de337c97b3bf7773a6fc031117b0ff8901eb6a0617b0",
+      "bytes": 789,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p14-a0-gray-y2-r0",
+      "source_sha256": "402b70b5b4be0a082c0aaf2f8763b2807527885377a8ff327a63daef0920b247",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "93360fde128287bf46f109e7ca3bbec0c04a377b0b67bd5762878cdd3bf77617",
+      "original_sha256": "93360fde128287bf46f109e7ca3bbec0c04a377b0b67bd5762878cdd3bf77617",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p14-a0-gray-y2-r5",
+      "source_sha256": "ece16eda7b4eead59cf0744363ee1040309e037e21a925fd36e84a3c587363ce",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "e886f029f89cb71e364bdfbefbd74bca02456211146199a1f472b1c388b65a1d",
+      "original_sha256": "e886f029f89cb71e364bdfbefbd74bca02456211146199a1f472b1c388b65a1d",
+      "bytes": 1050,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p14-a0-rgb444-yNone-r0",
+      "source_sha256": "bbce7922f49bfa972b6da9e0374e8a479d10f3c616e08c3b397ea2eaa378ef04",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4abc5c48c684432ea4af60e2fef316dd5e34fc24a817e68ceaffcbefabec8376",
+      "original_sha256": "4abc5c48c684432ea4af60e2fef316dd5e34fc24a817e68ceaffcbefabec8376",
+      "bytes": 242,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p14-a0-rgb444-yNone-r5",
+      "source_sha256": "f86d56820a39508a959abc235d35238aebdaabc750f539d23aadba03369ff720",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "752aed2ead45f7bfe443ea3f6ad333cf270e19e5aebbf1dd6ae13309021b6d22",
+      "original_sha256": "752aed2ead45f7bfe443ea3f6ad333cf270e19e5aebbf1dd6ae13309021b6d22",
+      "bytes": 2186,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p14-a0-rgb444-y2-r0",
+      "source_sha256": "bbce7922f49bfa972b6da9e0374e8a479d10f3c616e08c3b397ea2eaa378ef04",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "fd35cd9bbb04bf97776991f37d857bc6b376dc7891d6a43fd09527a6ed1da6b5",
+      "original_sha256": "fd35cd9bbb04bf97776991f37d857bc6b376dc7891d6a43fd09527a6ed1da6b5",
+      "bytes": 368,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p14-a0-rgb444-y2-r5",
+      "source_sha256": "f86d56820a39508a959abc235d35238aebdaabc750f539d23aadba03369ff720",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "39ae67cefd14ecb4a721474c148bc41fe8efbfe2dd0cfa9de3f1b9444b0b5261",
+      "original_sha256": "39ae67cefd14ecb4a721474c148bc41fe8efbfe2dd0cfa9de3f1b9444b0b5261",
+      "bytes": 2857,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p14-a1-gray-yNone-r0",
+      "source_sha256": "402b70b5b4be0a082c0aaf2f8763b2807527885377a8ff327a63daef0920b247",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "d30ae5c9d18460b1de5a28f3ac408d04d7323ddf78083012d5049f025bcf3c05",
+      "original_sha256": "d30ae5c9d18460b1de5a28f3ac408d04d7323ddf78083012d5049f025bcf3c05",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p14-a1-gray-yNone-r5",
+      "source_sha256": "ece16eda7b4eead59cf0744363ee1040309e037e21a925fd36e84a3c587363ce",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "0b97fe50d2667d09bc73635a158726334deebcf043dd0954dba63532075a488d",
+      "original_sha256": "0b97fe50d2667d09bc73635a158726334deebcf043dd0954dba63532075a488d",
+      "bytes": 703,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p14-a1-gray-y2-r0",
+      "source_sha256": "402b70b5b4be0a082c0aaf2f8763b2807527885377a8ff327a63daef0920b247",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "f4f68501b4872fa68899de69ffc4be36b6b14c07f611d1201edaa1c80494b9a4",
+      "original_sha256": "f4f68501b4872fa68899de69ffc4be36b6b14c07f611d1201edaa1c80494b9a4",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p14-a1-gray-y2-r5",
+      "source_sha256": "ece16eda7b4eead59cf0744363ee1040309e037e21a925fd36e84a3c587363ce",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "0fdc3dff3dc8aeaad27fd9d7df9104853f78b7b98b0c4c1c24f8c762cee9dbf3",
+      "original_sha256": "0fdc3dff3dc8aeaad27fd9d7df9104853f78b7b98b0c4c1c24f8c762cee9dbf3",
+      "bytes": 1091,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p14-a1-rgb444-yNone-r0",
+      "source_sha256": "bbce7922f49bfa972b6da9e0374e8a479d10f3c616e08c3b397ea2eaa378ef04",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "e21870b778fa66e745946e5c451e80f3507b7f2cca23747a7774b700a41650a9",
+      "original_sha256": "e21870b778fa66e745946e5c451e80f3507b7f2cca23747a7774b700a41650a9",
+      "bytes": 76,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p14-a1-rgb444-yNone-r5",
+      "source_sha256": "f86d56820a39508a959abc235d35238aebdaabc750f539d23aadba03369ff720",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "ccccacbf7834844f9fdb6bf31a9343535f9c1a901e8fe6ba1251d0641893ec71",
+      "original_sha256": "ccccacbf7834844f9fdb6bf31a9343535f9c1a901e8fe6ba1251d0641893ec71",
+      "bytes": 1786,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p14-a1-rgb444-y2-r0",
+      "source_sha256": "bbce7922f49bfa972b6da9e0374e8a479d10f3c616e08c3b397ea2eaa378ef04",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "15fff3699877b4289d277691fcbe9bfe1b4e309dd1b4711f52638d6d6f4327c9",
+      "original_sha256": "15fff3699877b4289d277691fcbe9bfe1b4e309dd1b4711f52638d6d6f4327c9",
+      "bytes": 146,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p14-a1-rgb444-y2-r5",
+      "source_sha256": "f86d56820a39508a959abc235d35238aebdaabc750f539d23aadba03369ff720",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "afe265e0323252696b987c17b65c2afa4571f4e610c2e702498f5c313bab8976",
+      "original_sha256": "afe265e0323252696b987c17b65c2afa4571f4e610c2e702498f5c313bab8976",
+      "bytes": 2862,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p15-a0-gray-yNone-r0",
+      "source_sha256": "095155808be8e84247903a850a473730b779343f7fe41721ad9544bda225532e",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "43ec4141f8c8f1d8ebce813756a6011d31dff98d91a4444021fb68368ab72ad0",
+      "original_sha256": "43ec4141f8c8f1d8ebce813756a6011d31dff98d91a4444021fb68368ab72ad0",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p15-a0-gray-yNone-r5",
+      "source_sha256": "ced3c34b44ca2a2ea96ad47e336a052a9dbad95b19178557643c47e3aecf0916",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "c0ddd7b4482413e1616b3f6fb4ff22f3968d99e99f6cee5d0b434879a126349d",
+      "original_sha256": "c0ddd7b4482413e1616b3f6fb4ff22f3968d99e99f6cee5d0b434879a126349d",
+      "bytes": 727,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p15-a0-gray-y2-r0",
+      "source_sha256": "095155808be8e84247903a850a473730b779343f7fe41721ad9544bda225532e",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "a31d647da006c77447291f743d37ac7d4b37ae521d6334bce08d6bbe58836090",
+      "original_sha256": "a31d647da006c77447291f743d37ac7d4b37ae521d6334bce08d6bbe58836090",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p15-a0-gray-y2-r5",
+      "source_sha256": "ced3c34b44ca2a2ea96ad47e336a052a9dbad95b19178557643c47e3aecf0916",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "0e9c73218a5975d3a09eb5cfc38ae364809eb56c71ce4728456c1529454eb78a",
+      "original_sha256": "0e9c73218a5975d3a09eb5cfc38ae364809eb56c71ce4728456c1529454eb78a",
+      "bytes": 1126,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p15-a0-rgb444-yNone-r0",
+      "source_sha256": "67cf95b6d867a1b7d8857a8d89974edb5f792aefc6f73bce48a1277b39b4c4ed",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "57078b4deb7368e61829a4bfd1e1b4ff0c8915edbfb6e1c7cf83aadf95f858e3",
+      "original_sha256": "57078b4deb7368e61829a4bfd1e1b4ff0c8915edbfb6e1c7cf83aadf95f858e3",
+      "bytes": 244,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p15-a0-rgb444-yNone-r5",
+      "source_sha256": "6d11d60f0a96a879bf5c0fb473e87d5c7da911a4ab0503bbcedeec4fba9d0234",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "1e2c687365c7f1a91b3d5d9e5aff4d72b58a64d111406587a35e2ecf1fc5d314",
+      "original_sha256": "1e2c687365c7f1a91b3d5d9e5aff4d72b58a64d111406587a35e2ecf1fc5d314",
+      "bytes": 1999,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p15-a0-rgb444-y2-r0",
+      "source_sha256": "67cf95b6d867a1b7d8857a8d89974edb5f792aefc6f73bce48a1277b39b4c4ed",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "d5166b0580781b44ec5bf8b747acdc971838ece2ebbe5fb9b8deb2092f2e4c88",
+      "original_sha256": "d5166b0580781b44ec5bf8b747acdc971838ece2ebbe5fb9b8deb2092f2e4c88",
+      "bytes": 369,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p15-a0-rgb444-y2-r5",
+      "source_sha256": "6d11d60f0a96a879bf5c0fb473e87d5c7da911a4ab0503bbcedeec4fba9d0234",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "5e263ab05b7aceb32e76ed381134c9650b6dc238c1fca674bc167bb30f1a9615",
+      "original_sha256": "5e263ab05b7aceb32e76ed381134c9650b6dc238c1fca674bc167bb30f1a9615",
+      "bytes": 3076,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p15-a1-gray-yNone-r0",
+      "source_sha256": "095155808be8e84247903a850a473730b779343f7fe41721ad9544bda225532e",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "e7fcd49920c4b208e6fee04d9792178ca78d73fe534a390c343167987c49cc4b",
+      "original_sha256": "e7fcd49920c4b208e6fee04d9792178ca78d73fe534a390c343167987c49cc4b",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p15-a1-gray-yNone-r5",
+      "source_sha256": "ced3c34b44ca2a2ea96ad47e336a052a9dbad95b19178557643c47e3aecf0916",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "a2e37f4b5441da3a3da45eb97e0157d0ff0943f28131052b708ad8a6808ca6c9",
+      "original_sha256": "a2e37f4b5441da3a3da45eb97e0157d0ff0943f28131052b708ad8a6808ca6c9",
+      "bytes": 652,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p15-a1-gray-y2-r0",
+      "source_sha256": "095155808be8e84247903a850a473730b779343f7fe41721ad9544bda225532e",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "7c67ab657b1788650a3fa22cf2881d63f18f34ac041de87ac7bbcdde1203ab6e",
+      "original_sha256": "7c67ab657b1788650a3fa22cf2881d63f18f34ac041de87ac7bbcdde1203ab6e",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p15-a1-gray-y2-r5",
+      "source_sha256": "ced3c34b44ca2a2ea96ad47e336a052a9dbad95b19178557643c47e3aecf0916",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "e523e1c842ed054b2b1ef8bd08291ecf867bc186529ac38aa570bfcaf0ab366f",
+      "original_sha256": "e523e1c842ed054b2b1ef8bd08291ecf867bc186529ac38aa570bfcaf0ab366f",
+      "bytes": 1180,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p15-a1-rgb444-yNone-r0",
+      "source_sha256": "67cf95b6d867a1b7d8857a8d89974edb5f792aefc6f73bce48a1277b39b4c4ed",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "f90987cf8aa24af9538283eab11a976bab0fcc5409baf50d0c82462e4e18fddf",
+      "original_sha256": "f90987cf8aa24af9538283eab11a976bab0fcc5409baf50d0c82462e4e18fddf",
+      "bytes": 77,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p15-a1-rgb444-yNone-r5",
+      "source_sha256": "6d11d60f0a96a879bf5c0fb473e87d5c7da911a4ab0503bbcedeec4fba9d0234",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "2f33b3a8965a94529ea81aeb2eda3c3d9ac0718cf6b96672b49bad8d89c1bd55",
+      "original_sha256": "2f33b3a8965a94529ea81aeb2eda3c3d9ac0718cf6b96672b49bad8d89c1bd55",
+      "bytes": 1659,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p15-a1-rgb444-y2-r0",
+      "source_sha256": "67cf95b6d867a1b7d8857a8d89974edb5f792aefc6f73bce48a1277b39b4c4ed",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "d82aacd5ed3049ed3f70530834334ff555e6da9b2bc4bd2a45d2471a62f16c9c",
+      "original_sha256": "d82aacd5ed3049ed3f70530834334ff555e6da9b2bc4bd2a45d2471a62f16c9c",
+      "bytes": 147,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p15-a1-rgb444-y2-r5",
+      "source_sha256": "6d11d60f0a96a879bf5c0fb473e87d5c7da911a4ab0503bbcedeec4fba9d0234",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "ee58b03f508c5526137594fef2e50ed15c507425eb302adf1ef3509a53a58d52",
+      "original_sha256": "ee58b03f508c5526137594fef2e50ed15c507425eb302adf1ef3509a53a58d52",
+      "bytes": 3106,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p16-a0-gray-yNone-r0",
+      "source_sha256": "736c7ab8b8c591606f7ffeecce4441299da705ec64601999ee847a23467bf681",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4d23bc803eb4e6dd24a7367a6964aecaaea850ff249624a281a6c6d903bb600a",
+      "original_sha256": "4d23bc803eb4e6dd24a7367a6964aecaaea850ff249624a281a6c6d903bb600a",
+      "bytes": 124,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p16-a0-gray-yNone-r5",
+      "source_sha256": "7f66cbffa989bde3a895ceab5bc359806d0e2a85276ffec6d2be57610e73b02f",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "2170b089f588369815ec4fb4815c19e5fe23d872e086cbda979cea722dee8112",
+      "original_sha256": "2170b089f588369815ec4fb4815c19e5fe23d872e086cbda979cea722dee8112",
+      "bytes": 649,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p16-a0-gray-y2-r0",
+      "source_sha256": "736c7ab8b8c591606f7ffeecce4441299da705ec64601999ee847a23467bf681",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "993e00532e0cba0b3dbbc44c77d33d9424db90647fe2b19d451f360b48e3bbc9",
+      "original_sha256": "993e00532e0cba0b3dbbc44c77d33d9424db90647fe2b19d451f360b48e3bbc9",
+      "bytes": 206,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p16-a0-gray-y2-r5",
+      "source_sha256": "7f66cbffa989bde3a895ceab5bc359806d0e2a85276ffec6d2be57610e73b02f",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "3c64c6d23b6f5595d0a96b00f689a299a78787dd5088ebbf4d1f8b37147247cd",
+      "original_sha256": "3c64c6d23b6f5595d0a96b00f689a299a78787dd5088ebbf4d1f8b37147247cd",
+      "bytes": 1092,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p16-a0-rgb444-yNone-r0",
+      "source_sha256": "fde69ff427bb17aa932c29514a68525b398396df202ea5ba378e72bb82252515",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "01acae1188ca13405f1e111f0ae4bc95fc7d78bb12b25c73137763b0523e578e",
+      "original_sha256": "01acae1188ca13405f1e111f0ae4bc95fc7d78bb12b25c73137763b0523e578e",
+      "bytes": 244,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p16-a0-rgb444-yNone-r5",
+      "source_sha256": "aab79009f8a60a1e447f2c56063d241144c96e11c23cef13a964712bc22658c1",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "8f1c02413f43a273726f6aedad3778162eb0a4bdf25ba529a4bb586c2f91a53f",
+      "original_sha256": "8f1c02413f43a273726f6aedad3778162eb0a4bdf25ba529a4bb586c2f91a53f",
+      "bytes": 1765,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        195
+      ]
+    },
+    {
+      "case": "lp-p16-a0-rgb444-y2-r0",
+      "source_sha256": "fde69ff427bb17aa932c29514a68525b398396df202ea5ba378e72bb82252515",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4ae9f5e378212e8dfe7ea7a8db314ca92b565812a39543983ad61c40428211e9",
+      "original_sha256": "4ae9f5e378212e8dfe7ea7a8db314ca92b565812a39543983ad61c40428211e9",
+      "bytes": 369,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p16-a0-rgb444-y2-r5",
+      "source_sha256": "aab79009f8a60a1e447f2c56063d241144c96e11c23cef13a964712bc22658c1",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "d31b0e6a3bfe461f5b09d1fe65fd20d57d712c52cdfdc17a4356ceae26cc8fe4",
+      "original_sha256": "d31b0e6a3bfe461f5b09d1fe65fd20d57d712c52cdfdc17a4356ceae26cc8fe4",
+      "bytes": 2972,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        195,
+        199
+      ]
+    },
+    {
+      "case": "lp-p16-a1-gray-yNone-r0",
+      "source_sha256": "736c7ab8b8c591606f7ffeecce4441299da705ec64601999ee847a23467bf681",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "3d660603375ef2339951169ee0058e90283b4e27ea87aaf89ebdcd824e7564d6",
+      "original_sha256": "3d660603375ef2339951169ee0058e90283b4e27ea87aaf89ebdcd824e7564d6",
+      "bytes": 58,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p16-a1-gray-yNone-r5",
+      "source_sha256": "7f66cbffa989bde3a895ceab5bc359806d0e2a85276ffec6d2be57610e73b02f",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "639f8984032a93faf833c9d8a7d1a69bb97c83641a50a0f896d5514bc5d75645",
+      "original_sha256": "639f8984032a93faf833c9d8a7d1a69bb97c83641a50a0f896d5514bc5d75645",
+      "bytes": 511,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p16-a1-gray-y2-r0",
+      "source_sha256": "736c7ab8b8c591606f7ffeecce4441299da705ec64601999ee847a23467bf681",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "b7fdcefb12c839a2de530eca5eeebf25b0332b8bbcfc64d93a8f9c73074bbd5d",
+      "original_sha256": "b7fdcefb12c839a2de530eca5eeebf25b0332b8bbcfc64d93a8f9c73074bbd5d",
+      "bytes": 111,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p16-a1-gray-y2-r5",
+      "source_sha256": "7f66cbffa989bde3a895ceab5bc359806d0e2a85276ffec6d2be57610e73b02f",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "7583783e1cd94b153467e65b02cd0e7d6d4358dc38f29842e5229be577691925",
+      "original_sha256": "7583783e1cd94b153467e65b02cd0e7d6d4358dc38f29842e5229be577691925",
+      "bytes": 1127,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p16-a1-rgb444-yNone-r0",
+      "source_sha256": "fde69ff427bb17aa932c29514a68525b398396df202ea5ba378e72bb82252515",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "67d4f6584b0fba6d198cbf3268b5462f5369e4a3fae0cb37acc1fb905440684c",
+      "original_sha256": "67d4f6584b0fba6d198cbf3268b5462f5369e4a3fae0cb37acc1fb905440684c",
+      "bytes": 78,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p16-a1-rgb444-yNone-r5",
+      "source_sha256": "aab79009f8a60a1e447f2c56063d241144c96e11c23cef13a964712bc22658c1",
+      "restart_mcus": 85,
+      "reference_encoder_error": null,
+      "sha256": "84a5306122a95fb6262cfa39a8d9b95bb39fce562cdc02d9b64667479d62d12e",
+      "original_sha256": "84a5306122a95fb6262cfa39a8d9b95bb39fce562cdc02d9b64667479d62d12e",
+      "bytes": 1281,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 1,
+      "unknown_DHP": false,
+      "markers": [
+        203
+      ]
+    },
+    {
+      "case": "lp-p16-a1-rgb444-y2-r0",
+      "source_sha256": "fde69ff427bb17aa932c29514a68525b398396df202ea5ba378e72bb82252515",
+      "restart_mcus": 0,
+      "reference_encoder_error": null,
+      "sha256": "4e0e8fddf81b950dc7413e8e8229c982eeb7586e4bbf2ad695bb308f95dbf020",
+      "original_sha256": "4e0e8fddf81b950dc7413e8e8229c982eeb7586e4bbf2ad695bb308f95dbf020",
+      "bytes": 148,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    },
+    {
+      "case": "lp-p16-a1-rgb444-y2-r5",
+      "source_sha256": "aab79009f8a60a1e447f2c56063d241144c96e11c23cef13a964712bc22658c1",
+      "restart_mcus": 153,
+      "reference_encoder_error": null,
+      "sha256": "2c84d917117a07da6864ddff7a3e3c53fdca6b711fff23ae6483356db2e8e455",
+      "original_sha256": "2c84d917117a07da6864ddff7a3e3c53fdca6b711fff23ae6483356db2e8e455",
+      "bytes": 2946,
+      "empty_DAC_removed": 0,
+      "EXP00_removed": 0,
+      "DNL_segments": 2,
+      "unknown_DHP": true,
+      "markers": [
+        203,
+        207
+      ]
+    }
+  ]
+}

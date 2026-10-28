@@ -117,7 +117,7 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
     let mut interval = 0;
     let mut scans = 0;
     let mut ended = false;
-    for event in reader.by_ref() {
+    while let Some(event) = reader.next() {
         match event? {
             Event::End { .. } => {
                 ended = true;
@@ -181,21 +181,6 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
                 {
                     return Err(Error::Unsupported("this JPEG process"));
                 }
-                if header.height == 0 {
-                    return Err(Error::Unsupported("DNL height"));
-                }
-                let remaining = limits
-                    .max_memory_bytes
-                    .checked_sub(metadata_bytes)
-                    .ok_or(Error::LimitExceeded("metadata and coefficients"))?;
-                (components, memory_bytes) = allocate_components(
-                    &header,
-                    Limits {
-                        max_memory_bytes: remaining,
-                        ..limits
-                    },
-                )?;
-                seen.resize(header.components.len(), false);
                 frame = Some(header);
             }
             Event::Scan {
@@ -205,7 +190,22 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
                 if scans > limits.max_scans {
                     return Err(Error::LimitExceeded("scans"));
                 }
-                let frame = frame.as_ref().ok_or(Error::Invalid("scan before frame"))?;
+                let frame = frame.as_mut().ok_or(Error::Invalid("scan before frame"))?;
+                if scans == 1 {
+                    reader.resolve_height(frame)?;
+                    let remaining = limits
+                        .max_memory_bytes
+                        .checked_sub(metadata_bytes)
+                        .ok_or(Error::LimitExceeded("metadata and coefficients"))?;
+                    (components, memory_bytes) = allocate_components(
+                        frame,
+                        Limits {
+                            max_memory_bytes: remaining,
+                            ..limits
+                        },
+                    )?;
+                    seen.resize(frame.components.len(), false);
+                }
                 decode_scan(
                     header,
                     entropy,
@@ -218,7 +218,9 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
                     conditioning,
                 )?;
             }
-            Event::Segment { marker: 0xdc, .. } => return Err(Error::Unsupported("DNL height")),
+            Event::Segment { marker: 0xdc, .. } => {
+                return Err(Error::Invalid("DNL outside first scan boundary"));
+            }
             Event::Segment {
                 marker: 0xde | 0xdf,
                 ..
@@ -236,7 +238,7 @@ pub fn decode_coefficients(input: &[u8], limits: Limits) -> Result<CoefficientIm
         return Err(Error::Truncated);
     }
     let frame = frame.ok_or(Error::Invalid("missing frame"))?;
-    if seen.iter().any(|&v| !v) {
+    if scans == 0 || seen.iter().any(|&v| !v) {
         return Err(Error::Invalid("missing component scan"));
     }
     Ok(CoefficientImage {

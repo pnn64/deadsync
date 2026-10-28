@@ -1,0 +1,33 @@
+diff --git a/control/blockbitmaprequester.cpp b/control/blockbitmaprequester.cpp
+index a959a96..2376dbd 100644
+--- a/control/blockbitmaprequester.cpp
++++ b/control/blockbitmaprequester.cpp
+@@ -69,6 +69,8 @@
+ #include "dct/deringing.hpp"
+ #include "colortrafo/colortrafo.hpp"
+ #include "std/string.hpp"
++#include <cstdio>
++#include <cstdlib>
+ ///
+ 
+ /// BlockBitmapRequester::BlockBitmapRequester
+@@ -1045,6 +1047,19 @@ void BlockBitmapRequester::ReconstructUnsampled(const struct RectangleRequest *r
+         if (i >= rr->rr_usFirstComponent && i <= rr->rr_usLastComponent && m_ppDCT[i]) {
+           class QuantizedRow *qrow = *m_pppQImage[i];
+           const LONG *src = (qrow)?(qrow->BlockAt(x)->m_Data):(NULL);
++          // Test-only observation for -U ordinary JPEG decoding, before IDCT.
++          if (src) {
++            if (const char *path = std::getenv("DEADLIB_JPEG_FRAME_DUMP")) {
++              if (FILE *dump = std::fopen(path,"a")) {
++                std::fprintf(dump,"D %d %lu %lu %u",int(m_pFrame->ScanTypeOf()),
++                             m_pFrame->WidthOf(),m_pFrame->HeightOf(),
++                             unsigned(m_pFrame->ComponentOf(i)->IDOf()));
++                for(unsigned k = 0;k < 64;k++) std::fprintf(dump," %ld",src[k]);
++                std::fprintf(dump,"\n");
++                std::fclose(dump);
++              }
++            }
++          }
+           m_ppDCT[i]->InverseTransformBlock(dst,src,(maxval + 1) >> 1);
+         } else {
+           memset(dst,0,sizeof(LONG) * 64);

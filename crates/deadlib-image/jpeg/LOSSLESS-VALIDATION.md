@@ -238,6 +238,7 @@ separate reference gate. Direct hierarchical frame encoding is also available
 through `HierarchicalImage::encode`, including signed differential Pt and both
 entropy coders. Automatic source pyramids are available through the native and
 shared raster APIs; their separate source/filter/C-frame gates are documented
-there. DNL and incremental input/output remain required. Independent conformance corpora,
+there. First-scan DNL decoding/encoding is implemented for both predictive
+processes; see DNL-VALIDATION.md. Incremental input/output remains required. Independent conformance corpora,
 IJG/mozjpeg checks, coverage-guided fuzzing and measured lossless performance
 also remain open. No complete-conformance or throughput claim is made.

@@ -44,6 +44,30 @@ impl<'a> MarkerReader<'a> {
         self.position
     }
 
+    /// Consume an optional segment at the current boundary without reading
+    /// the next scan's entropy. Used for mandatory first-scan DNL adjacency.
+    pub(crate) fn take_segment(&mut self, expected: u8) -> Result<Option<&'a [u8]>> {
+        let mut position = self.position;
+        if self.input.get(position) != Some(&0xff) {
+            return Err(if position == self.input.len() {
+                Error::Truncated
+            } else {
+                Error::Invalid("expected marker prefix")
+            });
+        }
+        while self.input.get(position) == Some(&0xff) {
+            position += 1;
+        }
+        let marker = *self.input.get(position).ok_or(Error::Truncated)?;
+        if marker != expected {
+            return Ok(None);
+        }
+        match self.next().ok_or(Error::Truncated)?? {
+            Event::Segment { data, .. } => Ok(Some(data)),
+            _ => unreachable!(),
+        }
+    }
+
     fn read_event(&mut self) -> Result<Event<'a>> {
         let offset = self.position;
         if self.input.get(self.position) != Some(&0xff) {

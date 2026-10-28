@@ -1,0 +1,40 @@
+{
+  "scope": "Whole-input DNL milestone, with reference parser limitations explicit; full JPEG standards/performance goal remains open.",
+  "package": "deadlib-image-jpeg",
+  "production_dependencies": [
+    "deadlib-image"
+  ],
+  "release_tests": 129,
+  "isolated_debug_tests": 129,
+  "native_DNL_output_cases": 2124,
+  "independent_C_DNL_inputs": 336,
+  "pinned_cases": 26,
+  "pinned_prefixes": 11861,
+  "pinned_bounded_mutations": 2600,
+  "unchanged_default_encoder_outputs": 10612,
+  "fresh_Turbo_C_decodes": 964,
+  "reports": {
+    "dnl-encode-jpegxt.json": "d1bc18bdc83b74ce24f995064a2eb473998bc239f177a3ce02bed9deab073c89",
+    "dnl-decode-jpegxt.json": "26c100643b5b45301ca7427144941e8c2a6498344d08fdc04788fc3c271d6e68",
+    "dnl-reference-generation.json": "5b2c9c54668edbd4a4bc859a9302277ed7653eb7adc3ded361a04310aa82586d",
+    "dnl-regressions.json": "bd6191964d131bec651bcd43963e306d6c3fbae2d24be36c0570f50b0f2fa932"
+  },
+  "original_zero_height_C_processes": [
+    192,
+    193,
+    194,
+    195,
+    197,
+    198,
+    199,
+    201,
+    202,
+    203,
+    205,
+    206,
+    207
+  ],
+  "maximum_predictive_components": 255,
+  "generated_component_scan_boundary_case": 128,
+  "release_DNL_module_after_final_API_checks": "7 passed; full release suite 129 passed"
+}

@@ -95,6 +95,16 @@ retain the declared polarity. No hierarchical output is labeled as JFIF.
 See HIERARCHICAL-VALIDATION.md for the chosen reduction filter, progressive/Pt
 reference handling, memory behavior and independent source-encoding evidence.
 
+All frame decoders support first-scan DNL, including initially zero or
+provisional SOF heights. Models return resolved dimensions; `MarkerReader`
+exposes the original declarations unchanged. Hierarchies can also omit the
+completed DHP height, which is inferred from full-resolution components.
+Set `height_declaration: HeightDeclaration::Dnl { initial_height: 0 }` in
+`CodingOptions` or `LosslessOptions` to emit DNL. Per-frame hierarchy and pyramid
+controls share these options; `omit_dhp_height` selects zero-height DHP.
+Defaults retain ordinary SOF/DHP output. DNL-VALIDATION.md records all-process
+checks, independent C-authored inputs and explicit reference limitations.
+
 `encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
 without another lossy transform. It preserves quantizer values, visible blocks,
 and APPn/COM payloads. Controls select sequential or progressive
@@ -164,7 +174,7 @@ record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark; allocation instrumentation remains planned.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
 unsupported errors. Full DCT component-count coverage,
-DNL, streaming, additional encoder scan strategies, and the broader validation
+Abbreviated streams, incremental I/O, additional encoder scan strategies, and the broader validation
 and performance work remain required.
 
 Run `cargo test -p deadlib-image-jpeg` and

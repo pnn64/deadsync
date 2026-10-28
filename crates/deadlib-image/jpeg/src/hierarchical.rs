@@ -49,8 +49,11 @@ impl HierarchyHeader {
     }
     pub(crate) fn validate(&self, limits: Limits) -> Result<()> {
         if self.height == 0 {
-            return Err(Error::Unsupported("DNL hierarchy height"));
+            return Err(Error::Invalid("unresolved DHP height"));
         }
+        self.validate_declaration(limits)
+    }
+    fn validate_declaration(&self, limits: Limits) -> Result<()> {
         if self.width == 0 || !(2..=16).contains(&self.precision) {
             return Err(Error::Invalid("DHP dimensions or precision"));
         }
@@ -398,11 +401,11 @@ impl Rules {
     ) -> Result<()> {
         specs(&frame.components, process.is_lossless())?;
         if frame.height == 0 {
-            return Err(Error::Unsupported("DNL hierarchy height"));
+            return Err(Error::Invalid("unresolved hierarchical frame height"));
         }
         if frame.width == 0
             || frame.width > self.width
-            || frame.height > self.height
+            || (self.height != 0 && frame.height > self.height)
             || frame.precision != self.precision
             || (process == Process::Baseline && frame.precision != 8)
             || (!process.is_lossless() && !matches!(frame.precision, 8 | 12))
@@ -441,7 +444,9 @@ impl Rules {
             }
             let width = (frame.width as usize * c.horizontal_sampling as usize).div_ceil(max_h);
             let height = (frame.height as usize * c.vertical_sampling as usize).div_ceil(max_v);
-            if width > self.final_sizes[index].0 || height > self.final_sizes[index].1 {
+            if width > self.final_sizes[index].0
+                || (self.height != 0 && height > self.final_sizes[index].1)
+            {
                 return Err(Error::Invalid("frame component exceeds DHP dimensions"));
             }
             let previous = self.sizes[index];
@@ -500,6 +505,28 @@ impl Rules {
             }
         }
         Ok(())
+    }
+    fn resolved_height(&self, header: &HierarchyHeader) -> Result<u16> {
+        if header.height != 0 {
+            return Ok(header.height);
+        }
+        let max_v = header
+            .components
+            .iter()
+            .map(|c| c.vertical_sampling)
+            .max()
+            .unwrap();
+        let mut height = None;
+        for c in &header.components {
+            if c.vertical_sampling == max_v {
+                let value = self.sizes[self.indices[c.id as usize] as usize].1;
+                if value == 0 || height.is_some_and(|h| h != value) {
+                    return Err(Error::Invalid("missing or inconsistent final DHP height"));
+                }
+                height = Some(value);
+            }
+        }
+        u16::try_from(height.unwrap()).map_err(|_| Error::Invalid("final DHP height"))
     }
 }
 
@@ -689,7 +716,8 @@ fn finish(active: Option<Active>, frames: &mut Vec<HierarchicalFrame>) -> Result
 
 /// Decode a DHP hierarchy while retaining every frame's original coefficients
 /// or native sample differences. Tables persist across frames; APPn/COM borrow
-/// the input and retain global scan positions. DNL remains unsupported.
+/// the input and retain global scan positions. Frame DNL declarations are
+/// resolved before allocation; a zero DHP height is inferred at completion.
 pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalImage<'_>> {
     let mut reader = MarkerReader::new(input)?;
     let mut header = None;
@@ -705,7 +733,7 @@ pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalI
     let mut metadata_bytes = 0usize;
     let mut scans = 0;
     let mut ended = false;
-    for event in reader.by_ref() {
+    while let Some(event) = reader.next() {
         match event? {
             Event::End { .. } => {
                 finish(active.take(), &mut frames)?;
@@ -719,7 +747,7 @@ pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalI
                     return Err(Error::Invalid("duplicate or late DHP"));
                 }
                 let h = HierarchyHeader::parse(data)?;
-                h.validate(limits)?;
+                h.validate_declaration(limits)?;
                 rules = Some(Rules::new(&h));
                 header = Some(h);
             }
@@ -778,51 +806,20 @@ pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalI
                 offset,
             } if Process::try_from(marker).is_ok() => {
                 finish(active.take(), &mut frames)?;
-                let header = header.as_ref().ok_or(Error::Invalid("frame before DHP"))?;
+                header.as_ref().ok_or(Error::Invalid("frame before DHP"))?;
                 if frames.len() >= limits.max_scans {
                     return Err(Error::LimitExceeded("hierarchical frames"));
                 }
                 let frame = FrameHeader::parse(marker, data)?;
                 let expansion = pending.take().unwrap_or_default();
-                rules.as_mut().unwrap().accept(&frame, expansion)?;
                 frames.try_reserve_exact(1).map_err(|_| Error::Allocation)?;
-                let used = storage(header, &frames, &metadata)?;
-                let overhead = if frame.process.is_lossless() {
-                    0
-                } else {
-                    frame.components.len()
-                        * (core::mem::size_of::<CoefficientComponent>()
-                            + core::mem::size_of::<ComponentSpec>()
-                            + 1)
-                };
-                let available = limits
-                    .max_memory_bytes
-                    .checked_sub(used)
-                    .and_then(|n| n.checked_sub(overhead))
-                    .ok_or(Error::LimitExceeded("hierarchical storage"))?;
-                let mut seen = Vec::new();
                 let data = if frame.process.is_lossless() {
-                    let (components, coding, _) = crate::lossless::allocate(
-                        &frame,
-                        Limits {
-                            max_memory_bytes: available,
-                            ..limits
-                        },
-                        0,
-                    )?;
-                    HierarchicalData::Lossless { components, coding }
+                    HierarchicalData::Lossless {
+                        components: Vec::new(),
+                        coding: Vec::new(),
+                    }
                 } else {
-                    let (components, _) = allocate_components(
-                        &frame,
-                        Limits {
-                            max_memory_bytes: available,
-                            ..limits
-                        },
-                    )?;
-                    seen.try_reserve_exact(frame.components.len())
-                        .map_err(|_| Error::Allocation)?;
-                    seen.resize(frame.components.len(), false);
-                    HierarchicalData::Dct(components)
+                    HierarchicalData::Dct(Vec::new())
                 };
                 active = Some(Active {
                     frame: HierarchicalFrame {
@@ -833,7 +830,7 @@ pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalI
                         first_scan: scans,
                         scans: 0,
                     },
-                    seen,
+                    seen: Vec::new(),
                 });
             }
             Event::Scan {
@@ -848,6 +845,45 @@ pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalI
                 scans += 1;
                 if scans > limits.max_scans {
                     return Err(Error::LimitExceeded("scans"));
+                }
+                if current.frame.scans == 0 {
+                    let frame = &mut current.frame.frame;
+                    reader.resolve_height(frame)?;
+                    rules
+                        .as_mut()
+                        .unwrap()
+                        .accept(frame, current.frame.expansion)?;
+                    let used = storage(h, &frames, &metadata)?;
+                    let overhead = if frame.process.is_lossless() {
+                        0
+                    } else {
+                        frame.components.len()
+                            * (core::mem::size_of::<CoefficientComponent>()
+                                + core::mem::size_of::<ComponentSpec>()
+                                + 1)
+                    };
+                    let available = limits
+                        .max_memory_bytes
+                        .checked_sub(used)
+                        .and_then(|n| n.checked_sub(overhead))
+                        .ok_or(Error::LimitExceeded("hierarchical storage"))?;
+                    let available = Limits {
+                        max_memory_bytes: available,
+                        ..limits
+                    };
+                    current.frame.data = if frame.process.is_lossless() {
+                        let (components, coding, _) =
+                            crate::lossless::allocate(frame, available, 0)?;
+                        HierarchicalData::Lossless { components, coding }
+                    } else {
+                        let (components, _) = allocate_components(frame, available)?;
+                        current
+                            .seen
+                            .try_reserve_exact(frame.components.len())
+                            .map_err(|_| Error::Allocation)?;
+                        current.seen.resize(frame.components.len(), false);
+                        HierarchicalData::Dct(components)
+                    };
                 }
                 let used = storage(h, &frames, &metadata)?
                     .checked_add(frame_storage(&current.frame)?)
@@ -884,7 +920,7 @@ pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalI
                 current.frame.scans += 1;
             }
             Event::Segment { marker: 0xdc, .. } => {
-                return Err(Error::Unsupported("DNL hierarchy height"));
+                return Err(Error::Invalid("DNL outside first scan boundary"));
             }
             Event::Segment { .. } => {
                 return Err(Error::Invalid("reserved or unexpected hierarchical marker"));
@@ -908,7 +944,8 @@ pub fn decode_hierarchical(input: &[u8], limits: Limits) -> Result<HierarchicalI
     if pending.is_some() {
         return Err(Error::Invalid("EXP without following frame"));
     }
-    let header = header.ok_or(Error::Invalid("missing DHP"))?;
+    let mut header = header.ok_or(Error::Invalid("missing DHP"))?;
+    header.height = rules.as_ref().unwrap().resolved_height(&header)?;
     let memory_bytes = storage(&header, &frames, &metadata)?;
     let image = HierarchicalImage {
         header,

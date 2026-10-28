@@ -2,10 +2,10 @@
 import struct
 
 
-def structure(data):
+def structure(data, require_dhp=True):
     assert data[:2] == b"\xff\xd8"
     position, frames, header, repairs, expansion = 2, [], None, [], 0
-    empty_dac, empty_exp = 0, 0
+    empty_dac, empty_exp, previous = 0, 0, None
     while position < len(data):
         start = position
         assert data[position] == 255
@@ -23,7 +23,7 @@ def structure(data):
             p, h, w, count = payload[0], *struct.unpack_from(">HH", payload, 1), payload[5]
             assert len(payload) == 6 + 3 * count
             specs = [(payload[6 + 3 * i], payload[7 + 3 * i] >> 4, payload[7 + 3 * i] & 15) for i in range(count)]
-            description = {"marker": marker, "precision": p, "width": w, "height": h, "components": specs}
+            description = {"marker": marker, "precision": p, "width": w, "height": h, "declared_height": h, "components": specs, "scans": 0, "dnl_segments": 0}
             if marker == 0xde:
                 assert header is None
                 header = description
@@ -31,6 +31,12 @@ def structure(data):
                 description["expansion"] = expansion
                 expansion = 0
                 frames.append(description)
+        if marker == 0xdc:
+            assert frames and previous == 0xda and frames[-1]["scans"] == 1
+            assert len(payload) >= 2 and frames[-1]["dnl_segments"] == 0
+            frames[-1]["height"] = int.from_bytes(payload[:2], "big")
+            assert frames[-1]["height"] > 0
+            frames[-1]["dnl_segments"] += 1
         if marker == 0xdf:
             assert len(payload) == 1
             expansion = payload[0]
@@ -41,6 +47,8 @@ def structure(data):
             repairs.append((start, end))
             empty_exp += 1
         if marker == 0xda:
+            assert frames
+            frames[-1]["scans"] += 1
             while end < len(data):
                 if data[end] != 255:
                     end += 1
@@ -53,7 +61,22 @@ def structure(data):
                 else:
                     break
         position = end
-    assert header is not None and frames
+        previous = marker
+    assert frames
+    assert all(f["height"] > 0 for f in frames)
+    if header is None:
+        assert not require_dhp and len(frames) == 1
+        header = dict(frames[0])
+    elif header["height"] == 0:
+        heights = {}
+        for frame in frames:
+            mv = max(c[2] for c in frame["components"])
+            for component_id, _, v in frame["components"]:
+                heights[component_id] = (frame["height"] * v + mv - 1) // mv
+        mv = max(c[2] for c in header["components"])
+        final = {heights[cid] for cid, _, v in header["components"] if v == mv}
+        assert len(final) == 1
+        header["height"] = final.pop()
     normalized = bytearray(data)
     for start, end in reversed(repairs):
         del normalized[start:end]

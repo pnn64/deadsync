@@ -51,6 +51,8 @@ pub struct CodingOptions<'a> {
     pub optimize_huffman: bool,
     /// MCU count between restart markers; zero disables restarts.
     pub restart_interval: u16,
+    /// Declare SOF's final height directly, or use first-scan DNL.
+    pub height_declaration: crate::HeightDeclaration,
     pub max_output_bytes: usize,
 }
 
@@ -64,6 +66,7 @@ impl Default for CodingOptions<'_> {
             arithmetic_conditioning: ArithmeticConditioning::default(),
             optimize_huffman: true,
             restart_interval: 0,
+            height_declaration: crate::HeightDeclaration::FrameHeader,
             max_output_bytes: 512 * 1024 * 1024,
         }
     }
@@ -290,7 +293,12 @@ pub(crate) fn encode_frame(
     }
     let mut header = [0u8; 18];
     header[0] = image.frame.precision;
-    header[1..3].copy_from_slice(&image.frame.height.to_be_bytes());
+    header[1..3].copy_from_slice(
+        &options
+            .height_declaration
+            .initial(image.frame.height)
+            .to_be_bytes(),
+    );
     header[3..5].copy_from_slice(&image.frame.width.to_be_bytes());
     header[5] = n as u8;
     for (i, c) in image.components.iter().enumerate() {
@@ -405,6 +413,9 @@ pub(crate) fn encode_frame(
             })?;
             coder.finish()?;
         }
+        options
+            .height_declaration
+            .after_scan(out, image.frame.height, s)?;
     }
     Ok(scan_count)
 }

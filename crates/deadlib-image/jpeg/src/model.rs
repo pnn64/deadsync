@@ -69,7 +69,8 @@ pub struct FrameHeader {
     pub process: Process,
     pub precision: u8,
     pub width: u16,
-    /// Zero means that a DNL marker must provide the height.
+    /// A parsed SOF value of zero requires DNL. Complete decoders return the
+    /// resolved DNL height here; MarkerReader retains the original declaration.
     pub height: u16,
     pub components: Vec<ComponentSpec>,
 }

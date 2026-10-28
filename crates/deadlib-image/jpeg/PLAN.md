@@ -324,7 +324,7 @@ Verified milestones:
   scan/Pt coverage, coverage-guided fuzzing and all measured performance and
   optimization work remain required. The full user goal stays active.
 
-- Automatic source-pyramid encoder milestone: native/shared source APIs with
+- `3fef847f8`: automatic source-pyramid encoder milestone: native/shared source APIs with
   explicit color/precision/sampling controls, backwards global/component grids,
   unique coarse targets, replicated-edge K.5 reduction and matching reconstructed
   references. Signed differential FDCT has no level shift and checks coefficient
@@ -351,3 +351,27 @@ Verified milestones:
   independent conformance and additional reference corpora, coverage-guided
   fuzzing and measured performance/optimization remain required. The full
   user goal remains active and the crate is not integrated into DeadSync.
+
+- DNL and unknown-height milestone: whole-input decoding/encoding for all
+  thirteen JPEG-1 frame processes, resolving the first-scan height before
+  sample/coefficient allocation. Zero, redundant and redefined SOF heights,
+  extended DNL lengths, strict adjacency, malformed MCU rows, resource limits
+  and zero-height DHP component inference are covered. Public models contain
+  resolved heights; raw marker events retain declarations. Shared bounded
+  frame writers emit canonical DNL without an intermediate JPEG buffer.
+  All 1,788 native files pass exact frame/target and canonical-byte checks:
+  1,163 original-header C matches and 625 explicit known-header comparisons.
+  All 336 independently C-authored DNL inputs decode exactly against C frame
+  data (248 original-header, 88 known-header), and all 336 native rewrites pass
+  (207 original-header, 129 known-header). Reference restart/redefinition/DNL
+  failures are retained rather than counted as parsing successes. A fourth
+  test-only observer records ordinary DCT coefficients before IDCT and changes
+  no codec decision. Twenty-six pinned regressions cover all thirteen
+  processes, all 11,861 truncated prefixes and 2,600 bounded mutations.
+  All 129 tests pass in release and isolated debug builds; all 10,612 prior
+  output hashes remain unchanged, with 964 fresh Turbo C decodes. See
+  DNL-VALIDATION.md and the dnl reports under tests/reports.
+  Abbreviated streams, incremental I/O, full DCT component counts, broader
+  independent conformance and IJG/mozjpeg corpora, coverage-guided fuzzing and
+  all measured performance/optimization work remain required. The full goal
+  stays active; no application integration is made.
