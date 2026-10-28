@@ -124,6 +124,14 @@ impl Demuxer {
         offset: u64,
         emit: impl FnMut(Packet<'_>),
     ) -> Result<(), Error> {
+        self.push_indexed_page(page, offset, emit).map(|_| ())
+    }
+    pub(crate) fn push_indexed_page(
+        &mut self,
+        page: Page<'_>,
+        offset: u64,
+        emit: impl FnMut(Packet<'_>),
+    ) -> Result<usize, Error> {
         if self.failed {
             return Err(Error::Failed);
         }
@@ -138,7 +146,7 @@ impl Demuxer {
         page: Page<'_>,
         offset: u64,
         mut emit: impl FnMut(Packet<'_>),
-    ) -> Result<(), Error> {
+    ) -> Result<usize, Error> {
         let header = page.header();
         let complete = page.completed_packets();
         let index = match self.streams.iter().rposition(|s| s.serial == header.serial) {
@@ -307,6 +315,6 @@ impl Demuxer {
             self.bos_phase = false;
         }
         self.compatibility.add(compatibility)?;
-        Ok(())
+        Ok(index)
     }
 }

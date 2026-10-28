@@ -253,7 +253,7 @@ impl OggIndex {
             let header = page.header();
             let mut last = None;
             let mut failure = None;
-            demux.push_page(page, located.offset, |packet| {
+            let stream_index = demux.push_indexed_page(page, located.offset, |packet| {
                 last = Some(packet.info);
                 if failure.is_none() {
                     failure = observe(IndexEvent::Packet { page, packet }).err();
@@ -265,11 +265,10 @@ impl OggIndex {
             if index.pages.len() == options.max_pages {
                 return Err(Error::LimitExceeded("index pages").into());
             }
-            let stream_index = if header.is_bos() {
+            if header.is_bos() {
                 reserve(&mut index.streams, 1)?;
                 reserve(&mut partial_starts, 1)?;
                 partial_starts.push(located.offset);
-                let stream = index.streams.len();
                 index.streams.push(StreamIndex {
                     serial: header.serial,
                     chain: last.ok_or(Error::Invalid("BOS without a packet"))?.chain,
@@ -279,14 +278,7 @@ impl OggIndex {
                     packets: 0,
                     pages: 0..0,
                 });
-                stream
-            } else {
-                index
-                    .streams
-                    .iter()
-                    .rposition(|s| s.serial == header.serial)
-                    .ok_or(Error::Invalid("unindexed logical stream"))?
-            };
+            }
             let stream = &mut index.streams[stream_index];
             let first_packet_offset = if header.is_continued() {
                 partial_starts[stream_index]
