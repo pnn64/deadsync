@@ -334,7 +334,16 @@ impl OggIndex {
         self.compatibility
     }
     pub fn stream(&self, serial: u32) -> Option<&StreamIndex> {
-        self.streams.iter().find(|s| s.serial == serial)
+        let (first, rest) = self.streams.split_first()?;
+        if first.serial == serial {
+            return Some(first);
+        }
+        let (last, middle) = rest.split_last()?;
+        if last.serial == serial {
+            Some(last)
+        } else {
+            middle.iter().find(|s| s.serial == serial)
+        }
     }
     pub fn pages(&self, serial: u32) -> Option<&[IndexedPage]> {
         Some(&self.pages[self.stream(serial)?.pages.clone()])
