@@ -407,6 +407,57 @@ fn indexed_granules_and_packet_boundaries_match_complete_demux() {
 }
 
 #[test]
+fn index_carries_packet_origins_across_nil_and_mixed_continuation_pages() {
+    let mut bytes = Vec::new();
+    let mut offsets = Vec::new();
+    for (sequence, (flags, granule, lacing, body)) in [
+        (BOS, 0, vec![1], vec![37]),
+        (0, UNKNOWN_GRANULE_POSITION, vec![255], vec![37; 255]),
+        (CONTINUED, UNKNOWN_GRANULE_POSITION, vec![], vec![]),
+        (CONTINUED, 2, vec![0, 1, 255], vec![37; 256]),
+        (CONTINUED, UNKNOWN_GRANULE_POSITION, vec![], vec![]),
+        (
+            CONTINUED,
+            UNKNOWN_GRANULE_POSITION,
+            vec![255],
+            vec![37; 255],
+        ),
+        (CONTINUED | EOS, 3, vec![0], vec![]),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        offsets.push(bytes.len() as u64);
+        bytes.extend(
+            encode_page(
+                PageHeader {
+                    flags,
+                    granule_position: granule,
+                    serial: 42,
+                    sequence: sequence as u32,
+                },
+                &lacing,
+                &body,
+            )
+            .unwrap(),
+        );
+    }
+    let index = OggIndex::read(bytes.as_slice(), IndexOptions::default()).unwrap();
+    let indexed = index.pages(42).unwrap();
+    assert_eq!(indexed.len(), offsets.len());
+    for (entry, expected) in indexed.iter().zip([0, 1, 1, 1, 3, 3, 3]) {
+        assert_eq!(entry.first_packet_offset, offsets[expected]);
+    }
+    for (packet, expected) in [0, 1, 3, 3].into_iter().enumerate() {
+        assert_eq!(
+            index.packet_start_page(42, packet as u64).unwrap().offset,
+            offsets[expected]
+        );
+    }
+    assert_eq!(index.stream(42).unwrap().packets, 4);
+}
+
+#[test]
 fn every_indexed_page_capture_and_repeated_seek_returns_exact_suffix() {
     let bytes = multiplexed_and_chained();
     let index = OggIndex::read(bytes.as_slice(), IndexOptions::default()).unwrap();

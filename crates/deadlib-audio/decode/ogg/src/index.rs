@@ -275,10 +275,10 @@ impl OggIndex {
                 granule_floor: 0,
                 landmark: 0,
             });
-            for fragment in page.fragments() {
-                if fragment.starts_packet {
-                    partial_starts[stream_index] = located.offset;
-                }
+            // Carry only an unfinished packet's start. A continued page can
+            // start a new one after completing its incoming packet.
+            if page.lacing().last() == Some(&255) && (!header.is_continued() || last.is_some()) {
+                partial_starts[stream_index] = located.offset;
             }
             if let Some(last) = last {
                 stream.packets = last
