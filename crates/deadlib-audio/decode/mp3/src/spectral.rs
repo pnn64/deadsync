@@ -74,13 +74,16 @@ pub fn quantized(
     Ok(line)
 }
 fn power(value: i16, scale: f64) -> f64 {
-    if value == 0 {
-        0.0
-    } else {
-        (value.unsigned_abs() as f64)
-            .powf(4.0 / 3.0)
-            .copysign(value as f64)
-            * scale
+    match value {
+        0 => 0.0,
+        1 => scale,
+        -1 => -scale,
+        _ => {
+            (value.unsigned_abs() as f64)
+                .powf(4.0 / 3.0)
+                .copysign(value as f64)
+                * scale
+        }
     }
 }
 /// Requantization and short-block reordering into frequency order.

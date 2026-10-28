@@ -6,7 +6,9 @@ mod cpu;
 mod heap;
 
 use deadlib_audio_decode_mp3::{
+    bands::Bands,
     bits::BitReader,
+    scalefactors::ScaleFactors,
     synthesis::{Hybrid, Synthesis},
     *,
 };
@@ -92,6 +94,53 @@ fn verify(paths: &[String]) {
             }
         }
     }
+    // All public gain values, rates and long/short/mixed reorderings. Include
+    // both common coefficients and the full signed-i16 magnitude boundary.
+    for rate in [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000] {
+        let bands = Bands::for_rate(rate).unwrap();
+        for (kind, mixed) in [(0, false), (1, false), (3, false), (2, false), (2, true)] {
+            for gain in 0..=255u8 {
+                let input = std::array::from_fn(|n| {
+                    [
+                        0,
+                        1,
+                        -1,
+                        2,
+                        -2,
+                        15,
+                        -15,
+                        16,
+                        -16,
+                        8206,
+                        -8206,
+                        i16::MAX,
+                        i16::MIN,
+                    ][n % 13]
+                });
+                let info = GranuleChannel {
+                    global_gain: gain,
+                    block_type: kind,
+                    mixed_block: mixed,
+                    scalefac_scale: gain & 2 != 0,
+                    subblock_gain: [gain, gain.wrapping_mul(7), gain.wrapping_mul(19)],
+                    ..Default::default()
+                };
+                let factors = ScaleFactors {
+                    long: std::array::from_fn(|n| gain.wrapping_add(n as u8)),
+                    short: std::array::from_fn(|n| {
+                        std::array::from_fn(|w| gain.wrapping_add((n * 3 + w) as u8))
+                    }),
+                    preflag: gain & 1 != 0,
+                    ..Default::default()
+                };
+                let mut output = [0.0; 576];
+                spectral::requantize(&input, &info, &factors, bands, &mut output).unwrap();
+                for value in output {
+                    out.write_all(&value.to_le_bytes()).unwrap();
+                }
+            }
+        }
+    }
 }
 
 fn main() {
@@ -125,6 +174,51 @@ fn main() {
                 black_box(bits.read(black_box(width)).unwrap());
             }
         });
+    }
+    probe("bits/flag", 1000, || {
+        let mut bits = BitReader::new(black_box(&bytes));
+        for _ in 0..512 {
+            black_box(bits.flag().unwrap());
+        }
+    });
+    for book in [1, 13, 23, 31] {
+        probe(&format!("huffman/{book}"), 1000, || {
+            let mut bits = BitReader::new(black_box(&bytes));
+            for _ in 0..256 {
+                black_box(huffman::pair(&mut bits, book).unwrap());
+            }
+        });
+    }
+    for (kind, mixed) in [(0, false), (2, false), (2, true)] {
+        for wide in [false, true] {
+            let input = std::array::from_fn(|n| {
+                let value = if wide {
+                    (n * 37 % 8207) as i16
+                } else {
+                    (n % 3) as i16
+                };
+                if n & 1 == 0 { value } else { -value }
+            });
+            let info = GranuleChannel {
+                global_gain: 210,
+                block_type: kind,
+                mixed_block: mixed,
+                ..Default::default()
+            };
+            let factors = ScaleFactors::default();
+            let bands = Bands::for_rate(44100).unwrap();
+            let mut output = [0.0; 576];
+            probe(&format!("requantize/{kind}/{mixed}/{wide}"), 1000, || {
+                spectral::requantize(
+                    black_box(&input),
+                    black_box(&info),
+                    black_box(&factors),
+                    bands,
+                    black_box(&mut output),
+                )
+                .unwrap();
+            });
+        }
     }
     for path in &args {
         let frames = packets(Path::new(path));

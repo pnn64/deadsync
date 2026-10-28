@@ -80,8 +80,10 @@ def capture(root, stage, fixtures, source_stage):
                            if "target" not in p.relative_to(folder).parts},
                   fixtures={str(p): sha(p) for p in fixtures},
                   output_sha256=output_sha, output_bytes=output_bytes)
-    (folder / "manifest.json").write_text(json.dumps(record, indent=2) + "\n")
     initial = invoke([binary, *fixtures])
+    record["workloads"] = re.findall(r"([^\r\n]+): cycles/op [\d.]+; ns/op [\d.]+", initial.decode())
+    assert record["workloads"], "no benchmark measurements"
+    (folder / "manifest.json").write_text(json.dumps(record, indent=2) + "\n")
     (folder / "initial.log").write_bytes(initial)
     print(initial.decode(), flush=True)
 
@@ -147,7 +149,11 @@ def main():
             counts = {label: dict(re.findall(r"(\w+): (\d+)", fields))
                       for label, fields in allocation.findall(output)}
             measurements = timing.findall(output)
-            assert len(measurements) == len(counts) == 13 + len(first["fixtures"])
+            assert len(measurements) == len(counts)
+            if "workloads" in first:
+                assert {m[0] for m in measurements} == set(first["workloads"])
+            else:
+                assert len(measurements) == 13 + len(first["fixtures"])
             for label, cycles, ns in measurements:
                 rows.append(dict(run=run, stage=stage, workload=label,
                                  cycles_per_op=float(cycles), ns_per_op=float(ns),
