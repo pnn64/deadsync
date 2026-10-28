@@ -2,6 +2,24 @@
 use super::*;
 
 impl NativeStack<'_, '_> {
+    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+    pub(crate) fn attach_standard_stream(
+        &mut self,
+        index: isize,
+        kind: usize,
+    ) -> Result<(), Error> {
+        let Some(Value::Userdata(id)) = self.value(index) else {
+            return Err(self.error(b"standard stream userdata expected"));
+        };
+        if kind > 2
+            || self.call.vm.userdata[slot_index(id.0)].bytes.len() != std::mem::size_of::<usize>()
+        {
+            return Err(self.error(b"invalid standard stream"));
+        }
+        let key = self.call.vm.standard_stream(kind);
+        self.call.vm.userdata[slot_index(id.0)].file = Some(key);
+        Ok(())
+    }
     /// Compile a named file, or shared standard input when `path` is None.
     /// Paths use the prefix before NUL. The file is closed on every named-file
     /// outcome; stdin remains open, including its buffered lookahead. A temporary

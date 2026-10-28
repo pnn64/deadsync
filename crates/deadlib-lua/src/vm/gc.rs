@@ -1173,7 +1173,10 @@ impl Vm {
         self.parser_prototypes.clear_marks();
         self.userdata.clear_marks();
         self.io.files.clear_marks();
-        if let Some(key) = self.io.stdin {
+        for key in [self.io.stdin, self.io.stdout, self.io.stderr]
+            .into_iter()
+            .flatten()
+        {
             self.io.files.mark(key.get());
         }
         self.strings.bytes.protect_new(true);

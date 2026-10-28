@@ -78,6 +78,8 @@ pub(super) struct Io {
     pub files: Arena<Stream>,
     pub file_tag: Option<StringId>,
     pub stdin: Option<NonZeroU64>,
+    pub stdout: Option<NonZeroU64>,
+    pub stderr: Option<NonZeroU64>,
 }
 impl Io {
     pub fn heap_bytes(&self) -> usize {
@@ -85,6 +87,22 @@ impl Io {
     }
 }
 impl Vm {
+    pub(super) fn standard_stream(&mut self, kind: usize) -> NonZeroU64 {
+        let (slot, resource, read, write) = match kind {
+            0 => (&mut self.io.stdin, Resource::Input, true, false),
+            1 => (&mut self.io.stdout, Resource::Output, false, true),
+            2 => (&mut self.io.stderr, Resource::Error, false, true),
+            _ => unreachable!("standard stream kind"),
+        };
+        *slot.get_or_insert_with(|| {
+            NonZeroU64::new(
+                self.io
+                    .files
+                    .insert(Stream::new(resource, read, write, true)),
+            )
+            .expect("stream arena key")
+        })
+    }
     pub(super) fn flush_process_streams(&mut self) {
         // Process exit flushes C streams without closing the Lua state or
         // invoking finalizers. Match that for the streams owned by this VM.
@@ -333,8 +351,11 @@ impl Vm {
             (0, b"stderr", Resource::Error, false, true),
         ] {
             let value = self.file_value(Stream::new(resource, read, write, true), standard);
-            if index == 1 {
-                self.io.stdin = self.file_key(value, false).and_then(NonZeroU64::new);
+            let key = self.file_key(value, false).and_then(NonZeroU64::new);
+            match index {
+                1 => self.io.stdin = key,
+                2 => self.io.stdout = key,
+                _ => self.io.stderr = key,
             }
             let name = self.intern(name);
             self.raw_set(library, name, value).unwrap();
@@ -371,7 +392,8 @@ impl Vm {
         user.file.map(NonZeroU64::get)
     }
     fn file_metatable(&self) -> Option<TableId> {
-        match self.tables[slot_index(self.registry.0)].get(Value::String(self.io.file_tag?)) {
+        let tag = self.io.file_tag.or_else(|| self.strings.find(b"FILE*"))?;
+        match self.tables[slot_index(self.registry.0)].get(Value::String(tag)) {
             Value::Table(id) => Some(id),
             _ => None,
         }

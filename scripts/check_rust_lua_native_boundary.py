@@ -490,6 +490,11 @@ def main():
             core.add(parenthesized[0] if parenthesized else re.findall(r'\blua_\w+\b',line.split('(')[0])[-1])
     declarations=set(re.findall(r'^API[^;\n]*?\b(lua_\w+)\s*\(', (root/'crates/deadlib-lua/src/native_abi/api.h').read_text(),re.M))
     result['core_c_api_declarations']=dict(implemented=len(core&declarations),total=len(core),missing=sorted(core-declarations),complete_semantics_proven=False)
+    library_header=(root/'vendor/lua-src/lua-5.1.5/lualib.h').read_text()
+    library_api=set(re.findall(r'\b(luaopen_\w+)\s*\)',library_header))
+    boundary_header=(root/'crates/deadlib-lua/src/native_abi/api.h').read_text()
+    library_exports=set(re.findall(r'^API int (luaopen_\w+)\(',boundary_header,re.M))
+    result['standard_library_declarations']=dict(implemented=len(library_api&library_exports),total=len(library_api),missing=sorted(library_api-library_exports),openlibs_declared=bool(re.search(r'^API void luaL_openlibs\(',boundary_header,re.M)),complete_semantics_proven=False)
     result['native_file_complete']=file_loaders
     result['native_dump_complete']=dumpers
     result['native_thread_complete']=threads

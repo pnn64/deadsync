@@ -163,6 +163,46 @@ API int luaopen_table(lua_State *L) {luaL_register(L,"table",open_table_function
 API int luaopen_os(lua_State *L) {luaL_register(L,"os",open_os_functions);return 1;}
 API int luaopen_debug(lua_State *L) {luaL_register(L,"debug",open_debug_functions);return 1;}
 
+static const luaL_Reg open_io_functions[]={
+  {"close",builtin_body_128},{"flush",builtin_body_129},
+  {"input",builtin_body_130},{"lines",builtin_body_131},
+  {"open",builtin_body_132},{"output",builtin_body_133},
+  {"popen",builtin_body_134},{"read",builtin_body_135},
+  {"tmpfile",builtin_body_136},{"type",builtin_body_137},
+  {"write",builtin_body_138},{NULL,NULL}
+};
+static const luaL_Reg open_file_functions[]={
+  {"close",builtin_body_128},{"flush",builtin_body_140},
+  {"lines",builtin_body_141},{"read",builtin_body_142},
+  {"seek",builtin_body_143},{"setvbuf",builtin_body_144},
+  {"write",builtin_body_145},{"__gc",builtin_body_146},
+  {"__tostring",builtin_body_147},{NULL,NULL}
+};
+static void open_io_environment(lua_State *L,lua_CFunction close) {
+  lua_createtable(L,0,1);lua_pushcclosure(L,close,0);lua_setfield(L,-2,"__close");
+}
+static void open_io_standard(lua_State *L,FILE *file,int kind,int index,const char *name) {
+  BoundaryValue value={0};
+  FILE **pointer=(FILE **)lua_newuserdata(L,sizeof(FILE *));*pointer=NULL;
+  lua_getfield(L,LUA_REGISTRYINDEX,"FILE*");lua_setmetatable(L,-2);
+  *pointer=file;
+  operation(L,75,kind,-1,&value);
+  if(index>0){lua_pushvalue(L,-1);lua_rawseti(L,LUA_ENVIRONINDEX,index);}
+  lua_pushvalue(L,-2);lua_setfenv(L,-2);lua_setfield(L,-3,name);
+}
+API int luaopen_io(lua_State *L) {
+  luaL_newmetatable(L,"FILE*");lua_pushvalue(L,-1);lua_setfield(L,-2,"__index");
+  luaL_register(L,NULL,open_file_functions);
+  open_io_environment(L,builtin_body_148);lua_replace(L,LUA_ENVIRONINDEX);
+  luaL_register(L,"io",open_io_functions);
+  open_io_environment(L,builtin_body_149);
+  open_io_standard(L,stdin,0,1,"stdin");
+  open_io_standard(L,stdout,1,2,"stdout");
+  open_io_standard(L,stderr,2,0,"stderr");
+  lua_settop(L,-2);lua_getfield(L,-1,"popen");
+  open_io_environment(L,builtin_body_150);lua_setfenv(L,-2);lua_settop(L,-2);return 1;
+}
+
 static const luaL_Reg open_package_functions[]={
   {"loadlib",builtin_body_158},{"seeall",builtin_body_153},{NULL,NULL}
 };
@@ -220,3 +260,16 @@ API int luaopen_package(lua_State *L) {
   lua_pushvalue(L,LUA_GLOBALSINDEX);luaL_register(L,NULL,open_module_functions);lua_settop(L,-2);
   return 1;
 }
+
+API void luaL_openlibs(lua_State *L) {
+  static const luaL_Reg libraries[]={
+    {"",luaopen_base},{"package",luaopen_package},{"table",luaopen_table},
+    {"io",luaopen_io},{"os",luaopen_os},{"string",luaopen_string},
+    {"math",luaopen_math},{"debug",luaopen_debug},{NULL,NULL}
+  };
+  const luaL_Reg *library;
+  for(library=libraries;library->func;library++){
+    lua_pushcclosure(L,library->func,0);lua_pushstring(L,library->name);lua_call(L,1,0);
+  }
+}
+API int boundary_openlibs(lua_State *L) {luaL_openlibs(L);return 0;}

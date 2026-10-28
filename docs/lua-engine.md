@@ -1453,17 +1453,17 @@ The checks match 66 transcript rows in each of twelve opening orders against
 release and checked references on Windows x64 and Linux i686 SSE2. They cover
 full C windows, intermediate registration values, setters and errors, closure
 environments, reopening and initialization on fresh, yielded and dead threads.
-`luaopen_io`, `luaL_openlibs`, the four core lifecycle/allocator
-declarations and the broader standalone parity gates remain unfinished.
+Package and I/O initialization are covered below. The four core
+lifecycle/allocator declarations and the broader standalone parity gates remain
+unfinished.
 
 The [package initializer](testing/2026-10-28-rust-lua-package-init.md) now exports
 `luaopen_package`. It preserves registry table reuse, registration order, C
 closure environments, path expansion, fresh loaders and preload tables, and
 cached imports. Comparisons match 3,024 transcript rows per profile across
 twelve opening orders and nine environment settings, including native loading,
-partial errors and initialization on yielded or waiting C activations. I/O's
-direct C close-handler path, I/O/openlibs initialization, lifecycle/allocator
-APIs and the other full Lua 5.1 parity gates remain open.
+partial errors and initialization on yielded or waiting C activations.
+Lifecycle/allocator APIs and the other full Lua 5.1 parity gates remain open.
 
 The [I/O close callback path](testing/2026-10-28-rust-lua-io-closers.md) now
 looks up `__close` through table semantics and invokes its native body inside
@@ -1471,8 +1471,21 @@ the existing activation. Binding data stays separate from caller environments
 and captures; modified C windows and yielded prefixes survive return hooks and
 resumption. Comparisons match 231 observations on both tested widths. A separate
 hook-yield audit retains unequal release behavior and a checked-reference
-assertion. I/O/openlibs initialization, lifecycle/allocator APIs and the broader
-standalone parity gates remain unfinished.
+assertion. Lifecycle/allocator APIs and the broader standalone parity gates
+remain unfinished.
+
+The [I/O and full-library initializers](testing/2026-10-28-rust-lua-io-init.md)
+now export `luaopen_io` and `luaL_openlibs`, bringing library entrypoint
+declaration coverage to 8/8. `NativeCAbiLoader::standard_library(b"io")` and
+`open_libraries()` expose them to Rust embeddings. Reopening creates fresh
+closures, environments and standard userdata while sharing the underlying
+stream buffers. Bare-state `loadfile()` can initialize stdin before the I/O
+library. Full initialization calls each opener in its own C activation, in
+Lua 5.1's standard order. Comparisons match 6,312 observations per profile on
+Windows debug/release and Linux i686 SSE2 release. This proves the recorded
+construction and stream cases; arbitrary native `FILE *` interoperability,
+strict callback interleavings, collector accounting, lifecycle/allocator APIs
+and full Lua 5.1 parity remain open.
 
 ## Reference contract
 

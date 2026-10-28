@@ -18,6 +18,7 @@ static lua_CFunction library_initializer(lua_State *L,int index) {
   if(!strcmp(name,"os"))return luaopen_os;
   if(!strcmp(name,"debug"))return luaopen_debug;
   if(!strcmp(name,"package"))return luaopen_package;
+  if(!strcmp(name,"io"))return luaopen_io;
   luaL_error(L,"unknown standard library");return NULL;
 }
 static int library_snapshot(lua_State *L,int results) {
@@ -31,6 +32,12 @@ static int library_snapshot(lua_State *L,int results) {
 static int library_open(lua_State *L) {
   lua_CFunction f=library_initializer(L,1);int results;
   lua_remove(L,1);results=f(L);return library_snapshot(L,results);
+}
+static int library_all(lua_State *L) {luaL_openlibs(L);return library_snapshot(L,0);}
+static int library_standard(lua_State *L) {
+  FILE **file=(FILE **)luaL_checkudata(L,1,"FILE*");
+  lua_pushboolean(L,lua_objlen(L,1)==sizeof(FILE *));
+  lua_pushboolean(L,*file!=NULL);return 2;
 }
 static int library_registry(lua_State *L) {
   int count=0;lua_pushnil(L);
@@ -88,10 +95,10 @@ LIBRARY_EXPORT int luaopen_package_probe(lua_State *L) {
 LIBRARY_EXPORT int luaopen_package_probe_child(lua_State *L) {return luaopen_package_probe(L);}
 LIBRARY_EXPORT int luaopen_library_initializers(lua_State *L) {
   static const luaL_Reg helpers[]={
-    {"library_open",library_open},{"library_rawcall",library_rawcall},
+    {"library_open",library_open},{"library_rawcall",library_rawcall},{"library_all",library_all},
     {"library_registry",library_registry},{"library_metatable",library_metatable},
     {"library_environment",library_environment},{"library_program_directory",library_program_directory},
-    {"library_open_thread",library_open_thread},{NULL,NULL}
+    {"library_open_thread",library_open_thread},{"library_standard",library_standard},{NULL,NULL}
   };
   const luaL_Reg *entry;
   for(entry=helpers;entry->name;entry++){

@@ -2,6 +2,15 @@
 use super::*;
 
 impl NativeStack<'_, '_> {
+    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+    pub(crate) fn attach_standard_stream_thread(
+        &mut self,
+        thread: ThreadId,
+        index: isize,
+        kind: usize,
+    ) -> Result<(), Error> {
+        self.with_thread_stack(thread, |stack| stack.attach_standard_stream(index, kind))
+    }
     /// Compile through a reader on the selected thread's native stack.
     /// Reader callbacks see that thread's stack, environment and retained status.
     /// Loading does not resume its pending computation. Parser output follows

@@ -163,6 +163,8 @@ fn bare_states_run_the_public_c_initializer_corpus_in_twelve_orders() {
     for source in [
         include_bytes!("native-boundary/library-initializers.lua").as_slice(),
         include_bytes!("native-boundary/package-initializer.lua").as_slice(),
+        include_bytes!("native-boundary/io-initializer.lua").as_slice(),
+        include_bytes!("native-boundary/openlibs.lua").as_slice(),
     ] {
         let program = compile_named(source, b"@library-initializers.lua").unwrap();
         for order in 1..=12 {
@@ -225,6 +227,44 @@ local old,preload,loaders=package.loadlib,package.preload,package.loaders
 assert(open_package()==package and old~=package.loadlib)
 assert(package.preload~=preload and package.loaders~=loaders and package.loaded.probe==result)
 assert(debug.getfenv(package.loadlib)==package)
+"#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+}
+
+#[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+#[test]
+fn io_initializer_and_openlibs_are_available_to_rust_embeddings() {
+    let loader = deadlib_lua::NativeCAbiLoader::default();
+    let mut vm = Vm::new_bare();
+    let io = vm
+        .new_native_function(loader.standard_library(b"io").unwrap())
+        .unwrap();
+    vm.call(io, &[]).unwrap();
+    assert_ne!(vm.global(b"io"), Value::Nil);
+    assert_eq!(vm.global(b"assert"), Value::Nil);
+    vm.set_global(b"open_io", io).unwrap();
+    let all = vm
+        .new_native_function(loader.open_libraries().unwrap())
+        .unwrap();
+    assert!(
+        vm.call(all, &[Value::Number(17.), Value::Nil])
+            .unwrap()
+            .is_empty()
+    );
+    vm.set_global(b"open_all", all).unwrap();
+    vm.execute(
+        &compile(
+            br#"
+assert(debug.getfenv(open_all)==_G)
+local f=assert(io.tmpfile());assert(f:write('embedding')and f:seek('set')==0)
+assert(f:read('*a')=='embedding'and f:close())
+local old=io.stdin;assert(open_io()==io and old~=io.stdin and io.type(old)=='file')
+assert(debug.getfenv(open_io)==debug.getfenv(io.read))
+assert(select('#',open_all(17,nil))==0 and debug.getfenv(open_all)==_G)
+assert(package.loaded.io==io and io.input()==io.stdin and io.output()==io.stdout)
 "#,
         )
         .unwrap(),

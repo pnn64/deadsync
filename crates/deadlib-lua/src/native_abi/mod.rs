@@ -92,7 +92,7 @@ fn matching_version(pointer: usize) -> bool {
 impl NativeCAbiLoader {
     /// Resolve an initializer from this VM build's C API image.
     /// Supported names are `base`, `math`, `string`, `table`, `os`, `debug`
-    /// and `package`.
+    /// `package` and `io`.
     /// Bind the result with [`crate::Vm::new_native_function`] and call it with
     /// the ordinary VM API. Initialization uses the current thread's globals,
     /// registry and function environment; repeated calls create fresh closures.
@@ -105,8 +105,18 @@ impl NativeCAbiLoader {
             b"os" => b"luaopen_os",
             b"debug" => b"luaopen_debug",
             b"package" => b"luaopen_package",
+            b"io" => b"luaopen_io",
             _ => return Err(b"unsupported standard library".as_slice().into()),
         };
+        self.bundled_function(symbol)
+    }
+    /// Resolve `luaL_openlibs` as a callable function returning no values.
+    /// Bind with [`crate::Vm::new_native_function`] to initialize all libraries
+    /// in Lua 5.1's standard order, preserving the caller's arguments.
+    pub fn open_libraries(&self) -> Result<NativeSymbol, Box<[u8]>> {
+        self.bundled_function(b"boundary_openlibs")
+    }
+    fn bundled_function(&self, symbol: &[u8]) -> Result<NativeSymbol, Box<[u8]>> {
         let bridge = self
             .bridge
             .get_or_init(Bridge::bundled)
@@ -754,6 +764,7 @@ impl Context<'_, '_, '_> {
             return self.inactive_operation(thread, op, a, b, value);
         }
         match op {
+            75 => self.stack.attach_standard_stream(b as isize, a as usize)?,
             71 => {
                 let body = crate::NativeBuiltinBody::from_implementation_code(a as u64)
                     .ok_or_else(|| self.stack.error(b"invalid builtin implementation"))?;
@@ -1056,6 +1067,11 @@ impl Context<'_, '_, '_> {
         b: c_int,
         value: &mut BoundaryValue,
     ) -> Result<(), Error> {
+        if op == 75 {
+            return self
+                .stack
+                .attach_standard_stream_thread(thread, b as isize, a as usize);
+        }
         if matches!(op, 18 | 19 | 39) || (matches!(op, 16 | 17) && b == 0) {
             match op {
                 16 => self.stack.get_table_thread(thread, a as isize, b != 0)?,

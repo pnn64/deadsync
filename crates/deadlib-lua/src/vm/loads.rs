@@ -396,7 +396,7 @@ impl Vm {
     pub(super) fn open_file_reader(&mut self, path: Option<&[u8]>) -> Result<FileReader, i32> {
         match path {
             None => Ok(FileReader {
-                key: self.io.stdin.expect("standard input initialized").get(),
+                key: self.standard_stream(0).get(),
                 owned: false,
                 phase: 0,
             }),

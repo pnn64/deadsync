@@ -1,0 +1,43 @@
+{
+  "reports": {
+    "io-init": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-init-i686-current.json",
+      "sha256": "c6f78200180b654888e4510bc74e3dea3c948d24dcbc5be9b0855cc4239ba1dc"
+    },
+    "openlibs": {
+      "path": "docs/testing/2026-10-28-rust-lua-openlibs-i686-current.json",
+      "sha256": "ea81a38e4946e7fdce5d121c0655016560cc77d2d17326c9aed9fc6944a6c53d"
+    },
+    "io-input": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-input-i686-current.json",
+      "sha256": "e9ff5af715b54011bfee35e2635efb0d267cea4042fe142794a8b2c7a5ceb1fa"
+    },
+    "io-loadstdin": {
+      "path": "docs/testing/2026-10-28-rust-lua-io-loadstdin-i686-current.json",
+      "sha256": "e739d645864cf9654cccbdbf648e6af1eb5c8b185af4564ecc1df00bf7559f25"
+    }
+  },
+  "artifact_hashes_verified": true,
+  "source_hashes_verified": true,
+  "checked_references_enabled": true,
+  "pointer_bits": 32,
+  "artifact_checks": 52,
+  "elf32_checks": 28,
+  "observations": {
+    "io-init": 3888,
+    "openlibs": 2376,
+    "io-input": 36,
+    "io-loadstdin": 12
+  },
+  "total_observations": 6312,
+  "initializer_processes": 240,
+  "initializer_totals": {
+    "operations": 1632828,
+    "states": 564,
+    "groups": 240,
+    "libraries": 240
+  },
+  "suite_report": "docs/testing/2026-10-28-rust-lua-io-init-i686-suite.json",
+  "suite_report_sha256": "f977e28820b51d18e8e8d8e50e96e5d27d8ad3914f1d8badc784bc1a4e2942f9",
+  "audit_script_sha256": "79598dd4b331d0f7abff16259d17f0dd70f3842284c0121533f23accb50bbabe"
+}
