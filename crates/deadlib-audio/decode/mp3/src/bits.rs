@@ -39,17 +39,24 @@ impl<'a> BitReader<'a> {
         if width as usize > self.remaining() {
             return Err(Error::Truncated);
         }
-        let mut value = 0;
-        let mut left = width;
-        while left != 0 {
-            let shift = self.position & 7;
-            let count = left.min((8 - shift) as u32);
-            let bits = (self.data[self.position >> 3] >> (8 - shift - count as usize)) as u32;
-            value = (value << count) | (bits & ((1 << count) - 1));
-            self.position += count as usize;
-            left -= count;
+        if width == 0 {
+            return Ok(0);
         }
-        Ok(value)
+        let count = (self.position & 7) as u32 + width;
+        let start = self.position >> 3;
+        let source = &self.data[start..start + count.div_ceil(8) as usize];
+        // A field spans at most five bytes. Fixed-size loads replace the
+        // byte-at-a-time extraction loop, including unaligned 32-bit fields.
+        let value = match *source {
+            [a] => u64::from(a),
+            [a, b] => u64::from(u16::from_be_bytes([a, b])),
+            [a, b, c] => u64::from(u32::from_be_bytes([0, a, b, c])),
+            [a, b, c, d] => u64::from(u32::from_be_bytes([a, b, c, d])),
+            [a, b, c, d, e] => u64::from_be_bytes([0, 0, 0, a, b, c, d, e]),
+            _ => unreachable!(),
+        };
+        self.position += width as usize;
+        Ok(((value >> ((8 - (count & 7)) & 7)) & ((1u64 << width) - 1)) as u32)
     }
     pub fn flag(&mut self) -> Result<bool, Error> {
         Ok(self.read(1)? != 0)

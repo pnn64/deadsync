@@ -71,6 +71,77 @@ fn joint(rate: u32, mode: u8) -> FrameHeader {
 
 fn verify(paths: &[String]) {
     let mut out = io::BufWriter::new(io::stdout().lock());
+    for size in 0..=16 {
+        let data: Vec<_> = (0..size).map(|n| (n * 37 + 13) as u8).collect();
+        for start in 0..=size * 8 {
+            for available in [0, 1, 7, 8, 9, 31, 32, 39] {
+                let available = available.min(size * 8 - start);
+                for width in 0..=33 {
+                    let mut bits = BitReader::bounded(&data, start, available).unwrap();
+                    writeln!(
+                        out,
+                        "{:?} {} {}",
+                        bits.read(width),
+                        bits.position(),
+                        bits.remaining()
+                    )
+                    .unwrap();
+                    let mut bits = BitReader::bounded(&data, start, available).unwrap();
+                    writeln!(
+                        out,
+                        "{:?} {} {}",
+                        bits.flag(),
+                        bits.position(),
+                        bits.remaining()
+                    )
+                    .unwrap();
+                }
+            }
+        }
+    }
+    let data: Vec<_> = (0..4096).map(|n| (n * 37 + 13) as u8).collect();
+    for rate in [44100, 48000, 32000, 22050, 24000, 16000, 11025, 12000, 8000] {
+        let bands = Bands::for_rate(rate).unwrap();
+        for kind in 0..=4 {
+            for mixed in [false, true] {
+                for (region0_count, region1_count) in
+                    [(0, 0), (7, 7), (15, 7), (21, 0), (22, 255), (255, 255)]
+                {
+                    for big_values in [0, 1, 17, 288, 289] {
+                        for table_select in [[0, 0, 0], [1, 13, 23], [4, 14, 32]] {
+                            let info = GranuleChannel {
+                                block_type: kind,
+                                mixed_block: mixed,
+                                region0_count,
+                                region1_count,
+                                big_values,
+                                table_select,
+                                ..Default::default()
+                            };
+                            for (start, available) in [(3, 31), (7, data.len() * 8 - 7)] {
+                                let mut bits = BitReader::bounded(&data, start, available).unwrap();
+                                let mut samples = [0; 576];
+                                let result =
+                                    spectral::quantized(&mut bits, &info, bands, &mut samples);
+                                writeln!(
+                                    out,
+                                    "{result:?} {} {}",
+                                    bits.position(),
+                                    bits.remaining()
+                                )
+                                .unwrap();
+                                if result.is_ok() {
+                                    for sample in samples {
+                                        out.write_all(&sample.to_le_bytes()).unwrap();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     for crc in 0..=u16::MAX {
         for byte in 0..=u8::MAX {
             out.write_all(&checksum::bytes(crc, &[byte]).to_le_bytes())
@@ -315,6 +386,46 @@ fn main() {
             for _ in 0..256 {
                 black_box(huffman::quad(&mut bits, table_b).unwrap());
             }
+        });
+    }
+    for (region0_count, region1_count) in [(0, 0), (7, 7), (15, 7)] {
+        let info = GranuleChannel {
+            big_values: 288,
+            region0_count,
+            region1_count,
+            table_select: [1, 13, 23],
+            ..Default::default()
+        };
+        let bands = Bands::for_rate(44100).unwrap();
+        let mut output = [0; 576];
+        probe(
+            &format!("quantized/{region0_count}/{region1_count}"),
+            1000,
+            || {
+                let mut bits = BitReader::new(black_box(&bytes));
+                black_box(
+                    spectral::quantized(&mut bits, black_box(&info), bands, black_box(&mut output))
+                        .unwrap(),
+                );
+            },
+        );
+    }
+    for (label, table_select) in [("zero", [0, 0, 0]), ("zero-middle", [1, 0, 23])] {
+        let info = GranuleChannel {
+            big_values: 288,
+            region0_count: 7,
+            region1_count: 7,
+            table_select,
+            ..Default::default()
+        };
+        let bands = Bands::for_rate(44100).unwrap();
+        let mut output = [0; 576];
+        probe(&format!("quantized/{label}"), 1000, || {
+            let mut bits = BitReader::new(black_box(&bytes));
+            black_box(
+                spectral::quantized(&mut bits, black_box(&info), bands, black_box(&mut output))
+                    .unwrap(),
+            );
         });
     }
     for (kind, mixed) in [(0, false), (2, false), (2, true)] {
