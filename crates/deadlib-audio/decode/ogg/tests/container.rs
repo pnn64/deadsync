@@ -710,6 +710,56 @@ fn full_terminated_lacing_waits_for_the_next_packet_or_flush() {
 }
 
 #[test]
+fn empty_incremental_polls_preserve_prefixes_and_error_boundaries() {
+    let frames = [
+        page(BOS | EOS, 0, 11, 0, &[], &[]),
+        page(BOS | EOS, 0, 11, 0, &[255, 0], &[37; 255]),
+    ];
+    for frame in &frames {
+        for prefix in 0..=frame.len() {
+            let mut decoder = PageDecoder::new();
+            let progress = decoder.push(&frame[..prefix]).unwrap();
+            assert_eq!(progress.consumed, prefix);
+            assert_eq!(progress.page.is_some(), prefix == frame.len());
+            for _ in 0..3 {
+                let progress = decoder.push(&[]).unwrap();
+                assert_eq!(progress.consumed, 0);
+                assert!(progress.page.is_none());
+            }
+            let rest = if prefix == frame.len() {
+                frame.as_slice()
+            } else {
+                &frame[prefix..]
+            };
+            let progress = decoder.push(rest).unwrap();
+            assert_eq!(progress.consumed, rest.len());
+            assert_eq!(progress.page.unwrap().bytes(), frame);
+            decoder.finish().unwrap();
+            assert!(decoder.push(&[]).unwrap().page.is_none());
+            decoder.finish().unwrap();
+        }
+    }
+    for corrupt_at in [0, 22] {
+        let mut frame = frames[0].clone();
+        frame[corrupt_at] ^= 128;
+        let mut decoder = PageDecoder::new();
+        assert!(decoder.push(&frame[..26]).unwrap().page.is_none());
+        assert!(decoder.push(&[]).unwrap().page.is_none());
+        let error = decoder.push(&frame[26..]).err().unwrap();
+        if corrupt_at == 0 {
+            assert_eq!(error, Error::Invalid("capture pattern"));
+        } else {
+            assert!(matches!(error, Error::Checksum { .. }));
+        }
+        assert!(matches!(decoder.push(&[]), Err(Error::Failed)));
+        assert_eq!(decoder.finish(), Err(Error::Failed));
+        decoder.reset();
+        assert!(decoder.push(&[]).unwrap().page.is_none());
+        decoder.finish().unwrap();
+    }
+}
+
+#[test]
 fn incremental_reset_and_reuse_discard_partial_page_lengths() {
     let large = page(BOS | EOS, 0, 8, 0, &[255, 17], &[37; 272]);
     let small = page(BOS | EOS, 0, 9, 0, &[0], &[]);

@@ -291,6 +291,13 @@ impl PageDecoder {
             self.length = 0;
             self.ready = false;
         }
+        // Every available prefix was validated by the preceding push.
+        if input.is_empty() {
+            return Ok(PageProgress {
+                consumed: 0,
+                page: None,
+            });
+        }
         let result = self.fill_page(input);
         match result {
             Ok((consumed, true)) => {
