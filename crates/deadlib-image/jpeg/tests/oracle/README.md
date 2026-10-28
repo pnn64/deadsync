@@ -59,5 +59,11 @@ decoder warnings**. This covers all 50 sources, sequential/progressive output,
 fixed/optimized Huffman policies and restart intervals 0, 1, 7. The retained
 case hashes and byte sizes are in `tests/reports/rewrite-turbo.json`.
 Separate native tests verify metadata payload/order preservation and bounded
-errors for malformed public coefficient models. Pixel encoding and broader
-oracle coverage remain open.
+errors for malformed public coefficient models. Broader oracle coverage remains
+open.
+
+The pixel encoder gate and its commands are documented in
+`../../ENCODER-VALIDATION.md`. The current oracle additionally writes `.color`
+files: native precision LE u16 full-resolution grayscale/RGB/CMYK output with
+float IDCT and nearest upsampling. Fractional ratios have coefficient/raw-plane
+checks and omit `.color` because the reference upsampler cannot handle them.

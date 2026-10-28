@@ -11,12 +11,16 @@ mod huffman_encode;
 mod marker;
 mod model;
 mod output;
+mod pixel_encode;
 mod progressive;
 mod reconstruct;
 mod transform;
 
 pub use decode::{CoefficientComponent, CoefficientImage, decode_coefficients};
 pub use encode::{CodingOptions, encode_coefficients};
+pub use pixel_encode::{
+    EncodeInput, EncodeOptions, SampleData, Subsampling, encode, encode_samples, quantize,
+};
 pub use reconstruct::{ColorSpace, ComponentPlane, PlanarImage, Upsampling};
 
 pub use marker::{Event, MarkerReader};

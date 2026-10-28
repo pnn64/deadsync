@@ -1,0 +1,2820 @@
+{
+  "reference": "libjpeg-turbo 3.2.1, float DCT/IDCT, no SIMD; correctness/size/quality only",
+  "cases": 172,
+  "coefficient_matches": 172,
+  "fdct_comparisons": 132,
+  "results": [
+    {
+      "case": "p8-q1-gray-444-p0-b1",
+      "native_bytes": 240,
+      "sha256": "1e19fe146fbac237debdda19ed73e9930c7676f90afb19c95062a6811196cea1",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2702.7058064516127,
+        "psnr_db": 13.812815861970124
+      },
+      "reference_bytes": 240,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 2702.7058064516127,
+        "psnr_db": 13.812815861970124
+      }
+    },
+    {
+      "case": "p8-q1-ycbcr-444-p0-b1",
+      "native_bytes": 319,
+      "sha256": "42905a1420aeaca3310cbc36dcf833bdeb52b08b8552a8d72feb55585c5981ce",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 3865.0860215053763,
+        "psnr_db": 12.259211968310623
+      },
+      "reference_bytes": 388,
+      "size_ratio": 0.8221649484536082,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 3865.0860215053763,
+        "psnr_db": 12.259211968310623
+      }
+    },
+    {
+      "case": "p8-q1-ycbcr-422-p0-b1",
+      "native_bytes": 280,
+      "sha256": "917a3b6ae0b2b6c41e92598f37edbd9e57c02fee59a6313cf0f724603035a5c3",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 4292.629677419355,
+        "psnr_db": 11.803569370962311
+      },
+      "reference_bytes": 349,
+      "size_ratio": 0.8022922636103151,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 4292.629677419355,
+        "psnr_db": 11.803569370962311
+      }
+    },
+    {
+      "case": "p8-q1-ycbcr-420-p0-b1",
+      "native_bytes": 266,
+      "sha256": "a300f530f559ccdcc97cd007da451a6511bbb17a83cb3d28c0b8465e45f2379a",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 4532.938064516129,
+        "psnr_db": 11.567005757211216
+      },
+      "reference_bytes": 335,
+      "size_ratio": 0.7940298507462686,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 4532.938064516129,
+        "psnr_db": 11.567005757211216
+      }
+    },
+    {
+      "case": "p8-q1-ycbcr-411-p0-b1",
+      "native_bytes": 263,
+      "sha256": "c437e7ef58bf164e5ddc2db6639e77acf541a5eb58e0b132788f77510f5ac6a3",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 4665.178064516129,
+        "psnr_db": 11.442121359448958
+      },
+      "reference_bytes": 332,
+      "size_ratio": 0.7921686746987951,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 4665.178064516129,
+        "psnr_db": 11.442121359448958
+      }
+    },
+    {
+      "case": "p8-q1-ycbcr-440-p0-b1",
+      "native_bytes": 285,
+      "sha256": "5dc89ba3c810adedc85507144559d5b03966e7eaaea453ec22fe7f8360200477",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 4570.51311827957,
+        "psnr_db": 11.53115401076427
+      },
+      "reference_bytes": 354,
+      "size_ratio": 0.8050847457627118,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00048828125,
+      "reference_quality": {
+        "mse": 4429.555268817205,
+        "psnr_db": 11.667202359979381
+      }
+    },
+    {
+      "case": "p8-q1-ycbcr-410-p0-b1",
+      "native_bytes": 257,
+      "sha256": "9415da67a3cdc4b18041b6b0a63cac3986faf342d72ad66a8d7def154e66a252",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 5047.035268817204,
+        "psnr_db": 11.100440212621862
+      },
+      "reference_bytes": 326,
+      "size_ratio": 0.7883435582822086,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 5047.035268817204,
+        "psnr_db": 11.100440212621862
+      }
+    },
+    {
+      "case": "p8-q1-rgb-444-p0-b1",
+      "native_bytes": 410,
+      "sha256": "611570d59ef052d41d369a4dc733ee9deddf0037db66dce897f54184618342be",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2640.206021505376,
+        "psnr_db": 13.914425436526574
+      },
+      "reference_bytes": 351,
+      "size_ratio": 1.168091168091168,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0003255208333333333,
+      "reference_quality": {
+        "mse": 2640.7070967741934,
+        "psnr_db": 13.913601282748452
+      }
+    },
+    {
+      "case": "p8-q1-cmyk-444-p0-b1",
+      "native_bytes": 469,
+      "sha256": "24b5b523046b912f5744366cce2bb359e71ae94e5ed3cddcd7d462de1a91d52d",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2595.635806451613,
+        "psnr_db": 13.988366043051066
+      }
+    },
+    {
+      "case": "p8-q1-ycck-444-p0-b1",
+      "native_bytes": 469,
+      "sha256": "32e494ce3e71a8fcb845e2c16beaef0a75a5f5eb37f8bec8fb67c0010a27b7b9",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p8-q1-gray-444-p1-b1",
+      "native_bytes": 249,
+      "sha256": "a479c9a017148f820ba06928de16dcca1d9509fe9108979b4b883ecfbf12d524",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2702.7058064516127,
+        "psnr_db": 13.812815861970124
+      },
+      "reference_bytes": 384,
+      "size_ratio": 0.6484375,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 2702.7058064516127,
+        "psnr_db": 13.812815861970124
+      }
+    },
+    {
+      "case": "p8-q1-ycbcr-444-p1-b1",
+      "native_bytes": 360,
+      "sha256": "7f0e6b27c7b36fc72da676ed428fb934d83191f76c0f2d3db04e0422f4db0d99",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 3865.0860215053763,
+        "psnr_db": 12.259211968310623
+      },
+      "reference_bytes": 678,
+      "size_ratio": 0.5309734513274337,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 3865.0860215053763,
+        "psnr_db": 12.259211968310623
+      }
+    },
+    {
+      "case": "p8-q1-ycbcr-422-p1-b1",
+      "native_bytes": 319,
+      "sha256": "2fc264b8773661a16ccdd6db3d4d024dc3063a1d046b84a8d7e66505321e9a07",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 4292.629677419355,
+        "psnr_db": 11.803569370962311
+      },
+      "reference_bytes": 626,
+      "size_ratio": 0.5095846645367412,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 4292.629677419355,
+        "psnr_db": 11.803569370962311
+      }
+    },
+    {
+      "case": "p8-q1-ycbcr-420-p1-b1",
+      "native_bytes": 300,
+      "sha256": "1a5e0bcf2fea9aad2bb92b9795482b1a8d807d28961a57160e0f886a748cd8ca",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 4532.938064516129,
+        "psnr_db": 11.567005757211216
+      },
+      "reference_bytes": 594,
+      "size_ratio": 0.5050505050505051,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 4532.938064516129,
+        "psnr_db": 11.567005757211216
+      }
+    },
+    {
+      "case": "p8-q1-ycbcr-411-p1-b1",
+      "native_bytes": 296,
+      "sha256": "f4a27dcea48f366509cc8f90f1e1db1d647eb1616e3387a77dee46a368a6ead9",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 4665.178064516129,
+        "psnr_db": 11.442121359448958
+      },
+      "reference_bytes": 592,
+      "size_ratio": 0.5,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 4665.178064516129,
+        "psnr_db": 11.442121359448958
+      }
+    },
+    {
+      "case": "p8-q1-ycbcr-440-p1-b1",
+      "native_bytes": 323,
+      "sha256": "df5ee36652934a186f6a2bf3ff6aa39d5aea0ce85151ee5c247da1503cc9d8e4",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 4570.51311827957,
+        "psnr_db": 11.53115401076427
+      },
+      "reference_bytes": 633,
+      "size_ratio": 0.5102685624012638,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00048828125,
+      "reference_quality": {
+        "mse": 4429.555268817205,
+        "psnr_db": 11.667202359979381
+      }
+    },
+    {
+      "case": "p8-q1-ycbcr-410-p1-b1",
+      "native_bytes": 293,
+      "sha256": "ab43b3653b21dafb65c08ca877ca3af97564ebad1d9ed8cdb3e989642f6517b8",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 5047.035268817204,
+        "psnr_db": 11.100440212621862
+      },
+      "reference_bytes": 586,
+      "size_ratio": 0.5,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 5047.035268817204,
+        "psnr_db": 11.100440212621862
+      }
+    },
+    {
+      "case": "p8-q1-rgb-444-p1-b1",
+      "native_bytes": 450,
+      "sha256": "f6b0e8e490d25a4165dff9452ab3359218c0f25630345877c267ae3a73d172f0",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2640.206021505376,
+        "psnr_db": 13.914425436526574
+      },
+      "reference_bytes": 837,
+      "size_ratio": 0.5376344086021505,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0003255208333333333,
+      "reference_quality": {
+        "mse": 2640.7070967741934,
+        "psnr_db": 13.913601282748452
+      }
+    },
+    {
+      "case": "p8-q1-cmyk-444-p1-b1",
+      "native_bytes": 522,
+      "sha256": "c5b8e7a5968442b7a6695c01f65d517d1d17270c6f3dacc077244d044187de62",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2595.635806451613,
+        "psnr_db": 13.988366043051066
+      }
+    },
+    {
+      "case": "p8-q1-ycck-444-p1-b1",
+      "native_bytes": 522,
+      "sha256": "ffedc234eaa31c28476640f332f323853ad68e89600188c44de0a03d8a3d66b6",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p8-q50-gray-444-p0-b1",
+      "native_bytes": 531,
+      "sha256": "16144b456f494fa38936343ae5d6a2941b2369e926379d7896dd99edd3cd275f",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 299.981935483871,
+        "psnr_db": 23.359852580012003
+      },
+      "reference_bytes": 531,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 299.981935483871,
+        "psnr_db": 23.359852580012003
+      }
+    },
+    {
+      "case": "p8-q50-ycbcr-444-p0-b1",
+      "native_bytes": 939,
+      "sha256": "7eb88f4c2b7a1da61f52dd3199d97bea8762560de140d4ea75e57f1628c93f39",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1096.909677419355,
+        "psnr_db": 17.729094928313344
+      },
+      "reference_bytes": 937,
+      "size_ratio": 1.0021344717182497,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0003255208333333333,
+      "reference_quality": {
+        "mse": 1098.08688172043,
+        "psnr_db": 17.724436575853353
+      }
+    },
+    {
+      "case": "p8-q50-ycbcr-422-p0-b1",
+      "native_bytes": 751,
+      "sha256": "6ef89350762186e89736ad13dfe3eed07a3a0c2abe38965474fd20734a66076e",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2095.6563440860214,
+        "psnr_db": 14.917602944377293
+      },
+      "reference_bytes": 751,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00048828125,
+      "reference_quality": {
+        "mse": 2100.1789247311826,
+        "psnr_db": 14.90824064841966
+      }
+    },
+    {
+      "case": "p8-q50-ycbcr-420-p0-b1",
+      "native_bytes": 642,
+      "sha256": "c59258372b7becc659830b828093c7d06aa26fe3dc8393b1460cc13a6060a411",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2898.3152688172045,
+        "psnr_db": 13.50934736095577
+      },
+      "reference_bytes": 642,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0006510416666666666,
+      "reference_quality": {
+        "mse": 2897.0636559139784,
+        "psnr_db": 13.51122322996403
+      }
+    },
+    {
+      "case": "p8-q50-ycbcr-411-p0-b1",
+      "native_bytes": 663,
+      "sha256": "36c6c0ed91a7d151a363491c2a5c7f7edbd56425d3d3dd26f47d219d8fd14bc4",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2792.064946236559,
+        "psnr_db": 13.67154844673195
+      },
+      "reference_bytes": 663,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 2792.064946236559,
+        "psnr_db": 13.67154844673195
+      }
+    },
+    {
+      "case": "p8-q50-ycbcr-440-p0-b1",
+      "native_bytes": 752,
+      "sha256": "dd5e1a5831ef220ede29cebc20e0c70ed10672109fd5a5f9b21ff83c8deface9",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2430.7655913978497,
+        "psnr_db": 14.273372807867608
+      },
+      "reference_bytes": 751,
+      "size_ratio": 1.0013315579227697,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00048828125,
+      "reference_quality": {
+        "mse": 2437.1002150537633,
+        "psnr_db": 14.262069728608644
+      }
+    },
+    {
+      "case": "p8-q50-ycbcr-410-p0-b1",
+      "native_bytes": 609,
+      "sha256": "32d6d9753139a56d5ab614a661288920fa0f124e7a402c85b9cfb847ee1caedf",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 3267.916129032258,
+        "psnr_db": 12.98809459019129
+      },
+      "reference_bytes": 607,
+      "size_ratio": 1.0032948929159802,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00078125,
+      "reference_quality": {
+        "mse": 3269.6417204301074,
+        "psnr_db": 12.985801945577611
+      }
+    },
+    {
+      "case": "p8-q50-rgb-444-p0-b1",
+      "native_bytes": 1267,
+      "sha256": "0089cd3375a402c35ff58c7703d00aa4f1576736a6cbe68915b6e1202c718c1d",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 306.9612903225806,
+        "psnr_db": 23.259967491016834
+      },
+      "reference_bytes": 1200,
+      "size_ratio": 1.0558333333333334,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0006510416666666666,
+      "reference_quality": {
+        "mse": 307.7169892473118,
+        "psnr_db": 23.24928886288719
+      }
+    },
+    {
+      "case": "p8-q50-cmyk-444-p0-b1",
+      "native_bytes": 1593,
+      "sha256": "d149e66d11e2022b507bc525eb616da19f3f5cf86a837144b9eb9c1c8ca4d572",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 299.5674193548387,
+        "psnr_db": 23.365857826943873
+      }
+    },
+    {
+      "case": "p8-q50-ycck-444-p0-b1",
+      "native_bytes": 1481,
+      "sha256": "f1ea9f1be7be0111a0913989034e7b0b82087d194b27495b7c6dba96d409703f",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p8-q50-gray-444-p1-b1",
+      "native_bytes": 543,
+      "sha256": "34e6f711b41b760c89da0628fabd7dd91c62e6cccdfa599a5ae377c87ff99d99",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 299.981935483871,
+        "psnr_db": 23.359852580012003
+      },
+      "reference_bytes": 653,
+      "size_ratio": 0.8315467075038285,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 299.981935483871,
+        "psnr_db": 23.359852580012003
+      }
+    },
+    {
+      "case": "p8-q50-ycbcr-444-p1-b1",
+      "native_bytes": 973,
+      "sha256": "2872de8c06454ed47e54093f628a962c7340c9022a669f35da8023f423da5beb",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1096.909677419355,
+        "psnr_db": 17.729094928313344
+      },
+      "reference_bytes": 1214,
+      "size_ratio": 0.8014827018121911,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0003255208333333333,
+      "reference_quality": {
+        "mse": 1098.08688172043,
+        "psnr_db": 17.724436575853353
+      }
+    },
+    {
+      "case": "p8-q50-ycbcr-422-p1-b1",
+      "native_bytes": 788,
+      "sha256": "a802ba007f5b491da2289b4fa29f7db52b1d2af5b6003aa63a2af6f22b111c07",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2095.6563440860214,
+        "psnr_db": 14.917602944377293
+      },
+      "reference_bytes": 1018,
+      "size_ratio": 0.7740667976424361,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00048828125,
+      "reference_quality": {
+        "mse": 2100.1789247311826,
+        "psnr_db": 14.90824064841966
+      }
+    },
+    {
+      "case": "p8-q50-ycbcr-420-p1-b1",
+      "native_bytes": 676,
+      "sha256": "0abd9afcdd5277b92fb5c3afa4dbc48ee7bb6f369f97d56868e318c131cbfd61",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2898.3152688172045,
+        "psnr_db": 13.50934736095577
+      },
+      "reference_bytes": 901,
+      "size_ratio": 0.7502774694783574,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0006510416666666666,
+      "reference_quality": {
+        "mse": 2897.0636559139784,
+        "psnr_db": 13.51122322996403
+      }
+    },
+    {
+      "case": "p8-q50-ycbcr-411-p1-b1",
+      "native_bytes": 697,
+      "sha256": "5a73ca9b233ea14a0b930d72f71cc5af2edf3d7038d72dc8a581cd52ea8e4d47",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2792.064946236559,
+        "psnr_db": 13.67154844673195
+      },
+      "reference_bytes": 922,
+      "size_ratio": 0.7559652928416486,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 2792.064946236559,
+        "psnr_db": 13.67154844673195
+      }
+    },
+    {
+      "case": "p8-q50-ycbcr-440-p1-b1",
+      "native_bytes": 790,
+      "sha256": "0b08cc4678357bbdf1059ff21a0762ebbbf57376f8d6bf85ec2c697b9a9687de",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2430.7655913978497,
+        "psnr_db": 14.273372807867608
+      },
+      "reference_bytes": 1030,
+      "size_ratio": 0.7669902912621359,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00048828125,
+      "reference_quality": {
+        "mse": 2437.1002150537633,
+        "psnr_db": 14.262069728608644
+      }
+    },
+    {
+      "case": "p8-q50-ycbcr-410-p1-b1",
+      "native_bytes": 645,
+      "sha256": "937f727cf6ccb4ecfcb52c1644f463f72ae949c4fdf3b4436b5b51305da16542",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 3267.916129032258,
+        "psnr_db": 12.98809459019129
+      },
+      "reference_bytes": 868,
+      "size_ratio": 0.7430875576036866,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00078125,
+      "reference_quality": {
+        "mse": 3269.6417204301074,
+        "psnr_db": 12.985801945577611
+      }
+    },
+    {
+      "case": "p8-q50-rgb-444-p1-b1",
+      "native_bytes": 1313,
+      "sha256": "db9e05d2c72ed4a01b56ebccefad4e640450ce943d474669922cb6dff904bf85",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 306.9612903225806,
+        "psnr_db": 23.259967491016834
+      },
+      "reference_bytes": 1647,
+      "size_ratio": 0.7972070431086824,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0006510416666666666,
+      "reference_quality": {
+        "mse": 307.7169892473118,
+        "psnr_db": 23.24928886288719
+      }
+    },
+    {
+      "case": "p8-q50-cmyk-444-p1-b1",
+      "native_bytes": 1653,
+      "sha256": "95b7f626e22c7e55183e7ce826305123b21c5e25aef32598a34b812f90837073",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 299.5674193548387,
+        "psnr_db": 23.365857826943873
+      }
+    },
+    {
+      "case": "p8-q50-ycck-444-p1-b1",
+      "native_bytes": 1541,
+      "sha256": "83c71aed5d5b82b33aec099243787e7dfe6744bf3a904f1040554f4cca7b2f12",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p8-q90-gray-444-p0-b1",
+      "native_bytes": 778,
+      "sha256": "0bbf2cd99a7b251cb657a782b42aa2cb76dbb85d073c88a671da1f7978cbae0f",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 13.646451612903226,
+        "psnr_db": 36.78060621232655
+      },
+      "reference_bytes": 778,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.001953125,
+      "reference_quality": {
+        "mse": 13.641290322580645,
+        "psnr_db": 36.78224908914548
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-444-p0-b1",
+      "native_bytes": 1688,
+      "sha256": "1ee0364b2a039ca0cba21c11ae646ece72a1f0f53db6cb43054d7381b64fd9aa",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 64.53892473118279,
+        "psnr_db": 30.03258635424505
+      },
+      "reference_bytes": 1687,
+      "size_ratio": 1.000592768227623,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.001953125,
+      "reference_quality": {
+        "mse": 64.49505376344086,
+        "psnr_db": 30.03553951746028
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-422-p0-b1",
+      "native_bytes": 1250,
+      "sha256": "397dd9bbc39ef8102aff28258ac2b0a01446cff40c71fe7fb3d9b83ffa00a486",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1073.1630107526883,
+        "psnr_db": 17.824146656555982
+      },
+      "reference_bytes": 1253,
+      "size_ratio": 0.9976057462090981,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00732421875,
+      "reference_quality": {
+        "mse": 1072.6791397849463,
+        "psnr_db": 17.826105258168432
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-420-p0-b1",
+      "native_bytes": 1059,
+      "sha256": "9ac4f7277361a587bd5802f7a62297008f9db97f3a251d9bb728a8eeb3fc657e",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1981.1440860215055,
+        "psnr_db": 15.161642985103441
+      },
+      "reference_bytes": 1054,
+      "size_ratio": 1.0047438330170777,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.008463541666666666,
+      "reference_quality": {
+        "mse": 1985.4563440860215,
+        "psnr_db": 15.152200185644485
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-411-p0-b1",
+      "native_bytes": 1025,
+      "sha256": "9622078a602f08d9e05b59c614d097b996c99404b9ba2c23691b9e081cdf7493",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1849.7402150537634,
+        "psnr_db": 15.45969622243778
+      },
+      "reference_bytes": 1024,
+      "size_ratio": 1.0009765625,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.001953125,
+      "reference_quality": {
+        "mse": 1850.2881720430107,
+        "psnr_db": 15.458409882585254
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-440-p0-b1",
+      "native_bytes": 1309,
+      "sha256": "eca31b7128b6df6ca5ebeb0f715eb7469f4d43555515cf787bdb1855254da477",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1450.708817204301,
+        "psnr_db": 16.51500110230195
+      },
+      "reference_bytes": 1310,
+      "size_ratio": 0.999236641221374,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00146484375,
+      "reference_quality": {
+        "mse": 1450.731182795699,
+        "psnr_db": 16.514934147597195
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-410-p0-b1",
+      "native_bytes": 927,
+      "sha256": "4df8450e0379cae860a7834cc91b7ec8bce96dffe73a066a3c6ac584569bd359",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2453.5367741935484,
+        "psnr_db": 14.232877891930602
+      },
+      "reference_bytes": 928,
+      "size_ratio": 0.9989224137931034,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00234375,
+      "reference_quality": {
+        "mse": 2454.0924731182795,
+        "psnr_db": 14.231894374368537
+      }
+    },
+    {
+      "case": "p8-q90-rgb-444-p0-b1",
+      "native_bytes": 2024,
+      "sha256": "4b66e996a95953e4c1c9c5ff7ee21f0856a104ba84ce12054c29b2e03527fa05",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 13.68731182795699,
+        "psnr_db": 36.767621992876755
+      },
+      "reference_bytes": 1952,
+      "size_ratio": 1.0368852459016393,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0022786458333333335,
+      "reference_quality": {
+        "mse": 13.68731182795699,
+        "psnr_db": 36.767621992876755
+      }
+    },
+    {
+      "case": "p8-q90-cmyk-444-p0-b1",
+      "native_bytes": 2600,
+      "sha256": "af2e56e7d38a7fdf7f997eb235fb5eb7a504e55a7c9dd5db2cfda04887a85b64",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 13.757741935483871,
+        "psnr_db": 36.74533202072577
+      }
+    },
+    {
+      "case": "p8-q90-ycck-444-p0-b1",
+      "native_bytes": 2487,
+      "sha256": "99bb67cc05b7cf29c7b9fdf68f995c065b1daec6bf4988a3bd606aa446de910d",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p8-q90-gray-444-p1-b1",
+      "native_bytes": 787,
+      "sha256": "b050fc77d3fa40569023a8f6f2f2776ed16353591c85bf44bdfb1daf3fe1e76a",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 13.646451612903226,
+        "psnr_db": 36.78060621232655
+      },
+      "reference_bytes": 911,
+      "size_ratio": 0.8638858397365532,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.001953125,
+      "reference_quality": {
+        "mse": 13.641290322580645,
+        "psnr_db": 36.78224908914548
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-444-p1-b1",
+      "native_bytes": 1725,
+      "sha256": "4633668142573564147e7eea328feb337426f9c43ed6641a53e449a4d2f6d233",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 64.53892473118279,
+        "psnr_db": 30.03258635424505
+      },
+      "reference_bytes": 1987,
+      "size_ratio": 0.8681429290387519,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.001953125,
+      "reference_quality": {
+        "mse": 64.49505376344086,
+        "psnr_db": 30.03553951746028
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-422-p1-b1",
+      "native_bytes": 1291,
+      "sha256": "8d40d4c2d7f3218fc08a6dfd2e222458836c8ee8cf1bc4e7f73aac8a9f441d61",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1073.1630107526883,
+        "psnr_db": 17.824146656555982
+      },
+      "reference_bytes": 1540,
+      "size_ratio": 0.8383116883116883,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00732421875,
+      "reference_quality": {
+        "mse": 1072.6791397849463,
+        "psnr_db": 17.826105258168432
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-420-p1-b1",
+      "native_bytes": 1090,
+      "sha256": "8eaebdb8a57c2aceb6506c1ced50e85cde5cba346992885dfaf06522ff50ba25",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1981.1440860215055,
+        "psnr_db": 15.161642985103441
+      },
+      "reference_bytes": 1323,
+      "size_ratio": 0.8238851095993953,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.008463541666666666,
+      "reference_quality": {
+        "mse": 1985.4563440860215,
+        "psnr_db": 15.152200185644485
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-411-p1-b1",
+      "native_bytes": 1059,
+      "sha256": "91351fff24b49d55f6a0831486f1fec15b86019ed6144ceefb67c43b045fe0c1",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1849.7402150537634,
+        "psnr_db": 15.45969622243778
+      },
+      "reference_bytes": 1297,
+      "size_ratio": 0.8164996144949884,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.001953125,
+      "reference_quality": {
+        "mse": 1850.2881720430107,
+        "psnr_db": 15.458409882585254
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-440-p1-b1",
+      "native_bytes": 1342,
+      "sha256": "28b2505f503d46326b3285e8dc94bd623480cffcb1997e6c145554f15423648d",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1450.708817204301,
+        "psnr_db": 16.51500110230195
+      },
+      "reference_bytes": 1588,
+      "size_ratio": 0.845088161209068,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00146484375,
+      "reference_quality": {
+        "mse": 1450.731182795699,
+        "psnr_db": 16.514934147597195
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-410-p1-b1",
+      "native_bytes": 965,
+      "sha256": "a89242f8ae8fd60188c3ff730773bc232feae600800790e5f6afef2db790d6a6",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2453.5367741935484,
+        "psnr_db": 14.232877891930602
+      },
+      "reference_bytes": 1192,
+      "size_ratio": 0.8095637583892618,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00234375,
+      "reference_quality": {
+        "mse": 2454.0924731182795,
+        "psnr_db": 14.231894374368537
+      }
+    },
+    {
+      "case": "p8-q90-rgb-444-p1-b1",
+      "native_bytes": 2054,
+      "sha256": "d43a988f03d7dc3332cd89af43073fa6485818a196356ce3a066b3cdefba4c77",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 13.68731182795699,
+        "psnr_db": 36.767621992876755
+      },
+      "reference_bytes": 2425,
+      "size_ratio": 0.8470103092783505,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0022786458333333335,
+      "reference_quality": {
+        "mse": 13.68731182795699,
+        "psnr_db": 36.767621992876755
+      }
+    },
+    {
+      "case": "p8-q90-cmyk-444-p1-b1",
+      "native_bytes": 2651,
+      "sha256": "3bb61e08b0d0dca68cee6c974e855bd4d9909777316d746e61bcfc2edfe9cfeb",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 13.757741935483871,
+        "psnr_db": 36.74533202072577
+      }
+    },
+    {
+      "case": "p8-q90-ycck-444-p1-b1",
+      "native_bytes": 2535,
+      "sha256": "527ae05b4aa45cc3b264e1542323ed971e7aa24ed6ec3775adb7ecebb370591d",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p8-q100-gray-444-p0-b1",
+      "native_bytes": 1049,
+      "sha256": "829e0b3d64de100c4fe30270b2c024b69dbc31e8854c4a66bd5d2ce8285677a7",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.08129032258064516,
+        "psnr_db": 59.0304151392064
+      },
+      "reference_bytes": 1049,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0126953125,
+      "reference_quality": {
+        "mse": 0.09290322580645162,
+        "psnr_db": 58.45049566942953
+      }
+    },
+    {
+      "case": "p8-q100-ycbcr-444-p0-b1",
+      "native_bytes": 2628,
+      "sha256": "f887b91f93a94a828243c230b6ae523108651c1610335eb368e5033c0852bb92",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.5410752688172042,
+        "psnr_db": 50.79822676984633
+      },
+      "reference_bytes": 2698,
+      "size_ratio": 0.9740548554484804,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.016276041666666668,
+      "reference_quality": {
+        "mse": 0.5337634408602151,
+        "psnr_db": 50.857315365951536
+      }
+    },
+    {
+      "case": "p8-q100-ycbcr-422-p0-b1",
+      "native_bytes": 1830,
+      "sha256": "5120a056d71ad205686d73d99539aa6b174c61e090b5d7544e419accad295d6a",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1004.8963440860215,
+        "psnr_db": 18.10959094646884
+      },
+      "reference_bytes": 1898,
+      "size_ratio": 0.964172813487882,
+      "max_fdct_coefficient_error": 2,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.10400390625,
+      "reference_quality": {
+        "mse": 1005.4464516129033,
+        "psnr_db": 18.10721415112973
+      }
+    },
+    {
+      "case": "p8-q100-ycbcr-420-p0-b1",
+      "native_bytes": 1497,
+      "sha256": "5678980d45a70bd134ce7b7e3e69fb948a48d7fe5fe291cfa608a9f8976e0b11",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1919.7406451612903,
+        "psnr_db": 15.298378009057611
+      },
+      "reference_bytes": 1570,
+      "size_ratio": 0.9535031847133758,
+      "max_fdct_coefficient_error": 2,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.08723958333333333,
+      "reference_quality": {
+        "mse": 1919.3290322580644,
+        "psnr_db": 15.299309282664275
+      }
+    },
+    {
+      "case": "p8-q100-ycbcr-411-p0-b1",
+      "native_bytes": 1416,
+      "sha256": "6e3492dcc76257a96ce81dab40d890e2df06feae2e3b8bfffe64b7d4d349110b",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1792.0670967741935,
+        "psnr_db": 15.597260948201141
+      },
+      "reference_bytes": 1484,
+      "size_ratio": 0.954177897574124,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.018880208333333332,
+      "reference_quality": {
+        "mse": 1791.895053763441,
+        "psnr_db": 15.597677901992162
+      }
+    },
+    {
+      "case": "p8-q100-ycbcr-440-p0-b1",
+      "native_bytes": 1984,
+      "sha256": "004a79b4054cdf22494ad567e29e516abec1e737d32b2871bee2678133670938",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1387.134623655914,
+        "psnr_db": 16.709617487681797
+      },
+      "reference_bytes": 2055,
+      "size_ratio": 0.9654501216545012,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.01806640625,
+      "reference_quality": {
+        "mse": 1386.8855913978496,
+        "psnr_db": 16.710397246496797
+      }
+    },
+    {
+      "case": "p8-q100-ycbcr-410-p0-b1",
+      "native_bytes": 1256,
+      "sha256": "6b3a94fbac7e92933b2cb290776af1d84eb72f26820547fbdea2e42920b01cf3",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2385.8782795698926,
+        "psnr_db": 14.354320773841957
+      },
+      "reference_bytes": 1324,
+      "size_ratio": 0.9486404833836858,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.01875,
+      "reference_quality": {
+        "mse": 2385.7660215053766,
+        "psnr_db": 14.354525118738186
+      }
+    },
+    {
+      "case": "p8-q100-rgb-444-p0-b1",
+      "native_bytes": 2827,
+      "sha256": "429af516656dabbdd81ab36c10cb51ae496b0c4a4c93810e8d3243c736d00e3f",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.07698924731182796,
+        "psnr_db": 59.2665028711399
+      },
+      "reference_bytes": 2767,
+      "size_ratio": 1.0216841344416336,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.013020833333333334,
+      "reference_quality": {
+        "mse": 0.08129032258064516,
+        "psnr_db": 59.0304151392064
+      }
+    },
+    {
+      "case": "p8-q100-cmyk-444-p0-b1",
+      "native_bytes": 3676,
+      "sha256": "a29aaaff86b69cb997dc3e1208f4a390be4a8f5b5b50a720bb4f1093a0c8c5c6",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.07838709677419355,
+        "psnr_db": 59.18835781103871
+      }
+    },
+    {
+      "case": "p8-q100-ycck-444-p0-b1",
+      "native_bytes": 3676,
+      "sha256": "4ce28056423faa862ed7be063b3369e777ba2033d8119d8f082546ddb7732a53",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p8-q100-gray-444-p1-b1",
+      "native_bytes": 1059,
+      "sha256": "6758d1dd9f4fdc70a15b48a29e59e3c409bdf154cb3f9b99cb825ba40bbd059b",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.08129032258064516,
+        "psnr_db": 59.0304151392064
+      },
+      "reference_bytes": 1197,
+      "size_ratio": 0.8847117794486216,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0126953125,
+      "reference_quality": {
+        "mse": 0.09290322580645162,
+        "psnr_db": 58.45049566942953
+      }
+    },
+    {
+      "case": "p8-q100-ycbcr-444-p1-b1",
+      "native_bytes": 2665,
+      "sha256": "032becaef1f7dc43c4d2b3f94f5d276ee30bd87f6a883fe5a3bafdd0375c33e8",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.5410752688172042,
+        "psnr_db": 50.79822676984633
+      },
+      "reference_bytes": 2997,
+      "size_ratio": 0.8892225558892226,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.016276041666666668,
+      "reference_quality": {
+        "mse": 0.5337634408602151,
+        "psnr_db": 50.857315365951536
+      }
+    },
+    {
+      "case": "p8-q100-ycbcr-422-p1-b1",
+      "native_bytes": 1868,
+      "sha256": "a2aee489b68dab05258479baa879cadb5a4ba50b169e941e0dbab5be11206db6",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1004.8963440860215,
+        "psnr_db": 18.10959094646884
+      },
+      "reference_bytes": 2188,
+      "size_ratio": 0.8537477148080439,
+      "max_fdct_coefficient_error": 2,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.10400390625,
+      "reference_quality": {
+        "mse": 1005.4464516129033,
+        "psnr_db": 18.10721415112973
+      }
+    },
+    {
+      "case": "p8-q100-ycbcr-420-p1-b1",
+      "native_bytes": 1533,
+      "sha256": "2e9de46f77cac2dd24953ea078e3992d8ba81d5257d7ec98a13dd9f7d32dd7e4",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1919.7406451612903,
+        "psnr_db": 15.298378009057611
+      },
+      "reference_bytes": 1837,
+      "size_ratio": 0.8345127925966249,
+      "max_fdct_coefficient_error": 2,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.08723958333333333,
+      "reference_quality": {
+        "mse": 1919.3290322580644,
+        "psnr_db": 15.299309282664275
+      }
+    },
+    {
+      "case": "p8-q100-ycbcr-411-p1-b1",
+      "native_bytes": 1450,
+      "sha256": "50d9bddd6aa0f6d9c80cc6f5255af3e8f96cce19fb964cbdb04f5f99e6416cc0",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1792.0670967741935,
+        "psnr_db": 15.597260948201141
+      },
+      "reference_bytes": 1752,
+      "size_ratio": 0.8276255707762558,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.018880208333333332,
+      "reference_quality": {
+        "mse": 1791.895053763441,
+        "psnr_db": 15.597677901992162
+      }
+    },
+    {
+      "case": "p8-q100-ycbcr-440-p1-b1",
+      "native_bytes": 2023,
+      "sha256": "1d98d31b19b97a43ecfc08a15a780a645da6fffd76b5a2a43ae33ce9f59891e2",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1387.134623655914,
+        "psnr_db": 16.709617487681797
+      },
+      "reference_bytes": 2337,
+      "size_ratio": 0.8656397090286693,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.01806640625,
+      "reference_quality": {
+        "mse": 1386.8855913978496,
+        "psnr_db": 16.710397246496797
+      }
+    },
+    {
+      "case": "p8-q100-ycbcr-410-p1-b1",
+      "native_bytes": 1291,
+      "sha256": "c4921b5c737b38999d90bb8e7db9103fd0dc0867bf27b376ddd8bbc311c247ab",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 2385.8782795698926,
+        "psnr_db": 14.354320773841957
+      },
+      "reference_bytes": 1594,
+      "size_ratio": 0.8099121706398996,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.01875,
+      "reference_quality": {
+        "mse": 2385.7660215053766,
+        "psnr_db": 14.354525118738186
+      }
+    },
+    {
+      "case": "p8-q100-rgb-444-p1-b1",
+      "native_bytes": 2871,
+      "sha256": "20f6749b19d20cfa15354b17edafa4b3bf8760b3dc84f0b2a1f3eff3ad972334",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.07698924731182796,
+        "psnr_db": 59.2665028711399
+      },
+      "reference_bytes": 3285,
+      "size_ratio": 0.873972602739726,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.013020833333333334,
+      "reference_quality": {
+        "mse": 0.08129032258064516,
+        "psnr_db": 59.0304151392064
+      }
+    },
+    {
+      "case": "p8-q100-cmyk-444-p1-b1",
+      "native_bytes": 3739,
+      "sha256": "4c3f24c0df4d55ffc48f9cf8f2d13b1d1a0ef310c92b34cba420e728abf4337b",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.07838709677419355,
+        "psnr_db": 59.18835781103871
+      }
+    },
+    {
+      "case": "p8-q100-ycck-444-p1-b1",
+      "native_bytes": 3739,
+      "sha256": "9705b907e6d0c3d76a1de5eae6cd97f928adf8b679635407216c96b60dcfe15d",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p12-q1-gray-444-p0-b1",
+      "native_bytes": 652,
+      "sha256": "1862f4bc9caab5a1aba9cb9886ae3bc76bbac78bb77b1e039d5bc40fa6f96929",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 5180.250322580645,
+        "psnr_db": 35.10157065750968
+      },
+      "reference_bytes": 652,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 5180.250322580645,
+        "psnr_db": 35.10157065750968
+      }
+    },
+    {
+      "case": "p12-q1-ycbcr-444-p0-b1",
+      "native_bytes": 1437,
+      "sha256": "6776a41405c1ac373c299cfcc1386054d7f5be4ba7920eabb3663653b33acd19",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 14708.460215053763,
+        "psnr_db": 30.56940602083115
+      },
+      "reference_bytes": 1506,
+      "size_ratio": 0.954183266932271,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0003255208333333333,
+      "reference_quality": {
+        "mse": 14749.884731182796,
+        "psnr_db": 30.557191858317
+      }
+    },
+    {
+      "case": "p12-q1-ycbcr-422-p0-b1",
+      "native_bytes": 1030,
+      "sha256": "cf416ec972f712db3096202e6faee8b1ad350336f18c2a962b281360a83d0b34",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 253545.99913978495,
+        "psnr_db": 18.204510502579993
+      },
+      "reference_bytes": 1099,
+      "size_ratio": 0.9372156505914467,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 253545.99913978495,
+        "psnr_db": 18.204510502579993
+      }
+    },
+    {
+      "case": "p12-q1-ycbcr-420-p0-b1",
+      "native_bytes": 834,
+      "sha256": "bd910d35bc4e0bec2c4562c25a9912037867cf884970ac80fde78f15b66a5342",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 505658.2713978495,
+        "psnr_db": 15.206506965065342
+      },
+      "reference_bytes": 903,
+      "size_ratio": 0.9235880398671097,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 505658.2713978495,
+        "psnr_db": 15.206506965065342
+      }
+    },
+    {
+      "case": "p12-q1-ycbcr-411-p0-b1",
+      "native_bytes": 814,
+      "sha256": "80a2a2ed376be0630c4a7ec815f8cdf7080a448addb4b9a3d915d94f41888ade",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 467438.78623655916,
+        "psnr_db": 15.547830665892965
+      },
+      "reference_bytes": 883,
+      "size_ratio": 0.9218573046432617,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 467438.78623655916,
+        "psnr_db": 15.547830665892965
+      }
+    },
+    {
+      "case": "p12-q1-ycbcr-440-p0-b1",
+      "native_bytes": 1073,
+      "sha256": "869204eb39cb765e141d5f4c248114773072843edc40445fe88a91d3c34b9030",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 388612.6335483871,
+        "psnr_db": 16.349908970635262
+      },
+      "reference_bytes": 1140,
+      "size_ratio": 0.9412280701754386,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00146484375,
+      "reference_quality": {
+        "mse": 388860.4477419355,
+        "psnr_db": 16.34714040300173
+      }
+    },
+    {
+      "case": "p12-q1-ycbcr-410-p0-b1",
+      "native_bytes": 730,
+      "sha256": "91519b5675c2311f93feaa8c6afd6c8c36252fdd8546111e0d851f2e2f76c86b",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 630287.8679569892,
+        "psnr_db": 14.249688644676121
+      },
+      "reference_bytes": 799,
+      "size_ratio": 0.9136420525657072,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 630287.8679569892,
+        "psnr_db": 14.249688644676121
+      }
+    },
+    {
+      "case": "p12-q1-rgb-444-p0-b1",
+      "native_bytes": 1622,
+      "sha256": "9170a3d929afc8bcc7958f3e4d7d659e97e059b1ba354565d5ba8f8c05bd5f35",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 5212.522150537635,
+        "psnr_db": 35.07459898679008
+      },
+      "reference_bytes": 1553,
+      "size_ratio": 1.0444301352221508,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0003255208333333333,
+      "reference_quality": {
+        "mse": 5212.514838709678,
+        "psnr_db": 35.07460507882896
+      }
+    },
+    {
+      "case": "p12-q1-cmyk-444-p0-b1",
+      "native_bytes": 2080,
+      "sha256": "5ede2fb26edd11a0079cc7a2d871e506c7eb2b65b6389d6ddc1a62e23dc217b2",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 5235.905161290322,
+        "psnr_db": 35.055160406818615
+      }
+    },
+    {
+      "case": "p12-q1-ycck-444-p0-b1",
+      "native_bytes": 2080,
+      "sha256": "26fcacf5b7959c342383dd074b9d3f5c8f2f16faca4f15ad826fe1301cecc887",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p12-q1-gray-444-p1-b1",
+      "native_bytes": 662,
+      "sha256": "45db865766784b42a4e1880f8e22557cd35ad6d8ce3930278a4b7b2cf9974624",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 5180.250322580645,
+        "psnr_db": 35.10157065750968
+      },
+      "reference_bytes": 817,
+      "size_ratio": 0.8102815177478581,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 5180.250322580645,
+        "psnr_db": 35.10157065750968
+      }
+    },
+    {
+      "case": "p12-q1-ycbcr-444-p1-b1",
+      "native_bytes": 1475,
+      "sha256": "df2b5e2e519e8d75a01572b0c606347d6b0280d8576869cbd4d5c5174c3517dc",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 14708.460215053763,
+        "psnr_db": 30.56940602083115
+      },
+      "reference_bytes": 1827,
+      "size_ratio": 0.8073344280240832,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0003255208333333333,
+      "reference_quality": {
+        "mse": 14749.884731182796,
+        "psnr_db": 30.557191858317
+      }
+    },
+    {
+      "case": "p12-q1-ycbcr-422-p1-b1",
+      "native_bytes": 1067,
+      "sha256": "61a4ad6920daf733c62d2cdc0c5017dd43c7c7a0a4940f6f676435d872ca8378",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 253545.99913978495,
+        "psnr_db": 18.204510502579993
+      },
+      "reference_bytes": 1409,
+      "size_ratio": 0.7572746628814763,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 253545.99913978495,
+        "psnr_db": 18.204510502579993
+      }
+    },
+    {
+      "case": "p12-q1-ycbcr-420-p1-b1",
+      "native_bytes": 871,
+      "sha256": "3091a0ea49ae9a83348744df16891e30ef7ea97b9f552ed8352fa088d1d383d1",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 505658.2713978495,
+        "psnr_db": 15.206506965065342
+      },
+      "reference_bytes": 1199,
+      "size_ratio": 0.7264386989157632,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 505658.2713978495,
+        "psnr_db": 15.206506965065342
+      }
+    },
+    {
+      "case": "p12-q1-ycbcr-411-p1-b1",
+      "native_bytes": 850,
+      "sha256": "281334ba2ce4c59cf1774c2355d69960dc0ce08e33ee79f115f7ad6dbb8a6ab2",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 467438.78623655916,
+        "psnr_db": 15.547830665892965
+      },
+      "reference_bytes": 1176,
+      "size_ratio": 0.7227891156462585,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 467438.78623655916,
+        "psnr_db": 15.547830665892965
+      }
+    },
+    {
+      "case": "p12-q1-ycbcr-440-p1-b1",
+      "native_bytes": 1111,
+      "sha256": "f4da171c1472a0b270eb3d516876636a73f71ee7e0cabeb02417d36f2e953343",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 388612.6335483871,
+        "psnr_db": 16.349908970635262
+      },
+      "reference_bytes": 1460,
+      "size_ratio": 0.760958904109589,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00146484375,
+      "reference_quality": {
+        "mse": 388860.4477419355,
+        "psnr_db": 16.34714040300173
+      }
+    },
+    {
+      "case": "p12-q1-ycbcr-410-p1-b1",
+      "native_bytes": 768,
+      "sha256": "75f05427b6afeb7c502033ef86066fe02f159193ec7fb7e1109f1d90a7c47de7",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 630287.8679569892,
+        "psnr_db": 14.249688644676121
+      },
+      "reference_bytes": 1088,
+      "size_ratio": 0.7058823529411765,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 630287.8679569892,
+        "psnr_db": 14.249688644676121
+      }
+    },
+    {
+      "case": "p12-q1-rgb-444-p1-b1",
+      "native_bytes": 1667,
+      "sha256": "b3955a03316eedc8c49bbfa12c1e07268936c30b64b640f0f80ebb2494e74213",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 5212.522150537635,
+        "psnr_db": 35.07459898679008
+      },
+      "reference_bytes": 2114,
+      "size_ratio": 0.7885525070955535,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0003255208333333333,
+      "reference_quality": {
+        "mse": 5212.514838709678,
+        "psnr_db": 35.07460507882896
+      }
+    },
+    {
+      "case": "p12-q1-cmyk-444-p1-b1",
+      "native_bytes": 2137,
+      "sha256": "66906614212d9cd82d9935e5a9fa470254e0625f170838e83d9bae6888a78cba",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 5235.905161290322,
+        "psnr_db": 35.055160406818615
+      }
+    },
+    {
+      "case": "p12-q1-ycck-444-p1-b1",
+      "native_bytes": 2137,
+      "sha256": "afaad1adf926131e996e69721741775d0ec33d080bcf1bd6cfa2874ff9867b39",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p12-q50-gray-444-p0-b1",
+      "native_bytes": 957,
+      "sha256": "eeb30c965966771060b242d9ede32229fc7d1ab3464936710be53b5e7d727b53",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 371.17806451612904,
+        "psnr_db": 46.54925509358038
+      },
+      "reference_bytes": 957,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.001953125,
+      "reference_quality": {
+        "mse": 371.36129032258066,
+        "psnr_db": 46.54711180089748
+      }
+    },
+    {
+      "case": "p12-q50-ycbcr-444-p0-b1",
+      "native_bytes": 2202,
+      "sha256": "53696c6e1a2d6f7654233ac51fb0bddd1808d39c05b34b349c32c1d557d21135",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1635.8258064516128,
+        "psnr_db": 40.1077075694353
+      },
+      "reference_bytes": 2202,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0006510416666666666,
+      "reference_quality": {
+        "mse": 1636.418064516129,
+        "psnr_db": 40.10613547137517
+      }
+    },
+    {
+      "case": "p12-q50-ycbcr-422-p0-b1",
+      "native_bytes": 1596,
+      "sha256": "93d919fd313c77b0f220b3445b1a96df3ee81086630af67cbc9262f010f70732",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 241727.19913978493,
+        "psnr_db": 18.411822922290444
+      },
+      "reference_bytes": 1596,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0029296875,
+      "reference_quality": {
+        "mse": 241758.53849462364,
+        "psnr_db": 18.411259906348818
+      }
+    },
+    {
+      "case": "p12-q50-ycbcr-420-p0-b1",
+      "native_bytes": 1339,
+      "sha256": "44811f9ad2e69ed9a36d9b006f6fca7c840a0f8f3074a9fa4613a24ed63e0df0",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 495453.3165591398,
+        "psnr_db": 15.295050722734864
+      },
+      "reference_bytes": 1339,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0026041666666666665,
+      "reference_quality": {
+        "mse": 495460.16903225804,
+        "psnr_db": 15.294990657122558
+      }
+    },
+    {
+      "case": "p12-q50-ycbcr-411-p0-b1",
+      "native_bytes": 1281,
+      "sha256": "cea289190420428e4a65a7dd570ca64d1790562fcf3819f69c2eeb3da9eaf199",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 454731.21419354837,
+        "psnr_db": 15.667530456131548
+      },
+      "reference_bytes": 1281,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0013020833333333333,
+      "reference_quality": {
+        "mse": 454751.871827957,
+        "psnr_db": 15.667333168314496
+      }
+    },
+    {
+      "case": "p12-q50-ycbcr-440-p0-b1",
+      "native_bytes": 1689,
+      "sha256": "46085538a1578ddd0003b9e1594f891e21a357708d3af97b64051efb7d402576",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 376332.6412903226,
+        "psnr_db": 16.489359236166315
+      },
+      "reference_bytes": 1689,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0009765625,
+      "reference_quality": {
+        "mse": 376333.2030107527,
+        "psnr_db": 16.48935275381867
+      }
+    },
+    {
+      "case": "p12-q50-ycbcr-410-p0-b1",
+      "native_bytes": 1153,
+      "sha256": "14cb2f0e52a5e4ba14495bf3dcc6c2528131473d500c3012082a722e2e3d99b3",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 619930.7131182796,
+        "psnr_db": 14.321646591331692
+      },
+      "reference_bytes": 1153,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0015625,
+      "reference_quality": {
+        "mse": 619936.0584946236,
+        "psnr_db": 14.32160914428491
+      }
+    },
+    {
+      "case": "p12-q50-rgb-444-p0-b1",
+      "native_bytes": 2530,
+      "sha256": "d7c01a4319dcc4e141a0a9e08821b1f0476ad71cd10ca761afe3bae5a8dd9b32",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 377.0993548387097,
+        "psnr_db": 46.48052022800322
+      },
+      "reference_bytes": 2457,
+      "size_ratio": 1.0297110297110297,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0009765625,
+      "reference_quality": {
+        "mse": 377.0731182795699,
+        "psnr_db": 46.48082239742121
+      }
+    },
+    {
+      "case": "p12-q50-cmyk-444-p0-b1",
+      "native_bytes": 3287,
+      "sha256": "48618142d8f66da02abd481494935d82308081e12ebfb2eaa5d9d138ab77390a",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 367.8751612903226,
+        "psnr_db": 46.58807346674112
+      }
+    },
+    {
+      "case": "p12-q50-ycck-444-p0-b1",
+      "native_bytes": 3176,
+      "sha256": "eb51d0939818fa1f37797a883cdbc47cb2a76dd4c483d77d8322a3d6de724278",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p12-q50-gray-444-p1-b1",
+      "native_bytes": 968,
+      "sha256": "3e72e57e7fef5301cbace92c749200b1af874083033714eff1837999128d4ce6",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 371.17806451612904,
+        "psnr_db": 46.54925509358038
+      },
+      "reference_bytes": 1100,
+      "size_ratio": 0.88,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.001953125,
+      "reference_quality": {
+        "mse": 371.36129032258066,
+        "psnr_db": 46.54711180089748
+      }
+    },
+    {
+      "case": "p12-q50-ycbcr-444-p1-b1",
+      "native_bytes": 2237,
+      "sha256": "f520ef2dd3a4f8d200f83c61d64d01214286ccda609909ea4277446ac298ccd1",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 1635.8258064516128,
+        "psnr_db": 40.1077075694353
+      },
+      "reference_bytes": 2508,
+      "size_ratio": 0.8919457735247209,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0006510416666666666,
+      "reference_quality": {
+        "mse": 1636.418064516129,
+        "psnr_db": 40.10613547137517
+      }
+    },
+    {
+      "case": "p12-q50-ycbcr-422-p1-b1",
+      "native_bytes": 1636,
+      "sha256": "b285117853e4e587df7e84398c704e309be7f3af7a4c4bf5dd8b130c941a70bb",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 241727.19913978493,
+        "psnr_db": 18.411822922290444
+      },
+      "reference_bytes": 1897,
+      "size_ratio": 0.8624143384290985,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0029296875,
+      "reference_quality": {
+        "mse": 241758.53849462364,
+        "psnr_db": 18.411259906348818
+      }
+    },
+    {
+      "case": "p12-q50-ycbcr-420-p1-b1",
+      "native_bytes": 1375,
+      "sha256": "9bd9c4daf6712d76b2077ecbda13665b0704f624d5ca9074f26248296bcd069f",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 495453.3165591398,
+        "psnr_db": 15.295050722734864
+      },
+      "reference_bytes": 1604,
+      "size_ratio": 0.8572319201995012,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0026041666666666665,
+      "reference_quality": {
+        "mse": 495460.16903225804,
+        "psnr_db": 15.294990657122558
+      }
+    },
+    {
+      "case": "p12-q50-ycbcr-411-p1-b1",
+      "native_bytes": 1316,
+      "sha256": "ad7d2f159ead1253ecb406ec410aa3d174477553de5a313fb89d60c89d83ca05",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 454731.21419354837,
+        "psnr_db": 15.667530456131548
+      },
+      "reference_bytes": 1556,
+      "size_ratio": 0.8457583547557841,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0013020833333333333,
+      "reference_quality": {
+        "mse": 454751.871827957,
+        "psnr_db": 15.667333168314496
+      }
+    },
+    {
+      "case": "p12-q50-ycbcr-440-p1-b1",
+      "native_bytes": 1732,
+      "sha256": "a972ac769d1a3fa0c5ebcc684e41db9db04428131adbf73efb22c1ec7a594906",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 376332.6412903226,
+        "psnr_db": 16.489359236166315
+      },
+      "reference_bytes": 1983,
+      "size_ratio": 0.8734241048915784,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0009765625,
+      "reference_quality": {
+        "mse": 376333.2030107527,
+        "psnr_db": 16.48935275381867
+      }
+    },
+    {
+      "case": "p12-q50-ycbcr-410-p1-b1",
+      "native_bytes": 1191,
+      "sha256": "d95f1484c6d86f9310bfe76799583a81c59f4f4e5b9cb2efb9245414244eec09",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 619930.7131182796,
+        "psnr_db": 14.321646591331692
+      },
+      "reference_bytes": 1428,
+      "size_ratio": 0.8340336134453782,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0015625,
+      "reference_quality": {
+        "mse": 619936.0584946236,
+        "psnr_db": 14.32160914428491
+      }
+    },
+    {
+      "case": "p12-q50-rgb-444-p1-b1",
+      "native_bytes": 2574,
+      "sha256": "1ec6946b26a52504c46376178f50681a8a6353d32fba7dcd06ee418f9b436b52",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 377.0993548387097,
+        "psnr_db": 46.48052022800322
+      },
+      "reference_bytes": 2963,
+      "size_ratio": 0.8687141410732366,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0009765625,
+      "reference_quality": {
+        "mse": 377.0731182795699,
+        "psnr_db": 46.48082239742121
+      }
+    },
+    {
+      "case": "p12-q50-cmyk-444-p1-b1",
+      "native_bytes": 3344,
+      "sha256": "9a52b46c92b682fd43511958d2b498031b68da7678ebaae2f69bf6872fe0eea0",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 367.8751612903226,
+        "psnr_db": 46.58807346674112
+      }
+    },
+    {
+      "case": "p12-q50-ycck-444-p1-b1",
+      "native_bytes": 3233,
+      "sha256": "06121132366da1b33678b898198f87aaf0987e017b8d86192c58a94ca5835f4b",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p12-q90-gray-444-p0-b1",
+      "native_bytes": 1185,
+      "sha256": "9f5c19827beca170c8d92a2d18bbae132248f7333f98e48101b8d0de75d47d01",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 13.79741935483871,
+        "psnr_db": 60.84709947875642
+      },
+      "reference_bytes": 1185,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.001953125,
+      "reference_quality": {
+        "mse": 13.812903225806451,
+        "psnr_db": 60.84222843068727
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-444-p0-b1",
+      "native_bytes": 2902,
+      "sha256": "0e5f8953ec2da960f30fe1758bd491f050f02c07bc5a95508833980219748f68",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 65.56301075268817,
+        "psnr_db": 54.07848923376537
+      },
+      "reference_bytes": 2902,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0026041666666666665,
+      "reference_quality": {
+        "mse": 65.60086021505376,
+        "psnr_db": 54.07598277936091
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-422-p0-b1",
+      "native_bytes": 2071,
+      "sha256": "585921fa9c7481a364c100bbc3004f001c0c4f7b3fc9839d02e5507e9cbbd882",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 240390.5260215054,
+        "psnr_db": 18.435904644098372
+      },
+      "reference_bytes": 2070,
+      "size_ratio": 1.0004830917874397,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0078125,
+      "reference_quality": {
+        "mse": 240378.99483870968,
+        "psnr_db": 18.436112973821523
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-420-p0-b1",
+      "native_bytes": 1726,
+      "sha256": "5aadd1dd91b95c815bb102578e4557fb3513393856b2bc92bc20df619f0e0530",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 494159.79139784945,
+        "psnr_db": 15.306404071941058
+      },
+      "reference_bytes": 1726,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.010416666666666666,
+      "reference_quality": {
+        "mse": 494180.2812903226,
+        "psnr_db": 15.306223999363144
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-411-p0-b1",
+      "native_bytes": 1637,
+      "sha256": "8fd02cd80e59553c9a481d1e2474291e236ffee747e882666d2583b8e3aaecd0",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 453951.03010752687,
+        "psnr_db": 15.674988062545932
+      },
+      "reference_bytes": 1637,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.004557291666666667,
+      "reference_quality": {
+        "mse": 453951.5965591398,
+        "psnr_db": 15.674982643312578
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-440-p0-b1",
+      "native_bytes": 2218,
+      "sha256": "c353251dc6cd1f3ebd21f421a1b9680ba16da141a4be872fe6119a6d069e6cd4",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 374881.4692473118,
+        "psnr_db": 16.506138388359812
+      },
+      "reference_bytes": 2218,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00244140625,
+      "reference_quality": {
+        "mse": 374899.6911827957,
+        "psnr_db": 16.505927295138232
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-410-p0-b1",
+      "native_bytes": 1469,
+      "sha256": "92581de6e7a9612146a954b2bac21f1e3e8f29808fe925521641690e8fd955e8",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 618406.4615053764,
+        "psnr_db": 14.332337934729857
+      },
+      "reference_bytes": 1469,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00390625,
+      "reference_quality": {
+        "mse": 618412.0959139785,
+        "psnr_db": 14.332298365586105
+      }
+    },
+    {
+      "case": "p12-q90-rgb-444-p0-b1",
+      "native_bytes": 3228,
+      "sha256": "fd08eb19b0f4205e1bbf0f83bebfa2d5da685f809cce623a29382d95c01b55b7",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 14.050322580645162,
+        "psnr_db": 60.768215168922794
+      },
+      "reference_bytes": 3165,
+      "size_ratio": 1.0199052132701423,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0013020833333333333,
+      "reference_quality": {
+        "mse": 14.06537634408602,
+        "psnr_db": 60.763564552172
+      }
+    },
+    {
+      "case": "p12-q90-cmyk-444-p0-b1",
+      "native_bytes": 4229,
+      "sha256": "e18b2a65a5a0b85ff60ddd1c1c963d0c65392eb164acfc1f813a5cfb21b19aa8",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 14.119032258064516,
+        "psnr_db": 60.747028817225335
+      }
+    },
+    {
+      "case": "p12-q90-ycck-444-p0-b1",
+      "native_bytes": 4115,
+      "sha256": "8bd071ddffa34514670e2d3d6b3c7f213dc61b37a90ce659f09c665ce2f1c1d3",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p12-q90-gray-444-p1-b1",
+      "native_bytes": 1191,
+      "sha256": "d9f8de716a68e497963d1ff2ca4a183eeede9a38c82df58bbc7e0517c8304ac8",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 13.79741935483871,
+        "psnr_db": 60.84709947875642
+      },
+      "reference_bytes": 1322,
+      "size_ratio": 0.9009077155824509,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.001953125,
+      "reference_quality": {
+        "mse": 13.812903225806451,
+        "psnr_db": 60.84222843068727
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-444-p1-b1",
+      "native_bytes": 2932,
+      "sha256": "2f5b8312262b1be9eee2a0ef3adcacae819e62ab889bad17b1bb7fc39bb0af4a",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 65.56301075268817,
+        "psnr_db": 54.07848923376537
+      },
+      "reference_bytes": 3191,
+      "size_ratio": 0.9188342212472579,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0026041666666666665,
+      "reference_quality": {
+        "mse": 65.60086021505376,
+        "psnr_db": 54.07598277936091
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-422-p1-b1",
+      "native_bytes": 2108,
+      "sha256": "b8ad6f54bd46edc9331daa13e87d640c8568be469ae37a4e96e1313eb2d8d4e1",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 240390.5260215054,
+        "psnr_db": 18.435904644098372
+      },
+      "reference_bytes": 2344,
+      "size_ratio": 0.8993174061433447,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0078125,
+      "reference_quality": {
+        "mse": 240378.99483870968,
+        "psnr_db": 18.436112973821523
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-420-p1-b1",
+      "native_bytes": 1762,
+      "sha256": "ef7d52042a953ac191baacce62b74c4e2db35ca37a98071a5815bdbec0c9bbd0",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 494159.79139784945,
+        "psnr_db": 15.306404071941058
+      },
+      "reference_bytes": 1980,
+      "size_ratio": 0.8898989898989899,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.010416666666666666,
+      "reference_quality": {
+        "mse": 494180.2812903226,
+        "psnr_db": 15.306223999363144
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-411-p1-b1",
+      "native_bytes": 1667,
+      "sha256": "7628c0026d43580152d66e166f002f03e25229715ce92e9a57638d4079516c12",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 453951.03010752687,
+        "psnr_db": 15.674988062545932
+      },
+      "reference_bytes": 1894,
+      "size_ratio": 0.8801478352692714,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.004557291666666667,
+      "reference_quality": {
+        "mse": 453951.5965591398,
+        "psnr_db": 15.674982643312578
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-440-p1-b1",
+      "native_bytes": 2262,
+      "sha256": "ea6475d385638f885c98e12e83a387c5182515e6d4efbce2ff86730b6d092762",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 374881.4692473118,
+        "psnr_db": 16.506138388359812
+      },
+      "reference_bytes": 2498,
+      "size_ratio": 0.9055244195356285,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00244140625,
+      "reference_quality": {
+        "mse": 374899.6911827957,
+        "psnr_db": 16.505927295138232
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-410-p1-b1",
+      "native_bytes": 1504,
+      "sha256": "baa73aeeacd4778564ad420a1fcd9f3213f57b9c04c6b3948fdd986285614b91",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 618406.4615053764,
+        "psnr_db": 14.332337934729857
+      },
+      "reference_bytes": 1723,
+      "size_ratio": 0.8728961114335462,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.00390625,
+      "reference_quality": {
+        "mse": 618412.0959139785,
+        "psnr_db": 14.332298365586105
+      }
+    },
+    {
+      "case": "p12-q90-rgb-444-p1-b1",
+      "native_bytes": 3265,
+      "sha256": "71101d9844630735a31adf1eb8d280ea4c93dc4e5efd0b86e2d567c3adaf7b4a",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 14.050322580645162,
+        "psnr_db": 60.768215168922794
+      },
+      "reference_bytes": 3653,
+      "size_ratio": 0.893785929373118,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0013020833333333333,
+      "reference_quality": {
+        "mse": 14.06537634408602,
+        "psnr_db": 60.763564552172
+      }
+    },
+    {
+      "case": "p12-q90-cmyk-444-p1-b1",
+      "native_bytes": 4286,
+      "sha256": "d90cf73a097aa3ee60a347edff925cc44231aa41111bfdabd23ffc8d6afb3028",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 14.119032258064516,
+        "psnr_db": 60.747028817225335
+      }
+    },
+    {
+      "case": "p12-q90-ycck-444-p1-b1",
+      "native_bytes": 4163,
+      "sha256": "ebf28f0ed0f32155f7ea6c0e9902288fe3a3049d73d3b3efb11a31180aa94a95",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p12-q100-gray-444-p0-b1",
+      "native_bytes": 1454,
+      "sha256": "bf2cb29e9e532c3f3741a06996d6db2ac2b3b622fe29fe11bd3443c9d0d01b09",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.07225806451612904,
+        "psnr_db": 83.65621487692984
+      },
+      "reference_bytes": 1454,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.01171875,
+      "reference_quality": {
+        "mse": 0.07225806451612904,
+        "psnr_db": 83.65621487692984
+      }
+    },
+    {
+      "case": "p12-q100-ycbcr-444-p0-b1",
+      "native_bytes": 3825,
+      "sha256": "1db3dca3e52ab60c56c58dad53254d9f3c2e9e67f1292bb8fe7d922ddd942611",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.7810752688172043,
+        "psnr_db": 73.3181492523378
+      },
+      "reference_bytes": 3894,
+      "size_ratio": 0.9822804314329738,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0146484375,
+      "reference_quality": {
+        "mse": 0.7655913978494624,
+        "psnr_db": 73.40510767109953
+      }
+    },
+    {
+      "case": "p12-q100-ycbcr-422-p0-b1",
+      "native_bytes": 2630,
+      "sha256": "3f50074da31a2df135d1ff66fa5ad8b683684eac93fe1b8a950e4ba379a0f74c",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 240411.84860215054,
+        "psnr_db": 18.43551944304243
+      },
+      "reference_bytes": 2698,
+      "size_ratio": 0.9747961452928094,
+      "max_fdct_coefficient_error": 2,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.111328125,
+      "reference_quality": {
+        "mse": 240423.5617204301,
+        "psnr_db": 18.435307855354566
+      }
+    },
+    {
+      "case": "p12-q100-ycbcr-420-p0-b1",
+      "native_bytes": 2150,
+      "sha256": "f3a25128ab511c3e8a68bba925ada88796d058e2e875fc8a8a64fc8e989bec7e",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 494256.6860215054,
+        "psnr_db": 15.30555259280294
+      },
+      "reference_bytes": 2220,
+      "size_ratio": 0.9684684684684685,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.09049479166666667,
+      "reference_quality": {
+        "mse": 494272.9148387097,
+        "psnr_db": 15.305409995439057
+      }
+    },
+    {
+      "case": "p12-q100-ycbcr-411-p0-b1",
+      "native_bytes": 2019,
+      "sha256": "38873e7e4a7c26491972d9827740f07b9a232af2dadf306b05b6e3d0c6d3483f",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 454035.52,
+        "psnr_db": 15.674179823829636
+      },
+      "reference_bytes": 2088,
+      "size_ratio": 0.9669540229885057,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.018880208333333332,
+      "reference_quality": {
+        "mse": 454046.02021505375,
+        "psnr_db": 15.674079388235366
+      }
+    },
+    {
+      "case": "p12-q100-ycbcr-440-p0-b1",
+      "native_bytes": 2893,
+      "sha256": "3271308d12ae1b7ee6a75016d76a060f4d7155422d4400a94d6604fd29e70820",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 374816.47182795696,
+        "psnr_db": 16.506891438864233
+      },
+      "reference_bytes": 2961,
+      "size_ratio": 0.9770347855454239,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.02099609375,
+      "reference_quality": {
+        "mse": 374826.15268817206,
+        "psnr_db": 16.506779269570913
+      }
+    },
+    {
+      "case": "p12-q100-ycbcr-410-p0-b1",
+      "native_bytes": 1783,
+      "sha256": "9d88ddcadcecb3bfbf9becf2a99204771c9aa7fc0810987ea606f0aa79a93cc0",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 618462.7539784947,
+        "psnr_db": 14.331942621948865
+      },
+      "reference_bytes": 1852,
+      "size_ratio": 0.962742980561555,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.01875,
+      "reference_quality": {
+        "mse": 618470.4352688172,
+        "psnr_db": 14.331888683029124
+      }
+    },
+    {
+      "case": "p12-q100-rgb-444-p0-b1",
+      "native_bytes": 4018,
+      "sha256": "0008c81f34e0a7b1c673604fe166657b52b1454070ea1039575198a3d940a7b1",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.07397849462365591,
+        "psnr_db": 83.55402322511299
+      },
+      "reference_bytes": 3948,
+      "size_ratio": 1.0177304964539007,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0107421875,
+      "reference_quality": {
+        "mse": 0.07440860215053763,
+        "psnr_db": 83.52884666290052
+      }
+    },
+    {
+      "case": "p12-q100-cmyk-444-p0-b1",
+      "native_bytes": 5287,
+      "sha256": "6dbe974e7e38c967be441f9bf17aea6b14d8b6ca8cda2d979938873f35bccd8d",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.07258064516129033,
+        "psnr_db": 83.63686987915784
+      }
+    },
+    {
+      "case": "p12-q100-ycck-444-p0-b1",
+      "native_bytes": 5287,
+      "sha256": "8d888eb47591e303ce4401f3a9623272f07ca1671ccbcda7b5063245c86b3901",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p12-q100-gray-444-p1-b1",
+      "native_bytes": 1458,
+      "sha256": "2afd17d20fe2d5db03dde6c7e6345ca259175ebf332e5f86d123081b387e2a2f",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.07225806451612904,
+        "psnr_db": 83.65621487692984
+      },
+      "reference_bytes": 1591,
+      "size_ratio": 0.9164047768698932,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.01171875,
+      "reference_quality": {
+        "mse": 0.07225806451612904,
+        "psnr_db": 83.65621487692984
+      }
+    },
+    {
+      "case": "p12-q100-ycbcr-444-p1-b1",
+      "native_bytes": 3871,
+      "sha256": "996b1d0a8e207caab4007cc670addbdb8a72b48f638302f2b0f391384a97769a",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.7810752688172043,
+        "psnr_db": 73.3181492523378
+      },
+      "reference_bytes": 4186,
+      "size_ratio": 0.9247491638795987,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.0146484375,
+      "reference_quality": {
+        "mse": 0.7655913978494624,
+        "psnr_db": 73.40510767109953
+      }
+    },
+    {
+      "case": "p12-q100-ycbcr-422-p1-b1",
+      "native_bytes": 2666,
+      "sha256": "9b4ac3ae2a0e6aa54cbcdc0edf6af973cb1dccf0f1c2fc4b66cf69b6c72fbcc9",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 240411.84860215054,
+        "psnr_db": 18.43551944304243
+      },
+      "reference_bytes": 2972,
+      "size_ratio": 0.8970390309555855,
+      "max_fdct_coefficient_error": 2,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.111328125,
+      "reference_quality": {
+        "mse": 240423.5617204301,
+        "psnr_db": 18.435307855354566
+      }
+    },
+    {
+      "case": "p12-q100-ycbcr-420-p1-b1",
+      "native_bytes": 2189,
+      "sha256": "9b385f707d3994cee86743827ed2903052d05c62ebbf352ed1251c790ecab52b",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 494256.6860215054,
+        "psnr_db": 15.30555259280294
+      },
+      "reference_bytes": 2480,
+      "size_ratio": 0.8826612903225807,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.09049479166666667,
+      "reference_quality": {
+        "mse": 494272.9148387097,
+        "psnr_db": 15.305409995439057
+      }
+    },
+    {
+      "case": "p12-q100-ycbcr-411-p1-b1",
+      "native_bytes": 2051,
+      "sha256": "3b9679b3ffdf6506c53262c14f19856a1d221d2dfaa9a442903fe45879c1b311",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 454035.52,
+        "psnr_db": 15.674179823829636
+      },
+      "reference_bytes": 2344,
+      "size_ratio": 0.875,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.018880208333333332,
+      "reference_quality": {
+        "mse": 454046.02021505375,
+        "psnr_db": 15.674079388235366
+      }
+    },
+    {
+      "case": "p12-q100-ycbcr-440-p1-b1",
+      "native_bytes": 2932,
+      "sha256": "d06ec1cc7f48f462dc96a6d3a9f711d68b7940c53ac8a87508bc233b6b699161",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 374816.47182795696,
+        "psnr_db": 16.506891438864233
+      },
+      "reference_bytes": 3243,
+      "size_ratio": 0.9041011409189023,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.02099609375,
+      "reference_quality": {
+        "mse": 374826.15268817206,
+        "psnr_db": 16.506779269570913
+      }
+    },
+    {
+      "case": "p12-q100-ycbcr-410-p1-b1",
+      "native_bytes": 1821,
+      "sha256": "7b50c18dc2b5c7480f79f2e235149957382cd53843954d5dcb173e5ec3b050ab",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 618462.7539784947,
+        "psnr_db": 14.331942621948865
+      },
+      "reference_bytes": 2111,
+      "size_ratio": 0.862624348649929,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 9,
+      "mean_fdct_coefficient_error": 0.01875,
+      "reference_quality": {
+        "mse": 618470.4352688172,
+        "psnr_db": 14.331888683029124
+      }
+    },
+    {
+      "case": "p12-q100-rgb-444-p1-b1",
+      "native_bytes": 4068,
+      "sha256": "6566b7e92b1ca4e617bbc4a76dd0f0b9266b8d6da32c8cbf7b92074017ec922c",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.07397849462365591,
+        "psnr_db": 83.55402322511299
+      },
+      "reference_bytes": 4446,
+      "size_ratio": 0.9149797570850202,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0107421875,
+      "reference_quality": {
+        "mse": 0.07440860215053763,
+        "psnr_db": 83.52884666290052
+      }
+    },
+    {
+      "case": "p12-q100-cmyk-444-p1-b1",
+      "native_bytes": 5339,
+      "sha256": "90286f6b6352eb36b60ca3f6ba173429bf7490beb3c51ec8531d00ddb909bca5",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 0.07258064516129033,
+        "psnr_db": 83.63686987915784
+      }
+    },
+    {
+      "case": "p12-q100-ycck-444-p1-b1",
+      "native_bytes": 5339,
+      "sha256": "3fcd45a49b18ca5d98079d5b6e87dbf9fd464c139c1da4561b3605c30d8bc287",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p8-q90-ycbcr-fractional-h-p0-b1",
+      "native_bytes": 1446,
+      "sha256": "110dbb24a0ee44aca98f1ff596dd5e7ac20fb1da8a6d990f6dda726cb637b6ec",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p8-q90-ycbcr-fractional-v-p0-b1",
+      "native_bytes": 1365,
+      "sha256": "f07bbf734c67a47ceb2b014b10789c1a2b7a0b3134455cfd2cbc45879090689c",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p8-q1-gray-444-p0-b0",
+      "native_bytes": 254,
+      "sha256": "54d3f9d51c093f64786db815bd24900251d30bfe86c0a9c8d14044a89056c00b",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 4957.358709677419,
+        "psnr_db": 11.17830015697453
+      },
+      "reference_bytes": 254,
+      "size_ratio": 1.0,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 4957.358709677419,
+        "psnr_db": 11.17830015697453
+      }
+    },
+    {
+      "case": "p8-q90-ycbcr-fractional-h-p1-b1",
+      "native_bytes": 1374,
+      "sha256": "b30f6db34ea93e013cb72bf027bc05be4a341bb2901410e111c0aed72e10d4d3",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p8-q90-ycbcr-fractional-v-p1-b1",
+      "native_bytes": 1307,
+      "sha256": "1cd667a03909b7e806e1d6e4bdf335461dd62f4ac6a4e5f7df3ec342db1f9262",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p8-q1-gray-444-p1-b0",
+      "native_bytes": 261,
+      "sha256": "5eb5828895082c0a7eb2f8207da5dc242f8989adcaadd055d607be6b968f7a3c",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 4957.358709677419,
+        "psnr_db": 11.17830015697453
+      },
+      "reference_bytes": 401,
+      "size_ratio": 0.6508728179551122,
+      "max_fdct_coefficient_error": 0,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0,
+      "reference_quality": {
+        "mse": 4957.358709677419,
+        "psnr_db": 11.17830015697453
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-fractional-h-p0-b1",
+      "native_bytes": 2404,
+      "sha256": "be38c84bcbba734dfcf225f09256161b56301e974c0f6aae32bc2bccd7d712d1",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p12-q90-ycbcr-fractional-v-p0-b1",
+      "native_bytes": 2226,
+      "sha256": "3586f8ffb312a4cd37801147f5967fd58b899c5bdcdecca8f05d6a62d86a84d7",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p12-q1-gray-444-p0-b0",
+      "native_bytes": 413,
+      "sha256": "3222f99a287ee65dc621b792606dad73bb2d92eb82dea36243cf45a7c68ca1e7",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 377274.36903225805,
+        "psnr_db": 16.47850510744769
+      },
+      "reference_bytes": 414,
+      "size_ratio": 0.9975845410628019,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0009765625,
+      "reference_quality": {
+        "mse": 365810.7070967742,
+        "psnr_db": 16.612513992837684
+      }
+    },
+    {
+      "case": "p12-q90-ycbcr-fractional-h-p1-b1",
+      "native_bytes": 2285,
+      "sha256": "ba209cda052b0671db1fab4d84028309aa9db6daffdb4e80bc9466c9a1969c2c",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p12-q90-ycbcr-fractional-v-p1-b1",
+      "native_bytes": 2128,
+      "sha256": "1fecc3165085b48f9aad8d184d0e8faf545775fcc068b2d08c33cc5917ff67b9",
+      "entropy_coefficients": "exact"
+    },
+    {
+      "case": "p12-q1-gray-444-p1-b0",
+      "native_bytes": 422,
+      "sha256": "da31bc4d898407c469d1d23836dcac7c7f59f1d11325f6472dcbf5eeed72fd53",
+      "entropy_coefficients": "exact",
+      "native_quality": {
+        "mse": 377274.36903225805,
+        "psnr_db": 16.47850510744769
+      },
+      "reference_bytes": 558,
+      "size_ratio": 0.7562724014336918,
+      "max_fdct_coefficient_error": 1,
+      "fdct_tolerance": 1,
+      "mean_fdct_coefficient_error": 0.0009765625,
+      "reference_quality": {
+        "mse": 365810.7070967742,
+        "psnr_db": 16.612513992837684
+      }
+    }
+  ]
+}

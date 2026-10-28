@@ -60,7 +60,7 @@ Verified milestones:
   Final gates: 17 tests pass in debug, release and isolated builds; rustfmt,
   Clippy and rustdoc with warnings denied pass. All 50 checked-in oracle cases
   retain exact coefficient/table parity and IDCT sample error <=1.
-- Coefficient encoder milestone: bounded native bit/marker writer, sequential
+- `92f504ce8`: bounded native bit/marker writer, sequential
   and spectral progressive output, restart intervals, Annex K length-limited
   optimized Huffman tables, fixed fallback tables covering 12-bit magnitudes,
   and quantizer/metadata retention. All 600 combinations of 50 source fixtures,
@@ -70,3 +70,16 @@ Verified milestones:
   rustdoc with warnings denied pass. The external report is retained under
   tests/reports/rewrite-turbo.json.
   Pixel/quality encoding and all remaining plan items are still required.
+- Pixel encoder milestone: native integer FDCT/quantization, quality scaling,
+  8/12-bit output, shared grayscale/RGB and native U8/U16 source APIs, common
+  and fractional chroma sampling, explicit precision scaling, JFIF/Adobe tags,
+  encoded CMYK/YCCK preservation, and coefficient inspection. The pinned C
+  decoder recovers exact pre-entropy coefficients/tables for all 172 generated
+  cases with zero warnings. All 132 float-encoder comparisons pass: observed
+  maximum coefficient error 1 for gray/RGB and 2 for YCbCr. Size/quality data and
+  justified numerical bounds are in ENCODER-VALIDATION.md and the retained
+  tests/reports/pixel-turbo.json report. Full remaining scope stays open.
+  Final gates: all 29 tests pass in release and isolated debug builds; rustfmt,
+  Clippy and rustdoc with warnings denied pass. After restricting fixed
+  Huffman tables to each process/precision's legal symbols, both external
+  gates were rerun: 600 rewrites plus 172 pixel encodes still pass exactly.

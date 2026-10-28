@@ -22,7 +22,17 @@ output, optimized or fixed Huffman tables, restart intervals, and an output
 byte budget. The initial writer accepts one to four components. Metadata keeps
 its relative order; segments beyond the new last scan are emitted before EOI.
 Progressive encoding currently uses full-precision DC and AC bands; successive
-approximation scan generation and pixel/quality encoding remain planned.
+approximation scan generation remains planned.
+
+`encode(&shared_image, EncodeOptions::default())` encodes shared grayscale/RGB
+images. Quality, output precision (8/12), subsampling, RGB-to-YCbCr conversion,
+quantizer range and entropy coding are configurable. `encode_samples` accepts
+native interleaved U8/U16 gray, RGB, YCbCr, CMYK and YCCK sources at 1–16-bit
+precision, explicitly scaled to output precision. CMYK/YCCK values use encoded
+JPEG component polarity. `quantize` exposes the coefficient result before
+entropy coding. Alpha/indexed conversion is explicit; grayscale is always 1x1
+sampled. Color presets enlarge the first component; `Subsampling::Custom`
+specifies every component's factors, including fractional ratios.
 
 ```rust
 use deadlib_image_jpeg::{decode_coefficients, Limits, Upsampling};
@@ -49,7 +59,8 @@ record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark; allocation instrumentation remains planned.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
 unsupported errors. Arithmetic, predictive lossless, hierarchy,
-DNL, streaming, and pixel encoding remain required work.
+DNL, streaming, additional encoder scan strategies, and the broader validation
+and performance work remain required.
 
 Run `cargo test -p deadlib-image-jpeg` and
 `cargo clippy -p deadlib-image-jpeg --all-targets -- -D warnings`.
@@ -64,3 +75,5 @@ not yet a general
 conformance bound for all legal quantizers/blocks. Pixel/color conversion,
 broader conformance, libjpeg/mozjpeg parity and performance characterization
 remain open. No throughput claim is made yet.
+See ENCODER-VALIDATION.md for external encoder checks and measured size/quality
+results, including their numerical bounds and limits.

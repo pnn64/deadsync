@@ -76,7 +76,7 @@ pub fn encode_coefficients(
         if options.optimize_huffman && histograms[i].iter().any(|&v| v != 0) {
             Codebook::optimized(&histograms[i])
         } else {
-            Codebook::fixed(i >= 2)
+            Codebook::fixed(i >= 2, image.frame.precision, options.progressive)
         }
     };
     let books = [make(0)?, make(1)?, make(2)?, make(3)?];

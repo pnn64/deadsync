@@ -36,7 +36,7 @@ pub struct CoefficientImage<'a> {
     pub(crate) limits: Limits,
 }
 
-fn allocate_components(
+pub(crate) fn allocate_components(
     frame: &FrameHeader,
     limits: Limits,
 ) -> Result<(Vec<CoefficientComponent>, usize)> {

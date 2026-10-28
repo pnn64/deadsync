@@ -85,5 +85,34 @@ int main(int argc,char **argv) {
         free(planes);fclose(out);
     }
     jpeg_finish_decompress(&c);jpeg_destroy_decompress(&c);fclose(in);
+    /* Full-resolution output, native precision in LE u16, nearest upsampling.
+     * The raw/coefficient gate also covers fractional ratios unsupported by
+     * libjpeg's color upsampler; those cases intentionally have no .color file. */
+    in=open_jpeg(&c,&e,argv[1]);
+    {
+        int maxh=1,maxv=1;
+        for(ci=0;ci<c.num_components;ci++) {
+            if(c.comp_info[ci].h_samp_factor>maxh) maxh=c.comp_info[ci].h_samp_factor;
+            if(c.comp_info[ci].v_samp_factor>maxv) maxv=c.comp_info[ci].v_samp_factor;
+        }
+        for(ci=0;ci<c.num_components;ci++) {
+            if(maxh%c.comp_info[ci].h_samp_factor || maxv%c.comp_info[ci].v_samp_factor) {
+                jpeg_destroy_decompress(&c);fclose(in);return 0;
+            }
+        }
+    }
+    c.dct_method=JDCT_FLOAT;c.do_fancy_upsampling=FALSE;
+    jpeg_start_decompress(&c);
+    out=output(argv[2],".color");
+    {
+        JDIMENSION count=c.output_width*c.output_components,i;
+        JSAMPARRAY row=(*c.mem->alloc_sarray)((j_common_ptr)&c,JPOOL_IMAGE,count*(c.data_precision==8?1:2),1);
+        while(c.output_scanline<c.output_height) {
+            if(c.data_precision==8) jpeg_read_scanlines(&c,row,1);
+            else jpeg12_read_scanlines(&c,(J12SAMPARRAY)row,1);
+            for(i=0;i<count;i++) u16(out,c.data_precision==8?row[0][i]:((J12SAMPARRAY)row)[0][i]);
+        }
+    }
+    fclose(out);jpeg_finish_decompress(&c);jpeg_destroy_decompress(&c);fclose(in);
     return 0;
 }
