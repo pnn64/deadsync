@@ -13,7 +13,7 @@ impl Read for Input {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = std::env::args().collect::<Vec<_>>();
     if !(3..=6).contains(&args.len()) {
-        return Err("pcm_reference INPUT borrowed|reader|forward|encode|encode-known [START [FRAMES [BUFFER_FRAMES]]]".into());
+        return Err("pcm_reference INPUT describe|borrowed|reader|forward|encode|encode-known [START [FRAMES [BUFFER_FRAMES]]]".into());
     }
     let bytes = std::fs::read(&args[1])?;
     let wave = Wave::parse(&bytes)?;
@@ -22,6 +22,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sample = format.sample_format()?;
     let channels = usize::from(format.channels);
     let bits = sample.bits();
+    if args[2] == "describe" {
+        println!(
+            "{{\"container\":\"{:?}\",\"channels\":{},\"sample_rate\":{},\"bits\":{},\"valid_bits\":{},\"mask\":{},\"frames\":{},\"block_align\":{},\"byte_rate\":{}}}",
+            wave.container,
+            format.channels,
+            format.sample_rate,
+            bits,
+            format.valid_bits,
+            format.channel_mask,
+            pcm.frames(),
+            format.block_align,
+            format.byte_rate
+        );
+        return Ok(());
+    }
     if args[2].starts_with("encode") {
         let spec = Spec {
             sample_format: sample,
@@ -63,6 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut integers = vec![0i32; 13 * channels];
         let mut floats = vec![0f32; 13 * channels];
         let mut doubles = vec![0f64; 13 * channels];
+        let mut shorts = vec![0i16; 13 * channels];
         while start < pcm.frames() {
             let n = match sample {
                 SampleFormat::F32 => {
@@ -76,7 +92,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     n
                 }
                 SampleFormat::I16 => {
-                    let mut shorts = vec![0i16; 13 * channels];
                     let n = pcm.read_i16(start, &mut shorts)?;
                     writer.write_i16(&shorts[..n])?;
                     n

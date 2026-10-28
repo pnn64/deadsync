@@ -10,14 +10,14 @@ import struct
 KINDS={'u8':(1,8),'i16':(1,16),'i24':(1,24),'i32':(1,32),'f32':(3,32),'f64':(3,64)}
 
 
-def chunk(tag,data,endian='<',sentinel=False):
-    return tag+struct.pack(endian+'I',0xffffffff if sentinel else len(data))+data+b'\xa5'*(len(data)&1)
+def chunk(tag,data,endian='<',sentinel=False,pad=0):
+    return tag+struct.pack(endian+'I',0xffffffff if sentinel else len(data))+data+bytes([pad])*(len(data)&1)
 
 
-def make(container,kind,channels,frames,valid=None,table=False,data_first=False):
+def make(container,kind,channels,frames,valid=None,table=False,data_first=False,odd_metadata=False,pad=0):
     tag,bits=KINDS[kind];valid=bits if valid is None else valid
     extensible=channels>2 or valid!=bits
-    name=f'{container.lower()}-{kind}-{channels}-{frames}-v{valid}'+('-table' if table else '')+('-data-first' if data_first else '')
+    name=f'{container.lower()}-{kind}-{channels}-{frames}-v{valid}'+('-table' if table else '')+('-data-first' if data_first else '')+('-odd-metadata' if odd_metadata else '')+('-nonzero-pad' if pad else '')
     endian='>' if container=='RIFX' else '<';large=container in ('RF64','BW64')
     seed=int.from_bytes(hashlib.sha256(name.encode()).digest()[:8],'little');rng=random.Random(seed)
     wire=bytearray();truth=bytearray()
@@ -42,17 +42,17 @@ def make(container,kind,channels,frames,valid=None,table=False,data_first=False)
     if extensible:
         fmt+=struct.pack(endian+'HHIIHH',22,valid,mask,tag,0,0x10)+b'\x80\0\0\xaa\0\x38\x9b\x71'
     elif tag==3:fmt+=b'\0\0'
-    leading=chunk(b'JUNK',b'odd\0\xff',endian)+chunk(b'fmt ',fmt,endian)+chunk(b'LIST',b'INFO'+chunk(b'INAM',b'caf\xe9\0',endian),endian)
-    if tag==3:leading+=chunk(b'fact',struct.pack(endian+'I',frames),endian)
-    if table:leading+=chunk(b't64!',b'abc',endian,sentinel=True)
-    data=chunk(b'data',wire,endian,sentinel=large)
-    body=b'WAVE'+(data+leading if data_first else leading+data)+chunk(b'zzzz',b'trailing\0\xfe',endian)
+    leading=chunk(b'JUNK',b'odd\0\xff' if odd_metadata else b'even\0\xff',endian,pad=pad)+chunk(b'fmt ',fmt,endian,pad=pad)+chunk(b'LIST',b'INFO'+chunk(b'INAM',b'caf\xe9\0',endian,pad=pad),endian,pad=pad)
+    if tag==3:leading+=chunk(b'fact',struct.pack(endian+'I',frames),endian,pad=pad)
+    if table:leading+=chunk(b't64!',b'abc',endian,sentinel=True,pad=pad)
+    data=chunk(b'data',wire,endian,sentinel=large,pad=pad)
+    body=b'WAVE'+(data+leading if data_first else leading+data)+chunk(b'zzzz',b'trailing\0\xfe',endian,pad=pad)
     if large:
         rows=b't64!'+struct.pack('<Q',3) if table else b''
         ds=struct.pack('<QQQI',len(body)+36+len(rows),len(wire),frames,int(table))+rows
         payload=container.encode()+b'\xff'*4+b'WAVE'+chunk(b'ds64',ds)+body[4:]
     else:payload=container.encode()+struct.pack(endian+'I',len(body))+body
-    info=dict(name=name,container=container,kind=kind,channels=channels,frames=frames,bits=bits,valid_bits=valid,mask=mask,sample_rate=rate,extensible=extensible,ds64_table=table,data_first=data_first,seed=seed,expected_bytes=len(truth),canonical='s32le_left_aligned' if tag==1 else kind+'le_native_bits',core_reference_gate=container=='RIFF' and channels<=2 and valid==bits and frames>0 and not data_first)
+    info=dict(name=name,container=container,kind=kind,channels=channels,frames=frames,bits=bits,valid_bits=valid,mask=mask,sample_rate=rate,extensible=extensible,ds64_table=table,data_first=data_first,odd_metadata=odd_metadata,pad_byte=pad,profile='compatibility' if data_first or pad else 'canonical',seed=seed,expected_bytes=len(truth),canonical='s32le_left_aligned' if tag==1 else kind+'le_native_bits',core_reference_gate=container=='RIFF' and channels<=2 and valid==bits and frames>0 and not data_first and not odd_metadata and not pad)
     return info,payload,bytes(truth)
 
 
@@ -68,3 +68,7 @@ def cases():
             for channels in (1,6):yield make(container,kind,channels,17,table=True)
     for container in ('RIFF','RIFX'):
         for kind in KINDS:yield make(container,kind,1,17,data_first=True)
+    for container in ('RIFF','RIFX','RF64','BW64'):
+        for kind in KINDS:
+            for channels in (1,2,6):yield make(container,kind,channels,17,odd_metadata=True)
+        for kind in ('u8','f64'):yield make(container,kind,1,17,odd_metadata=True,pad=0xa5)
