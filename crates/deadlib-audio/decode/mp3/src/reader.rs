@@ -400,7 +400,11 @@ impl<R: Read> PacketReader<R> {
             }
             if !self.locked {
                 self.ensure(count + 4)?;
-                if !self.eof {
+                // EOF describes the underlying source, not the buffered
+                // candidate. Tiny reads may discover EOF during free-format
+                // probing while bulk reads leave it unknown. Validate every
+                // buffered lookahead identically in either case.
+                if self.available().len() >= count + 4 {
                     let next = FrameHeader::parse(&self.available()[count..]);
                     let trailer = self.available()[count..].starts_with(b"ID3")
                         || self.available()[count..].starts_with(b"TAG");

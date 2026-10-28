@@ -133,6 +133,27 @@ fn packets<R: Read>(reader: &mut PacketReader<R>) -> Result<Vec<(u64, Vec<u8>)>,
 }
 
 #[test]
+fn eof_discovered_during_free_format_probe_does_not_change_resynchronization() {
+    let mut free = frame(3, 1, false, false, 0);
+    free[2] &= 0x0f;
+    free.resize(1306, 0);
+    let valid = frame(3, 1, false, false, 0);
+    let mut invalid = valid.clone();
+    let h = FrameHeader::parse(&invalid).unwrap();
+    invalid[4..h.main_data_offset()].fill(0xff); // Invalid big_values, etc.
+    let data = [free.repeat(3), vec![0], invalid, vec![0], valid.repeat(2)].concat();
+    let expected = packets(&mut PacketReader::new(Cursor::new(&data))).unwrap();
+    assert_eq!(expected.len(), 5);
+    assert_eq!(expected[3].0, (3 * 1306 + 1 + valid.len() + 1) as u64);
+    // Bulk reads have not discovered EOF during inference. Tiny reads need
+    // another fill to infer the same size, and that fill discovers EOF early.
+    for chunk in [1, 4, 17, 127, 8192] {
+        let actual = packets(&mut PacketReader::new(Split::new(&data, 0, chunk))).unwrap();
+        assert_eq!(actual, expected, "chunk={chunk}");
+    }
+}
+
+#[test]
 fn every_read_split_preserves_packets_tags_and_positions() {
     let a = frame(3, 1, true, false, 0);
     let b = frame(3, 1, false, true, 0);

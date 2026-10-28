@@ -33,7 +33,10 @@ Packets include their original header, byte offset, free-format size and skipped
 junk-byte count. Acquisition checks a compatible following header where
 available, or validates the complete candidate's side information when the next
 boundary contains junk. A lone final frame is accepted. Protection CRC and main
-data are checked by the decoder, including the first packet. Plausible embedded
+data are checked by the decoder, including the first packet. Buffered lookahead
+is validated even when free-format probing has already discovered source EOF;
+this keeps acquisition/recovery independent of the read schedule. Protection CRC and main
+data are checked by the decoder. Plausible embedded
 headers in arbitrary junk remain inherently ambiguous; further adversarial and
 fuzz validation is required.
 
