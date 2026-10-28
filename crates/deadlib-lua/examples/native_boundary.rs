@@ -171,6 +171,9 @@ mod supported {
             "boundary_yield_call",
             "boundary_yield_resume",
             "boundary_allocation_yield_tail",
+            "boundary_table_thread",
+            "boundary_table_thread_panic",
+            "boundary_table_invoke",
         ] {
             boot.push_str(&format!(
                 "{name}=assert(package.loadlib({},{}));",

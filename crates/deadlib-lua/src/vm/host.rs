@@ -13,6 +13,7 @@ pub use stack::{
 pub use thread::HostThreadState;
 pub(super) use thread::ThreadData;
 pub(super) const API_YIELDED: u32 = 8;
+pub(super) const API_TAG_CALL: u32 = 9;
 
 enum Action<'a> {
     Call(Value, &'a [Value]),
@@ -444,6 +445,16 @@ impl HostCall<'_> {
         action: Action<'_>,
         protected: bool,
     ) -> Result<std::ops::Range<usize>, Error> {
+        self.run_action_with_call(action, protected)
+            .map(|(range, _)| range)
+    }
+    // A completed tag-method call restores ci->base. A primitive operation or
+    // table-valued metamethod chain does not, even though both use this driver.
+    fn run_action_with_call(
+        &mut self,
+        action: Action<'_>,
+        protected: bool,
+    ) -> Result<(std::ops::Range<usize>, bool), Error> {
         if let Some(error) = &self.abort {
             return Err(error.clone());
         }
@@ -492,13 +503,26 @@ impl HostCall<'_> {
             _ => Value::Nil,
         };
         self.vm.registers[base + 1..].copy_from_slice(arguments);
+        let selected_tag =
+            matches!(
+                action,
+                Action::Get(..) | Action::Set(..) | Action::Compare(..)
+            ) && self.vm.frames.last().is_some_and(|frame| {
+                matches!(frame.function, FrameKind::Native(CONT_NATIVE_WINDOW))
+            });
         self.vm.push_record(Frame {
             function: FrameKind::Native(match action {
                 Action::Concat { .. } => CONT_HOST_CONCAT,
                 _ if c_protected => CONT_HOST_PCALL,
                 _ => CONT_HOST_CALL,
             }),
-            pc: u32::from(protected),
+            // A selected window has no real C callback to account for the tag
+            // method's luaD_call. Keep that call's ordinary counted continuation.
+            pc: if selected_tag {
+                API_TAG_CALL
+            } else {
+                u32::from(protected)
+            },
             base,
             stack_start: scratch,
             result: base,
@@ -603,7 +627,7 @@ impl HostCall<'_> {
             self.vm.active_native = active;
             self.vm.frames[depth].pc = API_YIELDED;
             self.vm.frames[depth].vararg_count = 0;
-            return Ok(range.end - 1..range.end);
+            return Ok((range.end - 1..range.end, false));
         }
         if !protected
             && self.vm.thread == owner
@@ -634,7 +658,7 @@ impl HostCall<'_> {
         match result {
             Ok(count) => {
                 self.vm.registers.truncate(scratch + count);
-                Ok(scratch..scratch + count)
+                Ok((scratch..scratch + count, !synchronous))
             }
             Err(error) => {
                 self.vm.registers.truncate(scratch);

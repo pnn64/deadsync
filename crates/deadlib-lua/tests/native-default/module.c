@@ -40,6 +40,7 @@ static int box(lua_State *L) {
 #include "waiting-errors.c"
 #include "thread-unprotected.c"
 #include "call-yields.c"
+#include "thread-tables.c"
 static const luaL_Reg functions[]={{"sum",sum},{"counter",counter},{"state",state},{"fail",fail},{"invoke",invoke},{"yield",yield},{"body",body},{"box",box},{"inactive",inactive_objects},{"pcall_thread",inactive_pcall},{"cpcall_thread",inactive_cpcall},{"yield_tail",inactive_yield_tail},{"called",inactive_called},{NULL,NULL}};
 EXPORT int luaopen_native(lua_State *L) {
   lua_newtable(L);luaL_register(L,NULL,functions);lua_pushcfunction(L,inactive_load);lua_setfield(L,-2,"load_thread");lua_pushvalue(L,LUA_ENVIRONINDEX);lua_setfield(L,-2,"environment");
@@ -62,6 +63,8 @@ EXPORT int luaopen_native(lua_State *L) {
   lua_pushcfunction(L,inactive_call_panic);lua_setfield(L,-2,"call_thread_panic");
   lua_pushcfunction(L,selected_yield_call);lua_setfield(L,-2,"yield_call");
   lua_pushcfunction(L,selected_yield_resume);lua_setfield(L,-2,"yield_resume");
+  lua_pushcfunction(L,selected_table);lua_setfield(L,-2,"table_thread");
+  lua_pushcfunction(L,selected_table_panic);lua_setfield(L,-2,"table_thread_panic");
   lua_pushvalue(L,1);lua_setfield(L,-2,"name");return 1;
 }
 EXPORT int luaopen_native_root_leaf(lua_State *L) {return luaopen_native(L);}

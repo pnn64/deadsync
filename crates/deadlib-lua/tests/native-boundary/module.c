@@ -1256,3 +1256,7 @@ EXPORT int boundary_unprotected_fail(lua_State *L) {lua_settop(L,1);return lua_e
 EXPORT int boundary_yield_call(lua_State *L) {return selected_yield_call(L);}
 EXPORT int boundary_yield_resume(lua_State *L) {return selected_yield_resume(L);}
 EXPORT int boundary_allocation_yield_tail(lua_State *L) {return inactive_yield_tail(L);}
+#include "../native-default/thread-tables.c"
+EXPORT int boundary_table_thread(lua_State *L) {return selected_table(L);}
+EXPORT int boundary_table_thread_panic(lua_State *L) {return selected_table_panic(L);}
+EXPORT int boundary_table_invoke(lua_State *L) {lua_call(L,lua_gettop(L)-1,-1);return lua_gettop(L);}

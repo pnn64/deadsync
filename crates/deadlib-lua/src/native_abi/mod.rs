@@ -1024,6 +1024,32 @@ impl Context<'_, '_, '_> {
         b: c_int,
         value: &mut BoundaryValue,
     ) -> Result<(), Error> {
+        if matches!(op, 18 | 19 | 39) || (matches!(op, 16 | 17) && b == 0) {
+            match op {
+                16 => self.stack.get_table_thread(thread, a as isize, b != 0)?,
+                17 => self.stack.set_table_thread(thread, a as isize, b != 0)?,
+                18 | 19 => {
+                    // SAFETY: field APIs lend these bytes until dispatch returns.
+                    let name =
+                        unsafe { std::slice::from_raw_parts(value.bytes.cast(), value.length) };
+                    if op == 18 {
+                        self.stack.get_field_thread(thread, a as isize, name)?;
+                    } else {
+                        self.stack.set_field_thread(thread, a as isize, name)?;
+                    }
+                }
+                39 => {
+                    value.integer = c_int::from(if value.integer == 0 {
+                        self.stack.equal_thread(thread, a as isize, b as isize)?
+                    } else {
+                        self.stack
+                            .less_than_thread(thread, a as isize, b as isize)?
+                    });
+                }
+                _ => unreachable!(),
+            }
+            return Ok(());
+        }
         if op == 8 {
             let arguments =
                 usize::try_from(a).map_err(|_| self.stack.error(b"invalid native call count"))?;
@@ -1244,7 +1270,7 @@ unsafe extern "C" fn dispatch(
         Ok(()) => 0,
         Err(error) => {
             if error.target_thread.is_none()
-                && matches!(op, 8 | 40 | 44 | 47 | 49 | 55 | 73)
+                && matches!(op, 8 | 16..=19 | 39 | 40 | 44 | 47 | 49 | 55 | 73)
                 && value.state as usize != context.state
                 && error.kind() == crate::ErrorKind::Runtime
             {

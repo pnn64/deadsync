@@ -27,8 +27,14 @@ impl NativeStack<'_, '_> {
         if raw {
             return Ok(self.call.vm.table(target)?.get(key));
         }
-        let range = self.call.run_action(Action::Get([target, key]), false)?;
-        Ok(self.call.vm.registers[range.start])
+        let (range, called) = self
+            .call
+            .run_action_with_call(Action::Get([target, key]), false)?;
+        let value = self.call.vm.registers[range.start];
+        if called {
+            self.restore_window_call_base();
+        }
+        Ok(value)
     }
     fn write_table(
         &mut self,
@@ -44,8 +50,12 @@ impl NativeStack<'_, '_> {
             };
             return self.call.vm.raw_set(table, key, value);
         }
-        self.call
-            .run_action(Action::Set([target, key, value]), false)?;
+        let (_, called) = self
+            .call
+            .run_action_with_call(Action::Set([target, key, value]), false)?;
+        if called {
+            self.restore_window_call_base();
+        }
         Ok(())
     }
     /// Replace the top key with a table lookup; raw access bypasses metamethods.

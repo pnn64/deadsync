@@ -1,0 +1,38 @@
+{
+  "original_binary": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\thread-tables-debug-before-stack.exe",
+  "original_sha256": "6e451b4b08ae8ffa41d50e94bdf47aec70faef0013c5b16d7c39fb552debbf6e",
+  "runs": [
+    {
+      "stack_reserve": 1048576,
+      "returncode": 3221225725,
+      "stdout_hex": "",
+      "stderr_hex": "0a74687265616420276d61696e27202834303531362920686173206f766572666c6f7765642069747320737461636b0a",
+      "binary": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\thread-tables-stack-1048576.exe",
+      "sha256": "6e451b4b08ae8ffa41d50e94bdf47aec70faef0013c5b16d7c39fb552debbf6e"
+    },
+    {
+      "stack_reserve": 4194304,
+      "returncode": 3221225725,
+      "stdout_hex": "",
+      "stderr_hex": "0a74687265616420276d61696e27202831343935322920686173206f766572666c6f7765642069747320737461636b0a",
+      "binary": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\thread-tables-stack-4194304.exe",
+      "sha256": "8ab67c1235e4610bac5c7c68896e77b9b150518eaf23d52bf7720d9dcf9d465a"
+    },
+    {
+      "stack_reserve": 8388608,
+      "returncode": 3221225725,
+      "stdout_hex": "",
+      "stderr_hex": "0a74687265616420276d61696e27202833303334302920686173206f766572666c6f7765642069747320737461636b0a",
+      "binary": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\thread-tables-stack-8388608.exe",
+      "sha256": "15a1ae51eee17a36d337afdce9457ddda1e3d0eddf6eb32161438df289f6190b"
+    },
+    {
+      "stack_reserve": 16777216,
+      "returncode": 0,
+      "stdout_hex": "31393909310933093009300933310d0a",
+      "stderr_hex": "",
+      "binary": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\thread-tables-stack-16777216.exe",
+      "sha256": "0c3168de68e665ffc1f6e525528fe110806a0b9a86c8e03bf8906d719a80683e"
+    }
+  ]
+}

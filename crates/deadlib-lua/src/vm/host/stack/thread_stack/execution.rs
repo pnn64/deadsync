@@ -45,6 +45,86 @@ impl NativeStack<'_, '_> {
     pub fn concatenate_thread(&mut self, thread: ThreadId, count: usize) -> Result<(), Error> {
         self.with_thread_stack(thread, |stack| stack.concatenate(count))
     }
+    /// Replace the selected stack's top key with a lookup result.
+    /// Non-raw access executes metamethods in that thread's context.
+    ///
+    /// # Errors
+    /// Propagates invalid indexes, lookup errors and fatal quotas. Unprotected
+    /// errors retain the selected thread's fault frames for its handler.
+    pub fn get_table_thread(
+        &mut self,
+        thread: ThreadId,
+        index: isize,
+        raw: bool,
+    ) -> Result<(), Error> {
+        self.with_thread_stack(thread, |stack| stack.get_table(index, raw))
+    }
+    /// Pop the selected stack's key/value pair after an assignment succeeds.
+    /// Non-raw access executes metamethods in that thread's context.
+    ///
+    /// # Errors
+    /// Propagates invalid indexes, assignment errors and fatal quotas, retaining
+    /// the fault stack when a metamethod fails.
+    pub fn set_table_thread(
+        &mut self,
+        thread: ThreadId,
+        index: isize,
+        raw: bool,
+    ) -> Result<(), Error> {
+        self.with_thread_stack(thread, |stack| stack.set_table(index, raw))
+    }
+    /// Push a field lookup on the selected stack without exposing its key.
+    /// Metamethods execute in the selected thread's context.
+    ///
+    /// # Errors
+    /// Propagates invalid indexes, lookup errors and fatal quotas, retaining
+    /// the fault stack when a metamethod fails.
+    pub fn get_field_thread(
+        &mut self,
+        thread: ThreadId,
+        index: isize,
+        name: &[u8],
+    ) -> Result<(), Error> {
+        self.with_thread_stack(thread, |stack| stack.get_field(index, name))
+    }
+    /// Pop the selected stack's value after assigning a named field.
+    /// Metamethods execute in the selected thread's context.
+    ///
+    /// # Errors
+    /// Propagates invalid indexes, assignment errors and fatal quotas, retaining
+    /// the fault stack when a metamethod fails.
+    pub fn set_field_thread(
+        &mut self,
+        thread: ThreadId,
+        index: isize,
+        name: &[u8],
+    ) -> Result<(), Error> {
+        self.with_thread_stack(thread, |stack| stack.set_field(index, name))
+    }
+    /// Compare selected stack values for equality, including their metamethod.
+    ///
+    /// # Errors
+    /// Propagates metamethod errors and fatal quotas with the fault stack intact.
+    pub fn equal_thread(
+        &mut self,
+        thread: ThreadId,
+        left: isize,
+        right: isize,
+    ) -> Result<bool, Error> {
+        self.with_thread_stack(thread, |stack| stack.equal(left, right))
+    }
+    /// Compare selected stack values with Lua's less-than operation.
+    ///
+    /// # Errors
+    /// Propagates comparison errors and fatal quotas with the fault stack intact.
+    pub fn less_than_thread(
+        &mut self,
+        thread: ThreadId,
+        left: isize,
+        right: isize,
+    ) -> Result<bool, Error> {
+        self.with_thread_stack(thread, |stack| stack.less_than(left, right))
+    }
     #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
     pub(crate) fn concatenate_primitives_thread(
         &mut self,

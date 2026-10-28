@@ -435,6 +435,26 @@ fn collector_integer_controls_follow_native_width_and_preserve_finalizer_errors(
 }
 
 #[test]
+fn selected_table_apis_execute_metamethods_and_route_unprotected_errors() {
+    std::thread::Builder::new()
+        .stack_size(32 * 1024 * 1024)
+        .spawn(selected_table_corpus)
+        .unwrap()
+        .join()
+        .unwrap();
+}
+
+fn selected_table_corpus() {
+    let _guard = VMS.lock().unwrap();
+    let f = fixture();
+    let mut vm = Vm::new();
+    let path = vm.intern(f.module.to_string_lossy().as_bytes());
+    vm.set_global(b"library_path", path).unwrap();
+    script(&mut vm,b"local m=assert(package.loadlib(library_path,'luaopen_native'))('selected tables');boundary_table_invoke=m.invoke;boundary_table_thread=m.table_thread;boundary_table_thread_panic=m.table_thread_panic;boundary_execution_yield_tail=m.yield_tail;boundary_execution_called=m.called;boundary_thread_pcall=m.pcall_thread;boundary_waiting_snapshot=m.waiting_snapshot;boundary_waiting_c_resume=m.waiting_c_resume");
+    script(&mut vm, include_bytes!("native-boundary/thread-tables.lua"));
+}
+
+#[test]
 fn default_cli_loads_an_unmodified_public_header_module() {
     let f = fixture();
     for entry in ["direct", "require"] {

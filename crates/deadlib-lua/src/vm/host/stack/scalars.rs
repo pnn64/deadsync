@@ -47,12 +47,15 @@ impl NativeStack<'_, '_> {
         let (Some(left), Some(right)) = (self.value(left), self.value(right)) else {
             return Ok(false);
         };
-        let range = self
+        let (range, called) = self
             .call
-            .run_action(Action::Compare(op, [left, right]), false)?;
+            .run_action_with_call(Action::Compare(op, [left, right]), false)?;
         let Value::Boolean(result) = self.call.vm.registers[range.start] else {
             unreachable!("comparison result")
         };
+        if called {
+            self.restore_window_call_base();
+        }
         self.call.vm.registers.truncate(self.base + self.top());
         Ok(result)
     }
