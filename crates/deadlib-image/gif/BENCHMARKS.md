@@ -241,3 +241,28 @@ source change: 14 added / 16 removed lines.
 
 Raw data: `04-before-decode.tsv`, `04-paired-decode.tsv`, and
 `04-paired-composite.tsv`. Allocation bytes are unchanged on every case.
+
+The compositor now stores pixels and saved rectangles as `Vec<[u8; 4]>` and
+borrows their bytes through safe slice flattening. Initialization resizes
+directly to the requested background, removing the prior zero-fill followed by
+an opaque fill. Rendering and disposal operate directly on pixels, removing
+repeated byte-stride multiplication and chunk conversion. The fixed-size
+canvas reserves its exact pixel count; public RGBA bytes and APIs are unchanged.
+Production diff: 30 added / 31 removed lines (including formatting the prior
+validation call).
+
+| Workload / operation | Before cycles | After cycles | CPU throughput | Allocations |
+|---|---:|---:|---:|---:|
+| solid / composite-init (logical background) | 594,627 | 480,549 | 1.27x | 2 -> 2 |
+| solid2-palette / composite-init | 593,818 | 476,851 | 1.25x | 2 -> 2 |
+| solid / composite | 680,230 | 597,327 | 1.14x | 2 -> 2 |
+| tiles16 / composite | 664,618 | 600,668 | 1.11x | 2 -> 2 |
+| noise256 / composite | 674,899 | 572,485 | 1.18x | 2 -> 2 |
+| animation32 / composite | 1,129,491 | 1,005,322 | 1.14x | 3 -> 3 |
+| tiles16-palette / composite | 1,072,702 | 996,580 | 1.13x | 2 -> 2 |
+
+Raw data: `05-before-init.tsv`, `05-paired-init.tsv`, and
+`05-paired-composite.tsv`. Allocation bytes are unchanged for these fixtures.
+The ordinary animation tests additionally check exact logical/transparent/custom
+backgrounds, palette fallback, clipped rectangles, disposal and repeated text
+rendering without allocation churn.

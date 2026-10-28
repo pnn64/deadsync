@@ -61,8 +61,8 @@ pub struct Compositor {
     header: Header,
     options: CompositeOptions,
     background: [u8; 4],
-    pixels: Vec<u8>,
-    saved: Vec<u8>,
+    pixels: Vec<[u8; 4]>,
+    saved: Vec<[u8; 4]>,
     pending: Option<(Rect, Disposal)>,
     text_indices: Vec<u8>,
     mask: Vec<u8>,
@@ -95,13 +95,12 @@ impl Compositor {
                 [c[0], c[1], c[2], 255]
             }
         };
-        let byte_count = count.checked_mul(4).ok_or(Error::LimitExceeded)?;
+        count.checked_mul(4).ok_or(Error::LimitExceeded)?;
         let mut pixels = Vec::new();
-        reserve(&mut pixels, byte_count)?;
-        pixels.resize(byte_count, 0);
-        if background != [0; 4] {
-            pixels.as_chunks_mut::<4>().0.fill(background);
-        }
+        pixels
+            .try_reserve_exact(count)
+            .map_err(|_| Error::Allocation)?;
+        pixels.resize(count, background);
         Ok(Self {
             header: header.clone(),
             options,
@@ -114,13 +113,11 @@ impl Compositor {
         })
     }
     pub fn pixels(&self) -> &[u8] {
-        &self.pixels
+        self.pixels.as_flattened()
     }
     /// Start another playback with the configured background.
     pub fn reset(&mut self) {
-        for pixel in self.pixels.as_chunks_mut::<4>().0 {
-            pixel.copy_from_slice(&self.background);
-        }
+        self.pixels.fill(self.background);
         self.pending = None;
         self.saved.clear();
     }
@@ -139,23 +136,21 @@ impl Compositor {
         // Reserve before changing state; old saved pixels must remain intact
         // until the preceding Previous disposal has been applied.
         if disposal == Disposal::Previous {
-            let required = rect.w * rect.h * 4;
+            let required = rect.w * rect.h;
             let extra = required.saturating_sub(self.saved.len());
             reserve(&mut self.saved, extra)?;
         }
-        let stride = self.header.width as usize * 4;
+        let stride = self.header.width as usize;
         if let Some((r, method)) = self.pending {
             for row in 0..r.h {
-                let dest = &mut self.pixels
-                    [(r.y + row) * stride + r.x * 4..(r.y + row) * stride + (r.x + r.w) * 4];
+                let dest =
+                    &mut self.pixels[(r.y + row) * stride + r.x..(r.y + row) * stride + r.x + r.w];
                 match method {
                     Disposal::Background => {
-                        for p in dest.as_chunks_mut::<4>().0 {
-                            p.copy_from_slice(&self.background);
-                        }
+                        dest.fill(self.background);
                     }
                     Disposal::Previous => {
-                        dest.copy_from_slice(&self.saved[row * r.w * 4..(row + 1) * r.w * 4])
+                        dest.copy_from_slice(&self.saved[row * r.w..(row + 1) * r.w])
                     }
                     _ => {}
                 }
@@ -165,7 +160,7 @@ impl Compositor {
         if disposal == Disposal::Previous {
             for y in rect.y..rect.y + rect.h {
                 self.saved.extend_from_slice(
-                    &self.pixels[y * stride + rect.x * 4..y * stride + (rect.x + rect.w) * 4],
+                    &self.pixels[y * stride + rect.x..y * stride + rect.x + rect.w],
                 );
             }
         }
@@ -173,7 +168,11 @@ impl Compositor {
         Ok(())
     }
     pub fn render(&mut self, frame: &Frame) -> Result<RenderedFrame<'_>, Error> {
-        frame.validate(&self.header, self.options.external_palette.as_deref(), false)?;
+        frame.validate(
+            &self.header,
+            self.options.external_palette.as_deref(),
+            false,
+        )?;
         let p = frame
             .palette(&self.header)
             .or(self.options.external_palette.as_deref())
@@ -185,28 +184,28 @@ impl Compositor {
         let transparent = frame.control.and_then(|c| c.transparent_index);
         let r = self.clip(frame.left, frame.top, frame.width, frame.height);
         self.prepare(r, frame.control)?;
-        let stride = self.header.width as usize * 4;
+        let stride = self.header.width as usize;
         for row in 0..r.h {
             let indices =
                 &frame.indices[row * frame.width as usize..row * frame.width as usize + r.w];
-            let dest = &mut self.pixels
-                [(r.y + row) * stride + r.x * 4..(r.y + row) * stride + (r.x + r.w) * 4];
+            let dest =
+                &mut self.pixels[(r.y + row) * stride + r.x..(r.y + row) * stride + r.x + r.w];
             if let Some(t) = transparent {
-                for (pixel, &index) in dest.as_chunks_mut::<4>().0.iter_mut().zip(indices) {
+                for (pixel, &index) in dest.iter_mut().zip(indices) {
                     if index != t {
-                        pixel.copy_from_slice(&table[index as usize]);
+                        *pixel = table[index as usize];
                     }
                 }
             } else {
-                for (pixel, &index) in dest.as_chunks_mut::<4>().0.iter_mut().zip(indices) {
-                    pixel.copy_from_slice(&table[index as usize]);
+                for (pixel, &index) in dest.iter_mut().zip(indices) {
+                    *pixel = table[index as usize];
                 }
             }
         }
         Ok(RenderedFrame {
             width: self.header.width,
             height: self.header.height,
-            rgba: &self.pixels,
+            rgba: self.pixels.as_flattened(),
             control: frame.control,
         })
     }
@@ -288,7 +287,7 @@ impl Compositor {
         Ok(RenderedFrame {
             width: self.header.width,
             height: self.header.height,
-            rgba: &self.pixels,
+            rgba: self.pixels.as_flattened(),
             control: text.control,
         })
     }
