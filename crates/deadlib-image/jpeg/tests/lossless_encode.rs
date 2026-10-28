@@ -1,9 +1,9 @@
 use deadlib_image::{ColorType, Image, Samples};
 use deadlib_image_jpeg::{
-    CmykPolarity, ColorSpace, ComponentPlane, ComponentSpec, EncodeInput, Error, Event,
-    FrameHeader, IccWrite, Limits, LosslessImage, LosslessOptions, LosslessScan, MarkerReader,
-    MetadataOptions, MetadataSegment, Process, SampleData, decode_lossless, encode_lossless,
-    encode_lossless_samples, encode_lossless_samples_with_metadata,
+    CmykPolarity, ColorSpace, ComponentPlane, ComponentSpec, EncodeInput, EntropyCoding, Error,
+    Event, FrameHeader, IccWrite, Limits, LosslessImage, LosslessOptions, LosslessScan,
+    MarkerReader, MetadataOptions, MetadataSegment, Process, SampleData, decode_lossless,
+    encode_lossless, encode_lossless_samples, encode_lossless_samples_with_metadata,
 };
 
 fn source(p: u8, count: usize, w: usize, h: usize) -> Vec<u16> {
@@ -41,38 +41,45 @@ fn all_precisions_predictors_point_transforms_and_entropy_policies() {
             };
             for predictor in 1..=7 {
                 for point in [0, precision - 1] {
-                    for optimize in [false, true] {
-                        let bytes = encode_lossless_samples(
-                            &input,
-                            LosslessOptions {
-                                predictor,
-                                point_transform: point,
-                                restart_rows: 2,
-                                optimize_huffman: optimize,
-                                separate_components: predictor % 2 == 0,
-                                ..LosslessOptions::default()
-                            },
-                        )
-                        .unwrap();
-                        let image = decode_lossless(&bytes, Limits::default()).unwrap();
-                        assert_eq!(image.color_space(), color_space);
-                        assert_eq!(image.frame.precision, precision);
-                        for (i, c) in image.components.iter().enumerate() {
-                            assert_eq!(
-                                c.samples,
-                                values
-                                    .iter()
-                                    .skip(i)
-                                    .step_by(count)
-                                    .map(|v| (v >> point) << point)
-                                    .collect::<Vec<_>>()
+                    for entropy_coding in [EntropyCoding::Huffman, EntropyCoding::Arithmetic] {
+                        for &optimize in if entropy_coding == EntropyCoding::Huffman {
+                            &[false, true][..]
+                        } else {
+                            &[false][..]
+                        } {
+                            let bytes = encode_lossless_samples(
+                                &input,
+                                LosslessOptions {
+                                    predictor,
+                                    point_transform: point,
+                                    restart_rows: 2,
+                                    optimize_huffman: optimize,
+                                    entropy_coding,
+                                    separate_components: predictor % 2 == 0,
+                                    ..LosslessOptions::default()
+                                },
+                            )
+                            .unwrap();
+                            let image = decode_lossless(&bytes, Limits::default()).unwrap();
+                            assert_eq!(image.color_space(), color_space);
+                            assert_eq!(image.frame.precision, precision);
+                            for (i, c) in image.components.iter().enumerate() {
+                                assert_eq!(
+                                    c.samples,
+                                    values
+                                        .iter()
+                                        .skip(i)
+                                        .step_by(count)
+                                        .map(|v| (v >> point) << point)
+                                        .collect::<Vec<_>>()
+                                );
+                            }
+                            assert!(
+                                !MarkerReader::new(&bytes)
+                                    .unwrap()
+                                    .any(|e| matches!(e, Ok(Event::Segment { marker: 0xdb, .. })))
                             );
                         }
-                        assert!(
-                            !MarkerReader::new(&bytes)
-                                .unwrap()
-                                .any(|e| matches!(e, Ok(Event::Segment { marker: 0xdb, .. })))
-                        );
                     }
                 }
             }
@@ -204,18 +211,21 @@ fn subsampling_odd_padding_and_full_component_counts() {
             for predictor in 1..=7 {
                 for restart_rows in [0, 1, 2] {
                     for separate_components in [false, true] {
-                        let bytes = image
-                            .encode(LosslessOptions {
-                                predictor,
-                                restart_rows,
-                                separate_components,
-                                ..LosslessOptions::default()
-                            })
-                            .unwrap();
-                        let decoded = decode_lossless(&bytes, Limits::default()).unwrap();
-                        for (a, b) in image.components.iter().zip(&decoded.components) {
-                            assert_eq!(a.samples, b.samples);
-                            assert_eq!(a.spec, b.spec);
+                        for entropy_coding in [EntropyCoding::Huffman, EntropyCoding::Arithmetic] {
+                            let bytes = image
+                                .encode(LosslessOptions {
+                                    predictor,
+                                    restart_rows,
+                                    separate_components,
+                                    entropy_coding,
+                                    ..LosslessOptions::default()
+                                })
+                                .unwrap();
+                            let decoded = decode_lossless(&bytes, Limits::default()).unwrap();
+                            for (a, b) in image.components.iter().zip(&decoded.components) {
+                                assert_eq!(a.samples, b.samples);
+                                assert_eq!(a.spec, b.spec);
+                            }
                         }
                     }
                 }
@@ -224,11 +234,18 @@ fn subsampling_odd_padding_and_full_component_counts() {
     }
     let factors = vec![(4, 4); 255];
     let image = planar(255, 16, &factors, 3, 2);
-    let bytes = image.encode(LosslessOptions::default()).unwrap();
-    let decoded = decode_lossless(&bytes, Limits::default()).unwrap();
-    assert_eq!(decoded.scans, 255);
-    for (a, b) in image.components.iter().zip(&decoded.components) {
-        assert_eq!(a.samples, b.samples);
+    for entropy_coding in [EntropyCoding::Huffman, EntropyCoding::Arithmetic] {
+        let bytes = image
+            .encode(LosslessOptions {
+                entropy_coding,
+                ..LosslessOptions::default()
+            })
+            .unwrap();
+        let decoded = decode_lossless(&bytes, Limits::default()).unwrap();
+        assert_eq!(decoded.scans, 255);
+        for (a, b) in image.components.iter().zip(&decoded.components) {
+            assert_eq!(a.samples, b.samples);
+        }
     }
 }
 

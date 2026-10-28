@@ -22,7 +22,7 @@ JPEG without changing its coefficients when the coefficients fit the target
 Huffman process's magnitude categories. Arithmetic decisions use the full
 signed 16-bit model at either sample precision.
 
-`decode_lossless(&jpeg, limits)` decodes predictive Huffman SOF3 directly into
+`decode_lossless(&jpeg, limits)` decodes predictive Huffman SOF3 or arithmetic SOF11 into
 native unsigned sample planes at every precision from 2 through 16 bits.
 All seven predictors, per-scan point transforms, whole-row restart intervals,
 interleaved/separate scans, subsampling and up to 255 frame components are
@@ -48,6 +48,15 @@ scans can vary predictor/Pt/restart rows and visit components in any order;
 each individual scan follows frame order. Generated scans pack legal MCUs and
 split larger layouts automatically. The metadata variants preserve APPn/COM,
 add segments, and preserve/remove/replace ICC bytes through the same writer.
+
+`LosslessOptions::entropy_coding = EntropyCoding::Arithmetic` writes SOF11
+using the native Annex H two-dimensional model. DAC L/U bounds use
+`arithmetic_conditioning`; the AC split is unused. Four decoder destinations,
+158 bins per table and left/above difference classes are supported. The class
+history is bounded to one row per vertical sampling phase. Arithmetic scans
+share the same precision, sampling, scripts, metadata and restart controls.
+The JPEG XT reference gate and its documented setup/output limitations are in
+LOSSLESS-VALIDATION.md.
 
 `encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
 without another lossy transform. It preserves quantizer values, visible blocks,
@@ -117,7 +126,7 @@ Limits bound pixels, coefficient/sample storage, metadata (including segment
 record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark; allocation instrumentation remains planned.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
-unsupported errors. Arithmetic lossless, hierarchy,
+unsupported errors. Hierarchy,
 DNL, streaming, additional encoder scan strategies, and the broader validation
 and performance work remain required.
 

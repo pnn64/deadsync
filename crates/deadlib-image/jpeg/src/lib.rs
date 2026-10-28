@@ -12,6 +12,7 @@ mod entropy;
 mod exif;
 mod huffman_encode;
 mod lossless;
+mod lossless_arithmetic;
 mod lossless_encode;
 mod marker;
 mod metadata;

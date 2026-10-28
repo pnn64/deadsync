@@ -25,6 +25,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         optimize_huffman: optimize,
         ..LosslessOptions::default()
     };
+    if args.get(base + 5).is_some_and(|a| a == "1") {
+        options.entropy_coding = deadlib_image_jpeg::EntropyCoding::Arithmetic;
+    }
+    if let Some(lower) = args.get(base + 6) {
+        options.arithmetic_conditioning.dc_lower = lower.parse()?;
+    }
+    if let Some(upper) = args.get(base + 7) {
+        options.arithmetic_conditioning.dc_upper = upper.parse()?;
+    }
     let script_for = |ids: &[u8], p: u8| -> Result<Vec<LosslessScan>, Box<dyn std::error::Error>> {
         let order: Vec<_> = if layout == 3 {
             (0..ids.len()).rev().collect()

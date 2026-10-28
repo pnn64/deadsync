@@ -1,11 +1,14 @@
 //! Native sample encoder, T.81 Annex H (no DCT or source raster copy).
+use crate::arithmetic_encode::Coder;
 use crate::encode::{emit_additional, emit_metadata, validate_metadata};
 use crate::huffman_encode::Codebook;
 use crate::lossless::{predictor, sampling};
+use crate::lossless_arithmetic::{History, Statistics};
 use crate::output::Output;
 use crate::{
-    CmykPolarity, ColorSpace, ComponentPlane, ComponentSpec, EncodeInput, Error, FrameHeader,
-    Limits, LosslessImage, MetadataOptions, MetadataSegment, Process, Result, SampleData,
+    ArithmeticConditioning, CmykPolarity, ColorSpace, ComponentPlane, ComponentSpec, EncodeInput,
+    EntropyCoding, Error, FrameHeader, Limits, LosslessImage, MetadataOptions, MetadataSegment,
+    Process, Result, SampleData,
 };
 use deadlib_image::{ColorType, Image, Samples};
 
@@ -50,6 +53,9 @@ pub struct LosslessOptions<'a> {
     pub point_transform: u8,
     pub restart_rows: u16,
     pub optimize_huffman: bool,
+    pub entropy_coding: EntropyCoding,
+    /// Arithmetic L/U conditioning. The AC split is unused by lossless scans.
+    pub arithmetic_conditioning: ArithmeticConditioning,
     /// Generate one scan per component rather than packing legal MCUs.
     pub separate_components: bool,
     /// Borrowed explicit scans override generated predictor/Pt/restart controls.
@@ -66,6 +72,8 @@ impl Default for LosslessOptions<'_> {
             point_transform: 0,
             restart_rows: 0,
             optimize_huffman: true,
+            entropy_coding: EntropyCoding::Huffman,
+            arithmetic_conditioning: ArithmeticConditioning::default(),
             separate_components: false,
             scan_script: &[],
             cmyk_polarity: CmykPolarity::Conventional,
@@ -418,7 +426,15 @@ fn geometry(frame: &FrameHeader, source: Source<'_>, scan: Scan) -> Result<(usiz
 }
 
 enum Token {
-    Difference(usize, i32, u8),
+    Difference {
+        component: usize,
+        local: usize,
+        value: i32,
+        size: u8,
+        x: usize,
+        y: usize,
+        first_row: bool,
+    },
     Restart(u8),
 }
 fn walk(
@@ -437,7 +453,7 @@ fn walk(
             restart = (restart + 1) & 7;
             first_row = mcu / cols;
         }
-        for &i in &scan.indices[..scan.count] {
+        for (local, &i) in scan.indices[..scan.count].iter().enumerate() {
             let spec = frame.components[i];
             let (h, v) = if scan.count == 1 {
                 (1, 1)
@@ -468,7 +484,15 @@ fn walk(
                     };
                     let difference = i32::from((get(x, y) - prediction) as i16);
                     let size = (32 - difference.unsigned_abs().leading_zeros()) as u8;
-                    emit(Token::Difference(usize::from(i != 0), difference, size))?;
+                    emit(Token::Difference {
+                        component: i,
+                        local,
+                        value: difference,
+                        size,
+                        x,
+                        y,
+                        first_row: y == first_row * v,
+                    })?;
                 }
             }
         }
@@ -489,12 +513,33 @@ fn encode_native(
     }
     validate_metadata(segments, options.limits, metadata)?;
     let plan = Plan::new(frame, options, source)?;
+    let arithmetic = options.entropy_coding == EntropyCoding::Arithmetic;
+    let conditioning = options.arithmetic_conditioning;
+    let mut history_bytes = 0;
+    if arithmetic {
+        if conditioning.dc_lower > conditioning.dc_upper || conditioning.dc_upper > 15 {
+            return Err(Error::Invalid("lossless arithmetic conditioning"));
+        }
+        for s in 0..plan.count {
+            let scan = plan.get(s)?;
+            history_bytes = history_bytes.max(History::bytes(
+                &history_shapes(frame, source, scan)?[..scan.count],
+            )?);
+        }
+    }
+    let available = options.limits.max_memory_bytes - stored;
+    if history_bytes > available {
+        return Err(Error::LimitExceeded("lossless arithmetic history"));
+    }
     let mut histograms = [[0u64; 256]; 2];
-    if options.optimize_huffman {
+    if !arithmetic && options.optimize_huffman {
         for s in 0..plan.count {
             walk(frame, source, plan.get(s)?, &mut |token| {
-                if let Token::Difference(group, _, size) = token {
-                    histograms[group][size as usize] += 1;
+                if let Token::Difference {
+                    component, size, ..
+                } = token
+                {
+                    histograms[usize::from(component != 0)][size as usize] += 1;
                 }
                 Ok(())
             })?;
@@ -507,12 +552,12 @@ fn encode_native(
             Codebook::lossless_fixed()
         }
     };
-    let books = [make(0)?, make(1)?];
-    let mut out = Output::new(
-        options
-            .max_output_bytes
-            .min(options.limits.max_memory_bytes - stored),
-    );
+    let books = if arithmetic {
+        None
+    } else {
+        Some([make(0)?, make(1)?])
+    };
+    let mut out = Output::new(options.max_output_bytes.min(available - history_bytes));
     out.marker(0xd8)?;
     let mut metadata_index = 0;
     emit_metadata(&mut out, segments, &mut metadata_index, 0, metadata.icc)?;
@@ -526,10 +571,23 @@ fn encode_native(
         header[6 + 3 * i] = c.id;
         header[7 + 3 * i] = (c.horizontal_sampling << 4) | c.vertical_sampling;
     }
-    out.segment(0xc3, &header[..6 + 3 * frame.components.len()])?;
-    books[0].emit(&mut out, 0, 0)?;
-    if frame.components.len() > 1 {
-        books[1].emit(&mut out, 0, 1)?;
+    out.segment(
+        if arithmetic { 0xcb } else { 0xc3 },
+        &header[..6 + 3 * frame.components.len()],
+    )?;
+    if let Some(books) = &books {
+        books[0].emit(&mut out, 0, 0)?;
+        if frame.components.len() > 1 {
+            books[1].emit(&mut out, 0, 1)?;
+        }
+    } else {
+        let mut dac = [0; 4];
+        let groups = if frame.components.len() == 1 { 1 } else { 2 };
+        for i in 0..groups {
+            dac[2 * i] = i as u8;
+            dac[2 * i + 1] = conditioning.dc_lower | (conditioning.dc_upper << 4);
+        }
+        out.segment(0xcc, &dac[..2 * groups])?;
     }
     let mut previous_interval = 0;
     for s in 0..plan.count {
@@ -551,26 +609,70 @@ fn encode_native(
         sos[1 + 2 * scan.count] = scan.predictor;
         sos[3 + 2 * scan.count] = scan.point;
         out.segment(0xda, &sos[..4 + 2 * scan.count])?;
-        walk(frame, source, scan, &mut |token| match token {
-            Token::Restart(i) => {
-                out.pad()?;
-                out.marker(0xd0 + i)
-            }
-            Token::Difference(group, difference, size) => {
-                books[group].write(&mut out, size)?;
-                if size != 0 && size != 16 {
-                    let amplitude = (if difference < 0 {
-                        difference - 1
-                    } else {
-                        difference
-                    }) as u32
-                        & ((1u32 << size) - 1);
-                    out.write_bits(amplitude, size)?;
+        if let Some(books) = &books {
+            walk(frame, source, scan, &mut |token| match token {
+                Token::Restart(i) => {
+                    out.pad()?;
+                    out.marker(0xd0 + i)
                 }
-                Ok(())
-            }
-        })?;
-        out.pad()?;
+                Token::Difference {
+                    component,
+                    value: difference,
+                    size,
+                    ..
+                } => {
+                    books[usize::from(component != 0)].write(&mut out, size)?;
+                    if size != 0 && size != 16 {
+                        let amplitude = (if difference < 0 {
+                            difference - 1
+                        } else {
+                            difference
+                        }) as u32
+                            & ((1u32 << size) - 1);
+                        out.write_bits(amplitude, size)?;
+                    }
+                    Ok(())
+                }
+            })?;
+            out.pad()?;
+        } else {
+            let mut history = History::new(
+                &history_shapes(frame, source, scan)?[..scan.count],
+                history_bytes,
+            )?;
+            let mut statistics = Statistics::default();
+            let mut coder = Coder::new(&mut out);
+            walk(frame, source, scan, &mut |token| match token {
+                Token::Restart(index) => {
+                    coder.restart(index)?;
+                    statistics.reset();
+                    Ok(())
+                }
+                Token::Difference {
+                    component,
+                    local,
+                    value,
+                    x,
+                    y,
+                    first_row,
+                    ..
+                } => {
+                    let (left, above) = history.context(local, x, y, first_row);
+                    let class = statistics.encode(
+                        &mut coder,
+                        usize::from(component != 0),
+                        left,
+                        above,
+                        value,
+                        conditioning.dc_lower,
+                        conditioning.dc_upper,
+                    )?;
+                    history.set(local, x, y, class);
+                    Ok(())
+                }
+            })?;
+            coder.finish()?;
+        }
     }
     emit_metadata(
         &mut out,
@@ -581,4 +683,25 @@ fn encode_native(
     )?;
     out.marker(0xd9)?;
     Ok(out.bytes)
+}
+
+fn history_shapes(
+    frame: &FrameHeader,
+    source: Source<'_>,
+    scan: Scan,
+) -> Result<[(usize, usize); 4]> {
+    let (cols, _, _) = geometry(frame, source, scan)?;
+    let mut shapes = [(0, 0); 4];
+    for (j, &i) in scan.indices[..scan.count].iter().enumerate() {
+        let c = frame.components[i];
+        shapes[j] = if scan.count == 1 {
+            (source.shape(i).0, 1)
+        } else {
+            (
+                cols * c.horizontal_sampling as usize,
+                c.vertical_sampling as usize,
+            )
+        };
+    }
+    Ok(shapes)
 }

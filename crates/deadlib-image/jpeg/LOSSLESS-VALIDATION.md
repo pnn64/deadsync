@@ -1,6 +1,6 @@
 # Predictive lossless validation
 
-The SOF3 decoder implements T.81 Annex H for unsigned precision P=2..16.
+The SOF3/SOF11 decoder implements T.81 Annex H for unsigned precision P=2..16.
 `decode_lossless(input, limits)` returns native `u16` planes, one
 `LosslessCoding { predictor, point_transform }` record per component, borrowed
 APPn/COM segments, scan count and the byte position after EOI. It does not apply
@@ -145,7 +145,94 @@ and are not claimed as successful C comparisons. Extracting the common metadata
 helpers leaves all 600 earlier C-verified DCT encoder hashes unchanged; see
 `tests/reports/rewrite-lossless-refactor-turbo.json`.
 
-Arithmetic SOF11, differential/hierarchical lossless, DNL and
+## Native SOF11 arithmetic coding
+
+The same decoder accepts arithmetic lossless SOF11. Select
+`LosslessOptions::entropy_coding = EntropyCoding::Arithmetic` to encode it.
+The encoder skips Huffman collection and writes DAC rather than DHT. The shared
+`ArithmeticConditioning` L/U bounds apply to both lossless destinations; AC split
+has no role in this process. Decoder destinations 0..3 accept independent DAC
+values and the Annex H defaults L=0,U=1 when DAC is absent.
+
+The native H.1.2.3 model contains 158 bins per table. Five signed difference
+classes select 25 left/above contexts, with 100 bins for zero/sign/size decisions
+and two sets of 29 magnitude bins selected by the above class. Magnitudes through
+32768 are supported at every precision, with modulo-65536 reconstruction.
+All bins reset at each scan/restart. Above conditioning is zero on the first
+row of each component at a scan/restart, and left conditioning is zero at each
+line's first sample. A flat class buffer retains one row per vertical sampling
+phase, consuming an old column's above class before replacing it. It does not
+allocate an image-sized difference grid. History allocation is checked against
+remaining memory before allocation, and encoder output reserves room for it.
+
+### Independent JPEG XT gate
+
+[Thomas Richter's JPEG XT reference](https://github.com/thorfdbg/libjpeg) is
+pinned at `702114c8130ae818ccd2354cc03e879dac69e579`. It is built with MSVC
+19.44/v143 as a Win32 Release CLI and static reference library. The checked-in
+`tests/oracle/jpegxt-lossless-table-selection.patch` selects entropy destination
+zero for predictive scans: the upstream encoder otherwise tries to look up
+nonexistent DCT quantizers and aborts before encoding. This two-line setup fix
+does not change its arithmetic coder, predictors or decoder. The report pins
+both the patch and executable hashes. The native codec does not link or copy
+the reference implementation.
+
+```text
+git clone https://github.com/thorfdbg/libjpeg.git crates/deadlib-image/jpeg/experiments/jpegxt-reference
+git -C crates/deadlib-image/jpeg/experiments/jpegxt-reference checkout 702114c8130ae818ccd2354cc03e879dac69e579
+git -C crates/deadlib-image/jpeg/experiments/jpegxt-reference apply ../../tests/oracle/jpegxt-lossless-table-selection.patch
+MSBuild crates/deadlib-image/jpeg/experiments/jpegxt-reference/vs15.0/jpeg/jpeg.sln /t:jpeg /p:Configuration=Release /p:Platform=Win32 /p:PlatformToolset=v143 /p:WindowsTargetPlatformVersion=10.0 /m:1
+python crates/deadlib-image/jpeg/tests/reference_lossless_arithmetic.py --native crates/deadlib-image/jpeg/experiments/arithmetic-encode-target/release/examples/lossless_encode.exe --inspect crates/deadlib-image/jpeg/experiments/arithmetic-encode-target/release/examples/lossless_inspect.exe --reference crates/deadlib-image/jpeg/experiments/jpegxt-reference/vs15.0/jpeg/Release/jpeg.exe --out crates/deadlib-image/jpeg/experiments/lossless-arithmetic-gate --fixtures crates/deadlib-image/jpeg/tests/fixtures/lossless-arithmetic
+```
+
+The C++ CLI is invoked with `-c -U` for raw PGX component output, avoiding color
+conversion/upsampling. Every result must match native samples exactly, and raw
+source cases must match independently generated input integers after explicit
+Pt. All **3,240 cases** pass with zero runtime reference warnings: 180
+reference-encoded files, 540 native rewrites and 2,520 native raw encodes.
+They cover every P=2..16 and native predictor 1..7, gray/RGB/YCbCr/CMYK/YCCK,
+both CMYK conventions, no/one/three-row restarts, mixed/reversed component scans,
+DAC bounds (0,1),(0,0),(3,7),(15,15), common 4:4:4/4:2:0/4:1:0 sampling and
+full-range sample patterns. The reference encoder uses PSV=1,Pt=0. Forty-five
+reference files and raw results are pinned for C-free Cargo tests.
+See `tests/reports/lossless-arithmetic-jpegxt.json`.
+
+### Reference output limitations
+
+The reference decoder has two observed output failures, retained with hashes
+and exact reproduction data under `tests/fixtures/jpegxt-limitations`:
+
+- A two-bit Huffman stream with Pt=1 reconstructs source values 0/2 correctly
+  in the native decoder and libjpeg-turbo 3.2.1, while JPEG XT outputs 2/3.
+- Its own 16-bit 2x2-sampled arithmetic stream at 9x19, restart interval 5,
+  reconstructs the last first-component row incorrectly. All nine wrong
+  samples differ from the original unmodified source component; native output
+  matches that source. The main reference matrix uses heights divisible by the
+  vertical factor. Independent literal/native tests retain odd vertical rows.
+
+For nonzero-Pt comparisons the driver clears only Pt in a copy of each SOS,
+leaving frame precision, entropy bytes and all other controls unchanged. If a
+component's original Pt is t, its normalized decoded samples gain the constant
+`delta = 2^(P-1) - 2^(P-t-1)` from the changed initial prediction. All seven
+Annex H predictors preserve addition of a constant, including arithmetic half
+shifts, so the coded differences, their classes and all arithmetic decisions
+remain identical. The driver subtracts delta and restores t low zero bits
+before comparing both decoders and the source. It also checks the resulting
+sample range. This validates unchanged arithmetic entropy with independent
+prediction and normalization; it does not establish that the reference
+correctly decodes the original nonzero-Pt headers. The report distinguishes
+**857 direct-stream comparisons** from **2,383 header-normalized comparisons**
+and records reference input hashes.
+
+Native tests cover all 45 reference samples and every prefix, another 4,500
+bounded mutations, all four destinations, missing/default/invalid DAC,
+restart corruption, history memory limits, both entropy modes at all predictors
+and precisions, fractional/4x4 factors and 255 components. They preserve the
+two observed reference failures as native standards regressions. All **4,448
+earlier Huffman lossless encoder byte hashes remain unchanged**; see
+`tests/reports/lossless-arithmetic-refactor-huffman.json`.
+
+Differential/hierarchical lossless, DNL and
 incremental input/output remain required. Independent conformance corpora,
 IJG/mozjpeg checks, coverage-guided fuzzing and measured lossless performance
 also remain open. No complete-conformance or throughput claim is made.

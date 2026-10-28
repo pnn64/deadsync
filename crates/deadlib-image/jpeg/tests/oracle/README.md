@@ -95,3 +95,12 @@ components with predictor/Pt varying by component. Decoding accepts
 `decode input.jpg output.samples` and emits exact native `JLP1` planes.
 See ../../LOSSLESS-VALIDATION.md for format, commands, scope and the reference
 decoder's sampling/component-count limitations.
+
+SOF11 uses the independently built JPEG XT reference at
+`702114c8130ae818ccd2354cc03e879dac69e579`, with a documented predictive
+table-selection setup patch. `reference_lossless_arithmetic.py` compares native
+planes against raw PGX output (`-c -U`). It records direct streams separately
+from Pt header normalization, which avoids an observed reference output bug
+while leaving entropy unchanged. See ../../LOSSLESS-VALIDATION.md for the
+normalization proof, source/build pinning, setup patch and two retained
+reference limitation fixtures. No JPEG XT code is linked into the Rust crate.

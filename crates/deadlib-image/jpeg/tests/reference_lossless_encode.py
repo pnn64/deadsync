@@ -11,6 +11,8 @@ parser = argparse.ArgumentParser()
 for name in ("native", "inspect", "oracle", "out"):
     parser.add_argument("--" + name, required=True, type=Path)
 parser.add_argument("--resume", action="store_true")
+parser.add_argument("--expected-hashes", type=Path,
+                    help="Require unchanged bytes from an earlier C-verified report; skip redundant C decoding")
 args = parser.parse_args()
 args.out.mkdir(parents=True, exist_ok=True)
 snapshots = args.out / "tools"
@@ -56,6 +58,7 @@ def planes(data):
 
 
 records = []
+baseline = {r["case"]: r for r in json.loads(args.expected_hashes.read_text())["results"]} if args.expected_hashes else None
 
 
 def gate(name, command, expected, settings):
@@ -67,6 +70,15 @@ def gate(name, command, expected, settings):
         (args.out / "current-case.json").write_text(json.dumps({"case": name}) + "\n")
         image = work / "image.jpg"
         run(command)
+        if baseline is not None:
+            previous = baseline[name]
+            assert previous["source_sha256"] == source_hash
+            assert hashlib.sha256(image.read_bytes()).hexdigest() == previous["sha256"], (name, "changed output bytes")
+            record = previous.copy()
+            with checkpoint.open("a") as file:
+                file.write(json.dumps(record) + "\n")
+            records.append(record)
+            return
         run([args.oracle, "decode", image, work / "c.samples"])
         run([args.inspect, image, work / "native.samples"])
         result = (work / "c.samples").read_bytes()
@@ -159,6 +171,7 @@ report = {"reference": "libjpeg-turbo 3.2.1 lossless sample decoder", "tools": h
           "boundary_cases": (2 + 8 + 12 + 15 + 16) * 4 * 2 * 2,
           "rewrite_cases": 45 * 3 * 2 * 4, "reference_warnings": 0,
           "scope": "native SOF3 encoding; P=2..16, PSV=1..7, 1x1 factors, gray/RGB/YCbCr/CMYK/YCCK",
+          "validation": "byte-identical to previously C-verified files" if baseline is not None else "C/native/source sample comparisons",
           "results": records}
 (args.out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
 print(json.dumps({k: v for k, v in report.items() if k != "results"}))

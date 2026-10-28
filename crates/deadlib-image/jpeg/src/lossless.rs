@@ -1,7 +1,8 @@
 //! Predictive JPEG-1 sample reconstruction, T.81 Annex H.
-use crate::arithmetic::Conditioning;
+use crate::arithmetic::{Arithmetic, Conditioning};
 use crate::decode::{parse_huffman, parse_quant};
 use crate::entropy::{Bits, Huffman};
+use crate::lossless_arithmetic::{History, Statistics};
 use crate::{
     ColorSpace, ComponentPlane, Error, Event, FrameHeader, IccProfile, Limits, MarkerReader,
     MetadataSegment, PlanarImage, Process, Result,
@@ -100,7 +101,7 @@ impl<'a> LosslessImage<'a> {
     }
     pub(crate) fn validate(&self) -> Result<usize> {
         let f = &self.frame;
-        if f.process != Process::Lossless
+        if !matches!(f.process, Process::Lossless | Process::ArithmeticLossless)
             || f.width == 0
             || f.height == 0
             || !(2..=16).contains(&f.precision)
@@ -262,7 +263,7 @@ fn allocate(
     Ok((components, coding, bytes))
 }
 
-/// Decode SOF3 predictive lossless Huffman JPEG into exact native sample planes.
+/// Decode SOF3/SOF11 predictive Huffman/arithmetic JPEG into native sample planes.
 pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>> {
     let mut reader = MarkerReader::new(input)?;
     let mut frame = None;
@@ -333,8 +334,11 @@ pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>
                     return Err(Error::Invalid("multiple frames without hierarchy"));
                 }
                 let header = FrameHeader::parse(marker, data)?;
-                if header.process != Process::Lossless {
-                    return Err(Error::Unsupported("lossless Huffman frame"));
+                if !matches!(
+                    header.process,
+                    Process::Lossless | Process::ArithmeticLossless
+                ) {
+                    return Err(Error::Unsupported("non-differential lossless frame"));
                 }
                 if header.height == 0 {
                     return Err(Error::Unsupported("DNL height"));
@@ -357,6 +361,10 @@ pub fn decode_lossless(input: &[u8], limits: Limits) -> Result<LosslessImage<'_>
                     &mut coding,
                     &tables,
                     interval,
+                    conditioning,
+                    limits
+                        .max_memory_bytes
+                        .saturating_sub(memory_bytes + metadata_bytes),
                 )?;
             }
             Event::Segment { marker: 0xdc, .. } => return Err(Error::Unsupported("DNL height")),
@@ -407,6 +415,8 @@ fn scan(
     coding: &mut [LosslessCoding],
     tables: &[Option<Huffman>; 8],
     interval: usize,
+    conditioning: Conditioning,
+    available: usize,
 ) -> Result<()> {
     if header.len() < 4 {
         return Err(Error::Invalid("SOS length"));
@@ -433,7 +443,10 @@ fn scan(
             .position(|c| c.id == pair[0])
             .ok_or(Error::Invalid("SOS component id"))?;
         let table = (pair[1] >> 4) as usize;
-        if table > 3 || pair[1] & 15 != 0 || tables[table].is_none() {
+        if table > 3
+            || pair[1] & 15 != 0
+            || (frame.process == Process::Lossless && tables[table].is_none())
+        {
             return Err(Error::Invalid("lossless entropy table selector"));
         }
         if coding[i].predictor != 0 || selected[..j].iter().any(|s| s.0 == i) {
@@ -463,17 +476,43 @@ fn scan(
         return Err(Error::Invalid("lossless restart row boundary"));
     }
     let mut bits = Bits::new(entropy);
+    let mut arithmetic = if frame.process == Process::ArithmeticLossless {
+        let mut shapes = [(0, 0); 4];
+        for (j, &(i, _)) in selected[..n].iter().enumerate() {
+            let c = &components[i];
+            shapes[j] = if n == 1 {
+                (c.width, 1)
+            } else {
+                (
+                    cols * c.spec.horizontal_sampling as usize,
+                    c.spec.vertical_sampling as usize,
+                )
+            };
+        }
+        Some((
+            Arithmetic::new(entropy)?,
+            Statistics::default(),
+            History::new(&shapes[..n], available)?,
+        ))
+    } else {
+        None
+    };
     let mut restart = 0;
     let mut first_row = 0;
     let maximum = (1u32 << (frame.precision - point)) - 1;
     let initial = 1i32 << (frame.precision - point - 1);
     for mcu in 0..cols * rows {
         if interval != 0 && mcu != 0 && mcu % interval == 0 {
-            bits.restart(restart)?;
+            if let Some((coder, statistics, _)) = &mut arithmetic {
+                coder.restart(restart)?;
+                statistics.reset();
+            } else {
+                bits.restart(restart)?;
+            }
             restart = (restart + 1) & 7;
             first_row = mcu / cols;
         }
-        for &(i, table) in &selected[..n] {
+        for (j, &(i, table)) in selected[..n].iter().enumerate() {
             let c = &mut components[i];
             let (h, v) = if n == 1 {
                 (1, 1)
@@ -512,14 +551,28 @@ fn scan(
                     } else {
                         predictor(selection, a, b, cc)
                     };
-                    let size = tables[table].as_ref().unwrap().decode(&mut bits)?;
-                    if size > 16 {
-                        return Err(Error::Invalid("lossless difference category"));
-                    }
-                    let difference = if size == 16 {
-                        32768
+                    let difference = if let Some((coder, statistics, history)) = &mut arithmetic {
+                        let (left, above) = history.context(j, x, y, y == first_row * v);
+                        let (difference, class) = statistics.decode(
+                            coder,
+                            table,
+                            left,
+                            above,
+                            conditioning.dc_lower[table],
+                            conditioning.dc_upper[table],
+                        )?;
+                        history.set(j, x, y, class);
+                        difference
                     } else {
-                        bits.receive(size)?
+                        let size = tables[table].as_ref().unwrap().decode(&mut bits)?;
+                        if size > 16 {
+                            return Err(Error::Invalid("lossless difference category"));
+                        }
+                        if size == 16 {
+                            32768
+                        } else {
+                            bits.receive(size)?
+                        }
                     };
                     let value = (prediction + difference) as u16;
                     if u32::from(value) > maximum {
@@ -530,7 +583,11 @@ fn scan(
             }
         }
     }
-    bits.finish()?;
+    if let Some((coder, _, _)) = arithmetic {
+        coder.finish()?;
+    } else {
+        bits.finish()?;
+    }
     for &(i, _) in &selected[..n] {
         coding[i] = LosslessCoding {
             predictor: selection,

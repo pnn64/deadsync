@@ -206,7 +206,7 @@ Verified milestones:
   lossless, hierarchy, DNL/abbreviated streams, incremental I/O, other references
   and conformance, coverage-guided fuzzing and all measured performance work
   remain required.
-- Predictive lossless Huffman encoder milestone: native SOF3 at P=2..16, all
+- `57ee5b0d7`: native SOF3 at P=2..16, all
   seven predictors, explicit Pt, fixed/Annex K optimized tables, whole-row
   restarts, generated and borrowed caller scans, mixed predictor/Pt/restart
   parameters, original component IDs/sampling and the full 255-component range.
@@ -230,3 +230,32 @@ Verified milestones:
   Arithmetic/differential lossless, hierarchy, DNL/abbreviated streams,
   incremental I/O, other reference/conformance corpora, coverage-guided fuzzing
   and all measured performance/optimization work remain required.
+- Arithmetic lossless milestone: native SOF11 decoding/encoding at P=2..16,
+  Annex H's 25 two-dimensional contexts/158 bins, four decoder destinations,
+  per-table DAC/defaults, modulo differences through magnitude 32768, row
+  restarts, sample planes, custom scans and shared/native pixel entry points.
+  A bounded flat difference-class history stores one row per vertical sampling
+  phase. Allocation is checked before use, and encoder output reserves room for
+  it. Full/fractional/4x4 sampling and 255 components run through both entropy
+  modes in native tests. All 4,448 earlier Huffman lossless output hashes remain
+  unchanged after sharing the sample traversal.
+  A new independently built JPEG XT reference is pinned at commit
+  702114c8130ae818ccd2354cc03e879dac69e579. Its predictive scan setup needs a
+  documented two-line table-selection fix; its coder, predictors and decoder
+  are unchanged. All 3,240 exact comparisons pass with zero runtime reference
+  warnings: 180 reference encodes, 540 native rewrites and 2,520 native raw
+  encodes. The evidence distinguishes 857 direct streams from 2,383 comparisons
+  with only Pt headers normalized, preserving entropy and applying the derived
+  constant prediction offset. Both observed reference output failures (Pt and
+  a partial vertical MCU row) are retained with independent expected samples;
+  the native codec preserves Annex H semantics. See LOSSLESS-VALIDATION.md for
+  the proof, oracle limitations, patch and reproduction commands.
+  Forty-five additional pinned reference files, every prefix, 4,500 new bounded
+  mutations, all destinations/default DAC, restart corruption, history budgets
+  and the reference limitations run without a C compiler. All 90 tests pass in
+  release and isolated debug builds; rustfmt, Clippy and rustdoc with warnings
+  denied pass. The retained reports are lossless-arithmetic-jpegxt.json and
+  lossless-arithmetic-refactor-huffman.json under tests/reports.
+  Differential/hierarchical modes, DNL/abbreviated streams, incremental I/O,
+  other reference/conformance corpora, coverage-guided fuzzing and all measured
+  performance/optimization work remain required.
