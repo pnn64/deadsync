@@ -53,8 +53,15 @@ pub fn quad(bits: &mut BitReader<'_>, table_b: bool) -> Result<[i16; 4], Error> 
     let mut cursor = *bits;
     let value = if table_b {
         15 ^ cursor.read(4)? as u8
+    } else if cursor.flag()? {
+        0
     } else {
-        symbol(&mut cursor, tables::ROOTS[32])?
+        let width = cursor.remaining().min(5) as u32;
+        let mut lookahead = cursor;
+        let prefix = lookahead.read(width)? << (5 - width);
+        let entry = tables::COUNT1[prefix as usize];
+        cursor.skip((entry >> 8) as usize)?;
+        entry as u8
     };
     let layout = tables::SIGN_LAYOUT[value as usize];
     let signs = cursor.read(u32::from(layout & 7))? as usize;
