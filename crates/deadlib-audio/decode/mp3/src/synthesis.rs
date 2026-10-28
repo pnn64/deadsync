@@ -119,12 +119,14 @@ impl Synthesis {
     /// sixteen 64-value matrix outputs, avoiding a full history copy per slot.
     pub fn process(&mut self, subbands: &[f64; 32], pcm: &mut [f64; 32]) {
         self.offset = (self.offset + 960) & 1023;
-        for n in 0..64 {
-            let mut value = 0.0;
-            for (k, &sample) in subbands.iter().enumerate() {
-                value += sample * tables::SYNTHESIS[n][k];
+        let values = &mut self.values[self.offset..self.offset + 64];
+        values.fill(0.0);
+        // Contiguous output lanes let the compiler vectorize without changing
+        // the accumulation order of any sample.
+        for (&sample, coefficients) in subbands.iter().zip(&tables::SYNTHESIS) {
+            for (value, &coefficient) in values.iter_mut().zip(coefficients) {
+                *value += sample * coefficient;
             }
-            self.values[self.offset + n] = value;
         }
         for (n, sample) in pcm.iter_mut().enumerate() {
             let mut value = 0.0;
