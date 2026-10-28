@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [buffered verification and recovery measurements](RECOVERY.md) cover
+The latest [page-buffer and packet-start measurements](BUFFERS.md) cover complete
+page copies, short-read initialization and reused index searches, including CPU
+cycles, allocation counters and exact behavior comparisons.
+
+The earlier [buffered verification and recovery measurements](RECOVERY.md) cover
 reused page validation and word scans for synchronization and pull recovery,
 with exact parser/IO comparisons and isolated CPU/heap measurements.
 

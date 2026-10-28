@@ -8,7 +8,7 @@ mod heap;
 use deadlib_audio_decode_ogg::*;
 use std::{
     hint::black_box,
-    io::{self, Write},
+    io::{self, Read, Write},
 };
 
 fn probe(label: &str, iterations: usize, mut work: impl FnMut()) {
@@ -27,6 +27,17 @@ impl Write for Sink {
     }
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
+    }
+}
+
+struct Capped<'a> {
+    input: &'a [u8],
+    limit: usize,
+}
+impl Read for Capped<'_> {
+    fn read(&mut self, output: &mut [u8]) -> io::Result<usize> {
+        let length = output.len().min(self.limit);
+        self.input.read(&mut output[..length])
     }
 }
 
@@ -167,6 +178,24 @@ fn main() {
             &vec![37; n],
         )
         .unwrap();
+        for limit in [1, 7, 4096, usize::MAX] {
+            probe(
+                &format!("capped-reader/{n}/{limit}"),
+                if n >= 4096 { 1 } else { 1000 },
+                || {
+                    let mut reader = PageReader::new(Capped {
+                        input: black_box(&bytes),
+                        limit,
+                    });
+                    let mut pages = 0;
+                    while let Some(page) = reader.next_page().unwrap() {
+                        black_box(page);
+                        pages += 1;
+                    }
+                    assert_eq!(pages, 1);
+                },
+            );
+        }
         for chunk in [1, 7, 4096, usize::MAX] {
             probe(
                 &format!("incremental/{n}/{chunk}"),
@@ -320,6 +349,16 @@ fn main() {
             pages.push((page, offset as u64));
             offset += len;
         }
+        let index = OggIndex::read(bytes.as_slice(), IndexOptions::default()).unwrap();
+        let mut number = 0;
+        probe(&format!("packet-start/{history}"), 10_000, || {
+            number = (number + 17) & 2047;
+            black_box(
+                index
+                    .packet_start_page(black_box(history), black_box(number))
+                    .unwrap(),
+            );
+        });
         probe(&format!("chained-demux/{history}"), 8, || {
             let mut demux = Demuxer::default();
             for &(page, offset) in black_box(&pages) {

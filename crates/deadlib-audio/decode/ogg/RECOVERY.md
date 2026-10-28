@@ -1,5 +1,8 @@
 # Buffered verification and recovery scans, 2026-10-28
 
+The later [page-buffer and packet-start pass](BUFFERS.md) measures complete-page
+copies, short-read initialization and reused index searches against this baseline.
+
 This pass follows [word loops and page bounds](WORD_LOOPS.md), using production
 source `dbd98f729` as its baseline. Three commits reduce repeated validation and
 byte-at-a-time transport searches while preserving parser and IO observations.
