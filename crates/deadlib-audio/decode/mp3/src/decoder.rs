@@ -177,9 +177,8 @@ impl FrameDecoder {
     }
     pub(crate) fn drain(&mut self, header: FrameHeader) -> Result<(), Error> {
         for channel in 0..header.channels() {
-            self.spectra[channel].fill(0.0);
-            self.hybrid[channel].process(&mut self.spectra[channel], 0, 0, &mut self.subbands)?;
-            let silent = self.subbands.iter().all(|&value| value == 0.0);
+            self.hybrid[channel].process_silence(&mut self.subbands);
+            let silent = is_silent(&self.subbands);
             for t in 0..18 {
                 let mut pcm = [0.0; 32];
                 if silent {
@@ -274,13 +273,17 @@ impl FrameDecoder {
                 } else {
                     0
                 };
-                self.hybrid[channel].process(
-                    &mut self.spectra[channel],
-                    info.block_type,
-                    mixed,
-                    &mut self.subbands,
-                )?;
-                let silent = self.subbands.iter().all(|&value| value == 0.0);
+                if is_silent(&self.spectra[channel]) {
+                    self.hybrid[channel].process_silence(&mut self.subbands);
+                } else {
+                    self.hybrid[channel].process(
+                        &mut self.spectra[channel],
+                        info.block_type,
+                        mixed,
+                        &mut self.subbands,
+                    )?;
+                }
+                let silent = is_silent(&self.subbands);
                 for t in 0..18 {
                     let mut pcm = [0.0; 32];
                     if silent {
@@ -306,5 +309,35 @@ impl FrameDecoder {
             self.right_active = false;
         }
         Ok(())
+    }
+}
+
+#[inline]
+fn is_silent(values: &[f64; 576]) -> bool {
+    // Both zero signs have no magnitude bits; OR cannot cancel a nonzero bit.
+    values.iter().fold(0, |bits, value| bits | value.to_bits()) & 0x7fff_ffff_ffff_ffff == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_silent;
+
+    #[test]
+    fn silent_detection_covers_every_bit_and_coefficient() {
+        for zero in [0.0, -0.0] {
+            let mut values = [zero; 576];
+            assert!(is_silent(&values));
+            for position in 0..576 {
+                for bit in 0..64 {
+                    values[position] = f64::from_bits(1 << bit);
+                    assert_eq!(is_silent(&values), values.iter().all(|&v| v == 0.0));
+                }
+                for bits in [u64::MAX, 0x7ff0_0000_0000_0000, 0x7ff0_0000_0000_0001] {
+                    values[position] = f64::from_bits(bits);
+                    assert!(!is_silent(&values));
+                }
+                values[position] = zero;
+            }
+        }
     }
 }

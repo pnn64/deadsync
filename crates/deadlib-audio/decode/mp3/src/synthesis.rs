@@ -103,6 +103,20 @@ impl Hybrid {
         }
         Ok(())
     }
+    pub(crate) fn process_silence(&mut self, output: &mut [f64; 576]) {
+        for (band, overlap) in self.overlap.iter().enumerate() {
+            for (n, &sample) in overlap.iter().enumerate() {
+                // Preserve the normal overlap-add rounding of signed zero.
+                let value = sample + 0.0;
+                output[n * 32 + band] = if band & 1 != 0 && n & 1 != 0 {
+                    -value
+                } else {
+                    value
+                };
+            }
+        }
+        self.overlap.fill([0.0; 18]);
+    }
 }
 
 #[derive(Clone)]
@@ -181,7 +195,56 @@ impl Synthesis {
 
 #[cfg(test)]
 mod tests {
-    use super::Synthesis;
+    use super::{Hybrid, Synthesis};
+
+    #[test]
+    fn silent_hybrid_granules_preserve_tail_bits_and_resumption() {
+        for (kind, mixed) in [(0, 0), (1, 0), (3, 0), (2, 0), (2, 2), (2, 4)] {
+            for pattern in 0..4 {
+                for prime in 0..3 {
+                    let mut reference = Hybrid::new();
+                    let mut expected = [0.0; 576];
+                    let source = std::array::from_fn(|n| match pattern {
+                        1 => f64::from_bits(1 + (n % 3) as u64),
+                        2 if n % 17 == 0 => f64::from_bits(0x7ff8_0000_0000_0000 | n as u64),
+                        3 => -0.0,
+                        _ => (n as f64 * 0.13).sin(),
+                    });
+                    for _ in 0..prime {
+                        let mut input = source;
+                        reference
+                            .process(&mut input, kind, mixed, &mut expected)
+                            .unwrap();
+                    }
+                    if pattern == 3 && prime != 0 {
+                        reference.overlap.fill([-0.0; 18]);
+                    }
+                    let mut fast = reference.clone();
+                    let mut actual = [0.0; 576];
+                    for round in 0..4 {
+                        let mut zero =
+                            std::array::from_fn(|n| if (n + round) & 1 == 0 { 0.0 } else { -0.0 });
+                        reference
+                            .process(&mut zero, kind, mixed, &mut expected)
+                            .unwrap();
+                        fast.process_silence(&mut actual);
+                        assert_eq!(actual.map(f64::to_bits), expected.map(f64::to_bits));
+                        assert_eq!(
+                            fast.overlap.map(|row| row.map(f64::to_bits)),
+                            reference.overlap.map(|row| row.map(f64::to_bits))
+                        );
+                    }
+                    let mut input = source;
+                    reference
+                        .process(&mut input, kind, mixed, &mut expected)
+                        .unwrap();
+                    let mut input = source;
+                    fast.process(&mut input, kind, mixed, &mut actual).unwrap();
+                    assert_eq!(actual.map(f64::to_bits), expected.map(f64::to_bits));
+                }
+            }
+        }
+    }
 
     #[test]
     fn silent_slots_preserve_history_at_every_ring_phase() {
