@@ -215,23 +215,32 @@ impl Demuxer {
         // Preflight the entire page before emitting any of its packets.
         let mut length = stream.partial.len();
         let mut pending = self.pending - length;
-        for fragment in page.fragments() {
-            length = length
-                .checked_add(fragment.data.len())
-                .ok_or(Error::LimitExceeded("packet size"))?;
-            if length > self.limits.max_packet_bytes {
-                return Err(Error::LimitExceeded("packet size"));
-            }
-            // Completed in-page packets do not need assembly allocation.
-            if (!fragment.starts_packet || !fragment.ends_packet)
-                && pending
-                    .checked_add(length)
-                    .is_none_or(|n| n > self.limits.max_pending_bytes)
-            {
-                return Err(Error::LimitExceeded("pending packet bytes"));
-            }
-            if fragment.ends_packet {
-                length = 0;
+        let body = page.body().len();
+        // Without buffered packet bytes, the body size bounds every packet.
+        if length != 0
+            || body > self.limits.max_packet_bytes
+            || pending
+                .checked_add(body)
+                .is_none_or(|n| n > self.limits.max_pending_bytes)
+        {
+            for fragment in page.fragments() {
+                length = length
+                    .checked_add(fragment.data.len())
+                    .ok_or(Error::LimitExceeded("packet size"))?;
+                if length > self.limits.max_packet_bytes {
+                    return Err(Error::LimitExceeded("packet size"));
+                }
+                // Completed in-page packets do not need assembly allocation.
+                if (!fragment.starts_packet || !fragment.ends_packet)
+                    && pending
+                        .checked_add(length)
+                        .is_none_or(|n| n > self.limits.max_pending_bytes)
+                {
+                    return Err(Error::LimitExceeded("pending packet bytes"));
+                }
+                if fragment.ends_packet {
+                    length = 0;
+                }
             }
         }
         if header.is_eos()

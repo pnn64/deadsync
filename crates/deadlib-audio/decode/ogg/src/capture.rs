@@ -221,24 +221,32 @@ impl PacketCapture {
         let mut skipping = self.skipping;
         let mut length = self.partial.len();
         let mut continuing = self.continuing;
-        for fragment in page.fragments() {
-            continuing = !fragment.ends_packet;
-            if !skipping {
-                length = length
-                    .checked_add(fragment.data.len())
-                    .ok_or(Error::LimitExceeded("packet size"))?;
-                if length > self.limits.max_packet_bytes {
-                    return Err(Error::LimitExceeded("packet size"));
+        let body = page.body().len();
+        if length == 0
+            && body <= self.limits.max_packet_bytes
+            && body <= self.limits.max_pending_bytes
+        {
+            continuing = page.lacing().last().map_or(continuing, |&n| n == 255);
+        } else {
+            for fragment in page.fragments() {
+                continuing = !fragment.ends_packet;
+                if !skipping {
+                    length = length
+                        .checked_add(fragment.data.len())
+                        .ok_or(Error::LimitExceeded("packet size"))?;
+                    if length > self.limits.max_packet_bytes {
+                        return Err(Error::LimitExceeded("packet size"));
+                    }
+                    if (!fragment.starts_packet || !fragment.ends_packet)
+                        && length > self.limits.max_pending_bytes
+                    {
+                        return Err(Error::LimitExceeded("pending packet bytes"));
+                    }
                 }
-                if (!fragment.starts_packet || !fragment.ends_packet)
-                    && length > self.limits.max_pending_bytes
-                {
-                    return Err(Error::LimitExceeded("pending packet bytes"));
+                if fragment.ends_packet {
+                    length = 0;
+                    skipping = false;
                 }
-            }
-            if fragment.ends_packet {
-                length = 0;
-                skipping = false;
             }
         }
         if header.is_eos() && continuing {
