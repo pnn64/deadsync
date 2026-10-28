@@ -21,6 +21,59 @@ fn scalefactor_band_boundaries_and_mixed_alignment() {
 }
 
 #[test]
+fn switched_huffman_regions_count_long_and_short_window_bands() {
+    for rate in [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000] {
+        for mixed in [false, true] {
+            let bands = Bands::for_rate(rate).unwrap();
+            // Eight band entries: MPEG-1 mixed has eight long bands;
+            // LSF mixed has six long bands plus short band 3, windows 0 and 1.
+            let boundary = if !mixed {
+                3 * bands.short()[3] as usize
+            } else if rate >= 32000 {
+                36
+            } else if rate == 8000 {
+                96
+            } else {
+                48
+            };
+            let mut encoded = Vec::new();
+            for pair in 0..288 {
+                // Normative (1,0), positive sign: book 1 = 01|0;
+                // book 2 = 011|0. Distinct words expose a wrong boundary.
+                encoded.extend_from_slice(if pair * 2 < boundary {
+                    &[false, true, false]
+                } else {
+                    &[false, true, true, false]
+                });
+            }
+            let mut bytes = vec![0; encoded.len().div_ceil(8)];
+            for (n, &bit) in encoded.iter().enumerate() {
+                bytes[n / 8] |= u8::from(bit) << (7 - n % 8);
+            }
+            let mut bits = BitReader::bounded(&bytes, 0, encoded.len()).unwrap();
+            let info = GranuleChannel {
+                block_type: 2,
+                mixed_block: mixed,
+                big_values: 288,
+                table_select: [1, 2, 0],
+                region0_count: if mixed { 7 } else { 8 },
+                ..Default::default()
+            };
+            let mut output = [0; 576];
+            spectral::quantized(&mut bits, &info, bands, &mut output).unwrap();
+            assert_eq!(bits.position(), encoded.len(), "{rate} mixed={mixed}");
+            for (line, &value) in output.iter().enumerate() {
+                assert_eq!(
+                    value,
+                    i16::from(line % 2 == 0),
+                    "{rate} mixed={mixed} line={line}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn requantization_half_steps_preemphasis_and_short_gain() {
     let b = Bands::for_rate(44100).unwrap();
     let mut input = [0; 576];

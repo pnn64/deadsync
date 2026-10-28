@@ -19,7 +19,15 @@ pub fn quantized(
         return Err(Error::Invalid("spectral granule fields"));
     }
     let (first, second) = if info.block_type == 2 {
-        (3 * bands.short()[3] as usize, 576)
+        let first = if info.mixed_block {
+            // Mixed region zero has eight band entries. LSF uses six long
+            // bands, followed by short band 3 in the first two windows.
+            bands.mixed_lines()
+                + (8 - bands.mixed_long_bands()) * (bands.short()[4] - bands.short()[3]) as usize
+        } else {
+            3 * bands.short()[3] as usize
+        };
+        (first, 576)
     } else if info.block_type != 0 {
         (
             bands

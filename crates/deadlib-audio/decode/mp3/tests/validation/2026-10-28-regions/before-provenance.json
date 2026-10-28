@@ -1,0 +1,11 @@
+{
+  "passed": false,
+  "files": 18,
+  "sample_values": 1368576,
+  "binaries": {
+    "native": "508aff847d3b9c20f325ce62b2c007e395002fb58904a37035ebe26262a8e428",
+    "oracle": "621c5342e2d0ec404f97c84623933c19492fee37ba15cbf363f153c2c542c8a7"
+  },
+  "script_sha256": "d0efbcaed09a37df225220816eaf9f7af6d41b96aba1f5400b719f2009753257",
+  "numpy": "2.5.2"
+}

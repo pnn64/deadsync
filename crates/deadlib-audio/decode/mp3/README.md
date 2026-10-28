@@ -45,6 +45,8 @@ recorded in [ENCODER_COMPATIBILITY.md](ENCODER_COMPATIBILITY.md), including the
 short-padding gapless correction and unusable encoder configurations.
 The full-file [historical music gate](HISTORICAL.md) adds exact file/seek counts,
 three-reference PCM checks and explicit strict/recovery tests on damaged music.
+The final [cross-codebook region audit](REGIONS.md) corrects mixed LSF Huffman
+boundaries using independently encoded coefficients and direct PCM equations.
 
 ```sh
 cargo test --locked -p deadlib-audio-decode-mp3 --target-dir target/deadlib-mp3

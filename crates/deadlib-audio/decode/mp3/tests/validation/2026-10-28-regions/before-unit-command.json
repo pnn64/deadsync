@@ -1,0 +1,18 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--offline",
+    "--manifest-path",
+    "C:\\GitHub\\deadsync\\target\\deadlib-mp3-reference\\extracted-regions-final\\Cargo.toml",
+    "--target-dir",
+    "C:\\GitHub\\deadsync\\target\\deadlib-mp3-extracted-before",
+    "--test",
+    "spectral",
+    "switched_huffman_regions_count_long_and_short_window_bands"
+  ],
+  "expected_failure": true,
+  "exit_code": 101,
+  "old_spectral_sha256": "9333a66334c0d4a5c026810055b12c30d3206ea2ddc5af2aa89803fac9ee6ab2"
+}
