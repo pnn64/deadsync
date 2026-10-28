@@ -1,0 +1,24 @@
+[package]
+name = "deadlib-wav-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+deadlib-audio-decode-wav = { path = ".." }
+
+[[bin]]
+name = "wav"
+path = "fuzz_targets/wav.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+
+[profile.release]
+overflow-checks = true

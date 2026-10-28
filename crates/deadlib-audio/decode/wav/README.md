@@ -75,5 +75,7 @@ cargo test -p deadlib-audio-decode-wav
 
 See [COVERAGE.md](COVERAGE.md) for evidence and limitations and [PLAN.md](PLAN.md)
 for the full outstanding objective. The current implementation is under development.
+Bounded mutation, coverage-guided fuzzing and sanitizer evidence is recorded in
+[FUZZING.md](FUZZING.md).
 The first resident PCM16 comparison and allocation/cycle evidence is recorded in
 [PERFORMANCE.md](PERFORMANCE.md); wider formats and platforms remain unmeasured.

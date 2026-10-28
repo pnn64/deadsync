@@ -86,8 +86,14 @@ all 41 debug tests and Clippy pass. The metadata oracle matches independent fiel
 truth for all 12 fixtures and dr_wav for nine, with trailing-RF64 differences
 retained. See [METADATA.md](METADATA.md) for precise scope and limitations.
 
+Bounded fuzzing now adds four million checked deterministic mutations on x64/i686
+and two million x64 libFuzzer/AddressSanitizer executions with no failures. All
+42 integration tests pass in debug; the new mutation test also passes in release
+and i686, supplementing the 41-test release/i686 runs. See FUZZING.md for exact
+properties, seed provenance, hashes, raw logs and resource/coverage limits.
+
 Remaining work: forward-only audio convenience, metadata profile/semantic validation,
-wavl/slnt and multiple-data handling, oracle comparisons, fuzzing, sparse >4 GiB
+wavl/slnt and multiple-data handling, oracle comparisons, broader fuzzing, sparse >4 GiB
 evidence and broad performance coverage (the first PCM16 baseline is in
 [PERFORMANCE.md](PERFORMANCE.md)); forward-only audio convenience APIs,
 known-length nonseekable encoding, and extensible compressed formats. BW64 shares 64-bit container

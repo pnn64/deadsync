@@ -26,6 +26,10 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    profile/ADM semantics, XML compression and broad metadata benchmarks remain open.
 5. Differential validation against libsndfile, dr_wav, Symphonia; independent
    fixtures, malformed corpus, streaming split matrix and bounded fuzz campaigns.
+   Four million checked deterministic mutations pass across x64/i686, plus two
+   million x64 libFuzzer/AddressSanitizer executions. The shared harness checks
+   container/stream/seek agreement and metadata/codec state properties. See
+   FUZZING.md for hashes, limits and remaining coverage; this is not exhaustive.
 6. Reproducible comparative benchmarks: open/metadata/full read/stream/seek/encode,
    CPU cycles, allocations, peak memory; optimize measured bottlenecks with parity.
    Initial resident PCM16 Hound baseline and scoped heap/Windows cycle counts are

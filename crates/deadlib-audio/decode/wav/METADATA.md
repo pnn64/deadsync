@@ -81,4 +81,5 @@ The RF64 2009 listing names the two intra-sample words High/Low but comments the
 as low/high. `Marker::intra_sample_words` preserves physical DWORD order and makes
 no unverified combined-integer interpretation. Its sample and byte positions have
 unambiguous 64-bit access. Full BWF/BW64 application profile validation remains
-open, as do coverage-guided fuzzing, large metadata throughput and RSS measurements.
+open, as do large metadata throughput and RSS measurements. Bounded metadata
+mutation and coverage-guided/AddressSanitizer evidence is recorded in FUZZING.md.
