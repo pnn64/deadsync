@@ -85,10 +85,15 @@ pub fn crc32(bytes: &[u8]) -> u32 {
 }
 
 pub(crate) fn page_crc(bytes: &[u8]) -> u32 {
-    // Keep the masked header contiguous so its last word uses the wide update.
-    let mut header = [0; 26];
-    header[..22].copy_from_slice(&bytes[..22]);
-    update(update(0, &header), &bytes[26..])
+    // Fold bytes 16..22 and four implicit zero checksum bytes in one step.
+    let state = update(0, &bytes[..16]) ^ u32::from_be_bytes(bytes[16..20].try_into().unwrap());
+    let crc = TABLES[9][(state >> 24) as usize]
+        ^ TABLES[8][((state >> 16) & 255) as usize]
+        ^ TABLES[7][((state >> 8) & 255) as usize]
+        ^ TABLES[6][(state & 255) as usize]
+        ^ TABLES[5][bytes[20] as usize]
+        ^ TABLES[4][bytes[21] as usize];
+    update(crc, &bytes[26..])
 }
 
 #[cfg(test)]
