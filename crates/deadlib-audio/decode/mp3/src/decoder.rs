@@ -46,6 +46,17 @@ impl<'a> Pcm<'a> {
     pub fn planes(self) -> impl ExactSizeIterator<Item = &'a [f32]> + DoubleEndedIterator {
         (0..self.channels).map(move |channel| self.plane(channel).unwrap())
     }
+    /// Borrows a sample range from every plane, preserving its physical stride.
+    pub fn slice(self, range: std::ops::Range<usize>) -> Option<Self> {
+        if range.start > range.end || range.end > self.samples {
+            return None;
+        }
+        Some(Self {
+            data: &self.data[range.start..(self.channels - 1) * self.stride + range.end],
+            samples: range.end - range.start,
+            ..self
+        })
+    }
 }
 pub struct DecodedFrame<'a> {
     pub header: FrameHeader,
@@ -147,6 +158,36 @@ impl FrameDecoder {
         }
         self.output.fill(0.0);
         Ok(())
+    }
+    pub(crate) fn prime_reservoir(&mut self, payload: &[u8]) -> Result<(), Error> {
+        self.reservoir.push(0, payload, 0)?;
+        Ok(())
+    }
+    pub(crate) fn drain(&mut self, header: FrameHeader) -> Result<(), Error> {
+        for channel in 0..header.channels() {
+            self.spectra[channel].fill(0.0);
+            self.hybrid[channel].process(&mut self.spectra[channel], 0, 0, &mut self.subbands)?;
+            for t in 0..18 {
+                let mut pcm = [0.0; 32];
+                self.synthesis[channel].process(
+                    self.subbands[t * 32..t * 32 + 32].try_into().unwrap(),
+                    &mut pcm,
+                );
+                let start = channel * 576 + t * 32;
+                for (out, sample) in self.output[start..start + 32].iter_mut().zip(pcm) {
+                    *out = sample as f32;
+                }
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn drained_pcm(&self, header: FrameHeader) -> Pcm<'_> {
+        Pcm {
+            data: &self.output[..576 * header.channels()],
+            channels: header.channels(),
+            samples: 576,
+            stride: 576,
+        }
     }
     fn decode_inner(
         &mut self,

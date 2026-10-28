@@ -9,6 +9,7 @@ pub mod checksum;
 pub mod decoder;
 pub mod frame;
 pub mod huffman;
+pub mod indexed;
 pub mod reader;
 pub mod reservoir;
 pub mod scalefactors;
@@ -20,6 +21,10 @@ pub mod tags;
 
 pub use decoder::{DecodeOptions, DecodedFrame, FrameDecoder, Pcm};
 pub use frame::{ChannelMode, Frame, FrameHeader, FreeFormat, MpegVersion};
+pub use indexed::{
+    DECODER_DELAY, FileFrame, FileOptions, FrameIndex, IndexEntry, IndexedDecoder, SampleMode,
+    SampleRange,
+};
 pub use reader::{Metadata, Packet, PacketReader, ReaderOptions, TruncatedPolicy};
 pub use reservoir::Reservoir;
 pub use side::{GranuleChannel, SideInfo};

@@ -46,6 +46,10 @@ Passing a primitive test does not establish completion of its parent item.
 The goal remains active until decoding, encoding and their complete validation
 and performance requirements are implemented and verified.
 
+The current user goal is decoder correctness and encoder interoperability.
+Native encoding and performance work remain on the broader roadmap, but are
+outside this decoding-only goal and are not its completion criteria.
+
 Current checkpoint: foundation implemented; eight integration tests, all-target
 Clippy and 84 LAME/libmad structural comparisons (732 frames) pass. Evidence and
 explicit limitations are in COVERAGE.md. Scalefactor parsing now passes all
@@ -59,8 +63,11 @@ seven all-frequency window shapes. See RAW_PCM.md for exact criteria, reference
 disagreements and remaining limits. Read-backed raw packet/file/stream decoding
 now passes exact PCM/coordinate checks on nine read schedules for all 84 files
 and the 18 legacy PCM fixtures with one-byte reads; see STREAMING.md. Gapless
-sample mapping, seeking, adversarial campaigns, encoding and measured
-optimization remain required. The MPEG-2.5 8 kHz mixed-block disagreement is
+sample mapping and exact indexed seeking now pass 41 integration tests, 120
+LAME-file comparisons against three reference decoders, and indexed raw checks
+on the 18 legacy PCM pairs; see SEEKING.md. Adversarial campaigns, broader encoder
+compatibility, encoding and measured optimization remain required on the
+roadmap. The MPEG-2.5 8 kHz mixed-block disagreement is
 still open.
 
 ## Source material

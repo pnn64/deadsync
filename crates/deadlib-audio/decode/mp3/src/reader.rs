@@ -127,6 +127,9 @@ impl<R: Read> PacketReader<R> {
     pub fn get_ref(&self) -> &R {
         &self.source
     }
+    pub(crate) fn into_scanned(self) -> (R, Metadata) {
+        (self.source, self.metadata)
+    }
     /// Returns the source (which may have read ahead) and its unread lookahead.
     pub fn into_parts(mut self) -> (R, Vec<u8>) {
         self.buffer.copy_within(self.head.., 0);
