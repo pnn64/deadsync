@@ -79,3 +79,7 @@ rotate component DC/AC destinations. Scan layout 0 is interleaved sequential,
 component scans, and 3 refines every bit from Al=13 (12-bit) or Al=10 (8-bit)
 with reversed component/band scan order. APP markers are not copied by this coefficient-only client.
 See ../../ARITHMETIC-VALIDATION.md for reproduction, scope and retained evidence.
+The native arithmetic encoder gate uses `reference_arithmetic_encode.py` with
+this same C coefficient decoder. It snapshots executables automatically and
+supports verified checkpoint resumption; native encoder bytes are never taken
+from the reference library.

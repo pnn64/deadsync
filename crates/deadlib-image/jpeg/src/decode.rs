@@ -458,7 +458,6 @@ fn decode_scan(
                                 &mut classes[j],
                                 &mut predictors[j],
                                 conditioning,
-                                frame.precision,
                             )?;
                         } else {
                             statistics.sequential(
@@ -469,7 +468,6 @@ fn decode_scan(
                                 &mut classes[j],
                                 &mut predictors[j],
                                 conditioning,
-                                frame.precision,
                             )?;
                         }
                     } else if let Some(scan) = progression {

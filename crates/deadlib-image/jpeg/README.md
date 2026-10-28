@@ -18,7 +18,9 @@ Sequential SOF9 and progressive SOF10 arithmetic decoding use a native Annex D
 binary coder, Annex F/G coefficient contexts, DAC conditioning and restart
 resets. Progressive arithmetic includes spectral bands, DC/AC refinement and
 per-block end-of-band history. Arithmetic input can be rewritten as Huffman
-JPEG without changing its coefficients.
+JPEG without changing its coefficients when the coefficients fit the target
+Huffman process's magnitude categories. Arithmetic decisions use the full
+signed 16-bit model at either sample precision.
 
 `encode_coefficients(&coefficients, CodingOptions::default())` rewrites a JPEG
 without another lossy transform. It preserves quantizer values, visible blocks,
@@ -28,6 +30,12 @@ byte budget. The initial writer accepts one to four components. Metadata keeps
 its relative order; segments beyond the new last scan are emitted before EOI.
 Progressive encoding currently uses full-precision DC and AC bands; successive
 approximation scan generation remains planned.
+`CodingOptions::entropy_coding` selects `EntropyCoding::Huffman` (default) or
+native `EntropyCoding::Arithmetic`. Arithmetic output uses SOF9/SOF10, explicit
+DAC tables, configurable `ArithmeticConditioning` and the same restart,
+metadata, precision and sampling controls. `optimize_huffman` applies to
+Huffman output. The arithmetic writer does not collect a Huffman histogram or
+allocate a separate entropy buffer.
 
 `encode(&shared_image, EncodeOptions::default())` encodes shared grayscale/RGB
 images. Quality, output precision (8/12), subsampling, RGB-to-YCbCr conversion,
@@ -72,7 +80,7 @@ Limits bound pixels, coefficient/sample storage, metadata (including segment
 record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark; allocation instrumentation remains planned.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
-unsupported errors. Arithmetic encoding, predictive lossless, hierarchy,
+unsupported errors. Predictive lossless, hierarchy,
 DNL, streaming, additional encoder scan strategies, and the broader validation
 and performance work remain required.
 

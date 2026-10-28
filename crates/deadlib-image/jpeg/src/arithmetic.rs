@@ -3,10 +3,10 @@ use crate::progressive::ProgressiveScan;
 use crate::{Error, Result, ZIGZAG};
 
 #[derive(Clone, Copy)]
-struct Probability {
-    qe: u16,
-    lps: u8,
-    mps: u8,
+pub(crate) struct Probability {
+    pub qe: u16,
+    pub lps: u8,
+    pub mps: u8,
 }
 const fn p(qe: u16, lps: u8, mps: u8, switch: bool) -> Probability {
     Probability {
@@ -17,7 +17,7 @@ const fn p(qe: u16, lps: u8, mps: u8, switch: bool) -> Probability {
 }
 // T.81 Table D.3, independently transcribed from the rendered standard.
 // The high LPS-transition bit toggles the stored most-probable-symbol sense.
-const PROBABILITIES: [Probability; 113] = [
+pub(crate) const PROBABILITIES: [Probability; 113] = [
     p(0x5a1d, 1, 1, true),
     p(0x2586, 14, 2, false),
     p(0x1114, 16, 3, false),
@@ -292,8 +292,8 @@ impl Conditioning {
 }
 
 pub(crate) struct Statistics {
-    dc: [[u8; 49]; 4],
-    ac: [[u8; 245]; 4],
+    pub dc: [[u8; 49]; 4],
+    pub ac: [[u8; 245]; 4],
 }
 impl Default for Statistics {
     fn default() -> Self {
@@ -318,18 +318,9 @@ impl Statistics {
         previous_class: &mut usize,
         predictor: &mut i32,
         conditioning: Conditioning,
-        precision: u8,
     ) -> Result<()> {
-        self.dc_initial(
-            block,
-            coder,
-            dc,
-            previous_class,
-            predictor,
-            conditioning,
-            precision,
-        )?;
-        self.ac_initial(block, coder, ac, conditioning, precision, 1, 63, 0)
+        self.dc_initial(block, coder, dc, previous_class, predictor, conditioning)?;
+        self.ac_initial(block, coder, ac, conditioning, 1, 63, 0)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -343,19 +334,10 @@ impl Statistics {
         previous_class: &mut usize,
         predictor: &mut i32,
         conditioning: Conditioning,
-        precision: u8,
     ) -> Result<()> {
         if scan.ss == 0 {
             if scan.ah == 0 {
-                self.dc_initial(
-                    block,
-                    coder,
-                    dc,
-                    previous_class,
-                    predictor,
-                    conditioning,
-                    precision,
-                )?;
+                self.dc_initial(block, coder, dc, previous_class, predictor, conditioning)?;
                 block[0] = i16::try_from(*predictor << scan.al)
                     .map_err(|_| Error::Invalid("arithmetic progressive DC range"))?;
             } else {
@@ -363,16 +345,7 @@ impl Statistics {
                 block[0] |= i16::from(coder.fixed()?) << scan.al;
             }
         } else if scan.ah == 0 {
-            self.ac_initial(
-                block,
-                coder,
-                ac,
-                conditioning,
-                precision,
-                scan.ss,
-                scan.se,
-                scan.al,
-            )?;
+            self.ac_initial(block, coder, ac, conditioning, scan.ss, scan.se, scan.al)?;
         } else {
             self.ac_refine(block, coder, ac, scan)?;
         }
@@ -388,7 +361,6 @@ impl Statistics {
         previous_class: &mut usize,
         predictor: &mut i32,
         conditioning: Conditioning,
-        precision: u8,
     ) -> Result<()> {
         let state = &mut self.dc[dc];
         let context = *previous_class;
@@ -401,7 +373,7 @@ impl Statistics {
                 while coder.decode(&mut state[category])? != 0 {
                     bound <<= 1;
                     category += 1;
-                    if bound >= 1u32 << (precision + 3) || category > 34 {
+                    if bound >= 32768 || category > 34 {
                         return Err(Error::Invalid("arithmetic DC magnitude"));
                     }
                 }
@@ -415,7 +387,7 @@ impl Statistics {
                 }
             }
             magnitude += 1;
-            if magnitude >= 1u32 << (precision + 3) {
+            if magnitude > 32768 || (magnitude == 32768 && sign == 0) {
                 return Err(Error::Invalid("arithmetic DC magnitude"));
             }
             let lower = conditioning.dc_lower[dc];
@@ -435,10 +407,8 @@ impl Statistics {
         } else {
             *previous_class = 0;
         }
-        if *predictor < -(1i32 << (precision + 3)) || *predictor >= 1i32 << (precision + 3) {
-            return Err(Error::Invalid("arithmetic DC coefficient range"));
-        }
-        block[0] = *predictor as i16;
+        block[0] = i16::try_from(*predictor)
+            .map_err(|_| Error::Invalid("arithmetic DC coefficient range"))?;
         Ok(())
     }
 
@@ -449,7 +419,6 @@ impl Statistics {
         coder: &mut Arithmetic<'_>,
         ac: usize,
         conditioning: Conditioning,
-        precision: u8,
         ss: usize,
         se: usize,
         al: u8,
@@ -483,7 +452,7 @@ impl Statistics {
                     while coder.decode(&mut state[category])? != 0 {
                         bound <<= 1;
                         category += 1;
-                        if bound >= 1u32 << (precision + 2) {
+                        if bound >= 32768 {
                             return Err(Error::Invalid("arithmetic AC magnitude"));
                         }
                     }
@@ -498,7 +467,7 @@ impl Statistics {
                 }
             }
             magnitude += 1;
-            if magnitude >= 1u32 << (precision + 2) {
+            if magnitude > 32768 {
                 return Err(Error::Invalid("arithmetic AC magnitude"));
             }
             let value = if sign == 0 {

@@ -1,9 +1,11 @@
+use crate::arithmetic::Statistics;
+use crate::arithmetic_encode::Coder;
 use crate::huffman_encode::Codebook;
 use crate::metadata::{ICC_IDENTIFIER, is_icc};
 use crate::output::Output;
 use crate::{
-    CoefficientImage, Error, ICC_CHUNK_BYTES, MAX_ICC_BYTES, MetadataSegment, Process, Result,
-    ZIGZAG,
+    ArithmeticConditioning, CoefficientImage, Error, ICC_CHUNK_BYTES, MAX_ICC_BYTES,
+    MetadataSegment, Process, Result, ZIGZAG,
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -22,12 +24,24 @@ pub struct MetadataOptions<'a> {
     pub icc: IccWrite<'a>,
 }
 
+/// Entropy coder used for newly encoded JPEG scans.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum EntropyCoding {
+    #[default]
+    Huffman,
+    Arithmetic,
+}
+
 /// Entropy coding controls shared by pixel encoding and coefficient rewriting.
 #[derive(Clone, Copy, Debug)]
 pub struct CodingOptions {
     /// Spectral progressive output: an interleaved DC scan and one AC scan per
     /// component. Coefficients are transmitted at full precision in each band.
     pub progressive: bool,
+    pub entropy_coding: EntropyCoding,
+    /// Used only with arithmetic coding. Both encoder tables use these values.
+    pub arithmetic_conditioning: ArithmeticConditioning,
+    /// Used only with Huffman coding.
     pub optimize_huffman: bool,
     /// MCU count between restart markers; zero disables restarts.
     pub restart_interval: u16,
@@ -38,6 +52,8 @@ impl Default for CodingOptions {
     fn default() -> Self {
         Self {
             progressive: false,
+            entropy_coding: EntropyCoding::Huffman,
+            arithmetic_conditioning: ArithmeticConditioning::default(),
             optimize_huffman: true,
             restart_interval: 0,
             max_output_bytes: 512 * 1024 * 1024,
@@ -59,10 +75,15 @@ enum Scan {
     Ac(usize),
 }
 
+enum BlockToken<'a> {
+    Block(usize, &'a [i16; 64]),
+    Restart(u8),
+}
+
 /// Encode original quantized coefficients without an IDCT/FDCT or color
 /// conversion. Quantizer values and APPn/COM payloads are preserved. Metadata
 /// keeps its relative order; positions past the new last scan move before EOI.
-/// Accepts one to four components from Huffman/arithmetic DCT frames and writes Huffman output.
+/// Accepts one to four components from Huffman/arithmetic DCT frames.
 pub fn encode_coefficients(
     image: &CoefficientImage<'_>,
     options: CodingOptions,
@@ -93,24 +114,29 @@ pub fn encode_coefficients_with_metadata(
             Scan::Ac(s - 1)
         }
     };
-    let mut histograms = [[0u64; 256]; 4];
-    // Validate categories and collect frequencies before allocating output.
-    for s in 0..scan_count {
-        walk(image, scan_at(s), options.restart_interval, &mut |token| {
-            if let Token::Symbol(table, symbol) = token {
-                histograms[table][symbol as usize] += 1;
-            }
-            Ok(())
-        })?;
-    }
-    let make = |i: usize| {
-        if options.optimize_huffman && histograms[i].iter().any(|&v| v != 0) {
-            Codebook::optimized(&histograms[i])
-        } else {
-            Codebook::fixed(i >= 2, image.frame.precision, options.progressive)
+    let books = if options.entropy_coding == EntropyCoding::Huffman {
+        let mut histograms = [[0u64; 256]; 4];
+        // Validate categories and collect frequencies before allocating output.
+        for s in 0..scan_count {
+            walk(image, scan_at(s), options.restart_interval, &mut |token| {
+                if let Token::Symbol(table, symbol) = token {
+                    histograms[table][symbol as usize] += 1;
+                }
+                Ok(())
+            })?;
         }
+        let make = |i: usize| {
+            if options.optimize_huffman && histograms[i].iter().any(|&v| v != 0) {
+                Codebook::optimized(&histograms[i])
+            } else {
+                Codebook::fixed(i >= 2, image.frame.precision, options.progressive)
+            }
+        };
+        Some([make(0)?, make(1)?, make(2)?, make(3)?])
+    } else {
+        options.arithmetic_conditioning.validate()?;
+        None
     };
-    let books = [make(0)?, make(1)?, make(2)?, make(3)?];
     let mut quantizers = Vec::<[u16; 64]>::new();
     quantizers
         .try_reserve_exact(n)
@@ -126,7 +152,13 @@ pub fn encode_coefficients_with_metadata(
         qslots[i] = slot as u8;
     }
     let wide = quantizers.iter().any(|q| q.iter().any(|&v| v > 255));
-    let process = if options.progressive {
+    let process = if options.entropy_coding == EntropyCoding::Arithmetic {
+        if options.progressive {
+            Process::ArithmeticProgressive
+        } else {
+            Process::ArithmeticSequential
+        }
+    } else if options.progressive {
         Process::Progressive
     } else if image.frame.precision == 8 && !wide {
         Process::Baseline
@@ -176,9 +208,23 @@ pub fn encode_coefficients_with_metadata(
     }
     out.segment(process as u8, &header[..6 + 3 * n])?;
     let groups = if n == 1 { 1 } else { 2 };
-    for i in 0..groups {
-        books[i].emit(&mut out, 0, i as u8)?;
-        books[2 + i].emit(&mut out, 1, i as u8)?;
+    if let Some(books) = &books {
+        for i in 0..groups {
+            books[i].emit(&mut out, 0, i as u8)?;
+            books[2 + i].emit(&mut out, 1, i as u8)?;
+        }
+    } else {
+        let c = options.arithmetic_conditioning;
+        let mut data = [0; 8];
+        for i in 0..groups {
+            data[4 * i..4 * i + 4].copy_from_slice(&[
+                i as u8,
+                (c.dc_upper << 4) | c.dc_lower,
+                16 | i as u8,
+                c.ac_split,
+            ]);
+        }
+        out.segment(0xcc, &data[..4 * groups])?;
     }
     if options.restart_interval != 0 {
         out.segment(0xdd, &options.restart_interval.to_be_bytes())?;
@@ -216,20 +262,60 @@ pub fn encode_coefficients_with_metadata(
             }
         };
         out.segment(0xda, &sos[..length])?;
-        walk(
-            image,
-            scan,
-            options.restart_interval,
-            &mut |token| match token {
-                Token::Symbol(table, symbol) => books[table].write(&mut out, symbol),
-                Token::Bits(value, n) => out.write_bits(value, n),
-                Token::Restart(i) => {
-                    out.pad()?;
-                    out.marker(0xd0 + i)
+        if let Some(books) = &books {
+            walk(
+                image,
+                scan,
+                options.restart_interval,
+                &mut |token| match token {
+                    Token::Symbol(table, symbol) => books[table].write(&mut out, symbol),
+                    Token::Bits(value, n) => out.write_bits(value, n),
+                    Token::Restart(i) => {
+                        out.pad()?;
+                        out.marker(0xd0 + i)
+                    }
+                },
+            )?;
+            out.pad()?;
+        } else {
+            let mut coder = Coder::new(&mut out);
+            let mut statistics = Statistics::default();
+            let mut predictors = [0; 4];
+            let mut classes = [0; 4];
+            walk_blocks(image, scan, options.restart_interval, &mut |token| {
+                match token {
+                    BlockToken::Restart(index) => {
+                        coder.restart(index)?;
+                        statistics.reset();
+                        predictors.fill(0);
+                        classes.fill(0);
+                    }
+                    BlockToken::Block(i, block) => {
+                        let group = usize::from(i != 0);
+                        if !matches!(scan, Scan::Ac(_)) {
+                            statistics.encode_dc(
+                                &mut coder,
+                                group,
+                                i32::from(block[0]),
+                                &mut predictors[i],
+                                &mut classes[i],
+                                options.arithmetic_conditioning,
+                            )?;
+                        }
+                        if !matches!(scan, Scan::Dc) {
+                            statistics.encode_ac(
+                                &mut coder,
+                                group,
+                                block,
+                                options.arithmetic_conditioning,
+                            )?;
+                        }
+                    }
                 }
-            },
-        )?;
-        out.pad()?;
+                Ok(())
+            })?;
+            coder.finish()?;
+        }
     }
     emit_metadata(
         &mut out,
@@ -273,7 +359,7 @@ fn validate(image: &CoefficientImage<'_>) -> Result<()> {
             | Process::ArithmeticProgressive
     ) {
         return Err(Error::Unsupported(
-            "coefficient encoding of non-Huffman DCT process",
+            "coefficient encoding of non-DCT process",
         ));
     }
     if n == 0 || n > 4 {
@@ -379,6 +465,45 @@ fn walk(
     interval: u16,
     emit: &mut impl FnMut(Token) -> Result<()>,
 ) -> Result<()> {
+    let mut predictors = [0; 4];
+    walk_blocks(image, scan, interval, &mut |token| {
+        match token {
+            BlockToken::Restart(index) => {
+                emit(Token::Restart(index))?;
+                predictors.fill(0);
+            }
+            BlockToken::Block(i, block) => {
+                let group = usize::from(i != 0);
+                if !matches!(scan, Scan::Ac(_)) {
+                    let value = i32::from(block[0]);
+                    let limit = 1 << (image.frame.precision + 3);
+                    if value < -limit || value >= limit {
+                        return Err(Error::Invalid("encoder DC coefficient range"));
+                    }
+                    let difference = value - predictors[i];
+                    predictors[i] = value;
+                    let size = category(difference);
+                    if size > image.frame.precision + 3 {
+                        return Err(Error::Invalid("encoder DC magnitude"));
+                    }
+                    emit(Token::Symbol(group, size))?;
+                    emit(Token::Bits(amplitude(difference, size), size))?;
+                }
+                if !matches!(scan, Scan::Dc) {
+                    emit_ac(block, group + 2, image.frame.precision, emit)?;
+                }
+            }
+        }
+        Ok(())
+    })
+}
+
+fn walk_blocks<'a>(
+    image: &'a CoefficientImage<'_>,
+    scan: Scan,
+    interval: u16,
+    emit: &mut impl FnMut(BlockToken<'a>) -> Result<()>,
+) -> Result<()> {
     let n = image.components.len();
     let interleaved = !matches!(scan, Scan::Ac(_)) && n > 1;
     let first = if let Scan::Ac(i) = scan { i } else { 0 };
@@ -408,13 +533,11 @@ fn walk(
         let c = &image.components[first];
         (c.width.div_ceil(8), c.height.div_ceil(8))
     };
-    let mut predictors = [0i32; 4];
     let mut restart = 0;
     for mcu in 0..cols * rows {
         if interval != 0 && mcu != 0 && mcu % interval as usize == 0 {
-            emit(Token::Restart(restart))?;
+            emit(BlockToken::Restart(restart))?;
             restart = (restart + 1) & 7;
-            predictors.fill(0);
         }
         for (i, c) in image.components.iter().enumerate().take(last).skip(first) {
             let (h, v) = if interleaved {
@@ -425,25 +548,11 @@ fn walk(
             } else {
                 (1, 1)
             };
-            let group = usize::from(i != 0);
             for y in 0..v {
                 for x in 0..h {
                     let block =
                         &c.blocks[(mcu / cols * v + y) * c.blocks_wide + mcu % cols * h + x];
-                    if !matches!(scan, Scan::Ac(_)) {
-                        let value = i32::from(block[0]);
-                        let difference = value - predictors[i];
-                        predictors[i] = value;
-                        let size = category(difference);
-                        if size > image.frame.precision + 3 {
-                            return Err(Error::Invalid("encoder DC magnitude"));
-                        }
-                        emit(Token::Symbol(group, size))?;
-                        emit(Token::Bits(amplitude(difference, size), size))?;
-                    }
-                    if !matches!(scan, Scan::Dc) {
-                        emit_ac(block, group + 2, image.frame.precision, emit)?;
-                    }
+                    emit(BlockToken::Block(i, block))?;
                 }
             }
         }

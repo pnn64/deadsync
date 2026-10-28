@@ -9,7 +9,7 @@ claim is made. The complete user scope is retained in PLAN.md.
 | Native bounded marker parsing | Zero-copy segments/scans; stuffing/restart/fill boundaries; every truncated prefix tested |
 | Sequential Huffman SOF0/SOF1, 8/12-bit | Implemented; 25 libjpeg-turbo cases, exact coefficients/tables |
 | Progressive Huffman SOF2, 8/12-bit | Implemented spectral selection and DC/AC refinement; 25 oracle cases exact; band order, partial progression, EOB/restart and Al=13 tests |
-| Arithmetic SOF9/SOF10 | Sequential/progressive 8/12-bit decoding implemented: native Annex D coder, Annex F/G contexts, DAC/defaults, DC/AC refinement, band history and restarts; 30 pinned fixtures and external coefficient gates. Arithmetic encoding pending; see ARITHMETIC-VALIDATION.md |
+| Arithmetic SOF9/SOF10 | Sequential/progressive 8/12-bit decoding and sequential/spectral progressive encoding implemented: native Annex D coder, full 16-bit Annex F/G models, DAC/defaults, DC/AC decoding refinement, band history and restarts; 32 pinned fixtures and external coefficient gates. Successive approximation encoding remains pending; see ARITHMETIC-VALIDATION.md |
 | Predictive lossless SOF3/SOF11, 2–16-bit | Pending: predictors, point transform, entropy |
 | Hierarchical SOF5/6/7/13/14/15, DHP/EXP | Pending: differential frames and expansion |
 | DNL, abbreviated tables/image streams | Pending |

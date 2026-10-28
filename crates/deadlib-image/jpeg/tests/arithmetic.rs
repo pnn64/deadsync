@@ -1,6 +1,6 @@
 use deadlib_image_jpeg::{
-    CodingOptions, CoefficientImage, Error, Event, Limits, MarkerReader, Process,
-    decode_coefficients, encode_coefficients,
+    ArithmeticConditioning, CodingOptions, CoefficientImage, EntropyCoding, Error, Event, Limits,
+    MarkerReader, Process, decode_coefficients, encode_coefficients,
 };
 
 fn fixtures() -> Vec<std::path::PathBuf> {
@@ -346,5 +346,342 @@ fn arithmetic_progressive_order_quantizers_and_bounded_mutations() {
         if let Ok(image) = decode_coefficients(&bytes, limits) {
             let _ = image.reconstruct();
         }
+    }
+}
+
+#[test]
+fn native_arithmetic_output_process_tables_conditioning_and_metadata() {
+    let mut paths = fixtures();
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    for group in ["sequential", "progressive"] {
+        paths.extend(
+            std::fs::read_dir(root.join(group))
+                .unwrap()
+                .map(|p| p.unwrap().path())
+                .filter(|p| p.extension().is_some_and(|s| s == "jpg")),
+        );
+    }
+    let settings = [(0, 0, 1, 5), (1, 0, 0, 1), (7, 3, 7, 63), (0, 15, 15, 32)];
+    for path in paths {
+        let bytes = std::fs::read(&path).unwrap();
+        let expected = std::fs::read(path.with_extension("coef")).unwrap();
+        let source = decode_coefficients(&bytes, Limits::default()).unwrap();
+        for progressive in [false, true] {
+            for (restart_interval, dc_lower, dc_upper, ac_split) in settings {
+                let options = CodingOptions {
+                    progressive,
+                    restart_interval,
+                    entropy_coding: EntropyCoding::Arithmetic,
+                    arithmetic_conditioning: ArithmeticConditioning {
+                        dc_lower,
+                        dc_upper,
+                        ac_split,
+                    },
+                    ..CodingOptions::default()
+                };
+                let encoded = encode_coefficients(&source, options).unwrap();
+                let image = decode_coefficients(&encoded, Limits::default()).unwrap();
+                assert_eq!(
+                    image.frame.process,
+                    if progressive {
+                        Process::ArithmeticProgressive
+                    } else {
+                        Process::ArithmeticSequential
+                    }
+                );
+                assert_eq!(
+                    image.scans,
+                    if progressive {
+                        image.components.len() + 1
+                    } else {
+                        1
+                    }
+                );
+                assert_eq!(coefficients(&image), expected, "{}", path.display());
+                let markers: Vec<_> = MarkerReader::new(&encoded)
+                    .unwrap()
+                    .filter_map(|e| {
+                        if let Event::Segment { marker, .. } = e.unwrap() {
+                            Some(marker)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                assert!(markers.contains(&0xcc) && !markers.contains(&0xc4));
+                assert_eq!(markers.contains(&0xdd), restart_interval != 0);
+                assert_eq!(
+                    source
+                        .metadata
+                        .iter()
+                        .map(|s| (s.marker, s.data))
+                        .collect::<Vec<_>>(),
+                    image
+                        .metadata
+                        .iter()
+                        .map(|s| (s.marker, s.data))
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn arithmetic_encoder_bounds_budgets_and_invalid_conditioning() {
+    let bytes = include_bytes!("fixtures/sequential/8-gray.jpg");
+    let source = decode_coefficients(bytes, Limits::default()).unwrap();
+    let base = CodingOptions {
+        entropy_coding: EntropyCoding::Arithmetic,
+        ..CodingOptions::default()
+    };
+    for progressive in [false, true] {
+        let options = CodingOptions {
+            progressive,
+            ..base
+        };
+        let encoded = encode_coefficients(&source, options).unwrap();
+        for max_output_bytes in [0, 1, 2, encoded.len() / 2, encoded.len() - 1] {
+            assert!(matches!(
+                encode_coefficients(
+                    &source,
+                    CodingOptions {
+                        max_output_bytes,
+                        ..options
+                    }
+                ),
+                Err(Error::LimitExceeded("encoded bytes"))
+            ));
+        }
+        assert_eq!(
+            encode_coefficients(
+                &source,
+                CodingOptions {
+                    max_output_bytes: encoded.len(),
+                    ..options
+                }
+            )
+            .unwrap(),
+            encoded
+        );
+    }
+    for c in [
+        ArithmeticConditioning {
+            dc_lower: 2,
+            dc_upper: 1,
+            ac_split: 5,
+        },
+        ArithmeticConditioning {
+            dc_lower: 0,
+            dc_upper: 16,
+            ac_split: 5,
+        },
+        ArithmeticConditioning {
+            dc_lower: 0,
+            dc_upper: 1,
+            ac_split: 0,
+        },
+        ArithmeticConditioning {
+            dc_lower: 0,
+            dc_upper: 1,
+            ac_split: 64,
+        },
+    ] {
+        assert!(matches!(
+            encode_coefficients(
+                &source,
+                CodingOptions {
+                    arithmetic_conditioning: c,
+                    ..base
+                }
+            ),
+            Err(Error::Invalid("encoder arithmetic conditioning"))
+        ));
+    }
+    for entropy_coding in [EntropyCoding::Huffman, EntropyCoding::Arithmetic] {
+        let options = CodingOptions {
+            entropy_coding,
+            ..base
+        };
+        let mut endpoint = source.clone();
+        for (i, block) in endpoint.components[0].blocks.iter_mut().enumerate() {
+            block[0] = [-1, -2048, -1, 2046][i % 4];
+        }
+        let encoded = encode_coefficients(&endpoint, options).unwrap();
+        assert_eq!(
+            coefficients(&decode_coefficients(&encoded, Limits::default()).unwrap()),
+            coefficients(&endpoint)
+        );
+        let mut invalid = source.clone();
+        // The first difference fits, but a later DC coefficient exceeds the precision range.
+        invalid.components[0].blocks[0][0] = 2047;
+        invalid.components[0].blocks[1][0] = 2048;
+        if entropy_coding == EntropyCoding::Huffman {
+            assert!(matches!(
+                encode_coefficients(&invalid, options),
+                Err(Error::Invalid(_))
+            ));
+        } else {
+            encode_coefficients(&invalid, options).unwrap();
+        }
+        let mut invalid = source.clone();
+        invalid.components[0].blocks[0][1] = 1024;
+        if entropy_coding == EntropyCoding::Huffman {
+            assert!(matches!(
+                encode_coefficients(&invalid, options),
+                Err(Error::Invalid(_))
+            ));
+        } else {
+            encode_coefficients(&invalid, options).unwrap();
+        }
+    }
+    let mut endpoint = source.clone();
+    for (i, block) in endpoint.components[0].blocks.iter_mut().enumerate() {
+        block[0] = [-1, i16::MIN, -1, i16::MAX - 1][i % 4];
+        block[1] = i16::MIN;
+        block[63] = i16::MAX;
+    }
+    for progressive in [false, true] {
+        for restart_interval in [0, 1, 7] {
+            let encoded = encode_coefficients(
+                &endpoint,
+                CodingOptions {
+                    progressive,
+                    restart_interval,
+                    ..base
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                coefficients(&decode_coefficients(&encoded, Limits::default()).unwrap()),
+                coefficients(&endpoint)
+            );
+        }
+    }
+    endpoint.components[0].blocks[0][0] = i16::MAX;
+    endpoint.components[0].blocks[1][0] = i16::MIN;
+    assert!(matches!(
+        encode_coefficients(&endpoint, base),
+        Err(Error::Invalid("encoder arithmetic DC magnitude"))
+    ));
+}
+
+#[test]
+fn arithmetic_native_pixel_encoding_carries_metadata_and_sampling() {
+    use deadlib_image_jpeg::{
+        ColorSpace, EncodeInput, EncodeOptions, MetadataOptions, MetadataSegment, SampleData,
+        Subsampling, encode_samples_with_metadata, quantize,
+    };
+    for precision in [8, 12] {
+        let maximum = (1u16 << precision) - 1;
+        let pixels: Vec<u16> = (0..19 * 17 * 4)
+            .map(|i| ((i * 391 + i * i * 17) & maximum as usize) as u16)
+            .collect();
+        for (space, channels) in [
+            (ColorSpace::Grayscale, 1),
+            (ColorSpace::Rgb, 3),
+            (ColorSpace::YCbCr, 3),
+            (ColorSpace::Cmyk, 4),
+            (ColorSpace::Ycck, 4),
+        ] {
+            let input = EncodeInput {
+                width: 19,
+                height: 17,
+                precision,
+                color_space: space,
+                samples: SampleData::U16(&pixels[..19 * 17 * channels]),
+            };
+            for progressive in [false, true] {
+                let options = EncodeOptions {
+                    precision,
+                    quality: 100,
+                    subsampling: Subsampling::S420,
+                    coding: CodingOptions {
+                        progressive,
+                        entropy_coding: EntropyCoding::Arithmetic,
+                        restart_interval: 1,
+                        ..CodingOptions::default()
+                    },
+                    ..EncodeOptions::default()
+                };
+                let expected = quantize(&input, options).unwrap();
+                let segments = [MetadataSegment {
+                    marker: 0xfe,
+                    data: b"arithmetic pixel encoder",
+                    offset: 0,
+                    preceding_scans: 0,
+                }];
+                let encoded = encode_samples_with_metadata(
+                    &input,
+                    options,
+                    MetadataOptions {
+                        additional_segments: &segments,
+                        ..MetadataOptions::default()
+                    },
+                )
+                .unwrap();
+                let decoded = decode_coefficients(&encoded, Limits::default()).unwrap();
+                assert_eq!(coefficients(&decoded), coefficients(&expected));
+                assert!(
+                    decoded
+                        .metadata
+                        .iter()
+                        .any(|s| s.marker == 0xfe && s.data == segments[0].data)
+                );
+                decoded.reconstruct().unwrap();
+            }
+        }
+    }
+}
+
+#[test]
+fn pinned_c_progressions_use_the_full_sixteen_bit_arithmetic_model() {
+    let root =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/arithmetic-model");
+    for (name, precision, scans) in [
+        ("p8-gray-17x17-w0-d1", 8, 33),
+        ("p12-ycck-17x17-w1-d1", 12, 126),
+    ] {
+        let bytes = std::fs::read(root.join(format!("{name}.jpg"))).unwrap();
+        let expected = std::fs::read(root.join(format!("{name}.coef"))).unwrap();
+        let source = decode_coefficients(&bytes, Limits::default()).unwrap();
+        assert_eq!(source.frame.precision, precision);
+        assert_eq!(source.frame.process, Process::ArithmeticProgressive);
+        assert_eq!(source.scans, scans);
+        assert_eq!(coefficients(&source), expected);
+        assert!(
+            source
+                .components
+                .iter()
+                .any(|c| c.blocks.iter().any(|b| b[0] == i16::MIN))
+        );
+        assert!(
+            source
+                .components
+                .iter()
+                .any(|c| c.blocks.iter().any(|b| b[1..].contains(&i16::MIN)))
+        );
+        source.reconstruct().unwrap();
+        for progressive in [false, true] {
+            let encoded = encode_coefficients(
+                &source,
+                CodingOptions {
+                    progressive,
+                    entropy_coding: EntropyCoding::Arithmetic,
+                    restart_interval: 1,
+                    ..CodingOptions::default()
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                coefficients(&decode_coefficients(&encoded, Limits::default()).unwrap()),
+                expected
+            );
+        }
+        // These arithmetic-model extrema exceed the Huffman process categories.
+        assert!(matches!(
+            encode_coefficients(&source, CodingOptions::default()),
+            Err(Error::Invalid(_))
+        ));
     }
 }

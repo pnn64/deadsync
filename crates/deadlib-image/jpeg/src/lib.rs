@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 mod arithmetic;
+mod arithmetic_encode;
 mod decode;
 mod encode;
 mod entropy;
@@ -19,9 +20,10 @@ mod progressive;
 mod reconstruct;
 mod transform;
 
+pub use arithmetic_encode::ArithmeticConditioning;
 pub use decode::{CoefficientComponent, CoefficientImage, decode_coefficients};
 pub use encode::{
-    CodingOptions, IccWrite, MetadataOptions, encode_coefficients,
+    CodingOptions, EntropyCoding, IccWrite, MetadataOptions, encode_coefficients,
     encode_coefficients_with_metadata,
 };
 pub use exif::{ByteOrder, Exif, ExifEntry, ExifIfd};

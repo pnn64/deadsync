@@ -128,7 +128,7 @@ Verified milestones:
   warnings denied pass. See ARITHMETIC-VALIDATION.md and the retained reports.
   Progressive arithmetic, arithmetic encoding, lossless/hierarchy, streaming,
   broader references/conformance, fuzzing and performance remain open.
-- Progressive arithmetic decoder milestone: SOF10 spectral selection, initial
+- `d78552252`: SOF10 spectral selection, initial
   point transforms, DC/AC refinement, per-block band history and scan validation.
   All 1,314 progressive arithmetic files from 219 sources and 2,628 native
   Huffman rewrites match C coefficients/quantizers exactly, with zero warnings.
@@ -142,3 +142,26 @@ Verified milestones:
   See ARITHMETIC-VALIDATION.md and tests/reports/arithmetic-progressive-turbo.json.
   Arithmetic encoding, lossless/hierarchy, streaming, broader references and
   conformance, coverage-guided fuzzing and all performance work remain open.
+- Native arithmetic encoder milestone: Annex D.1 interval/carry/byte-stuffing
+  writer, exact K.4 golden bytes, Annex F DC/AC models, configurable DAC values,
+  sequential SOF9 and spectral progressive SOF10 output, shared pixel/raster
+  APIs, metadata and restart controls. The writer has constant entropy state
+  and emits into the bounded output without a second entropy buffer or Huffman
+  histogram pass. All 4,140 output files from 345 distinct inputs plus 456
+  coefficient-extrema encodes match C/native coefficients exactly, with zero C
+  warnings. All 113 native probability states match pinned reference data.
+  An endpoint audit corrected inherited Huffman limits: arithmetic decisions
+  use the full signed 16-bit model independently of sample precision. Another
+  228 C progressive full-model cases match exactly; two are pinned with C
+  coefficients, including -32768 refinements from Al=13/10.
+  The shared MCU traversal leaves all 600 original Huffman output hashes
+  unchanged. Tests cover arithmetic budgets/conditioning/markers/metadata,
+  public coefficient errors, five color spaces and 200,000 adaptive/fixed
+  decisions with carry/stuffing/restart handling. All 63 tests pass in release
+  and isolated debug builds; rustfmt, Clippy and rustdoc with warnings denied
+  pass. See ARITHMETIC-VALIDATION.md and the retained reports. Validation resumed
+  from verified checkpoints after concurrent builds exhausted disk space;
+  serialized builds completed within available space.
+  Successive approximation encoding, lossless/hierarchy, DNL/abbreviated modes,
+  streaming, other reference/conformance corpora, coverage-guided fuzzing and
+  all benchmark/optimization work remain required.
