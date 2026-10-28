@@ -45,3 +45,19 @@ height, component count), then for each component seven LE u32 values (id, H,
 V, sample width/height, block width/height), 64 LE u16 quantizers, and natural
 order LE i16 blocks. `.planes` concatenates each component's unpadded rows as
 LE u16 samples. Fixture metadata and command provenance are in manifest.json.
+
+## Native coefficient encoder gate
+
+```text
+cargo build -p deadlib-image-jpeg --example rewrite
+python crates/deadlib-image/jpeg/tests/reference_rewrite.py --oracle <jpeg-oracle> --native target/debug/examples/rewrite.exe --out crates/deadlib-image/jpeg/experiments/rewrite-gate
+```
+
+Executed with the same pinned libjpeg-turbo reference: **600/600 native
+rewrites** decode with exact visible coefficients and quantizers and **zero C
+decoder warnings**. This covers all 50 sources, sequential/progressive output,
+fixed/optimized Huffman policies and restart intervals 0, 1, 7. The retained
+case hashes and byte sizes are in `tests/reports/rewrite-turbo.json`.
+Separate native tests verify metadata payload/order preservation and bounded
+errors for malformed public coefficient models. Pixel encoding and broader
+oracle coverage remain open.

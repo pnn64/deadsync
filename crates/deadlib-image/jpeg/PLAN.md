@@ -50,7 +50,7 @@ Verified milestones:
   IDCT error <=1. Twelve Rust tests pass in debug, release and isolated builds;
   rustfmt and Clippy with warnings denied pass. See tests/oracle/README.md.
   Encoding, rare modes and remaining gates are still open.
-- Progressive decoder milestone: SOF2 spectral selection and successive
+- `a65c4eabf`: SOF2 spectral selection and successive
   approximation in native Rust, with band precision tracking, DC/AC refinement,
   EOB runs, partial progressions, unused-table selectors and quantizer stability.
   Another 25 pinned 8/12-bit libjpeg-turbo cases match exactly in coefficients
@@ -60,3 +60,13 @@ Verified milestones:
   Final gates: 17 tests pass in debug, release and isolated builds; rustfmt,
   Clippy and rustdoc with warnings denied pass. All 50 checked-in oracle cases
   retain exact coefficient/table parity and IDCT sample error <=1.
+- Coefficient encoder milestone: bounded native bit/marker writer, sequential
+  and spectral progressive output, restart intervals, Annex K length-limited
+  optimized Huffman tables, fixed fallback tables covering 12-bit magnitudes,
+  and quantizer/metadata retention. All 600 combinations of 50 source fixtures,
+  two output processes, two table policies and three restart intervals decode
+  in libjpeg-turbo with exact visible coefficients/tables and zero warnings.
+  All 21 tests pass in release and isolated debug builds; rustfmt, Clippy and
+  rustdoc with warnings denied pass. The external report is retained under
+  tests/reports/rewrite-turbo.json.
+  Pixel/quality encoding and all remaining plan items are still required.

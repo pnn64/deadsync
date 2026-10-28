@@ -19,8 +19,8 @@ claim is made. The complete user scope is retained in PLAN.md.
 | Original coefficients, tables, metadata | Coefficients and quantizers retained; APPn/COM bytes borrowed with scan positions |
 | JFIF/JFXX, Exif, Adobe, ICC assembly | Pending |
 | IDCT, chroma upsampling, color numerics | Q20 integer IDCT: error <=1 vs reference float on 50 cases; centered linear/nearest; broader numerical and color gates pending |
-| Native configurable encoder | Pending |
-| Optimized Huffman, progressive encoding | Pending |
+| Native configurable encoder | Coefficient writer implemented for 1–4 components, 8/12-bit, restart/output controls; pixel/quality encoding pending |
+| Optimized Huffman, progressive encoding | Annex K length-limited Huffman tables and spectral progressive output implemented; successive approximation encoder pending |
 | Streaming and allocation limits | Storage/pixel/metadata/scan budgets implemented; streaming and allocator accounting pending |
 | Independent corpus and three C oracles | Pending |
 | Fuzzing and malformed corpus | Every sequential/progressive fixture truncation; 4,000 mutation smoke cases; invalid progression and quantizer changes; coverage-guided fuzzing pending |
