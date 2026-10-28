@@ -74,34 +74,37 @@ impl<R: Read> PageReader<R> {
     }
     fn fill(&mut self, required: usize) -> Result<bool, Error> {
         debug_assert!(required <= MAX_PAGE_SIZE);
-        while self.buffer.len() - self.start < required && !self.eof {
-            self.read_more(required)?;
+        if self.buffer.len() - self.start < required && !self.eof {
+            self.read_more(required, true)?;
         }
         Ok(self.buffer.len() - self.start >= required)
     }
-    fn read_more(&mut self, target: usize) -> Result<(), Error> {
+    fn read_more(&mut self, target: usize, complete: bool) -> Result<(), Error> {
         debug_assert!(target <= MAX_PAGE_SIZE && self.buffer.len() - self.start < target);
         if self.start != 0 {
             self.buffer.copy_within(self.start.., 0);
             self.buffer.truncate(self.buffer.len() - self.start);
             self.start = 0;
         }
-        let old = self.buffer.len();
-        reserve(&mut self.buffer, target - old)?;
+        let mut filled = self.buffer.len();
+        reserve(&mut self.buffer, target - filled)?;
         self.buffer.resize(target, 0);
-        let result = self.inner.read(&mut self.buffer[old..]);
-        match result {
-            Ok(0) => {
-                self.buffer.truncate(old);
-                self.eof = true;
+        // Initialize the unread suffix once, retaining it across short reads.
+        loop {
+            match self.inner.read(&mut self.buffer[filled..]) {
+                Ok(0) => self.eof = true,
+                Ok(n) => filled += n,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => (),
+                Err(e) => {
+                    self.buffer.truncate(filled);
+                    return Err(e.into());
+                }
             }
-            Ok(n) => self.buffer.truncate(old + n),
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => self.buffer.truncate(old),
-            Err(e) => {
-                self.buffer.truncate(old);
-                return Err(e.into());
+            if !complete || filled >= target || self.eof {
+                break;
             }
         }
+        self.buffer.truncate(filled);
         Ok(())
     }
 
@@ -159,7 +162,7 @@ impl<R: Read> PageReader<R> {
             if self.eof {
                 return Ok(());
             }
-            self.read_more(4096)?;
+            self.read_more(4096, false)?;
         }
     }
     fn candidate(&mut self) -> Result<Option<usize>, Error> {
