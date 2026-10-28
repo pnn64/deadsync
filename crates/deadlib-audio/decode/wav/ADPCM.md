@@ -109,8 +109,38 @@ Four new encoder tests verify exact constant/header-only vectors, full/partial
 block batch invariance in all four containers, custom predictors, up to 4000 IMA
 channels, exact fact trimming and invalid-input atomicity. Total crate tests: 27.
 
-Remaining: file-backed compressed streaming/seek convenience,
-3-bit DVI, extensible compressed mappings, RIFX external validation, Symphonia
+## File-backed decoding and exact seeks
+
+`AdpcmReader` consumes the shared `Reader` scan, allocates an encoded and decoded
+block once, and fills caller-owned interleaved i16 output. It caches decoded PCM
+for repeated reads or seeks within a block. `seek_frame` uses fixed block
+addressing and decodes the block prefix when necessary. File opening skips audio;
+fact or ds64 counts trim final padding. Metadata access keeps the logical audio
+position intact. Errors poison reads until a successful seek. This reader does
+not allocate PCM for the entire file.
+
+Four added integration tests cover sequential/random ranges in all container
+spellings, mono/stereo, unaligned caller capacity, nonzero source bases, metadata
+between reads, short reads, cache reuse, I/O recovery, malformed headers, data
+before fmt with trailing fact, a short final IMA block, and RF64 seeks above
+4 GiB/2^32 frames. The virtual large-file test runs with and without fact, proving
+ds64 fallback while reading less than 512 actual source bytes.
+
+```sh
+python crates/deadlib-audio/decode/wav/tests/reference_adpcm_file.py --output target/wav/my-file-validation.json
+```
+
+Run the encoder campaign first to regenerate its hash-checked corpus. The file
+gate verifies 144 complete real-file outputs against retained reference results,
+plus 60 exact ranges around beginnings, block boundaries and EOF. All 204 pass;
+evidence is in validation/adpcm-file-ranges.json. Total crate tests: 31, passing
+Windows x86_64 debug/release and i686 debug; Clippy with warnings denied passes.
+This establishes correctness and bounded I/O, not competitive compressed
+throughput. Real files currently seek explicitly when loading each uncached block;
+avoiding redundant sequential seeks is a remaining performance target.
+
+Remaining: forward-only compressed audio convenience, 3-bit DVI, extensible
+compressed mappings, RIFX external validation, exhaustive Symphonia decode
 comparison and longer fuzz campaigns. Negative Microsoft header deltas are
 rejected. Unbounded delta growth errors safely rather than overflowing. The
 initial implementation prioritizes correctness; no ADPCM throughput claim yet.

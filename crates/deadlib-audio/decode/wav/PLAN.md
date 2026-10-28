@@ -13,12 +13,12 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    integration tests, debug/release and Clippy; see COVERAGE.md). Forward-only
    audio convenience and known-length nonseekable output remain. RIFF and
    64-bit output, extensible valid bits/masks, metadata and exact roundtrips.
-3. Independent Microsoft ADPCM and 4-bit WAV IMA ADPCM block decoding implemented,
-   with borrowed fact-trimmed exact range access and 40 differential fixture sets
-   (see ADPCM.md). Encoding, compressed I/O convenience, 3-bit IMA and extensible
-   mapping remain. Encoded-format
-   dispatch, fact trimming, block boundaries and exact seeking. Additional encoded
-   formats must remain possible without coupling container parsing to codecs.
+3. Microsoft and 4-bit WAV IMA ADPCM block encoding/decoding, incremental encoding,
+   borrowed range access and file-backed cached seeking are implemented. See
+   ADPCM.md for 40 decode, 144 encoder and 204 file/range cases, including explicit
+   reference rounding disagreements. Forward-only audio convenience, 3-bit IMA and
+   extensible mappings remain. Additional encoded formats must remain possible
+   without coupling container parsing to codecs; shared Muxer supports that boundary.
 4. Rich metadata views and preservation: INFO, BEXT, cue/adtl, smpl, RF64 markers,
    ADM XML/CHNA, unknown chunks. Unusual ordering, large/sparse files and multichannel.
 5. Differential validation against libsndfile, dr_wav, Symphonia; independent
@@ -40,9 +40,16 @@ Record commands, source provenance and results with each implementation mileston
 Codec-independent encoded output muxing is implemented; native Writer shares the
 same path. Opaque descriptors, 64-bit decoded counts and bounded size accounting
 have dedicated coverage; 23 tests and a repeated PCM benchmark pass. ADPCM
-encoding and compressed readers remain the next implementation work.
+encoding and compressed readers were the next implementation work at this point.
 
 Microsoft and 4-bit IMA encoding are now implemented: block buffers, standard
 format generation and incremental writer with fact-trimmed final padding. Tests
 and the four-reference encoder campaign are recorded in ADPCM.md. Compressed
-readers, standard variants and remaining validation/performance work stay open.
+reader work followed below; standard variants and remaining validation/performance
+work stay open.
+
+File-backed cached ADPCM reading is now implemented and validated against the
+retained corpus. All 31 integration tests pass on x86_64 (debug/release) and i686
+(debug); all 204 real-file sequential/range cases pass. Forward-only convenience,
+known-length nonseekable output, metadata, 3-bit/extensible ADPCM, PCM differential
+coverage, fuzzing and broad performance/RSS evidence remain required.

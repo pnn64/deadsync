@@ -12,6 +12,7 @@ pub struct Reader<R> {
     chunks: Vec<ChunkInfo>,
     data: ChunkInfo,
     fact: Option<u64>,
+    ds64_sample_count: Option<u64>,
     pos: u64,
     failed: bool,
 }
@@ -31,6 +32,7 @@ impl<R: Read + Seek> Reader<R> {
             return Err(Error::Truncated);
         }
         let container = s.container();
+        let ds64_sample_count = s.ds64().map(|d| d.sample_count);
         let endian = container.endian();
         let mut format = Vec::new();
         let mut chunks = Vec::new();
@@ -94,6 +96,7 @@ impl<R: Read + Seek> Reader<R> {
             chunks,
             data,
             fact,
+            ds64_sample_count,
             pos: 0,
             failed: false,
         })
@@ -109,6 +112,12 @@ impl<R: Read + Seek> Reader<R> {
     }
     pub fn fact(&self) -> Option<u64> {
         self.fact
+    }
+    pub fn ds64_sample_count(&self) -> Option<u64> {
+        self.ds64_sample_count
+    }
+    pub fn data_chunk(&self) -> ChunkInfo {
+        self.data
     }
     pub fn into_inner(self) -> R {
         self.inner
@@ -264,6 +273,23 @@ impl<R: Read + Seek> Reader<R> {
             self.base + self.data.offset + self.pos * u64::from(self.format().block_align),
         ))?;
         self.failed = false;
+        Ok(n)
+    }
+    // The compressed wrapper addresses bytes independently of native PCM pos.
+    // Keep native reads poisoned until a native seek, if this Reader is reused.
+    pub(crate) fn seek_encoded(&mut self, offset: u64) -> Result<(), Error> {
+        if offset > self.data.size {
+            return Err(Error::Invalid("encoded data offset"));
+        }
+        self.failed = true;
+        self.inner
+            .seek(SeekFrom::Start(self.base + self.data.offset + offset))?;
+        Ok(())
+    }
+    pub(crate) fn read_encoded(&mut self, offset: u64, out: &mut [u8]) -> Result<usize, Error> {
+        self.seek_encoded(offset)?;
+        let n = (self.data.size - offset).min(out.len() as u64) as usize;
+        self.inner.read_exact(&mut out[..n])?;
         Ok(n)
     }
 }

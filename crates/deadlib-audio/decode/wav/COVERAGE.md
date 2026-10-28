@@ -72,7 +72,14 @@ the specified-arithmetic references and exact fact lengths; each other reference
 disagreement is retained. See ADPCM.md for scope and lossy quality limitations.
 Total crate integration tests: 27.
 
-Remaining work: compressed I/O convenience, structured metadata,
+File-backed `AdpcmReader` now adds cached block decoding and exact 64-bit frame
+seeks. Four integration tests exercise arbitrary ranges, metadata, order, errors,
+short blocks and >4 GiB virtual sources; 204 hash-checked real-file sequential/
+range cases match retained oracle evidence. All 31 integration tests pass on
+Windows x86_64 debug/release and i686 debug, and Clippy passes. Normal Cargo edges
+still show no production dependencies. See ADPCM.md for commands and limitations.
+
+Remaining work: forward-only audio convenience, structured metadata,
 wavl/slnt and multiple-data handling, oracle comparisons, fuzzing, sparse >4 GiB
 evidence and broad performance coverage (the first PCM16 baseline is in
 [PERFORMANCE.md](PERFORMANCE.md)); forward-only audio convenience APIs,

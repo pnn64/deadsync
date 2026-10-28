@@ -105,6 +105,26 @@ impl<'a> Adpcm<'a> {
     pub fn scratch_samples(self) -> usize {
         self.frames_per_block * self.channels
     }
+    /// Validate fact/ds64 duration against the encoded byte extent without
+    /// reading audio. A complete short last block contributes its actual capacity.
+    pub fn validate_frame_count(self, bytes: u64, frames: u64) -> Result<(), Error> {
+        let block = self.block_bytes as u64;
+        let full = bytes / block;
+        let tail = bytes % block;
+        let tail_frames = if tail == 0 {
+            0
+        } else {
+            self.block_frames(tail as usize)? as u64
+        };
+        let capacity = full
+            .checked_mul(self.frames_per_block as u64)
+            .and_then(|n| n.checked_add(tail_frames))
+            .ok_or(Error::Invalid("ADPCM byte extent or frame count overflow"))?;
+        if frames > capacity {
+            return Err(Error::Invalid("ADPCM fact exceeds encoded data"));
+        }
+        Ok(())
+    }
     /// Number of decodable frames in a full or structurally complete short block.
     pub fn block_frames(self, bytes: usize) -> Result<usize, Error> {
         if bytes > self.block_bytes {
@@ -228,21 +248,11 @@ impl<'a> AdpcmData<'a> {
     pub fn new(wave: &Wave<'a>) -> Result<Self, Error> {
         let codec = Adpcm::from_format(wave.format)?;
         let bytes = wave.data();
-        let full = bytes.len() / codec.block_bytes;
-        let tail = bytes.len() % codec.block_bytes;
-        let max_frames = full as u64 * codec.frames_per_block as u64
-            + if tail != 0 {
-                codec.block_frames(tail)? as u64
-            } else {
-                0
-            };
         let frames = wave
             .fact
             .or(wave.ds64.map(|d| d.sample_count))
             .ok_or(Error::Invalid("ADPCM requires fact sample count"))?;
-        if frames > max_frames {
-            return Err(Error::Invalid("ADPCM fact exceeds encoded data"));
-        }
+        codec.validate_frame_count(bytes.len() as u64, frames)?;
         Ok(Self {
             codec,
             bytes,

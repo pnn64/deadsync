@@ -47,6 +47,12 @@ the last real frame is repeated as padding. `AdpcmSpec` emits standard descripto
 block, and records the unpadded frame count on finish. Both Microsoft and 4-bit
 IMA encoding are native Rust; encoding does not promise lossless source recovery.
 
+`AdpcmReader<R: Read + Seek>` scans through the shared container reader and caches
+one decoded block. It reads interleaved i16 into caller storage and supports exact
+frame seeks, including RF64 positions above 4 GiB. Its memory depends on block
+geometry and metadata descriptors. Metadata access preserves the logical audio
+position. I/O or decode errors require a successful seek before reading again.
+
 `Muxer<W: Write + Seek>` accepts a raw format descriptor, encoded bytes and
 decoded frame counts. It preserves the descriptor without codec dispatch and
 handles fact/ds64/RIFF finalization. Producers own encoded block validation; native
