@@ -64,7 +64,7 @@ pub fn find_granule<R: Read + Seek>(
             let header = page.page.header();
             if header.serial == serial
                 && header.granule_position != UNKNOWN_GRANULE_POSITION
-                && (page.page.completed_packets() != 0 || page.page.lacing().is_empty())
+                && (page.page.lacing().iter().any(|&n| n < 255) || page.page.lacing().is_empty())
             {
                 return Ok(Some(GranuleLocation {
                     offset: page.offset,
