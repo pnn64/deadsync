@@ -47,6 +47,8 @@ impl NativeStack<'_, '_> {
     }
     /// Replace the selected stack's top key with a lookup result.
     /// Non-raw access executes metamethods in that thread's context.
+    /// A permitted yield retains pending frames and can leave a negative
+    /// [`NativeThreadStack::top_offset`]; it does not complete the tag method.
     ///
     /// # Errors
     /// Propagates invalid indexes, lookup errors and fatal quotas. Unprotected
@@ -61,6 +63,8 @@ impl NativeStack<'_, '_> {
     }
     /// Pop the selected stack's key/value pair after an assignment succeeds.
     /// Non-raw access executes metamethods in that thread's context.
+    /// After a permitted yield, the pop applies to the new physical top even
+    /// when it falls below the yielded base. Resumption finishes the tag method.
     ///
     /// # Errors
     /// Propagates invalid indexes, assignment errors and fatal quotas, retaining
@@ -75,6 +79,7 @@ impl NativeStack<'_, '_> {
     }
     /// Push a field lookup on the selected stack without exposing its key.
     /// Metamethods execute in the selected thread's context.
+    /// A permitted yield retains pending frames and its new physical stack.
     ///
     /// # Errors
     /// Propagates invalid indexes, lookup errors and fatal quotas, retaining
@@ -89,6 +94,8 @@ impl NativeStack<'_, '_> {
     }
     /// Pop the selected stack's value after assigning a named field.
     /// Metamethods execute in the selected thread's context.
+    /// A permitted yield applies that pop to the new physical stack and retains
+    /// the unfinished tag method for a later resumption.
     ///
     /// # Errors
     /// Propagates invalid indexes, assignment errors and fatal quotas, retaining
@@ -102,6 +109,8 @@ impl NativeStack<'_, '_> {
         self.with_thread_stack(thread, |stack| stack.set_field(index, name))
     }
     /// Compare selected stack values for equality, including their metamethod.
+    /// A permitted yield consumes its last physical value for this result while
+    /// leaving the tag method pending; check the selected thread's status.
     ///
     /// # Errors
     /// Propagates metamethod errors and fatal quotas with the fault stack intact.
@@ -114,6 +123,8 @@ impl NativeStack<'_, '_> {
         self.with_thread_stack(thread, |stack| stack.equal(left, right))
     }
     /// Compare selected stack values with Lua's less-than operation.
+    /// A permitted yield consumes its last physical value for this result while
+    /// leaving the tag method pending; check the selected thread's status.
     ///
     /// # Errors
     /// Propagates comparison errors and fatal quotas with the fault stack intact.

@@ -195,7 +195,7 @@ enabled through `Vm::set_output_capture`.
 and `atan2` check their second operand first on Linux/glibc and their first
 operand first elsewhere. These error orders follow the pinned GCC and MSVC
 reference builds; C itself does not specify the evaluation order. The
-[library argument audit](../../docs/testing/2026-10-28-rust-lua-thread-tables-stdlib.json)
+[library argument audit](../../docs/testing/2026-10-28-rust-lua-table-yields-stdlib.json)
 now matches all 5,507 bounded cases, including native-loading argument errors.
 It does not establish full standard-library parity.
 
@@ -369,6 +369,16 @@ on Windows x64 and Linux i686 SSE2, including waiting parents and open cells.
 The CLI runs Lua on a thread with a 32 MiB stack so recursive native calls can
 reach Lua's C-call limit in debug builds. Embedding hosts choose their execution
 thread's stack size. General native continuation and resource parity remain open.
+
+The [table-metamethod yield checks](../../docs/testing/2026-10-28-rust-lua-table-yields.md)
+retain permitted yields through selected table/field and comparison APIs.
+Their stack effects continue after the yield, including negative offsets and
+consumed values. Escaped tag calls stop charging C calls or blocking later
+yields. Setter resumptions retain their original operands, and collection clears
+open locals above the physical top. Release and checked references match 1,078
+observations on both tested pointer widths. Broader resumption cases still
+include checked-reference invariant failures and native reference crashes;
+general continuation, collector, lifecycle and resource parity remain open.
 
 The string library provides byte operations, method lookup, Lua patterns,
 `find`, `match`, independent `gmatch` iterators, `gsub` with string/table/function

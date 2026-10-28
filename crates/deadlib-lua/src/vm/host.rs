@@ -589,6 +589,15 @@ impl HostCall<'_> {
                 error
             }
         });
+        if selected_tag
+            && matches!(action, Action::Set(..))
+            && let Some(frame) = self.vm.frames.get_mut(depth + 1)
+        {
+            // A setter's C call requested no results. If it yields and is
+            // resumed later, its return still leaves the original operands
+            // below the tag-function slot, rather than resetting top to zero.
+            frame.result = scratch;
+        }
         let synchronous = matches!(
             action,
             Action::Get(..) | Action::Set(..) | Action::Compare(..) | Action::ConcatPair(..)
@@ -614,20 +623,32 @@ impl HostCall<'_> {
             self.abort = Some(error.clone());
             return Err(error.clone());
         }
-        if matches!(action, Action::ConcatPair(..))
-            && let Some(range) = self
-                .vm
-                .api_calls
-                .last()
-                .filter(|scope| scope.thread == owner && scope.frame == depth)
-                .and_then(|scope| scope.yielded.clone())
+        if matches!(
+            action,
+            Action::Get(..) | Action::Set(..) | Action::Compare(..) | Action::ConcatPair(..)
+        ) && let Some(range) = self
+            .vm
+            .api_calls
+            .last()
+            .filter(|scope| scope.thread == owner && scope.frame == depth)
+            .and_then(|scope| scope.yielded.clone())
         {
             // luaD_call can return while a selected thread remains yielded.
             // callTMres still consumes the last physical slot as its result.
             self.vm.active_native = active;
             self.vm.frames[depth].pc = API_YIELDED;
             self.vm.frames[depth].vararg_count = 0;
-            return Ok((range.end - 1..range.end, false));
+            if selected_tag {
+                // luaD_call has returned, although the tag method's Lua frame
+                // remains pending. Its C-call charge has already been removed.
+                self.vm.frames[depth + 1].pc = API_YIELDED;
+            }
+            let first = if matches!(action, Action::Set(..)) {
+                range.end
+            } else {
+                range.end - 1
+            };
+            return Ok((first..range.end, false));
         }
         if !protected
             && self.vm.thread == owner

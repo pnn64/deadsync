@@ -959,7 +959,7 @@ impl Vm {
         for &cell in open {
             if let Cell::Open(owner, position) = self.upvalues[cell as usize]
                 && owner == id
-                && position < registers.len()
+                && position < registers.len().min(cutoff)
             {
                 live[position / 64] |= 1u64 << (position % 64);
             }
@@ -988,7 +988,9 @@ impl Vm {
         );
         // Lua 5.1 clears unused stack slots while traversing a thread. Clear
         // scalar values too: debug.getlocal can observe them after collection.
-        // Native scratch windows and aliased argument/upvalue slots stay live.
+        // Native scratch windows and aliased argument/upvalue slots below the
+        // physical top stay live. An API returned from a yield can lower that
+        // top even past an open local; Lua then clears that slot as well.
         if id == self.thread {
             clear_unused_registers(&mut self.registers, &self.frames, &live);
         } else {

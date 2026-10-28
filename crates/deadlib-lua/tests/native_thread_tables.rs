@@ -4,6 +4,16 @@ fn yielding(call: &mut HostCall<'_>) -> Result<(), Error> {
     call.native_stack()?.yield_results(1)
 }
 
+fn yielding_all(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let stack = call.native_stack()?;
+    let count = stack.top();
+    stack.yield_results(count)
+}
+
+fn yielding_zero(call: &mut HostCall<'_>) -> Result<(), Error> {
+    call.native_stack()?.yield_results(0)
+}
+
 fn selected(call: &mut HostCall<'_>) -> Result<(), Error> {
     let mut stack = call.native_stack()?;
     let owner = stack.thread_id();
@@ -52,6 +62,101 @@ fn selected(call: &mut HostCall<'_>) -> Result<(), Error> {
     stack.push(result)?;
     stack.thread_stack(target)?.set_top(before)?;
     stack.finish(5)
+}
+
+fn selected_yield(call: &mut HostCall<'_>) -> Result<(), Error> {
+    let mut stack = call.native_stack()?;
+    let owner = stack.thread_id();
+    let target = stack.to_thread(1).unwrap();
+    let mode = stack.to_integer(3).unwrap();
+    let left = stack.value(4).unwrap();
+    let right = stack.value(5).unwrap();
+    let value = stack.value(6).unwrap();
+    let before = stack.thread_stack(target)?.top_offset();
+    let old = stack.thread_status(target).unwrap();
+    stack.thread_stack(target)?.push(left)?;
+    if matches!(mode, 0 | 2 | 4 | 5) {
+        stack.thread_stack(target)?.push(right)?;
+    }
+    if matches!(mode, 2 | 3) {
+        stack.thread_stack(target)?.push(value)?;
+    }
+    let result = match mode {
+        0 => {
+            stack.get_table_thread(target, -2, false)?;
+            false
+        }
+        1 => {
+            stack.get_field_thread(target, -1, b"field")?;
+            false
+        }
+        2 => {
+            stack.set_table_thread(target, -3, false)?;
+            false
+        }
+        3 => {
+            stack.set_field_thread(target, -2, b"field")?;
+            false
+        }
+        4 => stack.equal_thread(target, -2, -1)?,
+        5 => stack.less_than_thread(target, -2, -1)?,
+        _ => unreachable!(),
+    };
+    assert_eq!(stack.thread_id(), owner);
+    let after = stack.thread_stack(target)?.top_offset();
+    let new = stack.thread_status(target).unwrap();
+    let values: Vec<_> = (1..=after)
+        .map(|i| stack.thread_stack(target).unwrap().value(i).unwrap())
+        .collect();
+    for value in [
+        Value::Number(0.),
+        Value::Number(0.),
+        Value::Number(0.),
+        Value::Number(0.),
+        Value::Boolean(false),
+        Value::Boolean(false),
+        Value::Number(0.),
+        Value::Number(0.),
+        Value::Number(after as f64),
+        Value::Number(new as u8 as f64),
+        Value::Number(before as f64),
+        Value::Number(old as u8 as f64),
+        Value::Boolean(result),
+    ] {
+        stack.push(value)?;
+    }
+    stack.create_table(values.len(), 0)?;
+    for (i, value) in values.into_iter().enumerate() {
+        stack.push(value)?;
+        stack.raw_set_integer(-2, i as i32 + 1)?;
+    }
+    stack.finish(14)
+}
+
+#[test]
+fn selected_tag_yields_preserve_physical_tops_values_and_repeated_resumptions() {
+    let mut vm = Vm::new();
+    for (name, function) in [
+        (b"boundary_table_yield".as_slice(), selected_yield as _),
+        (b"boundary_execution_yield_tail".as_slice(), yielding as _),
+        (b"boundary_table_c_yield_all".as_slice(), yielding_all as _),
+        (b"boundary_table_c_yield_tail".as_slice(), yielding as _),
+        (
+            b"boundary_table_c_yield_zero".as_slice(),
+            yielding_zero as _,
+        ),
+    ] {
+        let function = vm.new_host_function(function, &[]).unwrap();
+        vm.set_global(name, function).unwrap();
+    }
+    vm.set_global(b"table_yields_portable", Value::Boolean(true))
+        .unwrap();
+    let mut source = include_bytes!("native-boundary/table-yields.lua").to_vec();
+    source.extend_from_slice(b";return 42");
+    assert_eq!(
+        vm.execute(&compile(&source).unwrap()).unwrap(),
+        &[Value::Number(42.)]
+    );
 }
 
 #[test]

@@ -47,12 +47,22 @@ impl NativeStack<'_, '_> {
         let (Some(left), Some(right)) = (self.value(left), self.value(right)) else {
             return Ok(false);
         };
-        let (range, called) = self
-            .call
-            .run_action_with_call(Action::Compare(op, [left, right]), false)?;
-        let Value::Boolean(result) = self.call.vm.registers[range.start] else {
-            unreachable!("comparison result")
-        };
+        let destination = self.end();
+        let TagResult {
+            range,
+            called,
+            yielded,
+        } = self.run_tag_action(Action::Compare(op, [left, right]))?;
+        let result = self.call.vm.registers[range.start].is_truthy();
+        if let Some(yielded) = yielded {
+            let value = self.call.vm.registers[range.start];
+            self.call.vm.registers[destination] = value;
+            self.call.vm.gc_new_value(value);
+            self.base = yielded.start;
+            self.set_window_end(yielded.end - 1);
+            self.call.vm.top = yielded.end - 1;
+            return Ok(result);
+        }
         if called {
             self.restore_window_call_base();
         }

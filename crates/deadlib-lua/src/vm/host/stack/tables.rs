@@ -22,19 +22,26 @@ impl NativeStack<'_, '_> {
         self.call.vm.gc_new_value(table);
         self.push(table)
     }
-    fn read_table(&mut self, target: Value, key: Value, raw: bool) -> Result<Value, Error> {
+    fn read_table(
+        &mut self,
+        target: Value,
+        key: Value,
+        raw: bool,
+    ) -> Result<(Value, Option<std::ops::Range<usize>>), Error> {
         self.check_error()?;
         if raw {
-            return Ok(self.call.vm.table(target)?.get(key));
+            return Ok((self.call.vm.table(target)?.get(key), None));
         }
-        let (range, called) = self
-            .call
-            .run_action_with_call(Action::Get([target, key]), false)?;
+        let TagResult {
+            range,
+            called,
+            yielded,
+        } = self.run_tag_action(Action::Get([target, key]))?;
         let value = self.call.vm.registers[range.start];
         if called {
             self.restore_window_call_base();
         }
-        Ok(value)
+        Ok((value, yielded))
     }
     fn write_table(
         &mut self,
@@ -42,21 +49,22 @@ impl NativeStack<'_, '_> {
         key: Value,
         value: Value,
         raw: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<Option<std::ops::Range<usize>>, Error> {
         self.check_error()?;
         if raw {
             let Value::Table(table) = target else {
                 return Err(self.error(b"raw native access requires a table"));
             };
-            return self.call.vm.raw_set(table, key, value);
+            self.call.vm.raw_set(table, key, value)?;
+            return Ok(None);
         }
-        let (_, called) = self
-            .call
-            .run_action_with_call(Action::Set([target, key, value]), false)?;
+        let TagResult {
+            called, yielded, ..
+        } = self.run_tag_action(Action::Set([target, key, value]))?;
         if called {
             self.restore_window_call_base();
         }
-        Ok(())
+        Ok(yielded)
     }
     /// Replace the top key with a table lookup; raw access bypasses metamethods.
     ///
@@ -67,9 +75,17 @@ impl NativeStack<'_, '_> {
         self.check_error()?;
         let target = self.indexed_value(index)?;
         let key = self.indexed_value(-1)?;
-        let value = self.read_table(target, key, raw)?;
-        self.set(-1, value)?;
-        self.call.vm.registers.truncate(self.base + self.top());
+        let destination = self.end() - 1;
+        let (value, yielded) = self.read_table(target, key, raw)?;
+        self.call.vm.registers[destination] = value;
+        self.call.vm.gc_new_value(value);
+        if let Some(yielded) = yielded {
+            self.base = yielded.start;
+            self.set_window_end(yielded.end - 1);
+            self.call.vm.top = yielded.end - 1;
+        } else {
+            self.call.vm.registers.truncate(self.end());
+        }
         Ok(())
     }
     /// Push a field lookup without adding its key to the visible native stack.
@@ -83,8 +99,18 @@ impl NativeStack<'_, '_> {
         }
         let target = self.indexed_value(index)?;
         let key = self.intern(name);
-        let value = self.read_table(target, key, false)?;
-        self.push(value)
+        let destination = self.end();
+        let (value, yielded) = self.read_table(target, key, false)?;
+        if let Some(yielded) = yielded {
+            self.call.vm.registers[destination] = value;
+            self.call.vm.gc_new_value(value);
+            self.base = yielded.start;
+            self.set_window_end(yielded.end);
+            self.call.vm.top = yielded.end;
+            Ok(())
+        } else {
+            self.push(value)
+        }
     }
     /// Pop a key and value after successful assignment to the indexed target.
     /// Raw access bypasses metamethods.
@@ -96,8 +122,14 @@ impl NativeStack<'_, '_> {
         let target = self.indexed_value(index)?;
         let key = self.indexed_value(-2)?;
         let value = self.indexed_value(-1)?;
-        self.write_table(target, key, value, raw)?;
-        self.set_top(self.top() - 2)
+        if let Some(yielded) = self.write_table(target, key, value, raw)? {
+            self.base = yielded.start;
+            self.set_window_end(yielded.end - 2);
+            self.call.vm.top = yielded.end - 2;
+            Ok(())
+        } else {
+            self.set_top(self.top() - 2)
+        }
     }
     /// Pop the top value after successful field assignment.
     ///
@@ -108,8 +140,14 @@ impl NativeStack<'_, '_> {
         let target = self.indexed_value(index)?;
         let value = self.indexed_value(-1)?;
         let key = self.intern(name);
-        self.write_table(target, key, value, false)?;
-        self.set_top(self.top() - 1)
+        if let Some(yielded) = self.write_table(target, key, value, false)? {
+            self.base = yielded.start;
+            self.set_window_end(yielded.end - 1);
+            self.call.vm.top = yielded.end - 1;
+            Ok(())
+        } else {
+            self.set_top(self.top() - 1)
+        }
     }
     /// Push a raw integer-key lookup.
     ///
@@ -118,7 +156,7 @@ impl NativeStack<'_, '_> {
     pub fn raw_get_integer(&mut self, index: isize, key: i32) -> Result<(), Error> {
         self.check_error()?;
         let target = self.indexed_value(index)?;
-        let value = self.read_table(target, Value::Number(f64::from(key)), true)?;
+        let (value, _) = self.read_table(target, Value::Number(f64::from(key)), true)?;
         self.push(value)
     }
     /// Pop the top value after raw integer-key assignment.

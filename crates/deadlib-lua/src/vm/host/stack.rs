@@ -44,6 +44,12 @@ pub struct NativeStack<'call, 'vm> {
     finished: bool,
 }
 
+struct TagResult {
+    range: std::ops::Range<usize>,
+    called: bool,
+    yielded: Option<std::ops::Range<usize>>,
+}
+
 impl<'vm> HostCall<'vm> {
     /// Open a mutable native stack initialized with the callback's arguments.
     ///
@@ -100,6 +106,38 @@ impl<'vm> HostCall<'vm> {
 }
 
 impl NativeStack<'_, '_> {
+    fn run_tag_action(&mut self, action: Action<'_>) -> Result<TagResult, Error> {
+        let selected = matches!(
+            self.call.vm.frames[self.frame].function,
+            FrameKind::Native(CONT_NATIVE_WINDOW)
+        );
+        if selected {
+            self.call.vm.api_calls.push(ApiCall {
+                thread: self.thread_id(),
+                frame: self.call.vm.frames.len(),
+                barriers: self.call.vm.frames[self.frame].barriers + 2,
+                status: NativeCallStatus::Ok,
+                yielded: None,
+            });
+        }
+        let outcome = self.call.run_action_with_call(action, false);
+        let yielded = if selected {
+            self.call
+                .vm
+                .api_calls
+                .pop()
+                .expect("tag-method API scope")
+                .yielded
+        } else {
+            None
+        };
+        let (range, called) = outcome?;
+        Ok(TagResult {
+            range,
+            called,
+            yielded,
+        })
+    }
     /// Apply a collector operation while preserving this native stack.
     /// Collection and completed steps run finalizers through the shared child
     /// scheduler, with no extra visible Lua/native function frame. The result

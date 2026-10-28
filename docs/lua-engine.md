@@ -55,7 +55,7 @@ passed 629 Rust tests on each platform after fixing the remaining fixture
 assumptions. Crashing GNU C `unpack` inputs run in a separate strict audit;
 five native crashes remain recorded, with signed-overflow diagnostics and an
 independent wrapping control. The default reference flags remain unchanged.
-The current runs pass 803 Rust tests on Windows x64 and 804 on Linux x64 and
+The current runs pass 805 Rust tests on Windows x64 and 806 on Linux x64 and
 Linux i686 SSE2. The default x87 arithmetic baseline and five bounded traceback
 requests retain failed/incomplete observations. Complete C/auxiliary APIs and
 remaining language, library, debug, GC and resource behavior must also be
@@ -63,7 +63,7 @@ completed. Selected passing probes and declaration counts do not close these
 gates. Production migration also requires the subsequent performance gates.
 
 Validation also includes strict Clippy, a dependency tree containing only the new
-crate, 715 differential/adversarial integration tests, eighty-four unit tests and
+crate, 717 differential/adversarial integration tests, eighty-four unit tests and
 four runnable documentation examples. Generated cases include 1,000 numeric/logical
 expressions, 325 metamethod-handler combinations, 5,120 arbitrary byte inputs,
 4,000 byte-pattern cases, 2,000 binary replacements, 2,000 float formats, 2,000 binary-scaling cases and 2,000
@@ -72,7 +72,7 @@ traces across all permutations through length six, callback mutations, nested
 sorting, errors and metatables. Coroutine generation exercises 300 resume sequences
 and recursive generators, alongside nested resumers, native callbacks, environments,
 failed/suspended thread cells, result arity, C-call limits and quota recovery.
-A separate [library argument audit](testing/2026-10-28-rust-lua-thread-tables-stdlib.json)
+A separate [library argument audit](testing/2026-10-28-rust-lua-table-yields-stdlib.json)
 matches all 5,507 bounded cases against the standalone Windows/MSVC reference.
 The default native adapter closes the fourteen previously retained native-loading
 argument mismatches; full standard-library parity remains open.
@@ -1432,6 +1432,17 @@ match 3,468 observations on both tested pointer widths. The CLI uses a 32 MiB
 execution-thread stack to support recursive native calls in debug builds.
 General metamethod continuations, allocation/GC accounting, lifecycle/allocator
 APIs and full Lua 5.1 parity remain unfinished.
+
+The [table-metamethod yield checks](testing/2026-10-28-rust-lua-table-yields.md)
+match 1,078 observations through selected table/field and comparison APIs,
+including direct C tag methods, typed yielded values, negative offsets and
+repeated yields. Escaped calls retain pending frames while removing their
+finished C-call charge and barrier. Setter resumptions preserve the operand
+prefix, and collection clears open locals above the lowered physical top.
+A portable regression repeats 760 observations without the default C feature.
+Broader resumptions retain checked-reference invariant failures and reference
+crashes; arbitrary reader/body/API interleavings, GC accounting, lifecycle and
+allocator APIs, resource behavior and full Lua 5.1 parity remain open.
 
 ## Reference contract
 

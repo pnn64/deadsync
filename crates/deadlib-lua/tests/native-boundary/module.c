@@ -1260,3 +1260,8 @@ EXPORT int boundary_allocation_yield_tail(lua_State *L) {return inactive_yield_t
 EXPORT int boundary_table_thread(lua_State *L) {return selected_table(L);}
 EXPORT int boundary_table_thread_panic(lua_State *L) {return selected_table_panic(L);}
 EXPORT int boundary_table_invoke(lua_State *L) {lua_call(L,lua_gettop(L)-1,-1);return lua_gettop(L);}
+#include "../native-default/table-yields.c"
+EXPORT int boundary_table_yield(lua_State *L) {return selected_table_yield(L);}
+EXPORT int boundary_table_c_yield_all(lua_State *L) {return selected_table_yield_all(L);}
+EXPORT int boundary_table_c_yield_tail(lua_State *L) {return selected_table_yield_tail(L);}
+EXPORT int boundary_table_c_yield_zero(lua_State *L) {return selected_table_yield_zero(L);}

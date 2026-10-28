@@ -455,6 +455,17 @@ fn selected_table_corpus() {
 }
 
 #[test]
+fn selected_table_tag_methods_preserve_yields_and_later_resumptions() {
+    let _guard = VMS.lock().unwrap();
+    let f = fixture();
+    let mut vm = Vm::new();
+    let path = vm.intern(f.module.to_string_lossy().as_bytes());
+    vm.set_global(b"library_path", path).unwrap();
+    script(&mut vm,b"local m=assert(package.loadlib(library_path,'luaopen_native'))('table yields');boundary_table_thread_panic=m.table_thread_panic;boundary_table_yield=m.table_yield;boundary_table_c_yield_all=m.table_c_yield_all;boundary_table_c_yield_tail=m.table_c_yield_tail;boundary_table_c_yield_zero=m.table_c_yield_zero;boundary_execution_yield_tail=m.yield_tail");
+    script(&mut vm, include_bytes!("native-boundary/table-yields.lua"));
+}
+
+#[test]
 fn default_cli_loads_an_unmodified_public_header_module() {
     let f = fixture();
     for entry in ["direct", "require"] {

@@ -715,6 +715,9 @@ impl Vm {
         let boundaries = frames[..end]
             .iter().enumerate()
             .filter(|(index, f)| {
+                if f.pc == host::API_YIELDED && matches!(f.function, FrameKind::Native(CONT_RAW | CONT_BOOL | CONT_NOT | CONT_IGNORE)) {
+                    return false;
+                }
                 if frames.get(index + 1).is_some_and(|next| {
                     matches!(next.function, FrameKind::Native(CONT_RETURN))
                         || (matches!(next.function, FrameKind::Native(CONT_HOOK | CONT_NATIVE_HOOK)) && f.pc == 0)
@@ -812,7 +815,16 @@ impl Vm {
                     )
                 )
         }) {
-            let barriers = frames[index].barriers;
+            let barriers = frames
+                .get(index + 1)
+                .filter(|frame| {
+                    frame.pc == host::API_YIELDED
+                        && matches!(
+                            frame.function,
+                            FrameKind::Native(CONT_RAW | CONT_BOOL | CONT_NOT | CONT_IGNORE)
+                        )
+                })
+                .map_or(frames[index].barriers, |frame| frame.barriers);
             // The API's C invocation has already returned. Resumed Lua keeps
             // only boundaries introduced above that escaped invocation.
             for frame in &mut frames[index..] {
