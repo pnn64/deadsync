@@ -5799,12 +5799,22 @@ mod runtime_regression_tests {
     /// Routine notes owned by P1 at beats 1 and 2 (columns 0 and 1) and by P2
     /// at beat 1 (column 7), so both participants have a note on one row.
     fn routine_state() -> State {
+        routine_state_for_style(GameplayInputPlayStyle::Routine)
+    }
+
+    fn routine_state_for_style(style: GameplayInputPlayStyle) -> State {
+        assert!(style.is_routine());
         let song = Arc::new(regression_song());
         let mut chart = song.charts[0].clone();
-        chart.chart_type = "dance-routine".to_string();
+        chart.chart_type = if style.is_pump() {
+            "pump-routine"
+        } else {
+            "dance-routine"
+        }
+        .to_string();
         let chart = Arc::new(chart);
         let mut payload = regression_payload_with_segments(TimingSegments::default(), 96);
-        payload.parsed_notes = [(0, 48, 0), (1, 48, 7), (0, 96, 1)]
+        payload.parsed_notes = [(0, 48, 0), (1, 48, style.cols_per_player() - 1), (0, 96, 1)]
             .into_iter()
             .map(|(player, row_index, column)| ParsedNote {
                 player,
@@ -5821,7 +5831,7 @@ mod runtime_regression_tests {
             [payload.clone(), payload],
             GameplayViewport::default(),
             GameplaySession {
-                play_style: GameplayInputPlayStyle::Routine,
+                play_style: style,
                 joined_sides: [true, true],
                 ..Default::default()
             },
@@ -5885,33 +5895,65 @@ mod runtime_regression_tests {
 
     #[test]
     fn routine_simultaneous_notes_of_different_participants_are_two_judged_rows() {
-        let mut state = routine_state();
-        assert_eq!(state.num_players(), 2);
-        assert_eq!(state.num_cols(), 16);
-        // Each participant's field holds only the notes it owns.
-        let p1 = routine_note(&state, 0);
-        let p2 = routine_note(&state, 15);
-        assert_eq!(state.chart_runtime.notes[p1].participant, Some(0));
-        assert_eq!(state.chart_runtime.notes[p2].participant, Some(1));
-        assert_eq!(state.chart_runtime.notes[p1].row_index, state.chart_runtime.notes[p2].row_index);
-        assert!(!state.chart_runtime.notes.iter().any(|note| note.column == 7 || note.column == 8));
+        for style in [
+            GameplayInputPlayStyle::Routine,
+            GameplayInputPlayStyle::PumpRoutine,
+        ] {
+            let mut state = routine_state_for_style(style);
+            let width = style.cols_per_player();
+            assert_eq!(state.num_players(), 2);
+            assert_eq!(state.num_cols(), 2 * width);
+            let p1 = routine_note(&state, 0);
+            let p2 = routine_note(&state, 2 * width - 1);
+            assert_eq!(state.chart_runtime.notes[p1].participant, Some(0));
+            assert_eq!(state.chart_runtime.notes[p2].participant, Some(1));
+            assert_eq!(
+                state.chart_runtime.notes[p1].row_index,
+                state.chart_runtime.notes[p2].row_index
+            );
+            assert!(
+                !state
+                    .chart_runtime
+                    .notes
+                    .iter()
+                    .any(|note| note.column == width - 1 || note.column == width)
+            );
 
-        // P1 steps left on the first pad and P2 steps right on the second.
-        let time_ns = state.chart_runtime.note_time_cache_ns[p1];
-        routine_step(&mut state, &[Lane::Left, Lane::P2Right], time_ns);
-
-        // ScreenGameplay sends each step to both Players.
-        assert!(state.lane_is_pressed(0) && state.lane_is_pressed(8));
-        assert!(state.lane_is_pressed(7) && state.lane_is_pressed(15));
-        for note in [p1, p2] {
-            let result = state.chart_runtime.notes[note].result.as_ref().expect("note judged");
-            assert_eq!(result.grade, JudgeGrade::Fantastic);
+            let time_ns = state.chart_runtime.note_time_cache_ns[p1];
+            // Use the actual physical input route: in Pump, P2Right maps to
+            // field column 9, then broadcasts to participant 2's column 19.
+            for physical in [Lane::Left, Lane::P2Right] {
+                assert!(state.queue_live_input_edge(physical, |lane, _, _, _| {
+                    test_input_edge_at(lane, true, time_ns)
+                }));
+            }
+            routine_step(&mut state, &[], time_ns);
+            assert!(state.lane_is_pressed(0) && state.lane_is_pressed(width));
+            assert!(state.lane_is_pressed(width - 1) && state.lane_is_pressed(2 * width - 1));
+            for note in [p1, p2] {
+                let result = state.chart_runtime.notes[note]
+                    .result
+                    .as_ref()
+                    .expect("note judged");
+                assert_eq!(result.grade, JudgeGrade::Fantastic);
+            }
+            for player in &state.players_runtime.players {
+                assert_eq!(judged(&player.judgment_counts), 1);
+                assert_eq!(player.combo, 1);
+            }
+            for physical in [Lane::Left, Lane::P2Right] {
+                assert!(state.queue_live_input_edge(physical, |lane, _, _, _| {
+                    test_input_edge_at(lane, false, time_ns + 1)
+                }));
+            }
+            routine_step(&mut state, &[], time_ns + 1);
+            for column in [0, width, width - 1, 2 * width - 1] {
+                assert!(
+                    !state.lane_is_pressed(column),
+                    "release missed column {column}"
+                );
+            }
         }
-        // One row per participant, not one shared row.
-        assert_eq!(judged(&state.players_runtime.players[0].judgment_counts), 1);
-        assert_eq!(judged(&state.players_runtime.players[1].judgment_counts), 1);
-        assert_eq!(state.players_runtime.players[0].combo, 1);
-        assert_eq!(state.players_runtime.players[1].combo, 1);
     }
 
     #[test]

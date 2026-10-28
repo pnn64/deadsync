@@ -1,4 +1,4 @@
-use deadsync_chart::SongData;
+use deadsync_chart::{GameplayChartData, SongData};
 use deadsync_core::input::MAX_PLAYERS;
 use deadsync_gameplay::{
     CourseDisplayTiming, CourseDisplayTotals, CourseLifeConfig, course_display_timing_for_stages,
@@ -118,36 +118,62 @@ fn course_stage_runtime_from_plan(
     })
 }
 
-fn add_course_stage_totals(
+/// Loading can fail if a simfile disappears or changes after course selection.
+/// Keep the loader explicit so this boundary can be exercised without global
+/// scan configuration or external song packs.
+fn add_course_stage_totals_with_loader(
     totals: &mut [CourseDisplayTotals; MAX_PLAYERS],
     stage: &CourseStageRuntime,
     chart_type: &str,
-) -> Option<()> {
-    let couple_style = match chart_type {
-        "dance-couple" => Some(deadsync_gameplay::GameplayInputPlayStyle::Couple),
-        "pump-couple" => Some(deadsync_gameplay::GameplayInputPlayStyle::PumpCouple),
-        "dance-routine" => Some(deadsync_gameplay::GameplayInputPlayStyle::Routine),
-        "pump-routine" => Some(deadsync_gameplay::GameplayInputPlayStyle::PumpRoutine),
-        _ => None,
-    };
-    for (player_idx, total) in totals.iter_mut().enumerate() {
-        let Some(chart) = stage
-            .song
-            .chart_for_steps_index(chart_type, stage.steps_index[player_idx])
-        else {
-            continue;
+    load: &mut impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
+) -> Result<(), String> {
+    use deadsync_gameplay::GameplayInputPlayStyle as Style;
+    let partner_style = [
+        ("dance-couple", Style::Couple),
+        ("pump-couple", Style::PumpCouple),
+        ("dance-routine", Style::Routine),
+        ("pump-routine", Style::PumpRoutine),
+    ]
+    .into_iter()
+    .find_map(|(name, style)| name.eq_ignore_ascii_case(chart_type).then_some(style));
+    let mut updated = *totals;
+    let mut loaded: Option<(usize, GameplayChartData)> = None;
+    for (player_idx, total) in updated.iter_mut().enumerate() {
+        let steps_index = stage.steps_index[player_idx];
+        let context = || {
+            format!(
+                "{}: {chart_type} chart at steps index {steps_index}",
+                stage.song.simfile_path.display()
+            )
         };
-        let add = if let Some(style) = couple_style {
+        let chart = stage
+            .song
+            .chart_for_steps_index(chart_type, steps_index)
+            .ok_or_else(|| format!("{} is missing", context()))?;
+        let add = if let Some(style) = partner_style {
             let index = stage
                 .song
                 .charts
                 .iter()
-                .position(|entry| std::ptr::eq(entry, chart))?;
-            let mut payloads =
-                deadsync_simfile::app_runtime::load_gameplay_charts(&stage.song, &[index], 0.0)
-                    .map_err(|error| log::warn!("Cannot load partner course chart: {error}"))
-                    .ok()?;
-            course_display_totals_for_chart_side(chart, &payloads.remove(0), style, player_idx)
+                .position(|entry| std::ptr::eq(entry, chart))
+                .ok_or_else(|| format!("{} is not in its song", context()))?;
+            if loaded
+                .as_ref()
+                .is_none_or(|(loaded_index, _)| *loaded_index != index)
+            {
+                let mut payloads = load(&stage.song, &[index], 0.0)
+                    .map_err(|error| format!("Cannot load {}: {error}", context()))?;
+                if payloads.len() != 1 {
+                    return Err(format!(
+                        "Loader returned {} payloads for {} (expected one)",
+                        payloads.len(),
+                        context()
+                    ));
+                }
+                loaded = payloads.pop().map(|payload| (index, payload));
+            }
+            let (_, payload) = loaded.as_ref().expect("one validated payload was loaded");
+            course_display_totals_for_chart_side(chart, payload, style, player_idx)
         } else {
             course_display_totals_for_chart(chart)
         };
@@ -159,7 +185,21 @@ fn add_course_stage_totals(
         total.rolls_total = total.rolls_total.saturating_add(add.rolls_total);
         total.mines_total = total.mines_total.saturating_add(add.mines_total);
     }
-    Some(())
+    *totals = updated;
+    Ok(())
+}
+
+fn add_course_stage_totals(
+    totals: &mut [CourseDisplayTotals; MAX_PLAYERS],
+    stage: &CourseStageRuntime,
+    chart_type: &str,
+) -> Result<(), String> {
+    add_course_stage_totals_with_loader(
+        totals,
+        stage,
+        chart_type,
+        &mut deadsync_simfile::app_runtime::load_gameplay_charts,
+    )
 }
 
 pub fn append_endless_cycle(
@@ -167,23 +207,48 @@ pub fn append_endless_cycle(
     selection: SelectedCoursePlan,
     chart_type: &str,
 ) -> bool {
+    match append_endless_cycle_with_loader(
+        course,
+        selection,
+        chart_type,
+        &mut deadsync_simfile::app_runtime::load_gameplay_charts,
+    ) {
+        Ok(appended) => appended,
+        Err(error) => {
+            log::warn!("Unable to append Endless course cycle: {error}");
+            false
+        }
+    }
+}
+
+fn append_endless_cycle_with_loader(
+    course: &mut CourseRunState,
+    selection: SelectedCoursePlan,
+    chart_type: &str,
+    load: &mut impl FnMut(&SongData, &[usize], f32) -> Result<Vec<GameplayChartData>, String>,
+) -> Result<bool, String> {
     if course.course_type != CourseTypeView::Endless || selection.path != course.path {
-        return false;
+        return Ok(false);
     }
     let previous_len = course.stages.len();
+    let mut totals = course.course_display_totals;
     for stage in selection
         .stages
         .into_iter()
-        .filter_map(|stage| course_stage_runtime_from_plan(stage, chart_type))
+        .filter_map(|plan| course_stage_runtime_from_plan(plan, chart_type))
     {
-        let mut totals = course.course_display_totals;
-        if add_course_stage_totals(&mut totals, &stage, chart_type).is_none() {
-            return false;
+        if let Err(error) =
+            add_course_stage_totals_with_loader(&mut totals, &stage, chart_type, load)
+        {
+            // The only mutations so far are appended stages. Drop those on
+            // failure, retaining the original stages, cursor and totals.
+            course.stages.truncate(previous_len);
+            return Err(error);
         }
-        course.course_display_totals = totals;
         course.stages.push(stage);
     }
-    course.stages.len() != previous_len
+    course.course_display_totals = totals;
+    Ok(course.stages.len() != previous_len)
 }
 
 pub fn build_course_run_from_selection(
@@ -194,7 +259,12 @@ pub fn build_course_run_from_selection(
     let mut course_display_totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
     for stage in selection.stages {
         if let Some(runtime) = course_stage_runtime_from_plan(stage, chart_type) {
-            add_course_stage_totals(&mut course_display_totals, &runtime, chart_type)?;
+            if let Err(error) =
+                add_course_stage_totals(&mut course_display_totals, &runtime, chart_type)
+            {
+                log::warn!("Unable to build course run: {error}");
+                return None;
+            }
             stages.push(runtime);
         }
     }
@@ -490,3 +560,6 @@ pub fn build_course_graph_stages(
 #[cfg(test)]
 #[path = "../../../tests/perf/course_updates.rs"]
 mod update_tests;
+
+#[cfg(test)]
+mod partner_tests;

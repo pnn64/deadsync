@@ -322,7 +322,7 @@ fn buffered_owned_append(
         return false;
     }
     for stage in &stages {
-        add_course_stage_totals(&mut course.course_display_totals, stage, chart_type);
+        let _ = add_course_stage_totals(&mut course.course_display_totals, stage, chart_type);
     }
     course.stages.extend(stages);
     true
