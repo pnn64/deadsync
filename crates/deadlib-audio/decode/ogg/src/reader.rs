@@ -312,6 +312,17 @@ impl PageDecoder {
         }
     }
     fn fill_page(&mut self, input: &[u8]) -> Result<(usize, bool), Error> {
+        // A complete page can be copied once into its final-sized buffer.
+        if self.buffer.is_empty()
+            && let Ok(length) = page::page_size(input)
+            && input.len() >= length
+        {
+            reserve(&mut self.buffer, length)?;
+            self.buffer.extend_from_slice(&input[..length]);
+            self.length = length;
+            page::check_crc(&self.buffer)?;
+            return Ok((length, true));
+        }
         let mut consumed = 0;
         loop {
             let target = if self.length != 0 {
