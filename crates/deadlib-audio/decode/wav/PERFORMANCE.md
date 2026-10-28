@@ -165,3 +165,17 @@ cases. All 44 integration tests pass in x64 debug/release and i686 debug, includ
 the zero-allocation metadata probe; Clippy with denied warnings passes. The new
 helper is also compared with a scalar search by the shared fuzz harness. See
 FUZZING.md for additional mutation/sanitizer and retained-corpus replay evidence.
+
+## Known-length sequential output
+
+The PCM16 harness now includes `wav/encode_known_i16`, using a Write-only slice
+sink and upfront frame count. `validation/pcm16-known-output-repeat.{tsv,json}`
+records the post-test run: median 0.321 ms for known-length output, 0.332 ms for
+seekable finalization and 0.422 ms for Hound's bounded batches. The native timing
+ranges overlap; no encoding-speed improvement is claimed from the new API.
+Both native output paths request zero heap allocations. Input/output buffers,
+resident-file scope and QueryThreadCycleTime accounting are unchanged. The raw
+initial run is also retained as `pcm16-known-output.*`; it overlapped verification
+work and is not the basis for a performance claim. The repeat ran after those
+checks and mutation processes finished. Broader output formats/ADPCM throughput,
+OS pipe/file costs and RSS remain outstanding.

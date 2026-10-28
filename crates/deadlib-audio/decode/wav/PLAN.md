@@ -11,7 +11,8 @@ backends stay unchanged. Preserve unrelated work and commit each verified milest
    extensible format, native integers/floats, unknown chunk retention, boundaries.
 2. Read/seek, chunk streaming and native PCM/float encoding implemented (14 total
    integration tests, debug/release and Clippy; see COVERAGE.md). Forward-only
-   audio convenience and known-length nonseekable output remain. RIFF and
+   audio convenience remains. Known-length nonseekable output is now implemented
+   for generic encoded data, native samples and ADPCM; see STREAMING.md. RIFF and
    64-bit output, extensible valid bits/masks, metadata and exact roundtrips.
 3. Microsoft and 4-bit WAV IMA ADPCM block encoding/decoding, incremental encoding,
    borrowed range access and file-backed cached seeking are implemented. See

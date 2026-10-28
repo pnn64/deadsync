@@ -107,6 +107,34 @@ impl<W: Write + Seek> Writer<W> {
         let mux = Muxer::new(inner, &format[..n], options, metadata)?;
         Ok(Self { mux, spec, endian })
     }
+    pub fn finish(self) -> Result<W, Error> {
+        self.mux.finish()
+    }
+}
+impl<W: Write> Writer<W> {
+    /// Emit final sizes before audio, allowing a Write-only sink. Call
+    /// finish_stream after exactly `frames` complete native frames.
+    pub fn with_frames(
+        inner: W,
+        spec: Spec,
+        options: WriteOptions,
+        metadata: &[RawChunk<'_>],
+        frames: u64,
+    ) -> Result<Self, Error> {
+        let endian = options.container.endian();
+        let (format, n) = spec.header(endian, options.force_extensible)?;
+        let bytes = frames
+            .checked_mul(u64::from(spec.channels) * u64::from(spec.sample_format.bits() / 8))
+            .ok_or(Error::Limit("data size overflow"))?;
+        let mux = Muxer::with_lengths(
+            inner,
+            &format[..n],
+            options,
+            metadata,
+            crate::DataLength { bytes, frames },
+        )?;
+        Ok(Self { mux, spec, endian })
+    }
     pub fn spec(&self) -> Spec {
         self.spec
     }
@@ -243,7 +271,7 @@ impl<W: Write + Seek> Writer<W> {
             },
         )
     }
-    pub fn finish(self) -> Result<W, Error> {
-        self.mux.finish()
+    pub fn finish_stream(self) -> Result<W, Error> {
+        self.mux.finish_stream()
     }
 }

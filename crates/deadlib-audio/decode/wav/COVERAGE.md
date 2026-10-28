@@ -101,10 +101,17 @@ The optimized source also passes repeated checked mutation campaigns, all 1474
 retained corpus inputs, 500000 fresh ASan executions, and the metadata oracle
 campaign. Verified corpus archives and raw reports are preserved; see FUZZING.md.
 
+Known-length Write-only output now shares the native/generic muxer and ADPCM
+encoder paths. Five tests add native bit/layout parity, compressed final padding,
+declared-count validation, short/failing I/O and 64-bit preflight boundaries.
+All 49 integration tests pass in x64 release and i686 debug, and Clippy passes.
+Two million checked mutations cover the new known-length output comparisons.
+STREAMING.md documents the API and PERFORMANCE.md records scoped heap/cycle data.
+
 Remaining work: forward-only audio convenience, metadata profile/semantic validation,
 wavl/slnt and multiple-data handling, oracle comparisons, broader fuzzing, sparse >4 GiB
 evidence and broad performance coverage (the first PCM16 baseline is in
 [PERFORMANCE.md](PERFORMANCE.md)); forward-only audio convenience APIs,
-known-length nonseekable encoding, and extensible compressed formats. BW64 shares 64-bit container
+and extensible compressed formats. BW64 shares 64-bit container
 mechanics; ADM profile conformance is not yet claimed. RIFX extensible GUID byte
 order follows the container but needs external-reference validation.

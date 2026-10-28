@@ -250,6 +250,27 @@ fn main() {
             .unwrap(),
         samples
     );
+    bench("wav/encode_known_i16", 128, samples.len() * 2, || {
+        let mut w = Writer::with_frames(
+            black_box(output.as_mut_slice()),
+            spec,
+            options,
+            &[],
+            frames as u64,
+        )
+        .unwrap();
+        w.write_i16(black_box(&samples)).unwrap();
+        black_box(w.finish_stream().unwrap());
+    });
+    assert_eq!(
+        Wave::parse(&output)
+            .unwrap()
+            .pcm()
+            .unwrap()
+            .as_i16()
+            .unwrap(),
+        samples
+    );
     let hs = hound::WavSpec {
         channels: 2,
         sample_rate: 48000,

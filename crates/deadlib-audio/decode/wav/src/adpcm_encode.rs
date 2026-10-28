@@ -232,7 +232,47 @@ impl<W: Write + Seek> AdpcmWriter<W> {
         options: WriteOptions,
         metadata: &[RawChunk<'_>],
     ) -> Result<Self, Error> {
+        Self::initialize(inner, spec, options.container.endian(), |inner, header| {
+            Muxer::new(inner, header, options, metadata)
+        })
+    }
+    pub fn finish(mut self) -> Result<W, Error> {
+        self.finish_pending()?;
+        self.mux.finish()
+    }
+}
+impl<W: Write> AdpcmWriter<W> {
+    /// Known-length ADPCM output for a nonseekable sink. Final block padding is
+    /// included in encoded bytes; fact/ds64 retain exactly the declared frames.
+    pub fn with_frames(
+        inner: W,
+        spec: AdpcmSpec,
+        options: WriteOptions,
+        metadata: &[RawChunk<'_>],
+        frames: u64,
+    ) -> Result<Self, Error> {
         let endian = options.container.endian();
+        Self::initialize(inner, spec, endian, |inner, header| {
+            let codec = Adpcm::from_format(Format::parse(header, endian)?)?;
+            let blocks = frames.div_ceil(codec.frames_per_block() as u64);
+            let bytes = blocks
+                .checked_mul(codec.block_bytes() as u64)
+                .ok_or(Error::Limit("ADPCM data size overflow"))?;
+            Muxer::with_lengths(
+                inner,
+                header,
+                options,
+                metadata,
+                crate::DataLength { bytes, frames },
+            )
+        })
+    }
+    fn initialize(
+        inner: W,
+        spec: AdpcmSpec,
+        endian: Endian,
+        mux: impl FnOnce(W, &[u8]) -> Result<Muxer<W>, Error>,
+    ) -> Result<Self, Error> {
         let mut header = [0; 50];
         let header_len = spec.format(endian, &mut header)?;
         let codec = Adpcm::from_format(Format::parse(&header[..header_len], endian)?)?;
@@ -242,7 +282,7 @@ impl<W: Write + Seek> AdpcmWriter<W> {
         let mut encoded = Vec::new();
         reserve(&mut encoded, codec.block_bytes())?;
         encoded.resize(codec.block_bytes(), 0);
-        let mux = Muxer::new(inner, &header[..header_len], options, metadata)?;
+        let mux = mux(inner, &header[..header_len])?;
         Ok(Self {
             mux,
             header,
@@ -274,6 +314,11 @@ impl<W: Write + Seek> AdpcmWriter<W> {
             .frames
             .checked_add((samples.len() / self.channels) as u64)
             .ok_or(Error::Limit("sample count overflow"))?;
+        if let Some(length) = self.mux.expected_length()
+            && frames > length.frames
+        {
+            return Err(Error::Invalid("declared WAVE data length exceeded"));
+        }
         let codec =
             Adpcm::from_format(Format::parse(&self.header[..self.header_len], self.endian)?)?;
         self.failed = true;
@@ -301,9 +346,14 @@ impl<W: Write + Seek> AdpcmWriter<W> {
         self.failed = false;
         Ok(())
     }
-    pub fn finish(mut self) -> Result<W, Error> {
+    fn finish_pending(&mut self) -> Result<(), Error> {
         if self.failed {
             return Err(Error::Invalid("ADPCM writer unusable after I/O error"));
+        }
+        if let Some(length) = self.mux.expected_length()
+            && self.frames != length.frames
+        {
+            return Err(Error::Invalid("incomplete declared WAVE data length"));
         }
         if self.filled != 0 {
             let codec =
@@ -311,7 +361,12 @@ impl<W: Write + Seek> AdpcmWriter<W> {
             codec.encode_block(&self.pending[..self.filled], &mut self.encoded)?;
             self.mux
                 .write_data(&self.encoded, (self.filled / self.channels) as u64)?;
+            self.filled = 0;
         }
-        self.mux.finish()
+        Ok(())
+    }
+    pub fn finish_stream(mut self) -> Result<W, Error> {
+        self.finish_pending()?;
+        self.mux.finish_stream()
     }
 }

@@ -60,6 +60,11 @@ PCM/float counts are checked against block alignment. The native `Writer` uses
 this same muxer. RF64 promotion also accounts for decoded counts above 32 bits,
 even when compressed data is small.
 
+Known-length output also works with Write-only sinks: `Muxer::with_lengths`,
+`Writer::with_frames` and `AdpcmWriter::with_frames` emit final sizes before audio
+and finalize with `finish_stream`. See [STREAMING.md](STREAMING.md) for count
+validation, RF64 selection and sequential I/O semantics.
+
 `metadata` provides borrowed LIST/INFO/adtl, cue, sampler, broadcast extension,
 RF64 marker and BW64 CHNA/XML envelope views. Matching helpers serialize into
 caller buffers. `Chunk::metadata` performs explicit bounded parsing; raw payloads

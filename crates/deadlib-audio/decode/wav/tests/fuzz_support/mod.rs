@@ -523,6 +523,17 @@ fn encode(data: &[u8]) -> u64 {
     let wave = Wave::parse(&bytes).unwrap();
     assert_eq!(wave.data(), payload);
     assert_eq!(wave.format.valid_bits, spec.valid_bits);
+    let mut known = Writer::with_frames(Vec::new(), spec, options, &[], frames as u64).unwrap();
+    known.write_frames(&payload[..split]).unwrap();
+    known.write_frames(&payload[split..]).unwrap();
+    if !payload.is_empty() {
+        assert!(known.write_frames(payload).is_err());
+    }
+    let known = known.finish_stream().unwrap();
+    let parsed = Wave::parse(&known).unwrap();
+    assert_eq!(parsed.format.raw, wave.format.raw);
+    assert_eq!(parsed.data(), wave.data());
+    assert_eq!(parsed.fact, wave.fact);
     let mut paths = (1 << 13) | container(&bytes);
     // Independently generated block parameters expose both encoder geometry checks and sample packing.
     let block_spec = AdpcmSpec {
@@ -553,6 +564,19 @@ fn encode(data: &[u8]) -> u64 {
                 let mut encoded = [0; 4096];
                 let mut decoded = [0; 8192];
                 let len = codec.encode_block(&source[..n], &mut encoded).unwrap();
+                let mut known = deadlib_audio_decode_wav::AdpcmWriter::with_frames(
+                    Vec::new(),
+                    block_spec,
+                    options,
+                    &[],
+                    (n / usize::from(channels)) as u64,
+                )
+                .unwrap();
+                known.write_i16(&source[..n]).unwrap();
+                let bytes = known.finish_stream().unwrap();
+                let parsed = Wave::parse(&bytes).unwrap();
+                assert_eq!(parsed.data(), &encoded[..len]);
+                assert_eq!(parsed.fact, Some((n / usize::from(channels)) as u64));
                 assert_eq!(
                     codec.decode_block(&encoded[..len], &mut decoded).unwrap(),
                     codec.frames_per_block()

@@ -20,7 +20,7 @@ pub use adpcm_reader::AdpcmReader;
 pub use container::{Chunk, Chunks, Container, Ds64, Wave};
 pub use encode::{RawChunk, Spec, WriteOptions, Writer};
 pub use format::{Encoding, Endian, Format, SampleFormat};
-pub use mux::Muxer;
+pub use mux::{DataLength, Muxer};
 pub use pcm::Pcm;
 pub use reader::Reader;
 pub use stream::{ChunkInfo, Stream};
