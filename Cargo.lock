@@ -1363,6 +1363,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "deadlib-image-jpeg"
+version = "0.1.0"
+dependencies = [
+ "deadlib-image",
+]
+
+[[package]]
 name = "deadlib-image-png"
 version = "0.1.0"
 dependencies = [

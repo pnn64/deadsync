@@ -1,0 +1,14 @@
+[package]
+name = "deadlib-image-jpeg"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "GPL-3.0"
+description = "Independent pure-Rust JPEG-1 codec with precision-preserving coefficients"
+repository = "https://github.com/pnn64/deadsync"
+
+[dependencies]
+deadlib-image = { path = "..", version = "0.1.0" }
+
+[lints.clippy]
+perf = { level = "warn", priority = -1 }

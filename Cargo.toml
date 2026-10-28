@@ -50,6 +50,7 @@ members = [
     "crates/deadlib-image",
     "crates/deadlib-image/png",
     "crates/deadlib-image/gif",
+    "crates/deadlib-image/jpeg",
     "crates/deadlib-lua",
     "crates/deadlib-lua-legacy",
     "crates/deadlib-lua-legacy/mlua-sys",
