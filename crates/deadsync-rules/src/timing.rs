@@ -3499,6 +3499,7 @@ mod tests {
             JudgeGrade::Miss => None,
         };
         Note {
+            participant: None,
             beat: row_index as f32,
             quantization_idx: 0,
             column,

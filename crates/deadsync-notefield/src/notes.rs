@@ -2065,6 +2065,7 @@ mod tests {
 
     fn note(beat: f32) -> Note {
         Note {
+            participant: None,
             beat,
             quantization_idx: 0,
             column: 0,

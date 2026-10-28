@@ -29,6 +29,7 @@ fn payload(rows: usize, id: usize) -> GameplayChartData {
         notes: b"1000\n0100\n0010\n0001\n".repeat(rows / 4),
         parsed_notes: (0..rows)
             .map(|row_index| ParsedNote {
+                player: 0,
                 row_index,
                 column: (row_index + id) % 4,
                 note_type: if row_index % 8 == 0 {

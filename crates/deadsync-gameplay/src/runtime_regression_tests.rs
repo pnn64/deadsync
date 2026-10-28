@@ -586,6 +586,7 @@ mod runtime_regression_tests {
 
     fn test_note(column: usize, row_index: usize, note_type: NoteType) -> Note {
         Note {
+            participant: None,
             beat: row_index as f32 / ROWS_PER_BEAT as f32,
             quantization_idx: 0,
             column,
@@ -894,12 +895,14 @@ mod runtime_regression_tests {
             notes: Vec::new(),
             parsed_notes: vec![
                 ParsedNote {
+                    player: 0,
                     row_index: 48,
                     column: 0,
                     note_type: NoteType::Tap,
                     tail_row_index: None,
                 },
                 ParsedNote {
+                    player: 0,
                     row_index: 96,
                     column: 1,
                     note_type: NoteType::Tap,
@@ -1144,6 +1147,7 @@ mod runtime_regression_tests {
         let mut gameplay_chart =
             regression_payload_with_segments(timing_segments, tail_row.max(96));
         gameplay_chart.parsed_notes = vec![ParsedNote {
+            player: 0,
             row_index: 48,
             column: 0,
             note_type: NoteType::Hold,
@@ -5790,5 +5794,296 @@ mod runtime_regression_tests {
         assert!(state.mods.attacks.visual[0].confusion_offset.is_none());
         assert!(state.mods.attacks.visual[0].tipsy.is_none());
         assert!((visibility.dark - 1.0).abs() <= 0.0001);
+    }
+
+    /// Routine notes owned by P1 at beats 1 and 2 (columns 0 and 1) and by P2
+    /// at beat 1 (column 7), so both participants have a note on one row.
+    fn routine_state() -> State {
+        let song = Arc::new(regression_song());
+        let mut chart = song.charts[0].clone();
+        chart.chart_type = "dance-routine".to_string();
+        let chart = Arc::new(chart);
+        let mut payload = regression_payload_with_segments(TimingSegments::default(), 96);
+        payload.parsed_notes = [(0, 48, 0), (1, 48, 7), (0, 96, 1)]
+            .into_iter()
+            .map(|(player, row_index, column)| ParsedNote {
+                player,
+                row_index,
+                column,
+                note_type: NoteType::Tap,
+                tail_row_index: None,
+            })
+            .collect();
+        let payload = Arc::new(payload);
+        init_gameplay_runtime(
+            song,
+            [chart.clone(), chart],
+            [payload.clone(), payload],
+            GameplayViewport::default(),
+            GameplaySession {
+                play_style: GameplayInputPlayStyle::Routine,
+                joined_sides: [true, true],
+                ..Default::default()
+            },
+            GameplayConfig::default(),
+            SyncPref::Default,
+            GameplayMiniIndicatorData::default(),
+            GameplayNoteskinData::default(),
+            NoSongLuaRuntime,
+            empty_crossover_annotations,
+            5,
+            1.0,
+            [ScrollSpeedSetting::default(); MAX_PLAYERS],
+            std::array::from_fn(|_| TestProfile::default()),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            [CourseLifeConfig::Bar; MAX_PLAYERS],
+            false,
+            [0; MAX_PLAYERS],
+        )
+    }
+
+    fn routine_note(state: &State, column: usize) -> usize {
+        state
+            .chart_runtime
+            .notes
+            .iter()
+            .position(|note| note.column == column)
+            .expect("routine note in column")
+    }
+
+    /// Step the shared pads as live input does, at `time_ns`.
+    fn routine_step(state: &mut State, lanes: &[Lane], time_ns: SongTimeNs) {
+        for &lane in lanes {
+            assert!(state.queue_pending_input_edge(lane.index(), test_input_edge_at(lane, true, time_ns)));
+        }
+        let clock = SongClockSnapshot {
+            song_time_ns: time_ns,
+            seconds_per_second: 1.0,
+            mapped_audio: true,
+            valid_at: std::time::Instant::now(),
+            valid_at_host_nanos: 0,
+            timing_diag_enabled: false,
+            timing_diag_callback_gap_ns: 0,
+        };
+        let mut phase_timings = GameplayUpdatePhaseTimings::default();
+        process_input_edges(state, false, &mut phase_timings, clock);
+        let beat = state.timing_runtime.timing.get_beat_for_time_ns(time_ns);
+        let seconds = song_time_ns_to_seconds(time_ns);
+        state.set_song_position_for_test(beat, time_ns, beat, seconds);
+        state.update_judged_rows();
+    }
+
+    fn judged(counts: &judgment::JudgeCounts) -> u32 {
+        counts.iter().sum()
+    }
+
+    #[test]
+    fn routine_simultaneous_notes_of_different_participants_are_two_judged_rows() {
+        let mut state = routine_state();
+        assert_eq!(state.num_players(), 2);
+        assert_eq!(state.num_cols(), 16);
+        // Each participant's field holds only the notes it owns.
+        let p1 = routine_note(&state, 0);
+        let p2 = routine_note(&state, 15);
+        assert_eq!(state.chart_runtime.notes[p1].participant, Some(0));
+        assert_eq!(state.chart_runtime.notes[p2].participant, Some(1));
+        assert_eq!(state.chart_runtime.notes[p1].row_index, state.chart_runtime.notes[p2].row_index);
+        assert!(!state.chart_runtime.notes.iter().any(|note| note.column == 7 || note.column == 8));
+
+        // P1 steps left on the first pad and P2 steps right on the second.
+        let time_ns = state.chart_runtime.note_time_cache_ns[p1];
+        routine_step(&mut state, &[Lane::Left, Lane::P2Right], time_ns);
+
+        // ScreenGameplay sends each step to both Players.
+        assert!(state.lane_is_pressed(0) && state.lane_is_pressed(8));
+        assert!(state.lane_is_pressed(7) && state.lane_is_pressed(15));
+        for note in [p1, p2] {
+            let result = state.chart_runtime.notes[note].result.as_ref().expect("note judged");
+            assert_eq!(result.grade, JudgeGrade::Fantastic);
+        }
+        // One row per participant, not one shared row.
+        assert_eq!(judged(&state.players_runtime.players[0].judgment_counts), 1);
+        assert_eq!(judged(&state.players_runtime.players[1].judgment_counts), 1);
+        assert_eq!(state.players_runtime.players[0].combo, 1);
+        assert_eq!(state.players_runtime.players[1].combo, 1);
+    }
+
+    #[test]
+    fn routine_participants_judge_independently_into_one_shared_score() {
+        let mut state = routine_state();
+        let p1_first = routine_note(&state, 0);
+        let p1_second = routine_note(&state, 1);
+        let p2 = routine_note(&state, 15);
+        let first_time_ns = state.chart_runtime.note_time_cache_ns[p1_first];
+        // P2 is late by a Great/Decent amount while P1 is exact.
+        routine_step(&mut state, &[Lane::Left], first_time_ns);
+        routine_step(
+            &mut state,
+            &[Lane::P2Right],
+            first_time_ns.saturating_add(song_time_ns_from_seconds(0.12)),
+        );
+        let second_time_ns = state.chart_runtime.note_time_cache_ns[p1_second];
+        routine_step(&mut state, &[Lane::Down], second_time_ns);
+
+        let grade = |note: usize| state.chart_runtime.notes[note].result.as_ref().unwrap().grade;
+        assert_eq!(grade(p1_first), JudgeGrade::Fantastic);
+        assert_eq!(grade(p1_second), JudgeGrade::Fantastic);
+        assert!(!matches!(grade(p2), JudgeGrade::Fantastic | JudgeGrade::Miss));
+        let players = &state.players_runtime.players;
+        assert_eq!(players[0].judgment_counts[0], 2);
+        assert_eq!(judged(&players[0].judgment_counts), 2);
+        assert_eq!(players[1].judgment_counts[0], 0);
+        assert_eq!(judged(&players[1].judgment_counts), 1);
+
+        // ScoreKeeperShared: both parts' points over both parts' possible points.
+        let first = state.stage_itg_score_inputs(0).unwrap();
+        let second = state.stage_itg_score_inputs(1).unwrap();
+        assert_eq!(first.possible_grade_points, 2 * second.possible_grade_points);
+        let points = |inputs: ItgScoreInputs| {
+            judgment::itg_grade_points_with_checkpoints(
+                &inputs.scoring_counts,
+                inputs.holds_held_for_score,
+                inputs.rolls_held_for_score,
+                inputs.mines_hit_for_score,
+                inputs.checkpoints_hit,
+                inputs.checkpoints_missed,
+            )
+        };
+        let expected = judgment::calculate_itg_score_percent_from_points(
+            points(first) + points(second),
+            first.possible_grade_points + second.possible_grade_points,
+        );
+        let shared = state.routine_shared_itg_score_percent().unwrap();
+        assert!((shared - expected).abs() < 1e-12);
+        assert!(shared < state.stage_itg_score_percent(0));
+        assert!(shared > state.stage_itg_score_percent(1));
+        assert_ne!(
+            shared,
+            (state.stage_itg_score_percent(0) + state.stage_itg_score_percent(1)) / 2.0
+        );
+
+        // CombinedLifeMeterShared: one meter changed by both participants.
+        assert_eq!(players[0].life, players[1].life);
+        assert_eq!(players[0].life_history, players[1].life_history);
+    }
+
+    #[test]
+    fn routine_hud_shows_the_shared_score_for_both_participants() {
+        let mut state = routine_state();
+        let p1_first = routine_note(&state, 0);
+        let p1_second = routine_note(&state, 1);
+        let first_time_ns = state.chart_runtime.note_time_cache_ns[p1_first];
+        // P1 is exact while P2 is late, so their own scores differ.
+        routine_step(&mut state, &[Lane::Left], first_time_ns);
+        routine_step(
+            &mut state,
+            &[Lane::P2Right],
+            first_time_ns.saturating_add(song_time_ns_from_seconds(0.12)),
+        );
+        let second_time_ns = state.chart_runtime.note_time_cache_ns[p1_second];
+        routine_step(&mut state, &[Lane::Down], second_time_ns);
+
+        let shared = state.routine_shared_itg_score_inputs().unwrap();
+        let own = |player| state.participant_display_itg_score_inputs(player).unwrap();
+        assert!(itg_score_percent_from_inputs(own(0)) > itg_score_percent_from_inputs(shared));
+        assert!(itg_score_percent_from_inputs(own(1)) < itg_score_percent_from_inputs(shared));
+        // Simply Love's Score.lua shows the shared score in both HUD modes.
+        for player in 0..2 {
+            for mode in [
+                GameplayScoreDisplayMode::Normal,
+                GameplayScoreDisplayMode::Predictive,
+            ] {
+                assert_eq!(
+                    state.display_gameplay_itg_score_percent(player, mode),
+                    display_itg_score_percent_for_mode(shared, mode),
+                );
+            }
+            assert_eq!(
+                state.display_predictive_itg_score_percent(player),
+                predictive_itg_score_percent_from_inputs(shared),
+            );
+        }
+        assert_ne!(
+            predictive_itg_score_percent_from_inputs(own(0)),
+            predictive_itg_score_percent_from_inputs(shared),
+        );
+        // Judgments and EX scores stay with each participant.
+        assert_ne!(
+            state.display_ex_score_percent(0, state.player_blue_window_ms(0)),
+            state.display_ex_score_percent(1, state.player_blue_window_ms(1)),
+        );
+        assert_ne!(
+            state.players_runtime.players[0].judgment_counts,
+            state.players_runtime.players[1].judgment_counts,
+        );
+    }
+
+    #[test]
+    fn routine_shared_course_score_keeps_earlier_songs() {
+        let mut state = routine_state();
+        let stage_points = [
+            state.stage_totals_for_player(0).possible_grade_points,
+            state.stage_totals_for_player(1).possible_grade_points,
+        ];
+        let stage_steps = [
+            state.stage_totals_for_player(0).total_steps,
+            state.stage_totals_for_player(1).total_steps,
+        ];
+        // The previous song was all Greats, the current one all Fantastics.
+        let carry = |player: usize| CourseDisplayCarry {
+            scoring_counts: [0, 0, stage_steps[player], 0, 0, 0],
+            ..CourseDisplayCarry::default()
+        };
+        let totals = |player: usize| CourseDisplayTotals {
+            possible_grade_points: 2 * stage_points[player],
+            total_steps: 2 * stage_steps[player],
+            ..CourseDisplayTotals::default()
+        };
+        state.progress.course_display = GameplayCourseDisplayState::new(
+            Some([carry(0), carry(1)]),
+            Some([totals(0), totals(1)]),
+            None,
+        );
+        for player in 0..2 {
+            state.players_runtime.players[player].scoring_counts =
+                [stage_steps[player], 0, 0, 0, 0, 0];
+        }
+
+        // Individual-song saves keep the current song only.
+        assert_eq!(state.routine_shared_stage_itg_score_percent(), Some(1.0));
+        // Course display and evaluation score Greats (2) and Fantastics (5)
+        // over the whole course of both participants.
+        let course = state.routine_shared_itg_score_percent().unwrap();
+        assert!((course - 0.7).abs() < 1e-12, "{course}");
+        let hud = state.display_gameplay_itg_score_percent(1, GameplayScoreDisplayMode::Normal);
+        assert!((hud - 70.0).abs() < 1e-9, "{hud}");
+    }
+
+    #[test]
+    fn routine_failing_one_participant_fails_both() {
+        let mut state = routine_state();
+        assert!(state.force_fail_player(1));
+        assert!(state.player_is_dead(0) && state.player_is_dead(1));
+        assert_eq!(state.players_runtime.players[0].fail_time, state.players_runtime.players[1].fail_time);
+        // The partner's EX score freezes at the shared failure too.
+        assert!(state.players_runtime.players[0].failed_ex_score_inputs.is_some());
+        assert!(state.players_runtime.players[1].failed_ex_score_inputs.is_some());
+    }
+
+    #[test]
+    fn regular_versus_steps_are_not_shared() {
+        let mut state = regression_state_with_session(GameplaySession {
+            play_style: GameplayInputPlayStyle::Versus,
+            joined_sides: [true, true],
+            ..Default::default()
+        });
+        assert!(state.queue_pending_input_edge(0, test_input_edge_at(Lane::Left, true, 0)));
+        assert_eq!(state.pending_input_len(), 1);
     }
 }

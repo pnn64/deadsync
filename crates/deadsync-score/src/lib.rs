@@ -4544,6 +4544,50 @@ pub struct LocalScoreGameplayPlayer<'a> {
     pub replay: Vec<LocalReplayEdge>,
 }
 
+/// StageStats::FillInRoutineHighScore: one Routine score from the shared stats
+/// both participants earned, saved for the master (`first`) player. `notes` and
+/// its caches cover both participants' notes.
+#[must_use]
+pub fn routine_shared_local_score_player<'a>(
+    mut first: LocalScoreGameplayPlayer<'a>,
+    second: LocalScoreGameplayPlayer<'a>,
+    scoring_counts: &'a judgment::JudgeCounts,
+    notes: &'a [Note],
+    note_times: &'a [SongTimeNs],
+    hold_end_times: &'a [SongTimeNs],
+) -> LocalScoreGameplayPlayer<'a> {
+    for reason in second.invalid_reasons {
+        if !first.invalid_reasons.contains(&reason) {
+            first.invalid_reasons.push(reason);
+        }
+    }
+    first.score_valid &= second.score_valid;
+    first.scoring_counts = scoring_counts;
+    first.holds_held_for_score += second.holds_held_for_score;
+    first.rolls_held_for_score += second.rolls_held_for_score;
+    first.mines_hit_for_score += second.mines_hit_for_score;
+    first.possible_grade_points += second.possible_grade_points;
+    first.notes = notes;
+    first.note_times = note_times;
+    first.hold_end_times = hold_end_times;
+    first.total_steps += second.total_steps;
+    first.holds_total += second.holds_total;
+    first.rolls_total += second.rolls_total;
+    first.mines_total += second.mines_total;
+    for (count, other) in first.counts.iter_mut().zip(second.counts) {
+        *count += other;
+    }
+    first.white_fantastics = first
+        .white_fantastics
+        .zip(second.white_fantastics)
+        .map(|(first, second)| first + second);
+    first.holds_held += second.holds_held;
+    first.rolls_held += second.rolls_held;
+    first.mines_avoided += second.mines_avoided;
+    first.hands_achieved += second.hands_achieved;
+    first
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LocalScoreGameplaySaveSkip {
     Autoplay,
@@ -8845,6 +8889,99 @@ mod tests {
     }
 
     #[test]
+    fn routine_shared_score_sums_both_participants_for_the_master() {
+        let mut first_counts = [0u32; judgment::JUDGE_GRADE_COUNT];
+        first_counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)] = 2;
+        let mut second_counts = [0u32; judgment::JUDGE_GRADE_COUNT];
+        second_counts[judgment::judge_grade_ix(judgment::JudgeGrade::Miss)] = 1;
+        let shared_counts: judgment::JudgeCounts =
+            std::array::from_fn(|ix| first_counts[ix] + second_counts[ix]);
+        let notes: [Note; 0] = [];
+        let times: [SongTimeNs; 0] = [];
+        fn player<'a>(
+            player_idx: usize,
+            counts: &'a judgment::JudgeCounts,
+            steps: u32,
+            reasons: Vec<&'a str>,
+        ) -> LocalScoreGameplayPlayer<'a> {
+            LocalScoreGameplayPlayer {
+                player_idx,
+                profile_id: format!("profile-{player_idx}"),
+                profile_initials: "AAA",
+                chart_hash: "routine",
+                score_valid: reasons.is_empty(),
+                invalid_reasons: reasons,
+                scoring_counts: counts,
+                holds_held_for_score: 1,
+                rolls_held_for_score: 0,
+                mines_hit_for_score: 0,
+                possible_grade_points: (steps * 5) as i32,
+                song_completed_naturally: true,
+                is_failing: false,
+                life: 0.5,
+                fail_time: None,
+                notes: &[],
+                note_times: &[],
+                hold_end_times: &[],
+                total_steps: steps,
+                holds_total: 1,
+                rolls_total: 0,
+                mines_total: 0,
+                counts: [steps, 0, 0, 0, 0, 0],
+                white_fantastics: Some(steps),
+                holds_held: 1,
+                rolls_held: 0,
+                mines_avoided: 0,
+                hands_achieved: 0,
+                beat0_time_ns: 7,
+                replay: Vec::new(),
+            }
+        }
+        let shared = routine_shared_local_score_player(
+            player(0, &first_counts, 2, Vec::new()),
+            player(1, &second_counts, 1, vec!["mods"]),
+            &shared_counts,
+            &notes,
+            &times,
+            &times,
+        );
+        assert_eq!(shared.player_idx, 0);
+        assert_eq!(shared.profile_id, "profile-0");
+        assert_eq!(shared.scoring_counts, &shared_counts);
+        assert_eq!(shared.possible_grade_points, 15);
+        assert_eq!(shared.total_steps, 3);
+        assert_eq!(shared.holds_held_for_score, 2);
+        assert_eq!(shared.counts[0], 3);
+        assert_eq!(shared.white_fantastics, Some(3));
+        assert_eq!(shared.beat0_time_ns, 7);
+        // Either participant's invalid score invalidates the shared one.
+        assert!(!shared.score_valid);
+        assert_eq!(shared.invalid_reasons, ["mods"]);
+
+        let mut written = Vec::new();
+        save_local_gameplay_scores(
+            1,
+            1.0,
+            false,
+            [routine_shared_local_score_player(
+                player(0, &first_counts, 2, Vec::new()),
+                player(1, &second_counts, 1, Vec::new()),
+                &shared_counts,
+                &notes,
+                &times,
+                &times,
+            )],
+            |profile, _, _, entry: &mut LocalScoreEntry| {
+                written.push((profile.to_string(), entry.score_percent));
+                true
+            },
+            |_| {},
+        );
+        let expected = judgment::calculate_itg_score_percent_from_counts(&shared_counts, 2, 0, 0, 15);
+        assert_eq!(written, [("profile-0".to_string(), expected)]);
+    }
+
+    #[test]
     fn save_local_gameplay_scores_skips_invalid_and_writes_valid() {
         let mut counts = [0u32; judgment::JUDGE_GRADE_COUNT];
         counts[judgment::judge_grade_ix(judgment::JudgeGrade::Fantastic)] = 80;
@@ -10176,6 +10313,7 @@ mod tests {
         mine_result: Option<MineResult>,
     ) -> Note {
         Note {
+            participant: None,
             beat: row_index as f32,
             quantization_idx: 0,
             column: 0,

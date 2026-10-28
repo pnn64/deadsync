@@ -1,6 +1,10 @@
 pub const MAX_PLAYERS: usize = 2;
-pub const MAX_COLS: usize = 10;
-pub type LaneMask = u16;
+/// Routine gives each participant a full double field, so two pump-double
+/// fields are the widest layout.
+pub const MAX_COLS: usize = 20;
+/// The widest field one player owns (pump-double).
+pub const MAX_COLS_PER_PLAYER: usize = 10;
+pub type LaneMask = u32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -15,6 +19,16 @@ pub enum Lane {
     P2Right = 7,
     Col8 = 8,
     Col9 = 9,
+    Col10 = 10,
+    Col11 = 11,
+    Col12 = 12,
+    Col13 = 13,
+    Col14 = 14,
+    Col15 = 15,
+    Col16 = 16,
+    Col17 = 17,
+    Col18 = 18,
+    Col19 = 19,
 }
 
 impl Lane {
@@ -33,7 +47,7 @@ pub enum InputSource {
 
 #[cfg(test)]
 mod tests {
-    use super::{Lane, MAX_COLS, MAX_PLAYERS};
+    use super::{Lane, MAX_COLS, MAX_COLS_PER_PLAYER, MAX_PLAYERS};
 
     #[test]
     fn lane_indices_are_stable() {
@@ -47,11 +61,13 @@ mod tests {
         assert_eq!(Lane::P2Right.index(), 7);
         assert_eq!(Lane::Col8.index(), 8);
         assert_eq!(Lane::Col9.index(), 9);
+        assert_eq!(Lane::Col19.index(), 19);
     }
 
     #[test]
     fn player_and_column_limits_match_lane_model() {
         assert_eq!(MAX_PLAYERS, 2);
-        assert_eq!(MAX_COLS, 10);
+        assert_eq!(MAX_COLS, 20);
+        assert_eq!(MAX_COLS, MAX_PLAYERS * MAX_COLS_PER_PLAYER);
     }
 }

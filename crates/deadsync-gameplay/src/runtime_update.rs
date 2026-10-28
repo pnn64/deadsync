@@ -1116,9 +1116,11 @@ where
         ) {
             self.mods.song_lua_player_transforms[player] = transform;
         }
-        let fail_type = self.mods.song_lua_fail_types[player].or(self.mods.attacks.fail_type[player])
+        // Routine participants share the master player's life meter.
+        let life_source = if self.setup.session.play_style.is_routine() { 0 } else { player };
+        let fail_type = self.mods.song_lua_fail_types[life_source].or(self.mods.attacks.fail_type[life_source])
             .unwrap_or(self.setup.config.default_fail_type);
-        let fail_type = song_fail_type(fail_type, &self.source.charts[player].difficulty, self.course_display_is_course_stage());
+        let fail_type = song_fail_type(fail_type, &self.source.charts[life_source].difficulty, self.course_display_is_course_stage());
         let runtime = &mut self.players_runtime.players[player];
         runtime.fail_type = fail_type;
         if update_player_failure(runtime, now, false) {
@@ -1775,7 +1777,21 @@ where
         )
     }
 
+    /// The ITG score the gameplay HUD shows. Routine participants share one
+    /// score, so both of their displays show it.
     pub fn display_itg_score_inputs(&self, player_idx: usize) -> Option<ItgScoreInputs> {
+        if player_idx >= self.setup.num_players {
+            return None;
+        }
+        self.routine_shared_itg_score_inputs()
+            .or_else(|| self.participant_display_itg_score_inputs(player_idx))
+    }
+
+    /// One participant's own ITG score, including course carry-over.
+    pub fn participant_display_itg_score_inputs(
+        &self,
+        player_idx: usize,
+    ) -> Option<ItgScoreInputs> {
         if player_idx >= self.setup.num_players {
             return None;
         }
@@ -1797,8 +1813,46 @@ where
         ))
     }
 
+    /// The Routine score both participants earn together, including both
+    /// participants' earlier course songs and full-course totals.
+    pub fn routine_shared_itg_score_inputs(&self) -> Option<ItgScoreInputs> {
+        if !self.setup.session.play_style.is_routine() {
+            return None;
+        }
+        Some(shared_itg_score_inputs(
+            self.participant_display_itg_score_inputs(0)?,
+            self.participant_display_itg_score_inputs(1)?,
+        ))
+    }
+
+    /// The Routine score both participants earn in the current song only.
+    pub fn routine_shared_stage_itg_score_inputs(&self) -> Option<ItgScoreInputs> {
+        if !self.setup.session.play_style.is_routine() {
+            return None;
+        }
+        Some(shared_itg_score_inputs(
+            self.stage_itg_score_inputs(0)?,
+            self.stage_itg_score_inputs(1)?,
+        ))
+    }
+
+    pub fn routine_shared_itg_score_percent(&self) -> Option<f64> {
+        self.routine_shared_itg_score_inputs()
+            .map(itg_score_percent_from_inputs)
+    }
+
+    pub fn routine_shared_stage_itg_score_percent(&self) -> Option<f64> {
+        self.routine_shared_stage_itg_score_inputs()
+            .map(itg_score_percent_from_inputs)
+    }
+
     pub fn display_itg_score_percent(&self, player_idx: usize) -> f64 {
         self.display_itg_score_inputs(player_idx)
+            .map_or(0.0, itg_score_percent_from_inputs)
+    }
+
+    pub fn participant_display_itg_score_percent(&self, player_idx: usize) -> f64 {
+        self.participant_display_itg_score_inputs(player_idx)
             .map_or(0.0, itg_score_percent_from_inputs)
     }
 
@@ -1853,6 +1907,7 @@ where
         player.fail_time.get_or_insert(current_music_time);
         self.capture_failed_ex_score_inputs(player_idx, self.player_blue_window_ms(player_idx));
         self.display.density_graph.life_dirty[player_idx] = true;
+        self.share_routine_life(player_idx);
         true
     }
 
@@ -2545,6 +2600,19 @@ where
             return false;
         }
         self.push_pending_input_edge(edge);
+        // ScreenGameplay sends a Routine step to both Players, and each judges
+        // only the notes it owns. Replays record the step once.
+        let width = self.setup.cols_per_player;
+        if self.setup.session.play_style.is_routine()
+            && lane_idx < width
+            && let Some(lane) = lane_from_column(lane_idx + width)
+        {
+            self.push_pending_input_edge(GameplayInputEdge {
+                lane,
+                record_replay: false,
+                ..edge
+            });
+        }
         if log::log_enabled!(log::Level::Debug) {
             let pending_len = self.pending_input_len();
             if pending_len >= GAMEPLAY_INPUT_BACKLOG_WARN {

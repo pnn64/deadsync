@@ -62,6 +62,12 @@ pub(crate) fn gameplay_chart_entry_plan(
     let chart_type = play_style.chart_type();
     let mut resolved_steps_index = requested_steps;
     let chart_indices = match play_style {
+        // Partner styles play one authored chart split between both participants.
+        PlayStyle::Couple | PlayStyle::PumpCouple | PlayStyle::Routine | PlayStyle::PumpRoutine => {
+            let resolved = resolve_chart(song, chart_type, requested_steps[0], preferred_steps[0]);
+            resolved_steps_index = [resolved.0; MAX_PLAYERS];
+            [resolved.1; MAX_PLAYERS]
+        }
         PlayStyle::Versus | PlayStyle::PumpVersus => {
             let p1 = resolve_chart(song, chart_type, requested_steps[0], preferred_steps[0]);
             let p2 = resolve_chart(song, chart_type, requested_steps[1], preferred_steps[1]);
@@ -116,7 +122,12 @@ pub(crate) fn gameplay_last_played_commands(
 ) -> Vec<Command> {
     let mut commands = Vec::with_capacity(MAX_PLAYERS);
     match play_style {
-        PlayStyle::Versus | PlayStyle::PumpVersus => {
+        PlayStyle::Versus
+        | PlayStyle::PumpVersus
+        | PlayStyle::Couple
+        | PlayStyle::PumpCouple
+        | PlayStyle::Routine
+        | PlayStyle::PumpRoutine => {
             for (idx, side) in [(0, PlayerSide::P1), (1, PlayerSide::P2)] {
                 commands.push(Command::UpdateLastPlayed {
                     side,
@@ -155,7 +166,13 @@ fn reload_chart_indices(
         let chart = song.charts.get(index)
             .ok_or_else(|| format!("Lua reload selected missing chart {index}"))?;
         let prefix = if session.play_style.is_pump() { "pump" } else { "dance" };
-        let suffix = if session.play_style.is_double() { "double" } else { "single" };
+        use deadsync_gameplay::GameplayInputPlayStyle as Style;
+        let suffix = match session.play_style {
+            Style::Couple | Style::PumpCouple => "couple",
+            Style::Routine | Style::PumpRoutine => "routine",
+            style if style.is_double() => "double",
+            _ => "single",
+        };
         if chart.chart_type != format!("{prefix}-{suffix}") {
             return Err(format!("Lua reload selected incompatible chart type {}", chart.chart_type));
         }
@@ -185,9 +202,13 @@ pub fn apply_song_lua_reload(
             (false, "single") => Style::Single,
             (false, "double") => Style::Double,
             (false, "versus") => Style::Versus,
+            (false, "couple") => Style::Couple,
+            (false, "routine") => Style::Routine,
             (true, "single") => Style::PumpSingle,
             (true, "double") => Style::PumpDouble,
             (true, "versus") => Style::PumpVersus,
+            (true, "couple") => Style::PumpCouple,
+            (true, "routine") => Style::PumpRoutine,
             _ => return Err(format!("Lua reload selected unsupported style {style}")),
         };
         // GameState::SetCurrentStyle preserves joined sides and rejects styles

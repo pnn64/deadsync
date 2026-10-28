@@ -7935,7 +7935,8 @@ pub fn mod_column_suffix(key: &str, prefix: &str) -> Option<usize> {
         return None;
     }
     let col = suffix.parse::<usize>().ok()?;
-    col.checked_sub(1).filter(|&col| col < MAX_COLS)
+    // Column mods name a lane of the player's own field.
+    col.checked_sub(1).filter(|&col| col < MAX_COLS_PER_PLAYER)
 }
 
 #[inline(always)]

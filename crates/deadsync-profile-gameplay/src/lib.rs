@@ -58,6 +58,14 @@ pub const fn gameplay_play_style_from_profile(
         deadsync_profile::PlayStyle::PumpDouble => {
             deadsync_gameplay::GameplayInputPlayStyle::PumpDouble
         }
+        deadsync_profile::PlayStyle::Couple => deadsync_gameplay::GameplayInputPlayStyle::Couple,
+        deadsync_profile::PlayStyle::Routine => deadsync_gameplay::GameplayInputPlayStyle::Routine,
+        deadsync_profile::PlayStyle::PumpCouple => {
+            deadsync_gameplay::GameplayInputPlayStyle::PumpCouple
+        }
+        deadsync_profile::PlayStyle::PumpRoutine => {
+            deadsync_gameplay::GameplayInputPlayStyle::PumpRoutine
+        }
     }
 }
 
@@ -399,8 +407,14 @@ pub const fn song_lua_compile_play_style(
             deadsync_gameplay::SongLuaCompilePlayStyle::Versus
         }
         deadsync_gameplay::GameplayInputPlayStyle::Double
-        | deadsync_gameplay::GameplayInputPlayStyle::PumpDouble => {
+        | deadsync_gameplay::GameplayInputPlayStyle::PumpDouble
+        | deadsync_gameplay::GameplayInputPlayStyle::Routine
+        | deadsync_gameplay::GameplayInputPlayStyle::PumpRoutine => {
             deadsync_gameplay::SongLuaCompilePlayStyle::Double
+        }
+        deadsync_gameplay::GameplayInputPlayStyle::Couple
+        | deadsync_gameplay::GameplayInputPlayStyle::PumpCouple => {
+            deadsync_gameplay::SongLuaCompilePlayStyle::Versus
         }
     }
 }
@@ -511,6 +525,10 @@ pub fn song_lua_compile_context(
         deadsync_gameplay::GameplayInputPlayStyle::PumpSingle => "pump-single",
         deadsync_gameplay::GameplayInputPlayStyle::PumpVersus => "pump-versus",
         deadsync_gameplay::GameplayInputPlayStyle::PumpDouble => "pump-double",
+        deadsync_gameplay::GameplayInputPlayStyle::Couple => "couple",
+        deadsync_gameplay::GameplayInputPlayStyle::Routine => "routine",
+        deadsync_gameplay::GameplayInputPlayStyle::PumpCouple => "pump-couple",
+        deadsync_gameplay::GameplayInputPlayStyle::PumpRoutine => "pump-routine",
     }
     .to_string();
     context.global_offset_seconds = machine_global_offset_seconds;
@@ -1667,6 +1685,36 @@ where
     }
 }
 
+/// FillInRoutineHighScore: the Routine score that both participants share,
+/// saved once for the master player.
+fn routine_local_score_player_from_runtime<'a, RuntimeProfile, OverlayActor, CapturedActor, StateDelta>(
+    gs: &'a deadsync_gameplay::GameplayRuntimeState<
+        RuntimeProfile,
+        OverlayActor,
+        CapturedActor,
+        StateDelta,
+    >,
+    profile_id: String,
+    scoring_counts: &'a deadsync_rules::judgment::JudgeCounts,
+) -> deadsync_score::LocalScoreGameplayPlayer<'a>
+where
+    RuntimeProfile:
+        Deref<Target = deadsync_profile::Profile> + deadsync_gameplay::GameplayProfileData,
+{
+    // Init appends the second participant's notes right after the first's.
+    let (start, first_end) = gs.note_range_for_player(0);
+    let (second_start, end) = gs.note_range_for_player(1);
+    debug_assert_eq!(first_end, second_start);
+    deadsync_score::routine_shared_local_score_player(
+        local_score_player_from_runtime(gs, 0, profile_id),
+        local_score_player_from_runtime(gs, 1, String::new()),
+        scoring_counts,
+        &gs.notes()[start..end],
+        &gs.note_time_cache_ns()[start..end],
+        &gs.hold_end_time_cache_ns()[start..end],
+    )
+}
+
 pub fn save_local_scores_from_runtime<
     RuntimeProfile,
     OverlayActor,
@@ -1696,10 +1744,25 @@ pub fn save_local_scores_from_runtime<
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0);
-    let players = (0..gs.num_players()).filter_map(|player_idx| {
-        let profile_id = active_profile_id_for_player(gs.num_players(), player_idx)?;
-        Some(local_score_player_from_runtime(gs, player_idx, profile_id))
+    // StageStats::CommitScores fills only the master player's high score in
+    // Routine, from the shared stats both participants earned together.
+    let routine_counts = gs.setup.session.play_style.is_routine().then(|| {
+        let [first, second] = [&gs.players()[0].scoring_counts, &gs.players()[1].scoring_counts];
+        std::array::from_fn(|ix| first[ix].saturating_add(second[ix]))
     });
+    let players: Vec<_> = if let Some(counts) = routine_counts.as_ref() {
+        active_profile_id_for_player(gs.num_players(), 0)
+            .map(|profile_id| routine_local_score_player_from_runtime(gs, profile_id, counts))
+            .into_iter()
+            .collect()
+    } else {
+        (0..gs.num_players())
+            .filter_map(|player_idx| {
+                let profile_id = active_profile_id_for_player(gs.num_players(), player_idx)?;
+                Some(local_score_player_from_runtime(gs, player_idx, profile_id))
+            })
+            .collect()
+    };
     deadsync_score::save_local_gameplay_scores(
         played_at_ms,
         gs.music_rate(),

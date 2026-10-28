@@ -79,6 +79,9 @@ pub enum Action {
     SortByFavorites,
     SwitchToSingle,
     SwitchToDouble,
+    SwitchToVersus,
+    SwitchToRoutine,
+    SwitchToCouple,
     TestInput,
     ConfigurePads,
     SongSearch,
@@ -270,6 +273,23 @@ pub const ITEM_SWITCH_TO_DOUBLE: Item = Item {
     top_label: TextContent::Static("Change Style To"),
     bottom_label: TextContent::Static("Double"),
     action: Action::SwitchToDouble,
+};
+// Simply Love's SortMenu "Change Style To" labels: Routine is "Couples" and
+// Couple is "Half Couple".
+pub const ITEM_SWITCH_TO_VERSUS: Item = Item {
+    top_label: TextContent::Static("Change Style To"),
+    bottom_label: TextContent::Static("Versus"),
+    action: Action::SwitchToVersus,
+};
+pub const ITEM_SWITCH_TO_ROUTINE: Item = Item {
+    top_label: TextContent::Static("Change Style To"),
+    bottom_label: TextContent::Static("Couples"),
+    action: Action::SwitchToRoutine,
+};
+pub const ITEM_SWITCH_TO_COUPLE: Item = Item {
+    top_label: TextContent::Static("Change Style To"),
+    bottom_label: TextContent::Static("Half Couple"),
+    action: Action::SwitchToCouple,
 };
 pub const ITEM_TEST_INPUT: Item = Item {
     top_label: TextContent::Static("Feeling salty?"),

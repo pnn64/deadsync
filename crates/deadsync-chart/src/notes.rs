@@ -2,6 +2,8 @@ use deadsync_core::note::NoteType;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ParsedNote {
+    /// Authored Routine participant (0 = P1, 1 = P2).
+    pub player: u8,
     pub row_index: usize,
     pub column: usize,
     pub note_type: NoteType,
@@ -11,23 +13,27 @@ pub struct ParsedNote {
 #[must_use]
 pub fn step_type_lanes(step_type: &str) -> usize {
     let bytes = step_type.trim().as_bytes();
-    match bytes.len() {
-        11 if matches!(bytes[4], b'-' | b'_') && bytes[..4].eq_ignore_ascii_case(b"pump") => {
-            if bytes[5..].eq_ignore_ascii_case(b"double") {
-                10
-            } else if bytes[5..].eq_ignore_ascii_case(b"single") {
-                5
-            } else {
-                4
-            }
-        }
-        12 if matches!(bytes[5], b'-' | b'_')
+    let pump = |style: &[u8]| {
+        bytes.len() == 5 + style.len()
+            && matches!(bytes[4], b'-' | b'_')
+            && bytes[..4].eq_ignore_ascii_case(b"pump")
+            && bytes[5..].eq_ignore_ascii_case(style)
+    };
+    let dance = |style: &[u8]| {
+        bytes.len() == 6 + style.len()
+            && matches!(bytes[5], b'-' | b'_')
             && bytes[..5].eq_ignore_ascii_case(b"dance")
-            && bytes[6..].eq_ignore_ascii_case(b"double") =>
-        {
-            8
-        }
-        _ => 4,
+            && bytes[6..].eq_ignore_ascii_case(style)
+    };
+    // Partner charts span both pads, like doubles.
+    if pump(b"double") || pump(b"couple") || pump(b"routine") {
+        10
+    } else if dance(b"double") || dance(b"couple") || dance(b"routine") {
+        8
+    } else if pump(b"single") {
+        5
+    } else {
+        4
     }
 }
 
@@ -38,6 +44,7 @@ pub fn parse_chart_notes(minimized_note_data: &[u8], lanes: usize) -> Vec<Parsed
         minimized_note_data,
         lanes,
         |row_index, column, note_type| ParsedNote {
+            player: 0,
             row_index,
             column,
             note_type,
@@ -219,6 +226,11 @@ mod tests {
         assert_eq!(step_type_lanes(" dance-single "), 4);
         assert_eq!(step_type_lanes("pump-single"), 5);
         assert_eq!(step_type_lanes("PUMP_SINGLE"), 5);
+        assert_eq!(step_type_lanes("dance-couple"), 8);
+        assert_eq!(step_type_lanes("DANCE_ROUTINE"), 8);
+        assert_eq!(step_type_lanes("pump-couple"), 10);
+        assert_eq!(step_type_lanes(" pump_routine "), 10);
+        assert_eq!(step_type_lanes("pump-routinex"), 4);
         assert_eq!(step_type_lanes("pump-double"), 10);
         assert_eq!(step_type_lanes("PUMP_DOUBLE"), 10);
         assert_eq!(step_type_lanes("pump-halfdouble"), 4);
@@ -249,6 +261,7 @@ mod tests {
         assert_eq!(
             notes,
             vec![ParsedNote {
+                player: 0,
                 row_index: 0,
                 column: 0,
                 note_type: NoteType::Hold,
@@ -269,6 +282,7 @@ mod tests {
         assert_eq!(
             notes,
             vec![ParsedNote {
+                player: 0,
                 row_index: 1,
                 column: 0,
                 note_type: NoteType::Tap,
@@ -283,6 +297,7 @@ mod tests {
         assert_eq!(
             notes,
             vec![ParsedNote {
+                player: 0,
                 row_index: 1,
                 column: 0,
                 note_type: NoteType::Hold,
@@ -306,6 +321,7 @@ mod tests {
                 lanes,
                 0,
                 |row_index, column, note_type| ParsedNote {
+                    player: 0,
                     row_index,
                     column,
                     note_type,
@@ -339,6 +355,7 @@ mod tests {
                     lanes,
                     capacity,
                     |row_index, column, note_type| ParsedNote {
+                        player: 0,
                         row_index,
                         column,
                         note_type,

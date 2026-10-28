@@ -20,18 +20,21 @@ fn calibration_state(
     );
     payload.parsed_notes = vec![
         ParsedNote {
+            player: 0,
             row_index: 48,
             column: 0,
             note_type: NoteType::Tap,
             tail_row_index: None,
         },
         ParsedNote {
+            player: 0,
             row_index: 96,
             column: 1,
             note_type: NoteType::Mine,
             tail_row_index: None,
         },
         ParsedNote {
+            player: 0,
             row_index: 144,
             column: 2,
             note_type: NoteType::Hold,

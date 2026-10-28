@@ -314,10 +314,10 @@ fn validate_manifest(manifest: &Manifest) -> Result<(), String> {
 }
 
 fn validate_players(style: PlayStyle, side: PlayerSide, joined: [bool; 2]) -> Result<(), String> {
-    if matches!(style, PlayStyle::Versus | PlayStyle::PumpVersus) {
+    if style.player_count() == 2 {
         return (joined == [true, true])
             .then_some(())
-            .ok_or_else(|| "versus cases require joined=[true,true]".to_owned());
+            .ok_or_else(|| "two-player cases require joined=[true,true]".to_owned());
     }
     let expected = match side {
         PlayerSide::P1 => [true, false],
@@ -336,6 +336,10 @@ fn parse_play_style(value: &str) -> Result<PlayStyle, String> {
         "pump-single" => Ok(PlayStyle::PumpSingle),
         "pump-versus" => Ok(PlayStyle::PumpVersus),
         "pump-double" => Ok(PlayStyle::PumpDouble),
+        "couple" | "dance-couple" => Ok(PlayStyle::Couple),
+        "routine" | "dance-routine" => Ok(PlayStyle::Routine),
+        "pump-couple" => Ok(PlayStyle::PumpCouple),
+        "pump-routine" => Ok(PlayStyle::PumpRoutine),
         _ => Err(format!("unsupported play_style '{value}'")),
     }
 }

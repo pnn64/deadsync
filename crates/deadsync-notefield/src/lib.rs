@@ -379,6 +379,7 @@ mod tests {
 
     fn test_note_at_beat(beat: f32) -> Note {
         Note {
+            participant: None,
             beat,
             quantization_idx: 0,
             column: 0,

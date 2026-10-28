@@ -35,6 +35,7 @@ impl PumpFixture {
             let beat = (i / 5) as f32 * 0.5;
             let held = mode != 0 && (mode == 1 || i % 17 == 0);
             notes.push(Note {
+                participant: None,
                 beat,
                 quantization_idx: 0,
                 column: i % 5,

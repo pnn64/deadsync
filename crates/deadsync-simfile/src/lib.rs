@@ -9,6 +9,7 @@ pub mod event_intro;
 pub mod golf;
 pub mod matrix;
 pub mod media;
+mod partner_charts;
 pub mod playlist;
 pub mod runtime;
 pub mod runtime_cache;

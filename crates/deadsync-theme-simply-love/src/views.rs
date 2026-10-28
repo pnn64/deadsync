@@ -578,6 +578,8 @@ impl Default for EvaluationContextView {
 #[derive(Clone, Default)]
 pub struct EvaluationInitView {
     pub score_info: [Option<ScoreInfo>; 2],
+    /// ScoreKeeperShared's Routine score, shown beside each participant's own.
+    pub routine_shared_score_percent: Option<f64>,
     pub stage_duration_seconds: f32,
     pub fail_stream_progress: [Option<(u32, u32)>; 2],
     pub context: EvaluationContextView,

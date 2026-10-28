@@ -15,6 +15,7 @@ fn original_count(notes: &[Note], row: usize, offset: usize, cols: usize) -> usi
 
 fn note(row: usize, column: usize, kind: NoteType, tail: Option<usize>) -> Note {
     Note {
+        participant: None,
         beat: row as f32 / 48.0,
         quantization_idx: 0,
         column,

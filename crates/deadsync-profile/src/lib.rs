@@ -942,6 +942,9 @@ pub fn runtime_session_play_style() -> PlayStyle {
 pub fn runtime_set_session_play_style(style: PlayStyle) {
     let prev_style = {
         let mut session = runtime_lock_session();
+        if style.is_couple() || style.is_routine() {
+            session.set_joined_sides(true, true);
+        }
         let Some(prev_style) = session.set_play_style(style) else {
             return;
         };
@@ -3995,6 +3998,10 @@ pub enum PlayStyle {
     PumpSingle,
     PumpVersus,
     PumpDouble,
+    Couple,
+    Routine,
+    PumpCouple,
+    PumpRoutine,
 }
 
 impl PlayStyle {
@@ -4004,8 +4011,12 @@ impl PlayStyle {
         match self {
             Self::Single | Self::Versus => "dance-single",
             Self::Double => "dance-double",
+            Self::Couple => "dance-couple",
+            Self::Routine => "dance-routine",
             Self::PumpSingle | Self::PumpVersus => "pump-single",
             Self::PumpDouble => "pump-double",
+            Self::PumpCouple => "pump-couple",
+            Self::PumpRoutine => "pump-routine",
         }
     }
 
@@ -4013,10 +4024,10 @@ impl PlayStyle {
     #[must_use]
     pub const fn cols_per_player(self) -> usize {
         match self {
-            Self::Single | Self::Versus => 4,
-            Self::Double => 8,
-            Self::PumpSingle | Self::PumpVersus => 5,
-            Self::PumpDouble => 10,
+            Self::Single | Self::Versus | Self::Couple => 4,
+            Self::Double | Self::Routine => 8,
+            Self::PumpSingle | Self::PumpVersus | Self::PumpCouple => 5,
+            Self::PumpDouble | Self::PumpRoutine => 10,
         }
     }
 
@@ -4025,10 +4036,16 @@ impl PlayStyle {
     pub const fn player_count(self) -> usize {
         match self {
             Self::Single | Self::Double | Self::PumpSingle | Self::PumpDouble => 1,
-            Self::Versus | Self::PumpVersus => 2,
+            Self::Versus
+            | Self::PumpVersus
+            | Self::Couple
+            | Self::PumpCouple
+            | Self::Routine
+            | Self::PumpRoutine => 2,
         }
     }
 
+    /// Routine gives each participant its own field over the shared pads.
     #[inline(always)]
     #[must_use]
     pub const fn total_cols(self) -> usize {
@@ -4038,13 +4055,40 @@ impl PlayStyle {
     #[inline(always)]
     #[must_use]
     pub const fn is_pump(self) -> bool {
-        matches!(self, Self::PumpSingle | Self::PumpVersus | Self::PumpDouble)
+        matches!(
+            self,
+            Self::PumpSingle
+                | Self::PumpVersus
+                | Self::PumpDouble
+                | Self::PumpCouple
+                | Self::PumpRoutine
+        )
     }
 
     #[inline(always)]
     #[must_use]
     pub const fn is_versus(self) -> bool {
-        matches!(self, Self::Versus | Self::PumpVersus)
+        matches!(
+            self,
+            Self::Versus
+                | Self::PumpVersus
+                | Self::Couple
+                | Self::PumpCouple
+                | Self::Routine
+                | Self::PumpRoutine
+        )
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_couple(self) -> bool {
+        matches!(self, Self::Couple | Self::PumpCouple)
+    }
+
+    #[inline(always)]
+    #[must_use]
+    pub const fn is_routine(self) -> bool {
+        matches!(self, Self::Routine | Self::PumpRoutine)
     }
 
     #[inline(always)]
@@ -4064,10 +4108,12 @@ impl PlayStyle {
 #[must_use]
 pub const fn player_options_section(style: PlayStyle) -> &'static str {
     match style {
-        PlayStyle::Single | PlayStyle::Versus => "PlayerOptionsSingles",
-        PlayStyle::Double => "PlayerOptionsDoubles",
-        PlayStyle::PumpSingle | PlayStyle::PumpVersus => "PlayerOptionsPumpSingles",
-        PlayStyle::PumpDouble => "PlayerOptionsPumpDoubles",
+        PlayStyle::Single | PlayStyle::Versus | PlayStyle::Couple => "PlayerOptionsSingles",
+        PlayStyle::Double | PlayStyle::Routine => "PlayerOptionsDoubles",
+        PlayStyle::PumpSingle | PlayStyle::PumpVersus | PlayStyle::PumpCouple => {
+            "PlayerOptionsPumpSingles"
+        }
+        PlayStyle::PumpDouble | PlayStyle::PumpRoutine => "PlayerOptionsPumpDoubles",
     }
 }
 
@@ -4163,6 +4209,9 @@ pub const fn play_style_for_joined(
     p1_joined: bool,
     p2_joined: bool,
 ) -> PlayStyle {
+    if style.is_couple() || style.is_routine() {
+        return style;
+    }
     if p1_joined && p2_joined {
         if style.is_pump() {
             PlayStyle::PumpVersus
@@ -4176,7 +4225,11 @@ pub const fn play_style_for_joined(
             PlayStyle::Single
             | PlayStyle::Double
             | PlayStyle::PumpSingle
-            | PlayStyle::PumpDouble => style,
+            | PlayStyle::PumpDouble
+            | PlayStyle::Couple
+            | PlayStyle::PumpCouple
+            | PlayStyle::Routine
+            | PlayStyle::PumpRoutine => style,
         }
     }
 }
@@ -4193,7 +4246,10 @@ pub const fn runtime_player_is_p2(play_style: PlayStyle, side: PlayerSide) -> bo
     matches!(
         (play_style, side),
         (
-            PlayStyle::Single | PlayStyle::Double | PlayStyle::PumpSingle | PlayStyle::PumpDouble,
+            PlayStyle::Single
+                | PlayStyle::Double
+                | PlayStyle::PumpSingle
+                | PlayStyle::PumpDouble,
             PlayerSide::P2
         )
     )
@@ -10755,20 +10811,28 @@ impl Profile {
     #[must_use]
     pub const fn player_options(&self, style: PlayStyle) -> &PlayerOptionsData {
         match style {
-            PlayStyle::Single | PlayStyle::Versus => &self.player_options_singles,
-            PlayStyle::Double => &self.player_options_doubles,
-            PlayStyle::PumpSingle | PlayStyle::PumpVersus => &self.player_options_pump_singles,
-            PlayStyle::PumpDouble => &self.player_options_pump_doubles,
+            PlayStyle::Single | PlayStyle::Versus | PlayStyle::Couple => {
+                &self.player_options_singles
+            }
+            PlayStyle::Double | PlayStyle::Routine => &self.player_options_doubles,
+            PlayStyle::PumpSingle | PlayStyle::PumpVersus | PlayStyle::PumpCouple => {
+                &self.player_options_pump_singles
+            }
+            PlayStyle::PumpDouble | PlayStyle::PumpRoutine => &self.player_options_pump_doubles,
         }
     }
 
     #[inline(always)]
     pub const fn player_options_mut(&mut self, style: PlayStyle) -> &mut PlayerOptionsData {
         match style {
-            PlayStyle::Single | PlayStyle::Versus => &mut self.player_options_singles,
-            PlayStyle::Double => &mut self.player_options_doubles,
-            PlayStyle::PumpSingle | PlayStyle::PumpVersus => &mut self.player_options_pump_singles,
-            PlayStyle::PumpDouble => &mut self.player_options_pump_doubles,
+            PlayStyle::Single | PlayStyle::Versus | PlayStyle::Couple => {
+                &mut self.player_options_singles
+            }
+            PlayStyle::Double | PlayStyle::Routine => &mut self.player_options_doubles,
+            PlayStyle::PumpSingle | PlayStyle::PumpVersus | PlayStyle::PumpCouple => {
+                &mut self.player_options_pump_singles
+            }
+            PlayStyle::PumpDouble | PlayStyle::PumpRoutine => &mut self.player_options_pump_doubles,
         }
     }
 
@@ -10797,8 +10861,13 @@ impl Profile {
             PlayStyle::Single
             | PlayStyle::Versus
             | PlayStyle::PumpSingle
-            | PlayStyle::PumpVersus => &self.last_played_singles,
-            PlayStyle::Double | PlayStyle::PumpDouble => &self.last_played_doubles,
+            | PlayStyle::PumpVersus
+            | PlayStyle::Couple
+            | PlayStyle::PumpCouple => &self.last_played_singles,
+            PlayStyle::Double
+            | PlayStyle::PumpDouble
+            | PlayStyle::Routine
+            | PlayStyle::PumpRoutine => &self.last_played_doubles,
         }
     }
 
@@ -10808,8 +10877,13 @@ impl Profile {
             PlayStyle::Single
             | PlayStyle::Versus
             | PlayStyle::PumpSingle
-            | PlayStyle::PumpVersus => &mut self.last_played_singles,
-            PlayStyle::Double | PlayStyle::PumpDouble => &mut self.last_played_doubles,
+            | PlayStyle::PumpVersus
+            | PlayStyle::Couple
+            | PlayStyle::PumpCouple => &mut self.last_played_singles,
+            PlayStyle::Double
+            | PlayStyle::PumpDouble
+            | PlayStyle::Routine
+            | PlayStyle::PumpRoutine => &mut self.last_played_doubles,
         }
     }
 
@@ -10820,8 +10894,13 @@ impl Profile {
             PlayStyle::Single
             | PlayStyle::Versus
             | PlayStyle::PumpSingle
-            | PlayStyle::PumpVersus => &self.last_played_course_singles,
-            PlayStyle::Double | PlayStyle::PumpDouble => &self.last_played_course_doubles,
+            | PlayStyle::PumpVersus
+            | PlayStyle::Couple
+            | PlayStyle::PumpCouple => &self.last_played_course_singles,
+            PlayStyle::Double
+            | PlayStyle::PumpDouble
+            | PlayStyle::Routine
+            | PlayStyle::PumpRoutine => &self.last_played_course_doubles,
         }
     }
 
@@ -10831,8 +10910,13 @@ impl Profile {
             PlayStyle::Single
             | PlayStyle::Versus
             | PlayStyle::PumpSingle
-            | PlayStyle::PumpVersus => &mut self.last_played_course_singles,
-            PlayStyle::Double | PlayStyle::PumpDouble => &mut self.last_played_course_doubles,
+            | PlayStyle::PumpVersus
+            | PlayStyle::Couple
+            | PlayStyle::PumpCouple => &mut self.last_played_course_singles,
+            PlayStyle::Double
+            | PlayStyle::PumpDouble
+            | PlayStyle::Routine
+            | PlayStyle::PumpRoutine => &mut self.last_played_course_doubles,
         }
     }
 }

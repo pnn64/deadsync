@@ -2634,6 +2634,8 @@ pub struct State {
     heart_rate_generation: Option<(bool, u64, u64)>,
     pub stage_duration_seconds: f32,
     pub score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    /// Routine's shared grade, shown for both participants.
+    routine_shared_grade: Option<score_data::Grade>,
     /// Immutable per-result Nice eligibility compiled with `score_info`.
     nice_scores: [bool; MAX_PLAYERS],
     result_text: [ResultText; MAX_PLAYERS],
@@ -2739,6 +2741,7 @@ impl Clone for State {
             heart_rate_generation: self.heart_rate_generation,
             stage_duration_seconds: self.stage_duration_seconds,
             score_info: self.score_info.clone(),
+            routine_shared_grade: self.routine_shared_grade,
             nice_scores: self.nice_scores,
             result_text: self.result_text.clone(),
             percentage_text: self.percentage_text.clone(),
@@ -2839,9 +2842,59 @@ pub const fn elapsed_times(state: &State) -> (f32, f32) {
     (state.session_elapsed, state.gameplay_elapsed)
 }
 
+// Simply Love's Routine panes show the shared percent and grade, with each
+// participant's own percent beside its judgments.
+fn routine_shared_grade(
+    score_info: &[Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
+) -> Option<score_data::Grade> {
+    routine_shared_score_percent.map(|percent| {
+        let failed = score_info
+            .iter()
+            .flatten()
+            .any(|si| si.grade == score_data::Grade::Failed);
+        if failed {
+            score_data::Grade::Failed
+        } else {
+            score_data::score_to_grade(percent * 10000.0)
+        }
+    })
+}
+
+fn percentage_texts(
+    score_info: &[Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
+) -> [Option<eval_panes::PercentageText>; MAX_PLAYERS] {
+    std::array::from_fn(|index| {
+        score_info[index]
+            .as_ref()
+            .map(|si| match routine_shared_score_percent {
+                Some(percent) => eval_panes::PercentageText::routine(si, percent),
+                None => eval_panes::PercentageText::new(si),
+            })
+    })
+}
+
+fn stats_presentations(
+    score_info: &[Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
+) -> [Option<eval_panes::StatsPanePresentation>; MAX_PLAYERS] {
+    std::array::from_fn(|index| {
+        score_info[index].as_ref().map(|si| {
+            let presentation = eval_panes::StatsPanePresentation::new(si);
+            if routine_shared_score_percent.is_some() {
+                presentation.routine(si)
+            } else {
+                presentation
+            }
+        })
+    })
+}
+
 pub fn init(init_view: EvaluationInitView) -> State {
     let EvaluationInitView {
         score_info,
+        routine_shared_score_percent,
         stage_duration_seconds,
         fail_stream_progress,
         context,
@@ -3081,7 +3134,11 @@ pub fn init(init_view: EvaluationInitView) -> State {
         }
 
         match play_style {
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            | profile_data::PlayStyle::Couple
+            | profile_data::PlayStyle::PumpCouple
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine => {
                 active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                     eval_pane_default_for(si.show_fa_plus_pane)
                 });
@@ -3132,11 +3189,8 @@ pub fn init(init_view: EvaluationInitView) -> State {
             .as_ref()
             .map_or_else(ResultText::empty, ResultText::from_score)
     });
-    let percentage_text = std::array::from_fn(|index| {
-        score_info[index]
-            .as_ref()
-            .map(eval_panes::PercentageText::new)
-    });
+    let routine_shared_grade = routine_shared_grade(&score_info, routine_shared_score_percent);
+    let percentage_text = percentage_texts(&score_info, routine_shared_score_percent);
     let modifiers_presentation = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3147,11 +3201,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
             .as_ref()
             .map(eval_panes::ColumnPanePresentation::new)
     });
-    let stats_presentation = std::array::from_fn(|index| {
-        score_info[index]
-            .as_ref()
-            .map(eval_panes::StatsPanePresentation::new)
-    });
+    let stats_presentation = stats_presentations(&score_info, routine_shared_score_percent);
     let timing_pane_text = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3192,6 +3242,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
         heart_rate_generation: None,
         stage_duration_seconds,
         score_info,
+        routine_shared_grade,
         nice_scores,
         result_text,
         percentage_text,
@@ -3267,6 +3318,7 @@ pub fn init(init_view: EvaluationInitView) -> State {
 #[must_use]
 pub fn init_from_score_info(
     score_info: [Option<ScoreInfo>; MAX_PLAYERS],
+    routine_shared_score_percent: Option<f64>,
     stage_duration_seconds: f32,
     context: EvaluationContextView,
 ) -> State {
@@ -3274,7 +3326,11 @@ pub fn init_from_score_info(
     let mut active_graph: [EvalGraphPane; MAX_PLAYERS] = [EvalGraphPane::Itg; MAX_PLAYERS];
     let play_style = context.play_style;
     match play_style {
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => {
             active_pane[0] = score_info[0].as_ref().map_or(EvalPane::Standard, |si| {
                 eval_pane_default_for(si.show_fa_plus_pane)
             });
@@ -3450,11 +3506,8 @@ pub fn init_from_score_info(
             .as_ref()
             .map_or_else(ResultText::empty, ResultText::from_score)
     });
-    let percentage_text = std::array::from_fn(|index| {
-        score_info[index]
-            .as_ref()
-            .map(eval_panes::PercentageText::new)
-    });
+    let routine_shared_grade = routine_shared_grade(&score_info, routine_shared_score_percent);
+    let percentage_text = percentage_texts(&score_info, routine_shared_score_percent);
     let modifiers_presentation = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3465,11 +3518,7 @@ pub fn init_from_score_info(
             .as_ref()
             .map(eval_panes::ColumnPanePresentation::new)
     });
-    let stats_presentation = std::array::from_fn(|index| {
-        score_info[index]
-            .as_ref()
-            .map(eval_panes::StatsPanePresentation::new)
-    });
+    let stats_presentation = stats_presentations(&score_info, routine_shared_score_percent);
     let timing_pane_text = std::array::from_fn(|index| {
         score_info[index]
             .as_ref()
@@ -3510,6 +3559,7 @@ pub fn init_from_score_info(
         heart_rate_generation: None,
         stage_duration_seconds,
         score_info,
+        routine_shared_grade,
         nice_scores,
         result_text,
         percentage_text,
@@ -5702,6 +5752,11 @@ pub fn push_actors(
     {
         let style_label = match play_style {
             profile_data::PlayStyle::Double => "Double",
+            // Simply Love's StepsType names for the partner styles.
+            profile_data::PlayStyle::Couple => "Half Couples",
+            profile_data::PlayStyle::Routine => "Couples",
+            profile_data::PlayStyle::PumpCouple => "Couple",
+            profile_data::PlayStyle::PumpRoutine => "Co-Op",
             profile_data::PlayStyle::Single | profile_data::PlayStyle::Versus => "Single",
             profile_data::PlayStyle::PumpDouble => "Pump Double",
             profile_data::PlayStyle::PumpSingle | profile_data::PlayStyle::PumpVersus => {
@@ -5789,10 +5844,10 @@ pub fn push_actors(
                 }
             }
 
-            // Letter Grade
+            // Letter Grade (Routine shows the shared stats' grade)
             eval_grades::push_actors(
                 actors,
-                si.grade,
+                state.routine_shared_grade.unwrap_or(si.grade),
                 eval_grades::EvalGradeParams {
                     x: 70.0f32.mul_add(dir, upper_origin_x),
                     y: cy - 134.0,

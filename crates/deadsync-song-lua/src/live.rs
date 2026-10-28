@@ -598,8 +598,10 @@ fn live_tap_note(lua: &Lua, params: &Table, note: &deadsync_rules::note::Note) -
     table.raw_set("TapNoteOffset", note.result.map_or(0.0, |result| result.time_error_ms / 1000.0))?;
     table.raw_set("Held", note.result.is_some_and(|result| result.miss_because_held))?;
     let table = crate::lua_util::normalize_tap_note_table(lua, params, table)?;
-    // Ordinary dance notes have no assigned routine-player number.
-    table.raw_set("GetPlayerNumber", lua.create_function(|_, _: MultiValue| Ok(Value::Nil))?)?;
+    let participant = note.participant;
+    table.raw_set("GetPlayerNumber", lua.create_function(move |_, _: MultiValue| {
+        Ok(participant.map(|owner| if owner == 0 { "PlayerNumber_P1" } else { "PlayerNumber_P2" }))
+    })?)?;
     Ok(table)
 }
 

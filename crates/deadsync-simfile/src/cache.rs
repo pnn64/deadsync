@@ -27,7 +27,7 @@ use crate::song::{
 };
 
 // Retain native Lua background effect definitions independently of media layers.
-pub const SONG_CACHE_VERSION: u8 = 72;
+pub const SONG_CACHE_VERSION: u8 = 73;
 pub const SONG_CACHE_MAGIC: [u8; 8] = *b"DSCACHE1";
 const MAX_SONG_CACHE_HEADER_BYTES: usize = 64 * 1024 * 1024;
 const MAX_UNCHECKED_CACHE_HEADER_BYTES: u64 = 1024 * 1024;
@@ -813,6 +813,7 @@ impl From<CachedNoteType> for NoteType {
 
 #[derive(Serialize, Deserialize, Clone, Encode, Decode)]
 pub struct CachedParsedNote {
+    pub player: u8,
     pub row_index: u32,
     pub column: u8,
     pub note_type: CachedNoteType,
@@ -822,6 +823,7 @@ pub struct CachedParsedNote {
 impl From<&ParsedNote> for CachedParsedNote {
     fn from(note: &ParsedNote) -> Self {
         Self {
+            player: note.player,
             row_index: note.row_index as u32,
             column: note.column as u8,
             note_type: note.note_type.into(),
@@ -833,6 +835,7 @@ impl From<&ParsedNote> for CachedParsedNote {
 impl From<CachedParsedNote> for ParsedNote {
     fn from(note: CachedParsedNote) -> Self {
         Self {
+            player: note.player,
             row_index: note.row_index as usize,
             column: note.column as usize,
             note_type: note.note_type.into(),
@@ -2930,6 +2933,7 @@ mod tests {
                 chart.row_to_beat = (0..64).map(|row| row as f32).collect();
                 chart.parsed_notes = (0..64)
                     .map(|row| CachedParsedNote {
+                        player: 0,
                         row_index: row,
                         column: 0,
                         note_type: match row % 4 {
@@ -3037,6 +3041,7 @@ mod tests {
     #[test]
     fn cached_note_round_trips_to_parsed_note() {
         let source = ParsedNote {
+            player: 0,
             row_index: 12,
             column: 2,
             note_type: NoteType::Roll,
@@ -3214,24 +3219,28 @@ mod tests {
         let timing = TimingData::from_segments(0.0, 0.0, &segments, &row_to_beat);
         let notes = vec![
             CachedParsedNote {
+                player: 0,
                 row_index: 0,
                 column: 0,
                 note_type: CachedNoteType::Tap,
                 tail_row_index: None,
             },
             CachedParsedNote {
+                player: 0,
                 row_index: 1,
                 column: 0,
                 note_type: CachedNoteType::Hold,
                 tail_row_index: Some(3),
             },
             CachedParsedNote {
+                player: 0,
                 row_index: 2,
                 column: 1,
                 note_type: CachedNoteType::Mine,
                 tail_row_index: None,
             },
             CachedParsedNote {
+                player: 0,
                 row_index: 3,
                 column: 1,
                 note_type: CachedNoteType::Fake,
@@ -3261,6 +3270,7 @@ mod tests {
             offset: 0.25,
             notes: b"1000\n".to_vec(),
             parsed_notes: vec![CachedParsedNote {
+                player: 0,
                 row_index: 0,
                 column: 0,
                 note_type: CachedNoteType::Tap,
@@ -3861,6 +3871,7 @@ mod tests {
             offset: 0.0,
             notes: Vec::new(),
             parsed_notes: vec![CachedParsedNote {
+                player: 0,
                 row_index,
                 column: 0,
                 note_type: CachedNoteType::Tap,

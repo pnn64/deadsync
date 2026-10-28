@@ -187,6 +187,10 @@ fn player_blue_window_ms(state: &GameplayCoreState, player_idx: usize) -> f32 {
 /// Compare the precise normal score values rather than their formatted or
 /// predictive display values, matching the upstream theme's behavior.
 pub fn gameplay_score_leader_alphas(state: &GameplayCoreState) -> [f32; MAX_PLAYERS] {
+    // Routine participants play for one shared score, so neither trails.
+    if state.setup.session.play_style.is_routine() {
+        return [1.0; MAX_PLAYERS];
+    }
     let golf: [bool; MAX_PLAYERS] = std::array::from_fn(|i| {
         let p = &state.profiles()[i];
         p.show_golf_score
@@ -613,10 +617,12 @@ const fn gameplay_step_stats_mode(
         profile_data::PlayStyle::Single
         | profile_data::PlayStyle::Double
         | profile_data::PlayStyle::PumpSingle
-        | profile_data::PlayStyle::PumpDouble => p1_enabled,
-        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
-            p1_enabled || p2_enabled
-        }
+        | profile_data::PlayStyle::PumpDouble
+        | profile_data::PlayStyle::Routine
+        | profile_data::PlayStyle::PumpRoutine => p1_enabled,
+        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+        | profile_data::PlayStyle::Couple
+        | profile_data::PlayStyle::PumpCouple => p1_enabled || p2_enabled,
     };
     if !enabled {
         return GameplayStepStatsMode::Hidden;
@@ -625,12 +631,12 @@ const fn gameplay_step_stats_mode(
         GameplayStepStatsMode::Side
     } else {
         match play_style {
-            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
-                GameplayStepStatsMode::Versus
-            }
-            profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble => {
-                GameplayStepStatsMode::Double
-            }
+            profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+            | profile_data::PlayStyle::Couple
+            | profile_data::PlayStyle::PumpCouple => GameplayStepStatsMode::Versus,
+            profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble
+            | profile_data::PlayStyle::Routine
+            | profile_data::PlayStyle::PumpRoutine => GameplayStepStatsMode::Double,
             profile_data::PlayStyle::Single | profile_data::PlayStyle::PumpSingle => {
                 GameplayStepStatsMode::Hidden
             }
@@ -2374,7 +2380,8 @@ fn gameplay_lobby_player_stats(
     };
     Some(lobby_data::MachinePlayerStats {
         judgments: Some(judgments),
-        score: Some((state.display_itg_score_percent(player_idx) * 100.0) as f32),
+        // Each participant's own score, like its judgments and EX score.
+        score: Some((state.participant_display_itg_score_percent(player_idx) * 100.0) as f32),
         ex_score: Some(state.display_ex_score_percent(player_idx, blue_window_ms) as f32),
     })
 }
@@ -4699,11 +4706,17 @@ pub fn frame_layers<'a>(
                 let Some(rgba) = state.danger_overlay_rgba(player_idx, hide_lifebar) else {
                     continue;
                 };
+                // Routine's participants share one life meter and one danger state.
+                if play_style.is_routine() && player_idx > 0 {
+                    continue;
+                }
                 let (x, w, fl, fr) = match play_style {
-                    profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble => {
-                        (0.0, sw, 0.0, 0.0)
-                    }
-                    profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+                    profile_data::PlayStyle::Double | profile_data::PlayStyle::PumpDouble
+                    | profile_data::PlayStyle::Routine
+                    | profile_data::PlayStyle::PumpRoutine => (0.0, sw, 0.0, 0.0),
+                    profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+                    | profile_data::PlayStyle::Couple
+                    | profile_data::PlayStyle::PumpCouple => {
                         if player_idx == 0 {
                             (0.0, cx, 0.0, 0.1)
                         } else {
@@ -4731,15 +4744,18 @@ pub fn frame_layers<'a>(
             }
         }
         ScreenLayer::Filter => {
+            // Simply Love draws Routine's background filter for the master
+            // player only, since both fields share one position.
+            let filter_players = if play_style.is_routine() { 1 } else { state.num_players() };
             let has_background_filter = per_player_fields.iter().any(|&(player_idx, _)| {
                 player_idx != usize::MAX
-                    && player_idx < state.num_players()
+                    && player_idx < filter_players
                     && state.profiles()[player_idx].background_filter.alpha() > 0.0
             });
             if has_background_filter {
                 presentation_skeleton.push(STATIC_FILTER, actors, |actors| {
                     for &(player_idx, field_x) in &per_player_fields {
-                        if player_idx == usize::MAX || player_idx >= state.num_players() {
+                        if player_idx == usize::MAX || player_idx >= filter_players {
                             continue;
                         }
                         let filter_alpha = state.profiles()[player_idx].background_filter.alpha();
@@ -4776,7 +4792,11 @@ pub fn frame_layers<'a>(
 
             let mut players = [(0usize, profile_data::PlayerSide::P1, 0.0, 0.0, 0.0, 0.0); 2];
             let player_count = match play_style {
-                profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+                profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+                | profile_data::PlayStyle::Couple
+                | profile_data::PlayStyle::PumpCouple
+                | profile_data::PlayStyle::Routine
+                | profile_data::PlayStyle::PumpRoutine => {
                     players[0] = (
                         0,
                         profile_data::PlayerSide::P1,
@@ -5213,7 +5233,11 @@ pub fn frame_layers<'a>(
             {
                 let player_life_color = |player_idx: usize| -> [f32; 4] {
                     let color_index = match play_style {
-                        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+                        profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+                        | profile_data::PlayStyle::Couple
+                        | profile_data::PlayStyle::PumpCouple
+                        | profile_data::PlayStyle::Routine
+                        | profile_data::PlayStyle::PumpRoutine => {
                             if player_idx == 0 {
                                 state.active_color_index()
                             } else {
@@ -5239,7 +5263,11 @@ pub fn frame_layers<'a>(
 
                 let mut life_players = [(0usize, profile_data::PlayerSide::P1); 2];
                 let life_player_count = match play_style {
-                    profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus => {
+                    profile_data::PlayStyle::Versus | profile_data::PlayStyle::PumpVersus
+                    | profile_data::PlayStyle::Couple
+                    | profile_data::PlayStyle::PumpCouple
+                    | profile_data::PlayStyle::Routine
+                    | profile_data::PlayStyle::PumpRoutine => {
                         life_players[0] = (0, profile_data::PlayerSide::P1);
                         life_players[1] = (1, profile_data::PlayerSide::P2);
                         2
@@ -5293,7 +5321,11 @@ pub fn frame_layers<'a>(
                             let meter_cx = screen_center_x()
                                 + match play_style {
                                     profile_data::PlayStyle::Versus
-                                    | profile_data::PlayStyle::PumpVersus => match side {
+                                    | profile_data::PlayStyle::PumpVersus
+                                    | profile_data::PlayStyle::Couple
+                                    | profile_data::PlayStyle::PumpCouple
+                                    | profile_data::PlayStyle::Routine
+                                    | profile_data::PlayStyle::PumpRoutine => match side {
                                         profile_data::PlayerSide::P1 => -widescale(238.0, 288.0),
                                         profile_data::PlayerSide::P2 => widescale(238.0, 288.0),
                                     },

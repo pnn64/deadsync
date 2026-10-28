@@ -114,6 +114,7 @@ fn cached_note_from_rssp(note: ParsedChartNote) -> CachedParsedNote {
         ChartNoteType::Fake => NoteType::Fake,
     };
     CachedParsedNote {
+        player: 0,
         row_index: note.row_index as u32,
         column: note.column as u8,
         note_type: note_type.into(),
@@ -296,7 +297,10 @@ fn parse_song_source(
 ) -> Result<SerializableSongData, String> {
     let parsed = rssp::parse::extract_sections(source.data, source.extension)
         .map_err(|error| error.to_string())?;
-    let analysis_bytes = note_analysis_bytes(source.data, &parsed.notes_list);
+    let projection = crate::partner_charts::project(source.data, &parsed.notes_list);
+    let projected = rssp::parse::extract_sections(&projection.bytes, source.extension)
+        .map_err(|error| error.to_string())?;
+    let analysis_bytes = note_analysis_bytes(&projection.bytes, &projected.notes_list);
     let mut summary = analyze_prepared_in_with_notes(
         &analysis_bytes,
         source.extension,
@@ -305,6 +309,49 @@ fn parse_song_source(
         parsed_notes,
         cached_note_from_rssp,
     )?;
+    for (chart_index, (chart, entry)) in summary
+        .charts
+        .iter_mut()
+        .zip(parsed.notes_list.iter().filter(|entry| {
+            entry.field_count >= 5 && crate::partner_charts::playable(entry.fields[0])
+        }))
+        .enumerate()
+    {
+        chart.step_type_str = rssp::parse::decode_unescape(entry.fields[0])
+            .trim()
+            .to_ascii_lowercase();
+        if crate::partner_charts::lanes(entry.fields[0]).is_some() {
+            // Couple has separate scores, so it must not alias an identical
+            // Double chart. Routine additionally hashes both ownership blocks.
+            let mut hash_notes = chart.step_type_str.as_bytes().to_vec();
+            hash_notes.push(b'\n');
+            hash_notes.extend_from_slice(
+                projection
+                    .hash_notes
+                    .get(&chart_index)
+                    .map_or(chart.minimized_note_data.as_slice(), Vec::as_slice),
+            );
+            let bpms = chart
+                .chart_bpms_norm
+                .as_deref()
+                .unwrap_or(&summary.normalized_bpms);
+            (chart.short_hash, chart.bpm_neutral_hash) =
+                rssp::hash::compute_chart_hash_pair(&hash_notes, bpms);
+        }
+        if chart.step_type_str.ends_with("-routine") {
+            for note in &mut parsed_notes[chart_index] {
+                let beat = chart
+                    .row_to_beat
+                    .get(note.row_index as usize)
+                    .ok_or("Routine note has no matching beat")?;
+                let row = (*beat as f64 * 48.0).round() as usize;
+                note.player = *projection
+                    .owners
+                    .get(&(chart_index, row, note.column as usize))
+                    .ok_or("Routine note lost its participant during analysis")?;
+            }
+        }
+    }
     // RSSP rounds its report offset to milliseconds. Runtime song timing
     // uses the authored float, as NotesLoaderSM::SMSetOffset does.
     summary.offset = rssp::parse::parse_offset_seconds(parsed.offset);
@@ -314,7 +361,7 @@ fn parse_song_source(
         // authored text for the description, credit and chart name.
         let entries = parsed.notes_list.iter().filter(|entry| {
             entry.field_count >= 5
-                && rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_some()
+                && crate::partner_charts::playable(entry.fields[0])
         });
         for (chart, entry) in summary.charts.iter_mut().zip(entries) {
             let description = rssp::parse::decode_unescape(entry.fields[1]);
@@ -330,7 +377,7 @@ fn parse_song_source(
         if !(version < rssp::parse::SSC_VERSION_CHART_NAME_TAG) {
             let entries = parsed.notes_list.iter().filter(|entry| {
                 entry.field_count >= 5
-                    && rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_some()
+                    && crate::partner_charts::playable(entry.fields[0])
             });
             for (chart, entry) in summary.charts.iter_mut().zip(entries) {
                 chart.description_str = rssp::parse::decode_unescape(entry.fields[1])
@@ -403,7 +450,7 @@ pub fn load_native_step_metadata(song: &deadsync_chart::SongData) -> Result<Vec<
     for entry in &parsed.notes_list {
         if entry.field_count < 5 { continue; }
         let kind = text(entry.fields[0]).to_ascii_lowercase();
-        if rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_some() {
+        if crate::partner_charts::playable(entry.fields[0]) {
             let chart = song.charts.get(playable).ok_or("native Steps catalog exceeds playable charts")?;
             steps.push(NativeStepMetadata {
                 chart_type: chart.chart_type.clone(), difficulty: chart.difficulty.clone(),
@@ -457,7 +504,7 @@ fn unplayed_chart_note_bounds(parsed: &rssp::parse::ParsedSimfileData<'_>, exten
     let own_timing_allowed = steps_timing_allowed(version, format);
     let mut bounds: Option<[f32; 2]> = None;
     for entry in &parsed.notes_list {
-        if rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_some() { continue; }
+        if crate::partner_charts::playable(entry.fields[0]) { continue; }
         let Ok(kind) = std::str::from_utf8(entry.fields[0]) else { continue; };
         let kind = kind.trim().to_ascii_lowercase();
         // GameManager.cpp's native StepsTypeInfo table. Lights never contribute.

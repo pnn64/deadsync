@@ -780,6 +780,7 @@ pub(crate) fn compose_frame(
             total_cols: state.num_cols(),
             single_style: play_style.is_single(),
             double_style: play_style.is_double(),
+            shared_sides: play_style.is_routine(),
             center_one_player: center_1player_notefield,
             screen_width: screen_width(),
             screen_height: screen_height(),

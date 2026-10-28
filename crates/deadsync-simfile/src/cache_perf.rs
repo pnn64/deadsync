@@ -19,6 +19,7 @@ fn fixture(chart_count: usize, rows: usize, measures: usize) -> SerializableSong
             chart.row_to_beat = (0..rows).map(|row| row as f32 * 0.25).collect();
             chart.parsed_notes = (0..rows)
                 .map(|row| CachedParsedNote {
+                    player: 0,
                     row_index: row as u32,
                     column: (row % 4) as u8,
                     note_type: match row % 6 {
