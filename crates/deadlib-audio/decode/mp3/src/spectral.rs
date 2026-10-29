@@ -5,14 +5,21 @@ use crate::{
 const PRETAB: [u8; 22] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 3, 3, 3, 2, 0,
 ];
-static POWERS: std::sync::LazyLock<[f64; 16]> = std::sync::LazyLock::new(|| {
-    // Keep the same runtime powf path as uncached coefficients; constant-folded
-    // powers can round differently from the platform math implementation.
-    std::array::from_fn(|n| std::hint::black_box(n as f64).powf(4.0 / 3.0))
+struct RequantTables {
+    powers: [f64; 16],
+    amplitudes: [[u64; 2]; 4],
+}
+static REQUANT_TABLES: std::sync::LazyLock<RequantTables> = std::sync::LazyLock::new(|| {
+    let half = std::hint::black_box(-0.5f64).exp2();
+    RequantTables {
+        // Keep the platform math rounding rather than constant-folding.
+        powers: std::array::from_fn(|n| std::hint::black_box(n as f64).powf(4.0 / 3.0)),
+        amplitudes: std::array::from_fn(|n| {
+            let gain = std::hint::black_box((n as f64 - 210.0) * 0.25).exp2();
+            [gain.to_bits(), (gain * half).to_bits()]
+        }),
+    }
 });
-
-static HALF_SCALE: std::sync::LazyLock<u64> =
-    std::sync::LazyLock::new(|| std::hint::black_box(-0.5f64).exp2().to_bits());
 
 static MPEG1_INTENSITY: std::sync::LazyLock<[(f64, f64); 5]> = std::sync::LazyLock::new(|| {
     std::array::from_fn(|n| {
@@ -119,16 +126,21 @@ fn power(value: i16, scale: f64, powers: &[f64; 16]) -> f64 {
 }
 
 #[inline]
-fn attenuation(exponent: i32, half: u64) -> f64 {
-    // Public u8 factors and subblock gains bound the exponent to 0..=1530.
-    // Every result is normal: only its binary exponent changes. Retain the
-    // platform exp2 mantissa for odd half-integers.
+fn amplitude(exponent: i32, gains: &[u64; 2]) -> f64 {
+    // All public inputs produce normal amplitudes. Cached products retain the
+    // original gain * attenuation rounding; only the binary exponent changes.
     let base = if exponent & 1 == 0 {
-        1.0f64.to_bits()
+        gains[0]
     } else {
-        half
+        gains[1]
     };
     f64::from_bits(base - (((exponent as u64) >> 1) << 52))
+}
+
+#[inline]
+fn gain_products(gain: u8, tables: &RequantTables) -> [u64; 2] {
+    let shift = (u64::from(gain) >> 2) << 52;
+    tables.amplitudes[usize::from(gain & 3)].map(|bits| bits + shift)
 }
 /// Requantization and short-block reordering into frequency order.
 pub fn requantize(
@@ -141,13 +153,13 @@ pub fn requantize(
     if info.block_type > 3 {
         return Err(Error::Invalid("requantization block shape"));
     }
-    let powers = &*POWERS;
+    let tables = &*REQUANT_TABLES;
+    let powers = &tables.powers;
     output.fill(0.0);
     if input.iter().fold(0, |combined, &value| combined | value) == 0 {
         return Ok(());
     }
-    let gain = ((info.global_gain as f64 - 210.0) * 0.25).exp2();
-    let half = *HALF_SCALE;
+    let gains = gain_products(info.global_gain, tables);
     let scale = 1 + i32::from(info.scalefac_scale);
     let short = info.block_type == 2;
     let long_bands = if !short {
@@ -165,7 +177,7 @@ pub fn requantize(
         }
         let exponent =
             scale * (factors.long[band] as i32 + if factors.preflag { pre as i32 } else { 0 });
-        let amplitude = gain * attenuation(exponent, half);
+        let amplitude = amplitude(exponent, &gains);
         for line in start..end {
             output[line] = power(input[line], amplitude, powers);
         }
@@ -187,7 +199,7 @@ pub fn requantize(
                 }
                 let exponent = scale * factors.short[band][window] as i32
                     + 4 * info.subblock_gain[window] as i32;
-                let amplitude = gain * attenuation(exponent, half);
+                let amplitude = amplitude(exponent, &gains);
                 for (line, &value) in (start..end).zip(values) {
                     output[3 * line + window] = power(value, amplitude, powers);
                 }
@@ -392,14 +404,18 @@ pub fn stereo(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn attenuation_preserves_platform_exp2_for_every_public_exponent() {
-        let half = *super::HALF_SCALE;
-        for exponent in 0..=1530 {
-            let expected = (-0.5 * std::hint::black_box(exponent) as f64).exp2();
-            assert_eq!(
-                super::attenuation(exponent, half).to_bits(),
-                expected.to_bits()
-            );
+    fn amplitudes_preserve_platform_math_for_every_public_gain_and_exponent() {
+        for gain in 0..=u8::MAX {
+            let original_gain = ((std::hint::black_box(gain) as f64 - 210.0) * 0.25).exp2();
+            let gains = super::gain_products(gain, &super::REQUANT_TABLES);
+            for exponent in 0..=1530 {
+                let expected =
+                    original_gain * (-0.5 * std::hint::black_box(exponent) as f64).exp2();
+                assert_eq!(
+                    super::amplitude(exponent, &gains).to_bits(),
+                    expected.to_bits()
+                );
+            }
         }
     }
 }
