@@ -513,7 +513,7 @@ impl HostCall<'_> {
             self.vm
                 .relocate_native_error_functions(scratch..self.vm.registers.len(), base);
         }
-        self.vm.registers.truncate(scratch);
+        self.vm.truncate_registers(scratch);
         self.vm.resize_registers(base + 1 + arguments.len());
         if c_protected {
             self.vm.registers[scratch] = Value::Nil;
@@ -698,11 +698,11 @@ impl HostCall<'_> {
         self.vm.top = top;
         match result {
             Ok(count) => {
-                self.vm.registers.truncate(scratch + count);
+                self.vm.truncate_registers(scratch + count);
                 Ok((scratch..scratch + count, !synchronous))
             }
             Err(error) => {
-                self.vm.registers.truncate(scratch);
+                self.vm.truncate_registers(scratch);
                 if let Some(value) = error.value() {
                     self.vm.registers.push(value);
                 }

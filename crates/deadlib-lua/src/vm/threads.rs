@@ -577,7 +577,7 @@ impl Vm {
             self.threads[slot_index(self.thread.0)].api_stack = 0..self.top;
         }
         let source = self.top;
-        self.registers.truncate(source);
+        self.truncate_registers(source);
         self.registers.push(value);
         // Keep faulting frames and open cells for debug inspection and escaped
         // closures. A dead thread cannot execute again or overwrite those cells.

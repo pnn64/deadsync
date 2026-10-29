@@ -180,7 +180,7 @@ impl Vm {
     pub(super) fn foreach_step(&mut self, id: u64, frame: Frame) -> Result<Option<usize>, Error> {
         let base = frame.base;
         if frame.pc() != 0 {
-            self.registers.truncate(base + 4);
+            self.truncate_registers(base + 4);
             if self.registers[base + 3] != Value::Nil {
                 return Ok(self.return_frame(frame, base + 3, 1));
             }

@@ -197,7 +197,7 @@ impl NativeStack<'_, '_> {
         self.call.vm.top = if pending { end } else { scope.top };
         self.call.vm.active_native = scope.active;
         self.call.results = end.saturating_sub(self.base);
-        self.call.vm.registers.truncate(end);
+        self.call.vm.truncate_registers(end);
         self.sync();
     }
     fn catch_load_error(&mut self, scope: Scope, error: Error) -> Result<NativeLoadStatus, Error> {

@@ -43,6 +43,7 @@ static int box(lua_State *L) {
 #include "thread-tables.c"
 #include "table-yields.c"
 #include "io-closers.c"
+#include "hook-stacks.c"
 static const luaL_Reg functions[]={{"sum",sum},{"counter",counter},{"state",state},{"fail",fail},{"invoke",invoke},{"yield",yield},{"body",body},{"box",box},{"inactive",inactive_objects},{"pcall_thread",inactive_pcall},{"cpcall_thread",inactive_cpcall},{"yield_tail",inactive_yield_tail},{"called",inactive_called},{NULL,NULL}};
 EXPORT int luaopen_native(lua_State *L) {
   lua_newtable(L);luaL_register(L,NULL,functions);lua_pushcfunction(L,inactive_load);lua_setfield(L,-2,"load_thread");lua_pushvalue(L,LUA_ENVIRONINDEX);lua_setfield(L,-2,"environment");
@@ -75,6 +76,8 @@ EXPORT int luaopen_native(lua_State *L) {
   lua_pushcfunction(L,file_closer_capture);lua_setfield(L,-2,"file_closer_capture");
   lua_pushcfunction(L,file_body);lua_setfield(L,-2,"file_body");
   lua_pushcfunction(L,file_hook);lua_setfield(L,-2,"file_hook");
+  lua_pushcfunction(L,hook_stack_install);lua_setfield(L,-2,"hook_stack");
+  lua_pushcfunction(L,hook_stack_echo);lua_setfield(L,-2,"hook_stack_echo");
   lua_pushvalue(L,1);lua_setfield(L,-2,"name");return 1;
 }
 EXPORT int luaopen_native_root_leaf(lua_State *L) {return luaopen_native(L);}

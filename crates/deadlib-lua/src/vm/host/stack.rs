@@ -92,7 +92,7 @@ impl<'vm> HostCall<'vm> {
         let start = self.arguments.min(base);
         let end = (self.arguments + self.count).min(base);
         self.vm.registers[start..end].fill(Value::Nil);
-        self.vm.registers.truncate(base + self.count);
+        self.vm.truncate_registers(base + self.count);
         self.results = self.count;
         self.stack_opened = true;
         let mut stack = NativeStack {
@@ -158,7 +158,7 @@ impl NativeStack<'_, '_> {
             if self.call.vm.gc.tag_calls != tag_calls {
                 self.restore_window_call_base();
             }
-            self.call.vm.registers.truncate(self.end());
+            self.call.vm.truncate_registers(self.end());
         }
         Ok(result)
     }
@@ -211,7 +211,7 @@ impl NativeStack<'_, '_> {
         if self.call.vm.gc.tag_calls != tag_calls {
             self.restore_window_call_base();
         }
-        self.call.vm.registers.truncate(self.end());
+        self.call.vm.truncate_registers(self.end());
         Ok(())
     }
     fn sync(&mut self) {
@@ -585,7 +585,7 @@ impl NativeStack<'_, '_> {
             Ok(range) => {
                 let count = results.unwrap_or(range.len());
                 if count > limits::MAX_CSTACK - prefix {
-                    self.call.vm.registers.truncate(self.base + prefix);
+                    self.call.vm.truncate_registers(self.base + prefix);
                     return Err(self.error(b"native stack overflow"));
                 }
                 self.call.vm.resize_registers(self.base + prefix + count);

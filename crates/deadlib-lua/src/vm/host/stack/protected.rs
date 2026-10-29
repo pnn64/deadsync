@@ -35,7 +35,7 @@ impl Vm {
             1
         };
         if count > limits::MAX_CSTACK - prefix {
-            self.registers.truncate(base + prefix);
+            self.truncate_registers(base + prefix);
             return Err(Error::new(ErrorKind::Runtime, 0, "native stack overflow"));
         }
         self.relocate_native_error_functions(range.start + 1..range.end, base + prefix);

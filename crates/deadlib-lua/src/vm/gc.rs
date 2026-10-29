@@ -449,6 +449,14 @@ fn frames_roots(
         }
     }
 }
+fn clear_popped_hook_slots(hooks: &mut hooks::Hooks, live: &[u64]) {
+    for (i, value) in hooks.popped.iter_mut().enumerate() {
+        let position = hooks.popped_start + i;
+        if live.get(position / 64).copied().unwrap_or(0) & (1u64 << (position % 64)) == 0 {
+            *value = Value::Nil;
+        }
+    }
+}
 fn clear_unused_registers(registers: &mut [Value], frames: &[Frame], live: &[u64]) {
     for (index, frame) in frames.iter().enumerate() {
         if !matches!(frame.function, FrameKind::Lua(_)) {
@@ -597,6 +605,7 @@ impl Vm {
                 .map(package::LoadingLibrary::heap_bytes)
                 .sum::<usize>();
         control += self.hooks.hidden.capacity() * std::mem::size_of::<Value>();
+        control += self.hooks.popped.capacity() * std::mem::size_of::<Value>();
         control += self.object_pointers.capacity()
             * (std::mem::size_of::<((u8, u64), Box<usize>)>() + 1)
             + self.object_pointers.len() * std::mem::size_of::<usize>();
@@ -610,6 +619,7 @@ impl Vm {
             control += loads::storage_bytes(&t.loads);
             control += t.tracebacks.capacity() * std::mem::size_of::<traces::Traceback>();
             control += t.hooks.hidden.capacity() * std::mem::size_of::<Value>();
+            control += t.hooks.popped.capacity() * std::mem::size_of::<Value>();
             control += t.host_states.capacity() * std::mem::size_of::<host::ThreadData>()
                 + t.host_states
                     .iter()
@@ -993,9 +1003,11 @@ impl Vm {
         // top even past an open local; Lua then clears that slot as well.
         if id == self.thread {
             clear_unused_registers(&mut self.registers, &self.frames, &live);
+            clear_popped_hook_slots(&mut self.hooks, &live);
         } else {
             let thread = &mut self.threads[slot_index(id.0)];
             clear_unused_registers(&mut thread.registers, &thread.frames, &live);
+            clear_popped_hook_slots(&mut thread.hooks, &live);
         }
         self.shrink_thread_calls(id);
     }

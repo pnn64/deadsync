@@ -704,7 +704,7 @@ impl Vm {
                 if contextual { result_slot } else { 0 }
             };
             self.registers[0] = self.registers[slot];
-            self.registers.truncate(1);
+            self.truncate_registers(1);
             self.top = 1;
             Ok(1)
         });
@@ -770,9 +770,14 @@ impl Vm {
         Ok(())
     }
     fn resize_registers(&mut self, len: usize) {
+        self.hooks.preserve_popped(&self.registers, len);
         let before = self.registers.capacity();
         self.registers.resize(len, Value::Nil);
         self.gc_note_control((self.registers.capacity() - before) * std::mem::size_of::<Value>());
+    }
+    fn truncate_registers(&mut self, len: usize) {
+        self.hooks.preserve_popped(&self.registers, len);
+        self.registers.truncate(len);
     }
     fn push_record(&mut self, mut frame: Frame) {
         frame.c_level_bias = self.threads[slot_index(self.thread.0)].native_bias;
@@ -1039,7 +1044,7 @@ impl Vm {
             scratch + count.min(params)..scratch + count,
             frame.stack_start,
         );
-        self.registers.truncate(end);
+        self.truncate_registers(end);
         if compat_arg {
             let t = self.new_table();
             for i in 0..extras {
@@ -1099,7 +1104,7 @@ impl Vm {
             let total = destination + count;
             self.registers
                 .copy_within(source..source + count, destination);
-            self.registers.truncate(total);
+            self.truncate_registers(total);
             self.top = total;
             self.frames.clear();
             return Some(total);
@@ -1241,7 +1246,7 @@ impl Vm {
         self.top = 0;
         let result = match self.start_lua_call(0, arguments.len(), OPEN, false) {
             Ok(Some(count)) => {
-                self.registers.truncate(count);
+                self.truncate_registers(count);
                 self.top = count;
                 Ok(count)
             }

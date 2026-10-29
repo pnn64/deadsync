@@ -180,7 +180,7 @@ impl Vm {
                 self.relocate_native_error_functions(base..self.registers.len(), call + 1);
                 if separate {
                     self.registers.copy_within(source..source + actual, call);
-                    self.registers.truncate(base.max(call + actual));
+                    self.truncate_registers(base.max(call + actual));
                 }
                 self.frames.pop();
                 Ok(Some(actual))
@@ -253,7 +253,7 @@ impl Vm {
         if matches!(frame.function, FrameKind::Native(CONT_HOST_LOAD)) {
             self.resize_registers(frame.base);
         } else {
-            self.registers.truncate(base);
+            self.truncate_registers(base);
         }
         let first = if loads::protected(kind) {
             Value::Nil
@@ -514,7 +514,7 @@ impl Vm {
             CONT_GC => self.finalizer_step(frame),
             CONT_CONCAT => {
                 self.frames.pop();
-                self.registers.truncate(frame.base);
+                self.truncate_registers(frame.base);
                 self.top = frame.pc();
                 self.concat_range(
                     frame.result,

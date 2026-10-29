@@ -66,7 +66,7 @@ impl NativeStack<'_, '_> {
         if called {
             self.restore_window_call_base();
         }
-        self.call.vm.registers.truncate(self.base + self.top());
+        self.call.vm.truncate_registers(self.base + self.top());
         Ok(result)
     }
     /// Replace the last `count` values with Lua concatenation of those values.
@@ -176,7 +176,7 @@ impl NativeStack<'_, '_> {
                     self.set_window_end(end);
                     self.call.vm.top = end;
                 } else {
-                    self.call.vm.registers.truncate(end);
+                    self.call.vm.truncate_registers(end);
                     self.restore_window_call_base();
                 }
             }
@@ -190,7 +190,7 @@ impl NativeStack<'_, '_> {
             .iter()
             .any(|frame| frame.pc == host::API_YIELDED)
         {
-            self.call.vm.registers.truncate(top);
+            self.call.vm.truncate_registers(top);
         }
         self.set_window_end(top);
         self.call.vm.top = top;

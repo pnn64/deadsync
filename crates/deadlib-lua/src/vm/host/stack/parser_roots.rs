@@ -103,7 +103,7 @@ impl Vm {
                     *top = top.checked_sub(count).ok_or_else(|| {
                         Error::new(ErrorKind::Runtime, 0, "native parser roots removed")
                     })?;
-                    self.registers.truncate(base + *top);
+                    self.truncate_registers(base + *top);
                     if let Some((_, parent)) = self.loads[index]
                         .native
                         .as_ref()

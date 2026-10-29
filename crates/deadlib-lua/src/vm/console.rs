@@ -71,7 +71,7 @@ impl Vm {
 
     fn debug_console_clear(&mut self, frame: Frame) {
         self.registers[frame.vararg_start..frame.vararg_start + frame.argc()].fill(Value::Nil);
-        self.registers.truncate(frame.base);
+        self.truncate_registers(frame.base);
         let current = self.frames.last_mut().unwrap();
         current.vararg_count = 0;
         current.pc = 0;

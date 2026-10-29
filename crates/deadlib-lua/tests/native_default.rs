@@ -477,6 +477,26 @@ fn file_close_bodies_keep_c_windows_context_errors_and_yields() {
 }
 
 #[test]
+fn hooks_preserve_popped_physical_slots_until_overwrite_or_collection() {
+    let _guard = VMS.lock().unwrap();
+    let fixture = fixture();
+    let mut vm = Vm::new();
+    let path = vm.intern(fixture.module.to_string_lossy().as_bytes());
+    vm.set_global(b"hook_stack_library", path).unwrap();
+    vm.set_output_capture(true);
+    script(&mut vm, include_bytes!("native-boundary/hook-stacks.lua"));
+    assert_eq!(
+        std::str::from_utf8(vm.output().unwrap())
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        include_str!("native-boundary/hook-stacks.expected")
+            .lines()
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn default_cli_loads_an_unmodified_public_header_module() {
     let f = fixture();
     for entry in ["direct", "require"] {

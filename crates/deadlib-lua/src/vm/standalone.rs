@@ -180,7 +180,7 @@ impl Vm {
             1 | 5 | 7 => {
                 let count = self.top - frame.vararg_start;
                 self.registers.copy_within(frame.vararg_start..self.top, 0);
-                self.registers.truncate(count);
+                self.truncate_registers(count);
                 self.top = count;
                 Ok(Some(count))
             }

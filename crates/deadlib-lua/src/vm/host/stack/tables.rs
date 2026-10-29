@@ -84,7 +84,7 @@ impl NativeStack<'_, '_> {
             self.set_window_end(yielded.end - 1);
             self.call.vm.top = yielded.end - 1;
         } else {
-            self.call.vm.registers.truncate(self.end());
+            self.call.vm.truncate_registers(self.end());
         }
         Ok(())
     }

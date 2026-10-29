@@ -42,6 +42,11 @@ pub(super) struct Hooks {
     pub host_owner: Option<usize>,
     pub hidden_start: usize,
     pub hidden: Vec<Value>,
+    // Unrooted physical slots beneath a C hook's saved top. Lowering the
+    // public top releases roots without erasing their bits. Stack traversal
+    // clears them, and writes followed by another pop replace the saved bits.
+    pub popped_start: usize,
+    pub popped: Vec<Value>,
     pub yielding: bool,
     pub yield_top: usize,
     pub yield_owner: Option<usize>,
@@ -64,6 +69,17 @@ pub(super) enum Callback {
     Host(u64),
 }
 impl Hooks {
+    pub fn preserve_popped(&mut self, registers: &[Value], end: usize) {
+        if self.popped.is_empty() {
+            return;
+        }
+        let start = end.max(self.popped_start);
+        let end = registers.len().min(self.popped_start + self.popped.len());
+        if start < end {
+            self.popped[start - self.popped_start..end - self.popped_start]
+                .copy_from_slice(&registers[start..end]);
+        }
+    }
     pub fn allowed(&self) -> bool {
         self.running.is_none() && self.finalizers == 0
     }
@@ -122,6 +138,7 @@ impl Vm {
             self.hooks.host_running = None;
             self.hooks.host_owner = None;
             self.hooks.hidden.clear();
+            self.hooks.popped.clear();
             self.hooks.yielding = false;
         }
         if self
@@ -450,7 +467,7 @@ impl Vm {
         match id {
             CONT_HOOK => {
                 self.frames.pop();
-                self.registers.truncate(frame.base);
+                self.truncate_registers(frame.base);
                 self.top = frame.result;
                 self.frames[frame.vararg_start].pc = frame.vararg_count;
                 self.hooks.running = None;
@@ -482,7 +499,7 @@ impl Vm {
                     )?;
                 } else {
                     self.frames.pop();
-                    self.registers.truncate(frame.base);
+                    self.truncate_registers(frame.base);
                     self.top = frame.result;
                     self.frames[owner].pc = frame.vararg_count;
                     if std::mem::take(&mut self.hooks.yielding) {

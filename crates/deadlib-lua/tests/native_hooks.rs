@@ -82,6 +82,43 @@ fn native_callbacks_have_no_visible_call_frame_and_can_mutate_parameters() {
 }
 
 #[test]
+fn hook_pops_retain_physical_values_without_retaining_collector_roots() {
+    fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mode = *call.function_data::<u8>().unwrap();
+        let mut s = call.native_stack()?;
+        s.set_hook(s.thread_id(), NativeHook::None, 0, 0)?;
+        s.set_top(1)?;
+        if mode == 1 {
+            s.push_integer(71)?;
+            s.set_top(1)?;
+        } else if mode == 2 {
+            s.gc(GcOperation::Collect)?;
+        }
+        Ok(())
+    }
+    for (mode, tail) in [
+        (0u8, [Value::Number(29.), Value::Number(42.)]),
+        (1, [Value::Number(71.), Value::Number(42.)]),
+        (2, [Value::Nil, Value::Nil]),
+    ] {
+        let mut vm = Vm::new();
+        let hook = vm.new_host_function_with_data(callback, &[], mode).unwrap();
+        let set = vm.new_host_function(install, &[hook]).unwrap();
+        vm.set_global(b"install", set).unwrap();
+        assert_eq!(
+            vm.execute(
+                &compile(
+                    b"local f=function(x,y,z)return x,y,z end;install(nil,1);return f(17,29,42)"
+                )
+                .unwrap()
+            )
+            .unwrap(),
+            &[Value::Number(17.), tail[0], tail[1]]
+        );
+    }
+}
+
+#[test]
 fn hook_errors_retain_identity_and_delivery_recovers_after_protected_unwind() {
     fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         let e = call.hook_event().unwrap();

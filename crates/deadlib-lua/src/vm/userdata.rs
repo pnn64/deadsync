@@ -143,7 +143,7 @@ impl Vm {
         }
         self.finish_gc_cycle();
         self.frames.pop();
-        self.registers.truncate(frame.stack_start);
+        self.truncate_registers(frame.stack_start);
         self.top = frame.result;
         self.gc.running -= 1;
         self.hooks.finalizers -= 1;
@@ -198,7 +198,7 @@ impl Vm {
         self.trim_loads();
         self.trim_tracebacks();
         self.trim_hooks();
-        self.registers.truncate(len);
+        self.truncate_registers(len);
         self.top = top;
         result.map(|_| ())
     }

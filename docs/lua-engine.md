@@ -1522,6 +1522,15 @@ observations across Windows debug/release and Linux i686 SSE2 release. The
 lifecycle/allocator APIs, collector accounting, broader strict continuations,
 diagnostics and resource/OOM gates remain unfinished.
 
+The [physical C-hook stack checks](testing/2026-10-29-rust-lua-hook-stacks.md)
+preserve popped slots until a write or collector traversal changes them. Saved
+copies are unrooted, and a hook's restored top exposes the latest physical
+contents. The 172-case public-header corpus matches release and checked Lua
+5.1.5 on Windows debug/release and Linux i686 SSE2 release. A separate
+pop-then-yield continuation mismatch remains recorded, including the checked
+reference's VM-top assertion. Lifecycle/allocator APIs, collector accounting,
+broader strict continuations and the other full parity gates stay open.
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the

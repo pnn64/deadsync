@@ -347,7 +347,7 @@ impl NativeStack<'_, '_> {
         };
         vm.relocate_native_error_functions(start..start + len, self.base);
         vm.registers.copy_within(start..start + len, self.base);
-        vm.registers.truncate(self.base + len);
+        vm.truncate_registers(self.base + len);
         vm.frames[depth] = original;
         self.call.results = len;
         self.sync();

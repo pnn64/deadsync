@@ -201,6 +201,8 @@ impl Vm {
         self.resize_registers(self.registers.len().max(end));
         self.hooks.hidden = self.registers[end..].to_vec();
         self.hooks.hidden_start = end;
+        self.hooks.popped = self.registers[base..end].to_vec();
+        self.hooks.popped_start = base;
         self.hooks.host_owner = Some(owner);
         self.push_record(Frame {
             function: FrameKind::Native(CONT_NATIVE_HOOK),
@@ -247,6 +249,13 @@ impl Vm {
                 self.hooks.yield_top = end;
             }
             self.frames.truncate(depth);
+            let live = self.registers.len().min(end);
+            self.hooks.preserve_popped(&self.registers, live);
+            self.registers.resize(end, Value::Nil);
+            if live < end {
+                self.registers[live..end].copy_from_slice(&self.hooks.popped[live - base..]);
+            }
+            self.hooks.popped.clear();
             self.resize_registers(end + self.hooks.hidden.len());
             self.registers[end..].copy_from_slice(&self.hooks.hidden);
             self.hooks.hidden.clear();

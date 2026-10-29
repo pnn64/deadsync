@@ -694,7 +694,7 @@ impl Vm {
                     ));
                 }
             }
-            self.registers.truncate(base + frame.argc());
+            self.truncate_registers(base + frame.argc());
         }
         let job = &mut self.loads[index];
         let before = job.arena_bytes();

@@ -466,7 +466,8 @@ impl Vm {
         state.top -= count;
         let frame = &mut self.frames[state.owner];
         frame.vararg_count = state.top as u32;
-        self.registers.truncate(frame.vararg_start + state.top);
+        let end = frame.vararg_start + state.top;
+        self.truncate_registers(end);
     }
     fn substitution_flush(&mut self, index: usize) -> bool {
         if self.substitutions[index].output.is_empty() {
@@ -834,10 +835,10 @@ impl Vm {
             let end = frame.vararg_start + self.substitutions[index].top;
             if frame.pc() & 3 == 1 {
                 let value = self.registers[end];
-                self.registers.truncate(end + 1);
+                self.truncate_registers(end + 1);
                 self.substitution_push(index, value);
             } else {
-                self.registers.truncate(end);
+                self.truncate_registers(end);
             }
             let complete = self.substitution_replacement(index)?;
             self.frames[owner].pc = ((index + 1) << 2) as u32;

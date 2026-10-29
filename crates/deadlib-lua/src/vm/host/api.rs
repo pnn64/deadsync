@@ -61,7 +61,7 @@ impl Vm {
         let protection = self.native_protected;
         self.native_protected |= protected;
         let wanted = results.map_or(OPEN, |n| n as u32);
-        self.registers.truncate(call + 1 + arguments);
+        self.truncate_registers(call + 1 + arguments);
         let start = self
             .start_call(call, arguments, wanted, false)
             .map_err(|error| {
@@ -118,7 +118,7 @@ impl Vm {
         }
         match result {
             Ok(count) => {
-                self.registers.truncate(call + count);
+                self.truncate_registers(call + count);
                 self.top = call + count;
                 Ok(ApiResult {
                     status: scope.status,
@@ -126,7 +126,7 @@ impl Vm {
                 })
             }
             Err(error) => {
-                self.registers.truncate(call);
+                self.truncate_registers(call);
                 if let Some(value) = error.value() {
                     self.registers.push(value);
                 }
