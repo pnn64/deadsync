@@ -1,10 +1,11 @@
 {
   "source_sha256": "ffe34a6725227e4649eb6104b772e4a96203da2b8a08c5a9912aef403f53cdb7",
   "symbols": 1410,
-  "nodes": 1334,
+  "nodes": 1318,
   "book1_prefix_entries": 32,
   "count1_sign_outputs": 81,
   "count1_b_prefix_entries": 256,
+  "small_pair_prefix_entries": 384,
   "tables": [
     {
       "number": 0,

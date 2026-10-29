@@ -9,15 +9,21 @@ this count1 stuffing condition from an invalid/truncated big-values region.
 
 Book 1's complete codeword and signs fit in five bits. A 32-entry packed lookup
 returns both signed values and the total consumed length, omitting its unused
-tree. Pair books 2..23 use a native flat prefix tree. Escape books 24..31 share a
+tree. Book 2 handles its one-bit zero pair directly and uses a 128-entry lookup
+for the remaining code/sign suffixes. Book 3 uses a complete eight-bit lookup.
+Packed entries contain signed three-bit values and their consumed length. Other pair books
+through 23 use a native flat prefix tree. Escape books 24..31 share a
 five-bit prefix lookup, followed by a residual tree walk for longer words.
-The generated forest retains 1,334 two-child nodes with high-bit leaf tags;
+The generated forest retains 1,318 two-child nodes with high-bit leaf tags;
 unreachable parents and duplicate escape-family roots are omitted. Short tails
 peek only their available bits and zero-pad the lookup index. The stored code
 length must still fit before it is consumed, preserving truncation errors.
 The small tree walker stays inlined to avoid a per-pair helper call. A shared
 bounded five-bit peek loads one or two bytes directly when five bits remain;
 short tails retain explicit zero padding and never consume lookahead bits.
+Single-bit sign flags use a checked byte-and-mask read. The sign and flag
+helpers stay inlined so larger pair paths do not introduce per-sign calls
+in the measured quantizer.
 The eight-bit peek loads a two-byte window where available, pads a missing
 second byte, and masks bits beyond the reader's explicit end.
 
@@ -28,7 +34,7 @@ magnitude mask. One sign-field read selects an eight-byte record from the 81
 possible signed quadruples. Table B recognizes its four-bit zero code directly; its other code/sign words
 use a complete eight-bit lookup to select one of those same records with a
 single checked skip. The immutable
-tables occupy 6,864 bytes of elements and need
+tables occupy 7,568 bytes of elements and need
 no runtime construction, allocation or pointer chasing through heap nodes.
 
 ## Numeric data provenance
@@ -79,7 +85,9 @@ and rejected variants are recorded in the
 and [eighth optimization pass](../../../../docs/performance/2026-10-28-mp3-round8.md).
 The padded-prefix helper also passes 5,701,633 independent pattern/bound checks,
 including empty input and every two-byte value, offset and remaining length
-through five bits. The eight-bit helper additionally passes 10,027,008
+through five bits. The [fourteenth optimization pass](../../../../docs/performance/2026-10-29-mp3-round14.md)
+records the direct code/sign lookups and their measured tradeoffs.
+The eight-bit helper additionally passes 10,027,008
 independent two-byte pattern, offset and end-bound checks, plus empty input.
 
 An independent gate embeds every codebook and sign/escape boundary in valid

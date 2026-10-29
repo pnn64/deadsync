@@ -13,6 +13,7 @@ fn symbol(bits: &mut BitReader<'_>, mut node: u16) -> Result<u8, Error> {
         node = next;
     }
 }
+#[inline(always)]
 fn signed(bits: &mut BitReader<'_>, magnitude: u16) -> Result<i16, Error> {
     if magnitude != 0 && bits.flag()? {
         Ok(-(magnitude as i16))
@@ -31,6 +32,24 @@ pub fn pair(bits: &mut BitReader<'_>, book: u8) -> Result<[i16; 2], Error> {
     }
     if book >= 32 || book == 4 || book == 14 {
         return Err(Error::Invalid("Layer III pair codebook"));
+    }
+    if matches!(book, 2 | 3) {
+        let entry = if book == 2 {
+            let mut cursor = *bits;
+            if cursor.flag()? {
+                *bits = cursor;
+                return Ok([0; 2]);
+            }
+            let entry = tables::PAIR2[cursor.peek8() >> 1];
+            cursor.skip((entry >> 8) as usize - 1)?;
+            *bits = cursor;
+            entry
+        } else {
+            let entry = tables::PAIR3[bits.peek8()];
+            bits.skip((entry >> 8) as usize)?;
+            entry
+        };
+        return Ok([((entry << 13) as i16) >> 13, ((entry << 10) as i16) >> 13]);
     }
     let mut cursor = *bits;
     if book == 1 {

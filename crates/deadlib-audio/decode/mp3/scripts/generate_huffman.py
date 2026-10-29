@@ -111,6 +111,36 @@ def main():
                 book1[index]=packed
     assert all(entry is not None for entry in book1),'incomplete signed book-1 prefixes'
     roots[1]=65535
+    # Books 2 and 3 have no linbits and complete signed words fit in eight
+    # bits. Three-bit two's-complement fields hold each value in -2..=2.
+    small_pairs=[]
+    for number in [2,3]:
+        assert tables[number]['linbits']==0 and tables[number]['reference'] is None
+        assert all(t['reference']!=number for t in tables.values())
+        entries=[None]*256
+        for x,y,length,code in tables[number]['rows']:
+            assert 0<=x<=2 and 0<=y<=2
+            count=(x!=0)+(y!=0);used=length+count
+            assert 1<=used<=8
+            for signs in range(1<<count):
+                remaining=count;values=[]
+                for magnitude in [x,y]:
+                    if magnitude:
+                        remaining-=1
+                        values.append(-magnitude if signs&(1<<remaining) else magnitude)
+                    else:values.append(0)
+                packed=(used<<8)|(values[0]&7)|((values[1]&7)<<3)
+                word=(code<<count)|signs
+                for suffix in range(1<<(8-used)):
+                    index=(word<<(8-used))|suffix
+                    assert entries[index] is None,'duplicate signed small-pair prefix'
+                    entries[index]=packed
+        assert all(entry is not None for entry in entries),'incomplete signed small-pair prefixes'
+        roots[number]=65535
+        if number==2:
+            assert entries[128:]==[1<<8]*128
+            entries=entries[:128]
+        small_pairs.append(entries)
     needed=set()
     def retain(node):
         if node==65535 or node&32768 or node in needed:return
@@ -154,6 +184,8 @@ def main():
            '// Source hashes and provenance: HUFFMAN.md. No reference decoder code.',
            '#[rustfmt::skip]',f'pub(super) static ROOTS: [u16; 24] = {roots!r};',
            '#[rustfmt::skip]',f'pub(super) static PAIR1: [u32; 32] = {book1!r};',
+           '#[rustfmt::skip]',f'pub(super) static PAIR2: [u16; 128] = {small_pairs[0]!r};',
+           '#[rustfmt::skip]',f'pub(super) static PAIR3: [u16; 256] = {small_pairs[1]!r};',
            '#[rustfmt::skip]',f'pub(super) static LINBITS: [u8; 32] = {[tables[n]["linbits"] for n in range(32)]!r};',
            '#[rustfmt::skip]',f'pub(super) static COUNT1: [u16; 32] = {count1!r};',
            '#[rustfmt::skip]',f'pub(super) static COUNT1_B: [u16; 256] = {count1b!r};',
@@ -170,7 +202,7 @@ def main():
     folder=args.crate/'tests/data';folder.mkdir(exist_ok=True)
     with (folder/'huffman.csv').open('w',encoding='ascii',newline='') as output:
         writer=csv.writer(output,lineterminator='\n');writer.writerow(['book','x','y','bits','code']);writer.writerows(fixtures)
-    manifest={'source_sha256':hashlib.sha256(args.input.read_bytes()).hexdigest(),'symbols':len(fixtures),'nodes':len(nodes),'book1_prefix_entries':len(book1),'count1_sign_outputs':len(sign_outputs),'count1_b_prefix_entries':len(count1b),
+    manifest={'source_sha256':hashlib.sha256(args.input.read_bytes()).hexdigest(),'symbols':len(fixtures),'nodes':len(nodes),'book1_prefix_entries':len(book1),'count1_sign_outputs':len(sign_outputs),'count1_b_prefix_entries':len(count1b),'small_pair_prefix_entries':sum(map(len,small_pairs)),
               'tables':[{k:v for k,v in t.items() if k!='rows'} for t in tables.values()]}
     (folder/'huffman.json').write_text(json.dumps(manifest,indent=2)+'\n',encoding='utf-8',newline='\n')
     print(len(fixtures),'symbols;',len(nodes),'complete trie nodes')

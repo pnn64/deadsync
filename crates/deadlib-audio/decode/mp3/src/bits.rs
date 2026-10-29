@@ -100,8 +100,14 @@ impl<'a> BitReader<'a> {
         self.position += width as usize;
         Ok(((value >> ((8 - (count & 7)) & 7)) & ((1u64 << width) - 1)) as u32)
     }
+    #[inline(always)]
     pub fn flag(&mut self) -> Result<bool, Error> {
-        Ok(self.read(1)? != 0)
+        if self.position == self.end {
+            return Err(Error::Truncated);
+        }
+        let value = self.data[self.position >> 3] & (0x80 >> (self.position & 7)) != 0;
+        self.position += 1;
+        Ok(value)
     }
     pub fn skip(&mut self, width: usize) -> Result<(), Error> {
         if width > self.remaining() {
