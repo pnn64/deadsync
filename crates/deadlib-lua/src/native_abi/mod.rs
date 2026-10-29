@@ -75,9 +75,13 @@ type Read = unsafe extern "C" fn(
 ) -> c_int;
 type NewState = unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_void;
 type FreeState = unsafe extern "C" fn(*mut c_void) -> c_int;
+type CreateOwned = unsafe extern "C" fn(*const c_void) -> *mut c_void;
+type CloseOwned = unsafe extern "C" fn(*mut c_void);
+type OwnState = unsafe extern "C" fn(*mut c_void, *mut c_void, Dispatch, CloseOwned) -> c_int;
 mod library;
 use library::Library;
 mod bundle;
+mod owned;
 mod stdio;
 pub(crate) fn file_backend(
     loader: Option<&dyn NativeLibraryLoader>,
@@ -114,6 +118,24 @@ impl NativeCAbiLoader {
     /// build's Lua 5.1 C API contracts. Its state pointer may only be used during
     /// a driver entry or an ordinary native callback on the same live VM.
     pub unsafe fn driver(&self, path: &[u8], symbol: &[u8]) -> Result<NativeCDriver, Box<[u8]>> {
+        Ok(NativeCDriver {
+            binding: self.binding(path, symbol)?,
+        })
+    }
+    /// Resolve a C embedding program that creates and closes its own Lua states.
+    /// The image's default-state factory is initialized before the program runs.
+    ///
+    /// # Safety
+    /// The symbol must have the `int (void)` signature and obey this build's C
+    /// API contracts. It must not jump across its Rust caller. Any callback's
+    /// defining image must remain loaded while owned states can call it.
+    pub unsafe fn program(&self, path: &[u8], symbol: &[u8]) -> Result<NativeCProgram, Box<[u8]>> {
+        Ok(NativeCProgram {
+            binding: self.binding(path, symbol)?,
+            _thread: std::marker::PhantomData,
+        })
+    }
+    fn binding(&self, path: &[u8], symbol: &[u8]) -> Result<Binding, Box<[u8]>> {
         let owner = self.open_loaded(path)?;
         let function = owner
             .library
@@ -122,12 +144,10 @@ impl NativeCAbiLoader {
             .as_ref()
             .unwrap()
             .try_symbol(symbol)?;
-        Ok(NativeCDriver {
-            binding: Binding {
-                function,
-                bridge: owner.bridge.clone(),
-                owner: Some(owner),
-            },
+        Ok(Binding {
+            function,
+            bridge: owner.bridge.clone(),
+            owner: Some(owner),
         })
     }
     /// Resolve an initializer from this VM build's C API image.
@@ -219,7 +239,7 @@ impl Bridge {
     unsafe fn from_image(image: Arc<Library>) -> Result<Arc<Self>, Box<[u8]>> {
         // SAFETY: the constructor's caller guarantees these protocol signatures.
         unsafe {
-            Ok(Arc::new(Self {
+            let bridge = Arc::new(Self {
                 stdio: Arc::new(stdio::Backend::new(image.clone())?),
                 hook: std::mem::transmute::<usize, InvokeHook>(image.try_symbol(b"boundary_hook")?),
                 invoke: std::mem::transmute::<usize, Invoke>(image.try_symbol(b"boundary_invoke")?),
@@ -231,12 +251,19 @@ impl Bridge {
                 free_state: std::mem::transmute::<usize, FreeState>(
                     image.try_symbol(b"boundary_state_free")?,
                 ),
+                own_state: std::mem::transmute::<usize, OwnState>(
+                    image.try_symbol(b"boundary_state_own")?,
+                ),
                 state_bytes: std::mem::transmute::<usize, unsafe extern "C" fn(*mut c_void) -> usize>(
                     image.try_symbol(b"boundary_state_size")?,
                 ),
                 states: Mutex::new(std::collections::HashMap::new()),
                 _library: image,
-            }))
+            });
+            let register: unsafe extern "C" fn(CreateOwned) =
+                std::mem::transmute(bridge._library.try_symbol(b"boundary_engine_create")?);
+            register(owned::new_state);
+            Ok(bridge)
         }
     }
 }
@@ -251,6 +278,7 @@ struct Bridge {
     write: Write,
     new_state: NewState,
     free_state: FreeState,
+    own_state: OwnState,
     state_bytes: unsafe extern "C" fn(*mut c_void) -> usize,
     states: Mutex<std::collections::HashMap<usize, ThreadId>>,
 }
@@ -267,6 +295,24 @@ struct Binding {
 /// A retained C entry point with no synthetic Lua-visible activation.
 pub struct NativeCDriver {
     binding: Binding,
+}
+/// A retained C embedding program whose states have C-controlled lifetimes.
+/// The program stays on its creating thread.
+pub struct NativeCProgram {
+    binding: Binding,
+    _thread: std::marker::PhantomData<*mut ()>,
+}
+impl NativeCProgram {
+    /// Invoke the C program without borrowing or creating a Rust-facing VM.
+    /// Lua errors use C protection/panic handling; unhandled panics may exit the
+    /// process, as in an ordinary Lua 5.1 C embedding program.
+    pub fn run(&self) -> i32 {
+        // SAFETY: the constructor fixes the signature, control-flow contract
+        // and retained image. There is no Rust frame inside the C program.
+        let program: unsafe extern "C" fn() -> c_int =
+            unsafe { std::mem::transmute(self.binding.function) };
+        unsafe { program() }
+    }
 }
 impl NativeCDriver {
     /// Run the driver on the VM's persistent main stack.
@@ -504,6 +550,20 @@ impl Context<'_, '_, '_> {
         b: c_int,
         value: &mut BoundaryValue,
     ) -> Result<(), Error> {
+        if op == 53 {
+            let thread = self
+                .bridge
+                .states
+                .lock()
+                .unwrap()
+                .get(&(value.userdata as usize))
+                .copied();
+            value.integer = thread
+                .and_then(|thread| self.stack.thread_status(thread))
+                .ok_or_else(|| self.stack.error(b"unknown C state"))?
+                as c_int;
+            return Ok(());
+        }
         if op == 74 {
             self.stack.flush_process_streams();
             return Ok(());
@@ -898,18 +958,6 @@ impl Context<'_, '_, '_> {
                 };
             }
             52 => value.integer = c_int::from(self.stack.push_thread()?),
-            53 => {
-                let thread = self
-                    .bridge
-                    .states
-                    .lock()
-                    .unwrap()
-                    .get(&(value.userdata as usize))
-                    .copied();
-                let status = thread.and_then(|thread| self.stack.thread_status(thread));
-                value.integer =
-                    status.ok_or_else(|| self.stack.error(b"unknown C state"))? as c_int;
-            }
             50 => {
                 let writer = value.writer;
                 let data = value.userdata;

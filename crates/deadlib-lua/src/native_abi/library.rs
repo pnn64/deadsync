@@ -4,6 +4,9 @@ use super::*;
 #[derive(Debug)]
 pub(super) struct Library(pub(super) usize);
 impl Library {
+    pub(super) fn from_address(address: *const c_void) -> Result<Self, Box<[u8]>> {
+        platform::from_address(address).map(Self)
+    }
     pub(super) fn try_open(path: &[u8]) -> Result<Self, Box<[u8]>> {
         platform::open(path, false).map(Self)
     }
@@ -31,6 +34,11 @@ mod platform {
         fn LoadLibraryA(name: *const c_char) -> *mut c_void;
         fn LoadLibraryW(name: *const u16) -> *mut c_void;
         fn GetModuleHandleA(name: *const c_char) -> *mut c_void;
+        fn GetModuleHandleExA(
+            flags: u32,
+            address: *const c_char,
+            handle: *mut *mut c_void,
+        ) -> c_int;
         fn GetProcAddress(module: *mut c_void, name: *const c_char) -> *mut c_void;
         fn FreeLibrary(module: *mut c_void) -> c_int;
         fn FormatMessageA(
@@ -96,6 +104,16 @@ mod platform {
             Ok(handle as usize)
         }
     }
+    pub(super) fn from_address(address: *const c_void) -> Result<usize, Box<[u8]>> {
+        let mut handle = std::ptr::null_mut();
+        // SAFETY: the live C image supplies its own address. FROM_ADDRESS adds
+        // one loader reference, paired with this Library owner's close.
+        if unsafe { GetModuleHandleExA(4, address.cast(), &mut handle) } == 0 {
+            Err(error())
+        } else {
+            Ok(handle as usize)
+        }
+    }
     pub(super) fn shim(path: &std::path::Path) -> Result<usize, Box<[u8]>> {
         use std::os::windows::ffi::OsStrExt;
         // SAFETY: the basename is terminated and the result is only borrowed.
@@ -144,12 +162,20 @@ mod platform {
 #[cfg(target_os = "linux")]
 mod platform {
     use super::*;
+    #[repr(C)]
+    struct ImageInfo {
+        name: *const c_char,
+        base: *mut c_void,
+        symbol: *const c_char,
+        address: *mut c_void,
+    }
     #[link(name = "dl")]
     unsafe extern "C" {
         fn dlopen(path: *const c_char, flags: c_int) -> *mut c_void;
         fn dlsym(handle: *mut c_void, name: *const c_char) -> *mut c_void;
         fn dlerror() -> *const c_char;
         fn dlclose(handle: *mut c_void) -> c_int;
+        fn dladdr(address: *const c_void, info: *mut ImageInfo) -> c_int;
     }
     fn error() -> Box<[u8]> {
         // SAFETY: dlerror lends its terminated message until the next loader call.
@@ -183,6 +209,20 @@ mod platform {
         } else {
             Ok(handle as usize)
         }
+    }
+    pub(super) fn from_address(address: *const c_void) -> Result<usize, Box<[u8]>> {
+        let mut info = ImageInfo {
+            name: std::ptr::null(),
+            base: std::ptr::null_mut(),
+            symbol: std::ptr::null(),
+            address: std::ptr::null_mut(),
+        };
+        // SAFETY: the current C image lends an address in its loaded mapping.
+        if unsafe { dladdr(address, &mut info) } == 0 || info.name.is_null() {
+            return Err(b"cannot identify native C API image".as_slice().into());
+        }
+        // SAFETY: dladdr's name is terminated and remains live with the image.
+        open(unsafe { CStr::from_ptr(info.name) }.to_bytes(), false)
     }
     pub(super) fn shim(path: &std::path::Path) -> Result<usize, Box<[u8]>> {
         use std::os::unix::ffi::OsStrExt;

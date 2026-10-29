@@ -52,6 +52,10 @@ typedef struct BoundaryValue {
   lua_State *state;
 } BoundaryValue;
 typedef int (*BoundaryDispatch)(void *, int, int, int, BoundaryValue *);
+typedef lua_State *(*BoundaryCreate)(void *);
+typedef void (*BoundaryClose)(void *);
+API void boundary_engine_create(BoundaryCreate);
+API int boundary_state_own(lua_State *, void *, BoundaryDispatch, BoundaryClose);
 API lua_State *boundary_state_new(void *, lua_State *);
 API int boundary_state_free(lua_State *);
 API size_t boundary_state_size(lua_State *);
@@ -60,6 +64,8 @@ API int boundary_hook(lua_State *, void *, BoundaryDispatch, lua_Hook, lua_Debug
 API int boundary_read(lua_State *, void *, BoundaryDispatch, lua_Reader, void *, BoundaryValue *);
 API int boundary_write(lua_State *, void *, BoundaryDispatch, lua_Writer, void *, const void *, size_t, BoundaryValue *);
 API int lua_dump(lua_State *, lua_Writer, void *);
+API lua_State *luaL_newstate(void);
+API void lua_close(lua_State *);
 API lua_State *lua_tothread(lua_State *, int);
 API lua_CFunction lua_tocfunction(lua_State *, int);
 API lua_CFunction lua_atpanic(lua_State *, lua_CFunction);

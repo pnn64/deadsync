@@ -779,10 +779,20 @@ per-build cache. Windows modules can link the generated `OUT_DIR/lua51.lib`;
 Linux modules resolve the globally loaded C API. Public-header module tests cover
 the actual CLI, child coroutines, replacement adapters, parallel VMs and cleanup.
 `--no-default-features` omits the bundled adapter and its C build. Custom providers
-remain available. The adapter declares 76 of 80 core APIs; this is partial C API
-support, with lifecycle/allocator entry points and broader semantics still open.
+remain available. The adapter declares 77 of 80 core APIs; this is partial C API
+support, with allocator entry points and broader semantics still open.
 
-Other standard libraries, complete native C API semantics, diagnostic text and
+After engine bootstrap, `luaL_newstate` creates a C-owned default VM and
+`lua_close` destroys its entire group, including when called through a child
+thread. Idle C API calls borrow that VM only for each operation. A retained
+`NativeCProgram`, resolved with `NativeCAbiLoader::program`, runs an `int(void)`
+C program without borrowing a Rust-facing VM. Owned states survive between
+program entries; errors use C protection and panic handling. See the
+[owned-state checks](../../docs/testing/2026-10-29-rust-lua-native-owned.md).
+`lua_newstate`, `lua_getallocf` and `lua_setallocf`, a standalone C host artifact,
+exact allocation/GC accounting and general interleavings remain unfinished.
+
+Complete standard-library and native C API semantics, diagnostic text and
 debug behavior, cache eviction/package integration, richer Rust host objects and
 later dialects remain unfinished. Numeric conversion edge cases and resource
 limits also need broader compatibility work. Native locales require Windows/MSVC or Linux/glibc,

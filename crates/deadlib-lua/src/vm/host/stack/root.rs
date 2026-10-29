@@ -2,6 +2,40 @@
 use super::*;
 
 impl Vm {
+    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+    pub(crate) fn prepare_native_close(&mut self) {
+        debug_assert_eq!(self.thread, self.main);
+        debug_assert!(self.frames.is_empty() && self.active_native.is_none());
+        // lua_close drops the main CallInfo's values before running GC tag
+        // methods. In particular, a finalizer can collect weak stack-only roots.
+        self.close_upvalues(0);
+        self.truncate_registers(0);
+        self.top = 0;
+        let state = &mut self.threads[slot_index(self.main.0)];
+        state.api_stack = 0..0;
+        state.depth = 0;
+        state.native_base_calls = 0;
+        state.native_level = 0;
+        self.set_thread_native_bias(self.main, 0);
+    }
+
+    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+    pub(crate) fn native_root_panic(&mut self) {
+        let state = &mut self.threads[slot_index(self.main.0)];
+        state.resume_status = threads::NativeThreadStatus::RuntimeError;
+        state.status = threads::Status::Dead;
+        state.resumer = None;
+        state.native_resumer = false;
+        state.resumed_values = None;
+        state.entry = None;
+        state.depth = 0;
+        state.native_level = state.native_base_calls;
+        // Outside an entry the Rust model includes one implicit root charge;
+        // with_native_stack removes it before the next C API operation.
+        let bias = state.native_base_calls;
+        self.set_thread_native_bias(self.main, bias);
+    }
+
     /// Borrow the idle main thread's persistent Lua 5.1 native stack.
     ///
     /// Values remain on this stack between entries and are collector roots.

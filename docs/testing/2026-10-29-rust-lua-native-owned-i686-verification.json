@@ -1,0 +1,11 @@
+{
+  "comparison_report_sha256": "5076d63a98e5123e14eab5ff085d3795a3db093ac8bcada9850837b96c9075e2",
+  "suite_report_sha256": "f1d4411c0c547b5de11679d09dc33014a006d6f25d266513a018555d04718163",
+  "artifact_hashes_verified": true,
+  "source_hashes_verified": true,
+  "pointer_bits": 32,
+  "elf32_binaries": 6,
+  "checked_reference_enabled": true,
+  "observations": 89,
+  "audit_script_sha256": "174041f1952b38df4f346cf34d9202db7f859b3ee417b300984b01591815cf4f"
+}

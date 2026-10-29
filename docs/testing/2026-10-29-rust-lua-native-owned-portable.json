@@ -1,0 +1,27 @@
+{
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--target-dir",
+    "target/lua-native-hooks/portable",
+    "-p",
+    "deadlib-lua",
+    "--no-default-features",
+    "--test",
+    "io_close_callbacks",
+    "--test",
+    "native_bodies",
+    "--test",
+    "library_initializers",
+    "--test",
+    "file_userdata",
+    "--test",
+    "native_hooks",
+    "--test",
+    "native_root"
+  ],
+  "returncode": 0,
+  "log": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\native-owned-portable.log",
+  "log_sha256": "70dc802498d6c544d1574a9ff1d8b4776e8d2c6b54c0bf7bf59fa1da08e606d0"
+}

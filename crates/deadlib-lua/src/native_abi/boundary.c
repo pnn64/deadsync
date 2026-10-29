@@ -18,7 +18,13 @@ static atomic_flag state_lock=ATOMIC_FLAG_INIT;
 #define UNLOCK_STATES() atomic_flag_clear_explicit(&state_lock,memory_order_release)
 #endif
 
-typedef struct BoundaryGlobal {size_t references;lua_CFunction panic;} BoundaryGlobal;
+typedef struct BoundaryGlobal {
+  size_t references;
+  lua_CFunction panic;
+  void *owner;
+  BoundaryDispatch dispatch;
+  BoundaryClose close;
+} BoundaryGlobal;
 typedef struct BoundaryState {
   lua_State *identity;
   BoundaryGlobal *global;
@@ -26,6 +32,7 @@ typedef struct BoundaryState {
   int owns_global;
 } BoundaryState;
 static BoundaryState *states;
+static BoundaryCreate create_state;
 static BoundaryState *find_state(lua_State *L) {
   BoundaryState *state;
   for(state=states;state;state=state->next)if(state->identity==L)return state;
@@ -81,6 +88,37 @@ static THREAD_LOCAL BoundaryFrame *active_frame;
 #define DEADLUA_ABI_VERSION 0
 #endif
 API unsigned long long boundary_abi_version(void) { return DEADLUA_ABI_VERSION; }
+API void boundary_engine_create(BoundaryCreate create) {
+  LOCK_STATES();create_state=create;UNLOCK_STATES();
+}
+static void engine_anchor(void) {}
+API lua_State *luaL_newstate(void) {
+  BoundaryCreate create;
+  LOCK_STATES();create=create_state;UNLOCK_STATES();
+  return create?create((void *)engine_anchor):NULL;
+}
+API int boundary_state_own(lua_State *L,void *owner,BoundaryDispatch dispatch,BoundaryClose close) {
+  BoundaryState *state;int result=0;
+  LOCK_STATES();state=find_state(L);
+  if(state && !state->global->owner) {
+    state->global->owner=owner;state->global->dispatch=dispatch;state->global->close=close;
+    result=1;
+  }
+  UNLOCK_STATES();return result;
+}
+API void lua_close(lua_State *L) {
+  BoundaryState *state;BoundaryFrame *frame;BoundaryGlobal *global;
+  void *owner;BoundaryClose close;
+  LOCK_STATES();state=find_state(L);
+  if(!state || !state->global->owner){UNLOCK_STATES();abort();}
+  global=state->global;
+  for(frame=active_frame;frame;frame=frame->previous) {
+    BoundaryState *active=find_state(frame->state);
+    if(active && active->global==global){UNLOCK_STATES();abort();}
+  }
+  owner=global->owner;close=global->close;
+  UNLOCK_STATES();close(owner);
+}
 
 API int boundary_read(lua_State *L, void *context, BoundaryDispatch dispatch, lua_Reader reader, void *data, BoundaryValue *result) {
   BoundaryFrame frame;
@@ -118,18 +156,29 @@ API int boundary_hook(lua_State *L, void *context, BoundaryDispatch dispatch, lu
 static void operation(lua_State *L, int op, int a, int b, BoundaryValue *value) {
   /* dispatch has returned, releasing every Rust borrow/local, before jumping. */
   BoundaryFrame *frame = active_frame;
+  BoundaryDispatch dispatch=frame?frame->dispatch:NULL;
+  void *context=frame?frame->context:NULL;
+  int root=0;
   lua_CFunction panic=op==7?current_panic(L):NULL;
-  if (!frame) abort();
+  if(!frame || frame->state!=L) {
+    BoundaryState *target,*active;
+    LOCK_STATES();target=find_state(L);active=frame?find_state(frame->state):NULL;
+    if(target && target->global->owner && (!active || target->global!=active->global)) {
+      dispatch=target->global->dispatch;context=target->global->owner;root=1;
+    }
+    UNLOCK_STATES();
+  }
+  if (!dispatch) abort();
   value->state=L;
   if(op==7)value->integer=panic!=NULL;
   {
-    int result=frame->dispatch(frame->context, op, a, b, value);
+    int result=dispatch(context, op, a, b, value);
     if(result==3) {
       /* Finalizers may replace the callback while an API operation runs. */
       panic=current_panic(L);value->integer=panic!=NULL;
-      result=frame->dispatch(frame->context,72,0,0,value);
+      result=dispatch(context,72,0,0,value);
     }
-    if(result==2)panic_error(L,panic);
+    if(result==2 || (root && result))panic_error(L,current_panic(L));
     if(result)longjmp(frame->failure, 1);
   }
 }
@@ -212,9 +261,7 @@ API int lua_pushthread(lua_State *L) {
 }
 API int lua_status(lua_State *L) {
   BoundaryValue value={0};value.userdata=L;
-  /* Readonly status queries route through the active callback, even when L is
-     inactive. Other inactive-state API operations remain unsupported. */
-  operation(active_state,53,0,0,&value);return value.integer;
+  operation(L,53,0,0,&value);return value.integer;
 }
 API const void *lua_topointer(lua_State *L, int index) {
   BoundaryValue value={0};operation(L,54,index,0,&value);return value.userdata;
@@ -334,7 +381,7 @@ API lua_State *boundary_state_new(void *identity,lua_State *parent) {
   if(!global){UNLOCK_STATES();return NULL;}
   state=(BoundaryState *)malloc(sizeof(BoundaryState));
   if(!state){if(!from)free(global);UNLOCK_STATES();return NULL;}
-  if(!from){global->references=0;global->panic=default_panic;}
+  if(!from){memset(global,0,sizeof(*global));global->panic=default_panic;}
   global->references++;state->identity=(lua_State *)identity;state->global=global;
   state->owns_global=!from;state->next=states;states=state;UNLOCK_STATES();
   /* Preserve the VM's aligned opaque thread identity without dereferencing it. */

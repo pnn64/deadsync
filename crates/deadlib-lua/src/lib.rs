@@ -40,7 +40,7 @@ pub use cache::{CacheStatus, CachedProgram, ProgramCache};
 pub use error::{Error, ErrorKind};
 #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
 #[doc(inline)]
-pub use native_abi::{NativeCAbiLoader, NativeCAbiStats, NativeCDriver};
+pub use native_abi::{NativeCAbiLoader, NativeCAbiStats, NativeCDriver, NativeCProgram};
 #[doc(inline)]
 pub use value::{FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value};
 #[doc(inline)]

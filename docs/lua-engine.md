@@ -1560,10 +1560,21 @@ synthetic Lua-visible C activation. Public-header C drivers initialize libraries
 parse and dump functions, call Lua and C, run hooks/finalizers, and resume retained
 coroutines on that stack. Root parser and protected-call depth limits match the
 checked reference. Driver errors return through the protected Rust boundary.
-This is a foundation for lifecycle work: `lua_newstate`, `lua_close`,
-`lua_getallocf` and `lua_setallocf` remain absent, and C API calls outside a live
-driver/native entry are not supported. Core declaration coverage remains 76/80;
-full parity, exact GC accounting and standalone C lifecycle semantics remain open.
+At that checkpoint, four lifecycle/allocator declarations remained absent and
+core coverage was 76/80. C-owned state support below extends this foundation.
+
+The [C-owned default-state checks](testing/2026-10-29-rust-lua-native-owned.md)
+add `luaL_newstate`, `lua_close` and `NativeCProgram` after engine bootstrap.
+Each C-owned state retains its independent Rust VM and C image, accepts idle C
+API calls, and survives between C program entries. Closing through a child
+destroys the main group and retries remaining finalizers after errors. Root
+errors unwind Rust before C panic handling, retain Lua's error status and close
+escaped upvalues. Release and checked references match 89 observations on each
+of three profiles through both the public SDK and an explicit C image.
+Core declaration coverage is 77/80. `lua_newstate`, `lua_getallocf` and
+`lua_setallocf`, a standalone C host artifact, exact allocation/GC accounting,
+general interleavings and full parity remain open.
+
 
 ## Reference contract
 
