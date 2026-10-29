@@ -1,5 +1,5 @@
 //! Direct table/image emission without compressing or splitting a second JPEG.
-use crate::output::Output;
+use crate::output::{Output, Sink};
 use crate::tables::{emit_huffman, emit_quantization};
 use crate::{Error, HuffmanClass, QuantizationTable, Result, Tables};
 
@@ -213,7 +213,7 @@ impl<'a> TableWriter<'a> {
             first_scan: true,
         })
     }
-    pub fn prepare(&self, out: &mut Output) -> Result<()> {
+    pub fn prepare<S: Sink>(&self, out: &mut Output<S>) -> Result<()> {
         if self.packet.is_some() {
             out.reserve_external(4)?;
         }
@@ -222,18 +222,22 @@ impl<'a> TableWriter<'a> {
     pub fn scan_started(&mut self) {
         self.first_scan = false;
     }
-    fn destination<'b>(&'b mut self, image: &'b mut Output, size: usize) -> Result<&'b mut Output> {
+    fn initial_packet<S: Sink>(
+        &mut self,
+        image: &mut Output<S>,
+        size: usize,
+    ) -> Result<Option<&mut Output>> {
         if self.first_scan
             && let Some(packet) = self.packet.as_mut()
         {
             image.reserve_external(size)?;
-            return Ok(packet);
+            return Ok(Some(packet));
         }
-        Ok(image)
+        Ok(None)
     }
-    pub fn quantization(
+    pub fn quantization<S: Sink>(
         &mut self,
-        out: &mut Output,
+        out: &mut Output<S>,
         id: u8,
         values: &[u16; 64],
         wide: bool,
@@ -250,19 +254,19 @@ impl<'a> TableWriter<'a> {
         {
             return Ok(());
         }
-        emit_quantization(
-            self.destination(out, 5 + 64 * if wide { 2 } else { 1 })?,
-            id,
-            &table,
-        )?;
+        if let Some(packet) = self.initial_packet(out, 5 + 64 * if wide { 2 } else { 1 })? {
+            emit_quantization(packet, id, &table)?;
+        } else {
+            emit_quantization(out, id, &table)?;
+        }
         if let Some(cache) = self.cache.as_mut() {
             cache.set_quantization(id, table)?;
         }
         Ok(())
     }
-    pub fn huffman(
+    pub fn huffman<S: Sink>(
         &mut self,
-        out: &mut Output,
+        out: &mut Output<S>,
         class: HuffmanClass,
         id: u8,
         counts: &[u8; 16],
@@ -276,13 +280,11 @@ impl<'a> TableWriter<'a> {
         {
             return Ok(());
         }
-        emit_huffman(
-            self.destination(out, 21 + symbols.len())?,
-            class,
-            id,
-            counts,
-            symbols,
-        )?;
+        if let Some(packet) = self.initial_packet(out, 21 + symbols.len())? {
+            emit_huffman(packet, class, id, counts, symbols)?;
+        } else {
+            emit_huffman(out, class, id, counts, symbols)?;
+        }
         if let Some(cache) = self.cache.as_mut() {
             cache.set_huffman(class, id, *counts, symbols)?;
         }

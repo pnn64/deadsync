@@ -4,7 +4,7 @@ use crate::encode::{emit_additional, emit_metadata, validate_metadata};
 use crate::huffman_encode::Codebook;
 use crate::lossless::{predictor, sampling};
 use crate::lossless_arithmetic::{History, Statistics};
-use crate::output::Output;
+use crate::output::{Output, Sink};
 use crate::{
     ArithmeticConditioning, CmykPolarity, ColorSpace, ComponentPlane, ComponentSpec, EncodeInput,
     EntropyCoding, Error, FrameHeader, Limits, LosslessImage, MetadataOptions, MetadataSegment,
@@ -146,6 +146,17 @@ pub(crate) fn encode_samples_with_tables(
     metadata: MetadataOptions<'_>,
     tables: &mut crate::abbreviated::TableWriter<'_>,
 ) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    write_samples_with_sink(input, options, metadata, tables, &mut bytes)?;
+    Ok(bytes)
+}
+pub(crate) fn write_samples_with_sink<S: Sink>(
+    input: &EncodeInput<'_>,
+    options: LosslessOptions<'_>,
+    metadata: MetadataOptions<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
+    sink: &mut S,
+) -> Result<()> {
     let count = match input.color_space {
         ColorSpace::Grayscale => 1,
         ColorSpace::Rgb | ColorSpace::YCbCr => 3,
@@ -239,6 +250,7 @@ pub(crate) fn encode_samples_with_tables(
         options,
         metadata,
         tables,
+        sink,
     )
 }
 
@@ -256,10 +268,21 @@ pub(crate) fn encode_planes(
 }
 pub(crate) fn encode_planes_with_tables(
     image: &LosslessImage<'_>,
-    mut options: LosslessOptions<'_>,
+    options: LosslessOptions<'_>,
     metadata: MetadataOptions<'_>,
     tables: &mut crate::abbreviated::TableWriter<'_>,
 ) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    write_planes_with_sink(image, options, metadata, tables, &mut bytes)?;
+    Ok(bytes)
+}
+pub(crate) fn write_planes_with_sink<S: Sink>(
+    image: &LosslessImage<'_>,
+    mut options: LosslessOptions<'_>,
+    metadata: MetadataOptions<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
+    sink: &mut S,
+) -> Result<()> {
     let stored = image.validate()?.max(image.memory_bytes);
     options.limits = intersect(options.limits, image.limits);
     if image.frame.width as usize * image.frame.height as usize > options.limits.max_pixels {
@@ -273,6 +296,7 @@ pub(crate) fn encode_planes_with_tables(
         options,
         metadata,
         tables,
+        sink,
     )
 }
 pub(crate) fn intersect(a: Limits, b: Limits) -> Limits {
@@ -544,7 +568,7 @@ fn walk(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn encode_native(
+fn encode_native<S: Sink>(
     frame: &FrameHeader,
     source: Source<'_>,
     segments: &[MetadataSegment<'_>],
@@ -552,7 +576,8 @@ fn encode_native(
     options: LosslessOptions<'_>,
     metadata: MetadataOptions<'_>,
     tables: &mut crate::abbreviated::TableWriter<'_>,
-) -> Result<Vec<u8>> {
+    sink: &mut S,
+) -> Result<()> {
     if stored > options.limits.max_memory_bytes {
         return Err(Error::LimitExceeded("lossless encoder storage"));
     }
@@ -562,7 +587,19 @@ fn encode_native(
     if history_bytes > available {
         return Err(Error::LimitExceeded("lossless arithmetic history"));
     }
-    let mut out = Output::new(options.max_output_bytes.min(available - history_bytes));
+    let additional = validate_metadata(&[], options.limits, metadata)?;
+    let output_memory = available
+        .checked_sub(history_bytes)
+        .and_then(|n| n.checked_sub(additional))
+        .and_then(|n| {
+            n.checked_sub(if options.entropy_coding == EntropyCoding::Huffman {
+                512
+            } else {
+                0
+            })
+        })
+        .ok_or(Error::LimitExceeded("lossless encoder storage"))?;
+    let mut out = Output::with_sink(sink, options.max_output_bytes, output_memory)?;
     tables.prepare(&mut out)?;
     out.marker(0xd8)?;
     let mut metadata_index = 0;
@@ -585,7 +622,7 @@ fn encode_native(
         metadata.icc,
     )?;
     out.marker(0xd9)?;
-    Ok(out.bytes)
+    Ok(())
 }
 
 pub(crate) fn frame_requirements(
@@ -629,13 +666,13 @@ pub(crate) fn frame_coding(
 }
 
 /// Emit one predictive frame directly into the caller's bounded JPEG output.
-pub(crate) fn encode_frame(
-    out: &mut Output,
+pub(crate) fn encode_frame<S: Sink>(
+    out: &mut Output<S>,
     frame: &FrameHeader,
     source: Source<'_>,
     options: LosslessOptions<'_>,
     reset_restart: bool,
-    before_scan: &mut impl FnMut(&mut Output, usize) -> Result<()>,
+    before_scan: &mut impl FnMut(&mut Output<S>, usize) -> Result<()>,
     tables: &mut crate::abbreviated::TableWriter<'_>,
 ) -> Result<usize> {
     let plan = Plan::new(frame, options)?;

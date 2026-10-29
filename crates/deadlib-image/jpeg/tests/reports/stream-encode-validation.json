@@ -1,0 +1,96 @@
+{
+  "scope": "Bounded incremental interchange encoded output and table-only streams; source/raster preparation remains in memory. No input-streaming, abbreviated-pair streaming, full allocation accounting, exhaustive conformance or speed claim.",
+  "rust_checks": {
+    "release": {
+      "unit_and_integration_passed": 158,
+      "doctests_passed": 1,
+      "total_passed": 159,
+      "failed": 0,
+      "log_sha256": "cafc084abe159bf6c442287e9607efb9b708c15af89d6be2dcd5f068a6178149"
+    },
+    "isolated_debug": {
+      "unit_and_integration_passed": 158,
+      "doctests_passed": 1,
+      "total_passed": 159,
+      "failed": 0,
+      "log_sha256": "b449e0a9e19f3d66cd4032afca03f0644e6bcec1cd399ea90815c6129f8c21cb"
+    }
+  },
+  "other_checks": {
+    "rustfmt": "pass",
+    "Clippy_all_targets_warnings_denied": "pass",
+    "rustdoc_warnings_denied": "pass",
+    "Python_drivers_py_compile": "pass",
+    "source_fixture_and_reference_tool_hashes": "pass"
+  },
+  "native_stream_checks": {
+    "integration_tests": 5,
+    "process_precision_buffer_comparisons": 260,
+    "selected_writer_failure_offsets": 780,
+    "many_component_metadata_cases": 12,
+    "staging_sizes": [
+      0,
+      1,
+      7,
+      17,
+      31,
+      64,
+      8192
+    ],
+    "small_model_all_failure_offsets_and_byte_ceilings": true,
+    "short_and_interrupted_writes": true,
+    "original_IO_error_payload": true,
+    "no_codec_flush_or_Drop_drain": true,
+    "writer_reuse_after_failure": true,
+    "staging_capacity_shrinks_to_budget": true,
+    "dense_digest_only_staging_bytes": 64,
+    "encoded_output_can_exceed_staging_and_source_budget": true
+  },
+  "independent_stream_checks": {
+    "source_sessions": 74,
+    "exact_file_memory_comparisons": 222,
+    "processes": [
+      192,
+      193,
+      194,
+      195,
+      197,
+      198,
+      199,
+      201,
+      202,
+      203,
+      205,
+      206,
+      207
+    ],
+    "IJG_exact_cases": 42,
+    "JPEG_XT_exact_cases": 210,
+    "JPEG_XT_DCT_blocks": 80208,
+    "JPEG_XT_sample_values": 730713,
+    "JPEG_XT_fractional_exclusions": 12,
+    "C_known_height_copies": 74,
+    "C_EXP00_copies": 0
+  },
+  "legacy_regressions": {
+    "unchanged_default_output_hashes": 10612,
+    "fresh_Turbo_C_decodes": 964,
+    "prior_C_evidence_reused_by_hash": 9648
+  },
+  "reports": {
+    "stream-encode.json": "ff103bc31262f113d79961c64df039fa9cc712026297bbd7e74067e801f06fd4",
+    "stream-encode-regressions.json": "09e635298ac472153fff8e349c4837201dd68d781a1314bcf1fbe629c54fef93"
+  },
+  "production_dependencies": [
+    "deadlib-image"
+  ],
+  "application_integration": false,
+  "remaining": [
+    "Incremental input",
+    "Paired abbreviated output streaming",
+    "Full allocator/stack/cache and peak memory audit",
+    "Broader rare/reference combinations and full conformance acceptance audit",
+    "Coverage-guided fuzzing",
+    "Measured performance and optimization"
+  ]
+}

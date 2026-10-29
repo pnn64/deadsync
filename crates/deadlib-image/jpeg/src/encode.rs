@@ -2,7 +2,7 @@ use crate::arithmetic::Statistics;
 use crate::arithmetic_encode::Coder;
 use crate::huffman_encode::Codebook;
 use crate::metadata::{ICC_IDENTIFIER, is_icc};
-use crate::output::Output;
+use crate::output::{Output, Sink};
 use crate::scan_encode::{Plan, Scan};
 use crate::{
     ArithmeticConditioning, CoefficientImage, Error, ICC_CHUNK_BYTES, MAX_ICC_BYTES,
@@ -116,6 +116,17 @@ pub(crate) fn encode_with_table_writer(
     metadata: MetadataOptions<'_>,
     tables: &mut crate::abbreviated::TableWriter<'_>,
 ) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    write_with_sink(image, options, metadata, tables, &mut bytes)?;
+    Ok(bytes)
+}
+pub(crate) fn write_with_sink<S: Sink>(
+    image: &CoefficientImage<'_>,
+    options: CodingOptions<'_>,
+    metadata: MetadataOptions<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
+    sink: &mut S,
+) -> Result<()> {
     if image.frame.process.is_differential() {
         return Err(Error::Unsupported(
             "differential frame requires a hierarchy",
@@ -134,7 +145,21 @@ pub(crate) fn encode_with_table_writer(
         }
         previous = segment.preceding_scans;
     }
-    let mut out = Output::new(options.max_output_bytes);
+    let additional = validate_metadata(&[], image.limits, metadata)?;
+    let available = image
+        .limits
+        .max_memory_bytes
+        .checked_sub(stored_bytes(image)?.max(image.memory_bytes))
+        .and_then(|n| n.checked_sub(additional))
+        .and_then(|n| {
+            n.checked_sub(if options.entropy_coding == EntropyCoding::Huffman {
+                1024
+            } else {
+                0
+            })
+        })
+        .ok_or(Error::LimitExceeded("coefficient encoder storage"))?;
+    let mut out = Output::with_sink(sink, options.max_output_bytes, available)?;
     tables.prepare(&mut out)?;
     out.marker(0xd8)?;
     let mut metadata_index = 0;
@@ -171,7 +196,24 @@ pub(crate) fn encode_with_table_writer(
         metadata.icc,
     )?;
     out.marker(0xd9)?;
-    Ok(out.bytes)
+    Ok(())
+}
+
+fn stored_bytes(image: &CoefficientImage<'_>) -> Result<usize> {
+    let mut n = image.components.capacity() * core::mem::size_of::<crate::CoefficientComponent>();
+    for bytes in [
+        image.frame.components.capacity() * core::mem::size_of::<crate::ComponentSpec>(),
+        image.metadata.capacity() * core::mem::size_of::<MetadataSegment<'_>>(),
+    ]
+    .into_iter()
+    .chain(image.metadata.iter().map(|s| s.data.len()))
+    .chain(image.components.iter().map(|c| c.blocks.capacity() * 128))
+    {
+        n = n
+            .checked_add(bytes)
+            .ok_or(Error::LimitExceeded("coefficient encoder storage"))?;
+    }
+    Ok(n)
 }
 
 #[derive(Clone, Copy)]
@@ -223,13 +265,13 @@ pub(crate) fn frame_process_for(
 
 /// Write one frame directly into a shared JPEG output, with no SOI/EOI or
 /// metadata copy. A hierarchy resets the inherited DRI before its first scan.
-pub(crate) fn encode_frame(
-    out: &mut Output,
+pub(crate) fn encode_frame<S: Sink>(
+    out: &mut Output<S>,
     image: DctFrame<'_>,
     options: CodingOptions<'_>,
     limits: crate::Limits,
     reset_restart: bool,
-    before_scan: &mut impl FnMut(&mut Output, usize) -> Result<()>,
+    before_scan: &mut impl FnMut(&mut Output<S>, usize) -> Result<()>,
     tables: &mut crate::abbreviated::TableWriter<'_>,
 ) -> Result<usize> {
     validate_frame(image, limits)?;
@@ -475,8 +517,8 @@ pub(crate) fn encode_frame(
     Ok(scan_count)
 }
 
-pub(crate) fn emit_metadata(
-    out: &mut Output,
+pub(crate) fn emit_metadata<S: Sink>(
+    out: &mut Output<S>,
     segments: &[MetadataSegment<'_>],
     index: &mut usize,
     scan: usize,
@@ -494,7 +536,10 @@ pub(crate) fn emit_metadata(
     Ok(())
 }
 
-pub(crate) fn emit_additional(out: &mut Output, metadata: MetadataOptions<'_>) -> Result<()> {
+pub(crate) fn emit_additional<S: Sink>(
+    out: &mut Output<S>,
+    metadata: MetadataOptions<'_>,
+) -> Result<()> {
     for segment in metadata.additional_segments {
         if matches!(metadata.icc, IccWrite::Preserve) || !is_icc(segment) {
             out.segment(segment.marker, segment.data)?;

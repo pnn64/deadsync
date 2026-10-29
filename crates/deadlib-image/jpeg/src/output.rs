@@ -1,7 +1,61 @@
 use crate::{Error, Result};
 
-pub(crate) struct Output {
-    pub bytes: Vec<u8>,
+/// Monomorphized storage: Vec retains the earlier allocation path; a streaming
+/// sink buffers only a bounded window and calls the external writer on drains.
+pub(crate) trait Sink {
+    const RETAINS_OUTPUT: bool;
+    fn len(&self) -> usize;
+    fn prepare(&mut self, memory: usize, limit: usize) -> Result<()>;
+    fn reserve(&mut self, n: usize, limit: usize) -> Result<()>;
+    fn push(&mut self, bytes: &[u8]) -> Result<()>;
+}
+
+impl Sink for Vec<u8> {
+    const RETAINS_OUTPUT: bool = true;
+    fn len(&self) -> usize {
+        Vec::len(self)
+    }
+    fn prepare(&mut self, _memory: usize, _limit: usize) -> Result<()> {
+        Ok(())
+    }
+    fn reserve(&mut self, n: usize, limit: usize) -> Result<()> {
+        let wanted = self.len() + n;
+        if wanted > self.capacity() {
+            let capacity = self
+                .capacity()
+                .saturating_mul(2)
+                .max(1024)
+                .min(limit)
+                .max(wanted);
+            self.try_reserve_exact(capacity - self.len())
+                .map_err(|_| Error::Allocation)?;
+        }
+        Ok(())
+    }
+    fn push(&mut self, bytes: &[u8]) -> Result<()> {
+        self.extend_from_slice(bytes);
+        Ok(())
+    }
+}
+
+impl<S: Sink> Sink for &mut S {
+    const RETAINS_OUTPUT: bool = S::RETAINS_OUTPUT;
+    fn len(&self) -> usize {
+        (**self).len()
+    }
+    fn prepare(&mut self, memory: usize, limit: usize) -> Result<()> {
+        (**self).prepare(memory, limit)
+    }
+    fn reserve(&mut self, n: usize, limit: usize) -> Result<()> {
+        (**self).reserve(n, limit)
+    }
+    fn push(&mut self, bytes: &[u8]) -> Result<()> {
+        (**self).push(bytes)
+    }
+}
+
+pub(crate) struct Output<S: Sink = Vec<u8>> {
+    pub bytes: S,
     limit: usize,
     buffer: u64,
     bits: u8,
@@ -18,7 +72,26 @@ impl Output {
             external_bytes: 0,
         }
     }
+}
 
+impl<'a, S: Sink> Output<&'a mut S> {
+    pub fn with_sink(bytes: &'a mut S, limit: usize, memory: usize) -> Result<Self> {
+        bytes.prepare(memory, limit)?;
+        Ok(Self {
+            bytes,
+            limit: if S::RETAINS_OUTPUT {
+                limit.min(memory)
+            } else {
+                limit
+            },
+            buffer: 0,
+            bits: 0,
+            external_bytes: 0,
+        })
+    }
+}
+
+impl<S: Sink> Output<S> {
     fn reserve(&mut self, n: usize) -> Result<()> {
         let wanted = self
             .bytes
@@ -28,25 +101,12 @@ impl Output {
         if wanted > self.limit {
             return Err(Error::LimitExceeded("encoded bytes"));
         }
-        if wanted > self.bytes.capacity() {
-            let capacity = self
-                .bytes
-                .capacity()
-                .saturating_mul(2)
-                .max(1024)
-                .min(self.limit)
-                .max(wanted);
-            self.bytes
-                .try_reserve_exact(capacity - self.bytes.len())
-                .map_err(|_| Error::Allocation)?;
-        }
-        Ok(())
+        self.bytes.reserve(n, self.limit)
     }
 
     pub fn raw(&mut self, bytes: &[u8]) -> Result<()> {
         self.reserve(bytes.len())?;
-        self.bytes.extend_from_slice(bytes);
-        Ok(())
+        self.bytes.push(bytes)
     }
 
     pub fn marker(&mut self, marker: u8) -> Result<()> {

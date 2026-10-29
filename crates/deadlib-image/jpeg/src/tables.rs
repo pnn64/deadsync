@@ -1,7 +1,7 @@
 //! Persistent DQT/DHT destinations and abbreviated streams, T.81 B.4/B.5.
 use crate::decode::{parse_huffman, parse_quant};
 use crate::entropy::Huffman;
-use crate::output::Output;
+use crate::output::{Output, Sink};
 use crate::{Error, Event, Limits, MarkerReader, MetadataSegment, Result, ZIGZAG};
 
 /// Natural-order quantizers, retaining the DQT representation's width.
@@ -160,11 +160,22 @@ impl Tables {
         limits: Limits,
         max_output_bytes: usize,
     ) -> Result<Vec<u8>> {
+        let mut bytes = Vec::new();
+        self.write_with_sink(metadata, limits, max_output_bytes, &mut bytes)?;
+        Ok(bytes)
+    }
+    pub(crate) fn write_with_sink<S: Sink>(
+        &self,
+        metadata: &[MetadataSegment<'_>],
+        limits: Limits,
+        max_output_bytes: usize,
+        sink: &mut S,
+    ) -> Result<()> {
         crate::encode::validate_metadata(metadata, limits, crate::MetadataOptions::default())?;
         if metadata.iter().any(|s| s.preceding_scans != 0) {
             return Err(Error::Invalid("table-stream metadata scan position"));
         }
-        let mut out = Output::new(max_output_bytes.min(limits.max_memory_bytes));
+        let mut out = Output::with_sink(sink, max_output_bytes, limits.max_memory_bytes)?;
         out.marker(0xd8)?;
         for segment in metadata {
             out.segment(segment.marker, segment.data)?;
@@ -182,7 +193,7 @@ impl Tables {
             }
         }
         out.marker(0xd9)?;
-        Ok(out.bytes)
+        Ok(())
     }
 
     pub fn decode_coefficients<'a>(
@@ -208,7 +219,11 @@ impl Tables {
     }
 }
 
-pub(crate) fn emit_quantization(out: &mut Output, id: u8, table: &QuantizationTable) -> Result<()> {
+pub(crate) fn emit_quantization<S: Sink>(
+    out: &mut Output<S>,
+    id: u8,
+    table: &QuantizationTable,
+) -> Result<()> {
     let mut data = [0u8; 129];
     data[0] = id | if table.wide { 16 } else { 0 };
     let mut n = 1;
@@ -223,8 +238,8 @@ pub(crate) fn emit_quantization(out: &mut Output, id: u8, table: &QuantizationTa
     }
     out.segment(0xdb, &data[..n])
 }
-pub(crate) fn emit_huffman(
-    out: &mut Output,
+pub(crate) fn emit_huffman<S: Sink>(
+    out: &mut Output<S>,
     class: HuffmanClass,
     id: u8,
     counts: &[u8; 16],

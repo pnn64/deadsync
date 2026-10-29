@@ -452,7 +452,7 @@ Verified milestones:
   rare combinations, coverage-guided fuzzing and all measured optimization
   remain required; the full goal stays active with no application integration.
 
-- Official T.83 independent-corpus milestone: pinned ITU archive, 45 unchanged
+- `80f3903e9`: official T.83 independent-corpus milestone: pinned ITU archive, 45 unchanged
   original streams/numeric files and separately identified C observations.
   All 21 unique streams (20 images and B1) decode natively, including the real
   255-component B1/B2 pair. Exact coefficient checks cover 16 IJG, 15 Turbo
@@ -473,3 +473,32 @@ Verified milestones:
   Incremental I/O, broader rare/reference combinations, coverage-guided fuzzing
   and measured performance/optimization remain required. The full goal stays
   active; no application integration or production codec dependency is added.
+
+- Bounded output-streaming milestone: `StreamEncoder<W: Write>` emits all
+  thirteen interchange processes and table-only streams through reusable,
+  resource-limited staging. Coefficient, predictive plane, native/shared raster,
+  direct hierarchy and source-pyramid entry points share the existing marker
+  and entropy writers. Source preparation remains in memory. Short/interrupted
+  writes, original I/O errors, failed prefixes, no codec flush/Drop drain,
+  output ceilings, buffer reuse/shrinkage, 255 components and large metadata
+  are covered. A digest-only destination emits a dense image larger than its
+  source/encoder budget with 64 bytes of staging. Standalone DCT output now
+  charges retained model capacities, added metadata and Huffman symbols against
+  the available storage budget; tighter limits can reject previously accepted
+  allocations. All legal default output bytes remain unchanged.
+  The native gate passes 260 process/precision/buffer comparisons, 780 selected
+  I/O failure points, twelve many-component metadata cases and every public
+  convenience method. All 222 file outputs match memory output exactly.
+  Independent checks pass 42 IJG coefficient cases and 210 JPEG XT cases across
+  all thirteen processes: 80,208 DCT blocks and 730,713 sample/residual integers.
+  Twelve fractional JPEG XT exclusions retain exact IJG checks; 74 known-height
+  DNL C-input copies are explicit. All 10,612 prior default hashes are unchanged,
+  with 964 fresh Turbo C decodes and explicit hash reuse for the others.
+  All 158 unit/integration tests plus one doctest pass in release and isolated
+  debug builds; rustfmt, all-target Clippy, rustdoc with warnings denied and
+  Python/hash audits pass. See STREAM-ENCODER-VALIDATION.md and stream-encode
+  reports in tests/reports. Incremental input, paired abbreviated streaming
+  output, full allocator/stack/cache/peak accounting, broader conformance and
+  rare combinations, coverage-guided fuzzing and measured optimization remain
+  required. The full goal stays active with no application integration or
+  added production dependency.

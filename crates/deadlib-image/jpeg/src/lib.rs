@@ -27,6 +27,7 @@ mod progressive;
 mod pyramid;
 mod reconstruct;
 mod scan_encode;
+mod stream_encode;
 mod tables;
 mod transform;
 
@@ -69,12 +70,13 @@ pub use reconstruct::{
     CmykImage, CmykPolarity, ColorSpace, ComponentPlane, PlanarImage, Upsampling,
 };
 pub use scan_encode::ScanSpec;
+pub use stream_encode::{StreamEncoder, WriteError, WriteResult};
 pub use tables::{HuffmanClass, HuffmanTable, QuantizationTable, TableStream, Tables};
 
 pub use marker::{Event, MarkerReader};
 pub use model::*;
 
-/// Failure categories remain stable across input and output APIs.
+/// Failure categories shared by native input and output APIs.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Error {
     Truncated,
@@ -82,6 +84,8 @@ pub enum Error {
     Unsupported(&'static str),
     LimitExceeded(&'static str),
     Allocation,
+    /// Streaming I/O category. `WriteError::Io` retains the original error.
+    Io(std::io::ErrorKind),
 }
 
 impl core::fmt::Display for Error {
@@ -92,6 +96,7 @@ impl core::fmt::Display for Error {
             Self::Unsupported(s) => write!(f, "unsupported JPEG feature: {s}"),
             Self::LimitExceeded(s) => write!(f, "JPEG resource limit exceeded: {s}"),
             Self::Allocation => f.write_str("JPEG allocation failed"),
+            Self::Io(kind) => write!(f, "JPEG I/O error: {kind}"),
         }
     }
 }

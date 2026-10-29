@@ -1,4 +1,4 @@
-use crate::output::Output;
+use crate::output::{Output, Sink};
 use crate::{Error, Result};
 
 pub(crate) struct Codebook {
@@ -137,15 +137,17 @@ impl Codebook {
     pub fn fixed(ac: bool, precision: u8, progressive: bool, differential: bool) -> Result<Self> {
         let mut counts = [0; 16];
         if ac {
-            let symbols: Vec<u8> = (0..=255)
-                .filter(|&symbol| {
-                    let size = symbol & 15;
-                    (size > 0 && size <= precision + 2 + u8::from(differential))
-                        || symbol == 0
-                        || symbol == 0xf0
-                        || (progressive && size == 0)
-                })
-                .collect();
+            let mut symbols = Vec::new();
+            symbols
+                .try_reserve_exact(256)
+                .map_err(|_| Error::Allocation)?;
+            symbols.extend((0..=255).filter(|&symbol| {
+                let size = symbol & 15;
+                (size > 0 && size <= precision + 2 + u8::from(differential))
+                    || symbol == 0
+                    || symbol == 0xf0
+                    || (progressive && size == 0)
+            }));
             if symbols.len() == 256 {
                 counts[8] = 255;
                 counts[9] = 1;
@@ -155,7 +157,12 @@ impl Codebook {
             Self::new(counts, symbols)
         } else {
             counts[if precision == 8 { 3 } else { 4 }] = precision + 4;
-            Self::new(counts, (0..precision + 4).collect())
+            let mut symbols = Vec::new();
+            symbols
+                .try_reserve_exact(usize::from(precision + 4))
+                .map_err(|_| Error::Allocation)?;
+            symbols.extend(0..precision + 4);
+            Self::new(counts, symbols)
         }
     }
 
@@ -171,7 +178,7 @@ impl Codebook {
     }
 
     #[inline]
-    pub fn write(&self, out: &mut Output, symbol: u8) -> Result<()> {
+    pub fn write<S: Sink>(&self, out: &mut Output<S>, symbol: u8) -> Result<()> {
         let length = self.lengths[symbol as usize];
         if length == 0 {
             return Err(Error::Invalid("symbol absent from encoder Huffman table"));

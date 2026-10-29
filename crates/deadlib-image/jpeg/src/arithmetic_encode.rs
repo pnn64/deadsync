@@ -1,6 +1,6 @@
 //! Native arithmetic encoding, derived from T.81 D.1 and F.1.4.
 use crate::arithmetic::{PROBABILITIES, Statistics};
-use crate::output::Output;
+use crate::output::{Output, Sink};
 use crate::{Error, Result, ZIGZAG};
 
 /// Arithmetic conditioning parameters written for each encoder table.
@@ -35,8 +35,8 @@ impl ArithmeticConditioning {
 /// Carry resolution retains one byte and a count of pending FFs. Zero runs
 /// remain pending so Flush can discard trailing zero bytes without rewriting
 /// output or allocating an intermediate entropy buffer.
-pub(crate) struct Coder<'a> {
-    output: &'a mut Output,
+pub(crate) struct Coder<'a, S: Sink = Vec<u8>> {
+    output: &'a mut Output<S>,
     a: u32,
     c: u32,
     count: u8,
@@ -47,9 +47,9 @@ pub(crate) struct Coder<'a> {
 
 impl Statistics {
     #[allow(clippy::too_many_arguments)]
-    pub fn encode_dc(
+    pub fn encode_dc<S: Sink>(
         &mut self,
-        coder: &mut Coder<'_>,
+        coder: &mut Coder<'_, S>,
         table: usize,
         value: i32,
         predictor: &mut i32,
@@ -107,9 +107,9 @@ impl Statistics {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn encode_ac(
+    pub fn encode_ac<S: Sink>(
         &mut self,
-        coder: &mut Coder<'_>,
+        coder: &mut Coder<'_, S>,
         table: usize,
         block: &[i16; 64],
         conditioning: ArithmeticConditioning,
@@ -170,9 +170,9 @@ impl Statistics {
         Ok(())
     }
 
-    pub fn encode_ac_refine(
+    pub fn encode_ac_refine<S: Sink>(
         &mut self,
-        coder: &mut Coder<'_>,
+        coder: &mut Coder<'_, S>,
         table: usize,
         block: &[i16; 64],
         scan: crate::progressive::ProgressiveScan,
@@ -213,8 +213,8 @@ impl Statistics {
         Ok(())
     }
 }
-impl<'a> Coder<'a> {
-    pub fn new(output: &'a mut Output) -> Self {
+impl<'a, S: Sink> Coder<'a, S> {
+    pub fn new(output: &'a mut Output<S>) -> Self {
         Self {
             output,
             a: 65536,

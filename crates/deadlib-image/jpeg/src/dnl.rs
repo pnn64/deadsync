@@ -19,9 +19,9 @@ impl HeightDeclaration {
             Self::Dnl { initial_height } => initial_height,
         }
     }
-    pub(crate) fn after_scan(
+    pub(crate) fn after_scan<S: crate::output::Sink>(
         self,
-        output: &mut crate::output::Output,
+        output: &mut crate::output::Output<S>,
         height: u16,
         scan: usize,
     ) -> Result<()> {

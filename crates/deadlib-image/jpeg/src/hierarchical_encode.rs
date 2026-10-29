@@ -2,7 +2,7 @@
 use crate::encode::{DctFrame, emit_additional, emit_metadata, validate_metadata};
 use crate::hierarchical::Rules;
 use crate::lossless_encode::{Source, intersect};
-use crate::output::Output;
+use crate::output::{Output, Sink};
 use crate::{
     CodingOptions, EntropyCoding, Error, HierarchicalData, HierarchicalFrame, HierarchicalImage,
     Limits, LosslessOptions, MetadataOptions, Process, Result,
@@ -118,10 +118,21 @@ pub(crate) fn encode_with_table_writer(
     metadata: MetadataOptions<'_>,
     tables: &mut crate::abbreviated::TableWriter<'_>,
 ) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    write_with_sink(image, options, metadata, tables, &mut bytes)?;
+    Ok(bytes)
+}
+pub(crate) fn write_with_sink<S: Sink>(
+    image: &HierarchicalImage<'_>,
+    options: HierarchicalOptions<'_>,
+    metadata: MetadataOptions<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
+    sink: &mut S,
+) -> Result<()> {
     if !options.frame_options.is_empty() && options.frame_options.len() != image.frames.len() {
         return Err(Error::Invalid("hierarchical frame option count"));
     }
-    write_hierarchy_with_tables(
+    write_hierarchy_to_sink(
         image,
         options.limits,
         options.max_output_bytes,
@@ -129,6 +140,7 @@ pub(crate) fn encode_with_table_writer(
         metadata,
         |index, frame| selected(options, index, frame),
         tables,
+        sink,
     )
 }
 
@@ -158,9 +170,33 @@ pub(crate) fn write_hierarchy_with_tables<'a>(
     max_output_bytes: usize,
     omit_dhp_height: bool,
     metadata: MetadataOptions<'_>,
-    mut controls: impl FnMut(usize, &HierarchicalFrame) -> Result<HierarchicalFrameOptions<'a>>,
+    controls: impl FnMut(usize, &HierarchicalFrame) -> Result<HierarchicalFrameOptions<'a>>,
     tables: &mut crate::abbreviated::TableWriter<'_>,
 ) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    write_hierarchy_to_sink(
+        image,
+        limits,
+        max_output_bytes,
+        omit_dhp_height,
+        metadata,
+        controls,
+        tables,
+        &mut bytes,
+    )?;
+    Ok(bytes)
+}
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn write_hierarchy_to_sink<'a, S: Sink>(
+    image: &HierarchicalImage<'_>,
+    limits: Limits,
+    max_output_bytes: usize,
+    omit_dhp_height: bool,
+    metadata: MetadataOptions<'_>,
+    mut controls: impl FnMut(usize, &HierarchicalFrame) -> Result<HierarchicalFrameOptions<'a>>,
+    tables: &mut crate::abbreviated::TableWriter<'_>,
+    sink: &mut S,
+) -> Result<()> {
     let stored = image.validate()?.max(image.memory_bytes);
     let mut limits = intersect(image.limits, limits);
     for (index, frame) in image.frames.iter().enumerate() {
@@ -232,7 +268,7 @@ pub(crate) fn write_hierarchy_with_tables<'a>(
         .and_then(|n| n.checked_sub(additional))
         .and_then(|n| n.checked_sub(scratch))
         .ok_or(Error::LimitExceeded("hierarchical encoder storage"))?;
-    let mut out = Output::new(max_output_bytes.min(available));
+    let mut out = Output::with_sink(sink, max_output_bytes, available)?;
     tables.prepare(&mut out)?;
     out.marker(0xd8)?;
     let mut metadata_index = 0;
@@ -272,7 +308,7 @@ pub(crate) fn write_hierarchy_with_tables<'a>(
                 ],
             )?;
         }
-        let mut before_scan = |out: &mut Output, scan: usize| {
+        let mut before_scan = |out: &mut Output<_>, scan: usize| {
             let source_scan = frame.first_scan + scan.min(frame.scans - 1);
             emit_metadata(
                 out,
@@ -327,5 +363,5 @@ pub(crate) fn write_hierarchy_with_tables<'a>(
         )?;
     }
     out.marker(0xd9)?;
-    Ok(out.bytes)
+    Ok(())
 }

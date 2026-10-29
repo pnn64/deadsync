@@ -208,13 +208,28 @@ available. The `encode_*_with_metadata` functions accept borrowed APPn/COM
 additions and ICC preserve/remove/replace controls. Profiles up to 255 chunks
 are supported. See METADATA-VALIDATION.md for APIs, bounds and reference gates.
 
+`StreamEncoder::new(writer)` writes interchange JPEGs directly to any
+`std::io::Write`. Its coefficient, raster, predictive lossless, hierarchy and
+source-pyramid methods use the same controls and bytes as the `Vec` APIs.
+`encode_tables` writes table-only streams. A reusable 8 KiB staging window is
+reduced by the remaining memory budget; `with_buffer_size` selects another
+window, including zero for direct writes. Encoded byte limits apply to the whole
+stream independently of staging storage. Source models and raster preparation
+remain in memory. Calls drain their own staging on success, return bytes written,
+and leave flushing to the caller. `WriteError::Io` retains the original I/O
+error; failures can leave a prefix and discard staged bytes. The codec never
+drains staging on Drop; the destination retains its own destructor behavior.
+See STREAM-ENCODER-VALIDATION.md for error semantics, bounds and all-process
+reference checks. Incremental input and paired abbreviated streaming output
+remain open.
+
 Malformed tables, runs, scan layouts, padding and restart sequences are errors.
 Limits bound pixels, coefficient/sample storage, metadata (including segment
 record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark; allocation instrumentation remains planned.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
-unsupported errors. Full DCT component-count coverage,
-Incremental I/O, additional encoder scan strategies, and the broader validation
+unsupported errors. Incremental input, paired abbreviated streaming output,
+additional encoder scan strategies, and the broader validation
 and performance work remain required.
 
 Run `cargo test -p deadlib-image-jpeg` and

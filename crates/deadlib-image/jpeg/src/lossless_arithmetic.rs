@@ -1,6 +1,7 @@
 //! Annex H.1.2.3: 25 two-dimensional contexts and 158 probability bins.
 use crate::arithmetic::Arithmetic;
 use crate::arithmetic_encode::Coder;
+use crate::output::Sink;
 use crate::{Error, Result};
 
 pub(crate) struct Statistics {
@@ -57,9 +58,9 @@ impl Statistics {
         Ok((difference, classify(difference, lower, upper)))
     }
     #[allow(clippy::too_many_arguments)]
-    pub fn encode(
+    pub fn encode<S: Sink>(
         &mut self,
-        coder: &mut Coder<'_>,
+        coder: &mut Coder<'_, S>,
         table: usize,
         left: usize,
         above: usize,
