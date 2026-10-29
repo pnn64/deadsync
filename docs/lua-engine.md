@@ -1596,6 +1596,17 @@ text and a retained Lua string. Custom allocator ownership, recoverable failures
 in other collections and exact allocation accounting remain open.
 
 
+The [fallible-storage checks](testing/2026-10-29-rust-lua-fallible-storage.md)
+reserve arena values, generations, free slots and mark buffers before publishing
+an identity. Arena removal and slot reuse allocate no memory. Userdata, host
+roots, native table creation and native stack growth return fixed memory errors
+when their reservations fail. The userdata/table constructors reserve collector
+queue space before committing an object. Native table hash hints beyond PUC's
+limit raise `table overflow`. A test-only allocator rejects actual alloc/realloc
+calls at each measured failure point; production still uses Rust's allocator.
+The custom allocator API and recoverable failures in other VM paths remain open.
+
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the

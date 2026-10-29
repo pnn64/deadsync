@@ -9,17 +9,15 @@ impl NativeStack<'_, '_> {
     /// Create and push a table with array and record capacity hints.
     ///
     /// # Errors
-    /// Rejects a pending error or full native stack.
+    /// Rejects a pending error, full native stack, table overflow or allocation failure.
     pub fn create_table(&mut self, array: usize, records: usize) -> Result<(), Error> {
         self.check_error()?;
         if self.top() == limits::MAX_CSTACK {
             return Err(self.error(b"native stack overflow"));
         }
-        let table = Table::with_capacity(array, records)?;
-        self.call.vm.tables.note_alloc(table.heap_bytes());
+        self.call.vm.reserve_registers(self.end() + 1)?;
+        let table = Value::Table(self.call.vm.try_table_with_capacity(array, records)?);
         self.call.vm.gc.pending = true;
-        let table = Value::Table(TableId(self.call.vm.tables.insert(table)));
-        self.call.vm.gc_new_value(table);
         self.push(table)
     }
     fn read_table(

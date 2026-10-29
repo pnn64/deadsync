@@ -113,7 +113,7 @@ def main():
         log_sha256=sha(output / 'build.log'),
         full_lua51_parity=False,
         missing_core_exports=['lua_getallocf', 'lua_newstate', 'lua_setallocf'],
-        limitations=['Default C-owned states only; custom allocator APIs remain absent.', 'Fallible userdata payload errors report LUA_ERRMEM; other allocations still lack recoverable OOM. Exact GC/heap accounting and general continuation/resource parity remain open.'],
+        limitations=['Default C-owned states only; custom allocator APIs remain absent.', 'Userdata, native table construction, host roots and native stack reservations report recoverable allocation errors; other VM paths still lack recoverable OOM. Exact GC/heap accounting and general continuation/resource parity remain open.'],
     )
     (output / 'manifest.json').write_text(json.dumps(result, indent=2) + '\n')
     print(f'{runtime_copy}: {result["runtime_sha256"]}')

@@ -1,4 +1,5 @@
 //! Reusable flat object storage with generation-checked external identities.
+use crate::Error;
 use std::ops::{Index, IndexMut};
 
 #[derive(Debug)]
@@ -29,16 +30,44 @@ pub(crate) fn index(key: u64) -> usize {
 }
 impl<T> Arena<T> {
     pub fn insert(&mut self, value: T) -> u64 {
+        self.try_insert(value).expect("allocate Lua arena slot")
+    }
+    /// Reserve every parallel buffer before publishing a new identity. The free
+    /// list also covers every slot, so removing objects never allocates.
+    fn reserve_insert(&mut self) -> Result<(), Error> {
+        if !self.free.is_empty() {
+            return Ok(());
+        }
+        let slot = self.values.len();
+        if slot >= u32::MAX as usize {
+            return Err(Error::memory());
+        }
+        self.values.try_reserve(1).map_err(|_| Error::memory())?;
+        self.generations
+            .try_reserve(1)
+            .map_err(|_| Error::memory())?;
+        self.free
+            .try_reserve(slot + 1)
+            .map_err(|_| Error::memory())?;
+        if slot.is_multiple_of(64) {
+            self.marks.try_reserve(1).map_err(|_| Error::memory())?;
+        }
+        Ok(())
+    }
+    pub fn try_insert(&mut self, value: T) -> Result<u64, Error> {
         let before = self.storage_bytes();
+        let reserved = self.reserve_insert();
+        // A failed reservation can still grow an earlier buffer. Account for
+        // that real storage while retaining all logical identities and marks.
+        self.allocated = self
+            .allocated
+            .saturating_add(self.storage_bytes().saturating_sub(before));
+        reserved?;
         let slot = if let Some(slot) = self.free.pop() {
             self.values[slot as usize] = Some(value);
             slot as usize
         } else {
             let slot = self.values.len();
-            assert!(
-                slot < u32::MAX as usize,
-                "Lua arena exhausted addressable slots"
-            );
             self.values.push(Some(value));
             self.generations.push(1);
             if slot.is_multiple_of(64) {
@@ -50,11 +79,8 @@ impl<T> Arena<T> {
         if self.protect_new {
             self.marks[slot / 64] |= 1u64 << (slot % 64);
         }
-        self.allocated = self
-            .allocated
-            .saturating_add(self.storage_bytes().saturating_sub(before))
-            .saturating_add(std::mem::size_of::<T>());
-        (u64::from(self.generations[slot]) << 32) | (slot as u64)
+        self.allocated = self.allocated.saturating_add(std::mem::size_of::<T>());
+        Ok((u64::from(self.generations[slot]) << 32) | (slot as u64))
     }
     pub fn key(&self, slot: usize) -> Option<u64> {
         self.values.get(slot)?.as_ref()?;
@@ -174,6 +200,25 @@ impl<T> IndexMut<usize> for Arena<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn removing_and_reusing_slots_needs_no_allocator_even_during_sweep() {
+        let mut arena = Arena::default();
+        let keys: Vec<_> = (0..129).map(|n| arena.try_insert(n).unwrap()).collect();
+        let ((), stats) = crate::allocation_probe::probe(1, || {
+            for &key in &keys {
+                arena.remove(key);
+            }
+            for n in 0..129 {
+                arena.try_insert(n).unwrap();
+            }
+            arena.clear_marks();
+            let mut cursor = arena.len();
+            arena.sweep_some(&mut cursor, usize::MAX);
+        });
+        assert_eq!(stats.attempts, 0);
+        assert_eq!(arena.live_len(), 0);
+        assert!(keys.iter().all(|&key| !arena.contains(key)));
+    }
     #[test]
     fn reuse_rejects_stale_handles_and_resets_marks() {
         let mut arena = Arena::default();

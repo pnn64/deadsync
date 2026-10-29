@@ -12,6 +12,7 @@ impl NativeStack<'_, '_> {
         if self.top() == limits::MAX_CSTACK {
             return Err(self.error(b"native stack overflow"));
         }
+        self.call.vm.reserve_registers(self.end() + 1)?;
         let env = self.context_environment();
         let id = self.call.vm.try_allocate_userdata(size, env)?;
         self.push(Value::Userdata(id))

@@ -249,23 +249,29 @@ impl Vm {
                 "memory allocation error: block too big",
             ));
         }
-        let bytes =
-            Bytes::new(size).map_err(|error| error.with_value(Value::String(self.memory_error)))?;
-        self.userdata_order = self
+        let bytes = Bytes::new(size).map_err(|_| self.memory_failure())?;
+        let order = self
             .userdata_order
             .checked_add(1)
             .expect("userdata creation order exhausted");
-        self.userdata.note_alloc(bytes.storage_bytes());
-        let id = UserdataId(self.userdata.insert(Userdata {
-            library: None,
-            file: None,
-            native_file: false,
-            env,
-            metatable: None,
-            bytes,
-            finalized: false,
-            order: self.userdata_order,
-        }));
+        self.reserve_gc_new_value()?;
+        let storage = bytes.storage_bytes();
+        let id = UserdataId(
+            self.userdata
+                .try_insert(Userdata {
+                    library: None,
+                    file: None,
+                    native_file: false,
+                    env,
+                    metatable: None,
+                    bytes,
+                    finalized: false,
+                    order,
+                })
+                .map_err(|_| self.memory_failure())?,
+        );
+        self.userdata_order = order;
+        self.userdata.note_alloc(storage);
         self.gc_new_value(Value::Userdata(id));
         Ok(id)
     }
@@ -274,6 +280,17 @@ impl Vm {
     /// Pin the returned value if the host retains it across executions/collections.
     pub fn new_userdata(&mut self, size: usize) -> Value {
         Value::Userdata(self.allocate_userdata(size, self.globals))
+    }
+
+    /// Try to allocate zeroed userdata in this thread's environment.
+    /// Store or pin the result before executing Lua or collecting.
+    ///
+    /// # Errors
+    /// Returns a memory error if payload, arena or collector queue allocation
+    /// fails. Requests beyond Lua 5.1's block-size guard return a runtime error.
+    pub fn try_new_userdata(&mut self, size: usize) -> Result<Value, Error> {
+        self.try_allocate_userdata(size, self.globals)
+            .map(Value::Userdata)
     }
 
     /// Borrow the byte storage of live userdata, or `None` for a collected handle.

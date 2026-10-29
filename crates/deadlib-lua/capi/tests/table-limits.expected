@@ -1,0 +1,21 @@
+table.limit.first.status	2
+table.limit.first.top	1
+table.limit.first.value	table overflow
+table.limit.power.status	2
+table.limit.power.top	1
+table.limit.power.value	table overflow
+table.limit.intmax.status	2
+table.limit.intmax.top	1
+table.limit.intmax.value	table overflow
+table.limit.handler.status	2
+table.limit.handler.top	2
+table.limit.handler.value	handled
+table.limit.handler.calls	1
+table.limit.reader.status	2
+table.limit.reader.top	1
+table.limit.reader.value	table overflow
+table.limit.coroutine.resume	2
+table.limit.coroutine.status	2
+table.limit.coroutine.value	table overflow
+table.limit.recovery	42
+table.limit.recovery.top	1

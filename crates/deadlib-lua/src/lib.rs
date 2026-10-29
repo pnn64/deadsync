@@ -13,6 +13,9 @@
 
 #![deny(unsafe_code)]
 
+#[cfg(test)]
+#[path = "../tests/support/allocation_probe.rs"]
+mod allocation_probe;
 mod arena;
 mod bytecode;
 mod cache;

@@ -39,6 +39,7 @@ impl NativeThreadStack<'_> {
         if self.top == limits::MAX_CSTACK {
             return Err(self.error(b"native stack overflow"));
         }
+        self.reserve_end(self.end + 1)?;
         let env = self.vm.calling_environment(self.thread);
         let id = self.vm.try_allocate_userdata(size, env)?;
         self.push(Value::Userdata(id))

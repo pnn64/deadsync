@@ -1,0 +1,1696 @@
+{
+  "package_manifest": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-package-debug\\manifest.json",
+  "package_manifest_sha256": "5c338bb56d390831bd0c0c04a0c632ef1d444fd52f8fb0d2353799270fc0e31b",
+  "source_hashes": {
+    "Cargo.lock": "808529345366cf552b8ada12d3238cfd705b575c653a646aa0ff0631e0141796",
+    "Cargo.toml": "dbd279ffe16dcf57fdcb0fbf4000f8140da48cf17e644508d3813dfa18ee6b76",
+    "crates/deadlib-lua/benches/baseline.rs": "bbe7218e9f362167416114998e9459338606757a3840f4020b06d79736b8e739",
+    "crates/deadlib-lua/benches/cache.rs": "f0ca43283706fe98903f7182a5a9f2103fbf160a4abfef0ed1b06504471abbc6",
+    "crates/deadlib-lua/benches/host_functions.rs": "d1352aace275cf63c5f0a7e2b384127a66ee914234b94aa9f15f4d70b52eaf36",
+    "crates/deadlib-lua/build.rs": "77b6cb431fa4be71988e8842ab2343340d8322a73feddefcc2bded3036e2b5c4",
+    "crates/deadlib-lua/capi/build.rs": "d2b8feac61eaced22d8eb29a50878cbb81f5be5e1fb7f25836b8648b4150af2c",
+    "crates/deadlib-lua/capi/Cargo.toml": "03819b27fbd9e9055c9bc6d6e8821df47709f4388b5294f14ea8d1c2c7b8386e",
+    "crates/deadlib-lua/capi/src/lib.rs": "870425c1965f48f531dec05c768f0877eec1f6ca1e7addfa8d54d7698aecce60",
+    "crates/deadlib-lua/capi/tests/capi-host.c": "f244155835c4c4265a96781c1d2f7b254f093334ffdad9f0562f4ede3a0909f5",
+    "crates/deadlib-lua/capi/tests/capi-module.c": "d886d6e292a41d74a29517ca0da4912072b838f1d500d77c17341ee51965eafb",
+    "crates/deadlib-lua/capi/tests/memory-cases.h": "f22f221a67a31e3124307d583431333c7a4167d72dd399d7d455cdd5e3193192",
+    "crates/deadlib-lua/capi/tests/public_host.rs": "df2d3ae1c75cb06080516ead71227940498c52a7f3bb94c5e13eb2653f99ec70",
+    "crates/deadlib-lua/capi/tests/table-limits.h": "84ebc4043684d81ecea00e70d8a0e1d33ac5036d037ed9f3c8d4762c7ca615b9",
+    "crates/deadlib-lua/Cargo.toml": "53ee49a57271b9aeee96cdce5351c3700273bbe364e4f5dff7033880a1ae9848",
+    "crates/deadlib-lua/examples/library_initializers.rs": "98c44981cbe44e24e8e91cf777936f42397130cef1dddfe3b93fc4b4919a5b1e",
+    "crates/deadlib-lua/examples/native_boundary.rs": "92d3a55903e4b6a6865b629d69f8339b578613980de5bb2a004dee023c293181",
+    "crates/deadlib-lua/examples/native_files.rs": "eac2d93fab07e1946a41c2ef939db144e05fb67232d99b7dc26ea8086368f2e4",
+    "crates/deadlib-lua/examples/native_owned.rs": "c2dcd186a24b33008a3d560e1a71eed9fcccbd095eb85682b27522ffeaa5da07",
+    "crates/deadlib-lua/examples/native_root.rs": "256fdd1ed1c414a0a7ba20a4853549a4ab5ab90aece195c76c5f01e3bf1bd007",
+    "crates/deadlib-lua/examples/official_suite.rs": "c3aec2ecd521c2513a01c862b067b11106d480c150dc5f6118e4a9e448d8fe68",
+    "crates/deadlib-lua/examples/os_process.rs": "455cd7c3c926e458d726098f39d203e83f04dcb3eaa4c1c8536886cb19a9e03d",
+    "crates/deadlib-lua/src/arena.rs": "4867ea4e078b18b4ff1d2661e9cffbbd47f75d95727a8c6e103122b28c996d0d",
+    "crates/deadlib-lua/src/bin/deadlua/cli.rs": "828b79325069c3d1ba3c90ce04c6ecd17291600bff4bac871ae7bd3d214fcf1d",
+    "crates/deadlib-lua/src/bin/deadlua.rs": "296ad69e9f399e2c0b0f4d0d7b7a406c18968b6de27f5b9f75dc7f86fd61b6d2",
+    "crates/deadlib-lua/src/bytecode.rs": "25f15e5868499cde78faddc65ac6ac4ec1cfd8076ae9b112c05c1e300267ea81",
+    "crates/deadlib-lua/src/cache/codec.rs": "4d1f89164ebe82ff47eec19c23bc9e0cde6df8156672580a95cb0e8c81d9724a",
+    "crates/deadlib-lua/src/cache/tests.rs": "df1573e1c833c4f68f9e4f4a3f1115cf5a8b41c7720a0b7c4efaf50a06e1f053",
+    "crates/deadlib-lua/src/cache.rs": "69eda49261a1425e3830af673284cbf526abf3de2217045fbb833126802ebb82",
+    "crates/deadlib-lua/src/chunk51/dump/jumps.rs": "e50dec9a76de807aeed4d54564e6ca34c1034dd5e9adb9131c09d00063dbeae8",
+    "crates/deadlib-lua/src/chunk51/dump/lower.rs": "15c95d36777e0c5ede2b251abdb5b54f7603945ae47b9a083799fa31747df9c6",
+    "crates/deadlib-lua/src/chunk51/dump.rs": "41bcd264f09f950a68ef9ea4148a42d1a5ddbefc3ce70a98b579fd61be64d391",
+    "crates/deadlib-lua/src/chunk51/tests.rs": "b04092bb62be23f1311eeb3d16eafefec8d590ffada9abbab814937eaad344f9",
+    "crates/deadlib-lua/src/chunk51/translate.rs": "fb6a0342e9d2952fef77b83e6b2a3727a91de60612262bb7f359dfca7bbed568",
+    "crates/deadlib-lua/src/chunk51/verify.rs": "1d1291c22f551cb6949a45703c1f290588b47872136a8338819fb7da8103a2c2",
+    "crates/deadlib-lua/src/chunk51.rs": "bad667624328513768b52ac77acc8605d917b191001b59ce5c1f671b64b7981f",
+    "crates/deadlib-lua/src/compiler/boolean.rs": "35f63ff3c5282a817cb61836fc48608248e0620eafae214df327798696af79ec",
+    "crates/deadlib-lua/src/compiler/constants/tests.rs": "524fefc17511230abb117b6d671fc5b36a06b0a300e77cc23df4ad59230d6d07",
+    "crates/deadlib-lua/src/compiler/constants.rs": "47ce5063845745c53a6491e1c17676c0b66a793ef640d891651670332d8bdeef",
+    "crates/deadlib-lua/src/compiler/expressions.rs": "cfdba07c2f28553faa04bd3bd8d2a81cf8c520bf8c0b4fbaeea097c21eae5672",
+    "crates/deadlib-lua/src/compiler/statements.rs": "3b0b686dac75169bfb381252097aa7f962383b07c2da9e32c52275f991a846a1",
+    "crates/deadlib-lua/src/compiler/tasks.rs": "e19956e5ef6df00ba4b216d1e041de6bfa842ed608d9ff9b04a0ed7c3861ddd0",
+    "crates/deadlib-lua/src/compiler.rs": "d560c845238720a24d00f5239787aa0ad6bbc469999ecc73bec1c25292919c9b",
+    "crates/deadlib-lua/src/error.rs": "96b0d99327b4cbc817b2e494299326a346f9df4b8a286cde1653620f7ad32eca",
+    "crates/deadlib-lua/src/format.rs": "4bc48088117a662e64af21306dc78bfac1a0f3717fa3f6ea1b51b077e7f1cd2c",
+    "crates/deadlib-lua/src/lexer/scanner.rs": "4d3524f2463176d0b85b1d7e4070eab807694dbcb3badf4a3055da5cd0024d73",
+    "crates/deadlib-lua/src/lexer.rs": "8754b3cbab2565e52e1297414acfc6d37497414b7182e124430230cfc33e2d0c",
+    "crates/deadlib-lua/src/lib.rs": "819f817fff3cd60e396ee6a54d0d2dc9267581801c56e14ec5dff021272900b0",
+    "crates/deadlib-lua/src/locale/posix.rs": "9ad4f6a0b6b1cfbba747c9730899158518aba6725812342964e7e3fe9dd0de47",
+    "crates/deadlib-lua/src/locale/windows.rs": "5aade2fe5d823b4a8424eeaa3979817e212c7f1c135f08496197e20b0d2c9ed9",
+    "crates/deadlib-lua/src/locale.rs": "6d898fd26c68725829c2e2b45616d79728f76270dc2e8b77315dc85a408cb634",
+    "crates/deadlib-lua/src/native_abi/api.h": "232c7fe4b7a2efff3a7c0fa56ecd2814e226c82e0e5b48c13964d0004017f763",
+    "crates/deadlib-lua/src/native_abi/boundary.c": "9b38965da54cbf956242a62e96f9929fa73a529939b053c63c151c1a56944f7d",
+    "crates/deadlib-lua/src/native_abi/builtin-bodies.h": "26840ffdbe24a0f93e989bec408bce524b013e80f4594b2cb59db2df7be1c519",
+    "crates/deadlib-lua/src/native_abi/bundle.rs": "7fb5cfb09d6880c79a4337acf6852a83995e188e32519fe5b6247a03ae877be0",
+    "crates/deadlib-lua/src/native_abi/library.rs": "87c3fd22b30c590e4daa614f9fb7a2efff3f5d64b28eb66c19abb43454613769",
+    "crates/deadlib-lua/src/native_abi/mod.rs": "c36d6efcd76b76553d490c9e94c5d40afe6f07984604947d311fc0fda2ed2736",
+    "crates/deadlib-lua/src/native_abi/native-stdio.h": "9c9fae92016a0ac044801f5e17dd6114a358e4bd54b73ac7f3187620e87973dc",
+    "crates/deadlib-lua/src/native_abi/owned.rs": "37db46772ec34f530e2ab1bbc12cf526607fc16b3a6be8245d08ed346d69827e",
+    "crates/deadlib-lua/src/native_abi/standard-libraries.h": "297acf38d9d37f9537bc95f088ad736a55741d57639b02b967e7ff7cdc845afb",
+    "crates/deadlib-lua/src/native_abi/stdio.rs": "0590260861b0e516288020c4b409dac447ea62921cd193bb4ab6fe388c3290cd",
+    "crates/deadlib-lua/src/numeric.rs": "2afdcaad6e4659b148667be4db1bafcf6bc5e3b75bd0292916eb3690579e3f12",
+    "crates/deadlib-lua/src/optimizer.rs": "daa6527ab937ecc89e128252cb095ff370dae6b378ab5091513ae72604a71426",
+    "crates/deadlib-lua/src/parser/bindings.rs": "138baf4ef45bb039983e673466bee8e2cbaddad3385913af3ee0a2158315e375",
+    "crates/deadlib-lua/src/parser/resources.rs": "750acb3001bc0745102e474d340561f8d9ae404a499d58d3cff140420375fb25",
+    "crates/deadlib-lua/src/parser/resume.rs": "1b0373affa5f8a87a7a236a15e35707eb5ef919e35043a908ae1724cabef7e22",
+    "crates/deadlib-lua/src/parser.rs": "453f1bd0715b1c73da6d6af612f1012201ec154c78af6f8d07517a211cb4ca7a",
+    "crates/deadlib-lua/src/pattern.rs": "4415a2f2a5e743aa3cdad758f45c229378ca67211aeafa1b74c7cf36e6481627",
+    "crates/deadlib-lua/src/table.rs": "b7b162972bce96831598d69406d6525d4d447a2810e6dfb7a5c6a50ef0cf265a",
+    "crates/deadlib-lua/src/value.rs": "94f8c20c159bb196d65da871d06f14faccf58fc0f8307f273ccee5472e57ea08",
+    "crates/deadlib-lua/src/vm/console.rs": "9d8cd957095c958ea3fb7dbec8ae92c47f5f6c21533490f31c2168808c2ce157",
+    "crates/deadlib-lua/src/vm/debug.rs": "2c840dc70e4a798e2083d4f91dfb6eb02e72df03fba1e10d3451c0a2b34bb25a",
+    "crates/deadlib-lua/src/vm/errors.rs": "a5001ed3643bd1602bf9e94c4a32552e9ae620845f1c92e97a86c17493ad4382",
+    "crates/deadlib-lua/src/vm/gc.rs": "70d834f3f9c4170ca2409bcb769aae8e004e196c677b0c88db3538c936208f60",
+    "crates/deadlib-lua/src/vm/hooks/returns/libraries.rs": "2926f0912ddea38cd4804ebbbf82b992496d995e2df99cd2b3be8dd4c92b833d",
+    "crates/deadlib-lua/src/vm/hooks/returns.rs": "c4a1d5bd1f38edfb1c83174cfbe74d821fd0f9fb33c22ead58e39d73baa3e163",
+    "crates/deadlib-lua/src/vm/hooks.rs": "3e5528a4bf3fc7e08e1f72aa68a86a5e6502361df0eb20bffbc07a81de12b643",
+    "crates/deadlib-lua/src/vm/host/api.rs": "9fe677bc27a1726f1fd9f750ee7261c73b5a1b129e148b905a892650d7a4e152",
+    "crates/deadlib-lua/src/vm/host/stack/body.rs": "6cdfa659bf856f9fade3d667d85e5c1300548927bd098d1c32bf1f814a591821",
+    "crates/deadlib-lua/src/vm/host/stack/coroutine.rs": "3a61340c777e2f0e672021f56d17f07c4f0d38cc263be9cb77e69f594fa9101e",
+    "crates/deadlib-lua/src/vm/host/stack/dump.rs": "5a01c2d892b99d10b57c49f7e8ca7847e1ca51bc1d938f917f912361c46637d0",
+    "crates/deadlib-lua/src/vm/host/stack/file.rs": "a1158e5981f45001d079f5c61835f778e6c6012a9fb6123b0517b09310588efc",
+    "crates/deadlib-lua/src/vm/host/stack/hooks.rs": "c4a6dc2e16558611256afe18a020f873ece89fc4a70af561656d09d99b354f0a",
+    "crates/deadlib-lua/src/vm/host/stack/inspection.rs": "37aed223957d93f0a15e75bd720f45a6aed3aabb7466644fa251c313d0b0156b",
+    "crates/deadlib-lua/src/vm/host/stack/io_callbacks.rs": "e06f2566dfe8c340a1b05dca6e92fa67f1cbd0de255a9b00e5bb5290eea2fb31",
+    "crates/deadlib-lua/src/vm/host/stack/loader.rs": "7815b68bde5e1327c05d308bab4dcff9014dab3b989387148be5c949d5855065",
+    "crates/deadlib-lua/src/vm/host/stack/objects.rs": "097f30f43ce836d8c731978f7132bff10f9351186fe6cb9b2b5c8090008f8141",
+    "crates/deadlib-lua/src/vm/host/stack/parser_roots.rs": "ce26215dab171a3297b721c89db62d65004f39f789e5c6feb2a76a01614e284b",
+    "crates/deadlib-lua/src/vm/host/stack/protected.rs": "4414e2c7909c5618354f32fe2abf3496d42b9394e862e37dd31a359129010c33",
+    "crates/deadlib-lua/src/vm/host/stack/root.rs": "52155488d15274617f2b0da5d24e5623ef907292420f89d3dc01a1b5aee5a1e4",
+    "crates/deadlib-lua/src/vm/host/stack/scalars.rs": "e7e7bb4c70bc6bb46680469bc5e9f8274dbb35975bf212b8d0746e6afe52b0fc",
+    "crates/deadlib-lua/src/vm/host/stack/tables.rs": "2100f0cbce4eddb5f03cf9c24acf362526f679e565080af1241896c2e26f9997",
+    "crates/deadlib-lua/src/vm/host/stack/thread.rs": "bb58f75793a974037a1a3e2fd528ea906c9bef6bbba06afeee57f5135ca62296",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/calls.rs": "dd0d6ef347b153a7b406315d5d3cc0ad9cf06007b90286f2b5b0c18eb2e5b98b",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/execution.rs": "065b60d56064fa12258006fd21f6e8a9f2a98e8d89bb7d807958bd90810d952b",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/loader.rs": "4681e45070bf89475702b9edde327efb2792872de7bc9e4599ab69191ef2d57a",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/objects.rs": "87a898191945c6407a553c58671ab9f929faee01853941cb5a28fd1dff968463",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/panic.rs": "2ae61170f8a67e019c84ea7b2f27714d9146a08e90fb795cf84dfe8e7cc711f8",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack/tables.rs": "034da73658faa2a6ad7e063aa481589b794774a9447c9defb0233d3a82d9f9bf",
+    "crates/deadlib-lua/src/vm/host/stack/thread_stack.rs": "c3e414a35e8c5b16970a2efea6ee85a1f27ea54fbf1783c6f08a8e3f46e307a1",
+    "crates/deadlib-lua/src/vm/host/stack/upvalues.rs": "5a0a04e70b0e04ecaadeb14d3f9b66df19ed3ed57e3e1774af2581d2393d5fad",
+    "crates/deadlib-lua/src/vm/host/stack.rs": "e3db1fe5f6755d108b6e2bbf123a93674e3de74ffc9a6d23b1d6139dcaf1a570",
+    "crates/deadlib-lua/src/vm/host/thread.rs": "c3698184771333f983807c5cfc320c0ffc383198dd1427ff26520f31ad577ef2",
+    "crates/deadlib-lua/src/vm/host.rs": "cc8d632045df9da4beb7db9444169a91b19004661caf76764cb6f3aa22b7d43b",
+    "crates/deadlib-lua/src/vm/identity.rs": "c9359466570bec0b2d24a753cc96fa220b2896ca85d2979074728e01f8245d1e",
+    "crates/deadlib-lua/src/vm/io/native.rs": "d933a5797f2c7f12ad8a9b48d0d863ca334a6b3e0c36941ae9dccfbb211d52fa",
+    "crates/deadlib-lua/src/vm/io/number.rs": "505b575b2c59b54447feb62ac4b069bbe47f60a454688076bddfb71498ab207b",
+    "crates/deadlib-lua/src/vm/io/output.rs": "6850ce12b119beae7fbeccc4e9f8e3e946e2cf2cbda2e4a68c35f864e3192aa5",
+    "crates/deadlib-lua/src/vm/io/returns.rs": "a0234aeec21577f46e749d7e352ae71416f4d2830eb4f170043c906f94e2ecfd",
+    "crates/deadlib-lua/src/vm/io/stream.rs": "a2007fea6110305fac133973a413ba81d394038714fd7faa9e754853cd924fe5",
+    "crates/deadlib-lua/src/vm/io.rs": "3434c518c7c1afb39dafa97abe6bb1d99b32cc334bb49db3449fb9666d4274f9",
+    "crates/deadlib-lua/src/vm/limits.rs": "c78dad498234853ea1277cff6a46ec18cb61e2e27fdcc0bffdf648038e747a0f",
+    "crates/deadlib-lua/src/vm/loads.rs": "6b8d7a586ac9b1f22ef9485bb87f6a39cf40386b5c336c5c6c45e3b8ea4cd262",
+    "crates/deadlib-lua/src/vm/math.rs": "3d1ff1634e4599996e36d5f5bf386c6a05606ef3e33a083d51d0ae719ae5743a",
+    "crates/deadlib-lua/src/vm/meta.rs": "ec57a0a6933431b22ba8a5632a1812d4b3c1bd3f44e59a9cd91e81eb8b976efb",
+    "crates/deadlib-lua/src/vm/native.rs": "8b374b9c24ebbda578b26d1ee42d84a0d545a2bed9757812d5e05eba28f974c0",
+    "crates/deadlib-lua/src/vm/os/calendar.rs": "ff60b2eb47e74ce136a57506764b7d2dd59461bc1585009f5b7204efff71a0fa",
+    "crates/deadlib-lua/src/vm/os/platform/posix_calendar.rs": "2aefa01ff6bbfa7243bfa64e4f7f7f8406121e472ecda739822570f2959045b1",
+    "crates/deadlib-lua/src/vm/os/platform/windows.rs": "f064bdce5216c465e48b67471afe2721db8a4528a2e7453888cc035a9f4c79d3",
+    "crates/deadlib-lua/src/vm/os/platform.rs": "795f9cf59689a58523b6b6d213741f391bec3ba77126aea5746dae4e74ee9b25",
+    "crates/deadlib-lua/src/vm/os/process.rs": "abedd37df91e057215475c85185bb5daa697b4d15706fff2b69b82508590c0cf",
+    "crates/deadlib-lua/src/vm/os.rs": "10131d697746fb4b8e258c5b98bc92922512144be202b1ef9627fdfc20ae4824",
+    "crates/deadlib-lua/src/vm/package/library.rs": "b0dcb3abc963fdbe692b945239ad5646b911bb31ad1d41e9b2c7bab4945f388e",
+    "crates/deadlib-lua/src/vm/package/returns.rs": "3b6ec451a547a66b503670c3990470cdd8bca9862478aa3ba47bf6cab3d8cbf2",
+    "crates/deadlib-lua/src/vm/package.rs": "54b373d44756366a8df041ac75065414c57e444b6ed84c23bae30cd27d9e30e6",
+    "crates/deadlib-lua/src/vm/standalone.rs": "5d147b60d179d50ba1e6f221149ea6ed69cdfaf43fda5d834dec2b107c4aaa00",
+    "crates/deadlib-lua/src/vm/strings.rs": "6c6d950e7ac267c140333bc03aa25c0da5908c3eaa3241980f9db4665141c1f4",
+    "crates/deadlib-lua/src/vm/tables.rs": "7d0d32f7317138a6f30931dd36931e0e8d7db0669268ac1b78a1d556e221b572",
+    "crates/deadlib-lua/src/vm/threads.rs": "2d394a269a5ea1d1b630f1471760d69229c7335744a3ef7b5c3bd3aff7220208",
+    "crates/deadlib-lua/src/vm/traces.rs": "58f3a6f448bfb55590f1daf8b1f674930a60b0ca2c08f16bca530a15f89ea46e",
+    "crates/deadlib-lua/src/vm/userdata.rs": "6e0c0a3e94ad5a73409c865b1badb236efcc42745c7ec1f5d10779cdc1c9f7fe",
+    "crates/deadlib-lua/src/vm.rs": "42c35c6388d645a22be5a92a602b6d4292395be0a9373d5a4545a4ef16eff59d",
+    "crates/deadlib-lua/tests/allocation_failures.rs": "a8a74af9cf6d6d87368633d0dea43370dc20c16432340ca04460ba5de41f63c0",
+    "crates/deadlib-lua/tests/cache_persistence.rs": "7fc11c52308d39be02553554104bb147deb2c7b51c30332a9b3bafa1d3fe1003",
+    "crates/deadlib-lua/tests/calendar.rs": "f7d97bbaa10ab791168de14db1ecda51578256afce2ed3d025f9da28bff999c7",
+    "crates/deadlib-lua/tests/call_limits.rs": "7c00a96eb8ce34e62529a23d21631ee682e5aa8947543cf6c2c049aaf3b82801",
+    "crates/deadlib-lua/tests/capture_limits.rs": "130d828ef872c72e78c21e3b01a5152791b1d93fd9a972053dce8b0a0af8545d",
+    "crates/deadlib-lua/tests/codegen.rs": "6ce2e1616dbf4c5fe13be05f769a8cf338510ca0914dd1b594a479182ce31196",
+    "crates/deadlib-lua/tests/constant_pool.rs": "470a24da83ff5e6395a3a06b6ce1bf4e3696ada308a261b4b036834006f1ba08",
+    "crates/deadlib-lua/tests/coroutines.rs": "caf53fdc2e4d678e4420984356308f4cf3831519af6c0d1233beb7c0c6f2f20c",
+    "crates/deadlib-lua/tests/debug.rs": "a8324a8552b206a4bd5e7a670833f547b05e81a0d2580a8622e24d2793e61480",
+    "crates/deadlib-lua/tests/debug_console.rs": "bbeb8cb2905bda00f24b9bdf885bd128381b3e27de33ac97576ba9c010953f54",
+    "crates/deadlib-lua/tests/debug_locals.rs": "86544cab77044c20ed9370d99196935f41332d67b67c8733b43fbc7f7ae20061",
+    "crates/deadlib-lua/tests/file_loading.rs": "f0e94dc6a03da16a2f9ff97ed20103a7a3239e89d33726901660ad65a946a7ed",
+    "crates/deadlib-lua/tests/file_userdata.rs": "db316ce7022811a3489ee44a90e1d26b335ce677f150d8804cfcc400fd66d05a",
+    "crates/deadlib-lua/tests/gc.rs": "40205a48e8c196ce4f452aceed95b2911532e4747d52d06ffd993fcc30050fc6",
+    "crates/deadlib-lua/tests/gnu_numbers.rs": "e65a915324102dfbe325bfc746c41b796928145073397e5bd505eca783514abe",
+    "crates/deadlib-lua/tests/hooks.rs": "cfec7bba0ffc0b8c40e99a5ea0de815df512c7a634e3785f315a5f720462a5be",
+    "crates/deadlib-lua/tests/host_calls.rs": "48d2bf2dcf5a5849e79bf64eab081f029c110b1a8f9bab86d33183656f427e2a",
+    "crates/deadlib-lua/tests/host_closures.rs": "05c88dd454f159989f77a6709e4e35feb7fa1aa4f20e7dd6526782a188339af3",
+    "crates/deadlib-lua/tests/host_functions.rs": "a3780f0b8d5fb529c2a063f45983fc15d19fab2d4ccee523fe99523ab8dca94d",
+    "crates/deadlib-lua/tests/host_reentry.rs": "b76ca455be538a5c4ab3e1aa0323c10e225a025a8922db05788d1cd20bc37b60",
+    "crates/deadlib-lua/tests/interning.rs": "aa7c47ed57857d5c43862aa0c7873c44f7a298450a78024d823909877173b4da",
+    "crates/deadlib-lua/tests/io.rs": "9f7cc3d0e79f21bb473989ce51e3b54ea57a23bb36ac63bd7acf7ab801a6aca4",
+    "crates/deadlib-lua/tests/io_close_callbacks.rs": "b944a3a9938318cc8aa34743564b3b5784acd47e07599b6d4a650aa4a6feb258",
+    "crates/deadlib-lua/tests/library_initializers.rs": "f8323d74328f6f9696844db3fd9a4f94c76554b4b957e204566d8d44e6a74026",
+    "crates/deadlib-lua/tests/library_return_stacks.rs": "e317e4b05ee2f3a3d306dc6eb54405d9df75339e35b718af6bfeb5e488675b4c",
+    "crates/deadlib-lua/tests/loading.rs": "1db7b969d7677ac24ab2f2e30bb0fb184e8b751027641777589b04451d4ff4d8",
+    "crates/deadlib-lua/tests/lua51.rs": "deda152310c325a1a31c9148fcb82844df24eeb0defd77b9d53fd88b3515cb2f",
+    "crates/deadlib-lua/tests/native-boundary/api.h": "cb2211e3a7cbfba736c10144dffe77eb9f80cbb56730282be507a23c26c28ce7",
+    "crates/deadlib-lua/tests/native-boundary/boundary.c": "a00657189f0d4d57becb115c030833c734b88e412efdb392d22d4107e8bf0e8c",
+    "crates/deadlib-lua/tests/native-boundary/builtin-bodies.h": "539f5315df423708b76a3571c696cccef999482227d42a7a48aa3cc9b692f122",
+    "crates/deadlib-lua/tests/native-boundary/module.c": "49aebf05dbd36eb713c0faa7a848bf4f1be1d6ed52b28d600ff186f714b8c0a3",
+    "crates/deadlib-lua/tests/native-default/allocation-gc.c": "c8cf87ad38b7674dff40e5879ad3af497cd8b9d5d75983eabd6f2e4ed2477794",
+    "crates/deadlib-lua/tests/native-default/call-yields.c": "354028a92ea76f8e977fbc8930aa257230aa810a619f4d9c41555212bee3fa49",
+    "crates/deadlib-lua/tests/native-default/hook-stacks.c": "967cca5e1540aa054a51c1ecf32dd45b9d0bf67429b1fa3e8f821460116f9795",
+    "crates/deadlib-lua/tests/native-default/inactive.c": "def7e8030ebc33ed55e853142f9598961bbba27ca19cb48f19dcafa59b057ef1",
+    "crates/deadlib-lua/tests/native-default/io-closers.c": "68e45976c76a98b11bf57ff842fb2085aabdf62823b5f764374596b0bb4ea95f",
+    "crates/deadlib-lua/tests/native-default/library-initializers.c": "5f428c41dcdc83ec796b9a56b5653cc5f9017f70b916ec46617646d9704e1b34",
+    "crates/deadlib-lua/tests/native-default/module.c": "bf0f2c6d06d9fae52964aaa91b2b8b01cdea11fe8d94ac054e142b580210fdd7",
+    "crates/deadlib-lua/tests/native-default/native-files.c": "b9ad1b6dcd12a3b4718324953770605fd0b62fccd683e4ca90c370c1b600abe8",
+    "crates/deadlib-lua/tests/native-default/native-owned.c": "bfa7185a75ddd8c0de35cc7f16a45bb800e63306a3ab536ae61b23e9ec228039",
+    "crates/deadlib-lua/tests/native-default/native-root.c": "3723c7ef78957262d27f6b8c61f25970ad9d7644aa27c53ac4cf3d5c2ae33484",
+    "crates/deadlib-lua/tests/native-default/panic.c": "30b76301b6ede5504691bc0e32fade6a8ebf26c9bc22e5896ae8603c552f3c07",
+    "crates/deadlib-lua/tests/native-default/table-yields.c": "9f5b11a6a0c95dcad738657f52e4e055dbc713820a58ba27cfa91d01f0311257",
+    "crates/deadlib-lua/tests/native-default/thread-calls.c": "8511eefb57a235cc5c2b0c29df2be2c69e3250232b356d88eaf1c11807446458",
+    "crates/deadlib-lua/tests/native-default/thread-execution.c": "c2837dce961b1719e13bbda5077207fd3bd9da3c1a77a020a1cb6ac2fe8ba3a0",
+    "crates/deadlib-lua/tests/native-default/thread-files.c": "471a2d52c7177d9a395cc8719dbeee2788895a57232b7be2e4b24ec23af1ca00",
+    "crates/deadlib-lua/tests/native-default/thread-gc.c": "0d9a45e4814f2463459167174105340d9416002ee1dccb63e39cabf09ab4826b",
+    "crates/deadlib-lua/tests/native-default/thread-loads.c": "d5ddc96b1984ffe7e2f2becd3bf4ada6df3e78bd9a29b187171b8b7b83f0ba8b",
+    "crates/deadlib-lua/tests/native-default/thread-tables.c": "6d080bd50f84e8b205892cd79039880f7b55153fa32554a2eda6242a8abb6609",
+    "crates/deadlib-lua/tests/native-default/thread-unprotected.c": "6be1b4d1dbdfad7226ac430880de82c387ad910eae2f4dd844c5873f53f1463c",
+    "crates/deadlib-lua/tests/native-default/waiting-errors.c": "eb5138949633217e937f76ec322128fb45c350eb9dbf032db24e103f5ac01faf",
+    "crates/deadlib-lua/tests/native_auxiliary.rs": "cb6ea37c24d1f31f64adf8b490727d324253b5eaea1808c872ff2cd33c878ef5",
+    "crates/deadlib-lua/tests/native_bodies.rs": "2db1e9bde03979b87603e639d4046ab8f367eca75752f38fce35d38726c4b0ad",
+    "crates/deadlib-lua/tests/native_context.rs": "180624a157dcb4efea4d6345b5917f7c8eca0957596ea68edca961c80d12008f",
+    "crates/deadlib-lua/tests/native_debug.rs": "0d871c595f0f334b5053e5544b2917bdda2c4b69819f7953ad3e99fde9fa786b",
+    "crates/deadlib-lua/tests/native_default.rs": "8dea386fbed151b4e1e4b5d57c210b92b1d5b4ecb2741f55e99eafe0b243cb63",
+    "crates/deadlib-lua/tests/native_dump.rs": "eb389c0a57a6c19d45aad6b7d144285d136360fddea7bf5dd96c1b547da030d0",
+    "crates/deadlib-lua/tests/native_errors.rs": "e726e027a3f0c03b62d2cd6e796c311f6570c33546e4a4305dba0694b9206849",
+    "crates/deadlib-lua/tests/native_file.rs": "805e8a2e4f9560897e3101eb658d1f8b1f3b16e11d956b3852c82adba02dddc5",
+    "crates/deadlib-lua/tests/native_files.rs": "1e8ff12113a0fc90aea75f6df57465993cc50ef2533b77cb845143d9791eb1a3",
+    "crates/deadlib-lua/tests/native_gc.rs": "e39148913effd10d6c8bb043bc8d5dc12c1d98856ad4068bf1a103aa37018693",
+    "crates/deadlib-lua/tests/native_hooks.rs": "10e136625d3cb3abd0e5deac6b7166ce070b300e78d2aa31e9fa1169b1a83824",
+    "crates/deadlib-lua/tests/native_inactive_objects.rs": "f5d0b1558c86a315c6569d3167bad7455551c72cdfe0705f514799899a032502",
+    "crates/deadlib-lua/tests/native_libraries.rs": "2d9402fd7072171ca7413487b8310ccd8669f104632ee45665e6514936db7491",
+    "crates/deadlib-lua/tests/native_load.rs": "3b0f13ca0be1b10ae5c47a17efe4b0961302dadf800f2a2be018ba35b4f11687",
+    "crates/deadlib-lua/tests/native_objects.rs": "aef1ce5a633c94dfbb987aae4912871f9c0e0052c2de2d0126d6969fca864b0c",
+    "crates/deadlib-lua/tests/native_owned.rs": "4e12cf97181ce7525b23a6169cfe00ef387d58f44d659425a768d11138b29d0e",
+    "crates/deadlib-lua/tests/native_pointers.rs": "a0e2607ce38313fa17d39519567192a6e7ea2b5b35a9cad4201af8e87e2812dc",
+    "crates/deadlib-lua/tests/native_protected.rs": "c974dcea26fbf06764203039f936fbd0d68f5b42feb06913bdbe788d1eb16370",
+    "crates/deadlib-lua/tests/native_root.rs": "bdd623d0dda56a8c9b38cd0bb4fbdaa406fec9fa7c5c3e03e88c4a3a3193c07e",
+    "crates/deadlib-lua/tests/native_root_c.rs": "c05e44233546d4cf413ffaf837e36b075f1efdd320d2b9dbd04cf446b077a4a4",
+    "crates/deadlib-lua/tests/native_stack.rs": "9d48666d51b3e7e43689885f0a1cca97f3bc6beb299f0906247a5ff5f70b8dc3",
+    "crates/deadlib-lua/tests/native_tables.rs": "924ad56634cd92294dd9f96922b931978e801b246b83daaf56382ff0254e1f6d",
+    "crates/deadlib-lua/tests/native_thread_calls.rs": "c97001427ace3a437e5d79986e8757f08120f6a57e3b783f17e5c0683c72b113",
+    "crates/deadlib-lua/tests/native_thread_execution.rs": "da4515e2e12dab82ab60359dd62845df52a82a55e109159c4c8517d821e3e679",
+    "crates/deadlib-lua/tests/native_thread_gc.rs": "f8dd6fb6ebb13fdcba78c6740d8074e90025add49e5c7bfba45888165ae8a0ff",
+    "crates/deadlib-lua/tests/native_thread_loads.rs": "fada8aae2c45ec6f75dad41daf1d7eb1bbaa302b9e591eafebde87aa30a04a11",
+    "crates/deadlib-lua/tests/native_thread_stacks.rs": "e4dc5030c035a3c8ab1b7933a6b524f94d48e48c73996c57329bf9086ab07234",
+    "crates/deadlib-lua/tests/native_thread_tables.rs": "7601fac07c3fdfa8dee364afb3b8dcffe0cf1072310b80f1b1c0228ec6acab94",
+    "crates/deadlib-lua/tests/native_threads.rs": "5c36b9164bbb047873b7f7a7ab42289c0cbb2d1732a4653df6d9695d7a0a6d39",
+    "crates/deadlib-lua/tests/native_upvalues.rs": "7f1738de213929b97fefb27a8d47deef77123d6e65126d8d8cf3f1d4131c2471",
+    "crates/deadlib-lua/tests/native_values.rs": "ed248f38a8717e84bdafa7641010670637332ac4f3ee45a3a26885610e0c7558",
+    "crates/deadlib-lua/tests/os.rs": "7524e0851f982b05cb12ae25d29602fd74eba09a047b96b3992dcdbce486194f",
+    "crates/deadlib-lua/tests/package.rs": "44eed4a9aa1862092ca33a14d5aa06fdbacba0182ae5a1fdd9a4351e2dc69c0e",
+    "crates/deadlib-lua/tests/posix_locale.rs": "dd2d18f3e7d967820ef7449ecd875e4ba5681f86254d30a0c624e368c93a16d0",
+    "crates/deadlib-lua/tests/register_limits.rs": "72140b0e817cdd7ba21cbe2d41b2f75685607b09274bd2800bb1fe4ef891ca7f",
+    "crates/deadlib-lua/tests/runtime_errors.rs": "5bc1473504aeb0c653f701608e90bb28696d5e3887abe7fbaeb8475ec4d828e7",
+    "crates/deadlib-lua/tests/standalone.rs": "923cfd4d761dfc70ce3f20aeb38d5456dcd0fc10038c3cd51c01c09830d1c3ed",
+    "crates/deadlib-lua/tests/stdlib.rs": "70a0348ec266eb11733ebf49379d5f602bc7453797db2cb411d0c1f7435c9749",
+    "crates/deadlib-lua/tests/support/allocation_probe.rs": "3b53a86a563fcfe907167618d59416ebd274cdd107632dc21ee7410c689a7c3c",
+    "crates/deadlib-lua/tests/syntax.rs": "0cef3d8108355af80bc52bade3baed22a3bcb86b189ec7a1e8357ff90f9ed724",
+    "crates/deadlib-lua/tests/thread_state.rs": "870f46d9c22e8f205c5e12c1677279674e6227b0795bc3f681fb50501d978a76",
+    "crates/deadlib-lua/tests/tracebacks.rs": "8bdbed8998665c4255f8764e3afa2abe486514a5b02285e45af730d02122b2bb",
+    "crates/deadlib-lua/tests/unprotected_calls.rs": "43839e82dc0542f9ca0ced0151160791eedac1722030a0c36d8e4a7f041ea668",
+    "crates/deadlib-lua/tests/userdata.rs": "c163e9694e6fb04db3bc7e582dd5e9873ebb721f227d635c2761bc04366978cd",
+    "scripts/build_rust_lua_c_api.py": "823698a4f503dcd739f89c33f723540be5d995c4dac27ff41e7040fe4dc76f8e",
+    "scripts/check_rust_lua_c_api.py": "3560997a0755c53d5b312dedd074f6aa83c96f6828bd849cbe85cd56c5c0ee24",
+    "crates/deadlib-lua/capi/tests/capi-host.expected": "3d15eb529cc25427d0b71568f820aa3982471f264e5a2f353457e3a454581eff",
+    "crates/deadlib-lua/capi/tests/table-limits.expected": "767be9db341ede679dfbda303808089fb4f4b635fe676a50c5c753b173a82698",
+    "scripts/build_lua_cli_reference.py": "dd92d1916090b9c4c11bec33db71852c5b3fd797890403c9a2803664131360ba",
+    "scripts/check_rust_lua_full_suite.py": "551b01c32d4059c41a34e771f60036494ba982a752d7f9e70315b8df0b1decde",
+    "scripts/check_rust_lua_suite.py": "1d6d74cba7472499e13a1381eee5c8ad5093c8957317e74da926f4529279549d"
+  },
+  "reference_archive_sha256": "2640fc56a795f29d28ef15e13c34a47e223960b0240e8cb0a82d9b0738695333",
+  "reference_source_hashes": {
+    "lapi.c": "6aa0d9fdd88b13fe46568ad6722ecf44164fb84476cfdf6480cf05b5704935f8",
+    "lapi.h": "4aea4c1b975d43184f4f1fd1a42c79cf11d74d2801315740cec07fe9abebb56d",
+    "lauxlib.c": "b564650bf4aca2757b9966311d32c8d5fea8803f6f33d72a856448d3b5d6d992",
+    "lauxlib.h": "c741f9c1587f29fd08a79acbe0c46884768a47f89bee4147669f774c5cf50fc0",
+    "lbaselib.c": "b14c49fae6fa4690662185bf842cb05d87756585d2f5bdd8495251fde83ef331",
+    "lcode.c": "027030bbef34115588bd4a64cf4c8c18236a56936835475a154277478767bac5",
+    "lcode.h": "97d5a37f3b1b19eda1ef39607b3358aa0f7e917568ccd27ed0f14bc6a70d4b17",
+    "ldblib.c": "eb8b056711f037e764f746d989f4e40621d8f9ff45add3336790c389849ed0ab",
+    "ldebug.c": "afa5840195befaec55177273c8168748026b38df3243767fc740cc7ced0c4c8f",
+    "ldebug.h": "d036f0dbb996bdecd48d505746f72c31b82fb2fc38f111b780568338d4ed9e9c",
+    "ldo.c": "d5942081ba661286327e30e22af5d11a1f4308d1f029a203c342b5f541cfa9b6",
+    "ldo.h": "591ad9a90098d3fbf06839da3de752d2c2585cbf5801dde4cdaffe12b23a182e",
+    "ldump.c": "30d83d766351bb053b3d20793a6bcd2ef0210e8fad76a7032abbe574bafa0ca3",
+    "lfunc.c": "525681d79098958530e5c937f7cbe94a4dafa679746ffdb16258f82b7ece29ce",
+    "lfunc.h": "3cea0071ffda94eac378adb5f1ecb467ef2ffafff4315459e4ccdf05b5119da4",
+    "lgc.c": "35be212ad0e4d89336f50f11cd0e991c04fe59b023ec03a626bf3f98e69fd1dc",
+    "lgc.h": "fbab2b989515377729d4c029dd58b3b6242877a88a7c4cfa703ea0deeb069a1e",
+    "linit.c": "c0c97c45862f6c978620a9682cd2201f0fc29c2afbcab824ba20d26cc1745e56",
+    "liolib.c": "a40f1d2c4aed9835885264cc6caf81c3bd2d5db93af3d313cc0478db37d93169",
+    "llex.c": "f1ade23f957e69f164ff28e133b201dff5d81726c390b060110b60907831e79b",
+    "llex.h": "0f3715d22b025727ef11debd641600a123b81718d195cd8445ac6378814458e6",
+    "llimits.h": "1910669296681d9d2814ca46c325063724bb634c0428dae4e5ff59be54e0b758",
+    "lmathlib.c": "e2933a56332d567cdd69f0fe514d638a8f82da6878754ff259e77cf2157263c3",
+    "lmem.c": "e63c50cb1c75356bd4123c9ca05f77bd0cd99e05c099cf6d1bf472086761e9c5",
+    "lmem.h": "abd1258418486c69bf5a93ceea3a1b9f8af2c7497a4fa6c27b442ffec2c5bbb1",
+    "loadlib.c": "b01bc465bb2e280fb45d24aea98d5ddd9dfd0999f44422e1151aafa1d7f5385c",
+    "lobject.c": "d704915c79c721556cc5850d741ed3bef1611221356f0e3a2f0ee5cfd5fd3632",
+    "lobject.h": "274c18373fbbad71bfebd534cae4b2d2e49934abf6672f44735edc6646fb6a8b",
+    "lopcodes.c": "63cd74edc75970092a8ce078c4ab970efa1ee18de960d00eb826d49fe98d8a76",
+    "lopcodes.h": "a15fe349da7c1e73b563e8c3249fe7d535eccc844cb30ec80b4e335b0699279b",
+    "loslib.c": "f0d5892f152cf7e1001b086e48774ccb6e567d11f1bf521f27050c15d9a0f040",
+    "lparser.c": "3590f24bab5763af673182e40d33194a7de6f5eabe5432c02a548d44225d2b63",
+    "lparser.h": "84512d6540b83ab599cd8de5a1c8c4deaf71ff353f8e4fbc2e4ca135ba4e9ef0",
+    "lstate.c": "c36d6b9354aaa30b5323b4984f3172783f69e0deb3186c2ef6f16a8281c59c29",
+    "lstate.h": "dc64ea7ec74d7c1efaeaf6a9e2257f0b7856a5c988747948af2e76cf079d20fe",
+    "lstring.c": "aa7e934c435d870b9d937ac2fb03dbfa15d367012d46e7e995a2ad8d440f2f6d",
+    "lstring.h": "c0e8af4eb33e3357be79f906e7e1191ba53a3a790d36ca15b50471d3a339e1f0",
+    "lstrlib.c": "e8048c79ae34be0fd29aa8db1a341cd600f5e09b9133b5810910e07b855a32d5",
+    "ltable.c": "3a853ce89bf5e834ec53f2a0dd2386eb8b84accbe5fdc18dabd7515b819f0f7c",
+    "ltable.h": "219e6ac2bf43aaa93093c6bcd571c012660325e6b87ea3d6c1b40679a0acfd64",
+    "ltablib.c": "e934dc4b2fc117a501c717302a00147f7b44eea978ef87a58a3e40e9bfe45d20",
+    "ltm.c": "9759ae5d1aa3b11e1c7faa6c0f65e05c7126417f7f8f3f989d82fc170b07f891",
+    "ltm.h": "54f4c2fa76b8ed8d48163e31807a19999f5d65b009ae862cb757e0773f2aa485",
+    "lua.c": "eb9ad1894926f0f807934ae52147cf9767ede0fbd01e9a1044dc4847caa9b73d",
+    "lua.h": "470551c185f058360f8d0f9e5c54a29a3950f78af6a93f3fe9e4039a380c7b87",
+    "luac.c": "b22ad97edb37c2a4b117ef81489bfc6eee15d58d4476ea149abbef7aabf8773d",
+    "luaconf.h": "0410ff22f66c275ba8fcee1fa87a0749d26d7952ed30d3bc9161688b39775464",
+    "lualib.h": "13f880e9dd997a0f7fd0b17ccd949c98f33e95bd120f084de66084e888217413",
+    "lundump.c": "55ccb55abde44e94e6c4d0bafc94f5870d2674d1944e9a81f6537d9ac92e8ebc",
+    "lundump.h": "9f3a2924d1585620993a70eea6cf3def34acb8322b2d9c3629bcdacc037edc64",
+    "lvm.c": "b560aad0a1b8bfc4e4b732b2393e8f8ecc68b6c772e6d25763d6ef71c38ab709",
+    "lvm.h": "db4b79dc7f4e7656078aa527350fbf14b2fde5d136ccf1cb4f3dc397def5fb67",
+    "lzio.c": "892bc24d898c19cbedceba419c68f910b99321c0b462be2c2c00b9d763563173",
+    "lzio.h": "0ec77d0179bf29c1ccab97028fed761944d5c21c02808e10cd7b5883b58b2ca6",
+    "print.c": "3c3b1c1dd17896e428b9742614c90ec10776ced65813eb648f02dee649892f2f"
+  },
+  "builds": [
+    [
+      "cl",
+      "/nologo",
+      "/O2",
+      "/MT",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DLUA_BUILD_AS_DLL",
+      "/IC:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src",
+      "/DLUA_CORE",
+      "/LD",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lapi.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lauxlib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lbaselib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lcode.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ldblib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ldebug.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ldo.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ldump.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lfunc.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lgc.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\linit.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\liolib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\llex.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lmathlib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lmem.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\loadlib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lobject.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lopcodes.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\loslib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lparser.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lstate.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lstring.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lstrlib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ltable.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ltablib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ltm.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lundump.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lvm.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lzio.c",
+      "/link",
+      "/STACK:33554432",
+      "/OUT:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua51.dll",
+      "/IMPLIB:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua51.lib"
+    ],
+    [
+      "cl",
+      "/nologo",
+      "/O2",
+      "/MT",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DLUA_BUILD_AS_DLL",
+      "/IC:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src",
+      "/LD",
+      "C:\\GitHub\\deadsync\\crates\\deadlib-lua\\capi\\tests\\capi-module.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua51.lib",
+      "/link",
+      "/STACK:33554432",
+      "/OUT:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\probe.dll",
+      "/IMPLIB:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\probe.lib"
+    ],
+    [
+      "cl",
+      "/nologo",
+      "/O2",
+      "/MT",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DLUA_BUILD_AS_DLL",
+      "/IC:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src",
+      "C:\\GitHub\\deadsync\\crates\\deadlib-lua\\capi\\tests\\capi-host.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua51.lib",
+      "/link",
+      "/STACK:33554432",
+      "/OUT:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.exe"
+    ],
+    [
+      "cl",
+      "/nologo",
+      "/O2",
+      "/MT",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DLUA_BUILD_AS_DLL",
+      "/IC:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lua.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua51.lib",
+      "/link",
+      "/STACK:33554432",
+      "/OUT:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua.exe"
+    ],
+    [
+      "cl",
+      "/nologo",
+      "/O2",
+      "/MT",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DLUA_BUILD_AS_DLL",
+      "/IC:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src",
+      "/DLUA_CORE",
+      "/LD",
+      "/FIC:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\assertions.h",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lapi.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lauxlib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lbaselib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lcode.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ldblib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ldebug.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ldo.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ldump.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lfunc.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lgc.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\linit.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\liolib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\llex.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lmathlib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lmem.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\loadlib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lobject.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lopcodes.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\loslib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lparser.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lstate.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lstring.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lstrlib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ltable.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ltablib.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\ltm.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lundump.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lvm.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lzio.c",
+      "/link",
+      "/STACK:33554432",
+      "/OUT:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua51.dll",
+      "/IMPLIB:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua51.lib"
+    ],
+    [
+      "cl",
+      "/nologo",
+      "/O2",
+      "/MT",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DLUA_BUILD_AS_DLL",
+      "/IC:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src",
+      "/LD",
+      "C:\\GitHub\\deadsync\\crates\\deadlib-lua\\capi\\tests\\capi-module.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua51.lib",
+      "/link",
+      "/STACK:33554432",
+      "/OUT:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\probe.dll",
+      "/IMPLIB:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\probe.lib"
+    ],
+    [
+      "cl",
+      "/nologo",
+      "/O2",
+      "/MT",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DLUA_BUILD_AS_DLL",
+      "/IC:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src",
+      "C:\\GitHub\\deadsync\\crates\\deadlib-lua\\capi\\tests\\capi-host.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua51.lib",
+      "/link",
+      "/STACK:33554432",
+      "/OUT:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.exe"
+    ],
+    [
+      "cl",
+      "/nologo",
+      "/O2",
+      "/MT",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DLUA_BUILD_AS_DLL",
+      "/IC:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\lua-5.1.5\\src\\lua.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua51.lib",
+      "/link",
+      "/STACK:33554432",
+      "/OUT:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua.exe"
+    ],
+    [
+      "cl",
+      "/nologo",
+      "/O2",
+      "/MT",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DLUA_BUILD_AS_DLL",
+      "/IC:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-package-debug\\include",
+      "/LD",
+      "C:\\GitHub\\deadsync\\crates\\deadlib-lua\\capi\\tests\\capi-module.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-package-debug\\lib\\lua51.lib",
+      "/link",
+      "/STACK:33554432",
+      "/OUT:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\probe.dll",
+      "/IMPLIB:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\probe.lib"
+    ],
+    [
+      "cl",
+      "/nologo",
+      "/O2",
+      "/MT",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DLUA_BUILD_AS_DLL",
+      "/IC:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-package-debug\\include",
+      "/DCAPI_DIAGNOSTICS",
+      "C:\\GitHub\\deadsync\\crates\\deadlib-lua\\capi\\tests\\capi-host.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-package-debug\\lib\\lua51.lib",
+      "/link",
+      "/STACK:33554432",
+      "/OUT:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.exe"
+    ],
+    [
+      "cl",
+      "/nologo",
+      "/O2",
+      "/MT",
+      "/D_CRT_SECURE_NO_WARNINGS",
+      "/DLUA_BUILD_AS_DLL",
+      "/IC:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-package-debug\\include",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\lua.c",
+      "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-package-debug\\lib\\lua51.lib",
+      "/link",
+      "/STACK:33554432",
+      "/OUT:C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\lua.exe"
+    ]
+  ],
+  "artifacts": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua51.dll": "86ccccb7972213f255fd0868e0e7eb1bba6d3f7114b225e2acb4aeeab10ce33c",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua51.log": "3f095686b9f62ae3f35366af8758f440801de5fafaf0bf2971fd12b73afcd469",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\probe.dll": "3638f1c2da91671ef4efa4cb46f1c0a4df6d72ee1d921d7bf6fab4170fe384f6",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\probe.log": "d209645252c3292ba6a96a83c5102903eeccd843a1667d3fa56f3d9924a3a8f9",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.exe": "6cea59cb07ae9e0fc5adb7477a4e316c93b839d7a56a8dd3e352b9609396a8e0",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.log": "ba7bfdefb25e8384141a8e80608eddad8cf34b58c9ec4cbee90c4db2f647c377",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua.exe": "01fec66bda81cb936f319f79ae4d5465fb98c5e4ea9a02b50c2cea9057e261f5",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua.log": "c49908558f814205b4845d6ecacf272fc830dc69a4a72dff5c3168e9c1235348",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\cli.lua": "c54db0e33ddf79e052826e743944dc1f1e3ba4afcb16442de1cddd621634f62f",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\assertions.h": "6a601983a4050c64d41cf81fe0ca7fd2d7cfa78fe6297f41d210a8d8662202c6",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua51.dll": "042c59e457e1df9ec7e62b02139e27558d94d2e2b1ec4fde5aabf4adfb7f3b20",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua51.log": "ce058de80bcd6c263c99321ac2167717abca920f594508e9ba2ddb41a5bc6170",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\probe.dll": "a7ec28f01800d8687c4778182f7ccfa7ed7f184447daab63d0a9a1f96de0ad91",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\probe.log": "f474b3efa2c84379b1f9776743b6e707e1df2ed3cc53a0fadfe97c61fe18d8c7",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.exe": "628910abfe1b5c74276607e7af8cf111fe616adc3bea11d8e34016d9062fae7c",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.log": "87526bc2a9ce159b82cd54aacee3fc66033d66bc7d97e171970f260dc71b906a",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua.exe": "cef34c653f49fb0e4d12cbad50f5745455688c0fc49e2a2fc04af7445aa38ed3",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua.log": "c49908558f814205b4845d6ecacf272fc830dc69a4a72dff5c3168e9c1235348",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\cli.lua": "c54db0e33ddf79e052826e743944dc1f1e3ba4afcb16442de1cddd621634f62f",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-package-debug\\bin\\lua51.dll": "10d120c77e7e142e9e93bb87ad4ab570de8eba978dd38b5a84da5e7f050b20c7",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\probe.dll": "60b08128283ead76ca57882e9e93fe146de124cf3223d0622b1f22d53d6aa1e0",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\probe.log": "0d9a2580282a5c3528f02c28ab39f35a1269957d6a14faa102d1f6f94460f5a1",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.exe": "5534653109fe62bc929cd58f43d7f327dfc7d2813196685ef0e0253f56c7aba3",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.log": "7fd39649faa258d709e9829769578d5a84b2a5f40cd999f88ce64e1ea672a79f",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\lua.c": "eb9ad1894926f0f807934ae52147cf9767ede0fbd01e9a1044dc4847caa9b73d",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\lua.exe": "b300c6278b00d0d5be9c1748441d885029f433cb7e9b74704aec44eac43e6a45",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\lua.log": "c49908558f814205b4845d6ecacf272fc830dc69a4a72dff5c3168e9c1235348",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\cli.lua": "c54db0e33ddf79e052826e743944dc1f1e3ba4afcb16442de1cddd621634f62f",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-package-debug\\metadata\\forwarding.map": "3626a65316e0e53c205e5c0166d643f5fabfd1d8baaa9fd387b45a751e5eb879",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-lua\\capi\\tests\\memory.expected": "b34f11d02fe2c8aa0e070e67b4e8ddfac34f659c78bd4f0ed5046cb37ff4221c"
+  },
+  "runs": {
+    "reference": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.exe",
+        "--module",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\probe.dll"
+      ],
+      "returncode": 0,
+      "stdout": "abi.initializers\t255\nabi.function.pointer\t1\nabi.error.status\t2\nabi.error.value\tABI error\nabi.varargs\tfmt:42:1.5:Z:%\nmodule.sum\t42\nmodule.error.status\t2\nmodule.error.value\tmodule 17/error\nowned.peer.top\t0\nowned.peer.status\t0\nowned.peer.empty\t1\ninitial.top\t0\ninitial.frame\t0\ninitial.thread\t1\nopenlibs.top\t0\npersistent.top\t2\nreader.top\t3\ndump.status\t0\ndump.nonempty\t1\ncall.status\t0\ncall.top\t5\ncall.number\t17\ncall.nil\tnil\ncall.false\t0\nbinary.result\t17\nsyntax.string\t1\nparser.depth.195\t0\nparser.depth.196\t0\nparser.depth.197\t0\nparser.depth.198\t0\nparser.depth.199\t3\nparser.depth.200\t3\nparser.depth.201\t3\nprotected.status\t2\nprotected.value\tprotected marker\nrecursive.status\t2\nrecursive.calls\t199\nrecursive.value\tC stack overflow\nraw.abs.count\t1\nraw.abs.value\t42\nhook.calls\t3\nhook.bad\t0\nhook.result\t42\nchild.first.status\t1\nchild.first.top\t1\nchild.first.value\t17\ngc.status\t0\ngc.finalized\t1\nfirst.top\t2\nfirst.frame\t0\nfirst.return\t517\npeer.callback.top\t1\npeer.callback.result\t42\npeer.after.top\t1\nsecond.same.state\t1\nsecond.top\t2\nsecond.frame\t0\nsecond.table\trooted value\nsecond.callback\trooted value\nsecond.registry\t1\nchild.second.status\t0\nchild.second.top\t1\nchild.second.value\t42\nsecond.concat\ta42\nsecond.lua.no.parent\t1\nsecond.lua.main\t1\nsecond.final.top\t2\nsecond.return\t-37\npeer.retained.top\t1\npeer.retained.value\tpersistent peer prefix\npeer.closed\t1\nclose.finalizer\t3\nclose.hook.installed\t1\nclose.parent\t0\nclose.finalizer\t2\nclose.hook.installed\t1\nclose.parent\t0\nclose.finalizer\t1\nclose.hook.installed\t1\nclose.parent\t0\nclose.finalizers\t3\nclose.hooks\t0\nclose.weak.before\t1\nclose.weak.empty\t1\npanic.status\t2\npanic.top\t1\npanic.value\towned root panic\npanic.after.status\t2\npanic.recovery.status\t0\npanic.recovery.value\t46\npanic.retained.status\t2\npanic.status\t2\npanic.top\t1\npanic.value\towned call panic\npanic.closed.upvalue\t17\nprogram.first\t123\nprogram.second\t-51\n",
+      "stderr": ""
+    },
+    "checked": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.exe",
+        "--module",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\probe.dll"
+      ],
+      "returncode": 0,
+      "stdout": "abi.initializers\t255\nabi.function.pointer\t1\nabi.error.status\t2\nabi.error.value\tABI error\nabi.varargs\tfmt:42:1.5:Z:%\nmodule.sum\t42\nmodule.error.status\t2\nmodule.error.value\tmodule 17/error\nowned.peer.top\t0\nowned.peer.status\t0\nowned.peer.empty\t1\ninitial.top\t0\ninitial.frame\t0\ninitial.thread\t1\nopenlibs.top\t0\npersistent.top\t2\nreader.top\t3\ndump.status\t0\ndump.nonempty\t1\ncall.status\t0\ncall.top\t5\ncall.number\t17\ncall.nil\tnil\ncall.false\t0\nbinary.result\t17\nsyntax.string\t1\nparser.depth.195\t0\nparser.depth.196\t0\nparser.depth.197\t0\nparser.depth.198\t0\nparser.depth.199\t3\nparser.depth.200\t3\nparser.depth.201\t3\nprotected.status\t2\nprotected.value\tprotected marker\nrecursive.status\t2\nrecursive.calls\t199\nrecursive.value\tC stack overflow\nraw.abs.count\t1\nraw.abs.value\t42\nhook.calls\t3\nhook.bad\t0\nhook.result\t42\nchild.first.status\t1\nchild.first.top\t1\nchild.first.value\t17\ngc.status\t0\ngc.finalized\t1\nfirst.top\t2\nfirst.frame\t0\nfirst.return\t517\npeer.callback.top\t1\npeer.callback.result\t42\npeer.after.top\t1\nsecond.same.state\t1\nsecond.top\t2\nsecond.frame\t0\nsecond.table\trooted value\nsecond.callback\trooted value\nsecond.registry\t1\nchild.second.status\t0\nchild.second.top\t1\nchild.second.value\t42\nsecond.concat\ta42\nsecond.lua.no.parent\t1\nsecond.lua.main\t1\nsecond.final.top\t2\nsecond.return\t-37\npeer.retained.top\t1\npeer.retained.value\tpersistent peer prefix\npeer.closed\t1\nclose.finalizer\t3\nclose.hook.installed\t1\nclose.parent\t0\nclose.finalizer\t2\nclose.hook.installed\t1\nclose.parent\t0\nclose.finalizer\t1\nclose.hook.installed\t1\nclose.parent\t0\nclose.finalizers\t3\nclose.hooks\t0\nclose.weak.before\t1\nclose.weak.empty\t1\npanic.status\t2\npanic.top\t1\npanic.value\towned root panic\npanic.after.status\t2\npanic.recovery.status\t0\npanic.recovery.value\t46\npanic.retained.status\t2\npanic.status\t2\npanic.top\t1\npanic.value\towned call panic\npanic.closed.upvalue\t17\nprogram.first\t123\nprogram.second\t-51\n",
+      "stderr": ""
+    },
+    "rust": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.exe",
+        "--module",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\probe.dll"
+      ],
+      "returncode": 0,
+      "stdout": "abi.initializers\t255\nabi.function.pointer\t1\nabi.error.status\t2\nabi.error.value\tABI error\nabi.varargs\tfmt:42:1.5:Z:%\nmodule.sum\t42\nmodule.error.status\t2\nmodule.error.value\tmodule 17/error\nowned.peer.top\t0\nowned.peer.status\t0\nowned.peer.empty\t1\ninitial.top\t0\ninitial.frame\t0\ninitial.thread\t1\nopenlibs.top\t0\npersistent.top\t2\nreader.top\t3\ndump.status\t0\ndump.nonempty\t1\ncall.status\t0\ncall.top\t5\ncall.number\t17\ncall.nil\tnil\ncall.false\t0\nbinary.result\t17\nsyntax.string\t1\nparser.depth.195\t0\nparser.depth.196\t0\nparser.depth.197\t0\nparser.depth.198\t0\nparser.depth.199\t3\nparser.depth.200\t3\nparser.depth.201\t3\nprotected.status\t2\nprotected.value\tprotected marker\nrecursive.status\t2\nrecursive.calls\t199\nrecursive.value\tC stack overflow\nraw.abs.count\t1\nraw.abs.value\t42\nhook.calls\t3\nhook.bad\t0\nhook.result\t42\nchild.first.status\t1\nchild.first.top\t1\nchild.first.value\t17\ngc.status\t0\ngc.finalized\t1\nfirst.top\t2\nfirst.frame\t0\nfirst.return\t517\npeer.callback.top\t1\npeer.callback.result\t42\npeer.after.top\t1\nsecond.same.state\t1\nsecond.top\t2\nsecond.frame\t0\nsecond.table\trooted value\nsecond.callback\trooted value\nsecond.registry\t1\nchild.second.status\t0\nchild.second.top\t1\nchild.second.value\t42\nsecond.concat\ta42\nsecond.lua.no.parent\t1\nsecond.lua.main\t1\nsecond.final.top\t2\nsecond.return\t-37\npeer.retained.top\t1\npeer.retained.value\tpersistent peer prefix\npeer.closed\t1\nclose.finalizer\t3\nclose.hook.installed\t1\nclose.parent\t0\nclose.finalizer\t2\nclose.hook.installed\t1\nclose.parent\t0\nclose.finalizer\t1\nclose.hook.installed\t1\nclose.parent\t0\nclose.finalizers\t3\nclose.hooks\t0\nclose.weak.before\t1\nclose.weak.empty\t1\npanic.status\t2\npanic.top\t1\npanic.value\towned root panic\npanic.after.status\t2\npanic.recovery.status\t0\npanic.recovery.value\t46\npanic.retained.status\t2\npanic.status\t2\npanic.top\t1\npanic.value\towned call panic\npanic.closed.upvalue\t17\nprogram.first\t123\nprogram.second\t-51\n",
+      "stderr": "CAPI operations=4492 states=6 groups=5 libraries=1\n"
+    }
+  },
+  "memory_runs": {
+    "reference": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.exe",
+        "--memory"
+      ],
+      "returncode": 0,
+      "stdout": "memory.pcall.status\t4\nmemory.pcall.top\t1\nmemory.pcall.value\tnot enough memory\nmemory.handler.status\t4\nmemory.handler.top\t2\nmemory.handler.value\tnot enough memory\nmemory.handler.calls\t0\nmemory.invalid-handler.status\t4\nmemory.invalid-handler.top\t2\nmemory.invalid-handler.value\tnot enough memory\nmemory.handler-oom.status\t4\nmemory.handler-oom.top\t2\nmemory.handler-oom.value\tnot enough memory\nmemory.ordinary-string.status\t2\nmemory.ordinary-string.top\t2\nmemory.ordinary-string.value\thandled\nmemory.ordinary-string.calls\t1\nmemory.too-big.status\t2\nmemory.too-big.top\t1\nmemory.too-big.value\tmemory allocation error: block too big\nmemory.largest-block.status\t4\nmemory.largest-block.top\t1\nmemory.largest-block.value\tnot enough memory\nmemory.first-overflow.status\t2\nmemory.first-overflow.top\t1\nmemory.first-overflow.value\tmemory allocation error: block too big\nmemory.call.status\t4\nmemory.call.top\t1\nmemory.call.value\tnot enough memory\nmemory.nested.inner\t4\nmemory.nested.status\t0\nmemory.nested.top\t1\nmemory.nested.value\t42\nmemory.cpcall.status\t4\nmemory.cpcall.top\t1\nmemory.cpcall.value\tnot enough memory\nmemory.load.status\t4\nmemory.load.top\t1\nmemory.load.value\tnot enough memory\nmemory.coroutine.resume\t4\nmemory.coroutine.status\t4\nmemory.coroutine.value\tnot enough memory\nmemory.coroutine.again\t2\nmemory.coroutine.after\t4\nmemory.lua.recovery\t42\nmemory.recovery.bytes\t16\n",
+      "stderr": ""
+    },
+    "checked": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.exe",
+        "--memory"
+      ],
+      "returncode": 0,
+      "stdout": "memory.pcall.status\t4\nmemory.pcall.top\t1\nmemory.pcall.value\tnot enough memory\nmemory.handler.status\t4\nmemory.handler.top\t2\nmemory.handler.value\tnot enough memory\nmemory.handler.calls\t0\nmemory.invalid-handler.status\t4\nmemory.invalid-handler.top\t2\nmemory.invalid-handler.value\tnot enough memory\nmemory.handler-oom.status\t4\nmemory.handler-oom.top\t2\nmemory.handler-oom.value\tnot enough memory\nmemory.ordinary-string.status\t2\nmemory.ordinary-string.top\t2\nmemory.ordinary-string.value\thandled\nmemory.ordinary-string.calls\t1\nmemory.too-big.status\t2\nmemory.too-big.top\t1\nmemory.too-big.value\tmemory allocation error: block too big\nmemory.largest-block.status\t4\nmemory.largest-block.top\t1\nmemory.largest-block.value\tnot enough memory\nmemory.first-overflow.status\t2\nmemory.first-overflow.top\t1\nmemory.first-overflow.value\tmemory allocation error: block too big\nmemory.call.status\t4\nmemory.call.top\t1\nmemory.call.value\tnot enough memory\nmemory.nested.inner\t4\nmemory.nested.status\t0\nmemory.nested.top\t1\nmemory.nested.value\t42\nmemory.cpcall.status\t4\nmemory.cpcall.top\t1\nmemory.cpcall.value\tnot enough memory\nmemory.load.status\t4\nmemory.load.top\t1\nmemory.load.value\tnot enough memory\nmemory.coroutine.resume\t4\nmemory.coroutine.status\t4\nmemory.coroutine.value\tnot enough memory\nmemory.coroutine.again\t2\nmemory.coroutine.after\t4\nmemory.lua.recovery\t42\nmemory.recovery.bytes\t16\n",
+      "stderr": ""
+    },
+    "rust": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.exe",
+        "--memory"
+      ],
+      "returncode": 0,
+      "stdout": "memory.pcall.status\t4\nmemory.pcall.top\t1\nmemory.pcall.value\tnot enough memory\nmemory.handler.status\t4\nmemory.handler.top\t2\nmemory.handler.value\tnot enough memory\nmemory.handler.calls\t0\nmemory.invalid-handler.status\t4\nmemory.invalid-handler.top\t2\nmemory.invalid-handler.value\tnot enough memory\nmemory.handler-oom.status\t4\nmemory.handler-oom.top\t2\nmemory.handler-oom.value\tnot enough memory\nmemory.ordinary-string.status\t2\nmemory.ordinary-string.top\t2\nmemory.ordinary-string.value\thandled\nmemory.ordinary-string.calls\t1\nmemory.too-big.status\t2\nmemory.too-big.top\t1\nmemory.too-big.value\tmemory allocation error: block too big\nmemory.largest-block.status\t4\nmemory.largest-block.top\t1\nmemory.largest-block.value\tnot enough memory\nmemory.first-overflow.status\t2\nmemory.first-overflow.top\t1\nmemory.first-overflow.value\tmemory allocation error: block too big\nmemory.call.status\t4\nmemory.call.top\t1\nmemory.call.value\tnot enough memory\nmemory.nested.inner\t4\nmemory.nested.status\t0\nmemory.nested.top\t1\nmemory.nested.value\t42\nmemory.cpcall.status\t4\nmemory.cpcall.top\t1\nmemory.cpcall.value\tnot enough memory\nmemory.load.status\t4\nmemory.load.top\t1\nmemory.load.value\tnot enough memory\nmemory.coroutine.resume\t4\nmemory.coroutine.status\t4\nmemory.coroutine.value\tnot enough memory\nmemory.coroutine.again\t2\nmemory.coroutine.after\t4\nmemory.lua.recovery\t42\nmemory.recovery.bytes\t16\n",
+      "stderr": ""
+    }
+  },
+  "memory_observations": 46,
+  "table_runs": {
+    "reference": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.exe",
+        "--table-limits"
+      ],
+      "returncode": 0,
+      "stdout": "table.limit.first.status\t2\ntable.limit.first.top\t1\ntable.limit.first.value\ttable overflow\ntable.limit.power.status\t2\ntable.limit.power.top\t1\ntable.limit.power.value\ttable overflow\ntable.limit.intmax.status\t2\ntable.limit.intmax.top\t1\ntable.limit.intmax.value\ttable overflow\ntable.limit.handler.status\t2\ntable.limit.handler.top\t2\ntable.limit.handler.value\thandled\ntable.limit.handler.calls\t1\ntable.limit.reader.status\t2\ntable.limit.reader.top\t1\ntable.limit.reader.value\ttable overflow\ntable.limit.coroutine.resume\t2\ntable.limit.coroutine.status\t2\ntable.limit.coroutine.value\ttable overflow\ntable.limit.recovery\t42\ntable.limit.recovery.top\t1\n",
+      "stderr": ""
+    },
+    "checked": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.exe",
+        "--table-limits"
+      ],
+      "returncode": 0,
+      "stdout": "table.limit.first.status\t2\ntable.limit.first.top\t1\ntable.limit.first.value\ttable overflow\ntable.limit.power.status\t2\ntable.limit.power.top\t1\ntable.limit.power.value\ttable overflow\ntable.limit.intmax.status\t2\ntable.limit.intmax.top\t1\ntable.limit.intmax.value\ttable overflow\ntable.limit.handler.status\t2\ntable.limit.handler.top\t2\ntable.limit.handler.value\thandled\ntable.limit.handler.calls\t1\ntable.limit.reader.status\t2\ntable.limit.reader.top\t1\ntable.limit.reader.value\ttable overflow\ntable.limit.coroutine.resume\t2\ntable.limit.coroutine.status\t2\ntable.limit.coroutine.value\ttable overflow\ntable.limit.recovery\t42\ntable.limit.recovery.top\t1\n",
+      "stderr": ""
+    },
+    "rust": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.exe",
+        "--table-limits"
+      ],
+      "returncode": 0,
+      "stdout": "table.limit.first.status\t2\ntable.limit.first.top\t1\ntable.limit.first.value\ttable overflow\ntable.limit.power.status\t2\ntable.limit.power.top\t1\ntable.limit.power.value\ttable overflow\ntable.limit.intmax.status\t2\ntable.limit.intmax.top\t1\ntable.limit.intmax.value\ttable overflow\ntable.limit.handler.status\t2\ntable.limit.handler.top\t2\ntable.limit.handler.value\thandled\ntable.limit.handler.calls\t1\ntable.limit.reader.status\t2\ntable.limit.reader.top\t1\ntable.limit.reader.value\ttable overflow\ntable.limit.coroutine.resume\t2\ntable.limit.coroutine.status\t2\ntable.limit.coroutine.value\ttable overflow\ntable.limit.recovery\t42\ntable.limit.recovery.top\t1\n",
+      "stderr": ""
+    }
+  },
+  "table_observations": 21,
+  "terminating": {
+    "reference": {
+      "owned_default_panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.exe",
+          "owned_default_panic"
+        ],
+        "returncode": 1,
+        "stdout": "default.panic.before\n",
+        "stderr": "PANIC: unprotected error in call to Lua API (default owned panic)\n"
+      },
+      "owned_returning_panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.exe",
+          "owned_returning_panic"
+        ],
+        "returncode": 1,
+        "stdout": "returning.panic.before\nreturning.panic.status\t2\nreturning.panic.value\treturning owned panic\n",
+        "stderr": ""
+      },
+      "--memory-default-panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.exe",
+          "--memory-default-panic"
+        ],
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "PANIC: unprotected error in call to Lua API (not enough memory)\n"
+      },
+      "--memory-returning-panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.exe",
+          "--memory-returning-panic"
+        ],
+        "returncode": 1,
+        "stdout": "memory.panic.status\t4\nmemory.panic.top\t1\nmemory.panic.value\tnot enough memory\n",
+        "stderr": ""
+      },
+      "--memory-child-panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.exe",
+          "--memory-child-panic"
+        ],
+        "returncode": 1,
+        "stdout": "memory.panic.status\t4\nmemory.panic.top\t1\nmemory.panic.value\tnot enough memory\n",
+        "stderr": ""
+      },
+      "--table-child-panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.exe",
+          "--table-child-panic"
+        ],
+        "returncode": 1,
+        "stdout": "table.limit.panic.status\t2\ntable.limit.panic.top\t1\ntable.limit.panic.value\ttable overflow\n",
+        "stderr": ""
+      }
+    },
+    "checked": {
+      "owned_default_panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.exe",
+          "owned_default_panic"
+        ],
+        "returncode": 1,
+        "stdout": "default.panic.before\n",
+        "stderr": "PANIC: unprotected error in call to Lua API (default owned panic)\n"
+      },
+      "owned_returning_panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.exe",
+          "owned_returning_panic"
+        ],
+        "returncode": 1,
+        "stdout": "returning.panic.before\nreturning.panic.status\t2\nreturning.panic.value\treturning owned panic\n",
+        "stderr": ""
+      },
+      "--memory-default-panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.exe",
+          "--memory-default-panic"
+        ],
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "PANIC: unprotected error in call to Lua API (not enough memory)\n"
+      },
+      "--memory-returning-panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.exe",
+          "--memory-returning-panic"
+        ],
+        "returncode": 1,
+        "stdout": "memory.panic.status\t4\nmemory.panic.top\t1\nmemory.panic.value\tnot enough memory\n",
+        "stderr": ""
+      },
+      "--memory-child-panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.exe",
+          "--memory-child-panic"
+        ],
+        "returncode": 1,
+        "stdout": "memory.panic.status\t4\nmemory.panic.top\t1\nmemory.panic.value\tnot enough memory\n",
+        "stderr": ""
+      },
+      "--table-child-panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.exe",
+          "--table-child-panic"
+        ],
+        "returncode": 1,
+        "stdout": "table.limit.panic.status\t2\ntable.limit.panic.top\t1\ntable.limit.panic.value\ttable overflow\n",
+        "stderr": ""
+      }
+    },
+    "rust": {
+      "owned_default_panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.exe",
+          "owned_default_panic"
+        ],
+        "returncode": 1,
+        "stdout": "default.panic.before\n",
+        "stderr": "PANIC: unprotected error in call to Lua API (default owned panic)\n"
+      },
+      "owned_returning_panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.exe",
+          "owned_returning_panic"
+        ],
+        "returncode": 1,
+        "stdout": "returning.panic.before\nreturning.panic.status\t2\nreturning.panic.value\treturning owned panic\n",
+        "stderr": ""
+      },
+      "--memory-default-panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.exe",
+          "--memory-default-panic"
+        ],
+        "returncode": 1,
+        "stdout": "",
+        "stderr": "PANIC: unprotected error in call to Lua API (not enough memory)\n"
+      },
+      "--memory-returning-panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.exe",
+          "--memory-returning-panic"
+        ],
+        "returncode": 1,
+        "stdout": "memory.panic.status\t4\nmemory.panic.top\t1\nmemory.panic.value\tnot enough memory\n",
+        "stderr": ""
+      },
+      "--memory-child-panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.exe",
+          "--memory-child-panic"
+        ],
+        "returncode": 1,
+        "stdout": "memory.panic.status\t4\nmemory.panic.top\t1\nmemory.panic.value\tnot enough memory\n",
+        "stderr": ""
+      },
+      "--table-child-panic": {
+        "command": [
+          "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.exe",
+          "--table-child-panic"
+        ],
+        "returncode": 1,
+        "stdout": "table.limit.panic.status\t2\ntable.limit.panic.top\t1\ntable.limit.panic.value\ttable overflow\n",
+        "stderr": ""
+      }
+    }
+  },
+  "cli_runs": {
+    "reference": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\cli.lua",
+        "argument",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\probe.dll"
+      ],
+      "returncode": 0,
+      "stdout": "standalone-cli-ok\tmain\n",
+      "stderr": ""
+    },
+    "checked": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\cli.lua",
+        "argument",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\probe.dll"
+      ],
+      "returncode": 0,
+      "stdout": "standalone-cli-ok\tmain\n",
+      "stderr": ""
+    },
+    "rust": {
+      "command": [
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\lua.exe",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\cli.lua",
+        "argument",
+        "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\probe.dll"
+      ],
+      "returncode": 0,
+      "stdout": "standalone-cli-ok\tmain\n",
+      "stderr": ""
+    }
+  },
+  "binaries": {
+    "reference": {
+      "host": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\host.exe",
+      "module": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\probe.dll",
+      "cli": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua.exe",
+      "runtime": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\reference\\lua51.dll"
+    },
+    "checked": {
+      "host": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\host.exe",
+      "module": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\probe.dll",
+      "cli": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua.exe",
+      "runtime": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\checked\\lua51.dll"
+    },
+    "rust": {
+      "host": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\host.exe",
+      "module": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\probe.dll",
+      "cli": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-proof-debug\\rust\\lua.exe",
+      "runtime": "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\storage-package-debug\\bin\\lua51.dll"
+    }
+  },
+  "forwarded_entries": [
+    "boundary_abi_version",
+    "boundary_call_level",
+    "boundary_engine_create",
+    "boundary_hook",
+    "boundary_invoke",
+    "boundary_openlibs",
+    "boundary_read",
+    "boundary_state_free",
+    "boundary_state_new",
+    "boundary_state_own",
+    "boundary_state_size",
+    "boundary_stdio",
+    "boundary_write",
+    "luaL_addlstring",
+    "luaL_addstring",
+    "luaL_addvalue",
+    "luaL_argerror",
+    "luaL_buffinit",
+    "luaL_callmeta",
+    "luaL_checkany",
+    "luaL_checkinteger",
+    "luaL_checklstring",
+    "luaL_checknumber",
+    "luaL_checkoption",
+    "luaL_checkstack",
+    "luaL_checktype",
+    "luaL_checkudata",
+    "luaL_error",
+    "luaL_findtable",
+    "luaL_getmetafield",
+    "luaL_gsub",
+    "luaL_loadbuffer",
+    "luaL_loadfile",
+    "luaL_loadstring",
+    "luaL_newmetatable",
+    "luaL_newstate",
+    "luaL_openlib",
+    "luaL_openlibs",
+    "luaL_optinteger",
+    "luaL_optlstring",
+    "luaL_optnumber",
+    "luaL_prepbuffer",
+    "luaL_pushresult",
+    "luaL_ref",
+    "luaL_register",
+    "luaL_typerror",
+    "luaL_unref",
+    "luaL_where",
+    "lua_atpanic",
+    "lua_call",
+    "lua_checkstack",
+    "lua_close",
+    "lua_concat",
+    "lua_cpcall",
+    "lua_createtable",
+    "lua_dump",
+    "lua_equal",
+    "lua_error",
+    "lua_gc",
+    "lua_getfenv",
+    "lua_getfield",
+    "lua_gethook",
+    "lua_gethookcount",
+    "lua_gethookmask",
+    "lua_getinfo",
+    "lua_getlocal",
+    "lua_getmetatable",
+    "lua_getstack",
+    "lua_gettable",
+    "lua_gettop",
+    "lua_getupvalue",
+    "lua_insert",
+    "lua_iscfunction",
+    "lua_isnumber",
+    "lua_isstring",
+    "lua_isuserdata",
+    "lua_lessthan",
+    "lua_load",
+    "lua_newthread",
+    "lua_newuserdata",
+    "lua_next",
+    "lua_objlen",
+    "lua_pcall",
+    "lua_pushboolean",
+    "lua_pushcclosure",
+    "lua_pushfstring",
+    "lua_pushinteger",
+    "lua_pushlightuserdata",
+    "lua_pushlstring",
+    "lua_pushnil",
+    "lua_pushnumber",
+    "lua_pushstring",
+    "lua_pushthread",
+    "lua_pushvalue",
+    "lua_pushvfstring",
+    "lua_rawequal",
+    "lua_rawget",
+    "lua_rawgeti",
+    "lua_rawset",
+    "lua_rawseti",
+    "lua_remove",
+    "lua_replace",
+    "lua_resume",
+    "lua_setfenv",
+    "lua_setfield",
+    "lua_sethook",
+    "lua_setlevel",
+    "lua_setlocal",
+    "lua_setmetatable",
+    "lua_settable",
+    "lua_settop",
+    "lua_setupvalue",
+    "lua_status",
+    "lua_toboolean",
+    "lua_tocfunction",
+    "lua_tointeger",
+    "lua_tolstring",
+    "lua_tonumber",
+    "lua_topointer",
+    "lua_tothread",
+    "lua_touserdata",
+    "lua_type",
+    "lua_typename",
+    "lua_xmove",
+    "lua_yield",
+    "luaopen_base",
+    "luaopen_debug",
+    "luaopen_io",
+    "luaopen_math",
+    "luaopen_os",
+    "luaopen_package",
+    "luaopen_string",
+    "luaopen_table"
+  ],
+  "exports": {
+    "boundary_abi_version": {
+      "rva": 4112,
+      "address": 6442455056,
+      "bytes": "e97b302b00cccccccccccccccccccccc"
+    },
+    "boundary_call_level": {
+      "rva": 4128,
+      "address": 6442455072,
+      "bytes": "e97b302b00cccccccccccccccccccccc"
+    },
+    "boundary_engine_create": {
+      "rva": 4144,
+      "address": 6442455088,
+      "bytes": "e9bb302b00cccccccccccccccccccccc"
+    },
+    "boundary_hook": {
+      "rva": 4160,
+      "address": 6442455104,
+      "bytes": "e9db302b00cccccccccccccccccccccc"
+    },
+    "boundary_invoke": {
+      "rva": 4176,
+      "address": 6442455120,
+      "bytes": "e9cb312b00cccccccccccccccccccccc"
+    },
+    "boundary_openlibs": {
+      "rva": 4192,
+      "address": 6442455136,
+      "bytes": "e9ab322b00cccccccccccccccccccccc"
+    },
+    "boundary_read": {
+      "rva": 4208,
+      "address": 6442455152,
+      "bytes": "e9ab322b00cccccccccccccccccccccc"
+    },
+    "boundary_state_free": {
+      "rva": 4224,
+      "address": 6442455168,
+      "bytes": "e9ab332b00cccccccccccccccccccccc"
+    },
+    "boundary_state_new": {
+      "rva": 4240,
+      "address": 6442455184,
+      "bytes": "e98b342b00cccccccccccccccccccccc"
+    },
+    "boundary_state_own": {
+      "rva": 4256,
+      "address": 6442455200,
+      "bytes": "e98b352b00cccccccccccccccccccccc"
+    },
+    "boundary_state_size": {
+      "rva": 4272,
+      "address": 6442455216,
+      "bytes": "e91b362b00cccccccccccccccccccccc"
+    },
+    "boundary_stdio": {
+      "rva": 4288,
+      "address": 6442455232,
+      "bytes": "e97b362b00cccccccccccccccccccccc"
+    },
+    "boundary_write": {
+      "rva": 4304,
+      "address": 6442455248,
+      "bytes": "e98b3a2b00cccccccccccccccccccccc"
+    },
+    "deadlua_engine_abi_version": {
+      "rva": 6240,
+      "address": 6442457184,
+      "bytes": "554883ec30488d6c243048c745f8feff"
+    },
+    "deadlua_engine_new_state": {
+      "rva": 6320,
+      "address": 6442457264,
+      "bytes": "4883ec2848894c2420e862d400009048"
+    },
+    "deadlua_engine_statistics": {
+      "rva": 6352,
+      "address": 6442457296,
+      "bytes": "5556574881ec10010000488dac248000"
+    },
+    "luaL_addlstring": {
+      "rva": 4320,
+      "address": 6442455264,
+      "bytes": "e9ab3b2b00cccccccccccccccccccccc"
+    },
+    "luaL_addstring": {
+      "rva": 4336,
+      "address": 6442455280,
+      "bytes": "e92b3c2b00cccccccccccccccccccccc"
+    },
+    "luaL_addvalue": {
+      "rva": 4352,
+      "address": 6442455296,
+      "bytes": "e94b3c2b00cccccccccccccccccccccc"
+    },
+    "luaL_argerror": {
+      "rva": 4368,
+      "address": 6442455312,
+      "bytes": "e9eb3c2b00cccccccccccccccccccccc"
+    },
+    "luaL_buffinit": {
+      "rva": 4384,
+      "address": 6442455328,
+      "bytes": "e98b3d2b00cccccccccccccccccccccc"
+    },
+    "luaL_callmeta": {
+      "rva": 4400,
+      "address": 6442455344,
+      "bytes": "e99b3d2b00cccccccccccccccccccccc"
+    },
+    "luaL_checkany": {
+      "rva": 4416,
+      "address": 6442455360,
+      "bytes": "e90b3e2b00cccccccccccccccccccccc"
+    },
+    "luaL_checkinteger": {
+      "rva": 4432,
+      "address": 6442455376,
+      "bytes": "e93b3e2b00cccccccccccccccccccccc"
+    },
+    "luaL_checklstring": {
+      "rva": 4448,
+      "address": 6442455392,
+      "bytes": "e98b3e2b00cccccccccccccccccccccc"
+    },
+    "luaL_checknumber": {
+      "rva": 4464,
+      "address": 6442455408,
+      "bytes": "e9cb3e2b00cccccccccccccccccccccc"
+    },
+    "luaL_checkoption": {
+      "rva": 4480,
+      "address": 6442455424,
+      "bytes": "e91b3f2b00cccccccccccccccccccccc"
+    },
+    "luaL_checkstack": {
+      "rva": 4496,
+      "address": 6442455440,
+      "bytes": "e9ab3f2b00cccccccccccccccccccccc"
+    },
+    "luaL_checktype": {
+      "rva": 4512,
+      "address": 6442455456,
+      "bytes": "e9db3f2b00cccccccccccccccccccccc"
+    },
+    "luaL_checkudata": {
+      "rva": 4528,
+      "address": 6442455472,
+      "bytes": "e91b402b00cccccccccccccccccccccc"
+    },
+    "luaL_error": {
+      "rva": 4544,
+      "address": 6442455488,
+      "bytes": "e9ab402b00cccccccccccccccccccccc"
+    },
+    "luaL_findtable": {
+      "rva": 4560,
+      "address": 6442455504,
+      "bytes": "e9eb402b00cccccccccccccccccccccc"
+    },
+    "luaL_getmetafield": {
+      "rva": 4576,
+      "address": 6442455520,
+      "bytes": "e90b422b00cccccccccccccccccccccc"
+    },
+    "luaL_gsub": {
+      "rva": 4592,
+      "address": 6442455536,
+      "bytes": "e97b422b00cccccccccccccccccccccc"
+    },
+    "luaL_loadbuffer": {
+      "rva": 4608,
+      "address": 6442455552,
+      "bytes": "e94b432b00cccccccccccccccccccccc"
+    },
+    "luaL_loadfile": {
+      "rva": 4624,
+      "address": 6442455568,
+      "bytes": "e96b432b00cccccccccccccccccccccc"
+    },
+    "luaL_loadstring": {
+      "rva": 4640,
+      "address": 6442455584,
+      "bytes": "e9bb432b00cccccccccccccccccccccc"
+    },
+    "luaL_newmetatable": {
+      "rva": 4656,
+      "address": 6442455600,
+      "bytes": "e9eb432b00cccccccccccccccccccccc"
+    },
+    "luaL_newstate": {
+      "rva": 4672,
+      "address": 6442455616,
+      "bytes": "e96b442b00cccccccccccccccccccccc"
+    },
+    "luaL_openlib": {
+      "rva": 4688,
+      "address": 6442455632,
+      "bytes": "e9ab442b00cccccccccccccccccccccc"
+    },
+    "luaL_openlibs": {
+      "rva": 4704,
+      "address": 6442455648,
+      "bytes": "e91b462b00cccccccccccccccccccccc"
+    },
+    "luaL_optinteger": {
+      "rva": 4720,
+      "address": 6442455664,
+      "bytes": "e97b462b00cccccccccccccccccccccc"
+    },
+    "luaL_optlstring": {
+      "rva": 4736,
+      "address": 6442455680,
+      "bytes": "e9bb462b00cccccccccccccccccccccc"
+    },
+    "luaL_optnumber": {
+      "rva": 4752,
+      "address": 6442455696,
+      "bytes": "e91b472b00cccccccccccccccccccccc"
+    },
+    "luaL_prepbuffer": {
+      "rva": 4768,
+      "address": 6442455712,
+      "bytes": "e95b472b00cccccccccccccccccccccc"
+    },
+    "luaL_pushresult": {
+      "rva": 4784,
+      "address": 6442455728,
+      "bytes": "e99b472b00cccccccccccccccccccccc"
+    },
+    "luaL_ref": {
+      "rva": 4800,
+      "address": 6442455744,
+      "bytes": "e9fb472b00cccccccccccccccccccccc"
+    },
+    "luaL_register": {
+      "rva": 4816,
+      "address": 6442455760,
+      "bytes": "e9bb482b00cccccccccccccccccccccc"
+    },
+    "luaL_typerror": {
+      "rva": 4832,
+      "address": 6442455776,
+      "bytes": "e9bb482b00cccccccccccccccccccccc"
+    },
+    "luaL_unref": {
+      "rva": 4848,
+      "address": 6442455792,
+      "bytes": "e90b492b00cccccccccccccccccccccc"
+    },
+    "luaL_where": {
+      "rva": 4864,
+      "address": 6442455808,
+      "bytes": "e97b492b00cccccccccccccccccccccc"
+    },
+    "lua_atpanic": {
+      "rva": 4880,
+      "address": 6442455824,
+      "bytes": "e9bb492b00cccccccccccccccccccccc"
+    },
+    "lua_call": {
+      "rva": 4896,
+      "address": 6442455840,
+      "bytes": "e92b4a2b00cccccccccccccccccccccc"
+    },
+    "lua_checkstack": {
+      "rva": 4912,
+      "address": 6442455856,
+      "bytes": "e96b4a2b00cccccccccccccccccccccc"
+    },
+    "lua_close": {
+      "rva": 4928,
+      "address": 6442455872,
+      "bytes": "e9ab4a2b00cccccccccccccccccccccc"
+    },
+    "lua_concat": {
+      "rva": 4944,
+      "address": 6442455888,
+      "bytes": "e98b4b2b00cccccccccccccccccccccc"
+    },
+    "lua_cpcall": {
+      "rva": 4960,
+      "address": 6442455904,
+      "bytes": "e92b4c2b00cccccccccccccccccccccc"
+    },
+    "lua_createtable": {
+      "rva": 4976,
+      "address": 6442455920,
+      "bytes": "e95b4c2b00cccccccccccccccccccccc"
+    },
+    "lua_dump": {
+      "rva": 4992,
+      "address": 6442455936,
+      "bytes": "e90b4d2b00cccccccccccccccccccccc"
+    },
+    "lua_equal": {
+      "rva": 5008,
+      "address": 6442455952,
+      "bytes": "e95b4d2b00cccccccccccccccccccccc"
+    },
+    "lua_error": {
+      "rva": 5024,
+      "address": 6442455968,
+      "bytes": "e99b4d2b00cccccccccccccccccccccc"
+    },
+    "lua_gc": {
+      "rva": 5040,
+      "address": 6442455984,
+      "bytes": "e9db4d2b00cccccccccccccccccccccc"
+    },
+    "lua_getfenv": {
+      "rva": 5056,
+      "address": 6442456000,
+      "bytes": "e91b4e2b00cccccccccccccccccccccc"
+    },
+    "lua_getfield": {
+      "rva": 5072,
+      "address": 6442456016,
+      "bytes": "e95b4e2b00cccccccccccccccccccccc"
+    },
+    "lua_gethook": {
+      "rva": 5088,
+      "address": 6442456032,
+      "bytes": "e9cb4e2b00cccccccccccccccccccccc"
+    },
+    "lua_gethookcount": {
+      "rva": 5104,
+      "address": 6442456048,
+      "bytes": "e91b4f2b00cccccccccccccccccccccc"
+    },
+    "lua_gethookmask": {
+      "rva": 5120,
+      "address": 6442456064,
+      "bytes": "e95b4f2b00cccccccccccccccccccccc"
+    },
+    "lua_getinfo": {
+      "rva": 5136,
+      "address": 6442456080,
+      "bytes": "e99b4f2b00cccccccccccccccccccccc"
+    },
+    "lua_getlocal": {
+      "rva": 5152,
+      "address": 6442456096,
+      "bytes": "e9eb4f2b00cccccccccccccccccccccc"
+    },
+    "lua_getmetatable": {
+      "rva": 5168,
+      "address": 6442456112,
+      "bytes": "e93b502b00cccccccccccccccccccccc"
+    },
+    "lua_getstack": {
+      "rva": 5184,
+      "address": 6442456128,
+      "bytes": "e97b502b00cccccccccccccccccccccc"
+    },
+    "lua_gettable": {
+      "rva": 5200,
+      "address": 6442456144,
+      "bytes": "e9cb502b00cccccccccccccccccccccc"
+    },
+    "lua_gettop": {
+      "rva": 5216,
+      "address": 6442456160,
+      "bytes": "e90b512b00cccccccccccccccccccccc"
+    },
+    "lua_getupvalue": {
+      "rva": 5232,
+      "address": 6442456176,
+      "bytes": "e94b512b00cccccccccccccccccccccc"
+    },
+    "lua_insert": {
+      "rva": 5248,
+      "address": 6442456192,
+      "bytes": "e98b512b00cccccccccccccccccccccc"
+    },
+    "lua_iscfunction": {
+      "rva": 5264,
+      "address": 6442456208,
+      "bytes": "e9cb512b00cccccccccccccccccccccc"
+    },
+    "lua_isnumber": {
+      "rva": 5280,
+      "address": 6442456224,
+      "bytes": "e90b522b00cccccccccccccccccccccc"
+    },
+    "lua_isstring": {
+      "rva": 5296,
+      "address": 6442456240,
+      "bytes": "e94b522b00cccccccccccccccccccccc"
+    },
+    "lua_isuserdata": {
+      "rva": 5312,
+      "address": 6442456256,
+      "bytes": "e95b522b00cccccccccccccccccccccc"
+    },
+    "lua_lessthan": {
+      "rva": 5328,
+      "address": 6442456272,
+      "bytes": "e97b522b00cccccccccccccccccccccc"
+    },
+    "lua_load": {
+      "rva": 5344,
+      "address": 6442456288,
+      "bytes": "e9cb522b00cccccccccccccccccccccc"
+    },
+    "lua_newthread": {
+      "rva": 5360,
+      "address": 6442456304,
+      "bytes": "e91b532b00cccccccccccccccccccccc"
+    },
+    "lua_newuserdata": {
+      "rva": 5376,
+      "address": 6442456320,
+      "bytes": "e95b532b00cccccccccccccccccccccc"
+    },
+    "lua_next": {
+      "rva": 5392,
+      "address": 6442456336,
+      "bytes": "e90b542b00cccccccccccccccccccccc"
+    },
+    "lua_objlen": {
+      "rva": 5408,
+      "address": 6442456352,
+      "bytes": "e94b542b00cccccccccccccccccccccc"
+    },
+    "lua_pcall": {
+      "rva": 5424,
+      "address": 6442456368,
+      "bytes": "e98b542b00cccccccccccccccccccccc"
+    },
+    "lua_pushboolean": {
+      "rva": 5440,
+      "address": 6442456384,
+      "bytes": "e9cb542b00cccccccccccccccccccccc"
+    },
+    "lua_pushcclosure": {
+      "rva": 5456,
+      "address": 6442456400,
+      "bytes": "e90b552b00cccccccccccccccccccccc"
+    },
+    "lua_pushfstring": {
+      "rva": 5472,
+      "address": 6442456416,
+      "bytes": "e9bb552b00cccccccccccccccccccccc"
+    },
+    "lua_pushinteger": {
+      "rva": 5488,
+      "address": 6442456432,
+      "bytes": "e9db552b00cccccccccccccccccccccc"
+    },
+    "lua_pushlightuserdata": {
+      "rva": 5504,
+      "address": 6442456448,
+      "bytes": "e92b562b00cccccccccccccccccccccc"
+    },
+    "lua_pushlstring": {
+      "rva": 5520,
+      "address": 6442456464,
+      "bytes": "e97b562b00cccccccccccccccccccccc"
+    },
+    "lua_pushnil": {
+      "rva": 5536,
+      "address": 6442456480,
+      "bytes": "e92b572b00cccccccccccccccccccccc"
+    },
+    "lua_pushnumber": {
+      "rva": 5552,
+      "address": 6442456496,
+      "bytes": "e96b572b00cccccccccccccccccccccc"
+    },
+    "lua_pushstring": {
+      "rva": 5568,
+      "address": 6442456512,
+      "bytes": "e9bb572b00cccccccccccccccccccccc"
+    },
+    "lua_pushthread": {
+      "rva": 5584,
+      "address": 6442456528,
+      "bytes": "e9fb572b00cccccccccccccccccccccc"
+    },
+    "lua_pushvalue": {
+      "rva": 5600,
+      "address": 6442456544,
+      "bytes": "e93b582b00cccccccccccccccccccccc"
+    },
+    "lua_pushvfstring": {
+      "rva": 5616,
+      "address": 6442456560,
+      "bytes": "e97b582b00cccccccccccccccccccccc"
+    },
+    "lua_rawequal": {
+      "rva": 5632,
+      "address": 6442456576,
+      "bytes": "e9cb5c2b00cccccccccccccccccccccc"
+    },
+    "lua_rawget": {
+      "rva": 5648,
+      "address": 6442456592,
+      "bytes": "e90b5d2b00cccccccccccccccccccccc"
+    },
+    "lua_rawgeti": {
+      "rva": 5664,
+      "address": 6442456608,
+      "bytes": "e94b5d2b00cccccccccccccccccccccc"
+    },
+    "lua_rawset": {
+      "rva": 5680,
+      "address": 6442456624,
+      "bytes": "e98b5d2b00cccccccccccccccccccccc"
+    },
+    "lua_rawseti": {
+      "rva": 5696,
+      "address": 6442456640,
+      "bytes": "e9cb5d2b00cccccccccccccccccccccc"
+    },
+    "lua_remove": {
+      "rva": 5712,
+      "address": 6442456656,
+      "bytes": "e90b5e2b00cccccccccccccccccccccc"
+    },
+    "lua_replace": {
+      "rva": 5728,
+      "address": 6442456672,
+      "bytes": "e94b5e2b00cccccccccccccccccccccc"
+    },
+    "lua_resume": {
+      "rva": 5744,
+      "address": 6442456688,
+      "bytes": "e98b5e2b00cccccccccccccccccccccc"
+    },
+    "lua_setfenv": {
+      "rva": 5760,
+      "address": 6442456704,
+      "bytes": "e9cb5e2b00cccccccccccccccccccccc"
+    },
+    "lua_setfield": {
+      "rva": 5776,
+      "address": 6442456720,
+      "bytes": "e90b5f2b00cccccccccccccccccccccc"
+    },
+    "lua_sethook": {
+      "rva": 5792,
+      "address": 6442456736,
+      "bytes": "e97b5f2b00cccccccccccccccccccccc"
+    },
+    "lua_setlevel": {
+      "rva": 5808,
+      "address": 6442456752,
+      "bytes": "e9cb5f2b00cccccccccccccccccccccc"
+    },
+    "lua_setlocal": {
+      "rva": 5824,
+      "address": 6442456768,
+      "bytes": "e91b602b00cccccccccccccccccccccc"
+    },
+    "lua_setmetatable": {
+      "rva": 5840,
+      "address": 6442456784,
+      "bytes": "e96b602b00cccccccccccccccccccccc"
+    },
+    "lua_settable": {
+      "rva": 5856,
+      "address": 6442456800,
+      "bytes": "e9ab602b00cccccccccccccccccccccc"
+    },
+    "lua_settop": {
+      "rva": 5872,
+      "address": 6442456816,
+      "bytes": "e9eb602b00cccccccccccccccccccccc"
+    },
+    "lua_setupvalue": {
+      "rva": 5888,
+      "address": 6442456832,
+      "bytes": "e92b612b00cccccccccccccccccccccc"
+    },
+    "lua_status": {
+      "rva": 5904,
+      "address": 6442456848,
+      "bytes": "e96b612b00cccccccccccccccccccccc"
+    },
+    "lua_toboolean": {
+      "rva": 5920,
+      "address": 6442456864,
+      "bytes": "e9bb612b00cccccccccccccccccccccc"
+    },
+    "lua_tocfunction": {
+      "rva": 5936,
+      "address": 6442456880,
+      "bytes": "e9fb612b00cccccccccccccccccccccc"
+    },
+    "lua_tointeger": {
+      "rva": 5952,
+      "address": 6442456896,
+      "bytes": "e96b622b00cccccccccccccccccccccc"
+    },
+    "lua_tolstring": {
+      "rva": 5968,
+      "address": 6442456912,
+      "bytes": "e9ab622b00cccccccccccccccccccccc"
+    },
+    "lua_tonumber": {
+      "rva": 5984,
+      "address": 6442456928,
+      "bytes": "e99b632b00cccccccccccccccccccccc"
+    },
+    "lua_topointer": {
+      "rva": 6000,
+      "address": 6442456944,
+      "bytes": "e9db632b00cccccccccccccccccccccc"
+    },
+    "lua_tothread": {
+      "rva": 6016,
+      "address": 6442456960,
+      "bytes": "e91b642b00cccccccccccccccccccccc"
+    },
+    "lua_touserdata": {
+      "rva": 6032,
+      "address": 6442456976,
+      "bytes": "e95b642b00cccccccccccccccccccccc"
+    },
+    "lua_type": {
+      "rva": 6048,
+      "address": 6442456992,
+      "bytes": "e99b642b00cccccccccccccccccccccc"
+    },
+    "lua_typename": {
+      "rva": 6064,
+      "address": 6442457008,
+      "bytes": "e9db642b00cccccccccccccccccccccc"
+    },
+    "lua_xmove": {
+      "rva": 6080,
+      "address": 6442457024,
+      "bytes": "e9eb642b00cccccccccccccccccccccc"
+    },
+    "lua_yield": {
+      "rva": 6096,
+      "address": 6442457040,
+      "bytes": "e92b652b00cccccccccccccccccccccc"
+    },
+    "luaopen_base": {
+      "rva": 6112,
+      "address": 6442457056,
+      "bytes": "e96b652b00cccccccccccccccccccccc"
+    },
+    "luaopen_debug": {
+      "rva": 6128,
+      "address": 6442457072,
+      "bytes": "e9cb662b00cccccccccccccccccccccc"
+    },
+    "luaopen_io": {
+      "rva": 6144,
+      "address": 6442457088,
+      "bytes": "e9eb662b00cccccccccccccccccccccc"
+    },
+    "luaopen_math": {
+      "rva": 6160,
+      "address": 6442457104,
+      "bytes": "e9ab682b00cccccccccccccccccccccc"
+    },
+    "luaopen_os": {
+      "rva": 6176,
+      "address": 6442457120,
+      "bytes": "e93b692b00cccccccccccccccccccccc"
+    },
+    "luaopen_package": {
+      "rva": 6192,
+      "address": 6442457136,
+      "bytes": "e95b692b00cccccccccccccccccccccc"
+    },
+    "luaopen_string": {
+      "rva": 6208,
+      "address": 6442457152,
+      "bytes": "e90b6b2b00cccccccccccccccccccccc"
+    },
+    "luaopen_table": {
+      "rva": 6224,
+      "address": 6442457168,
+      "bytes": "e9cb6b2b00cccccccccccccccccccccc"
+    }
+  },
+  "observations_equal": true,
+  "observations": 97,
+  "no_rust_bootstrap": true,
+  "no_public_forwarding_frames": true,
+  "suite_results": [],
+  "suite_archive_sha256": null,
+  "internal_test_module": false,
+  "full_lua51_parity": false
+}

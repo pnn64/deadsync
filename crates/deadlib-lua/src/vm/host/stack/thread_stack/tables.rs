@@ -9,16 +9,14 @@ impl NativeThreadStack<'_> {
     /// Create and push a table with array and record capacity hints.
     ///
     /// # Errors
-    /// Rejects allocation failure or a full stack.
+    /// Rejects allocation failure, table overflow or a full stack.
     pub fn create_table(&mut self, array: usize, records: usize) -> Result<(), Error> {
         if self.top == limits::MAX_CSTACK {
             return Err(self.error(b"native stack overflow"));
         }
-        let table = Table::with_capacity(array, records)?;
-        self.vm.tables.note_alloc(table.heap_bytes());
+        self.reserve_end(self.end + 1)?;
+        let table = Value::Table(self.vm.try_table_with_capacity(array, records)?);
         self.vm.gc.pending = true;
-        let table = Value::Table(TableId(self.vm.tables.insert(table)));
-        self.vm.gc_new_value(table);
         self.push(table)
     }
     /// Replace the top key with a raw table lookup, bypassing metamethods.

@@ -246,15 +246,15 @@ impl NativeThreadStack<'_> {
         let Some(end) = self
             .end
             .checked_add(extra)
-            .filter(|_| extra <= limits::MAX_CSTACK)
+            .filter(|&end| extra <= limits::MAX_CSTACK && end <= self.base + limits::MAX_CSTACK)
         else {
             return false;
         };
-        self.reserve_end(end)
+        self.reserve_end(end).is_ok()
     }
-    fn reserve_end(&mut self, end: usize) -> bool {
+    fn reserve_end(&mut self, end: usize) -> Result<(), Error> {
         if end > self.base + limits::MAX_CSTACK {
-            return false;
+            return Err(self.error(b"native stack overflow"));
         }
         let state = &mut self.vm.threads[slot_index(self.thread.0)];
         let before = state.registers.capacity();
@@ -263,11 +263,11 @@ impl NativeThreadStack<'_> {
             .try_reserve(end.saturating_sub(state.registers.len()))
             .is_err()
         {
-            return false;
+            return Err(self.vm.memory_failure());
         }
         let growth = (state.registers.capacity() - before) * size_of::<Value>();
         self.vm.threads.note_alloc(growth);
-        true
+        Ok(())
     }
     /// Resize this native window, filling newly exposed values with nil.
     ///
@@ -280,8 +280,8 @@ impl NativeThreadStack<'_> {
         self.set_end(self.base + top)
     }
     fn set_end(&mut self, end: usize) -> Result<(), Error> {
-        if end > self.end && !self.reserve_end(end) {
-            return Err(self.error(b"native stack overflow"));
+        if end > self.end {
+            self.reserve_end(end)?;
         }
         let state = &mut self.vm.threads[slot_index(self.thread.0)];
         if state.registers.len() < end {
@@ -306,6 +306,8 @@ impl NativeThreadStack<'_> {
     pub fn push(&mut self, value: Value) -> Result<(), Error> {
         self.vm.validate_value(value)?;
         let at = self.end;
+        self.vm
+            .reserve_gc_barrier(Value::Thread(self.thread), value)?;
         self.set_end(at + 1)?;
         self.vm.threads[slot_index(self.thread.0)].registers[at] = value;
         self.vm.gc_barrier(Value::Thread(self.thread), value);

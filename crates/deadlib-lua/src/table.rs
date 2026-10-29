@@ -120,7 +120,13 @@ pub(crate) enum TableTrace {
 
 impl Table {
     pub fn with_capacity(array: usize, records: usize) -> Result<Self, Error> {
-        let failed = || Error::new(ErrorKind::Runtime, 0, "not enough memory");
+        let failed = Error::memory;
+        let mut table = Self::default();
+        table.array.try_reserve_exact(array).map_err(|_| failed())?;
+        table.array.resize(array, Value::Nil);
+        if records > (1 << 26) {
+            return Err(Error::new(ErrorKind::Runtime, 0, "table overflow"));
+        }
         let slots = if records == 0 {
             0
         } else {
@@ -129,9 +135,6 @@ impl Table {
                 .and_then(|n| (n / 3 + 1).max(8).checked_next_power_of_two())
                 .ok_or_else(failed)?
         };
-        let mut table = Self::default();
-        table.array.try_reserve_exact(array).map_err(|_| failed())?;
-        table.array.resize(array, Value::Nil);
         table
             .entries
             .try_reserve_exact(records)

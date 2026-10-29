@@ -1484,7 +1484,8 @@ unsafe extern "C" fn dispatch(
         Ok(()) => 0,
         Err(error) => {
             if error.target_thread.is_none()
-                && matches!(op, 8 | 16..=19 | 29 | 39 | 40 | 44 | 47 | 49 | 55 | 73)
+                && (error.kind() == crate::ErrorKind::Memory
+                    || matches!(op, 8 | 15..=19 | 29 | 39 | 40 | 44 | 47 | 49 | 55 | 73))
                 && value.state as usize != context.state
                 && error.catchable()
             {

@@ -322,20 +322,13 @@ impl NativeStack<'_, '_> {
         else {
             return false;
         };
-        let before = self.call.vm.registers.capacity();
-        let needed = end.saturating_sub(self.call.vm.registers.len());
-        if self.call.vm.registers.try_reserve(needed).is_err() {
-            return false;
-        }
-        self.call.vm.gc_note_control(
-            (self.call.vm.registers.capacity() - before) * std::mem::size_of::<Value>(),
-        );
-        true
+        self.call.vm.reserve_registers(end).is_ok()
     }
     /// Resize the stack, filling new slots with nil and releasing popped roots.
     ///
     /// # Errors
-    /// Returns a runtime error above the 8,000-slot bound.
+    /// Returns a runtime error above the 8,000-slot bound, or a memory error if
+    /// stack storage cannot grow.
     pub fn set_top(&mut self, top: usize) -> Result<(), Error> {
         self.check_error()?;
         if top > limits::MAX_CSTACK {
@@ -343,6 +336,7 @@ impl NativeStack<'_, '_> {
         }
         let end = self.base + top;
         let before = self.end();
+        self.call.vm.reserve_registers(end)?;
         self.call.vm.resize_registers(end);
         if before < end {
             self.call.vm.registers[before..end].fill(Value::Nil);
@@ -353,14 +347,16 @@ impl NativeStack<'_, '_> {
     /// Push a live value, retaining it across nested calls and collection.
     ///
     /// # Errors
-    /// Rejects collected/invalid handles or a full stack.
+    /// Rejects collected/invalid handles, a full stack or allocation failure.
     pub fn push(&mut self, value: Value) -> Result<(), Error> {
         self.check_error()?;
         self.call.vm.validate_value(value)?;
-        if !self.check_stack(1) {
+        if self.top() == limits::MAX_CSTACK {
             return Err(self.error(b"native stack overflow"));
         }
         let at = self.end();
+        self.call.vm.reserve_registers(at + 1)?;
+        self.call.vm.reserve_gc_value(value)?;
         self.call.vm.resize_registers(at + 1);
         self.set_window_end(at + 1);
         self.call.vm.registers[at] = value;

@@ -57,7 +57,10 @@ This is partial Lua 5.1 parity: 77 of 80 core functions are declared.
 use Rust's allocator. Fallible userdata payload failures now return `LUA_ERRMEM`
 and bypass error handlers, including through parser readers and coroutines.
 The fixed memory diagnostic survives collection. Custom allocator ownership and
-recoverable failures in other VM allocations remain unfinished. Exact heap/GC accounting and general continuation/resource
+recoverable failures in other VM allocations remain unfinished. Arena insertion,
+userdata, native table creation, host roots and native stack growth use fallible
+reservations; the test allocator rejects their real allocation calls and checks
+that retries succeed. Exact heap/GC accounting and general continuation/resource
 parity also remain open. The deep C callback tests reserve 32 MiB of host stack,
 as the existing Rust runners do; default host-stack limits are not proven equal
 to PUC Lua's resource bounds.
@@ -69,3 +72,6 @@ also running on Linux x64. See the
 
 See the [allocation-error checks](../../../docs/testing/2026-10-29-rust-lua-memory-errors.md)
 for the tested failure paths and remaining allocation limits.
+
+The [fallible-storage checks](../../../docs/testing/2026-10-29-rust-lua-fallible-storage.md)
+record allocator rejection and native table-limit coverage.

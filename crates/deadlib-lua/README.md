@@ -863,7 +863,9 @@ both full stock entry points. See the
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.
 The [allocation-error checks](../../docs/testing/2026-10-29-rust-lua-memory-errors.md)
 cover recoverable userdata payload failures, their status codes and handler
-bypass. Custom allocator ownership and failures in other allocations remain open.
+bypass. The [fallible-storage checks](../../docs/testing/2026-10-29-rust-lua-fallible-storage.md)
+also reject real allocator calls for object arenas, host roots, native tables and
+stack growth. Custom allocator ownership and failures in other allocations remain open.
 The [portable regression checks](../../docs/testing/2026-10-27-rust-lua-portable-tests.md)
 also retain GNU C crashes on overflowing `unpack` ranges in separate processes.
 The strict standalone audit continues to fail on those inputs. Sanitizer and

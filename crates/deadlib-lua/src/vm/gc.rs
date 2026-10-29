@@ -521,13 +521,19 @@ impl Vm {
     /// Values must originate in this VM. Root handles additionally check VM ownership.
     ///
     /// # Errors
-    /// Returns an error if the object handle is invalid or has been collected.
+    /// Returns an error if the object handle is invalid, has been collected, or
+    /// root/collector storage cannot grow.
     pub fn pin(&mut self, value: Value) -> Result<Root, Error> {
         self.validate_value(value)?;
+        self.reserve_gc_value(value)?;
+        let key = self
+            .roots
+            .try_insert(value)
+            .map_err(|_| self.memory_failure())?;
         self.gc_new_value(value);
         Ok(Root {
             vm: self.identity,
-            key: self.roots.insert(value),
+            key,
         })
     }
     /// Read a pinned value, rejecting released roots or roots from another VM.
@@ -774,6 +780,27 @@ impl Vm {
         if fresh {
             work.push(Trace::MarkedValue(value));
         }
+    }
+    pub(super) fn reserve_gc_new_value(&mut self) -> Result<(), Error> {
+        if self.gc.phase == Phase::Propagate {
+            self.gc
+                .work
+                .try_reserve(1)
+                .map_err(|_| self.memory_failure())?;
+        }
+        Ok(())
+    }
+    pub(super) fn reserve_gc_value(&mut self, value: Value) -> Result<(), Error> {
+        if !self.marked_value(value) {
+            self.reserve_gc_new_value()?;
+        }
+        Ok(())
+    }
+    pub(super) fn reserve_gc_barrier(&mut self, owner: Value, value: Value) -> Result<(), Error> {
+        if self.marked_value(owner) {
+            self.reserve_gc_value(value)?;
+        }
+        Ok(())
     }
     pub(super) fn gc_new_value(&mut self, value: Value) {
         if self.gc.phase == Phase::Propagate {
@@ -1531,6 +1558,38 @@ impl Vm {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn allocation_failure_during_marking_keeps_the_work_queue_and_object_identity_unpublished() {
+        let mut attempts = 0;
+        // Payload + collector work queue + the arena's four parallel buffers.
+        for nth in 0..=6 {
+            let mut vm = Vm::new_bare();
+            vm.gc.phase = Phase::Propagate;
+            vm.gc.work = Vec::new();
+            let (result, stats) = crate::allocation_probe::probe(nth, || vm.try_new_userdata(16));
+            if nth == 0 {
+                attempts = stats.attempts;
+                assert_eq!(attempts, 6);
+                assert!(result.is_ok());
+                assert_eq!(vm.gc.work.len(), 1);
+            } else {
+                assert!(nth <= attempts);
+                assert_eq!(stats.rejected, 1);
+                assert_eq!(result.unwrap_err().kind(), ErrorKind::Memory);
+                assert_eq!(vm.userdata.live_len(), 0);
+                assert_eq!(vm.userdata_order, 0);
+                assert!(vm.gc.work.is_empty());
+                let Value::Userdata(id) = vm.try_new_userdata(16).unwrap() else {
+                    unreachable!()
+                };
+                assert!(vm.userdata.marked(id.0));
+                assert_eq!(vm.gc.work.len(), 1);
+                assert_eq!(vm.userdata_order, 1);
+            }
+            vm.gc.phase = Phase::Pause;
+        }
+        eprintln!("ALLOCATION_GC_FAILURE_POINTS 6");
+    }
 
     #[test]
     fn native_capture_writes_barrier_already_propagated_builtin_and_host_closures() {

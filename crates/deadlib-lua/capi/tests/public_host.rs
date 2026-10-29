@@ -234,6 +234,45 @@ fn c_host_and_module_use_the_standalone_library_without_rust_bootstrap() {
             );
         }
     }
+    let tables = Command::new(&host)
+        .arg("--table-limits")
+        .current_dir(&folder)
+        .output()
+        .unwrap();
+    assert!(
+        tables.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&tables.stdout),
+        String::from_utf8_lossy(&tables.stderr)
+    );
+    assert!(tables.stderr.is_empty());
+    assert_eq!(
+        String::from_utf8(tables.stdout)
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        include_str!("table-limits.expected")
+            .lines()
+            .collect::<Vec<_>>()
+    );
+    let tables = Command::new(&host)
+        .arg("--table-child-panic")
+        .current_dir(&folder)
+        .output()
+        .unwrap();
+    assert_eq!(tables.status.code(), Some(1));
+    assert!(tables.stderr.is_empty());
+    assert_eq!(
+        String::from_utf8(tables.stdout)
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        [
+            "table.limit.panic.status\t2",
+            "table.limit.panic.top\t1",
+            "table.limit.panic.value\ttable overflow"
+        ]
+    );
     for symbol in ["owned_default_panic", "owned_returning_panic"] {
         let result = Command::new(&host)
             .arg(symbol)

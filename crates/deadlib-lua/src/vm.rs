@@ -772,6 +772,17 @@ impl Vm {
         self.gc_table_write(id, key, value);
         Ok(())
     }
+    fn memory_failure(&self) -> Error {
+        Error::memory().with_value(Value::String(self.memory_error))
+    }
+    fn reserve_registers(&mut self, len: usize) -> Result<(), Error> {
+        let before = self.registers.capacity();
+        self.registers
+            .try_reserve(len.saturating_sub(self.registers.len()))
+            .map_err(|_| self.memory_failure())?;
+        self.gc_note_control((self.registers.capacity() - before) * std::mem::size_of::<Value>());
+        Ok(())
+    }
     fn resize_registers(&mut self, len: usize) {
         self.hooks.preserve_popped(&self.registers, len);
         let before = self.registers.capacity();
@@ -796,9 +807,35 @@ impl Vm {
     ///
     /// Store or pin the returned identity before executing Lua or collecting.
     pub fn new_table(&mut self) -> TableId {
-        let id = TableId(self.tables.insert(Table::default()));
+        self.try_new_table().expect("allocate Lua table")
+    }
+    /// Try to create an empty table. Store or pin it before executing Lua or
+    /// collecting.
+    ///
+    /// # Errors
+    /// Returns a memory error if arena or collector queue allocation fails.
+    pub fn try_new_table(&mut self) -> Result<TableId, Error> {
+        self.try_table_with_capacity(0, 0)
+    }
+    fn try_table_with_capacity(&mut self, array: usize, records: usize) -> Result<TableId, Error> {
+        let table = Table::with_capacity(array, records).map_err(|error| {
+            if error.kind() == ErrorKind::Memory {
+                self.memory_failure()
+            } else {
+                error
+            }
+        })?;
+        self.reserve_gc_new_value()?;
+        let bytes = table.heap_bytes();
+        let id = TableId(
+            self.tables
+                .try_insert(table)
+                .map_err(|_| self.memory_failure())?,
+        );
+        self.tables.note_alloc(bytes);
+        self.gc.pending |= bytes != 0;
         self.gc_new_value(Value::Table(id));
-        id
+        Ok(id)
     }
     fn new_record_table(&mut self, capacity: usize) -> TableId {
         let table = Table::with_record_capacity(capacity);
@@ -1473,7 +1510,7 @@ impl Vm {
                         self.registers[a],
                     )?,
                     Op::NewTable => {
-                        let id = self.new_table();
+                        let id = self.try_new_table()?;
                         self.registers[a] = Value::Table(id);
                         self.maybe_gc();
                     }
