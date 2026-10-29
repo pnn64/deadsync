@@ -2,6 +2,15 @@
 use super::*;
 use std::cmp::Ordering;
 
+pub(super) enum TableRead {
+    Value(Value),
+    Call(Value, Value),
+}
+pub(super) enum TableWrite {
+    Slot(TableId),
+    Call(Value, Value),
+}
+
 impl Vm {
     #[inline]
     pub(super) fn number_op(op: Op, x: f64, y: f64) -> f64 {
@@ -72,21 +81,34 @@ impl Vm {
     }
     pub(super) fn get_table(
         &mut self,
-        mut target: Value,
+        target: Value,
         key: Value,
         result: usize,
     ) -> Result<(), Error> {
+        match self.resolve_table_read(target, key)? {
+            TableRead::Value(value) => {
+                self.registers[result] = value;
+                Ok(())
+            }
+            TableRead::Call(handler, target) => {
+                self.meta_call(handler, &[target, key], result, CONT_RAW)
+            }
+        }
+    }
+    pub(super) fn resolve_table_read(
+        &mut self,
+        mut target: Value,
+        key: Value,
+    ) -> Result<TableRead, Error> {
         for step in 0..100 {
             let handler = if let Value::Table(id) = target {
                 let value = self.tables[slot_index(id.0)].get(key);
                 if value != Value::Nil {
-                    self.registers[result] = value;
-                    return Ok(());
+                    return Ok(TableRead::Value(value));
                 }
                 let handler = self.metafield(target, Meta::Index);
                 if handler == Value::Nil {
-                    self.registers[result] = Value::Nil;
-                    return Ok(());
+                    return Ok(TableRead::Value(Value::Nil));
                 }
                 handler
             } else {
@@ -105,7 +127,7 @@ impl Vm {
                 handler
             };
             if matches!(handler, Value::Function(_) | Value::Native(_)) {
-                return self.meta_call(handler, &[target, key], result, CONT_RAW);
+                return Ok(TableRead::Call(handler, target));
             }
             target = handler;
         }
@@ -114,20 +136,32 @@ impl Vm {
     }
     pub(super) fn set_table(
         &mut self,
-        mut target: Value,
+        target: Value,
         key: Value,
         value: Value,
     ) -> Result<(), Error> {
+        match self.resolve_table_write(target, key)? {
+            TableWrite::Slot(table) => self.raw_set(table, key, value),
+            TableWrite::Call(handler, target) => {
+                self.meta_call(handler, &[target, key, value], 0, CONT_IGNORE)
+            }
+        }
+    }
+    pub(super) fn resolve_table_write(
+        &mut self,
+        mut target: Value,
+        key: Value,
+    ) -> Result<TableWrite, Error> {
         for step in 0..100 {
             let handler = if let Value::Table(id) = target {
                 // Lua checks invalid keys before consulting __newindex on tables.
                 if key == Value::Nil || matches!(key,Value::Number(n) if n.is_nan()) {
-                    return self.raw_set(id, key, value);
+                    return Ok(TableWrite::Slot(id));
                 }
                 let old = self.tables[slot_index(id.0)].get(key);
                 let handler = self.metafield(target, Meta::NewIndex);
                 if old != Value::Nil || handler == Value::Nil {
-                    return self.raw_set(id, key, value);
+                    return Ok(TableWrite::Slot(id));
                 }
                 handler
             } else {
@@ -146,7 +180,7 @@ impl Vm {
                 handler
             };
             if matches!(handler, Value::Function(_) | Value::Native(_)) {
-                return self.meta_call(handler, &[target, key, value], 0, CONT_IGNORE);
+                return Ok(TableWrite::Call(handler, target));
             }
             target = handler;
         }

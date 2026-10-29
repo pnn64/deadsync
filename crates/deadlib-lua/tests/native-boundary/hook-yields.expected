@@ -1,0 +1,361 @@
+first	4	14	lua	7	true	17	29	42	nil	nil	nil
+window	4	14	lua	6	-	-
+second	4	14	lua	4	true	101	102	103
+state	4	14	lua	dead	-
+first	4	14	kept	7	true	17	29	42	nil	nil	nil
+window	4	14	kept	6	-	-
+second	4	14	kept	4	true	17	29	42
+state	4	14	kept	suspended	-
+first	4	14	collected	7	true	17	29	42	nil	nil	nil
+window	4	14	collected	6	-	-
+second	4	14	collected	4	true	101	102	103
+state	4	14	collected	suspended	-
+first	4	15	lua	7	true	17	71	42	nil	nil	nil
+window	4	15	lua	6	-	-
+second	4	15	lua	4	true	101	102	103
+state	4	15	lua	dead	-
+first	4	15	kept	7	true	17	71	42	nil	nil	nil
+window	4	15	kept	6	-	-
+second	4	15	kept	4	true	17	71	42
+state	4	15	kept	suspended	-
+first	4	15	collected	7	true	17	71	42	nil	nil	nil
+window	4	15	collected	6	-	-
+second	4	15	collected	4	true	101	102	103
+state	4	15	collected	suspended	-
+first	4	16	lua	6	true	71	42	nil	nil	nil
+window	4	16	lua	6	0	1
+second	4	16	lua	4	true	17	101	102
+state	4	16	lua	dead	-
+first	4	16	kept	6	true	71	42	nil	nil	nil
+window	4	16	kept	6	0	1
+second	4	16	kept	4	true	17	71	42
+state	4	16	kept	suspended	-
+first	4	16	collected	6	true	71	42	nil	nil	nil
+window	4	16	collected	6	0	1
+second	4	16	collected	4	true	17	101	102
+state	4	16	collected	suspended	-
+first	4	17	lua	7	true	71	29	42	nil	nil	nil
+window	4	17	lua	6	0	1
+second	4	17	lua	4	true	101	102	103
+state	4	17	lua	dead	-
+first	4	17	kept	7	true	71	29	42	nil	nil	nil
+window	4	17	kept	6	0	1
+second	4	17	kept	4	true	71	29	42
+state	4	17	kept	suspended	-
+first	4	17	collected	7	true	71	29	42	nil	nil	nil
+window	4	17	collected	6	0	1
+second	4	17	collected	4	true	101	102	103
+state	4	17	collected	suspended	-
+first	4	18	lua	1	true
+window	4	18	lua	6	0	1
+second	4	18	lua	4	true	17	29	42
+state	4	18	lua	dead	-
+first	4	18	kept	1	true
+window	4	18	kept	6	0	1
+second	4	18	kept	4	true	17	29	42
+state	4	18	kept	suspended	-
+first	4	18	collected	1	true
+window	4	18	collected	6	0	1
+second	4	18	collected	4	true	17	29	42
+state	4	18	collected	suspended	-
+first	4	19	lua	6	true	nil	42	nil	nil	nil
+window	4	19	lua	6	0	1
+second	4	19	lua	4	true	17	101	102
+state	4	19	lua	dead	-
+first	4	19	kept	6	true	nil	42	nil	nil	nil
+window	4	19	kept	6	0	1
+second	4	19	kept	4	true	17	nil	42
+state	4	19	kept	suspended	-
+first	4	19	collected	6	true	nil	42	nil	nil	nil
+window	4	19	collected	6	0	1
+second	4	19	collected	4	true	17	101	102
+state	4	19	collected	suspended	-
+first	4	20	lua	7	true	nil	nil	nil	nil	nil	nil
+window	4	20	lua	6	0	1
+second	4	20	lua	4	true	101	102	103
+state	4	20	lua	dead	-
+first	4	20	kept	7	true	nil	nil	nil	nil	nil	nil
+window	4	20	kept	6	0	1
+second	4	20	kept	4	true	nil	nil	nil
+state	4	20	kept	suspended	-
+first	4	20	collected	7	true	nil	nil	nil	nil	nil	nil
+window	4	20	collected	6	0	1
+second	4	20	collected	4	true	101	102	103
+state	4	20	collected	suspended	-
+first	4	21	lua	5	true	71	nil	nil	nil
+window	4	21	lua	6	0	1
+second	4	21	lua	4	true	17	29	101
+state	4	21	lua	dead	-
+first	4	21	kept	5	true	71	nil	nil	nil
+window	4	21	kept	6	0	1
+second	4	21	kept	4	true	17	29	71
+state	4	21	kept	suspended	-
+first	4	21	collected	5	true	71	nil	nil	nil
+window	4	21	collected	6	0	1
+second	4	21	collected	4	true	17	29	101
+state	4	21	collected	suspended	-
+first	4	22	lua	7	true	71	71	42	nil	nil	nil
+window	4	22	lua	6	0	1
+second	4	22	lua	4	true	101	102	103
+state	4	22	lua	dead	71
+first	4	22	kept	7	true	71	71	42	nil	nil	nil
+window	4	22	kept	6	0	1
+second	4	22	kept	4	true	71	71	42
+state	4	22	kept	suspended	71
+first	4	22	collected	7	true	71	71	42	nil	nil	nil
+window	4	22	collected	6	0	1
+second	4	22	collected	4	true	101	102	103
+state	4	22	collected	suspended	71
+first	4	23	lua	7	true	71	71	42	nil	nil	nil
+window	4	23	lua	6	0	1
+second	4	23	lua	4	true	101	102	103
+state	4	23	lua	dead	71
+first	4	23	kept	7	true	71	71	42	nil	nil	nil
+window	4	23	kept	6	0	1
+second	4	23	kept	4	true	71	71	42
+state	4	23	kept	suspended	71
+first	4	23	collected	7	true	71	71	42	nil	nil	nil
+window	4	23	collected	6	0	1
+second	4	23	collected	4	true	101	102	103
+state	4	23	collected	suspended	71
+first	8	14	lua	7	true	17	29	42	nil	nil	nil
+window	8	14	lua	6	-	-
+second	8	14	lua	4	true	101	102	103
+state	8	14	lua	dead	-
+first	8	14	kept	7	true	17	29	42	nil	nil	nil
+window	8	14	kept	6	-	-
+second	8	14	kept	4	true	17	29	42
+state	8	14	kept	suspended	-
+first	8	14	collected	7	true	17	29	42	nil	nil	nil
+window	8	14	collected	6	-	-
+second	8	14	collected	4	true	101	102	103
+state	8	14	collected	suspended	-
+first	8	15	lua	7	true	17	71	42	nil	nil	nil
+window	8	15	lua	6	-	-
+second	8	15	lua	4	true	101	102	103
+state	8	15	lua	dead	-
+first	8	15	kept	7	true	17	71	42	nil	nil	nil
+window	8	15	kept	6	-	-
+second	8	15	kept	4	true	17	71	42
+state	8	15	kept	suspended	-
+first	8	15	collected	7	true	17	71	42	nil	nil	nil
+window	8	15	collected	6	-	-
+second	8	15	collected	4	true	101	102	103
+state	8	15	collected	suspended	-
+first	8	16	lua	6	true	71	42	nil	nil	nil
+window	8	16	lua	6	0	1
+second	8	16	lua	4	true	17	101	102
+state	8	16	lua	dead	-
+first	8	16	kept	6	true	71	42	nil	nil	nil
+window	8	16	kept	6	0	1
+second	8	16	kept	4	true	17	71	42
+state	8	16	kept	suspended	-
+first	8	16	collected	6	true	71	42	nil	nil	nil
+window	8	16	collected	6	0	1
+second	8	16	collected	4	true	17	101	102
+state	8	16	collected	suspended	-
+first	8	17	lua	7	true	71	29	42	nil	nil	nil
+window	8	17	lua	6	0	1
+second	8	17	lua	4	true	101	102	103
+state	8	17	lua	dead	-
+first	8	17	kept	7	true	71	29	42	nil	nil	nil
+window	8	17	kept	6	0	1
+second	8	17	kept	4	true	71	29	42
+state	8	17	kept	suspended	-
+first	8	17	collected	7	true	71	29	42	nil	nil	nil
+window	8	17	collected	6	0	1
+second	8	17	collected	4	true	101	102	103
+state	8	17	collected	suspended	-
+first	8	18	lua	1	true
+window	8	18	lua	6	0	1
+second	8	18	lua	4	true	17	29	42
+state	8	18	lua	dead	-
+first	8	18	kept	1	true
+window	8	18	kept	6	0	1
+second	8	18	kept	4	true	17	29	42
+state	8	18	kept	suspended	-
+first	8	18	collected	1	true
+window	8	18	collected	6	0	1
+second	8	18	collected	4	true	17	29	42
+state	8	18	collected	suspended	-
+first	8	19	lua	6	true	nil	42	nil	nil	nil
+window	8	19	lua	6	0	1
+second	8	19	lua	4	true	17	101	102
+state	8	19	lua	dead	-
+first	8	19	kept	6	true	nil	42	nil	nil	nil
+window	8	19	kept	6	0	1
+second	8	19	kept	4	true	17	nil	42
+state	8	19	kept	suspended	-
+first	8	19	collected	6	true	nil	42	nil	nil	nil
+window	8	19	collected	6	0	1
+second	8	19	collected	4	true	17	101	102
+state	8	19	collected	suspended	-
+first	8	20	lua	7	true	nil	nil	nil	nil	nil	nil
+window	8	20	lua	6	0	1
+second	8	20	lua	4	true	101	102	103
+state	8	20	lua	dead	-
+first	8	20	kept	7	true	nil	nil	nil	nil	nil	nil
+window	8	20	kept	6	0	1
+second	8	20	kept	4	true	nil	nil	nil
+state	8	20	kept	suspended	-
+first	8	20	collected	7	true	nil	nil	nil	nil	nil	nil
+window	8	20	collected	6	0	1
+second	8	20	collected	4	true	101	102	103
+state	8	20	collected	suspended	-
+first	8	21	lua	5	true	71	nil	nil	nil
+window	8	21	lua	6	0	1
+second	8	21	lua	4	true	17	29	101
+state	8	21	lua	dead	-
+first	8	21	kept	5	true	71	nil	nil	nil
+window	8	21	kept	6	0	1
+second	8	21	kept	4	true	17	29	71
+state	8	21	kept	suspended	-
+first	8	21	collected	5	true	71	nil	nil	nil
+window	8	21	collected	6	0	1
+second	8	21	collected	4	true	17	29	101
+state	8	21	collected	suspended	-
+first	8	22	lua	7	true	71	71	42	nil	nil	nil
+window	8	22	lua	6	0	1
+second	8	22	lua	4	true	101	102	103
+state	8	22	lua	dead	71
+first	8	22	kept	7	true	71	71	42	nil	nil	nil
+window	8	22	kept	6	0	1
+second	8	22	kept	4	true	71	71	42
+state	8	22	kept	suspended	71
+first	8	22	collected	7	true	71	71	42	nil	nil	nil
+window	8	22	collected	6	0	1
+second	8	22	collected	4	true	101	102	103
+state	8	22	collected	suspended	71
+first	8	23	lua	7	true	71	71	42	nil	nil	nil
+window	8	23	lua	6	0	1
+second	8	23	lua	4	true	101	102	103
+state	8	23	lua	dead	71
+first	8	23	kept	7	true	71	71	42	nil	nil	nil
+window	8	23	kept	6	0	1
+second	8	23	kept	4	true	71	71	42
+state	8	23	kept	suspended	71
+first	8	23	collected	7	true	71	71	42	nil	nil	nil
+window	8	23	collected	6	0	1
+second	8	23	collected	4	true	101	102	103
+state	8	23	collected	suspended	71
+first	12	14	lua	7	true	17	29	42	nil	nil	nil
+window	12	14	lua	6	-	-
+second	12	14	lua	4	true	101	102	103
+state	12	14	lua	dead	-
+first	12	14	kept	7	true	17	29	42	nil	nil	nil
+window	12	14	kept	6	-	-
+second	12	14	kept	4	true	17	29	42
+state	12	14	kept	suspended	-
+first	12	14	collected	7	true	17	29	42	nil	nil	nil
+window	12	14	collected	6	-	-
+second	12	14	collected	4	true	101	102	103
+state	12	14	collected	suspended	-
+first	12	15	lua	7	true	17	71	42	nil	nil	nil
+window	12	15	lua	6	-	-
+second	12	15	lua	4	true	101	102	103
+state	12	15	lua	dead	-
+first	12	15	kept	7	true	17	71	42	nil	nil	nil
+window	12	15	kept	6	-	-
+second	12	15	kept	4	true	17	71	42
+state	12	15	kept	suspended	-
+first	12	15	collected	7	true	17	71	42	nil	nil	nil
+window	12	15	collected	6	-	-
+second	12	15	collected	4	true	101	102	103
+state	12	15	collected	suspended	-
+first	12	16	lua	6	true	71	42	nil	nil	nil
+window	12	16	lua	6	0	1
+second	12	16	lua	4	true	17	101	102
+state	12	16	lua	dead	-
+first	12	16	kept	6	true	71	42	nil	nil	nil
+window	12	16	kept	6	0	1
+second	12	16	kept	4	true	17	71	42
+state	12	16	kept	suspended	-
+first	12	16	collected	6	true	71	42	nil	nil	nil
+window	12	16	collected	6	0	1
+second	12	16	collected	4	true	17	101	102
+state	12	16	collected	suspended	-
+first	12	17	lua	7	true	71	29	42	nil	nil	nil
+window	12	17	lua	6	0	1
+second	12	17	lua	4	true	101	102	103
+state	12	17	lua	dead	-
+first	12	17	kept	7	true	71	29	42	nil	nil	nil
+window	12	17	kept	6	0	1
+second	12	17	kept	4	true	71	29	42
+state	12	17	kept	suspended	-
+first	12	17	collected	7	true	71	29	42	nil	nil	nil
+window	12	17	collected	6	0	1
+second	12	17	collected	4	true	101	102	103
+state	12	17	collected	suspended	-
+first	12	18	lua	1	true
+window	12	18	lua	6	0	1
+second	12	18	lua	4	true	17	29	42
+state	12	18	lua	dead	-
+first	12	18	kept	1	true
+window	12	18	kept	6	0	1
+second	12	18	kept	4	true	17	29	42
+state	12	18	kept	suspended	-
+first	12	18	collected	1	true
+window	12	18	collected	6	0	1
+second	12	18	collected	4	true	17	29	42
+state	12	18	collected	suspended	-
+first	12	19	lua	6	true	nil	42	nil	nil	nil
+window	12	19	lua	6	0	1
+second	12	19	lua	4	true	17	101	102
+state	12	19	lua	dead	-
+first	12	19	kept	6	true	nil	42	nil	nil	nil
+window	12	19	kept	6	0	1
+second	12	19	kept	4	true	17	nil	42
+state	12	19	kept	suspended	-
+first	12	19	collected	6	true	nil	42	nil	nil	nil
+window	12	19	collected	6	0	1
+second	12	19	collected	4	true	17	101	102
+state	12	19	collected	suspended	-
+first	12	20	lua	7	true	nil	nil	nil	nil	nil	nil
+window	12	20	lua	6	0	1
+second	12	20	lua	4	true	101	102	103
+state	12	20	lua	dead	-
+first	12	20	kept	7	true	nil	nil	nil	nil	nil	nil
+window	12	20	kept	6	0	1
+second	12	20	kept	4	true	nil	nil	nil
+state	12	20	kept	suspended	-
+first	12	20	collected	7	true	nil	nil	nil	nil	nil	nil
+window	12	20	collected	6	0	1
+second	12	20	collected	4	true	101	102	103
+state	12	20	collected	suspended	-
+first	12	21	lua	5	true	71	nil	nil	nil
+window	12	21	lua	6	0	1
+second	12	21	lua	4	true	17	29	101
+state	12	21	lua	dead	-
+first	12	21	kept	5	true	71	nil	nil	nil
+window	12	21	kept	6	0	1
+second	12	21	kept	4	true	17	29	71
+state	12	21	kept	suspended	-
+first	12	21	collected	5	true	71	nil	nil	nil
+window	12	21	collected	6	0	1
+second	12	21	collected	4	true	17	29	101
+state	12	21	collected	suspended	-
+first	12	22	lua	7	true	71	71	42	nil	nil	nil
+window	12	22	lua	6	0	1
+second	12	22	lua	4	true	101	102	103
+state	12	22	lua	dead	71
+first	12	22	kept	7	true	71	71	42	nil	nil	nil
+window	12	22	kept	6	0	1
+second	12	22	kept	4	true	71	71	42
+state	12	22	kept	suspended	71
+first	12	22	collected	7	true	71	71	42	nil	nil	nil
+window	12	22	collected	6	0	1
+second	12	22	collected	4	true	101	102	103
+state	12	22	collected	suspended	71
+first	12	23	lua	7	true	71	71	42	nil	nil	nil
+window	12	23	lua	6	0	1
+second	12	23	lua	4	true	101	102	103
+state	12	23	lua	dead	71
+first	12	23	kept	7	true	71	71	42	nil	nil	nil
+window	12	23	kept	6	0	1
+second	12	23	kept	4	true	71	71	42
+state	12	23	kept	suspended	71
+first	12	23	collected	7	true	71	71	42	nil	nil	nil
+window	12	23	collected	6	0	1
+second	12	23	collected	4	true	101	102	103
+state	12	23	collected	suspended	71
+hook-yields-complete

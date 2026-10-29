@@ -1531,6 +1531,17 @@ pop-then-yield continuation mismatch remains recorded, including the checked
 reference's VM-top assertion. Lifecycle/allocator APIs, collector accounting,
 broader strict continuations and the other full parity gates stay open.
 
+The [hook-yield checks](testing/2026-10-29-rust-lua-hook-yields.md) distinguish
+the base selected by `lua_yield` from the top restored after a C hook returns.
+Popped physical slots can become yielded values, and resume arguments overwrite
+those slots after consumption. Further C API operations observe the new base
+and status immediately; primitive table access no longer overwrites discarded
+slots with interpreter temporaries. The 360-case corpus matches release and
+checked references on Windows debug/release and Linux i686 SSE2 release. The
+earlier eight pop-then-yield cases match release Lua while retaining their checked
+VM-top aborts. A current I/O closer hook-yield mismatch and the remaining
+lifecycle, allocator, collector and broader parity gates stay open.
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the

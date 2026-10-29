@@ -184,6 +184,25 @@ impl NativeStack<'_, '_> {
     pub fn yield_results(mut self, count: usize) -> Result<(), Error> {
         self.request_yield(count)
     }
+    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+    pub(crate) fn prepare_c_yield(&mut self, count: usize) -> Result<(), Error> {
+        // A C hook can keep using the API after lua_yield returns. Its visible
+        // base and status change immediately, before hook return restores top.
+        if self.call.hook.is_some() {
+            self.request_yield(count)?;
+        }
+        Ok(())
+    }
+    #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
+    pub(crate) fn finish_c_yield(mut self, count: usize) -> Result<(), Error> {
+        // Do not choose the base again after the hook's subsequent API writes.
+        if self.call.hook.is_some() && self.call.vm.hooks.yielding {
+            self.finished = true;
+            Ok(())
+        } else {
+            self.request_yield(count)
+        }
+    }
     pub(super) fn request_yield(&mut self, count: usize) -> Result<(), Error> {
         if let Err(error) = self.check_yield(count) {
             let value = self.intern(error.message_bytes());
@@ -191,6 +210,13 @@ impl NativeStack<'_, '_> {
         }
         if self.call.hook.is_some() {
             self.call.vm.hooks.yielding = true;
+            let thread = self.thread_id();
+            self.call.vm.threads[slot_index(thread.0)].resume_status =
+                threads::NativeThreadStatus::Yielded;
+            let base = self.end();
+            self.call.vm.hooks.yield_base = base;
+            self.base = base;
+            self.set_window_end(base);
             self.finished = true;
             return Ok(());
         }

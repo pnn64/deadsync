@@ -1,0 +1,23 @@
+{
+  "reports": {
+    "current": {
+      "path": "docs/testing/2026-10-29-rust-lua-hook-yields-i686-current.json",
+      "sha256": "93e476cd3d70fc5ec9d186f387374b3df50fab0874d505b1ccef5f0390bfaeaf",
+      "observations": 360
+    },
+    "strict-current": {
+      "path": "docs/testing/2026-10-29-rust-lua-hook-yields-i686-strict-current.json",
+      "sha256": "839aa694d6d678a614eba8b9915753e62acd8580d3a58281b3782d853915abc9",
+      "observations": 8
+    }
+  },
+  "suite_report_sha256": "0fb5a73013e14ff68dd679476800c9b6f4223d44ec99a16f7abae661a652f964",
+  "artifact_hashes_verified": true,
+  "source_hashes_verified": true,
+  "pointer_bits": 32,
+  "elf32_binaries": 7,
+  "checked_reference_enabled": true,
+  "observations": 360,
+  "release_only_observations": 8,
+  "audit_script_sha256": "0a140f50d8d336064aeb5ba379faf366cb4b0f06fda72c3a4453801045f1128c"
+}

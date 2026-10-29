@@ -32,6 +32,9 @@ impl NativeStack<'_, '_> {
         if raw {
             return Ok((self.call.vm.table(target)?.get(key), None));
         }
+        if let meta::TableRead::Value(value) = self.call.vm.resolve_table_read(target, key)? {
+            return Ok((value, None));
+        }
         let TagResult {
             range,
             called,
@@ -55,6 +58,10 @@ impl NativeStack<'_, '_> {
             let Value::Table(table) = target else {
                 return Err(self.error(b"raw native access requires a table"));
             };
+            self.call.vm.raw_set(table, key, value)?;
+            return Ok(None);
+        }
+        if let meta::TableWrite::Slot(table) = self.call.vm.resolve_table_write(target, key)? {
             self.call.vm.raw_set(table, key, value)?;
             return Ok(None);
         }

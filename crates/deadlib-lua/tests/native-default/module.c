@@ -78,6 +78,8 @@ EXPORT int luaopen_native(lua_State *L) {
   lua_pushcfunction(L,file_hook);lua_setfield(L,-2,"file_hook");
   lua_pushcfunction(L,hook_stack_install);lua_setfield(L,-2,"hook_stack");
   lua_pushcfunction(L,hook_stack_echo);lua_setfield(L,-2,"hook_stack_echo");
+  lua_pushcfunction(L,hook_stack_resume);lua_setfield(L,-2,"hook_stack_resume");
+  lua_pushcfunction(L,hook_stack_clear);lua_setfield(L,-2,"hook_stack_clear");
   lua_pushvalue(L,1);lua_setfield(L,-2,"name");return 1;
 }
 EXPORT int luaopen_native_root_leaf(lua_State *L) {return luaopen_native(L);}

@@ -316,6 +316,61 @@ assert(coroutine.status(co)=='dead')
 }
 
 #[test]
+fn lowered_hook_yield_bases_expose_saved_slots_and_receive_resume_arguments() {
+    fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let saved = call.function_data::<Arc<AtomicUsize>>().unwrap().clone();
+        let mut stack = call.native_stack()?;
+        saved.store(stack.top(), Ordering::SeqCst);
+        stack.set_hook(stack.thread_id(), NativeHook::None, 0, 0)?;
+        stack.set_top(0)?;
+        stack.yield_results(0)
+    }
+    let saved = Arc::new(AtomicUsize::new(0));
+    let mut vm = Vm::new();
+    let hook = vm
+        .new_host_function_with_data(callback, &[], saved.clone())
+        .unwrap();
+    let set = vm.new_host_function(install, &[hook]).unwrap();
+    vm.set_global(b"install", set).unwrap();
+    let first = vm
+        .execute(
+            &compile(
+                br#"
+collectgarbage('stop')
+co=coroutine.create(function(x,y,z)return x,y,z end)
+install(co,4)
+local function pack(...)return {n=select('#',...),...}end
+local r=pack(coroutine.resume(co,17,29,42))
+return r.n,r[1],r[2],r[3],r[4]
+"#,
+            )
+            .unwrap(),
+        )
+        .unwrap()
+        .to_vec();
+    assert_eq!(
+        first,
+        [
+            Value::Number((saved.load(Ordering::SeqCst) + 1) as f64),
+            Value::Boolean(true),
+            Value::Number(17.),
+            Value::Number(29.),
+            Value::Number(42.),
+        ]
+    );
+    assert_eq!(
+        vm.execute(&compile(b"return coroutine.resume(co,99)").unwrap())
+            .unwrap(),
+        &[
+            Value::Boolean(true),
+            Value::Number(99.),
+            Value::Number(29.),
+            Value::Number(42.)
+        ]
+    );
+}
+
+#[test]
 fn pushed_hook_temporaries_alias_lua_and_native_debug_locals() {
     fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         let event = call.hook_event().unwrap();

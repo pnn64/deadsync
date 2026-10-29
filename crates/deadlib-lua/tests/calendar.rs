@@ -1,5 +1,10 @@
 use deadlib_lua::{Value, Vm, compile};
 use lua_reference::{Lua, MultiValue, Value as Ref};
+use std::sync::Mutex;
+
+// PUC os.date reads libc's shared gmtime/localtime buffer while building its
+// result. Independent oracle states must not execute those reads concurrently.
+static CALENDAR: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, PartialEq)]
 enum Scalar {
@@ -9,6 +14,7 @@ enum Scalar {
     Bytes(Vec<u8>),
 }
 fn compare(source: &[u8]) {
+    let _calendar = CALENDAR.lock().unwrap();
     let mut vm = Vm::new();
     let program = deadlib_lua::compile_named(source, b"=calendar-test").unwrap();
     let actual: Vec<_> = vm

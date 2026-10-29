@@ -802,6 +802,7 @@ impl Context<'_, '_, '_> {
                     let value = self.stack.intern(error.message_bytes());
                     return Err(self.stack.raise(value));
                 }
+                self.stack.prepare_c_yield(count)?;
                 self.yielded = Some(count);
             }
             55 => {
@@ -1412,7 +1413,7 @@ fn native(call: &mut HostCall<'_>) -> Result<(), Error> {
     let yielded = context.yielded;
     drop(context);
     if let Some(count) = yielded {
-        return stack.yield_results(count);
+        return stack.finish_c_yield(count);
     }
     let count =
         usize::try_from(count).map_err(|_| stack.error(b"invalid boundary-probe result count"))?;
@@ -1468,7 +1469,7 @@ fn native_hook(call: &mut HostCall<'_>) -> Result<(), Error> {
     let yielded = context.yielded;
     drop(context);
     if let Some(count) = yielded {
-        return stack.yield_results(count);
+        return stack.finish_c_yield(count);
     }
     Ok(())
 }

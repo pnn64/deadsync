@@ -173,7 +173,7 @@ impl Vm {
                 end = top;
             }
             if self.hooks.yielding {
-                base = self.hooks.yield_top;
+                base = self.hooks.yield_base;
             }
         }
         let event = NativeHookEvent {
@@ -246,7 +246,7 @@ impl Vm {
         self.active_native = active;
         if result.is_ok() {
             if self.hooks.yielding {
-                self.hooks.yield_top = end;
+                self.hooks.yield_end = end;
             }
             self.frames.truncate(depth);
             let live = self.registers.len().min(end);

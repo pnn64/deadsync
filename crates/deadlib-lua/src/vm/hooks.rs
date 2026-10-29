@@ -48,7 +48,8 @@ pub(super) struct Hooks {
     pub popped_start: usize,
     pub popped: Vec<Value>,
     pub yielding: bool,
-    pub yield_top: usize,
+    pub yield_base: usize,
+    pub yield_end: usize,
     pub yield_owner: Option<usize>,
     pub resumed_top: Option<(usize, usize)>,
     pub mask: u8,
@@ -499,16 +500,26 @@ impl Vm {
                     )?;
                 } else {
                     self.frames.pop();
-                    self.truncate_registers(frame.base);
+                    let yielding = std::mem::take(&mut self.hooks.yielding);
+                    if yielding {
+                        self.resize_registers(
+                            frame
+                                .base
+                                .max(self.hooks.yield_end)
+                                .max(self.hooks.yield_base),
+                        );
+                    } else {
+                        self.truncate_registers(frame.base);
+                    }
                     self.top = frame.result;
                     self.frames[owner].pc = frame.vararg_count;
-                    if std::mem::take(&mut self.hooks.yielding) {
+                    if yielding {
                         self.hooks.skip = None;
                         self.hooks.last = None;
                         self.hooks.yield_owner = Some(owner);
                         self.transition = Some(threads::Transition::Yield {
-                            source: self.hooks.yield_top,
-                            count: 0,
+                            source: self.hooks.yield_base,
+                            count: self.hooks.yield_end.saturating_sub(self.hooks.yield_base),
                         });
                     } else {
                         self.hooks.skip = Some((owner as u16, frame.vararg_count));
