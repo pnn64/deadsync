@@ -517,9 +517,9 @@ impl Vm {
                         self.hooks.skip = None;
                         self.hooks.last = None;
                         self.hooks.yield_owner = Some(owner);
-                        self.transition = Some(threads::Transition::Yield {
-                            source: self.hooks.yield_base,
-                            count: self.hooks.yield_end.saturating_sub(self.hooks.yield_base),
+                        self.transition = Some(threads::Transition::HookYield {
+                            base: self.hooks.yield_base,
+                            top: self.hooks.yield_end,
                         });
                     } else {
                         self.hooks.skip = Some((owner as u16, frame.vararg_count));

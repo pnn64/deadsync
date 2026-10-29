@@ -462,7 +462,10 @@ impl Vm {
         let scheduled = self.scheduled_native(id);
         match id {
             _ if frame.pc == threads::HOST_YIELDED && self.host_callback(id).is_some() => {
-                if matches!(self.transition, Some(threads::Transition::Yield { .. })) {
+                if matches!(
+                    self.transition,
+                    Some(threads::Transition::Yield { .. } | threads::Transition::HookYield { .. })
+                ) {
                     return Ok(None);
                 }
                 let values = self.take_resume_values(frame)?;

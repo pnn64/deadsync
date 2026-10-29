@@ -112,6 +112,7 @@ pub(super) struct NativeClosure {
 pub(super) enum Transition {
     Resume(ThreadId),
     Yield { source: usize, count: usize },
+    HookYield { base: usize, top: usize },
 }
 
 #[derive(Debug)]
@@ -395,27 +396,31 @@ impl Vm {
                 }
             }
             Some(Transition::Yield { source, count }) => {
-                if let Some(scope) = self
-                    .api_calls
-                    .iter_mut()
-                    .rev()
-                    .find(|s| s.thread == self.thread)
-                {
-                    let range = source..source + count;
-                    scope.yielded = Some(range.clone());
-                    let state = &mut self.threads[slot_index(self.thread.0)];
-                    state.resume_status = NativeThreadStatus::Yielded;
-                    state.status = Status::Suspended;
-                    state.api_stack = range;
-                    self.top = source + count;
-                    return Ok(Some(0));
-                }
-                return Ok(self
-                    .finish_thread(source, count, false, true, line)
-                    .then_some(0));
+                return Ok(self.yield_thread(source..source + count, line));
+            }
+            Some(Transition::HookYield { base, top }) => {
+                return Ok(self.yield_thread(base..top, line));
             }
         }
         Ok(None)
+    }
+    fn yield_thread(&mut self, range: std::ops::Range<usize>, line: &mut u32) -> Option<usize> {
+        if let Some(scope) = self
+            .api_calls
+            .iter_mut()
+            .rev()
+            .find(|s| s.thread == self.thread)
+        {
+            scope.yielded = Some(range.clone());
+            let state = &mut self.threads[slot_index(self.thread.0)];
+            state.resume_status = NativeThreadStatus::Yielded;
+            state.status = Status::Suspended;
+            self.top = range.end;
+            state.api_stack = range;
+            return Some(0);
+        }
+        self.finish_thread_range(range, false, true, line)
+            .then_some(0)
     }
     pub(super) fn finish_thread(
         &mut self,
@@ -425,6 +430,18 @@ impl Vm {
         suspended: bool,
         line: &mut u32,
     ) -> bool {
+        self.finish_thread_range(source..source + count, failed, suspended, line)
+    }
+    fn finish_thread_range(
+        &mut self,
+        values: std::ops::Range<usize>,
+        failed: bool,
+        suspended: bool,
+        line: &mut u32,
+    ) -> bool {
+        let source = values.start;
+        let inverted = values.end < values.start;
+        let count = if inverted { 1 } else { values.len() };
         let id = self.thread;
         let host = self.frames.last().is_some_and(
             |f| matches!(f.function, FrameKind::Native(id) if self.host_callback(id).is_some()),
@@ -459,14 +476,19 @@ impl Vm {
             } else {
                 0
             };
-            state.api_stack = base..source + count;
-            self.top = source + count;
+            state.api_stack = base..values.end;
+            self.top = values.end;
             self.threads[slot_index(parent.0)].status = Status::Running;
             self.switch_thread(parent, line);
             return true;
         }
         let caller_index = self.threads[slot_index(parent.0)].frames.len() - 1;
         let body = self.body_code(parent, caller_index);
+        let parent_function = if inverted {
+            self.calling_function(parent).unwrap_or(Value::Nil)
+        } else {
+            Value::Nil
+        };
         let caller = &mut self.threads[slot_index(parent.0)];
         let frame = caller
             .frames
@@ -485,16 +507,28 @@ impl Vm {
             Value::Nil,
         );
         if prefix != 0 {
-            caller.registers[base + arguments] = Value::Boolean(!failed);
+            caller.registers[base + arguments] = Value::Boolean(!failed && !inverted);
         }
-        caller.registers[base + arguments + prefix..base + arguments + prefix + count]
-            .copy_from_slice(&self.registers[source..source + count]);
+        if inverted {
+            // auxresume passes the signed offset to lua_xmove. A negative
+            // count advances the source top and copies no values; coresume
+            // then treats that offset as its failure flag. Its remaining C
+            // slot is the thread argument (or the wrap closure below base).
+            caller.registers[base + arguments + prefix] = if prefix != 0 {
+                Value::Thread(id)
+            } else {
+                parent_function
+            };
+        } else {
+            caller.registers[base + arguments + prefix..base + arguments + prefix + count]
+                .copy_from_slice(&self.registers[values]);
+        }
         caller.top = base + arguments + prefix + count;
         frame.vararg_start = base;
         frame.vararg_count = (arguments + prefix + count) as u32;
         // Low two bits select the continuation; higher bits retain the C
         // argument prefix below its results, including return-hook aliases.
-        frame.pc = ((arguments as u32) << 2) | if failed { 3 } else { 2 };
+        frame.pc = ((arguments as u32) << 2) | if failed || inverted { 3 } else { 2 };
         caller.status = Status::Running;
         self.threads[slot_index(id.0)].status = if suspended {
             Status::Suspended

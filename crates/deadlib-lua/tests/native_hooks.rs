@@ -371,6 +371,63 @@ return r.n,r[1],r[2],r[3],r[4]
 }
 
 #[test]
+fn hook_offsets_survive_raw_resume_and_keep_lua_failure_identities() {
+    fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        stack.set_hook(stack.thread_id(), NativeHook::None, 0, 0)?;
+        stack.set_top(stack.top() + 2)?;
+        stack.yield_results(0)
+    }
+    fn resume(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        let thread = stack.to_thread(1).unwrap();
+        let status = stack.resume_thread(thread, 0)?;
+        if status == deadlib_lua::NativeThreadStatus::Yielded {
+            stack.move_thread_values(thread, stack.thread_id(), 0)?;
+        }
+        let top = stack.thread_stack(thread)?.top_offset();
+        stack.push_integer(status as isize)?;
+        stack.push_integer(top)?;
+        stack.finish(2)
+    }
+    fn wrapped_thread(call: &mut HostCall<'_>) -> Result<(), Error> {
+        let mut stack = call.native_stack()?;
+        stack.get_upvalue(1, 1)?.unwrap();
+        stack.finish(1)
+    }
+    let mut vm = setup(callback);
+    for (name, function) in [
+        (
+            b"raw_resume".as_slice(),
+            resume as deadlib_lua::HostFunction,
+        ),
+        (b"wrapped_thread", wrapped_thread),
+    ] {
+        let function = vm.new_host_function(function, &[]).unwrap();
+        vm.set_global(name, function).unwrap();
+    }
+    vm.execute(
+        &compile(
+            br#"
+collectgarbage('stop')
+local function target()return 17,29,42 end
+local co=coroutine.create(target);install(co,4)
+local status,offset=raw_resume(co);assert(status==1 and offset==-2)
+status,offset=raw_resume(co);assert(status==0 and offset==3 and coroutine.status(co)=='suspended')
+co=coroutine.create(target);install(co,4)
+local ok,e=coroutine.resume(co);assert(not ok and e==co and coroutine.status(co)=='suspended')
+local a,b,c;ok,a,b,c=coroutine.resume(co);assert(ok and a==17 and b==29 and c==42)
+local wrapped=coroutine.wrap(target);co=wrapped_thread(wrapped);install(co,4)
+ok,e=pcall(wrapped);assert(not ok and e==wrapped and coroutine.status(co)=='suspended')
+ok,a,b,c=pcall(wrapped);assert(ok and a==17 and b==29 and c==42 and coroutine.status(co)=='dead')
+"#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+}
+
+#[test]
 fn pushed_hook_temporaries_alias_lua_and_native_debug_locals() {
     fn callback(call: &mut HostCall<'_>) -> Result<(), Error> {
         let event = call.hook_event().unwrap();

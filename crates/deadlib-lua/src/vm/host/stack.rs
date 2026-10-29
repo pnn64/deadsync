@@ -566,8 +566,7 @@ impl NativeStack<'_, '_> {
             };
             if let Some(range) = result.yielded {
                 self.base = range.start;
-                self.call.output = range.start;
-                self.call.results = range.len();
+                self.set_window_end(range.end);
             } else {
                 self.call.results = self.call.vm.top - self.base;
                 self.restore_window_call_base();

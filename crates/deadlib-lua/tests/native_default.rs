@@ -517,6 +517,50 @@ fn yielded_hooks_retain_their_selected_bases_and_public_stack_contents() {
 }
 
 #[test]
+fn signed_hook_offsets_preserve_raw_stacks_moves_and_resume_failures() {
+    let _guard = VMS.lock().unwrap();
+    let fixture = fixture();
+    let mut vm = Vm::new();
+    let path = vm.intern(fixture.module.to_string_lossy().as_bytes());
+    vm.set_global(b"hook_stack_library", path).unwrap();
+    for (source, expected) in [
+        (
+            include_bytes!("native-boundary/hook-offsets.lua").as_slice(),
+            include_str!("native-boundary/hook-offsets.expected"),
+        ),
+        (
+            include_bytes!("native-boundary/hook-offsets-wrapped.lua").as_slice(),
+            include_str!("native-boundary/hook-offsets-wrapped.expected"),
+        ),
+        (
+            include_bytes!("native-boundary/hook-offsets-zero.lua").as_slice(),
+            include_str!("native-boundary/hook-offsets-zero.expected"),
+        ),
+    ] {
+        vm.set_output_capture(true);
+        script(&mut vm, source);
+        assert_eq!(
+            std::str::from_utf8(vm.output().unwrap())
+                .unwrap()
+                .lines()
+                .collect::<Vec<_>>(),
+            expected.lines().collect::<Vec<_>>()
+        );
+    }
+    script(&mut vm, br#"
+local m=assert(package.loadlib(hook_stack_library,'luaopen_native'))('I/O hook offset')
+local file=assert(io.tmpfile());local original=debug.getfenv(file)
+debug.setfenv(file,{__close=m.file_closer('yield-zero',false)})
+local fn=function(f)return 17 end;local co=coroutine.create(fn);m.file_hook(io.close,fn,co)
+local function pack(...)return{n=select('#',...),...}end
+local first=pack(coroutine.resume(co,file));debug.setfenv(file,original)
+assert(first.n==2 and first[1]==false and rawequal(first[2],co) and coroutine.status(co)=='suspended')
+local second=pack(coroutine.resume(co));assert(second.n==2 and second[1]and second[2]==17 and coroutine.status(co)=='dead')
+assert(file:close())
+"#);
+}
+
+#[test]
 fn default_cli_loads_an_unmodified_public_header_module() {
     let f = fixture();
     for entry in ["direct", "require"] {

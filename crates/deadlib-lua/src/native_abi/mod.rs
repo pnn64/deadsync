@@ -684,8 +684,7 @@ impl Context<'_, '_, '_> {
             if from == to {
                 return Ok(());
             }
-            let count = usize::try_from(a).map_err(|_| self.stack.error(b"invalid move count"))?;
-            return self.stack.move_thread_values(from, to, count);
+            return self.stack.move_thread_values_signed(from, to, a as isize);
         }
         if op == 49 {
             // SAFETY: luaL_loadfile lends an optional C-string path; copy it

@@ -1,0 +1,30 @@
+{
+  "reports": {
+    "current": {
+      "path": "docs/testing/2026-10-29-rust-lua-hook-offsets-i686-current.json",
+      "sha256": "3e5e9e1c3363c50e24c8a018ee94d8b4820aaf306a96ea0d69a6a3a7575e8d5f",
+      "observations": 108
+    },
+    "wrapped-current": {
+      "path": "docs/testing/2026-10-29-rust-lua-hook-offsets-i686-wrapped-current.json",
+      "sha256": "36a8ec4b9d4bacf425a4efce3d3f3e50bbb53dcd3c0043907f6ae95c30affb0e",
+      "observations": 27
+    },
+    "zero-current": {
+      "path": "docs/testing/2026-10-29-rust-lua-hook-offsets-i686-zero-current.json",
+      "sha256": "921c1504a31109ecc3eb070198b5d45d353f31bc525dc130f05ad64c9adf75c5",
+      "observations": 36
+    }
+  },
+  "io_report_sha256": "5d406164445f35f2b38777041a76f25dca5c961701f8a744b2649a9cd05447a9",
+  "suite_report_sha256": "f3006a88822bfded7a9babc75136a4b89d0843d685c48bb57083431ed30705cd",
+  "artifact_hashes_verified": true,
+  "source_hashes_verified": true,
+  "pointer_bits": 32,
+  "elf32_binaries": 10,
+  "checked_reference_enabled": true,
+  "observations": 108,
+  "release_only_observations": 63,
+  "io_release_equal": true,
+  "audit_script_sha256": "5e442c181878236c836ab465c9891279d7f130b67fcfad6e964cddd1107c66f8"
+}

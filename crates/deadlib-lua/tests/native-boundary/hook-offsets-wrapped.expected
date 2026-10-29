@@ -1,0 +1,28 @@
+first	4	24	2	false	function	true	suspended
+second	4	24	4	true	17	29	42
+state	4	24	dead
+first	4	25	2	false	function	true	suspended
+second	4	25	4	true	17	29	42
+state	4	25	dead
+first	4	26	2	false	function	true	suspended
+second	4	26	4	true	17	29	42
+state	4	26	dead
+first	8	24	2	false	function	true	suspended
+second	8	24	4	true	17	29	42
+state	8	24	dead
+first	8	25	2	false	function	true	suspended
+second	8	25	4	true	17	29	42
+state	8	25	dead
+first	8	26	2	false	function	true	suspended
+second	8	26	4	true	17	29	42
+state	8	26	dead
+first	12	24	2	false	function	true	suspended
+second	12	24	4	true	17	29	42
+state	12	24	dead
+first	12	25	2	false	function	true	suspended
+second	12	25	4	true	17	29	42
+state	12	25	dead
+first	12	26	2	false	function	true	suspended
+second	12	26	4	true	17	29	42
+state	12	26	dead
+wrapped-hook-offsets-complete

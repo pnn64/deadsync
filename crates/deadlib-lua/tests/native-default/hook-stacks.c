@@ -1,6 +1,7 @@
 /* Physical stack slots outlive lua_settop until overwritten or traversed. */
 static void hook_stack_slots(lua_State *L, lua_Debug *ar) {
   int top=lua_gettop(L),mode,selected;
+  lua_State *other;
   lua_getfield(L,LUA_REGISTRYINDEX,"native.hook.stack.target");
   if(lua_isfunction(L,-1)) {
     lua_getinfo(L,"f",ar);selected=lua_rawequal(L,-1,-2);lua_pop(L,2);
@@ -34,6 +35,11 @@ static void hook_stack_slots(lua_State *L, lua_Debug *ar) {
     case 20: lua_settop(L,0);lua_yield(L,0);break;
     case 21: lua_settop(L,2);lua_yield(L,0);break;
     case 22: case 23: lua_settop(L,0);lua_yield(L,0);break;
+    case 24: case 25: case 26: lua_settop(L,top+mode-23);lua_yield(L,0);return;
+    case 27: case 28: case 29:
+      lua_getfield(L,LUA_REGISTRYINDEX,"native.hook.stack.sink");other=lua_tothread(L,-1);lua_pop(L,1);
+      lua_settop(L,0);lua_xmove(L,other,26-mode);top=lua_gettop(L);
+      lua_pushinteger(L,top);lua_setfield(L,LUA_REGISTRYINDEX,"native.hook.stack.active_top");return;
     default: return;
   }
   if(mode<16)return;
@@ -75,6 +81,19 @@ static int hook_stack_clear(lua_State *L) {
   lua_State *co=lua_tothread(L,1);if(!co || co==L)return luaL_error(L,"another thread expected");
   lua_settop(co,0);return 0;
 }
+/* A signed public top can be inspected without moving its yielded window. */
+static int hook_stack_resume_window(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);int args=lua_gettop(L)-1,status;
+  if(!co || co==L)return luaL_error(L,"another thread expected");
+  lua_setlevel(L,co);lua_xmove(L,co,args);status=lua_resume(co,args);
+  lua_pushinteger(L,status);lua_pushinteger(L,lua_gettop(co));return 2;
+}
+static int hook_stack_move_signed(lua_State *L) {
+  lua_State *co=lua_tothread(L,1);int count=(int)luaL_checkinteger(L,2),before=lua_gettop(L);
+  if(!co || co==L)return luaL_error(L,"another thread expected");
+  lua_xmove(co,L,count);lua_pushinteger(L,lua_gettop(co));lua_pushinteger(L,lua_gettop(L)-before-1);return 2;
+}
+static int hook_stack_wrapped_thread(lua_State *L) {return lua_getupvalue(L,1,1)?1:0;}
 #ifdef HOOK_STACKS_MAIN
 #include "lualib.h"
 #include <stdio.h>

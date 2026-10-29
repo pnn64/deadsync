@@ -1542,6 +1542,17 @@ earlier eight pop-then-yield cases match release Lua while retaining their check
 VM-top aborts. A current I/O closer hook-yield mismatch and the remaining
 lifecycle, allocator, collector and broader parity gates stay open.
 
+The [signed hook-offset checks](testing/2026-10-29-rust-lua-hook-offsets.md)
+preserve windows whose selected base lies above their restored top. Raw resume
+retains negative offsets, C moves preserve physical slots, and the coroutine
+library follows the reference's signed-result failure path. The 108-case corpus
+matches release and checked references on Windows debug/release and Linux i686
+SSE2 release. Wrapped and zero-count controls match release Lua while retaining
+their checked aborts separately. The earlier I/O closer case now matches release
+Lua on all three profiles, including `false, thread` and its later completion.
+Lifecycle/allocator APIs, collector accounting, broader continuations and the
+other full parity gates remain unfinished.
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the
