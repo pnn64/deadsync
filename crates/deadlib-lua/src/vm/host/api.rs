@@ -97,7 +97,7 @@ impl Vm {
         if !protected
             && self.thread == owner
             && let Err(error) = &result
-            && error.kind() == ErrorKind::Runtime
+            && error.catchable()
         {
             self.active_native = active;
             return Err(error.clone());

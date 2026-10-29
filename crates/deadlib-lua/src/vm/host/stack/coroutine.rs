@@ -100,7 +100,7 @@ impl NativeStack<'_, '_> {
                         .finish_thread(0, count, false, false, &mut line);
                 }
                 Ok(_) => {}
-                Err(error) if error.kind() == ErrorKind::Runtime => {
+                Err(error) if error.catchable() => {
                     if error.target_thread.is_some_and(|target| target != thread) {
                         break Err(error);
                     }

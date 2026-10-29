@@ -1203,6 +1203,7 @@ impl Vm {
     fn seed_gc_roots(&self, work: &mut Vec<Trace>) {
         work.push(Trace::Value(Value::Thread(self.main)));
         work.push(Trace::Value(Value::Table(self.registry)));
+        work.push(Trace::Value(Value::String(self.memory_error)));
         if let Some(tag) = self.io.file_tag {
             work.push(Trace::Value(Value::String(tag)));
         }

@@ -3,6 +3,7 @@
 #ifdef __linux__
 #include <sys/resource.h>
 #endif
+#include "memory-cases.h"
 static unsigned initializer_mask;
 static void initializer_hook(lua_State *L,lua_Debug *ar) {
   lua_CFunction f;
@@ -74,6 +75,10 @@ int main(int argc,char **argv) {
    * the host's observations visible when a DLL panic terminates the process. */
   setvbuf(stdout,NULL,_IONBF,0);
   if(argc>1) {
+    if(strcmp(argv[1],"--memory")==0){memory_checks();return 0;}
+    if(strcmp(argv[1],"--memory-default-panic")==0)return memory_panic_probe(0,0);
+    if(strcmp(argv[1],"--memory-returning-panic")==0)return memory_panic_probe(1,0);
+    if(strcmp(argv[1],"--memory-child-panic")==0)return memory_panic_probe(1,1);
     if(strcmp(argv[1],"owned_default_panic")==0)return owned_default_panic();
     if(strcmp(argv[1],"owned_returning_panic")==0)return owned_returning_panic();
     CHECK(argc==3 && strcmp(argv[1],"--module")==0);

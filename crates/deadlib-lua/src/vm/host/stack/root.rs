@@ -20,9 +20,9 @@ impl Vm {
     }
 
     #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
-    pub(crate) fn native_root_panic(&mut self) {
+    pub(crate) fn native_root_panic(&mut self, error: &Error) {
         let state = &mut self.threads[slot_index(self.main.0)];
-        state.resume_status = threads::NativeThreadStatus::RuntimeError;
+        state.resume_status = threads::NativeThreadStatus::for_error(error);
         state.status = threads::Status::Dead;
         state.resumer = None;
         state.native_resumer = false;

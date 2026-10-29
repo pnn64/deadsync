@@ -861,6 +861,9 @@ independent files pass in reference, Rust and both cache modes; unchanged
 both full stock entry points. See the
 [suite report](../../docs/testing/2026-10-26-rust-lua-boolean-hooks.md) and
 [work plan](../../docs/lua-engine.md) for remaining requirements and gates.
+The [allocation-error checks](../../docs/testing/2026-10-29-rust-lua-memory-errors.md)
+cover recoverable userdata payload failures, their status codes and handler
+bypass. Custom allocator ownership and failures in other allocations remain open.
 The [portable regression checks](../../docs/testing/2026-10-27-rust-lua-portable-tests.md)
 also retain GNU C crashes on overflowing `unpack` ranges in separate processes.
 The strict standalone audit continues to fail on those inputs. Sanitizer and

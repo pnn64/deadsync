@@ -1,0 +1,15 @@
+{
+  "report_sha256": "08e6097d7df15af4de66f89e81714ad759319ae82c36f518c13717aed05de850",
+  "package_manifest_sha256": "3a2edd3de8dcc6057413672ac3f9d6165c184ae278c730079fdb092e6c27ff59",
+  "source_hashes_verified": true,
+  "artifact_hashes_verified": true,
+  "elf32_binaries": 36,
+  "pointer_bits": 32,
+  "observations": 97,
+  "memory_observations": 46,
+  "forwarded_entries": 133,
+  "stock_suite_passes": 6,
+  "no_external_lua_dependency": true,
+  "checked_reference_enabled": true,
+  "audit_script_sha256": "06ebe917b2b2b76368582ea4dcc5bf64766b74221a9155ac3efcbd4e34c68ef2"
+}

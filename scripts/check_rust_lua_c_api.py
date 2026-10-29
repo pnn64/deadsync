@@ -136,7 +136,7 @@ def main():
         environment = {key: value for key, value in os.environ.items() if key.upper() not in {'LUA_INIT', 'LUA_PATH', 'LUA_CPATH'}}
         process = subprocess.run(list(map(str, command)), cwd=folder, env=environment, capture_output=True, timeout=90)
         return dict(command=list(map(str, command)), returncode=process.returncode, stdout=process.stdout.decode(errors='replace').replace('\r\n', '\n'), stderr=process.stderr.decode(errors='replace').replace('\r\n', '\n'))
-    runs, terminating, cli_runs, binaries = {}, {}, {}, {}
+    runs, terminating, cli_runs, binaries, memory_runs = {}, {}, {}, {}, {}
     for engine in ['reference', 'checked', 'rust']:
         folder = work / engine
         folder.mkdir(exist_ok=True)
@@ -159,7 +159,8 @@ def main():
             artifacts[str(cli_source)] = sha(cli_source)
         cli = compile_c(folder, 'lua', [cli_source], library)
         runs[engine] = run([host, '--module', module], folder)
-        terminating[engine] = {symbol: run([host, symbol], folder) for symbol in ['owned_default_panic', 'owned_returning_panic']}
+        terminating[engine] = {symbol: run([host, symbol], folder) for symbol in ['owned_default_panic', 'owned_returning_panic', '--memory-default-panic', '--memory-returning-panic', '--memory-child-panic']}
+        memory_runs[engine] = run([host, '--memory'], folder)
         program = folder / 'cli.lua'
         program.write_text("assert(_VERSION=='Lua 5.1');assert(arg[1]=='argument');local f=assert(package.loadlib(arg[2],'luaopen_capi_probe'));local m=f();assert(m.sum(17,25)==42);local co=coroutine.create(function()coroutine.yield(17);return 42 end);assert(select(2,coroutine.resume(co))==17);assert(select(2,coroutine.resume(co))==42);print('standalone-cli-ok',debug.getinfo(1,'S').what)\n")
         cli_runs[engine] = run([cli, program, 'argument', module], folder)
@@ -174,6 +175,9 @@ def main():
             assert re.fullmatch(r'CAPI operations=\d+ states=6 groups=5 libraries=1\n', row['stderr']), row['stderr']
         else:
             assert not row['stderr'], row['stderr']
+    memory_expected = (root / 'crates/deadlib-lua/capi/tests/memory.expected').read_text().splitlines()
+    for engine, row in memory_runs.items():
+        assert row['returncode'] == 0 and not row['stderr'] and row['stdout'].splitlines() == memory_expected, (engine, row)
     for symbol in terminating['reference']:
         rows = [terminating[engine][symbol] for engine in runs]
         assert all(row['returncode'] == 1 for row in rows)
@@ -241,17 +245,18 @@ def main():
     bound_sources = dict(report['source_hashes'])
     bound_sources[Path(__file__).resolve().relative_to(root).as_posix()] = sha(Path(__file__))
     golden = root / 'crates/deadlib-lua/capi/tests/capi-host.expected'
+    artifacts[str(root / 'crates/deadlib-lua/capi/tests/memory.expected')] = sha(root / 'crates/deadlib-lua/capi/tests/memory.expected')
     bound_sources[golden.relative_to(root).as_posix()] = sha(golden)
     for helper in ['build_lua_cli_reference.py', 'check_rust_lua_full_suite.py', 'check_rust_lua_suite.py']:
         path = root / 'scripts' / helper
         bound_sources[path.relative_to(root).as_posix()] = sha(path)
     for name, digest in report['source_hashes'].items():
         assert sha(root / name) == digest, name
-    result = dict(package_manifest=str(package / 'manifest.json'), package_manifest_sha256=sha(package / 'manifest.json'), source_hashes=bound_sources, reference_archive_sha256=SHA256, reference_source_hashes={path.name: sha(path) for path in source.iterdir() if path.suffix in {'.c', '.h'}}, builds=builds, artifacts=artifacts, runs=runs, terminating=terminating, cli_runs=cli_runs, binaries=binaries, forwarded_entries=forwarded, exports=exports, observations_equal=True, observations=97, no_rust_bootstrap=True, no_public_forwarding_frames=True, suite_results=suite_results, suite_archive_sha256=SUITE_SHA256 if args.suite else None, internal_test_module=False, full_lua51_parity=False)
+    result = dict(package_manifest=str(package / 'manifest.json'), package_manifest_sha256=sha(package / 'manifest.json'), source_hashes=bound_sources, reference_archive_sha256=SHA256, reference_source_hashes={path.name: sha(path) for path in source.iterdir() if path.suffix in {'.c', '.h'}}, builds=builds, artifacts=artifacts, runs=runs, memory_runs=memory_runs, memory_observations=len(memory_expected), terminating=terminating, cli_runs=cli_runs, binaries=binaries, forwarded_entries=forwarded, exports=exports, observations_equal=True, observations=97, no_rust_bootstrap=True, no_public_forwarding_frames=True, suite_results=suite_results, suite_archive_sha256=SUITE_SHA256 if args.suite else None, internal_test_module=False, full_lua51_parity=False)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2) + '\n')
     assert all(row['status'] == 'pass' for row in suite_results), 'stock C CLI suite failure; see report'
-    print('97 C observations, panic termination, native modules and the unchanged C CLI match.', flush=True)
+    print(f'97 C observations, {len(memory_expected)} allocation observations, panic termination, native modules and the unchanged C CLI match.', flush=True)
 
 
 if __name__ == '__main__':

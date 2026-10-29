@@ -228,10 +228,7 @@ impl NativeStack<'_, '_> {
             // An unprotected call retains its fault stack. Publishing the old
             // window end would let the panic error slot overwrite an open
             // local before resetstack closes that local's upvalue.
-            let end = if outcome
-                .as_ref()
-                .is_err_and(|error| error.kind() == ErrorKind::Runtime)
-            {
+            let end = if outcome.as_ref().is_err_and(|error| error.catchable()) {
                 stack.call.vm.registers.len().max(stack.call.vm.top)
             } else {
                 stack.end()

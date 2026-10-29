@@ -377,6 +377,7 @@ pub struct Vm {
     remaining: u64,
     type_metatables: [Option<TableId>; 9],
     meta_names: [StringId; 19],
+    memory_error: StringId,
     output: Option<Vec<u8>>,
     active_native: Option<usize>,
     // A synchronous protected host invocation can also drive child threads.
@@ -455,6 +456,7 @@ impl Vm {
             remaining: 0,
             type_metatables: [None; 9],
             meta_names: [StringId(0); 19],
+            memory_error: StringId(0),
             output: None,
             active_native: None,
             native_protected: false,
@@ -501,6 +503,7 @@ impl Vm {
             userdata_order: 0,
             standalone: 0,
         };
+        vm.memory_error = vm.strings.intern(b"not enough memory");
         if !libraries {
             vm.meta_names = META_NAMES.map(|name| vm.strings.intern(name));
             vm.reset_gc_debt();
@@ -1306,7 +1309,7 @@ impl Vm {
                 .take()
                 .map_or_else(|| self.run(&mut error_line), Err);
             match result {
-                Err(error) if error.kind() == ErrorKind::Runtime => {
+                Err(error) if error.catchable() => {
                     if let Some(target) = error.target_thread {
                         self.leave_threads_to(target, &mut error_line)?;
                     }

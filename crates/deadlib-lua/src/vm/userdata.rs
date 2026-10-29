@@ -14,7 +14,7 @@ const ALIGNMENT: usize = if align_of::<usize>() > align_of::<f64>() {
 pub(super) struct Bytes(Box<[u8]>);
 impl Bytes {
     fn new(size: usize) -> Result<Self, Error> {
-        let failed = || Error::new(ErrorKind::Runtime, 0, "not enough memory");
+        let failed = Error::memory;
         // Keep even a zero-sized payload address inside its own allocation,
         // so it cannot coincide with the next allocation's first address.
         let total = size.checked_add(ALIGNMENT).ok_or_else(failed)?;
@@ -238,7 +238,19 @@ impl Vm {
         size: usize,
         env: TableId,
     ) -> Result<UserdataId, Error> {
-        let bytes = Bytes::new(size)?;
+        // Match the public C ABI's userdata size guard before asking Rust for
+        // backing storage. PUC's header contains four pointers/sizes and the
+        // two tag bytes, rounded to its maximum pointer/double alignment.
+        let header = (5 * std::mem::size_of::<usize>()).next_multiple_of(ALIGNMENT);
+        if size > usize::MAX - 2 - header {
+            return Err(Error::new(
+                ErrorKind::Runtime,
+                0,
+                "memory allocation error: block too big",
+            ));
+        }
+        let bytes =
+            Bytes::new(size).map_err(|error| error.with_value(Value::String(self.memory_error)))?;
         self.userdata_order = self
             .userdata_order
             .checked_add(1)
@@ -323,5 +335,32 @@ impl Drop for Vm {
             self.finalize_on_close();
         }
         let _ = self.io.flush_stdout();
+    }
+}
+
+#[cfg(test)]
+mod allocation_tests {
+    use super::*;
+
+    #[test]
+    fn failed_payload_allocation_reuses_a_fixed_diagnostic_and_preserves_the_heap() {
+        let mut vm = Vm::new_bare();
+        let value = Value::String(vm.memory_error);
+        let live = vm.userdata.live_len();
+        let order = vm.userdata_order;
+        for _ in 0..3 {
+            vm.collect_cycle();
+            let error = vm
+                .try_allocate_userdata(usize::MAX - 255, vm.globals)
+                .unwrap_err();
+            assert_eq!(error.kind(), ErrorKind::Memory);
+            assert_eq!(error.value(), Some(value));
+            assert_eq!(error.clone().at_line(42).line(), 0);
+            assert_eq!(error.message_bytes(), b"not enough memory");
+            assert_eq!(vm.userdata.live_len(), live);
+            assert_eq!(vm.userdata_order, order);
+        }
+        let id = vm.try_allocate_userdata(16, vm.globals).unwrap();
+        assert_eq!(vm.userdata_bytes(id).unwrap(), &[0; 16]);
     }
 }

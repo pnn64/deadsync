@@ -11,6 +11,8 @@ pub enum NativeLoadStatus {
     RuntimeError = 2,
     /// Text syntax or native-bytecode validation failed.
     SyntaxError = 3,
+    /// A fallible VM allocation failed, including in the reader.
+    MemoryError = 4,
     /// An inherited error handler failed.
     ErrorHandler = 5,
     /// A file could not be opened, reopened or read.
@@ -225,10 +227,10 @@ impl NativeStack<'_, '_> {
             .drive_host(scope.owner, scope.depth, Err(error), OPEN);
         let (status, value) = match outcome {
             Ok(2) => {
-                let status = if self.call.vm.registers[scope.base] == Value::Number(5.) {
-                    NativeLoadStatus::ErrorHandler
-                } else {
-                    NativeLoadStatus::RuntimeError
+                let status = match self.call.vm.registers[scope.base] {
+                    Value::Number(4.) => NativeLoadStatus::MemoryError,
+                    Value::Number(5.) => NativeLoadStatus::ErrorHandler,
+                    _ => NativeLoadStatus::RuntimeError,
                 };
                 (status, self.call.vm.registers[scope.base + 1])
             }

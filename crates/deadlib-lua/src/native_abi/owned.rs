@@ -105,10 +105,10 @@ unsafe extern "C" fn operate(
         Ok(Ok(status)) => status,
         // The root entry has unwound and retained its Lua error value. C can
         // now invoke lua_atpanic or exit without skipping any Rust frames.
-        Ok(Err(_)) => {
+        Ok(Err(error)) => {
             // SAFETY: entered still excludes every other root borrow. The C
             // panic callback runs only after this status has been published.
-            unsafe { &mut *owner.vm.get() }.native_root_panic();
+            unsafe { &mut *owner.vm.get() }.native_root_panic(&error);
             2
         }
         Err(_) => std::process::abort(),

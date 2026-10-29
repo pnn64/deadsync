@@ -53,13 +53,17 @@ impl NativeStack<'_, '_> {
         let value = error
             .value()
             .unwrap_or_else(|| target.intern(error.message_bytes()));
-        target.push(value)
+        target.push(value)?;
+        target.vm.threads[slot_index(thread.0)].resume_status =
+            threads::NativeThreadStatus::for_error(error);
+        Ok(())
     }
     #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
     pub(crate) fn prepare_thread_panic(
         &mut self,
         thread: ThreadId,
         reset: bool,
+        status: threads::NativeThreadStatus,
     ) -> Result<(), Error> {
         let target = self.panic_target(thread)?;
         let value = target
@@ -67,7 +71,7 @@ impl NativeStack<'_, '_> {
             .ok_or_else(|| target.error(b"missing native error value"))?;
         if !reset {
             let state = &mut self.call.vm.threads[slot_index(thread.0)];
-            state.resume_status = threads::NativeThreadStatus::RuntimeError;
+            state.resume_status = status;
             state.status = threads::Status::Dead;
             return Ok(());
         }
@@ -96,7 +100,7 @@ impl NativeStack<'_, '_> {
         self.call.vm.active_native = None;
         let state = &mut self.call.vm.threads[slot_index(thread.0)];
         state.api_stack = 0..1;
-        state.resume_status = threads::NativeThreadStatus::RuntimeError;
+        state.resume_status = status;
         state.status = threads::Status::Dead;
         state.resumer = None;
         state.native_resumer = false;
@@ -130,7 +134,7 @@ mod tests {
                 target.push(Value::Number(17.))?;
                 target.push(Value::Boolean(true))?;
             }
-            s.prepare_thread_panic(child, false)?;
+            s.prepare_thread_panic(child, false, threads::NativeThreadStatus::RuntimeError)?;
             let target = s.thread_stack(child)?;
             assert_eq!(target.top(), 2);
             assert_eq!(target.value(1), Some(Value::Number(17.)));
@@ -139,7 +143,7 @@ mod tests {
                 s.thread_status(child),
                 Some(threads::NativeThreadStatus::RuntimeError)
             );
-            s.prepare_thread_panic(child, true)?;
+            s.prepare_thread_panic(child, true, threads::NativeThreadStatus::RuntimeError)?;
             let target = s.thread_stack(child)?;
             assert_eq!(target.top(), 1);
             assert_eq!(target.value(1), Some(Value::Boolean(true)));

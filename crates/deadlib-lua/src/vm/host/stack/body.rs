@@ -294,7 +294,7 @@ impl NativeStack<'_, '_> {
                 Ok(count) if vm.thread != owner => {
                     vm.finish_thread(0, count, false, false, &mut line);
                 }
-                Err(error) if error.kind() == ErrorKind::Runtime => {
+                Err(error) if error.catchable() => {
                     let floor = if vm.thread == owner { depth } else { 0 };
                     match vm.catch_error_from(&error, floor) {
                         Ok(true) => {}

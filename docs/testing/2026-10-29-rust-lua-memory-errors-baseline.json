@@ -1,0 +1,87 @@
+{
+  "base_commit": "587c9426fecc62b4955228a64854faabf58219d2",
+  "previous_report": "C:\\GitHub\\deadsync\\docs\\testing\\2026-10-29-rust-lua-capi-release.json",
+  "previous_report_sha256": "05ce7530a0e975a69c37a3c6feb9263f49897b4af80bafca62ef0e03d383549f",
+  "fixture_hashes": {
+    "crates/deadlib-lua/capi/tests/capi-host.c": "4c18f520dd8bc23f04d03d577ad9bd70188c2f4953a3bdb21c6f90dd506c7a89",
+    "crates/deadlib-lua/capi/tests/memory-cases.h": "f22f221a67a31e3124307d583431333c7a4167d72dd399d7d455cdd5e3193192"
+  },
+  "artifacts": {
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\capi-proof-final-release\\reference\\lua51.dll": "4688e1e2e0ebc02208a26dea9eb4d00acbcef430ad69ab60c22c8f4e19805680",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\capi-proof-final-release\\reference\\memory-baseline.exe": "9975dc34042091fd600962395dd4c9110e807273ca5d462698516f74517178ad",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\capi-proof-final-release\\checked\\lua51.dll": "62a4f2cff48333395c027766877af874357a8cf43b7550b61d0e05141c020bf8",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\capi-proof-final-release\\checked\\memory-baseline.exe": "caeaae6ab16bee49ef144e2d5f700ea38083173ebfcacb0494fed199fb53e4b3",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\capi-proof-final-release\\rust\\lua51.dll": "e1209641b3007c3dea93b57431147d1c2cb101d53b619d488772076365c4873f",
+    "C:\\GitHub\\deadsync\\target\\lua-native-hooks\\capi-proof-final-release\\rust\\memory-baseline.exe": "a42f59405e89c2b18d6be0f881b98e7be1fea03e655c1cca3abfc516c3ae624c"
+  },
+  "runs": {
+    "reference": {
+      "--memory": {
+        "code": 0,
+        "stdout": "memory.pcall.status\t4\nmemory.pcall.top\t1\nmemory.pcall.value\tnot enough memory\nmemory.handler.status\t4\nmemory.handler.top\t2\nmemory.handler.value\tnot enough memory\nmemory.handler.calls\t0\nmemory.invalid-handler.status\t4\nmemory.invalid-handler.top\t2\nmemory.invalid-handler.value\tnot enough memory\nmemory.handler-oom.status\t4\nmemory.handler-oom.top\t2\nmemory.handler-oom.value\tnot enough memory\nmemory.ordinary-string.status\t2\nmemory.ordinary-string.top\t2\nmemory.ordinary-string.value\thandled\nmemory.ordinary-string.calls\t1\nmemory.too-big.status\t2\nmemory.too-big.top\t1\nmemory.too-big.value\tmemory allocation error: block too big\nmemory.largest-block.status\t4\nmemory.largest-block.top\t1\nmemory.largest-block.value\tnot enough memory\nmemory.first-overflow.status\t2\nmemory.first-overflow.top\t1\nmemory.first-overflow.value\tmemory allocation error: block too big\nmemory.call.status\t4\nmemory.call.top\t1\nmemory.call.value\tnot enough memory\nmemory.nested.inner\t4\nmemory.nested.status\t0\nmemory.nested.top\t1\nmemory.nested.value\t42\nmemory.cpcall.status\t4\nmemory.cpcall.top\t1\nmemory.cpcall.value\tnot enough memory\nmemory.load.status\t4\nmemory.load.top\t1\nmemory.load.value\tnot enough memory\nmemory.coroutine.resume\t4\nmemory.coroutine.status\t4\nmemory.coroutine.value\tnot enough memory\nmemory.coroutine.again\t2\nmemory.coroutine.after\t4\nmemory.lua.recovery\t42\nmemory.recovery.bytes\t16\n",
+        "stderr": ""
+      },
+      "--memory-default-panic": {
+        "code": 1,
+        "stdout": "",
+        "stderr": "PANIC: unprotected error in call to Lua API (not enough memory)\n"
+      },
+      "--memory-returning-panic": {
+        "code": 1,
+        "stdout": "memory.panic.status\t4\nmemory.panic.top\t1\nmemory.panic.value\tnot enough memory\n",
+        "stderr": ""
+      },
+      "--memory-child-panic": {
+        "code": 1,
+        "stdout": "memory.panic.status\t4\nmemory.panic.top\t1\nmemory.panic.value\tnot enough memory\n",
+        "stderr": ""
+      }
+    },
+    "checked": {
+      "--memory": {
+        "code": 0,
+        "stdout": "memory.pcall.status\t4\nmemory.pcall.top\t1\nmemory.pcall.value\tnot enough memory\nmemory.handler.status\t4\nmemory.handler.top\t2\nmemory.handler.value\tnot enough memory\nmemory.handler.calls\t0\nmemory.invalid-handler.status\t4\nmemory.invalid-handler.top\t2\nmemory.invalid-handler.value\tnot enough memory\nmemory.handler-oom.status\t4\nmemory.handler-oom.top\t2\nmemory.handler-oom.value\tnot enough memory\nmemory.ordinary-string.status\t2\nmemory.ordinary-string.top\t2\nmemory.ordinary-string.value\thandled\nmemory.ordinary-string.calls\t1\nmemory.too-big.status\t2\nmemory.too-big.top\t1\nmemory.too-big.value\tmemory allocation error: block too big\nmemory.largest-block.status\t4\nmemory.largest-block.top\t1\nmemory.largest-block.value\tnot enough memory\nmemory.first-overflow.status\t2\nmemory.first-overflow.top\t1\nmemory.first-overflow.value\tmemory allocation error: block too big\nmemory.call.status\t4\nmemory.call.top\t1\nmemory.call.value\tnot enough memory\nmemory.nested.inner\t4\nmemory.nested.status\t0\nmemory.nested.top\t1\nmemory.nested.value\t42\nmemory.cpcall.status\t4\nmemory.cpcall.top\t1\nmemory.cpcall.value\tnot enough memory\nmemory.load.status\t4\nmemory.load.top\t1\nmemory.load.value\tnot enough memory\nmemory.coroutine.resume\t4\nmemory.coroutine.status\t4\nmemory.coroutine.value\tnot enough memory\nmemory.coroutine.again\t2\nmemory.coroutine.after\t4\nmemory.lua.recovery\t42\nmemory.recovery.bytes\t16\n",
+        "stderr": ""
+      },
+      "--memory-default-panic": {
+        "code": 1,
+        "stdout": "",
+        "stderr": "PANIC: unprotected error in call to Lua API (not enough memory)\n"
+      },
+      "--memory-returning-panic": {
+        "code": 1,
+        "stdout": "memory.panic.status\t4\nmemory.panic.top\t1\nmemory.panic.value\tnot enough memory\n",
+        "stderr": ""
+      },
+      "--memory-child-panic": {
+        "code": 1,
+        "stdout": "memory.panic.status\t4\nmemory.panic.top\t1\nmemory.panic.value\tnot enough memory\n",
+        "stderr": ""
+      }
+    },
+    "rust": {
+      "--memory": {
+        "code": 87,
+        "stdout": "memory.pcall.status\t2\nmemory.pcall.top\t1\nmemory.pcall.value\tnot enough memory\nmemory.handler.status\t2\nmemory.handler.top\t2\nmemory.handler.value\thandled\nmemory.handler.calls\t1\nmemory.invalid-handler.status\t5\nmemory.invalid-handler.top\t2\nmemory.invalid-handler.value\terror in error handling\nmemory.handler-oom.status\t5\nmemory.handler-oom.top\t2\nmemory.handler-oom.value\terror in error handling\nmemory.ordinary-string.status\t2\nmemory.ordinary-string.top\t2\nmemory.ordinary-string.value\thandled\nmemory.ordinary-string.calls\t2\nmemory.too-big.status\t2\nmemory.too-big.top\t1\nmemory.too-big.value\tnot enough memory\nmemory.largest-block.status\t2\nmemory.largest-block.top\t1\nmemory.largest-block.value\tnot enough memory\nmemory.first-overflow.status\t2\nmemory.first-overflow.top\t1\nmemory.first-overflow.value\tnot enough memory\nmemory.call.status\t2\nmemory.call.top\t1\nmemory.call.value\tnot enough memory\nmemory.nested.inner\t2\nmemory.nested.status\t0\nmemory.nested.top\t1\nmemory.nested.value\t42\nmemory.cpcall.status\t2\nmemory.cpcall.top\t1\nmemory.cpcall.value\tnot enough memory\nmemory.load.status\t2\nmemory.load.top\t1\nmemory.load.value\tnot enough memory\nmemory.coroutine.resume\t2\nmemory.coroutine.status\t2\nmemory.coroutine.value\tnot enough memory\nmemory.coroutine.again\t2\nmemory.coroutine.after\t2\n",
+        "stderr": "MEMORY_SCRIPT [string \"local calls=0;local function h(e) calls=cal...\"]:1: assertion failed!\n"
+      },
+      "--memory-default-panic": {
+        "code": 1,
+        "stdout": "",
+        "stderr": "PANIC: unprotected error in call to Lua API (not enough memory)\n"
+      },
+      "--memory-returning-panic": {
+        "code": 1,
+        "stdout": "memory.panic.status\t2\nmemory.panic.top\t1\nmemory.panic.value\tnot enough memory\n",
+        "stderr": ""
+      },
+      "--memory-child-panic": {
+        "code": 1,
+        "stdout": "memory.panic.status\t0\nmemory.panic.top\t0\nmemory.panic.value\t(null)\n",
+        "stderr": ""
+      }
+    }
+  },
+  "old_engine_mismatch_reproduced": true,
+  "proof_tool_source": "from pathlib import Path\nimport subprocess,os,json\nroot=Path.cwd();work=root/'target/lua-native-hooks/memory-baseline';work.mkdir(exist_ok=True)\nfinder=Path(os.environ['ProgramFiles(x86)'])/'Microsoft Visual Studio/Installer/vswhere.exe'\nsetup=subprocess.check_output([str(finder),'-latest','-products','*','-find','VC/Auxiliary/Build/vcvars64.bat'],text=True).strip().splitlines()[0]\nrows={}\nfor engine in ['reference','checked','rust']:\n folder=root/'target/lua-native-hooks/capi-proof-final-release'/engine\n lib=folder/('lua51.lib'if engine!='rust'else'lua51.lib')\n if not lib.exists():lib=root/'target/lua-native-hooks/capi-final-release/lib/lua51.lib'\n host=folder/'memory-baseline.exe'\n args=['/nologo','/O2','/MT','/DLUA_BUILD_AS_DLL','/I'+str(root/'vendor/lua-src/lua-5.1.5'),str(root/'crates/deadlib-lua/capi/tests/capi-host.c'),str(lib),'/link','/STACK:33554432','/OUT:'+str(host)]\n rsp=work/(engine+'.rsp');rsp.write_text(' '.join('\"'+x+'\"'for x in args))\n script=work/(engine+'.cmd');script.write_text('@call \"'+setup+'\" >nul\\n@cl @\"'+str(rsp)+'\"\\n@exit /b %errorlevel%\\n')\n p=subprocess.run(['cmd','/d','/c',str(script)],cwd=work,capture_output=True);assert p.returncode==0,(p.stdout+p.stderr).decode(errors='replace')\n row={}\n for mode in ['--memory','--memory-default-panic','--memory-returning-panic','--memory-child-panic']:\n  p=subprocess.run([str(host),mode],cwd=folder,capture_output=True,timeout=30)\n  row[mode]=dict(code=p.returncode,stdout=p.stdout.decode().replace('\\r\\n','\\n'),stderr=p.stderr.decode().replace('\\r\\n','\\n'))\n rows[engine]=row\n print(engine,row['--memory']['code'],row['--memory']['stdout'],row['--memory']['stderr'],flush=True)\n(work/'baseline.json').write_text(json.dumps(rows,indent=2)+'\\n')\nassert rows['reference']==rows['checked']\n(root/'crates/deadlib-lua/capi/tests/memory.expected').write_text(rows['reference']['--memory']['stdout'])\nprint('panic',json.dumps({k:v for k,v in rows['reference'].items()if k!='--memory'},indent=2))\n"
+}

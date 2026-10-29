@@ -10,6 +10,8 @@ pub enum NativeCallStatus {
     Ok = 0,
     /// Call failed; the error value is on the stack.
     RuntimeError = 2,
+    /// A fallible VM allocation failed; error handlers are bypassed.
+    MemoryError = 4,
     /// The error handler failed; its diagnostic is on the stack.
     ErrorHandler = 5,
 }
@@ -25,6 +27,7 @@ impl Vm {
         let status = match self.registers[range.start] {
             Value::Number(0.) => NativeCallStatus::Ok,
             Value::Number(2.) => NativeCallStatus::RuntimeError,
+            Value::Number(4.) => NativeCallStatus::MemoryError,
             Value::Number(5.) => NativeCallStatus::ErrorHandler,
             _ => unreachable!("protected native status"),
         };
@@ -56,7 +59,8 @@ impl NativeStack<'_, '_> {
     ///
     /// An optional ordinary stack index selects the error function before the
     /// call. It runs while faulting frames and open locals are still present.
-    /// The handler is ignored on success; on error it must be a function.
+    /// The handler is ignored on success and allocation failure; on a runtime
+    /// error it must be a function.
     ///
     /// # Errors
     /// Rejects invalid stack/count inputs, pending unprotected errors or fatal

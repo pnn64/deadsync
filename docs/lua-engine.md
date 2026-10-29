@@ -1586,6 +1586,16 @@ Core coverage remains 77/80; the three allocator APIs and full semantic/resource
 parity remain unfinished.
 
 
+The [allocation-error checks](testing/2026-10-29-rust-lua-memory-errors.md)
+add a distinct memory error kind and `LUA_ERRMEM` outcomes for fallible userdata
+payload allocation. Protected calls skip error handlers for these failures;
+parser readers, failed coroutines and unprotected panic callbacks preserve
+status 4. An oversized block that crosses PUC's userdata overflow guard instead
+raises its runtime diagnostic with status 2. The memory error uses static Rust
+text and a retained Lua string. Custom allocator ownership, recoverable failures
+in other collections and exact allocation accounting remain open.
+
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the

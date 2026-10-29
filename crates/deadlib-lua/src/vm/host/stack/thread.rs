@@ -28,7 +28,7 @@ impl NativeStack<'_, '_> {
     }
     /// Read a live thread's retained execution status. Unlike coroutine.status,
     /// fresh and completed threads both return Ok; only a yielded thread returns
-    /// Yielded. Failed children retain RuntimeError or ErrorHandler; quota-aborted
+    /// Yielded. Failed children retain RuntimeError, MemoryError or ErrorHandler; quota-aborted
     /// children return RuntimeError.
     /// Collected/invalid identities return None. The main thread remains Ok.
     pub fn thread_status(&self, thread: ThreadId) -> Option<NativeThreadStatus> {

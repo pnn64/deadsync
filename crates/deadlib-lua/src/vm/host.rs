@@ -274,6 +274,7 @@ impl Vm {
         }
         let status = match frame.pc {
             2 => 2,
+            4 => 4,
             5 => 5,
             _ => 0,
         };
@@ -286,6 +287,7 @@ impl Vm {
             debug_assert_eq!(scope.thread, self.thread);
             scope.status = match status {
                 2 => NativeCallStatus::RuntimeError,
+                4 => NativeCallStatus::MemoryError,
                 5 => NativeCallStatus::ErrorHandler,
                 _ => NativeCallStatus::Ok,
             };
@@ -364,7 +366,7 @@ impl Vm {
                 Err(error) if self.thread == owner && self.frames.len() == depth => {
                     return Err(error.at_line(line));
                 }
-                Err(error) if error.kind() == ErrorKind::Runtime => {
+                Err(error) if error.catchable() => {
                     if error.target_thread.is_some_and(|target| target != owner) {
                         return Err(error);
                     }
@@ -673,7 +675,7 @@ impl HostCall<'_> {
         if !protected
             && self.vm.thread == owner
             && let Err(error) = &result
-            && error.kind() == ErrorKind::Runtime
+            && error.catchable()
         {
             // Return through Rust/C first, retaining the Lua fault stack for
             // an enclosing handler. This callback cannot resume execution.

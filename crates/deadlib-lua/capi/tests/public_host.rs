@@ -183,6 +183,57 @@ fn c_host_and_module_use_the_standalone_library_without_rust_bootstrap() {
                 .ends_with("states=6 groups=5 libraries=1"),
         "{diagnostics}"
     );
+    let memory = Command::new(&host)
+        .arg("--memory")
+        .current_dir(&folder)
+        .output()
+        .unwrap();
+    assert!(
+        memory.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&memory.stdout),
+        String::from_utf8_lossy(&memory.stderr)
+    );
+    assert!(memory.stderr.is_empty());
+    assert_eq!(
+        String::from_utf8(memory.stdout)
+            .unwrap()
+            .lines()
+            .collect::<Vec<_>>(),
+        include_str!("memory.expected").lines().collect::<Vec<_>>()
+    );
+    for mode in [
+        "--memory-default-panic",
+        "--memory-returning-panic",
+        "--memory-child-panic",
+    ] {
+        let memory = Command::new(&host)
+            .arg(mode)
+            .current_dir(&folder)
+            .output()
+            .unwrap();
+        assert_eq!(memory.status.code(), Some(1), "{mode}");
+        if mode == "--memory-default-panic" {
+            assert!(memory.stdout.is_empty());
+            assert_eq!(
+                String::from_utf8(memory.stderr).unwrap().trim_end(),
+                "PANIC: unprotected error in call to Lua API (not enough memory)"
+            );
+        } else {
+            assert!(memory.stderr.is_empty());
+            assert_eq!(
+                String::from_utf8(memory.stdout)
+                    .unwrap()
+                    .lines()
+                    .collect::<Vec<_>>(),
+                [
+                    "memory.panic.status\t4",
+                    "memory.panic.top\t1",
+                    "memory.panic.value\tnot enough memory"
+                ]
+            );
+        }
+    }
     for symbol in ["owned_default_panic", "owned_returning_panic"] {
         let result = Command::new(&host)
             .arg(symbol)

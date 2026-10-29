@@ -1463,9 +1463,14 @@ unsafe extern "C" fn dispatch(
                 {
                     return Err(error);
                 }
+                let status = if op == 72 {
+                    context.stack.thread_status(thread).unwrap()
+                } else {
+                    crate::NativeThreadStatus::RuntimeError
+                };
                 context
                     .stack
-                    .prepare_thread_panic(thread, value.integer != 0)
+                    .prepare_thread_panic(thread, value.integer != 0, status)
             });
         return match outcome {
             Ok(()) => 2,
@@ -1479,9 +1484,9 @@ unsafe extern "C" fn dispatch(
         Ok(()) => 0,
         Err(error) => {
             if error.target_thread.is_none()
-                && matches!(op, 8 | 16..=19 | 39 | 40 | 44 | 47 | 49 | 55 | 73)
+                && matches!(op, 8 | 16..=19 | 29 | 39 | 40 | 44 | 47 | 49 | 55 | 73)
                 && value.state as usize != context.state
-                && error.kind() == crate::ErrorKind::Runtime
+                && error.catchable()
             {
                 let thread = context
                     .bridge

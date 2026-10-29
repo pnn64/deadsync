@@ -77,8 +77,21 @@ pub enum NativeThreadStatus {
     Yielded = 1,
     /// The coroutine failed with an unprotected runtime error.
     RuntimeError = 2,
+    /// Execution failed because a fallible VM allocation failed.
+    MemoryError = 4,
     /// Execution failed while processing an error.
     ErrorHandler = 5,
+}
+impl NativeThreadStatus {
+    pub(crate) fn for_error(error: &Error) -> Self {
+        if error.kind() == ErrorKind::Memory {
+            Self::MemoryError
+        } else if error.bypass_handler {
+            Self::ErrorHandler
+        } else {
+            Self::RuntimeError
+        }
+    }
 }
 impl Status {
     fn name(self) -> &'static [u8] {
@@ -556,11 +569,8 @@ impl Vm {
         false
     }
     pub(super) fn fail_thread(&mut self, error: &Error, line: &mut u32) {
-        self.threads[slot_index(self.thread.0)].resume_status = if error.bypass_handler {
-            NativeThreadStatus::ErrorHandler
-        } else {
-            NativeThreadStatus::RuntimeError
-        };
+        self.threads[slot_index(self.thread.0)].resume_status =
+            NativeThreadStatus::for_error(error);
         self.discard_finalizers(0);
         let value = error.value().unwrap_or_else(|| {
             let value = self.intern(error.message().as_bytes());

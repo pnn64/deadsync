@@ -352,13 +352,17 @@ impl Vm {
                 let value = self.intern(error.message_bytes());
                 self.located_error(value, 1)
             };
-            if error.bypass_handler {
+            if error.kind() == ErrorKind::Memory || error.bypass_handler {
                 self.protected_failure(index, value);
                 if matches!(
                     frame.function,
                     FrameKind::Native(CONT_HOST_PCALL | CONT_HOST_LOAD)
                 ) {
-                    self.frames[index].pc = 5;
+                    self.frames[index].pc = if error.kind() == ErrorKind::Memory {
+                        4
+                    } else {
+                        5
+                    };
                 }
                 return Ok(true);
             }
@@ -426,7 +430,7 @@ impl Vm {
                     match self.start_call(base, 1, 1, false) {
                         Ok(Some(actual)) => self.finish_call(base, actual, 1),
                         Ok(None) => {}
-                        Err(next) if next.kind() == ErrorKind::Runtime => {
+                        Err(next) if next.catchable() => {
                             pending = Some(next);
                             continue;
                         }
@@ -472,9 +476,9 @@ impl Vm {
                 self.frames[index].vararg_count = (self.top - frame.vararg_start) as u32;
                 Ok(self.return_frame(self.frames[index], values.start, values.len()))
             }
-            CONT_HOST_LOAD if matches!(frame.pc, 2 | 5) => {
+            CONT_HOST_LOAD if matches!(frame.pc, 2 | 4 | 5) => {
                 self.frames.pop();
-                self.registers[base] = Value::Number(if frame.pc == 5 { 5. } else { 2. });
+                self.registers[base] = Value::Number(f64::from(frame.pc));
                 self.top = base + 2;
                 Ok(Some(2))
             }

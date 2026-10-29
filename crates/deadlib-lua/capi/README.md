@@ -54,8 +54,10 @@ serialized; callbacks and their code must remain live while Lua can call them.
 
 This is partial Lua 5.1 parity: 77 of 80 core functions are declared.
 `lua_newstate`, `lua_getallocf` and `lua_setallocf` remain absent. Default states
-use Rust's allocator; custom allocator ownership and recoverable OOM behavior
-remain unfinished. Exact heap/GC accounting and general continuation/resource
+use Rust's allocator. Fallible userdata payload failures now return `LUA_ERRMEM`
+and bypass error handlers, including through parser readers and coroutines.
+The fixed memory diagnostic survives collection. Custom allocator ownership and
+recoverable failures in other VM allocations remain unfinished. Exact heap/GC accounting and general continuation/resource
 parity also remain open. The deep C callback tests reserve 32 MiB of host stack,
 as the existing Rust runners do; default host-stack limits are not proven equal
 to PUC Lua's resource bounds.
@@ -64,3 +66,6 @@ Supported build targets are Windows MSVC and Linux GNU. The current evidence
 covers Windows x64 debug/release and Linux i686 SSE2 release, with Cargo tests
 also running on Linux x64. See the
 [standalone C checks](../../../docs/testing/2026-10-29-rust-lua-capi.md).
+
+See the [allocation-error checks](../../../docs/testing/2026-10-29-rust-lua-memory-errors.md)
+for the tested failure paths and remaining allocation limits.
