@@ -767,6 +767,20 @@ fn main() {
                 .unwrap();
         });
     }
+    for (kind, mixed) in [(0, 0), (2, 0), (2, 2), (2, 4)] {
+        for live in [0, 1, 8, 31] {
+            let mut source = signal::<576>(0x73429);
+            source[live * 18..].fill(0.0);
+            let mut hybrid = Hybrid::new();
+            let mut output = [0.0; 576];
+            probe(&format!("hybrid-live/{kind}/{mixed}/{live}"), 1000, || {
+                let mut input = source;
+                hybrid
+                    .process(black_box(&mut input), kind, mixed, black_box(&mut output))
+                    .unwrap();
+            });
+        }
+    }
     let bytes: Vec<_> = (0..4096).map(|n| (n * 37 + 13) as u8).collect();
     for size in [2, 17, 32, 1024] {
         probe(
@@ -794,7 +808,7 @@ fn main() {
             black_box(bits.flag().unwrap());
         }
     });
-    for book in [1, 13, 23, 31] {
+    for book in [1, 2, 3, 13, 23, 31] {
         probe(&format!("huffman/{book}"), 1000, || {
             let mut bits = BitReader::new(black_box(&bytes));
             for _ in 0..256 {
@@ -814,6 +828,10 @@ fn main() {
     for (book, code, width, x, y, lin) in [
         (1, 1, 1, 0, 0, 0),
         (1, 0, 3, 1, 1, 0),
+        (2, 1, 1, 0, 0, 0),
+        (2, 0, 6, 2, 2, 0),
+        (3, 3, 2, 0, 0, 0),
+        (3, 0, 6, 2, 2, 0),
         (7, 1, 1, 0, 0, 0),
         (7, 0, 10, 5, 5, 0),
         (13, 1, 1, 0, 0, 0),

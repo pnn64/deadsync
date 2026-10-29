@@ -54,7 +54,13 @@ impl Hybrid {
         for band in 0..32 {
             let samples = &input[band * 18..band * 18 + 18];
             let mut transformed = [0.0; 36];
-            if samples.iter().any(|&v| v != 0.0) {
+            if samples[0] != 0.0
+                || samples[1..]
+                    .iter()
+                    .fold(0, |bits, &value| bits | value.to_bits())
+                    & 0x7fff_ffff_ffff_ffff
+                    != 0
+            {
                 if block_type == 2 && band >= long_subbands {
                     for window in 0..3 {
                         for n in 0..12 {
