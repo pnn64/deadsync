@@ -148,6 +148,10 @@ fn main() {
         "case\toperation\titerations\tsample_bytes\tcycles_per_image\tns_per_image\tMiB_per_second\tallocations\treallocations\trequested_bytes\tfingerprint"
     );
     let stage = std::env::var("DEADLIB_PNG_BENCH_STAGE");
+    if stage.as_deref() == Ok("encoder-first") {
+        encoder_first();
+        return;
+    }
     if stage.as_deref() == Ok("deflate-tables") {
         reader_buffers();
         reference_deflate();
@@ -393,6 +397,82 @@ fn main() {
             fingerprint(&png.image.samples),
             || decode(black_box(&bytes)).unwrap(),
         );
+    }
+}
+
+fn encoder_first() {
+    let formats = [
+        (ColorType::Grayscale, 8),
+        (ColorType::Rgba, 8),
+        (ColorType::Rgba, 16),
+        (ColorType::Grayscale, 2),
+    ];
+    let mut cases = Vec::new();
+    for (color, depth) in formats {
+        for (width, height) in [(4097, 1), (33, 9)] {
+            for interlaced in [false, true] {
+                for filter in [
+                    Filter::None,
+                    Filter::Sub,
+                    Filter::Up,
+                    Filter::Average,
+                    Filter::Paeth,
+                    Filter::Adaptive,
+                ] {
+                    cases.push((color, depth, width, height, interlaced, filter));
+                }
+            }
+        }
+    }
+    for (color, depth) in &formats[..3] {
+        for filter in [Filter::None, Filter::Adaptive] {
+            cases.push((*color, *depth, 513, 257, false, filter));
+        }
+    }
+    for interlaced in [false, true] {
+        for filter in [
+            Filter::None,
+            Filter::Sub,
+            Filter::Up,
+            Filter::Average,
+            Filter::Paeth,
+            Filter::Adaptive,
+        ] {
+            cases.push((ColorType::Rgba, 8, 1, 1, interlaced, filter));
+        }
+    }
+    for (color, depth, width, height, interlaced, filter) in cases {
+        let png = fixture(width, height, color, depth);
+        let options = EncodeOptions {
+            interlaced,
+            filter,
+            compression: deadlib_image_png::zlib::Compression::Stored,
+            ..Default::default()
+        };
+        let expected = apng_recovery::filtered_with(&png.image, interlaced, filter);
+        let before = encode(&png, &options).unwrap();
+        let mut streamed = Vec::new();
+        deadlib_image_png::encode_writer(&png, &options, &mut streamed).unwrap();
+        assert_eq!(apng_recovery::inflate_idat(&before), expected);
+        assert_eq!(apng_recovery::inflate_idat(&streamed), expected);
+        assert_eq!(decode(&before).unwrap().image, png.image);
+        assert_eq!(decode(&streamed).unwrap().image, png.image);
+        let hash = fingerprint(&Samples::U8(expected.clone()));
+        let case = format!(
+            "first-c{}-d{depth}-{width}x{height}-i{}-f{}",
+            color as u8,
+            u8::from(interlaced),
+            filter as u8
+        );
+        measure(&case, "encode", expected.len(), hash, || {
+            encode(black_box(&png), black_box(&options)).unwrap()
+        });
+        measure(&case, "encode-writer", expected.len(), hash, || {
+            let mut output = Vec::new();
+            deadlib_image_png::encode_writer(black_box(&png), black_box(&options), &mut output)
+                .unwrap();
+            output
+        });
     }
 }
 

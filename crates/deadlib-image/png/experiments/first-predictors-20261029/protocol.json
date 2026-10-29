@@ -1,0 +1,47 @@
+{
+  "base": "8314615bc",
+  "selected": "adaptive",
+  "checkpoints": [
+    "baseline",
+    "buffered",
+    "writer",
+    "adaptive"
+  ],
+  "changes": [
+    "Buffered first-row predictor kernels, omitted previous buffer for one-row images, and no last-row swap.",
+    "Streaming first-row kernels, omitted previous buffer for single-row passes, and no last-row swap.",
+    "Adaptive first rows skip Up/Paeth because their bytes/scores duplicate earlier None/Sub candidates; strict-score tie order is preserved."
+  ],
+  "pipeline": {
+    "stage": "encoder-first",
+    "cases": 228,
+    "processes": 32,
+    "comparisons": [
+      "buffered-paired",
+      "writer-paired",
+      "adaptive-paired",
+      "selected-paired"
+    ],
+    "rounds": 4,
+    "order": "A/B, B/A alternation",
+    "iterations": 3,
+    "warmups": 3,
+    "batches": 7,
+    "minimum": "Outputs below 4096 filtered bytes use at least 2048 iterations. See each TSV iteration column.",
+    "allocations": "Separate untimed probe of complete PNG APIs: allocation calls, reallocations and requested bytes."
+  },
+  "fixtures": "Grayscale8, RGBA8, RGBA16 and packed grayscale2; 4097x1 and 33x9, plain/Adam7, all six filters. Native 513x257 None/adaptive controls and RGBA8 1x1 all-filter plain/Adam7 cases. Both buffered and writer encodes. Stored compression isolates reconstruction and checksums; no Fast throughput claim.",
+  "answers": "Every process checks complete scalar-modeled filtered bytes from independent test support, then complete decoded native samples. Both filtered fingerprints and per-version allocation counts are checked. Linked caller also requires complete old/new buffered PNGs and writer PNGs to match byte-for-byte.",
+  "linked": {
+    "processes": 3,
+    "api_cases": 100,
+    "image_fixtures": 50,
+    "batches": "One warmup plus eleven retained alternating batches per version; median per version, then median across three processes.",
+    "iterations": "512 for width below 100, 128 for wide single rows, 6 for tall controls.",
+    "memory": "50 untimed writer-owned peak-buffer probes per process, separately verified stable and nonincreasing. Timed writer calls blackbox both returned EncodeStats and output bytes."
+  },
+  "identity": "Local measure.py and pair.py retain source/harness/build/profile/executable/log/output hashes. measure.py touches source timestamps before building and requires an actual library rebuild, preventing stale Cargo artifacts after source restoration. Caller build-log names include -caller-build to avoid collisions. Recorded measurement files are immutable.",
+  "machine": "Windows QueryThreadCycleTime; logical CPU 2 affinity; existing optimized/LTO bench profile. This task serializes builds, timings and correctness checks. Host workloads, cache state and CPU frequency are uncontrolled.",
+  "validation": "Encoder filter-byte/native-format/reference/boundary/field and writer/deflate tests, PNG streaming/static/APNG recovery/resource checks, plus release/debug library oracles, strict all-target Clippy and scoped formatting. Independent integration/support/fixture/oracle inputs remain unchanged; the existing scalar unit oracle additionally verifies first-row bytes and scores in scored/unscored modes.",
+  "metric_changes": "Encoder-owned memory statistics truthfully decrease where the previous row is omitted. No public API, production dependency or unsafe-code change."
+}

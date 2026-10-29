@@ -2513,3 +2513,129 @@ commands, logs and exact source/test identities. `summary.py` recomputes all
 linked medians. `audit.py` verifies sources, rebuilds, executables, fixtures,
 heap counts, size probes, summaries and the explicit stale-timing exclusion.
 `audit.json` records normalized report, support and evidence hashes before commit.
+
+## First-row encoder predictors and adaptive ties (2026-10-29)
+
+Three safe Rust changes build on `8314615bc`:
+
+1. Buffered first rows use zero-upper predictor kernels: Up equals None,
+   Paeth equals Sub, and Average subtracts half the left byte. One-row images
+   omit the previous buffer. Pass initialization no longer explicitly clears
+   that buffer, and the last row no longer swaps it.
+2. Streaming encoding uses the same first-row kernels. A single-row pass
+   omits previous-row allocation/resizing; later passes allocate it when needed.
+   Explicit pass-start clears and last-row swaps are removed.
+3. Adaptive selection skips Up and Paeth on each pass's first row. Their
+   bytes and scores equal the already evaluated None and Sub candidates, so
+   they cannot win the existing strict-score tie rule. Other rows keep all
+   five candidates and their original order.
+
+The changes reuse the constant filter kernels and add a first-row Average
+kernel with no upper-row reads. Native packing, filtered bytes, selected wire
+filter values, compression/framing and writer failure behavior are preserved.
+Encoder memory statistics truthfully decrease with omitted buffers.
+
+### Component comparisons
+
+The following complete Stored PNG operations use the same RGBA16 4097x1 input.
+Each component compares its immutable checkpoint with the immediately preceding
+checkpoint: four alternating processes per version, three warmups and seven
+CPU-median batches per process. Values are medians across four processes.
+
+| Component / operation | Before cycles | After cycles | CPU throughput | Allocation calls |
+| --- | ---: | ---: | ---: | ---: |
+| Buffered first row, Paeth | 260,986 | 160,272 | 1.628x | 6 -> 5 |
+| Streaming first row, Paeth | 415,879 | 296,910 | 1.401x | 7 -> 6 |
+| Adaptive duplicate pruning, buffered | 709,790 | 466,657 | 1.521x | 6 -> 6 |
+| Adaptive duplicate pruning, writer | 842,661 | 564,444 | 1.493x | 7 -> 7 |
+
+Buffered Paeth requested bytes decrease from 266,584 to 233,808; writer requests decrease from 332,183 to 299,407. Each removes one 32,776-byte previous row. Allocation probes are outside timing.
+
+### Combined results and controls
+
+An additional caller links the immutable baseline and all three changes into
+one executable. It requires complete buffered PNGs and complete writer PNGs to
+match byte-for-byte, then checks decoded native samples before timing. Fifty
+fixtures produce 100 API comparisons per process. Each of three processes
+alternates versions within twelve batches, discards the first batch and retains
+eleven. Wide single rows use 128 iterations, small widths 512 and tall controls
+six. Writer timing blackboxes both output and returned EncodeStats.
+
+| Linked comparison | Before cycles | Selected cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| RGBA16 4097x1 Paeth buffered | 264,717 | 143,435 | 1.846x |
+| RGBA16 4097x1 Paeth writer | 282,238 | 162,391 | 1.738x |
+| RGBA16 4097x1 adaptive buffered | 748,149 | 411,660 | 1.817x |
+| RGBA16 4097x1 adaptive writer | 865,140 | 470,912 | 1.837x |
+| RGBA8 33x9 Adam7 adaptive buffered | 33,142 | 29,601 | 1.120x |
+| RGBA8 33x9 Adam7 adaptive writer | 50,032 | 49,083 | 1.019x |
+| RGBA8 33x9 plain adaptive buffered | 31,668 | 34,498 | 0.918x |
+| Gray8 4097x1 Up writer | 48,257 | 51,174 | 0.943x |
+| Gray8 4097x1 None writer | 19,114 | 20,648 | 0.926x |
+| Gray8 513x257 None buffered | 282,460 | 296,471 | 0.953x |
+| RGBA16 513x257 adaptive buffered | 36,815,455 | 36,155,454 | 1.018x |
+| RGBA16 513x257 adaptive writer | 36,219,001 | 36,278,630 | 0.998x |
+
+The median of the 100 linked API ratios is 1.082x; it is not a
+weighted corpus throughput. The twelve tall-control ratios range from
+0.953x to 1.047x. The small plain adaptive buffered control is
+about 8.2% slower and the wide gray Up writer about 5.7% slower. The
+separate-process small plain adaptive comparison is approximately neutral.
+Both datasets remain visible. These results establish targeted first-row
+and storage benefits; they do not establish faster encoding for every input.
+
+All fifty linked writer-owned peak-buffer probes agree across three processes
+and never increase. RGBA16 4097x1 Paeth drops from 233,769 to 200,993 owned
+bytes. Tiny RGBA8 adaptive drops from 135,472 to 135,464 bytes, reflecting the
+streaming Vec's minimum capacity. Every pipeline case also has nonincreasing
+allocation calls, reallocations and requested bytes across retained components.
+
+### Scope and verification
+
+`experiments/first-predictors-20261029` retains four frozen checkpoints and four
+alternating comparisons: 32 complete pipeline processes with 228 API operations
+each. The corpus covers gray8, RGBA8, RGBA16 and packed gray2; 4097x1 and 33x9
+plain/Adam7 cases; all six filters; native 513x257 None/adaptive controls and
+RGBA8 1x1 cases. Every process checks complete independently modeled filtered
+bytes and decoded native samples outside timing. The new `encoder-first` stage
+reuses the existing fixture/oracle/allocator harness. Source, harness, profile,
+toolchain, commands, logs, binaries, filtered fingerprints and allocation counts
+are retained and checked. Cumulative patches are relative to `8314615bc`.
+
+All cases use Stored compression; Fast compression has correctness coverage
+without a throughput claim here. Thread CPU cycles and logical CPU2 affinity
+are used. The host, frequency and cache state are uncontrolled. This task's
+builds, timings and correctness jobs are serialized. Pipeline runs request
+three iterations, with a minimum of 2,048 for filtered outputs below 4,096
+bytes. The actual iteration count is recorded in each TSV. Linked callers
+supplement the process comparisons with more iterations for short operations.
+
+Local `measure.py` forces source timestamps forward and requires an actual
+library rebuild before freezing a binary. Caller logs have a distinct
+`-caller-build` suffix. Measurement records and output files are immutable.
+`protocol.json` describes the individual scopes; `summary.py` recomputes linked
+medians, and `write_report.py` renders these tables from the retained data.
+
+Selected source passes 50 release tests and 48 debug tests: 37/35 integration
+tests across ten suites, plus 13 library oracles in each profile. All 2 optional C
+checks run in release and remain ignored in debug. Strict all-target
+Clippy and scoped formatting pass. Checks cover 17,280 independently
+modeled filtered outputs, all native formats/filter types/Adam7 tails,
+1,620 C encoder references and 3,240 corresponding native encodings,
+8,640 native APNG files, deterministic ties, native input/resource
+validation, every writer failure prefix and PNG/APNG recovery/order rules.
+The existing scalar unit oracle now also checks first-row bytes and
+scores in scored and unscored modes. Independent integration/support/
+fixture/oracle sources remain unchanged.
+
+Only two production files change: 74 added and 24 removed lines,
+net +50, including the unit-oracle assertions. Removed execution
+includes previous-row allocations, repeated clears, last-row swaps,
+zero-upper Paeth/Up work and two redundant adaptive candidate scans per
+pass. No public API, runtime dependency or unsafe code is added.
+
+`final-validation.json` and `library-validation.json` retain six successful
+commands and exact tested identities. `audit.py` verifies all four
+checkpoints, 32 pipeline processes, three linked processes, fifty memory
+probes, source/support identities, logs and recomputed summaries.
+`audit.json` records evidence and normalized report hashes before commit.

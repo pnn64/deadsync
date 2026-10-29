@@ -72,9 +72,8 @@ impl<'a> Rows<'a> {
                 )?;
                 if self.filter != Filter::None {
                     resize(&mut self.row, bytes)?;
-                    if self.filter != Filter::Sub {
+                    if self.filter != Filter::Sub && self.height > 1 {
                         resize(&mut self.previous, bytes)?;
-                        self.previous.fill(0);
                     }
                     if self.filter == Filter::Adaptive {
                         resize(&mut self.candidate, bytes + 1)?;
@@ -122,13 +121,20 @@ impl<'a> Rows<'a> {
         if self.filter == Filter::Adaptive {
             let mut best = u64::MAX;
             for kind in 0..5 {
-                let score = scanline::filter_into::<true>(
-                    &self.row,
-                    &self.previous,
-                    bpp,
-                    kind,
-                    &mut self.candidate[1..],
-                );
+                if self.index == 0 && matches!(kind, 2 | 4) {
+                    continue;
+                }
+                let score = if self.index == 0 {
+                    scanline::filter_first::<true>(&self.row, bpp, kind, &mut self.candidate[1..])
+                } else {
+                    scanline::filter_into::<true>(
+                        &self.row,
+                        &self.previous,
+                        bpp,
+                        kind,
+                        &mut self.candidate[1..],
+                    )
+                };
                 if score < best {
                     best = score;
                     selected = kind;
@@ -136,17 +142,21 @@ impl<'a> Rows<'a> {
                 }
             }
         } else {
-            scanline::filter_into::<false>(
-                &self.row,
-                &self.previous,
-                bpp,
-                selected,
-                &mut self.output[1..],
-            );
+            if self.index == 0 {
+                scanline::filter_first::<false>(&self.row, bpp, selected, &mut self.output[1..]);
+            } else {
+                scanline::filter_into::<false>(
+                    &self.row,
+                    &self.previous,
+                    bpp,
+                    selected,
+                    &mut self.output[1..],
+                );
+            }
         }
         self.output[0] = selected;
         self.index += 1;
-        if self.filter != Filter::Sub {
+        if self.filter != Filter::Sub && self.index < self.height {
             core::mem::swap(&mut self.row, &mut self.previous);
         }
         Ok(Some(&self.output))

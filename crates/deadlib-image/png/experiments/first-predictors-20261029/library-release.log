@@ -1,0 +1,21 @@
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+    Finished `release` profile [optimized] target(s) in 15.13s
+     Running unittests src\lib.rs (target\png-first-predictors-20261029\build\release\deps\deadlib_image_png-e217eeb2c3bd0973.exe)
+
+running 13 tests
+test checksum::tests::known_checksums ... ok
+test checksum::tests::adler_block_and_modulus_boundaries ... ok
+test scanline::tests::invalid_filter_bytes_do_not_change_the_row ... ok
+test checksum::tests::crc_bulk_tails_and_split_boundaries ... ok
+test zlib::tests::consumed_prefix_byte_count_avoids_large_position_overflow ... ok
+test zlib::matcher::tests::bounded_history_chains_and_wrapping_head_positions ... ok
+test zlib::tests::every_length_and_distance_code_matches_rfc1951_tables ... ok
+test scanline::tests::independent_filter_bytes_scores_and_short_row_boundaries ... ok
+test checksum::tests::crc_every_byte_value_in_word_lanes_and_fragmented_tails ... ok
+test zlib::matcher::tests::every_prefix_mismatch_and_tail ... ok
+test scanline::tests::every_packed_byte_and_tail_survives_strided_gather ... ok
+test checksum::tests::adler_fragmentation_and_tail_lengths_match_scalar_oracle ... ok
+test scanline::tests::every_paeth_triplet_matches_the_specification ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+

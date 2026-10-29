@@ -1,0 +1,150 @@
+first-c0-d8-4097x1-i0-f2: writer-owned 147732 -> 143635
+first-c0-d8-4097x1-i0-f2-buffered: cycles/op 22438.73 -> 18938.73; ns/op 10236.72 -> 8618.75; CPU throughput 1.185x
+first-c0-d8-4097x1-i0-f2-writer: cycles/op 52007.77 -> 51174.37; ns/op 23801.56 -> 23350.00; CPU throughput 1.016x
+first-c0-d8-4097x1-i0-f4: writer-owned 147732 -> 143635
+first-c0-d8-4097x1-i0-f4-buffered: cycles/op 32837.55 -> 19465.20; ns/op 14968.75 -> 8857.81; CPU throughput 1.687x
+first-c0-d8-4097x1-i0-f4-writer: cycles/op 42558.99 -> 29834.85; ns/op 19488.28 -> 13606.25; CPU throughput 1.426x
+first-c0-d8-4097x1-i0-f5: writer-owned 151830 -> 147733
+first-c0-d8-4097x1-i0-f5-buffered: cycles/op 94307.82 -> 50685.63; ns/op 43092.19 -> 23257.03; CPU throughput 1.861x
+first-c0-d8-4097x1-i0-f5-writer: cycles/op 113560.38 -> 63788.75; ns/op 51893.75 -> 29193.75; CPU throughput 1.780x
+first-c0-d8-33x9-i0-f5: writer-owned 135574 -> 135574
+first-c0-d8-33x9-i0-f5-buffered: cycles/op 9799.05 -> 9885.22; ns/op 4467.77 -> 4530.66; CPU throughput 0.991x
+first-c0-d8-33x9-i0-f5-writer: cycles/op 21268.78 -> 20914.66; ns/op 9762.50 -> 9561.52; CPU throughput 1.017x
+first-c0-d8-4097x1-i1-f2: writer-owned 141600 -> 139548
+first-c0-d8-4097x1-i1-f2-buffered: cycles/op 24618.29 -> 23543.09; ns/op 11278.12 -> 10721.09; CPU throughput 1.046x
+first-c0-d8-4097x1-i1-f2-writer: cycles/op 36646.21 -> 34854.20; ns/op 16710.16 -> 15892.19; CPU throughput 1.051x
+first-c0-d8-4097x1-i1-f4: writer-owned 141600 -> 139548
+first-c0-d8-4097x1-i1-f4-buffered: cycles/op 36320.39 -> 23544.80; ns/op 16563.28 -> 10614.06; CPU throughput 1.543x
+first-c0-d8-4097x1-i1-f4-writer: cycles/op 47117.05 -> 32088.16; ns/op 21500.00 -> 14632.81; CPU throughput 1.468x
+first-c0-d8-4097x1-i1-f5: writer-owned 143656 -> 141604
+first-c0-d8-4097x1-i1-f5-buffered: cycles/op 99313.46 -> 58117.78; ns/op 45299.22 -> 26590.62; CPU throughput 1.709x
+first-c0-d8-4097x1-i1-f5-writer: cycles/op 116513.34 -> 67976.40; ns/op 53228.91 -> 31010.94; CPU throughput 1.714x
+first-c0-d8-33x9-i1-f5: writer-owned 135696 -> 135666
+first-c0-d8-33x9-i1-f5-buffered: cycles/op 11158.06 -> 10524.85; ns/op 5087.11 -> 4798.05; CPU throughput 1.060x
+first-c0-d8-33x9-i1-f5-writer: cycles/op 27757.75 -> 25991.46; ns/op 12702.93 -> 11893.16; CPU throughput 1.068x
+first-c6-d8-4097x1-i0-f2: writer-owned 184605 -> 168217
+first-c6-d8-4097x1-i0-f2-buffered: cycles/op 89255.90 -> 79376.67; ns/op 40871.88 -> 36276.56; CPU throughput 1.124x
+first-c6-d8-4097x1-i0-f2-writer: cycles/op 100640.77 -> 94688.52; ns/op 46054.69 -> 43422.66; CPU throughput 1.063x
+first-c6-d8-4097x1-i0-f4: writer-owned 184605 -> 168217
+first-c6-d8-4097x1-i0-f4-buffered: cycles/op 140413.12 -> 81100.10; ns/op 64132.03 -> 37039.84; CPU throughput 1.731x
+first-c6-d8-4097x1-i0-f4-writer: cycles/op 160812.91 -> 93628.75; ns/op 73502.34 -> 42768.75; CPU throughput 1.718x
+first-c6-d8-4097x1-i0-f5: writer-owned 200994 -> 184606
+first-c6-d8-4097x1-i0-f5-buffered: cycles/op 365110.80 -> 205592.61; ns/op 166936.72 -> 93999.22; CPU throughput 1.776x
+first-c6-d8-4097x1-i0-f5-writer: cycles/op 403502.73 -> 226242.76; ns/op 184294.53 -> 103353.91; CPU throughput 1.783x
+first-c6-d8-33x9-i0-f5: writer-owned 135970 -> 135970
+first-c6-d8-33x9-i0-f5-buffered: cycles/op 31667.59 -> 34497.94; ns/op 14462.11 -> 15784.77; CPU throughput 0.918x
+first-c6-d8-33x9-i0-f5-writer: cycles/op 46533.14 -> 46919.41; ns/op 21247.07 -> 21441.80; CPU throughput 0.992x
+first-c6-d8-4097x1-i1-f2: writer-owned 160068 -> 151860
+first-c6-d8-4097x1-i1-f2-buffered: cycles/op 78399.23 -> 72633.92; ns/op 35816.41 -> 33226.56; CPU throughput 1.079x
+first-c6-d8-4097x1-i1-f2-writer: cycles/op 100299.49 -> 92143.71; ns/op 46055.47 -> 42032.81; CPU throughput 1.089x
+first-c6-d8-4097x1-i1-f4: writer-owned 160068 -> 151860
+first-c6-d8-4097x1-i1-f4-buffered: cycles/op 125584.87 -> 78392.37; ns/op 57360.94 -> 35832.03; CPU throughput 1.602x
+first-c6-d8-4097x1-i1-f4-writer: cycles/op 147341.09 -> 90524.88; ns/op 67329.69 -> 41368.75; CPU throughput 1.628x
+first-c6-d8-4097x1-i1-f5: writer-owned 168280 -> 160072
+first-c6-d8-4097x1-i1-f5-buffered: cycles/op 374154.91 -> 205187.91; ns/op 170949.22 -> 93646.09; CPU throughput 1.823x
+first-c6-d8-4097x1-i1-f5-writer: cycles/op 396533.60 -> 220504.90; ns/op 181249.22 -> 100682.03; CPU throughput 1.798x
+first-c6-d8-33x9-i1-f5: writer-owned 136096 -> 136096
+first-c6-d8-33x9-i1-f5-buffered: cycles/op 33104.20 -> 30529.36; ns/op 15159.57 -> 13941.41; CPU throughput 1.084x
+first-c6-d8-33x9-i1-f5-writer: cycles/op 50032.28 -> 48021.20; ns/op 22866.02 -> 21946.88; CPU throughput 1.042x
+first-c6-d16-4097x1-i0-f2: writer-owned 233769 -> 200993
+first-c6-d16-4097x1-i0-f2-buffered: cycles/op 160507.66 -> 149995.66; ns/op 73296.88 -> 68496.09; CPU throughput 1.070x
+first-c6-d16-4097x1-i0-f2-writer: cycles/op 181404.74 -> 173519.90; ns/op 82899.22 -> 79287.50; CPU throughput 1.045x
+first-c6-d16-4097x1-i0-f4: writer-owned 233769 -> 200993
+first-c6-d16-4097x1-i0-f4-buffered: cycles/op 266781.66 -> 142807.05; ns/op 121939.84 -> 65217.97; CPU throughput 1.868x
+first-c6-d16-4097x1-i0-f4-writer: cycles/op 282237.56 -> 157189.44; ns/op 128871.88 -> 71840.62; CPU throughput 1.796x
+first-c6-d16-4097x1-i0-f5: writer-owned 266546 -> 233770
+first-c6-d16-4097x1-i0-f5-buffered: cycles/op 815066.98 -> 443331.69; ns/op 372542.97 -> 202546.09; CPU throughput 1.839x
+first-c6-d16-4097x1-i0-f5-writer: cycles/op 888201.56 -> 470911.52; ns/op 406303.91 -> 215176.56; CPU throughput 1.886x
+first-c6-d16-33x9-i0-f5: writer-owned 136498 -> 136498
+first-c6-d16-33x9-i0-f5-buffered: cycles/op 78087.98 -> 79375.83; ns/op 35658.01 -> 36284.77; CPU throughput 0.984x
+first-c6-d16-33x9-i0-f5-writer: cycles/op 142305.87 -> 140547.74; ns/op 65224.80 -> 71112.70; CPU throughput 1.013x
+first-c6-d16-4097x1-i1-f2: writer-owned 184692 -> 168276
+first-c6-d16-4097x1-i1-f2-buffered: cycles/op 193983.13 -> 180729.10; ns/op 88760.94 -> 82681.25; CPU throughput 1.073x
+first-c6-d16-4097x1-i1-f2-writer: cycles/op 241503.16 -> 226553.15; ns/op 110614.06 -> 103707.03; CPU throughput 1.066x
+first-c6-d16-4097x1-i1-f4: writer-owned 184692 -> 168276
+first-c6-d16-4097x1-i1-f4-buffered: cycles/op 294467.82 -> 169646.06; ns/op 134678.12 -> 77536.72; CPU throughput 1.736x
+first-c6-d16-4097x1-i1-f4-writer: cycles/op 316325.22 -> 195919.16; ns/op 144581.25 -> 89616.41; CPU throughput 1.615x
+first-c6-d16-4097x1-i1-f5: writer-owned 201112 -> 184696
+first-c6-d16-4097x1-i1-f5-buffered: cycles/op 823445.66 -> 466641.57; ns/op 376294.53 -> 213259.38; CPU throughput 1.765x
+first-c6-d16-4097x1-i1-f5-writer: cycles/op 894779.73 -> 491952.65; ns/op 409174.22 -> 225008.59; CPU throughput 1.819x
+first-c6-d16-33x9-i1-f5: writer-owned 136736 -> 136736
+first-c6-d16-33x9-i1-f5-buffered: cycles/op 72952.89 -> 67891.52; ns/op 33333.79 -> 31016.41; CPU throughput 1.075x
+first-c6-d16-33x9-i1-f5-writer: cycles/op 93337.23 -> 86238.63; ns/op 42699.02 -> 39420.70; CPU throughput 1.082x
+first-c0-d2-4097x1-i0-f2: writer-owned 138516 -> 137491
+first-c0-d2-4097x1-i0-f2-buffered: cycles/op 19105.08 -> 17273.62; ns/op 8764.84 -> 7885.94; CPU throughput 1.106x
+first-c0-d2-4097x1-i0-f2-writer: cycles/op 26909.33 -> 27039.66; ns/op 12277.34 -> 12310.94; CPU throughput 0.995x
+first-c0-d2-4097x1-i0-f4: writer-owned 138516 -> 137491
+first-c0-d2-4097x1-i0-f4-buffered: cycles/op 19991.65 -> 16117.81; ns/op 9120.31 -> 7352.34; CPU throughput 1.240x
+first-c0-d2-4097x1-i0-f4-writer: cycles/op 30371.59 -> 25765.53; ns/op 13850.78 -> 11730.47; CPU throughput 1.179x
+first-c0-d2-4097x1-i0-f5: writer-owned 139542 -> 138517
+first-c0-d2-4097x1-i0-f5-buffered: cycles/op 34778.74 -> 23618.55; ns/op 15857.03 -> 10819.53; CPU throughput 1.473x
+first-c0-d2-4097x1-i0-f5-writer: cycles/op 44181.23 -> 34799.32; ns/op 20151.56 -> 15943.75; CPU throughput 1.270x
+first-c0-d2-33x9-i0-f5: writer-owned 135478 -> 135478
+first-c0-d2-33x9-i0-f5-buffered: cycles/op 5707.43 -> 5452.35; ns/op 2598.83 -> 2486.72; CPU throughput 1.047x
+first-c0-d2-33x9-i0-f5-writer: cycles/op 15955.34 -> 15834.87; ns/op 7302.15 -> 7239.84; CPU throughput 1.008x
+first-c0-d2-4097x1-i1-f2: writer-owned 136992 -> 136476
+first-c0-d2-4097x1-i1-f2-buffered: cycles/op 19760.14 -> 20756.47; ns/op 9012.50 -> 9339.84; CPU throughput 0.952x
+first-c0-d2-4097x1-i1-f2-writer: cycles/op 31863.52 -> 30910.05; ns/op 14630.47 -> 14094.53; CPU throughput 1.031x
+first-c0-d2-4097x1-i1-f4: writer-owned 136992 -> 136476
+first-c0-d2-4097x1-i1-f4-buffered: cycles/op 22111.20 -> 19984.79; ns/op 10082.81 -> 9114.84; CPU throughput 1.106x
+first-c0-d2-4097x1-i1-f4-writer: cycles/op 34401.48 -> 30090.37; ns/op 15786.72 -> 13699.22; CPU throughput 1.143x
+first-c0-d2-4097x1-i1-f5: writer-owned 137512 -> 136996
+first-c0-d2-4097x1-i1-f5-buffered: cycles/op 39041.84 -> 28125.15; ns/op 17801.56 -> 12876.56; CPU throughput 1.388x
+first-c0-d2-4097x1-i1-f5-writer: cycles/op 52424.49 -> 40161.63; ns/op 24000.78 -> 18357.03; CPU throughput 1.305x
+first-c0-d2-33x9-i1-f5: writer-owned 135504 -> 135504
+first-c0-d2-33x9-i1-f5-buffered: cycles/op 7322.38 -> 7640.91; ns/op 3359.38 -> 3484.18; CPU throughput 0.958x
+first-c0-d2-33x9-i1-f5-writer: cycles/op 19398.74 -> 19850.17; ns/op 8880.86 -> 9076.95; CPU throughput 0.977x
+first-c0-d8-513x257-i0-f0: writer-owned 135954 -> 135954
+first-c0-d8-513x257-i0-f0-buffered: cycles/op 282460.00 -> 296471.33; ns/op 129133.33 -> 134883.33; CPU throughput 0.953x
+first-c0-d8-513x257-i0-f0-writer: cycles/op 364772.50 -> 359248.33; ns/op 165683.33 -> 163983.33; CPU throughput 1.015x
+first-c0-d8-513x257-i0-f5: writer-owned 137494 -> 137494
+first-c0-d8-513x257-i0-f5-buffered: cycles/op 4305675.50 -> 4293456.83; ns/op 1969666.67 -> 1962833.33; CPU throughput 1.003x
+first-c0-d8-513x257-i0-f5-writer: cycles/op 4513944.17 -> 4501762.33; ns/op 2062850.00 -> 2057633.33; CPU throughput 1.003x
+first-c6-d8-513x257-i0-f0: writer-owned 137493 -> 137493
+first-c6-d8-513x257-i0-f0-buffered: cycles/op 2843659.00 -> 2877535.50; ns/op 1297666.67 -> 1317766.67; CPU throughput 0.988x
+first-c6-d8-513x257-i0-f0-writer: cycles/op 1954720.67 -> 1966354.00; ns/op 896150.00 -> 898466.67; CPU throughput 0.994x
+first-c6-d8-513x257-i0-f5: writer-owned 143650 -> 143650
+first-c6-d8-513x257-i0-f5-buffered: cycles/op 19103634.00 -> 19137180.33; ns/op 8733066.67 -> 8751283.33; CPU throughput 0.998x
+first-c6-d8-513x257-i0-f5-writer: cycles/op 18601418.00 -> 18576943.17; ns/op 8506416.67 -> 8494216.67; CPU throughput 1.001x
+first-c6-d16-513x257-i0-f0: writer-owned 139545 -> 139545
+first-c6-d16-513x257-i0-f0-buffered: cycles/op 6265627.50 -> 6118709.00; ns/op 2867400.00 -> 2797900.00; CPU throughput 1.024x
+first-c6-d16-513x257-i0-f0-writer: cycles/op 4775259.00 -> 4808257.17; ns/op 2183666.67 -> 2209400.00; CPU throughput 0.993x
+first-c6-d16-513x257-i0-f5: writer-owned 151858 -> 151858
+first-c6-d16-513x257-i0-f5-buffered: cycles/op 37364533.83 -> 37411616.50; ns/op 17085016.67 -> 17102533.33; CPU throughput 0.999x
+first-c6-d16-513x257-i0-f5-writer: cycles/op 36219000.67 -> 36278630.33; ns/op 32928500.00 -> 32609066.67; CPU throughput 0.998x
+first-c6-d8-1x1-i0-f0: writer-owned 135448 -> 135448
+first-c6-d8-1x1-i0-f0-buffered: cycles/op 1414.75 -> 1519.35; ns/op 643.16 -> 690.62; CPU throughput 0.931x
+first-c6-d8-1x1-i0-f0-writer: cycles/op 11333.83 -> 11177.35; ns/op 9083.20 -> 9005.47; CPU throughput 1.014x
+first-c6-d8-1x1-i0-f1: writer-owned 135456 -> 135456
+first-c6-d8-1x1-i0-f1-buffered: cycles/op 1819.88 -> 1817.73; ns/op 827.93 -> 826.95; CPU throughput 1.001x
+first-c6-d8-1x1-i0-f1-writer: cycles/op 11762.97 -> 11590.20; ns/op 13224.41 -> 9221.09; CPU throughput 1.015x
+first-c6-d8-1x1-i0-f2: writer-owned 135464 -> 135456
+first-c6-d8-1x1-i0-f2-buffered: cycles/op 2077.11 -> 1835.74; ns/op 944.92 -> 4749.02; CPU throughput 1.131x
+first-c6-d8-1x1-i0-f2-writer: cycles/op 11206.07 -> 10855.39; ns/op 9055.08 -> 8863.87; CPU throughput 1.032x
+first-c6-d8-1x1-i0-f3: writer-owned 135464 -> 135456
+first-c6-d8-1x1-i0-f3-buffered: cycles/op 2143.12 -> 1919.77; ns/op 974.80 -> 873.24; CPU throughput 1.116x
+first-c6-d8-1x1-i0-f3-writer: cycles/op 11954.60 -> 11453.01; ns/op 9401.95 -> 9147.07; CPU throughput 1.044x
+first-c6-d8-1x1-i0-f4: writer-owned 135464 -> 135456
+first-c6-d8-1x1-i0-f4-buffered: cycles/op 1847.31 -> 1695.12; ns/op 840.23 -> 771.09; CPU throughput 1.090x
+first-c6-d8-1x1-i0-f4-writer: cycles/op 12358.45 -> 11842.71; ns/op 9601.37 -> 9344.73; CPU throughput 1.044x
+first-c6-d8-1x1-i0-f5: writer-owned 135472 -> 135464
+first-c6-d8-1x1-i0-f5-buffered: cycles/op 2459.08 -> 2214.72; ns/op 5034.96 -> 1007.23; CPU throughput 1.110x
+first-c6-d8-1x1-i0-f5-writer: cycles/op 11913.88 -> 11642.93; ns/op 9374.80 -> 13166.99; CPU throughput 1.023x
+first-c6-d16-4097x1-i0-f3: writer-owned 233769 -> 200993
+first-c6-d16-4097x1-i0-f3-buffered: cycles/op 201000.27 -> 165463.55; ns/op 185943.75 -> 154105.47; CPU throughput 1.215x
+first-c6-d16-4097x1-i0-f3-writer: cycles/op 216740.80 -> 189668.58; ns/op 193790.62 -> 180914.84; CPU throughput 1.143x
+first-c0-d8-4097x1-i0-f0: writer-owned 139538 -> 139538
+first-c0-d8-4097x1-i0-f0-buffered: cycles/op 8503.91 -> 9234.43; ns/op 3868.75 -> 4202.34; CPU throughput 0.921x
+first-c0-d8-4097x1-i0-f0-writer: cycles/op 18160.20 -> 19103.35; ns/op 8266.41 -> 24376.56; CPU throughput 0.951x
+first-c0-d8-4097x1-i0-f1: writer-owned 143635 -> 143635
+first-c0-d8-4097x1-i0-f1-buffered: cycles/op 17477.69 -> 17897.83; ns/op 7957.81 -> 8149.22; CPU throughput 0.977x
+first-c0-d8-4097x1-i0-f1-writer: cycles/op 26710.41 -> 26413.73; ns/op 27839.06 -> 12025.78; CPU throughput 1.011x
+first-c6-d16-4097x1-i1-f3: writer-owned 184692 -> 168276
+first-c6-d16-4097x1-i1-f3-buffered: cycles/op 195504.20 -> 162995.89; ns/op 167896.09 -> 136778.12; CPU throughput 1.199x
+first-c6-d16-4097x1-i1-f3-writer: cycles/op 223644.79 -> 188078.92; ns/op 196264.84 -> 164525.00; CPU throughput 1.189x
+first-c0-d8-4097x1-i1-f0: writer-owned 137496 -> 137496
+first-c0-d8-4097x1-i1-f0-buffered: cycles/op 14001.70 -> 14315.52; ns/op 6372.66 -> 6516.41; CPU throughput 0.978x
+first-c0-d8-4097x1-i1-f0-writer: cycles/op 23669.99 -> 23513.93; ns/op 26892.97 -> 26376.56; CPU throughput 1.007x
+first-c0-d8-4097x1-i1-f1: writer-owned 139548 -> 139548
+first-c0-d8-4097x1-i1-f1-buffered: cycles/op 21253.77 -> 23983.80; ns/op 25347.66 -> 26597.66; CPU throughput 0.886x
+first-c0-d8-4097x1-i1-f1-writer: cycles/op 33662.38 -> 32690.07; ns/op 31204.69 -> 30662.50; CPU throughput 1.030x

@@ -1,0 +1,122 @@
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling cfg-if v1.0.5
+   Compiling bitflags v2.13.2
+   Compiling miniz_oxide v0.9.1
+   Compiling crc32fast v1.5.3
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling deadlib-image v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image)
+   Compiling flate2 v1.1.10
+   Compiling png v0.18.1
+   Compiling deadlib-image-png v0.1.0 (C:\GitHub\deadsync-png-pixels-20261028\crates\deadlib-image\png)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.11s
+     Running tests\apng_recovery.rs (target\png-first-predictors-20261029\build\debug\deps\apng_recovery-dbedf7b8833c7c6e.exe)
+
+running 8 tests
+test libpng_static_fallback_known_answers_and_crc_policy ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ORACLE
+test palette_strictness_keeps_static_and_animation_errors_distinct ... ok
+test recovery_never_accepts_bad_core_png_or_bypasses_limits ... ok
+test animation_chunk_permutations_and_reencoding_clear_diagnostics ... ok
+test all_truncations_io_errors_and_multiple_fdat_boundaries ... ok
+test discarded_large_chunks_stay_bounded_and_report_only_the_first_fault ... ok
+test default_control_before_actl_all_formats_faults_and_deferred_events ... ok
+Recovered 3000 independent APNG faults across 60 format/interlace/default-role configurations
+test independent_valid_animation_and_recovered_static_samples_all_formats ... ok
+
+test result: ok. 7 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 3.36s
+
+     Running tests\decoder_boundaries.rs (target\png-first-predictors-20261029\build\debug\deps\decoder_boundaries-d00ad6f732f55a60.exe)
+
+running 4 tests
+Native resource fuzzer contract: 6376 independent format/policy/IO/budget seeds
+test native_resource_fuzzer_contract_accepts_independent_boundary_and_io_seeds ... ok
+Independent resource audit: 120 files, 4680 budget/policy probes, 2400 accepted, 2280 rejected, 32760 buffered/reader/push API checks
+test exact_input_sample_inflation_metadata_chunk_and_frame_budgets ... ok
+IHDR audit: 960 dimension pairs, 65536 color/depth pairs, 11520 method bytes, 468096 parser/policy API checks; no giant allocation
+test ihdr_integer_color_depth_and_method_fields_fail_before_large_allocation ... ok
+Reader fault audit: 80760 interruption/short-read/IO/oversized-count checks across all formats, interlace modes, animation roles and EOF probing
+test interruptions_and_reader_faults_at_chunk_boundaries_and_final_eof_probe ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.22s
+
+     Running tests\deflate_stream.rs (target\png-first-predictors-20261029\build\debug\deps\deflate_stream-a55f63789189db61.exe)
+
+running 4 tests
+test empty_output_and_input_after_finish ... ok
+test cross_block_history_and_separate_finish ... ok
+test mixed_compressibility_block_transitions_and_full_window_reuse ... ok
+test input_output_fragments_and_block_boundaries ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.72s
+
+     Running tests\encoder_boundaries.rs (target\png-first-predictors-20261029\build\debug\deps\encoder_boundaries-1186da46f0a3817f.exe)
+
+running 3 tests
+Encoder image/frame validation: 687 malformed native inputs, both writers reject before output
+test native_image_animation_and_frame_storage_errors_reject_before_output ... ok
+Encoder APNG rectangle audit: 450 valid / 2430 invalid inputs, both default roles and all native formats; both writers, plain/Adam7, independent CRC/control/zlib answers
+test frame_rectangles_and_integer_edges_have_literal_controls_and_exact_frame_streams ... ok
+Encoder writer audit: 2616 exact prefix/failure offsets with short and Interrupted writes; invalid byte counts rejected
+test every_output_byte_failure_short_writes_and_invalid_writer_counts ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.05s
+
+     Running tests\encoder_fields.rs (target\png-first-predictors-20261029\build\debug\deps\encoder_fields-98455592603e27a9.exe)
+
+running 3 tests
+Encoder native boundary audit: 308033 invalid inputs rejected by both writers before any output
+test native_palette_transparency_and_option_boundaries_reject_before_writing ... ok
+Encoder ordering audit: 49419 independently modeled pairs, both writers, exact literal output or rejection before output
+test metadata_placement_multiplicity_and_pairs_follow_table_seven_when_writing ... ok
+Encoder scalar audit: 109376 exact literal files, 82396 rejected inputs, 15576 malformed wire lengths unrepresentable by the native API; each checked through both encoders
+test scalar_input_fields_and_exact_wire_values_for_both_encoders ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 47.19s
+
+     Running tests\encoder_filter_bytes.rs (target\png-first-predictors-20261029\build\debug\deps\encoder_filter_bytes-67ff9f79d06d11ec.exe)
+
+running 1 test
+test all_formats_filters_and_pass_tails_match_normative_bytes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.53s
+
+     Running tests\encoder_reference.rs (target\png-first-predictors-20261029\build\debug\deps\encoder_reference-fb8329fb261a7156.exe)
+
+running 2 tests
+test c_libpng_encoder_all_formats_filters_interlace_and_compression_levels ... ignored, build tests/oracle and set DEADLIB_LIBPNG_ENCODER
+Cross-encoder APNG audit: 8640 native files, 2160 Rust png animations and 180 static reference encodings; exact native samples, palettes, transparency and controls
+test rust_encoder_and_both_native_writers_preserve_static_and_apng_semantics ... ok
+
+test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 28.97s
+
+     Running tests\png_stream.rs (target\png-first-predictors-20261029\build\debug\deps\png_stream-dd9b5eda8d24da6f.exe)
+
+running 5 tests
+test prefix_consumption_provisional_rows_and_verified_image_end ... ok
+test every_truncation_limits_and_reader_errors ... ok
+test apng_image_roles_and_completion ... ok
+test row_pipeline_memory_is_bounded_for_growing_heights ... ok
+test pngsuite_and_apng_arbitrary_reads ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s
+
+     Running tests\png_write.rs (target\png-first-predictors-20261029\build\debug\deps\png_write-13df142561112301.exe)
+
+running 4 tests
+test write_failures_and_input_validation ... ok
+test sixteen_bit_gradient_compression_regression ... ok
+test all_formats_fragmented_writes_and_chunks ... ok
+test bounded_encoder_scratch_and_maximum_chunk_size ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.78s
+
+     Running tests\static_png.rs (target\png-first-predictors-20261029\build\debug\deps\static_png-f860a6acf3292a71.exe)
+
+running 3 tests
+test decode_reference_encodings ... ok
+test one_byte_idat_and_truncations ... ok
+test complete_native_format_filter_and_adam7_matrix ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 17.30s
+
