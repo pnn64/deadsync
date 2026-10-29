@@ -45,7 +45,8 @@ pub type WriteResult<T> = std::result::Result<T, WriteError>;
 ///
 /// All thirteen JPEG-1 processes use the same marker and entropy writers as
 /// the `Vec` APIs. Calls produce full interchange images or table-only streams;
-/// paired abbreviated output with an omission cache is not provided here.
+/// use [`AbbreviatedStreamEncoder`](crate::AbbreviatedStreamEncoder) for paired
+/// abbreviated output to separate logical destinations.
 /// Source models and raster preparation remain resident in memory. Only the
 /// encoded destination is incremental. Staging capacity is charged against the
 /// memory left after source and encoder storage; `max_output_bytes` still
@@ -282,15 +283,7 @@ impl<W: Write> StreamEncoder<W> {
         &mut self,
         encode: impl FnOnce(&mut WriterSink<'_>) -> Result<()>,
     ) -> WriteResult<usize> {
-        let mut sink = WriterSink {
-            writer: &mut self.writer,
-            buffer: &mut self.buffer,
-            requested: self.requested,
-            used: 0,
-            length: 0,
-            written: 0,
-            error: None,
-        };
+        let mut sink = WriterSink::new(&mut self.writer, &mut self.buffer, self.requested);
         let result = encode(&mut sink).and_then(|()| sink.drain());
         match result {
             Ok(()) => Ok(sink.written),
@@ -339,6 +332,27 @@ fn write_all(writer: &mut dyn Write, mut data: &[u8], written: &mut usize) -> io
 }
 
 impl WriterSink<'_> {
+    pub(crate) fn new<'a>(
+        writer: &'a mut dyn Write,
+        buffer: &'a mut Vec<u8>,
+        requested: usize,
+    ) -> WriterSink<'a> {
+        WriterSink {
+            writer,
+            buffer,
+            requested,
+            used: 0,
+            length: 0,
+            written: 0,
+            error: None,
+        }
+    }
+    pub(crate) fn written(&self) -> usize {
+        self.written
+    }
+    pub(crate) fn take_error(&mut self) -> Option<io::Error> {
+        self.error.take()
+    }
     fn failure(&mut self, error: io::Error) -> Error {
         let kind = error.kind();
         self.error = Some(error);

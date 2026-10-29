@@ -7,8 +7,15 @@ use deadlib_image_jpeg::{
 use std::path::Path;
 #[path = "support/hierarchy_dump.rs"]
 mod dump;
+#[path = "support/paired_output.rs"]
+mod paired_output;
 mod support;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+enum Native<'a> {
+    Dct(deadlib_image_jpeg::CoefficientImage<'a>),
+    Lossless(deadlib_image_jpeg::LosslessImage<'a>),
+    Hierarchy(deadlib_image_jpeg::HierarchicalImage<'a>),
+}
 
 fn kind(input: &[u8]) -> Result<Option<u8>> {
     let mut hierarchy = false;
@@ -107,7 +114,7 @@ fn decode(prefix: &Path, inputs: &[String], limits: Limits) -> Result<()> {
     println!("tables {packets} images {images}");
     Ok(())
 }
-fn encode(args: &[String]) -> Result<()> {
+fn encode(args: &[String], stream: Option<usize>, dnl: bool) -> Result<()> {
     if args.len() < 5 {
         return Err("encode prefix fixed restart repeat input.jpg... required".into());
     }
@@ -116,9 +123,32 @@ fn encode(args: &[String]) -> Result<()> {
     let restart = args[2].parse()?;
     let repeat: usize = args[3].parse()?;
     let mut encoder = AbbreviatedEncoder::new();
+    let mut probe = stream.map(paired_output::Probe::new);
+    let mut decoder = Tables::new();
+    let limits = Limits {
+        max_scans: 8192,
+        ..Limits::default()
+    };
+    let height_declaration = if dnl {
+        deadlib_image_jpeg::HeightDeclaration::Dnl { initial_height: 0 }
+    } else {
+        deadlib_image_jpeg::HeightDeclaration::FrameHeader
+    };
     let mut counter = 0;
     for source in &args[4..] {
         let bytes = std::fs::read(source)?;
+        let Some(family) = kind(&bytes)? else {
+            decoder.load(&bytes, limits)?;
+            continue;
+        };
+        // Read an abbreviated source exactly once in its original input-table
+        // context. Repeating its prepared model must not reinterpret the same
+        // compressed source using table redefinitions from its previous read.
+        let source = match family {
+            0 => Native::Dct(decoder.decode_coefficients(&bytes, limits)?),
+            1 => Native::Lossless(decoder.decode_lossless(&bytes, limits)?),
+            _ => Native::Hierarchy(decoder.decode_hierarchical(&bytes, limits)?),
+        };
         for _ in 0..repeat {
             let dct = |process: Process| CodingOptions {
                 entropy_coding: if process.is_arithmetic() {
@@ -130,6 +160,7 @@ fn encode(args: &[String]) -> Result<()> {
                 successive_approximation: 3,
                 optimize_huffman,
                 restart_interval: restart,
+                height_declaration,
                 ..CodingOptions::default()
             };
             let lossless = |process: Process| LosslessOptions {
@@ -140,34 +171,53 @@ fn encode(args: &[String]) -> Result<()> {
                 },
                 optimize_huffman,
                 restart_rows: restart,
+                height_declaration,
+                limits,
                 ..LosslessOptions::default()
             };
             let destination = append(prefix, &format!(".image-{counter}"));
-            let result = match kind(&bytes)?.ok_or("image source required")? {
-                0 => {
-                    let image = deadlib_image_jpeg::decode_coefficients(&bytes, Limits::default())?;
-                    support::coefficients(&image, &append(&destination, ".expected.coef"))?;
-                    encoder.encode_coefficients(
-                        &image,
+            let result = match &source {
+                Native::Dct(image) => {
+                    support::coefficients(image, &append(&destination, ".expected.coef"))?;
+                    let result = encoder.encode_coefficients(
+                        image,
                         dct(image.frame.process),
                         MetadataOptions::default(),
-                    )?
+                    )?;
+                    if let Some(probe) = &mut probe {
+                        probe.compare(&destination, &result, |stream| {
+                            stream.encode_coefficients(
+                                image,
+                                dct(image.frame.process),
+                                MetadataOptions::default(),
+                            )
+                        })?;
+                    }
+                    result
                 }
-                1 => {
-                    let image = deadlib_image_jpeg::decode_lossless(&bytes, Limits::default())?;
+                Native::Lossless(image) => {
                     dump::sample_dump(
                         &append(&destination, ".expected.samples"),
                         &image.frame,
                         &image.components,
                     )?;
-                    encoder.encode_lossless(
-                        &image,
+                    let result = encoder.encode_lossless(
+                        image,
                         lossless(image.frame.process),
                         MetadataOptions::default(),
-                    )?
+                    )?;
+                    if let Some(probe) = &mut probe {
+                        probe.compare(&destination, &result, |stream| {
+                            stream.encode_lossless(
+                                image,
+                                lossless(image.frame.process),
+                                MetadataOptions::default(),
+                            )
+                        })?;
+                    }
+                    result
                 }
-                _ => {
-                    let image = deadlib_image_jpeg::decode_hierarchical(&bytes, Limits::default())?;
+                Native::Hierarchy(image) => {
                     let mut options = Vec::new();
                     for (i, frame) in image.frames.iter().enumerate() {
                         dump::frame_dump(
@@ -202,18 +252,26 @@ fn encode(args: &[String]) -> Result<()> {
                         &frame,
                         &image.reconstruct_reference()?,
                     )?;
-                    encoder.encode_hierarchical(
-                        &image,
-                        HierarchicalOptions {
-                            frame_options: &options,
-                            ..HierarchicalOptions::default()
-                        },
-                        MetadataOptions::default(),
-                    )?
+                    let controls = HierarchicalOptions {
+                        frame_options: &options,
+                        limits,
+                        omit_dhp_height: dnl,
+                        ..HierarchicalOptions::default()
+                    };
+                    let result =
+                        encoder.encode_hierarchical(image, controls, MetadataOptions::default())?;
+                    if let Some(probe) = &mut probe {
+                        probe.compare(&destination, &result, |stream| {
+                            stream.encode_hierarchical(image, controls, MetadataOptions::default())
+                        })?;
+                    }
+                    result
                 }
             };
-            std::fs::write(append(&destination, ".tables.jpg"), result.tables)?;
-            std::fs::write(append(&destination, ".jpg"), result.image)?;
+            if probe.is_none() {
+                std::fs::write(append(&destination, ".tables.jpg"), result.tables)?;
+                std::fs::write(append(&destination, ".jpg"), result.image)?;
+            }
             counter += 1;
         }
     }
@@ -250,7 +308,8 @@ fn main() -> Result<()> {
             }
             decode(Path::new(&args[1]), &inputs, limits)
         }
-        Some("encode") => encode(&args[1..]),
-        _ => Err("decode prefix stream... | encode prefix fixed restart repeat input...".into()),
+        Some("encode") => encode(&args[1..],None,false),
+        Some("encode-stream") if args.len()>=8 => encode(&args[3..],Some(args[1].parse()?),args[2]=="1"),
+        _ => Err("decode prefix stream... | encode prefix fixed restart repeat input... | encode-stream buffer dnl prefix fixed restart repeat input...".into()),
     }
 }

@@ -474,7 +474,7 @@ Verified milestones:
   and measured performance/optimization remain required. The full goal stays
   active; no application integration or production codec dependency is added.
 
-- Bounded output-streaming milestone: `StreamEncoder<W: Write>` emits all
+- `8bd467c17`: bounded output-streaming milestone: `StreamEncoder<W: Write>` emits all
   thirteen interchange processes and table-only streams through reusable,
   resource-limited staging. Coefficient, predictive plane, native/shared raster,
   direct hierarchy and source-pyramid entry points share the existing marker
@@ -502,3 +502,34 @@ Verified milestones:
   rare combinations, coverage-guided fuzzing and measured optimization remain
   required. The full goal stays active with no application integration or
   added production dependency.
+
+- Paired output-streaming milestone: `AbbreviatedStreamEncoder<T: Write,
+  I: Write>` writes all thirteen processes, native/shared rasters, prepared
+  models and source pyramids to separate logical table/image destinations.
+  Tables use direct writes without encoded-packet retention; the image shares
+  bounded reusable staging with `StreamEncoder`. Writes can interleave; deliver
+  each successful table packet before its image. Counts delimit each pair.
+  Combined/table/nested-frame byte ceilings and original I/O errors with their
+  destination are preserved. Every failed call clears cache knowledge and
+  discards pending image staging; retries resend required definitions.
+  Four new tests cover 520 mixed process/precision/buffer/repeat comparisons,
+  24 large-metadata 255-component cases, every small-model failure offset and
+  output ceiling, all source conveniences, cache parts and a digest-only dense
+  image with 64 image-staging bytes and zero table staging.
+  Three buffer configurations pass 180 sessions/10,368 image outputs with exact
+  vector identity and unchanged earlier paired hashes: 4,572 genuine Turbo
+  B.5 outputs and 5,796 JPEG XT equivalent-interchange rare-process outputs.
+  The latter check 29,952 DCT blocks and 3,874,716 sample/residual integers;
+  288 EXP00 C-input copies are explicit. A 148-session/296-output DNL supplement
+  includes real B1/B2 and generic 255-component inputs. Original native headers
+  match source values; 56 IJG and 280 JPEG XT comparisons check explicit external
+  table/known-height copies, with 16 fractional exclusions covered by IJG.
+  The final source-context-aware adapter replays all 10,368 earlier paired
+  hashes; that bridge reuses C evidence and is not counted as fresh C decoding.
+  All 162 unit/integration tests and two doctests pass in release and isolated
+  debug builds. rustfmt, all-target Clippy, rustdoc with warnings denied and
+  Python/hash audits pass. See PAIRED-STREAM-VALIDATION.md and paired-stream
+  reports in tests/reports. Incremental input, single-channel table-first paired
+  transmission, full memory instrumentation, broader conformance and rare
+  combinations, coverage-guided fuzzing and measured optimization remain open.
+  The full goal stays active; no integration or production dependency is added.

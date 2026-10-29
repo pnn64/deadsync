@@ -120,11 +120,11 @@ pub(crate) fn encode_with_table_writer(
     write_with_sink(image, options, metadata, tables, &mut bytes)?;
     Ok(bytes)
 }
-pub(crate) fn write_with_sink<S: Sink>(
+pub(crate) fn write_with_sink<S: Sink, T: Sink>(
     image: &CoefficientImage<'_>,
     options: CodingOptions<'_>,
     metadata: MetadataOptions<'_>,
-    tables: &mut crate::abbreviated::TableWriter<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_, T>,
     sink: &mut S,
 ) -> Result<()> {
     if image.frame.process.is_differential() {
@@ -265,14 +265,14 @@ pub(crate) fn frame_process_for(
 
 /// Write one frame directly into a shared JPEG output, with no SOI/EOI or
 /// metadata copy. A hierarchy resets the inherited DRI before its first scan.
-pub(crate) fn encode_frame<S: Sink>(
+pub(crate) fn encode_frame<S: Sink, T: Sink>(
     out: &mut Output<S>,
     image: DctFrame<'_>,
     options: CodingOptions<'_>,
     limits: crate::Limits,
     reset_restart: bool,
     before_scan: &mut impl FnMut(&mut Output<S>, usize) -> Result<()>,
-    tables: &mut crate::abbreviated::TableWriter<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_, T>,
 ) -> Result<usize> {
     validate_frame(image, limits)?;
     let n = image.components.len();

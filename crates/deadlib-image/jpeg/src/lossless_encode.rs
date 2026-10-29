@@ -150,11 +150,11 @@ pub(crate) fn encode_samples_with_tables(
     write_samples_with_sink(input, options, metadata, tables, &mut bytes)?;
     Ok(bytes)
 }
-pub(crate) fn write_samples_with_sink<S: Sink>(
+pub(crate) fn write_samples_with_sink<S: Sink, T: Sink>(
     input: &EncodeInput<'_>,
     options: LosslessOptions<'_>,
     metadata: MetadataOptions<'_>,
-    tables: &mut crate::abbreviated::TableWriter<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_, T>,
     sink: &mut S,
 ) -> Result<()> {
     let count = match input.color_space {
@@ -276,11 +276,11 @@ pub(crate) fn encode_planes_with_tables(
     write_planes_with_sink(image, options, metadata, tables, &mut bytes)?;
     Ok(bytes)
 }
-pub(crate) fn write_planes_with_sink<S: Sink>(
+pub(crate) fn write_planes_with_sink<S: Sink, T: Sink>(
     image: &LosslessImage<'_>,
     mut options: LosslessOptions<'_>,
     metadata: MetadataOptions<'_>,
-    tables: &mut crate::abbreviated::TableWriter<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_, T>,
     sink: &mut S,
 ) -> Result<()> {
     let stored = image.validate()?.max(image.memory_bytes);
@@ -568,14 +568,14 @@ fn walk(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn encode_native<S: Sink>(
+fn encode_native<S: Sink, T: Sink>(
     frame: &FrameHeader,
     source: Source<'_>,
     segments: &[MetadataSegment<'_>],
     stored: usize,
     options: LosslessOptions<'_>,
     metadata: MetadataOptions<'_>,
-    tables: &mut crate::abbreviated::TableWriter<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_, T>,
     sink: &mut S,
 ) -> Result<()> {
     if stored > options.limits.max_memory_bytes {
@@ -666,14 +666,14 @@ pub(crate) fn frame_coding(
 }
 
 /// Emit one predictive frame directly into the caller's bounded JPEG output.
-pub(crate) fn encode_frame<S: Sink>(
+pub(crate) fn encode_frame<S: Sink, T: Sink>(
     out: &mut Output<S>,
     frame: &FrameHeader,
     source: Source<'_>,
     options: LosslessOptions<'_>,
     reset_restart: bool,
     before_scan: &mut impl FnMut(&mut Output<S>, usize) -> Result<()>,
-    tables: &mut crate::abbreviated::TableWriter<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_, T>,
 ) -> Result<usize> {
     let plan = Plan::new(frame, options)?;
     let (_, history_bytes) = frame_requirements(frame, options)?;

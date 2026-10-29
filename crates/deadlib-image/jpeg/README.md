@@ -220,15 +220,20 @@ and leave flushing to the caller. `WriteError::Io` retains the original I/O
 error; failures can leave a prefix and discard staged bytes. The codec never
 drains staging on Drop; the destination retains its own destructor behavior.
 See STREAM-ENCODER-VALIDATION.md for error semantics, bounds and all-process
-reference checks. Incremental input and paired abbreviated streaming output
-remain open.
+reference checks. `AbbreviatedStreamEncoder::new(table_writer, image_writer)`
+adds paired output through separate logical destinations, direct table writes
+and the same bounded image staging. It returns byte counts for both outputs,
+clears cache knowledge on failures, and preserves the failing destination and
+original I/O error. Writes can interleave; deliver each completed table stream
+before its image to the same receiver cache. See PAIRED-STREAM-VALIDATION.md.
+Incremental input and single-channel table-first paired transmission remain open.
 
 Malformed tables, runs, scan layouts, padding and restart sequences are errors.
 Limits bound pixels, coefficient/sample storage, metadata (including segment
 record overhead), and scan count. These are storage budgets, not a measured
 allocator high-water mark; allocation instrumentation remains planned.
 Bytes after EOI are left unconsumed. Unknown SOF modes return explicit
-unsupported errors. Incremental input, paired abbreviated streaming output,
+unsupported errors. Incremental input, single-channel table-first paired output,
 additional encoder scan strategies, and the broader validation
 and performance work remain required.
 

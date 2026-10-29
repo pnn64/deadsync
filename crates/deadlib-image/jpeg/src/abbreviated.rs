@@ -188,9 +188,9 @@ impl AbbreviatedEncoder {
     }
 }
 
-pub(crate) struct TableWriter<'a> {
+pub(crate) struct TableWriter<'a, T: Sink = Vec<u8>> {
     cache: Option<&'a mut Tables>,
-    packet: Option<Output>,
+    packet: Option<Output<T>>,
     first_scan: bool,
 }
 impl<'a> TableWriter<'a> {
@@ -213,6 +213,30 @@ impl<'a> TableWriter<'a> {
             first_scan: true,
         })
     }
+    pub(crate) fn abbreviated_to<'s, S: Sink>(
+        cache: &'a mut Tables,
+        sink: &'s mut S,
+        limit: usize,
+        output_limit: usize,
+    ) -> Result<TableWriter<'a, &'s mut S>> {
+        if output_limit < 4 {
+            return Err(Error::LimitExceeded("encoded bytes"));
+        }
+        if limit < 4 {
+            return Err(Error::LimitExceeded("table stream bytes"));
+        }
+        // The paired streaming table destination is direct: no packet storage
+        // competes with the source or image staging budget.
+        let mut packet = Output::with_sink(sink, limit.min(output_limit), 0)?;
+        packet.marker(0xd8)?;
+        Ok(TableWriter {
+            cache: Some(cache),
+            packet: Some(packet),
+            first_scan: true,
+        })
+    }
+}
+impl<T: Sink> TableWriter<'_, T> {
     pub fn prepare<S: Sink>(&self, out: &mut Output<S>) -> Result<()> {
         if self.packet.is_some() {
             out.reserve_external(4)?;
@@ -226,7 +250,7 @@ impl<'a> TableWriter<'a> {
         &mut self,
         image: &mut Output<S>,
         size: usize,
-    ) -> Result<Option<&mut Output>> {
+    ) -> Result<Option<&mut Output<T>>> {
         if self.first_scan
             && let Some(packet) = self.packet.as_mut()
         {
@@ -290,7 +314,7 @@ impl<'a> TableWriter<'a> {
         }
         Ok(())
     }
-    fn finish(mut self) -> Result<Vec<u8>> {
+    pub(crate) fn finish(mut self) -> Result<T> {
         let packet = self
             .packet
             .as_mut()

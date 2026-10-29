@@ -27,6 +27,7 @@ mod progressive;
 mod pyramid;
 mod reconstruct;
 mod scan_encode;
+mod stream_abbreviated;
 mod stream_encode;
 mod tables;
 mod transform;
@@ -70,6 +71,9 @@ pub use reconstruct::{
     CmykImage, CmykPolarity, ColorSpace, ComponentPlane, PlanarImage, Upsampling,
 };
 pub use scan_encode::ScanSpec;
+pub use stream_abbreviated::{
+    AbbreviatedBytes, AbbreviatedStreamEncoder, AbbreviatedWriteError, AbbreviatedWriteResult,
+};
 pub use stream_encode::{StreamEncoder, WriteError, WriteResult};
 pub use tables::{HuffmanClass, HuffmanTable, QuantizationTable, TableStream, Tables};
 

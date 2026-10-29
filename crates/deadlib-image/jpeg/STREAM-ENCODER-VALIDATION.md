@@ -4,8 +4,9 @@
 JPEG-1 frame processes and standalone table streams. The public entry points
 accept prepared coefficients, predictive planes, hierarchy frames, native/shared
 rasters and source-pyramid inputs. Raster conversion and pyramid/model preparation
-still happen in memory. Incremental input and paired abbreviated output with a
-persistent omission cache remain future work.
+still happen in memory. Paired output to separate logical destinations with a
+persistent omission cache is covered in PAIRED-STREAM-VALIDATION.md. Incremental
+input remains future work.
 
 ## Storage and error behavior
 
@@ -123,6 +124,6 @@ python tests/independent.py
 ```
 
 Reports are `tests/reports/stream-encode.json`, `stream-encode-regressions.json`
-and `stream-encode-validation.json`. Broader conformance, incremental input and
-abbreviated output, coverage-guided fuzzing and measured optimization remain
+and `stream-encode-validation.json`. Broader conformance, incremental input,
+single-channel table-first paired output, coverage-guided fuzzing and measured optimization remain
 required. No application integration or production dependency is added.

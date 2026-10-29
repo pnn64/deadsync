@@ -28,6 +28,7 @@ for name in ("native", "turbo", "reference", "out"):
 parser.add_argument("--part", choices=("c", "native", "rare"), required=True)
 parser.add_argument("--resume", action="store_true")
 parser.add_argument("--fixtures", type=Path)
+parser.add_argument("--stream-buffer", type=int, help="Use bounded paired file output and assert exact vector identity")
 args = parser.parse_args()
 args.out.mkdir(parents=True, exist_ok=True)
 work = args.out / "case"
@@ -46,6 +47,9 @@ for name in ("native", "turbo", "reference"):
 checkpoint = args.out / "checkpoint.jsonl"
 identity = {"tools": hashes, "part": args.part, "driver": sha(Path(__file__).read_bytes()),
             "stream_support": sha(Path(__file__).with_name("stream_support.py").read_bytes())}
+if args.stream_buffer is not None:
+    assert args.stream_buffer >= 0 and args.part != "c"
+    identity["paired_stream_buffer"] = args.stream_buffer
 if args.resume:
     previous = [json.loads(line) for line in checkpoint.read_text().splitlines()]
     assert previous[0] == identity
@@ -230,7 +234,8 @@ def native_gate(rare):
             (args.out / "current-case.json").write_text(json.dumps({"case": name, "sources": [str(p) for p in batch]}))
             prefix = work / "encoded"
             count = len(batch) * 2
-            assert run([args.native, "encode", prefix, fixed, restart, 2, *batch]).stdout.decode().strip() == f"images {count}"
+            command = [args.native, "encode", prefix, fixed, restart, 2, *batch] if args.stream_buffer is None else [args.native, "encode-stream", args.stream_buffer, 0, prefix, fixed, restart, 2, *batch]
+            assert run(command).stdout.decode().strip() == f"images {count}"
             paths = [suffix(prefix, f".image-{i}{tail}") for i in range(count) for tail in (".tables.jpg", ".jpg")]
             decoders(paths, count, not rare)
             bank, expectations, fixtures, c_counts, c_copies = {}, [], [], [0, 0], []
@@ -293,6 +298,9 @@ report = {"part": args.part, "tools": hashes, "driver": identity["driver"], "ses
           "reference": "libjpeg-turbo 3.2.1 public B.5 API" if args.part != "rare" else "JPEG XT 702114c equivalent interchange only",
           "scope": "Exact coefficients/quantizers and lossless samples. Metadata stays image-local. No pixel-tolerance claims.",
           "results": records}
+if args.stream_buffer is not None:
+    report["paired_stream_buffer"] = args.stream_buffer
+    report["file_vector_output_identical"] = True
 (args.out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
 if args.fixtures:
     (args.fixtures / (args.part + "-manifest.json")).write_text(json.dumps({"tools": hashes, "sessions": retained}, indent=2) + "\n")

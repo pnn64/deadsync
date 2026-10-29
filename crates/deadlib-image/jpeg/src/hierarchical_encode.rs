@@ -122,11 +122,11 @@ pub(crate) fn encode_with_table_writer(
     write_with_sink(image, options, metadata, tables, &mut bytes)?;
     Ok(bytes)
 }
-pub(crate) fn write_with_sink<S: Sink>(
+pub(crate) fn write_with_sink<S: Sink, T: Sink>(
     image: &HierarchicalImage<'_>,
     options: HierarchicalOptions<'_>,
     metadata: MetadataOptions<'_>,
-    tables: &mut crate::abbreviated::TableWriter<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_, T>,
     sink: &mut S,
 ) -> Result<()> {
     if !options.frame_options.is_empty() && options.frame_options.len() != image.frames.len() {
@@ -187,14 +187,14 @@ pub(crate) fn write_hierarchy_with_tables<'a>(
     Ok(bytes)
 }
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn write_hierarchy_to_sink<'a, S: Sink>(
+pub(crate) fn write_hierarchy_to_sink<'a, S: Sink, T: Sink>(
     image: &HierarchicalImage<'_>,
     limits: Limits,
     max_output_bytes: usize,
     omit_dhp_height: bool,
     metadata: MetadataOptions<'_>,
     mut controls: impl FnMut(usize, &HierarchicalFrame) -> Result<HierarchicalFrameOptions<'a>>,
-    tables: &mut crate::abbreviated::TableWriter<'_>,
+    tables: &mut crate::abbreviated::TableWriter<'_, T>,
     sink: &mut S,
 ) -> Result<()> {
     let stored = image.validate()?.max(image.memory_bytes);
