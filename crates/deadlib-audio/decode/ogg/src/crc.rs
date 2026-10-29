@@ -40,6 +40,10 @@ static TABLES: [[u32; 256]; 16] = tables();
 
 #[inline]
 pub(crate) fn update(crc: u32, bytes: &[u8]) -> u32 {
+    #[cfg(target_arch = "x86_64")]
+    if let Some(crc) = crate::crc_hardware::update(crc, bytes) {
+        return crc;
+    }
     update_scalar(crc, bytes)
 }
 
@@ -86,10 +90,6 @@ pub(crate) fn update_scalar(mut crc: u32, bytes: &[u8]) -> u32 {
 }
 
 pub fn crc32(bytes: &[u8]) -> u32 {
-    #[cfg(target_arch = "x86_64")]
-    if let Some(crc) = crate::crc_hardware::update(0, bytes) {
-        return crc;
-    }
     update(0, bytes)
 }
 
