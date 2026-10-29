@@ -1571,9 +1571,19 @@ destroys the main group and retries remaining finalizers after errors. Root
 errors unwind Rust before C panic handling, retain Lua's error status and close
 escaped upvalues. Release and checked references match 89 observations on each
 of three profiles through both the public SDK and an explicit C image.
-Core declaration coverage is 77/80. `lua_newstate`, `lua_getallocf` and
-`lua_setallocf`, a standalone C host artifact, exact allocation/GC accounting,
-general interleavings and full parity remain open.
+Core declaration coverage is 77/80. At that checkpoint, a standalone C host
+artifact was still missing; the package below supplies it. The allocator APIs,
+exact allocation/GC accounting, general interleavings and full parity remain open.
+
+The [standalone C package](testing/2026-10-29-rust-lua-capi.md) embeds the Rust
+interpreter into a `lua51` shared library. Pure C hosts, native modules and the
+unchanged `lua.c` CLI use the public headers without a Rust bootstrap. Public
+entries jump directly into C, preserving variadic arguments and keeping C error
+jumps clear of Rust forwarding frames. Calls and stored pointers inside the C
+boundary use the same public function identities. The staged package contains
+headers, runtime/link libraries, pkg-config metadata and source/payload hashes.
+Core coverage remains 77/80; the three allocator APIs and full semantic/resource
+parity remain unfinished.
 
 
 ## Reference contract

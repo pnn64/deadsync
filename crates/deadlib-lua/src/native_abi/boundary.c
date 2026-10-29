@@ -32,7 +32,13 @@ typedef struct BoundaryState {
   int owns_global;
 } BoundaryState;
 static BoundaryState *states;
+#ifdef DEADLUA_EMBED_RUNTIME
+extern lua_State *deadlua_engine_new_state(const void *);
+extern unsigned long long deadlua_engine_abi_version(void);
+static BoundaryCreate create_state=(BoundaryCreate)deadlua_engine_new_state;
+#else
 static BoundaryCreate create_state;
+#endif
 static BoundaryState *find_state(lua_State *L) {
   BoundaryState *state;
   for(state=states;state;state=state->next)if(state->identity==L)return state;
@@ -87,7 +93,13 @@ static THREAD_LOCAL BoundaryFrame *active_frame;
 #ifndef DEADLUA_ABI_VERSION
 #define DEADLUA_ABI_VERSION 0
 #endif
-API unsigned long long boundary_abi_version(void) { return DEADLUA_ABI_VERSION; }
+API unsigned long long boundary_abi_version(void) {
+#ifdef DEADLUA_EMBED_RUNTIME
+  return deadlua_engine_abi_version();
+#else
+  return DEADLUA_ABI_VERSION;
+#endif
+}
 API void boundary_engine_create(BoundaryCreate create) {
   LOCK_STATES();create_state=create;UNLOCK_STATES();
 }

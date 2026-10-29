@@ -789,8 +789,11 @@ thread. Idle C API calls borrow that VM only for each operation. A retained
 C program without borrowing a Rust-facing VM. Owned states survive between
 program entries; errors use C protection and panic handling. See the
 [owned-state checks](../../docs/testing/2026-10-29-rust-lua-native-owned.md).
-`lua_newstate`, `lua_getallocf` and `lua_setallocf`, a standalone C host artifact,
-exact allocation/GC accounting and general interleavings remain unfinished.
+The [standalone C package](capi/README.md) embeds the interpreter behind these
+entries and supplies a `lua51` shared library, public headers and link metadata;
+C applications need no Rust bootstrap. `lua_newstate`, `lua_getallocf` and
+`lua_setallocf`, exact allocation/GC accounting, OOM/resource behavior and general
+interleavings remain unfinished.
 
 Complete standard-library and native C API semantics, diagnostic text and
 debug behavior, cache eviction/package integration, richer Rust host objects and

@@ -41,6 +41,9 @@ pub use error::{Error, ErrorKind};
 #[cfg(all(feature = "native-c-api", any(windows, target_os = "linux")))]
 #[doc(inline)]
 pub use native_abi::{NativeCAbiLoader, NativeCAbiStats, NativeCDriver, NativeCProgram};
+#[cfg(all(feature = "c-api-runtime", any(windows, target_os = "linux")))]
+#[doc(hidden)]
+pub use native_abi::{c_api_owned_state, c_api_version};
 #[doc(inline)]
 pub use value::{FunctionId, ParserPrototypeId, StringId, TableId, ThreadId, UserdataId, Value};
 #[doc(inline)]

@@ -12,6 +12,7 @@ repository = "https://github.com/pnn64/deadsync"
 [features]
 default = ["native-c-api"]
 native-c-api = []
+c-api-runtime = ["native-c-api"]
 
 [dev-dependencies]
 lua_reference = { package = "deadlib-lua-legacy", path = "../deadlib-lua-legacy", features = ["lua51", "vendored"] }

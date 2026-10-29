@@ -82,6 +82,20 @@ mod library;
 use library::Library;
 mod bundle;
 mod owned;
+#[cfg(feature = "c-api-runtime")]
+#[doc(hidden)]
+/// # Safety
+/// `anchor` must belong to this build's live standalone C API image, whose
+/// private protocol and public exports match this interpreter.
+pub unsafe extern "C" fn c_api_owned_state(anchor: *const c_void) -> *mut c_void {
+    // SAFETY: the standalone C image supplies its own live protocol anchor.
+    unsafe { owned::new_state(anchor) }
+}
+#[cfg(feature = "c-api-runtime")]
+#[doc(hidden)]
+pub fn c_api_version() -> u64 {
+    u64::from_str_radix(env!("DEADLIB_LUA_NATIVE_ABI_VERSION"), 16).expect("native ABI version")
+}
 mod stdio;
 pub(crate) fn file_backend(
     loader: Option<&dyn NativeLibraryLoader>,

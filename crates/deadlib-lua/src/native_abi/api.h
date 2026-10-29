@@ -4,7 +4,9 @@
 #include <stddef.h>
 #include <stdarg.h>
 #include <stdio.h>
-#if defined(_WIN32) && defined(BOUNDARY_BUILD)
+#if defined(DEADLUA_EMBED_RUNTIME)
+#define API
+#elif defined(_WIN32) && defined(BOUNDARY_BUILD)
 #define API __declspec(dllexport)
 #elif defined(_WIN32)
 #define API __declspec(dllimport)
