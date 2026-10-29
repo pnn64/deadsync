@@ -866,6 +866,9 @@ cover recoverable userdata payload failures, their status codes and handler
 bypass. The [fallible-storage checks](../../docs/testing/2026-10-29-rust-lua-fallible-storage.md)
 also reject real allocator calls for object arenas, host roots, native tables and
 stack growth. Custom allocator ownership and failures in other allocations remain open.
+The [table-write checks](../../docs/testing/2026-10-29-rust-lua-table-writes.md)
+cover allocation failure during array growth, hash rebuilds and collector edge
+reservation, including persistent rejection through Lua protected calls.
 The [portable regression checks](../../docs/testing/2026-10-27-rust-lua-portable-tests.md)
 also retain GNU C crashes on overflowing `unpack` ranges in separate processes.
 The strict standalone audit continues to fail on those inputs. Sanitizer and

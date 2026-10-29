@@ -75,3 +75,8 @@ for the tested failure paths and remaining allocation limits.
 
 The [fallible-storage checks](../../../docs/testing/2026-10-29-rust-lua-fallible-storage.md)
 record allocator rejection and native table-limit coverage.
+
+[Table-write checks](../../../docs/testing/2026-10-29-rust-lua-table-writes.md)
+cover fallible array/hash growth, preserved native inputs and Lua protection
+under persistent allocator rejection. Table writes reserve collector edge space
+before committing values. Other VM allocation paths remain unfinished.

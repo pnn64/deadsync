@@ -225,9 +225,15 @@ do
 end
 do
   local rows={};package.path=nil;package.cpath=nil
+  -- findfile keeps raw pointers into these translated strings. Retain them
+  -- while replacing their C stack slots, including across the full collection.
+  local retained={}
   local old_mt=debug.getmetatable(package)
   setmetatable(package,{__index=function(t,k)
-    snapshot(k,rows);assert(debug.setlocal(2,1,'changed-argument'))
+    snapshot(k,rows)
+    local _,value=debug.getlocal(2,3);retained[#retained+1]=value
+    if k=='cpath'then local _,value=debug.getlocal(2,4);retained[#retained+1]=value end
+    assert(debug.setlocal(2,1,'changed-argument'))
     assert(debug.setlocal(2,3,'changed-name'))
     if k=='cpath'then assert(debug.setlocal(2,4,'changed-translation'))end
     collectgarbage();return 'absent-?.missing'
@@ -235,7 +241,7 @@ do
   local lua_search=implementation(original_loaders[2]);local root_search=implementation(original_loaders[4])
   print('LIVE','lua-path',encode(lua_search('original.name',tag)))
   print('LIVE','root-path',encode(root_search('original.name',tag)))
-  print('LIVE','paths',table.concat(rows,'|'))
+  print('LIVE','paths',table.concat(rows,'|'));assert(#retained==3)
   setmetatable(package,old_mt);package.path=original_path;package.cpath=original_cpath
 end
 do

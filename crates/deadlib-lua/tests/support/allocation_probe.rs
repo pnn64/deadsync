@@ -64,7 +64,7 @@ unsafe impl GlobalAlloc for RejectingAllocator {
 }
 #[global_allocator]
 static ALLOCATOR: RejectingAllocator = RejectingAllocator;
-struct Disarm;
+pub(crate) struct Disarm;
 impl Drop for Disarm {
     fn drop(&mut self) {
         ALLOCATIONS.with(|cell| {
@@ -74,7 +74,7 @@ impl Drop for Disarm {
         });
     }
 }
-pub(crate) fn probe<T>(deny_from: usize, action: impl FnOnce() -> T) -> (T, Allocations) {
+pub(crate) fn begin(deny_from: usize) -> Disarm {
     ALLOCATIONS.with(|cell| {
         assert!(!cell.get().enabled);
         cell.set(Allocations {
@@ -83,9 +83,15 @@ pub(crate) fn probe<T>(deny_from: usize, action: impl FnOnce() -> T) -> (T, Allo
             ..Allocations::default()
         });
     });
-    let guard = Disarm;
+    Disarm
+}
+pub(crate) fn statistics() -> Allocations {
+    ALLOCATIONS.with(Cell::get)
+}
+pub(crate) fn probe<T>(deny_from: usize, action: impl FnOnce() -> T) -> (T, Allocations) {
+    let guard = begin(deny_from);
     let result = action();
-    let state = ALLOCATIONS.with(Cell::get);
+    let state = statistics();
     drop(guard);
     (result, state)
 }

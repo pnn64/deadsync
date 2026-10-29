@@ -1,0 +1,10 @@
+{
+  "report_sha256": "6a04890c4cba13a5664e3a5746f7426ff0926391d2d05bc0861bf66af1fcf9d9",
+  "artifact_hashes_verified": true,
+  "reference_source_unmodified": true,
+  "asan_linked": true,
+  "reference_elf_bits": 64,
+  "rooted_reference_and_rust_controls_passed": true,
+  "unrooted_failure_retained": true,
+  "proof_tool_sha256": "22e92f08c5516ddf859bd4ea66391e09f25dba77fcd7a000452afc8f8e18f40d"
+}

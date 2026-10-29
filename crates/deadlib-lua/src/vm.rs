@@ -750,7 +750,8 @@ impl Vm {
     /// All object handles must originate in this VM.
     ///
     /// # Errors
-    /// Returns an error for invalid/collected handles, nil keys or NaN keys.
+    /// Returns an error for invalid/collected handles, nil keys, NaN keys or
+    /// allocation failure. A failed reservation leaves the table values intact.
     pub fn raw_table_set(&mut self, table: TableId, key: Value, value: Value) -> Result<(), Error> {
         self.validate_value(Value::Table(table))?;
         self.validate_value(key)?;
@@ -759,15 +760,22 @@ impl Vm {
     }
 
     fn raw_set(&mut self, id: TableId, key: Value, value: Value) -> Result<(), Error> {
+        Table::validate_set_key(key).map_err(|error| self.operand_error(error))?;
+        self.reserve_gc_table_write(id, key, value)?;
         let table = &mut self.tables[slot_index(id.0)];
         let before = table.heap_bytes();
-        if let Err(error) = table.set(key, value) {
-            return Err(self.operand_error(error));
-        }
+        let result = table.set(key, value);
         let growth = table.heap_bytes().saturating_sub(before);
         if growth != 0 {
             self.tables.note_alloc(growth);
             self.gc.pending = true;
+        }
+        if let Err(error) = result {
+            return Err(if error.kind() == ErrorKind::Memory {
+                self.memory_failure()
+            } else {
+                self.operand_error(error)
+            });
         }
         self.gc_table_write(id, key, value);
         Ok(())

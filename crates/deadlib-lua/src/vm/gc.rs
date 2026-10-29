@@ -832,6 +832,26 @@ impl Vm {
             self.gc.work.push(Trace::CellAgain(cell));
         }
     }
+    pub(super) fn reserve_gc_table_write(
+        &mut self,
+        id: TableId,
+        key: Value,
+        value: Value,
+    ) -> Result<(), Error> {
+        if self.gc.phase == Phase::Propagate && self.tables.marked(id.0) {
+            let (weak_keys, weak_values) = self.table_mode(&self.tables[slot_index(id.0)]);
+            let key_needed =
+                (!weak_keys || matches!(key, Value::String(_))) && !self.marked_value(key);
+            let value_needed = (!weak_values || matches!(value, Value::String(_)))
+                && !self.marked_value(value)
+                && (!key_needed || key != value);
+            self.gc
+                .work
+                .try_reserve(usize::from(key_needed) + usize::from(value_needed))
+                .map_err(|_| self.memory_failure())?;
+        }
+        Ok(())
+    }
     pub(super) fn gc_table_write(&mut self, id: TableId, key: Value, value: Value) {
         if self.gc.phase == Phase::Propagate && self.tables.marked(id.0) {
             let (weak_keys, weak_values) = self.table_mode(&self.tables[slot_index(id.0)]);
@@ -1558,6 +1578,98 @@ impl Vm {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn mutation_reserves_both_strong_edges_before_publishing_either() {
+        let mut vm = Vm::new_bare();
+        let table = vm.try_table_with_capacity(0, 2).unwrap();
+        let key = Value::Table(vm.new_table());
+        let value = Value::Table(vm.new_table());
+        vm.gc.phase = Phase::Propagate;
+        vm.gc.work = Vec::with_capacity(1);
+        vm.tables.mark(table.0);
+        vm.tables[slot_index(table.0)].trace = TableTrace::Pending(false, false);
+        let (result, stats) = crate::allocation_probe::probe(1, || vm.raw_set(table, key, value));
+        assert_eq!(stats.rejected, 1);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::Memory);
+        assert_eq!(vm.tables[slot_index(table.0)].get(key), Value::Nil);
+        assert_eq!(
+            vm.tables[slot_index(table.0)].trace,
+            TableTrace::Pending(false, false)
+        );
+        assert!(vm.gc.work.is_empty());
+        assert!(!vm.marked_value(key));
+        assert!(!vm.marked_value(value));
+        vm.raw_set(table, key, value).unwrap();
+        assert_eq!(vm.gc.work.len(), 2);
+        assert!(vm.marked_value(key));
+        assert!(vm.marked_value(value));
+        vm.gc.phase = Phase::Pause;
+        eprintln!("TABLE_MUTATION_GC_FAILURE_POINTS 1");
+    }
+    #[test]
+    fn mutation_weak_and_duplicate_edges_do_not_request_unneeded_queue_storage() {
+        for (mode, same, expected) in [
+            (b"k".as_slice(), false, 1),
+            (b"v", false, 1),
+            (b"kv", false, 0),
+            (b"", true, 1),
+        ] {
+            let mut vm = Vm::new_bare();
+            let table = vm.try_table_with_capacity(0, 2).unwrap();
+            let mt = vm.new_table();
+            let name = vm.intern(b"__mode");
+            let mode_value = vm.intern(mode);
+            vm.raw_set(mt, name, mode_value).unwrap();
+            vm.set_metatable(Value::Table(table), Some(mt));
+            let key = Value::Table(vm.new_table());
+            let value = if same {
+                key
+            } else {
+                Value::Table(vm.new_table())
+            };
+            vm.gc.phase = Phase::Propagate;
+            vm.gc.work = Vec::with_capacity(expected);
+            vm.tables.mark(table.0);
+            let (result, stats) =
+                crate::allocation_probe::probe(1, || vm.raw_set(table, key, value));
+            result.unwrap();
+            assert_eq!(stats.attempts, 0);
+            assert_eq!(vm.gc.work.len(), expected);
+            assert_eq!(vm.tables[slot_index(table.0)].get(key), value);
+            vm.gc.phase = Phase::Pause;
+        }
+    }
+    #[test]
+    fn mutation_failed_hash_reservation_accounts_for_the_buffer_that_already_grew() {
+        let mut vm = Vm::new_bare();
+        let table = vm.try_table_with_capacity(0, 5).unwrap();
+        for n in 1..=5 {
+            vm.raw_set(
+                table,
+                Value::Number(-f64::from(n)),
+                Value::Number(f64::from(n)),
+            )
+            .unwrap();
+        }
+        let before = vm.tables[slot_index(table.0)].heap_bytes();
+        let debt = vm.tables.allocated;
+        let (result, stats) = crate::allocation_probe::probe(2, || {
+            vm.raw_set(table, Value::Number(-6.), Value::Number(42.))
+        });
+        assert_eq!(stats.rejected, 1);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::Memory);
+        let retained = vm.tables[slot_index(table.0)].heap_bytes() - before;
+        assert!(retained > 0);
+        assert_eq!(vm.tables.allocated - debt, retained);
+        assert_eq!(
+            vm.tables[slot_index(table.0)].get(Value::Number(-6.)),
+            Value::Nil
+        );
+        vm.raw_set(table, Value::Number(-6.), Value::Number(42.))
+            .unwrap();
+        eprintln!("TABLE_MUTATION_GC_FAILURE_POINTS 1");
+    }
+
     #[test]
     fn allocation_failure_during_marking_keeps_the_work_queue_and_object_identity_unpublished() {
         let mut attempts = 0;

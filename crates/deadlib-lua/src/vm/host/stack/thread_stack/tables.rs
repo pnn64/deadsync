@@ -32,7 +32,8 @@ impl NativeThreadStack<'_> {
     /// Pop the top key and value after raw assignment, bypassing metamethods.
     ///
     /// # Errors
-    /// Rejects a non-table target, invalid key or absent input.
+    /// Rejects a non-table target, invalid key, absent input or allocation failure.
+    /// Failed writes retain both inputs.
     pub fn raw_set(&mut self, index: isize) -> Result<(), Error> {
         let Value::Table(table) = self.indexed_value(index)? else {
             return Err(self.error(b"raw native access requires a table"));

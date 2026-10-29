@@ -1607,6 +1607,15 @@ calls at each measured failure point; production still uses Rust's allocator.
 The custom allocator API and recoverable failures in other VM paths remain open.
 
 
+The [table-write checks](testing/2026-10-29-rust-lua-table-writes.md) make array
+migration and hash insertion reserve storage before changing entries, tombstones
+or traversal state. VM writes reserve both collector edges before mutation and
+retain the fixed memory error through native and Lua protection. Real allocator
+rejection checks main/selected native inputs, unchanged tables, weak edge rules,
+retained-capacity accounting and persistent failure through pcall/xpcall. Other
+VM storage, custom allocator ownership and full resource parity remain open.
+
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the
