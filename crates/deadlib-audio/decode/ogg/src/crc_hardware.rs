@@ -31,31 +31,60 @@ const fn power(bits: usize) -> u32 {
 }
 const K128: u32 = power(128);
 const K192: u32 = power(192);
+const K512: u32 = power(512);
+const K576: u32 = power(576);
 #[target_feature(enable = "pclmulqdq,ssse3")]
 unsafe fn fold(seed: u32, bytes: &[u8]) -> u32 {
-    let (words, tail) = bytes.as_chunks::<16>();
-    let Some((first, words)) = words.split_first() else {
+    let (groups, tail) = bytes.as_chunks::<64>();
+    let Some((first, groups)) = groups.split_first() else {
         return crate::crc::update_scalar(seed, bytes);
     };
-    // SAFETY: the caller checks both CPU features. Every load/store is an exact
-    // sixteen-byte array; unaligned operations impose no alignment requirement.
+    // SAFETY: feature support is checked by the caller. Each source is a full
+    // 64-byte array, every indexed load is exactly sixteen valid bytes, and the
+    // destination is a fresh sixteen-byte array. All memory operations are unaligned.
     unsafe {
         let reverse = _mm_setr_epi8(15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0);
-        let k = _mm_set_epi64x(K192 as i64, K128 as i64);
-        let mut state = _mm_xor_si128(
-            _mm_shuffle_epi8(_mm_loadu_si128(first.as_ptr().cast()), reverse),
-            _mm_set_epi32(seed as i32, 0, 0, 0),
-        );
+        let k = _mm_set_epi64x(K576 as i64, K512 as i64);
+        let k1 = _mm_set_epi64x(K192 as i64, K128 as i64);
+        macro_rules! load {
+            ($block:expr,$offset:expr) => {
+                _mm_shuffle_epi8(
+                    _mm_loadu_si128($block[$offset..$offset + 16].as_ptr().cast()),
+                    reverse,
+                )
+            };
+        }
+        macro_rules! fold {
+            ($value:expr,$factor:expr) => {
+                _mm_xor_si128(
+                    _mm_clmulepi64_si128::<0x00>($value, $factor),
+                    _mm_clmulepi64_si128::<0x11>($value, $factor),
+                )
+            };
+        }
+        let mut a = _mm_xor_si128(load!(first, 0), _mm_set_epi32(seed as i32, 0, 0, 0));
+        let mut b = load!(first, 16);
+        let mut c = load!(first, 32);
+        let mut d = load!(first, 48);
+        for group in groups {
+            a = _mm_xor_si128(fold!(a, k), load!(group, 0));
+            b = _mm_xor_si128(fold!(b, k), load!(group, 16));
+            c = _mm_xor_si128(fold!(c, k), load!(group, 32));
+            d = _mm_xor_si128(fold!(d, k), load!(group, 48));
+        }
+        let mut state = _mm_xor_si128(fold!(a, k1), b);
+        state = _mm_xor_si128(fold!(state, k1), c);
+        state = _mm_xor_si128(fold!(state, k1), d);
+        let (words, tail) = tail.as_chunks::<16>();
         for word in words {
-            let lo = _mm_clmulepi64_si128::<0x00>(state, k);
-            let hi = _mm_clmulepi64_si128::<0x11>(state, k);
-            let input = _mm_shuffle_epi8(_mm_loadu_si128(word.as_ptr().cast()), reverse);
-            state = _mm_xor_si128(_mm_xor_si128(lo, hi), input);
+            state = _mm_xor_si128(
+                fold!(state, k1),
+                _mm_shuffle_epi8(_mm_loadu_si128(word.as_ptr().cast()), reverse),
+            );
         }
         let mut folded = [0u8; 16];
         _mm_storeu_si128(folded.as_mut_ptr().cast(), _mm_shuffle_epi8(state, reverse));
-        let crc = crate::crc::update_scalar(0, &folded);
-        crate::crc::update_scalar(crc, tail)
+        crate::crc::update_scalar(crate::crc::update_scalar(0, &folded), tail)
     }
 }
 
@@ -70,6 +99,25 @@ mod tests {
             }
         }
         crc
+    }
+    #[cfg(miri)]
+    #[test]
+    fn hardware_memory_bounds_and_provenance() {
+        assert!(is_x86_feature_detected!("pclmulqdq") && is_x86_feature_detected!("ssse3"));
+        for length in [
+            0, 1, 15, 16, 17, 31, 32, 63, 64, 65, 127, 128, 129, 191, 192, 255, 256, 257, 511, 512,
+            513,
+        ] {
+            for offset in 0..16 {
+                // The borrowed input ends at the allocation boundary.
+                let data: Vec<_> = (0..offset + length).map(|i| (i * 73 + 127) as u8).collect();
+                let input = &data[offset..];
+                for seed in [0, 0xfedcba98] {
+                    // SAFETY: both required target features were asserted above.
+                    assert_eq!(unsafe { fold(seed, input) }, bitwise(seed, input));
+                }
+            }
+        }
     }
     #[test]
     fn hardware_and_scalar_match_independent_crc_across_seeds_alignments_and_tails() {
