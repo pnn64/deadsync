@@ -70,10 +70,18 @@ pub fn pair(bits: &mut BitReader<'_>, book: u8) -> Result<[i16; 2], Error> {
 /// leaves the cursor untouched so the granule parser can discard stuffing bits.
 #[inline(always)]
 pub fn quad(bits: &mut BitReader<'_>, table_b: bool) -> Result<[i16; 4], Error> {
+    if table_b {
+        let prefix = bits.peek8();
+        if prefix >= 240 {
+            bits.skip(4)?;
+            return Ok([0; 4]);
+        }
+        let entry = tables::COUNT1_B[prefix];
+        bits.skip((entry >> 8) as usize)?;
+        return Ok(tables::COUNT1_SIGNS[(entry & 255) as usize]);
+    }
     let mut cursor = *bits;
-    let value = if table_b {
-        15 ^ cursor.read(4)? as u8
-    } else if cursor.flag()? {
+    let value = if cursor.flag()? {
         0
     } else {
         let entry = tables::COUNT1[cursor.peek5()];

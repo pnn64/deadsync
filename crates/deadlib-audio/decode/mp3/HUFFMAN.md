@@ -18,13 +18,17 @@ length must still fit before it is consumed, preserving truncation errors.
 The small tree walker stays inlined to avoid a per-pair helper call. A shared
 bounded five-bit peek loads one or two bytes directly when five bits remain;
 short tails retain explicit zero padding and never consume lookahead bits.
+The eight-bit peek loads a two-byte window where available, pads a missing
+second byte, and masks bits beyond the reader's explicit end.
 
 Count1 table A's one-bit all-zero code returns directly. Its other codes start
 with zero and have at most five further bits, resolved by a 32-entry lookup.
-Table B reads its fixed four-bit code directly and complements it. A compact
-layout table specifies the sign count and output offset for each magnitude
-mask. One sign-field read then selects an eight-byte record from the 81 possible
-signed quadruples. The immutable tables occupy 6,352 bytes of elements and need
+Table A's compact layout specifies the sign count and output offset for each
+magnitude mask. One sign-field read selects an eight-byte record from the 81
+possible signed quadruples. Table B recognizes its four-bit zero code directly; its other code/sign words
+use a complete eight-bit lookup to select one of those same records with a
+single checked skip. The immutable
+tables occupy 6,864 bytes of elements and need
 no runtime construction, allocation or pointer chasing through heap nodes.
 
 ## Numeric data provenance
@@ -62,7 +66,7 @@ missing pages were inspected.
 
 ## Validation
 
-All 66 crate tests pass. Huffman tests exercise 175,680 pair
+All 72 crate tests pass. Huffman tests exercise 175,680 pair
 configurations across every codeword, both sign bits, all eight initial bit
 offsets and independent zero/maximum escape extensions for x and y. All 4,096
 quadruple/code/sign/offset configurations pass. Truncation at every bit of
@@ -75,7 +79,8 @@ and rejected variants are recorded in the
 and [eighth optimization pass](../../../../docs/performance/2026-10-28-mp3-round8.md).
 The padded-prefix helper also passes 5,701,633 independent pattern/bound checks,
 including empty input and every two-byte value, offset and remaining length
-through five bits.
+through five bits. The eight-bit helper additionally passes 10,027,008
+independent two-byte pattern, offset and end-bound checks, plus empty input.
 
 An independent gate embeds every codebook and sign/escape boundary in valid
 MPEG-1 frames, with two/four isolated coefficients in subband zero and a zero

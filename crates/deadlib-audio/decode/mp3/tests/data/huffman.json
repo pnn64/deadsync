@@ -4,6 +4,7 @@
   "nodes": 1334,
   "book1_prefix_entries": 32,
   "count1_sign_outputs": 81,
+  "count1_b_prefix_entries": 256,
   "tables": [
     {
       "number": 0,

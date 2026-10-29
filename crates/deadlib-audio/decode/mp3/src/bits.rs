@@ -58,6 +58,22 @@ impl<'a> BitReader<'a> {
         let prefix = usize::from(window >> (11 - offset)) & 31;
         prefix & (31 << (5 - available))
     }
+    /// Peeks eight bits, padding unavailable low bits with zero.
+    #[inline(always)]
+    pub(crate) fn peek8(&self) -> usize {
+        let available = self.remaining().min(8);
+        if available == 0 {
+            return 0;
+        }
+        let start = self.position >> 3;
+        let offset = (self.position & 7) as u32;
+        let word = u16::from_be_bytes([
+            self.data[start],
+            self.data.get(start + 1).copied().unwrap_or(0),
+        ]);
+        let prefix = usize::from(word >> (8 - offset)) & 255;
+        prefix & (255 << (8 - available))
+    }
     pub fn read(&mut self, width: u32) -> Result<u32, Error> {
         if width > 32 {
             return Err(Error::Invalid("bit field width"));
@@ -141,6 +157,26 @@ impl BitWriter {
 #[cfg(test)]
 mod tests {
     use super::BitReader;
+
+    #[test]
+    fn eight_bit_prefixes_preserve_every_two_byte_pattern_and_bound() {
+        assert_eq!(BitReader::new(&[]).peek8(), 0);
+        for word in 0..=u16::MAX {
+            let bytes = word.to_be_bytes();
+            for start in 0..=16 {
+                for available in 0..=16 - start {
+                    let bits = BitReader::bounded(&bytes, start, available).unwrap();
+                    let mut expected = 0;
+                    for n in 0..available.min(8) {
+                        expected |=
+                            usize::from((bytes[(start + n) / 8] >> (7 - (start + n) % 8)) & 1)
+                                << (7 - n);
+                    }
+                    assert_eq!(bits.peek8(), expected);
+                }
+            }
+        }
+    }
 
     #[test]
     fn padded_prefixes_preserve_every_two_byte_pattern_and_short_bound() {
