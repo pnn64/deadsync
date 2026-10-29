@@ -2347,3 +2347,169 @@ publication retain their existing consumption and verification behavior.
 caller processes, decoder-size probes, unchanged independent test/support/
 fixture sources and every recorded source, binary, log and summary identity.
 `audit.json` records the report, support and evidence hashes before commit.
+
+## Short Huffman prefixes, narrow symbols and repeated bytes (2026-10-29)
+
+Three retained changes build on `a5ca368eb`:
+
+1. A dynamic tree shorter than nine bits builds only its distinct primary-table
+   prefix. Contiguous doubling copies expand that prefix to the existing 512
+   entries. This removes repeated strided alias construction; the decoder's
+   nine-bit lookup, canonical fallback and tree validation remain unchanged.
+2. Distance tables hold 32 canonical symbols instead of 288. Buffered
+   code-length trees hold 19; literal trees retain 288. A private const parameter
+   sizes the arrays without runtime indirection or heap allocation. Streaming
+   code-length parsing continues to reuse its literal-table field.
+3. A streaming distance-one match fills the output with the previous history
+   byte. This replaces seed/overlap doubling copies for repeated bytes. The
+   existing history update, output/window checks, checksums and suspension states
+   still handle the result.
+
+Only `src/zlib.rs` and `src/zlib/inflate.rs` change in production: 26 added and
+11 removed lines, net +15. The removed work is runtime alias-loop iterations,
+unused symbol storage/initialization/copying and overlapping match copies. No
+production dependency, public API, unsafe code or independent test input changes.
+
+### Component measurements
+
+The focused callers link both source versions into one executable, alternate
+versions within each process, retain eleven batches after warmup and run three
+processes. Values below are medians of the three process medians, in thread CPU
+cycles per operation. The construction probe uses verified standalone source
+copies with the same benchmark-only wrapper appended to each; the runtime crate
+has no probe function. Complete comb trees cover maximum code depths 1 through
+15, with 20,000 constructions per batch.
+
+| Construction / complete tree depth | Before cycles | After cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| 1 | 624 | 303 | 2.059x |
+| 5 | 719 | 354 | 2.028x |
+| 7 | 722 | 439 | 1.648x |
+| 8 | 770 | 575 | 1.339x |
+| 9, unchanged full primary width | 792 | 785 | 1.009x |
+| 15, unchanged full primary width | 871 | 846 | 1.029x |
+
+`replication-summary.tsv` isolates table construction from image reconstruction
+and match copying. `prefix-paired-summary.tsv` compares the corresponding PNG
+APIs against the previous `repeat-clean` checkpoint. For example, small dynamic
+RGBA8 level9 buffered decoding changes from 13,094 to 11,537 cycles (1.135x) in
+that process comparison. Separate-process controls vary; the combined linked
+caller below provides additional evidence.
+
+`repeat-clean-focus-summary.tsv` reconstructs all production source hashes from
+`repeat-clean`, which differs from the baseline only in distance-one fill. Its
+nine complete streaming-inflate operations verify output and exact input
+consumption before timing. They cover repeated-byte streams of 1 KiB, 64 KiB
+and 1 MiB, each with output fragments of 31, 258 and 8,192 bytes. CPU throughput
+ratios span 1.123x-1.416x. The 1 MiB/8,192-byte operation changes from 987,695 to
+700,626 cycles (1.410x). These measurements include inflater construction and
+its existing history allocation; output-buffer allocation is outside timing.
+The earlier `repeat-focus` probe includes subsequently rejected setup/row edits;
+use the independently reconstructed clean probe for attribution.
+
+The narrow-symbol checkpoint changes `size_of::<Inflater>()` from 3,904 to
+3,392 bytes and `size_of::<StreamDecoder>()` from 4,696 to 4,184 bytes, saving
+512 bytes per object. `Inflater::new(0).working_memory_bytes()` changes from
+3,912 to 3,400 bytes. All linked size probes agree. This is an object-storage
+reduction: all 212 selected pipeline operations retain exactly the baseline's
+heap allocation calls, reallocations and requested bytes. The component CPU
+comparison, `prefix-narrow-paired-summary.tsv`, is mixed (median API ratio 0.973x);
+its memory reduction is not presented as a universal CPU gain. The frozen
+all-case example executable grows from 722,944 to 728,064 bytes; that file size
+includes the harness and linkage, not only the codec's text section.
+
+### Combined PNG APIs and controls
+
+`in-process-summary.tsv` links the baseline and all three retained changes.
+Fixture creation, complete native sample/palette checks and encoding remain
+outside timing; the complete decoded Png is blackboxed. Small images use 512
+iterations per batch and large images use three.
+
+| PNG API / input | Before cycles | Selected cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| Reference dynamic gray8 33x9 level1 buffered | 10,118 | 8,239 | 1.228x |
+| Reference dynamic gray8 33x9 level9 buffered | 9,584 | 7,313 | 1.311x |
+| Reference dynamic RGBA8 33x9 level9 buffered | 10,567 | 8,638 | 1.223x |
+| Reference dynamic RGBA8 33x9 level9 reader | 14,012 | 12,433 | 1.127x |
+| Reference dynamic RGBA16 33x9 level9 buffered | 13,212 | 11,565 | 1.142x |
+| Reference dynamic RGBA16 33x9 level9 reader | 16,697 | 15,207 | 1.098x |
+| Reference dynamic RGBA8 513x257 level9 reader | 558,920 | 567,188 | 0.985x |
+| Reference dynamic RGBA16 513x257 level9 reader | 2,016,839 | 2,023,644 | 0.997x |
+| RGBA8 4097x257 Stored reader | 10,755,793 | 11,273,373 | 0.954x |
+| RGBA16 4097x257 Stored reader | 24,178,583 | 24,929,932 | 0.970x |
+
+Across all six small reference-dynamic cases, buffered ratios span
+1.142x-1.311x and reader ratios 1.069x-1.127x. Large reference-dynamic ratios
+span 0.999x-1.041x buffered and 0.985x-1.071x reader. Across the complete 212-case
+linked caller, the median ratio is 1.007x; this does not establish a general
+whole-corpus speedup.
+
+The broad caller also reports a 0.751x RGB8 513x257 Fast buffered control.
+A separate `fixed-focus` caller repeats that exact fixture with 128 iterations
+per batch, and wide RGBA8 Stored controls with twelve. Its three-process
+medians are:
+
+| Longer control / API | Before cycles | Selected cycles | CPU throughput |
+| --- | ---: | ---: | ---: |
+| RGB8 513x257 Fast buffered | 345,440 | 345,081 | 1.001x |
+| RGB8 513x257 Fast reader | 483,063 | 501,326 | 0.964x |
+| RGBA8 4097x257 Stored buffered | 30,548,401 | 29,781,284 | 1.026x |
+| RGBA8 4097x257 Stored reader | 13,824,878 | 13,843,115 | 0.999x |
+
+The large buffered slowdown does not reproduce in the longer control. The Fast
+reader control is still about 3.6% slower, and the broad caller's other slower
+controls remain recorded. The changes target short-tree setup, repeated bytes
+and object size; they do not establish faster decoding for every input.
+
+### Protocol, rejected trials and verification
+
+`experiments/dynamic-setup-20261029` retains seven valid frozen checkpoints,
+six alternating four-round process comparisons (48 processes, 212 API
+operations each), four linked API callers (twelve processes) and two private
+construction callers (six processes). The pipeline corpus covers Stored noise,
+native fixed-code gradients, packed samples, all native channel widths,
+Adam7/Paeth, tiny and wide rows, and independently compressed reference-zlib
+level1/9 inputs. Large reference inputs assert dynamic first-block type 2.
+Encoded fingerprints and complete scalar-modeled filtered/native answers are
+checked outside timing. CPU 2 affinity and Windows thread cycles are used;
+frequency, cache state and external workloads remain uncontrolled. This task's
+builds and correctness jobs do not overlap timed runs.
+
+Paired pipeline runs request three iterations, with the harness's existing
+small-input minimums. The generic freeze manifest scope text still says twelve,
+but its outputs are deferred; actual paired manifests and TSV columns record
+three and those minimums. Cumulative source patches are relative to `a5ca368eb`.
+`protocol.json` records the individual measurement scopes and identities.
+
+The early maximum-depth loop exit (`bounded`) and retained native16 row-length
+rewrite (`rows`) did not establish consistent benefits and are rejected.
+`replicated-paired` is explicitly excluded: restoring a saved file preserved its
+old timestamp, so Cargo reused the `repeat-clean` executable despite different
+recorded source. Identical binary hashes and Cargo's fresh-artifact output prove
+the mismatch; `replicated-invalid.json` records it. A separate log-name collision overwrote the original `replica` build log;
+`replica-paired` and `narrow-paired` (sixteen processes) are also excluded.
+`replica-build-log-overwritten.json` records the missing and replacement
+digests. Identical production source is rebuilt as `prefix`, using unique
+logs; `prefix-paired` and `prefix-narrow-paired` replace those comparisons.
+The focused construction log survives as `replication-probe-build.log`,
+and its exact measured driver as `replication-measured.py`. The audit requires
+a rebuilt PNG library for every valid checkpoint. Failed standalone build and
+launch artifacts are retained without timing claims.
+
+Selected source passes 71 release tests and 65 debug tests: 58/52 integration
+tests plus thirteen library oracles in each profile. All six optional C audits
+run in release and remain ignored in debug. Strict all-target Clippy and scoped
+formatting pass. Unchanged suites check malformed/empty/complete Huffman trees,
+all repeat counts, reserved symbols, symbol permutations at depths 1 through 15,
+window/history boundaries, input/output suspension, exact prefixes/trailers,
+native samples and palettes, Adam7/filter reconstruction, PNG/APNG CRCs,
+sequence/recovery/event ordering, and resource/I/O limits. C zlib checks 19,645
+Huffman fixtures and 10,744 symbol-permutation streams. Known C acceptance of
+out-of-window or pre-output references remains distinct from Rust's unchanged
+strict policy.
+
+`final-validation.json` and `library-validation.json` retain the six successful
+commands, logs and exact source/test identities. `summary.py` recomputes all
+linked medians. `audit.py` verifies sources, rebuilds, executables, fixtures,
+heap counts, size probes, summaries and the explicit stale-timing exclusion.
+`audit.json` records normalized report, support and evidence hashes before commit.

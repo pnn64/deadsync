@@ -1,0 +1,6 @@
+{
+  "error": "WinError 740: installer-name elevation heuristic; no timing process started",
+  "driver_sha256": "6d38cb2059b28b0e42cc45ba757b7eaf87dd40120250959ffc4da073ea15595c",
+  "executable": "C:\\GitHub\\deadsync-png-pixels-20261028\\target\\png-dynamic-setup-20261029\\setup\\png-setup-compare.exe",
+  "executable_sha256": "74d06ee16d2fe87235c39e7de9dfe8b2225bc0111242a265403bf03201ff78d0"
+}

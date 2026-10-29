@@ -1,0 +1,6 @@
+{
+  "reason": "Restoring a saved source with Copy-Item preserved an old timestamp. Cargo reported the PNG library fresh, so the binary is the repeat-clean control, not the recorded replicated source. Exclude replicated-paired timing claims.",
+  "invalid_manifest_sha256": "990b68b03da16a53f6964863267154ab559e224ab5cfa1b1f3ab886650412908",
+  "control_manifest_sha256": "273e2e0f62eadade0ac75153579fbf780b6c6f56746739d533ced499dc049a0e",
+  "identical_executable_sha256": "2bff30a213226dfb729d49f8981fae5da5f1174bcebd04a86f7777f2783e02b5"
+}

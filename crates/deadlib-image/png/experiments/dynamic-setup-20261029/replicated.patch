@@ -1,0 +1,51 @@
+diff --git a/crates/deadlib-image/png/src/zlib.rs b/crates/deadlib-image/png/src/zlib.rs
+index eb2fe440d..25dc61a20 100644
+--- a/crates/deadlib-image/png/src/zlib.rs
++++ b/crates/deadlib-image/png/src/zlib.rs
+@@ -150,6 +150,7 @@ impl Huffman {
+             return Err("incomplete Huffman tree");
+         }
+         let mut next = h.first;
++        let primary = 1usize << if h.max < 9 { h.max } else { 9 };
+         let mut symbol = 0;
+         while symbol < lengths.len() {
+             let n = lengths[symbol];
+@@ -163,7 +164,7 @@ impl Huffman {
+             if n <= 9 {
+                 let rev = (code.reverse_bits() >> (16 - n)) as usize;
+                 let mut index = rev;
+-                while index < 512 {
++                while index < primary {
+                     h.fast[index] = ((symbol as u16) << 4) | n as u16;
+                     index += 1 << n;
+                 }
+@@ -171,6 +172,12 @@ impl Huffman {
+             next[n] += 1;
+             symbol += 1;
+         }
++        let mut initialized = primary;
++        while initialized < 512 {
++            let (prefix, rest) = h.fast.split_at_mut(initialized);
++            rest[..initialized].copy_from_slice(prefix);
++            initialized *= 2;
++        }
+         Ok(h)
+     }
+     // A small primary lookup can inline at symbol call sites; keep the
+diff --git a/crates/deadlib-image/png/src/zlib/inflate.rs b/crates/deadlib-image/png/src/zlib/inflate.rs
+index 4b79e76e9..4441a7bbb 100644
+--- a/crates/deadlib-image/png/src/zlib/inflate.rs
++++ b/crates/deadlib-image/png/src/zlib/inflate.rs
+@@ -183,6 +183,12 @@ impl Inflater {
+     }
+     #[inline]
+     fn copy_match(&mut self, distance: usize, output: &mut [u8]) {
++        if distance == 1 {
++            let previous = (self.history_pos + self.history.len() - 1) & (self.history.len() - 1);
++            output.fill(self.history[previous]);
++            self.remember(output);
++            return;
++        }
+         let n = output.len();
+         let seed = distance.min(n);
+         let size = self.history.len();

@@ -1,0 +1,66 @@
+{
+  "base": "a5ca368eb",
+  "selected": "narrow",
+  "production_changes": [
+    "Build short Huffman primary prefixes once, then duplicate contiguous prefixes to 512 entries.",
+    "Size distance symbols to 32 and buffered code-length symbols to 19, retaining literal capacity 288.",
+    "Fill distance-one streaming matches from the previous byte before the unchanged history/checksum machinery."
+  ],
+  "valid_checkpoints": [
+    "baseline",
+    "bounded",
+    "repeats",
+    "rows",
+    "repeat-clean",
+    "prefix",
+    "narrow"
+  ],
+  "rejected_trials": [
+    "bounded: early maximum-depth exit did not show a consistent setup benefit",
+    "rows: retained native16 length and zipped conversion did not show a consistent API benefit"
+  ],
+  "excluded_timings": "replicated-paired (8 processes): preserved source timestamp caused Cargo to reuse repeat-clean. Identical binary digests and fresh artifact output prove these are invalid candidate timings; replicated-invalid.json records identities. replica-paired is the corrected rebuild. Also exclude replica-paired and narrow-paired (16 processes): a standalone build log overwrote the frozen replica build log. replica-build-log-overwritten.json records the missing/replacement digests. Identical source hashes are rebuilt as prefix with unique logs; prefix-paired and prefix-narrow-paired replace those comparisons.",
+  "pipeline": {
+    "stage": "deflate-tables",
+    "cases_per_process": 212,
+    "comparisons": [
+      "bounded-paired",
+      "repeats-paired",
+      "rows-paired",
+      "prefix-paired",
+      "prefix-narrow-paired",
+      "selected-paired"
+    ],
+    "processes": 48,
+    "iterations": 3,
+    "order": "4 rounds, alternating A/B then B/A",
+    "scope": "3 warmups, 7 CPU-median batches; reader outputs <=65536 bytes use at least 64 iterations, other outputs below 4096 bytes at least 2048; separate untimed heap probe"
+  },
+  "metadata_caveat": "Generic freeze scope text says 12 iterations, but outputs are deferred. Paired manifests and TSV iteration columns record the actual 3/minimums above.",
+  "linked_callers": {
+    "processes_each": 3,
+    "batches": "one warmup plus 11 retained alternating batches per version; median per version, then median across 3 processes",
+    "scopes": {
+      "in-process": "212 PNG API operations; small512 iterations, large3; complete Png result blackboxed",
+      "repeat-focus": "9 exploratory streaming inflate operations; includes rejected bounded/rows snapshot",
+      "repeat-clean-focus": "9 isolated streaming inflate operations; verified repeat-clean reconstruction differs from baseline only in distance-one fill",
+      "fixed-focus": "6 PNG operations; RGB8 513x257 plain 128 iterations; RGBA8 4097x257 Stored 12 iterations; investigates controls from the broad caller"
+    }
+  },
+  "setup_callers": {
+    "processes_each": 3,
+    "cases_each": 15,
+    "iterations": 20000,
+    "fixtures": "Complete comb trees with maximum depth 1..15; construction blackboxed with identical private benchmark wrappers appended only to verified standalone source copies.",
+    "versions": {
+      "setup": "baseline vs rejected bounded",
+      "replication": "baseline vs prefix source (originally recorded as replica); exact source identity confirmed by rebuilt prefix snapshot. Measured driver preserved as replication-measured.py; corrected reproduction driver uses a unique log filename."
+    }
+  },
+  "identity": "Frozen source, harness, toolchain, commands, logs, executable and measurements hashed. Audit additionally requires an actual PNG library rebuild for every valid frozen checkpoint.",
+  "known_answers": "Encoded-input fingerprints match across versions. Full scalar-modeled filtered bytes and native samples/palettes checked outside pipeline timings; linked callers check complete native sample/palette answers. Repeated-byte streams verify complete output and exact consumption before timing.",
+  "machine": "Windows thread-cycle counts; current thread pinned to CPU2; same release/bench profile; no builds/tests from this task during timed runs. Host, other tasks, frequency and cache state are uncontrolled.",
+  "metric_changes": "working_memory_bytes truthfully decreases with the 512-byte object reduction; heap allocation calls, reallocations and requested byte counts are independently checked.",
+  "independent_tests": "Existing integration/support/fixture/oracle inputs unchanged. Release includes all 6 optional C audits; debug omits those 6 optional checks. Existing strict Rust distance/window policy remains distinct from known C zlib permissiveness.",
+  "failed_infrastructure": "Initial installer-named setup executable was not launched (WinError 740); renamed standalone executable. First replication standalone compile exposed unsupported const range indexing; split_at_mut fixes it. Failed artifacts retained without performance claims."
+}

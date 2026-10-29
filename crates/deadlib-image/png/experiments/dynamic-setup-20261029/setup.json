@@ -1,0 +1,140 @@
+{
+  "base": "a5ca368eb",
+  "driver_sha256": "ec5da5cb0acf365b46da1c01275e78d950a7dc765421554c80d52bffd97ae5d6",
+  "original_sources": {
+    "baseline": {
+      "crates/deadlib-image/png/src/apng.rs": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21",
+      "crates/deadlib-image/png/src/checksum.rs": "7f457e0de65410e8bc893e8c20c8eaefbf9c35af3a08452304c68ad1c1c5aab6",
+      "crates/deadlib-image/png/src/codec.rs": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f",
+      "crates/deadlib-image/png/src/composite.rs": "8abc623e703a6cfb09235fa502a8a8042b1951f164d3ab4c9645cb3410a0bc78",
+      "crates/deadlib-image/png/src/lib.rs": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9",
+      "crates/deadlib-image/png/src/metadata/language/registry.rs": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4",
+      "crates/deadlib-image/png/src/metadata/language.rs": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb",
+      "crates/deadlib-image/png/src/metadata/profile.rs": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b",
+      "crates/deadlib-image/png/src/metadata.rs": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b",
+      "crates/deadlib-image/png/src/reference.rs": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5",
+      "crates/deadlib-image/png/src/scanline.rs": "1ffeee3a1b47770809a1d41038db02f338a1cc1e84965d4b7670d51eeb062b5a",
+      "crates/deadlib-image/png/src/stream/decode.rs": "82a26ee7c8c8be6fc807be5d3e5ba2e7012d5e17a18e1caa0c2d54bd73a34b9b",
+      "crates/deadlib-image/png/src/stream/encode_rows.rs": "100117390a78fb26be7ed3f4a7e75441706144d56f4da9e806abd787a99db5df",
+      "crates/deadlib-image/png/src/stream/mod.rs": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b",
+      "crates/deadlib-image/png/src/stream/read.rs": "e810451a37c1dc79fd3eea1d0d609e5772be3c6925c008c4c93f22be758c1576",
+      "crates/deadlib-image/png/src/stream/rows.rs": "8aa9e3230b8a47fe9c738b37a61714e6d86a94d33b72bd7ed4aa853b2d551b7a",
+      "crates/deadlib-image/png/src/stream/write.rs": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463",
+      "crates/deadlib-image/png/src/zlib/deflate.rs": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4",
+      "crates/deadlib-image/png/src/zlib/inflate.rs": "6f9c091eae942ffa404a3ce7f9a9411c55958e201619356d2c992b2466bd9b76",
+      "crates/deadlib-image/png/src/zlib/matcher.rs": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19",
+      "crates/deadlib-image/png/src/zlib.rs": "aad0419aeb3e232b1b8495c2c5833de0f48b97fa867323181123f88f8436c4c7"
+    },
+    "selected": {
+      "crates/deadlib-image/png/src/apng.rs": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21",
+      "crates/deadlib-image/png/src/checksum.rs": "7f457e0de65410e8bc893e8c20c8eaefbf9c35af3a08452304c68ad1c1c5aab6",
+      "crates/deadlib-image/png/src/codec.rs": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f",
+      "crates/deadlib-image/png/src/composite.rs": "8abc623e703a6cfb09235fa502a8a8042b1951f164d3ab4c9645cb3410a0bc78",
+      "crates/deadlib-image/png/src/lib.rs": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9",
+      "crates/deadlib-image/png/src/metadata/language/registry.rs": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4",
+      "crates/deadlib-image/png/src/metadata/language.rs": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb",
+      "crates/deadlib-image/png/src/metadata/profile.rs": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b",
+      "crates/deadlib-image/png/src/metadata.rs": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b",
+      "crates/deadlib-image/png/src/reference.rs": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5",
+      "crates/deadlib-image/png/src/scanline.rs": "1ffeee3a1b47770809a1d41038db02f338a1cc1e84965d4b7670d51eeb062b5a",
+      "crates/deadlib-image/png/src/stream/decode.rs": "82a26ee7c8c8be6fc807be5d3e5ba2e7012d5e17a18e1caa0c2d54bd73a34b9b",
+      "crates/deadlib-image/png/src/stream/encode_rows.rs": "100117390a78fb26be7ed3f4a7e75441706144d56f4da9e806abd787a99db5df",
+      "crates/deadlib-image/png/src/stream/mod.rs": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b",
+      "crates/deadlib-image/png/src/stream/read.rs": "e810451a37c1dc79fd3eea1d0d609e5772be3c6925c008c4c93f22be758c1576",
+      "crates/deadlib-image/png/src/stream/rows.rs": "8aa9e3230b8a47fe9c738b37a61714e6d86a94d33b72bd7ed4aa853b2d551b7a",
+      "crates/deadlib-image/png/src/stream/write.rs": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463",
+      "crates/deadlib-image/png/src/zlib/deflate.rs": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4",
+      "crates/deadlib-image/png/src/zlib/inflate.rs": "6f9c091eae942ffa404a3ce7f9a9411c55958e201619356d2c992b2466bd9b76",
+      "crates/deadlib-image/png/src/zlib/matcher.rs": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19",
+      "crates/deadlib-image/png/src/zlib.rs": "8dc7b64f60df6ff31ae3364183bd4524924aeb57c3b297886cc2f8c4aed38137"
+    }
+  },
+  "generated_sources": {
+    "baseline": {
+      "crates/deadlib-image/png/src/apng.rs": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21",
+      "crates/deadlib-image/png/src/checksum.rs": "7f457e0de65410e8bc893e8c20c8eaefbf9c35af3a08452304c68ad1c1c5aab6",
+      "crates/deadlib-image/png/src/codec.rs": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f",
+      "crates/deadlib-image/png/src/composite.rs": "8abc623e703a6cfb09235fa502a8a8042b1951f164d3ab4c9645cb3410a0bc78",
+      "crates/deadlib-image/png/src/lib.rs": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9",
+      "crates/deadlib-image/png/src/metadata/language/registry.rs": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4",
+      "crates/deadlib-image/png/src/metadata/language.rs": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb",
+      "crates/deadlib-image/png/src/metadata/profile.rs": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b",
+      "crates/deadlib-image/png/src/metadata.rs": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b",
+      "crates/deadlib-image/png/src/reference.rs": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5",
+      "crates/deadlib-image/png/src/scanline.rs": "1ffeee3a1b47770809a1d41038db02f338a1cc1e84965d4b7670d51eeb062b5a",
+      "crates/deadlib-image/png/src/stream/decode.rs": "82a26ee7c8c8be6fc807be5d3e5ba2e7012d5e17a18e1caa0c2d54bd73a34b9b",
+      "crates/deadlib-image/png/src/stream/encode_rows.rs": "100117390a78fb26be7ed3f4a7e75441706144d56f4da9e806abd787a99db5df",
+      "crates/deadlib-image/png/src/stream/mod.rs": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b",
+      "crates/deadlib-image/png/src/stream/read.rs": "e810451a37c1dc79fd3eea1d0d609e5772be3c6925c008c4c93f22be758c1576",
+      "crates/deadlib-image/png/src/stream/rows.rs": "8aa9e3230b8a47fe9c738b37a61714e6d86a94d33b72bd7ed4aa853b2d551b7a",
+      "crates/deadlib-image/png/src/stream/write.rs": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463",
+      "crates/deadlib-image/png/src/zlib/deflate.rs": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4",
+      "crates/deadlib-image/png/src/zlib/inflate.rs": "6f9c091eae942ffa404a3ce7f9a9411c55958e201619356d2c992b2466bd9b76",
+      "crates/deadlib-image/png/src/zlib/matcher.rs": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19",
+      "crates/deadlib-image/png/src/zlib.rs": "432771bab895e7c13a4234fb6c187e27e608daad5b3b9d089dd22450e5373ce1"
+    },
+    "selected": {
+      "crates/deadlib-image/png/src/apng.rs": "1a740b5ca862cc699a39b6282c87b4cb1664bc6209b914dee32f029b50ca8a21",
+      "crates/deadlib-image/png/src/checksum.rs": "7f457e0de65410e8bc893e8c20c8eaefbf9c35af3a08452304c68ad1c1c5aab6",
+      "crates/deadlib-image/png/src/codec.rs": "61151efee02d033a12fa97b91016630a5eb909fcfffb1d8d0380af5b95ba296f",
+      "crates/deadlib-image/png/src/composite.rs": "8abc623e703a6cfb09235fa502a8a8042b1951f164d3ab4c9645cb3410a0bc78",
+      "crates/deadlib-image/png/src/lib.rs": "dfa95c53f3697b5f0975b7c9a471b79da254cb2baa2af6cd4118ebd13e4a6af9",
+      "crates/deadlib-image/png/src/metadata/language/registry.rs": "9ac990b5a00ef5eaca278b8012b98434ebe31da96ea7313ca2dc1e463d1b88f4",
+      "crates/deadlib-image/png/src/metadata/language.rs": "3b97fcf0da4bb275883b1d2c31653bef733939f0c9a867a177207aaa2c38f7cb",
+      "crates/deadlib-image/png/src/metadata/profile.rs": "9a0fae073e45227763edefce53af4ae07ae79ff7d0bce38ca66c8d6075adff1b",
+      "crates/deadlib-image/png/src/metadata.rs": "b664d12e18efb201dd9f033e132ad99c2a62c7a92cb6ce4543ad0e30624bea0b",
+      "crates/deadlib-image/png/src/reference.rs": "a697d0e85784053bc856cf26d3307d9f1d3d74dec81f7c0859cf9d00654c94e5",
+      "crates/deadlib-image/png/src/scanline.rs": "1ffeee3a1b47770809a1d41038db02f338a1cc1e84965d4b7670d51eeb062b5a",
+      "crates/deadlib-image/png/src/stream/decode.rs": "82a26ee7c8c8be6fc807be5d3e5ba2e7012d5e17a18e1caa0c2d54bd73a34b9b",
+      "crates/deadlib-image/png/src/stream/encode_rows.rs": "100117390a78fb26be7ed3f4a7e75441706144d56f4da9e806abd787a99db5df",
+      "crates/deadlib-image/png/src/stream/mod.rs": "8c7b0a66f345402bbd804d345d1c9815161e84a632a6e82f1530679a669f017b",
+      "crates/deadlib-image/png/src/stream/read.rs": "e810451a37c1dc79fd3eea1d0d609e5772be3c6925c008c4c93f22be758c1576",
+      "crates/deadlib-image/png/src/stream/rows.rs": "8aa9e3230b8a47fe9c738b37a61714e6d86a94d33b72bd7ed4aa853b2d551b7a",
+      "crates/deadlib-image/png/src/stream/write.rs": "be5aa900a1bbdc206d6ea32444e322cf2b89ece631a03b5a54e05062c891a463",
+      "crates/deadlib-image/png/src/zlib/deflate.rs": "9bd571140a43b90f75b8031f342b5e51feb1ff61dea8e4c417a079280c7da0e4",
+      "crates/deadlib-image/png/src/zlib/inflate.rs": "6f9c091eae942ffa404a3ce7f9a9411c55958e201619356d2c992b2466bd9b76",
+      "crates/deadlib-image/png/src/zlib/matcher.rs": "1582c0a4fa53c020d02b697ddeb3388c3253c4b30a1352aedff905977f46ae19",
+      "crates/deadlib-image/png/src/zlib.rs": "c5e4840756b682b3eaebc225f444f8458934ec3cfb12e78a7dcd0984c8865540"
+    }
+  },
+  "outputs": [
+    {
+      "path": "setup-run1.log",
+      "sha256": "0ec75ef6156d98d8a3b867819439b5d248e23b8d7332b587b00d5e16b9910078"
+    },
+    {
+      "path": "setup-run2.log",
+      "sha256": "f1c66a8efd3e42ab5b2b9b624002aca474c286f7e66e8e73cf3ecfbbed78ea03"
+    },
+    {
+      "path": "setup-run3.log",
+      "sha256": "c592fde10301da43236dd74074c615c6fdfa0c02fa9e0fc13fe0de6196e09307"
+    }
+  ],
+  "command": [
+    "cargo",
+    "build",
+    "--offline",
+    "--manifest-path",
+    "C:\\GitHub\\deadsync-png-pixels-20261028\\target\\png-dynamic-setup-20261029\\canonical\\Cargo.toml",
+    "--profile",
+    "bench",
+    "--target-dir",
+    "C:\\GitHub\\deadsync-png-pixels-20261028\\target\\png-dynamic-setup-20261029\\canonical\\build",
+    "--message-format",
+    "json"
+  ],
+  "profile": {
+    "opt-level": 3,
+    "overflow-checks": false,
+    "debug-assertions": false,
+    "lto": true,
+    "debug": 1,
+    "panic": "abort"
+  },
+  "build_log_sha256": "48c58067761440aa15f8bbf8454899589782012f84da789c8291ddad11540fcf",
+  "harness_sha256": "3118672fbf3c342c6242a436b7be5e67d91de3af214deee7738d7b20693b0225",
+  "cpu_sha256": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+  "executable": "C:\\GitHub\\deadsync-png-pixels-20261028\\target\\png-dynamic-setup-20261029\\canonical\\canonical_bench.exe",
+  "executable_sha256": "d1fd9fd1294e7f2e3529e074026680e57cebd18da338411594c44a8910f0c93a"
+}

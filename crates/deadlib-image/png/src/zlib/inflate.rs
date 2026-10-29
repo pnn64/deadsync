@@ -57,7 +57,7 @@ pub struct Inflater {
     history_pos: usize,
     // None borrows fixed tables; Some owns a dynamic table.
     literals: Option<Huffman>,
-    distances: Option<Huffman>,
+    distances: Option<Huffman<32>>,
     code_lengths: [u8; 19],
     lengths: [u8; 318],
     nl: usize,
@@ -183,6 +183,12 @@ impl Inflater {
     }
     #[inline]
     fn copy_match(&mut self, distance: usize, output: &mut [u8]) {
+        if distance == 1 {
+            let previous = (self.history_pos + self.history.len() - 1) & (self.history.len() - 1);
+            output.fill(self.history[previous]);
+            self.remember(output);
+            return;
+        }
         let n = output.len();
         let seed = distance.min(n);
         let size = self.history.len();

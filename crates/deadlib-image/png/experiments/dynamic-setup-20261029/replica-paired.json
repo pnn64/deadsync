@@ -1,0 +1,71 @@
+{
+  "driver_sha256": "381bf859dabe8bdedbf85ab46284de1b9dca497baa4dd33fb33942c2ba2e8716",
+  "iterations": 3,
+  "benchmark_stage": "deflate-tables",
+  "measurements": [
+    {
+      "round": 1,
+      "label": "repeat-clean",
+      "path": "replica-paired-1-repeat-clean.tsv",
+      "sha256": "a9d8d46298946a18d5b7ffa42df9f640ebfe7e0318d6954590a862565ae9989b",
+      "source_manifest_sha256": "273e2e0f62eadade0ac75153579fbf780b6c6f56746739d533ced499dc049a0e",
+      "executable_sha256": "2bff30a213226dfb729d49f8981fae5da5f1174bcebd04a86f7777f2783e02b5"
+    },
+    {
+      "round": 1,
+      "label": "replica",
+      "path": "replica-paired-1-replica.tsv",
+      "sha256": "c41d8f1a058725113287b8f140dc68a17a8a6d75faa8a1c9bc80d81efcaace50",
+      "source_manifest_sha256": "6f7446f669fcbdc45c2a497352980219bfbf5bc5c7be7746f74dcd972f447d00",
+      "executable_sha256": "dd3b3364ce15cb649efb96167723f4fd579317fb4847ff444ce78874bc8b3c2a"
+    },
+    {
+      "round": 2,
+      "label": "replica",
+      "path": "replica-paired-2-replica.tsv",
+      "sha256": "1d08956569bf2daf34dc960aed71dc9687e1c6b47bfd3d3a661402e55e144222",
+      "source_manifest_sha256": "6f7446f669fcbdc45c2a497352980219bfbf5bc5c7be7746f74dcd972f447d00",
+      "executable_sha256": "dd3b3364ce15cb649efb96167723f4fd579317fb4847ff444ce78874bc8b3c2a"
+    },
+    {
+      "round": 2,
+      "label": "repeat-clean",
+      "path": "replica-paired-2-repeat-clean.tsv",
+      "sha256": "2098f425e3b09362595563ac74ea3e754dbe24432abc182094a8075b8c29b5d8",
+      "source_manifest_sha256": "273e2e0f62eadade0ac75153579fbf780b6c6f56746739d533ced499dc049a0e",
+      "executable_sha256": "2bff30a213226dfb729d49f8981fae5da5f1174bcebd04a86f7777f2783e02b5"
+    },
+    {
+      "round": 3,
+      "label": "repeat-clean",
+      "path": "replica-paired-3-repeat-clean.tsv",
+      "sha256": "621f1103f6e133404cbd0eb7b620902ac52d2a31a93a22d81645f26e46b7f649",
+      "source_manifest_sha256": "273e2e0f62eadade0ac75153579fbf780b6c6f56746739d533ced499dc049a0e",
+      "executable_sha256": "2bff30a213226dfb729d49f8981fae5da5f1174bcebd04a86f7777f2783e02b5"
+    },
+    {
+      "round": 3,
+      "label": "replica",
+      "path": "replica-paired-3-replica.tsv",
+      "sha256": "766816b7b02dbb85a70d569086ee5fa3705870eaf25ba0c3a50c2a59df867b95",
+      "source_manifest_sha256": "6f7446f669fcbdc45c2a497352980219bfbf5bc5c7be7746f74dcd972f447d00",
+      "executable_sha256": "dd3b3364ce15cb649efb96167723f4fd579317fb4847ff444ce78874bc8b3c2a"
+    },
+    {
+      "round": 4,
+      "label": "replica",
+      "path": "replica-paired-4-replica.tsv",
+      "sha256": "c06f8ad7951ae843e28094e195de3a171fbd89fba86bdeea8673ea919c9b2f93",
+      "source_manifest_sha256": "6f7446f669fcbdc45c2a497352980219bfbf5bc5c7be7746f74dcd972f447d00",
+      "executable_sha256": "dd3b3364ce15cb649efb96167723f4fd579317fb4847ff444ce78874bc8b3c2a"
+    },
+    {
+      "round": 4,
+      "label": "repeat-clean",
+      "path": "replica-paired-4-repeat-clean.tsv",
+      "sha256": "0fa1f77b68fc4b3ee389321ff797042669adbb21d383525ed2fa86116569dcec",
+      "source_manifest_sha256": "273e2e0f62eadade0ac75153579fbf780b6c6f56746739d533ced499dc049a0e",
+      "executable_sha256": "2bff30a213226dfb729d49f8981fae5da5f1174bcebd04a86f7777f2783e02b5"
+    }
+  ]
+}

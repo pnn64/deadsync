@@ -85,15 +85,15 @@ impl<'a> Bits<'a> {
 
 // A small primary table handles common codes. Canonical arrays handle longer
 // codes without a 128 KiB lookup allocation per dynamic block.
-struct Huffman {
+struct Huffman<const SYMBOLS: usize = 288> {
     fast: [u16; 512],
     counts: [u16; 16],
     first: [u16; 16],
     offsets: [u16; 16],
-    symbols: [u16; 288],
+    symbols: [u16; SYMBOLS],
     max: u8,
 }
-impl Huffman {
+impl<const SYMBOLS: usize> Huffman<SYMBOLS> {
     fn new(lengths: &[u8], complete: bool, allow_empty: bool) -> Result<Self, Error> {
         Self::build(lengths, complete, allow_empty).map_err(Error::Invalid)
     }
@@ -107,7 +107,7 @@ impl Huffman {
             counts: [0; 16],
             first: [0; 16],
             offsets: [0; 16],
-            symbols: [0; 288],
+            symbols: [0; SYMBOLS],
             max: 0,
         };
         let mut symbol = 0;
@@ -150,6 +150,9 @@ impl Huffman {
             return Err("incomplete Huffman tree");
         }
         let mut next = h.first;
+        // Short trees depend only on the low `max` bits. Build that prefix
+        // once, then duplicate it across the nine-bit primary lookup.
+        let primary = 1usize << if h.max < 9 { h.max } else { 9 };
         let mut symbol = 0;
         while symbol < lengths.len() {
             let n = lengths[symbol];
@@ -163,13 +166,19 @@ impl Huffman {
             if n <= 9 {
                 let rev = (code.reverse_bits() >> (16 - n)) as usize;
                 let mut index = rev;
-                while index < 512 {
+                while index < primary {
                     h.fast[index] = ((symbol as u16) << 4) | n as u16;
                     index += 1 << n;
                 }
             }
             next[n] += 1;
             symbol += 1;
+        }
+        let mut initialized = primary;
+        while initialized < 512 {
+            let (prefix, rest) = h.fast.split_at_mut(initialized);
+            rest.split_at_mut(initialized).0.copy_from_slice(prefix);
+            initialized *= 2;
         }
         Ok(h)
     }
@@ -212,25 +221,25 @@ impl Huffman {
     }
 }
 
-const FIXED: (Huffman, Huffman) = {
+const FIXED: (Huffman, Huffman<32>) = {
     let mut lengths = [8; 288];
     let mut n = 144;
     while n < 280 {
         lengths[n] = if n < 256 { 9 } else { 7 };
         n += 1;
     }
-    let literals = match Huffman::build(&lengths, false, false) {
+    let literals = match Huffman::<288>::build(&lengths, false, false) {
         Ok(tree) => tree,
         Err(_) => panic!("invalid fixed literal tree"),
     };
-    let distances = match Huffman::build(&[5; 32], false, false) {
+    let distances = match Huffman::<32>::build(&[5; 32], false, false) {
         Ok(tree) => tree,
         Err(_) => panic!("invalid fixed distance tree"),
     };
     (literals, distances)
 };
 
-fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
+fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman<32>), Error> {
     let nl = bits.read(5)? as usize + 257;
     let nd = bits.read(5)? as usize + 1;
     let nc = bits.read(4)? as usize + 4;
@@ -244,7 +253,7 @@ fn dynamic(bits: &mut Bits<'_>) -> Result<(Huffman, Huffman), Error> {
     for &index in &order[..nc] {
         lengths[index] = bits.read(3)? as u8;
     }
-    let tree = Huffman::new(&lengths, true, false)?;
+    let tree = Huffman::<19>::new(&lengths, true, false)?;
     let mut lengths = [0; 318];
     let mut pos = 0;
     while pos < nl + nd {

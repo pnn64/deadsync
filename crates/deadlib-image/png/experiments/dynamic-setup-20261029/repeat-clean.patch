@@ -1,0 +1,17 @@
+diff --git a/crates/deadlib-image/png/src/zlib/inflate.rs b/crates/deadlib-image/png/src/zlib/inflate.rs
+index 4b79e76e9..4441a7bbb 100644
+--- a/crates/deadlib-image/png/src/zlib/inflate.rs
++++ b/crates/deadlib-image/png/src/zlib/inflate.rs
+@@ -183,6 +183,12 @@ impl Inflater {
+     }
+     #[inline]
+     fn copy_match(&mut self, distance: usize, output: &mut [u8]) {
++        if distance == 1 {
++            let previous = (self.history_pos + self.history.len() - 1) & (self.history.len() - 1);
++            output.fill(self.history[previous]);
++            self.remember(output);
++            return;
++        }
+         let n = output.len();
+         let seed = distance.min(n);
+         let size = self.history.len();
