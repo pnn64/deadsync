@@ -530,6 +530,21 @@ fn verify(paths: &[String]) {
                         out.write_all(&value.to_le_bytes()).unwrap();
                     }
                 }
+                let mut zero_info = info;
+                zero_info.subblock_gain = [0; 3];
+                let mut output =
+                    std::array::from_fn(|n| f64::from_bits(0x7ff8_0000_0000_0000 | n as u64));
+                spectral::requantize(
+                    &input,
+                    &zero_info,
+                    &ScaleFactors::default(),
+                    bands,
+                    &mut output,
+                )
+                .unwrap();
+                for value in output {
+                    out.write_all(&value.to_le_bytes()).unwrap();
+                }
             }
         }
     }
@@ -1068,6 +1083,34 @@ fn main() {
                 },
             );
         }
+    }
+    for (kind, mixed) in [(0, false), (2, false), (2, true)] {
+        let input = std::array::from_fn(|n| (n % 3) as i16 - 1);
+        let info = GranuleChannel {
+            global_gain: 155,
+            block_type: kind,
+            mixed_block: mixed,
+            subblock_gain: [1, 2, 3],
+            ..Default::default()
+        };
+        let factors = ScaleFactors {
+            long: std::array::from_fn(|n| (n % 7 + 1) as u8),
+            short: std::array::from_fn(|n| std::array::from_fn(|w| ((n + w) % 7 + 1) as u8)),
+            preflag: true,
+            ..Default::default()
+        };
+        let bands = Bands::for_rate(44100).unwrap();
+        let mut output = [0.0; 576];
+        probe(&format!("requantize-factors/{kind}/{mixed}"), 1000, || {
+            spectral::requantize(
+                black_box(&input),
+                black_box(&info),
+                black_box(&factors),
+                bands,
+                black_box(&mut output),
+            )
+            .unwrap();
+        });
     }
     for mode in 1..=3 {
         let source = [signal::<576>(19), signal::<576>(31)];

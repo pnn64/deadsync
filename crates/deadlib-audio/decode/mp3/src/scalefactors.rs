@@ -153,15 +153,18 @@ pub fn read(
                 }
                 let shift = u32::from(width);
                 let mask = (1 << shift) - 1;
-                for band in first..last {
-                    let packed = cursor.read(3 * shift)?;
-                    factors.short[band] = [
-                        ((packed >> (2 * shift)) & mask) as u8,
-                        ((packed >> shift) & mask) as u8,
-                        (packed & mask) as u8,
-                    ];
-                    factors.short_width[band] = [width; 3];
+                let (chunks, tail) =
+                    factors.short.as_flattened_mut()[3 * first..3 * last].as_chunks_mut::<6>();
+                for chunk in chunks {
+                    let packed = cursor.read(6 * shift)?;
+                    for (n, value) in chunk.iter_mut().enumerate() {
+                        *value = ((packed >> ((5 - n) as u32 * shift)) & mask) as u8;
+                    }
                 }
+                if !tail.is_empty() {
+                    read_values(&mut cursor, width, tail)?;
+                }
+                factors.short_width.as_flattened_mut()[3 * first..3 * last].fill(width);
             }
         } else {
             for (group, (first, last)) in [(0, 6), (6, 11), (11, 16), (16, 21)]
