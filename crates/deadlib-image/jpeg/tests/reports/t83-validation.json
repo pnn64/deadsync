@@ -1,0 +1,66 @@
+{
+  "scope": "Official ITU T.83 corpus, configured C differential checks and explicit native EREF/DREF numeric gates. No exhaustive or formal full Part 2 conformance claim.",
+  "rust_checks": {
+    "release": {
+      "passed": 153,
+      "failed": 0,
+      "log_sha256": "d7789a2c556bf3f0a2dfd4515820877c7c6d0b1b24ea9f99254256cf628db246"
+    },
+    "isolated_debug": {
+      "passed": 153,
+      "failed": 0,
+      "log_sha256": "a0070a9a2ada3d38fc57264b837d7846d1d84b64fcf7f146f12b2ee157d21563"
+    }
+  },
+  "other_checks": {
+    "rustfmt": "pass",
+    "Clippy_all_targets_warnings_denied": "pass",
+    "rustdoc_warnings_denied": "pass",
+    "Python_drivers_py_compile": "pass",
+    "original_and_observed_artifact_hashes": "pass"
+  },
+  "official_archive_sha256": "9f5ed0a74a3087c6c93f4cbb0bd5128c2a87b128e4f59f5b6649e32941da7069",
+  "retained_original_files": 45,
+  "separate_C_observations": 2,
+  "fixture_files": 50,
+  "fixture_bytes": 2799061,
+  "original_streams": 21,
+  "original_images": 20,
+  "original_C_coefficients": {
+    "IJG": 16,
+    "Turbo": 15,
+    "mozjpeg": 11
+  },
+  "original_JPEG_XT_lossless_images": 4,
+  "exact_lossless_sample_values_per_decoder": 219640,
+  "native_encoder_EREF_coefficients": 119936,
+  "native_decoder_DREF_coefficients": 119936,
+  "max_quantized_coefficient_error": 1,
+  "max_IDCT_sample_error_against_f64": 1,
+  "max_independent_f64_DREF_error": 1,
+  "native_roundtrips": 118,
+  "native_coefficient_encode_cases": 186,
+  "native_encode_exact_C_comparisons": {
+    "IJG": 186,
+    "Turbo": 180,
+    "mozjpeg": 156
+  },
+  "prefixes_and_boundaries": 4284,
+  "bounded_mutations": 672,
+  "reports": {
+    "t83.json": "0e4945cbfdccf422a3da79f845f7b716f8985e85fb2148d04597d0c98e5180c8",
+    "t83-encode.json": "af353ddf29e338396ad7e1ec70f3a8f847b56b62aea74fab6a3446632ccd9e57"
+  },
+  "production_dependencies": [
+    "deadlib-image"
+  ],
+  "application_integration": false,
+  "remaining": [
+    "Full Part 2 acceptance-procedure audit",
+    "Officially unavailable streams including hierarchies",
+    "Incremental byte I/O",
+    "Broader rare-mode/reference combinations",
+    "Coverage-guided fuzzing",
+    "Measured performance and optimization"
+  ]
+}

@@ -431,7 +431,7 @@ Verified milestones:
   measured performance/optimization remain required. The full goal stays active;
   there is no application integration or added production codec dependency.
 
-- mozjpeg and three-C ordinary-process validation milestone: unmodified pinned
+- `e2a3079a7`: mozjpeg and three-C ordinary-process validation milestone: unmodified pinned
   mozjpeg 4.1.1 8/12-bit builds and a public classic-API observer. All 759 inputs
   match native/Turbo/IJG/mozjpeg visible coefficients and quantizers exactly:
   612 mozjpeg source encodes, 78 native rewrites and 69 earlier regressions.
@@ -451,3 +451,25 @@ Verified milestones:
   or performance results. Incremental I/O, broader reference/conformance and
   rare combinations, coverage-guided fuzzing and all measured optimization
   remain required; the full goal stays active with no application integration.
+
+- Official T.83 independent-corpus milestone: pinned ITU archive, 45 unchanged
+  original streams/numeric files and separately identified C observations.
+  All 21 unique streams (20 images and B1) decode natively, including the real
+  255-component B1/B2 pair. Exact coefficient checks cover 16 IJG, 15 Turbo
+  and 11 mozjpeg originals; native and JPEG XT each match all 219,640 lossless
+  reference samples. Native FDCT and reconstructed/forward-transformed IDCT
+  each check 119,936 EREF/DREF coefficients with maximum error one quantized
+  unit. An independent f64 model checks the interpretation and sample error;
+  precision-specific DREF edge treatment and half-bucket ties are explicit.
+  Native writers pass 118 model roundtrips. A separate 186-case native DCT
+  writer gate passes 186 IJG, 180 Turbo and 156 mozjpeg comparisons; the B2
+  source interchange copy is labeled separately from original B.5 decoding.
+  All 4,284 prefixes/boundaries and 672 bounded mutations pass.
+  All 153 tests pass in release and isolated debug builds; rustfmt, Clippy and
+  rustdoc with warnings denied and Python compilation/hash audits pass. See
+  T83-VALIDATION.md and t83 reports in tests/reports. Full Part 2 acceptance
+  procedures still require audit; the official archive lacks I1/M1 and eight
+  hierarchical streams, which are not fabricated or counted as passing.
+  Incremental I/O, broader rare/reference combinations, coverage-guided fuzzing
+  and measured performance/optimization remain required. The full goal stays
+  active; no application integration or production codec dependency is added.

@@ -161,6 +161,12 @@ against all three ordinary-process C references, exact coefficient checks,
 separate numerical tolerances and explicit reference-producer limitations.
 The C tools remain test-only; broader conformance and performance work is open.
 
+T83-VALIDATION.md covers the official ITU T.83 compressed streams and numeric
+references, including the 255-component B1/B2 pair, exact lossless samples,
+native FDCT/IDCT accuracy and C-checked coefficient output. The corpus and
+independent f64 model are retained for offline Cargo tests; full conformance
+acceptance audits and the standard's unavailable streams remain explicit gaps.
+
 `encode(&shared_image, EncodeOptions::default())` encodes shared grayscale/RGB
 images. Quality, output precision (8/12), subsampling, RGB-to-YCbCr conversion,
 quantizer range and entropy coding are configurable. `encode_samples` accepts

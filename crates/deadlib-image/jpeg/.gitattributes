@@ -5,3 +5,6 @@ tests/fixtures/**/*.samples -text
 tests/fixtures/**/*.coef -text
 tests/fixtures/**/*.raw -text
 tests/fixtures/**/*.planes -text
+tests/fixtures/**/*.JPG -text
+tests/fixtures/**/*.SRC -text
+tests/fixtures/**/*.DCT -text

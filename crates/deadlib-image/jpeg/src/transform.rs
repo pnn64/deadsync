@@ -28,6 +28,10 @@ const BASIS: [[i64; 8]; 8] = [
     ],
 ];
 
+#[cfg(test)]
+#[path = "../tests/support/t83_transform.rs"]
+mod t83_transform;
+
 pub(crate) fn idct(block: &[i16; 64], quant: &[u16; 64], precision: u8) -> [u16; 64] {
     idct_mode(block, quant, Some(precision))
 }

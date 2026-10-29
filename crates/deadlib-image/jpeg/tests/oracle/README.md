@@ -204,3 +204,20 @@ records the scan-optimization/restart producer defect and empty DHT segments
 during explicit DC refinement. No runtime C warning is accepted by the main
 gate. See ../../MOZJPEG-VALIDATION.md for original/modified input distinctions,
 the unmodified source hash, numerical scope and reproduction commands.
+
+## Official ITU T.83 data
+
+`tests/fetch_t83.py` pins unchanged streams and numeric references from the
+official public archive. `reference_t83.py` checks original DCT inputs through
+the pinned IJG/Turbo/mozjpeg clients and original lossless PGX output through
+JPEG XT against exact official SRC values. IJG consumes the real B1/B2 packet
+pair, including 255 components. `reference_t83_encode.py` checks 186 native
+coefficient rewrites against supported C clients, with a separately labeled
+equivalent-interchange B2 source for the standalone rewrite CLI.
+
+`tests/support/t83_transform.rs` uses the native transforms and an independent
+f64 cosine model for the official EREF/DREF arrays. DREF is a reconstructed
+sample/FDCT reference, not an entropy coefficient dump; its edge treatments
+are explicit. T83-VALIDATION.md records the numerical gates, original copyright,
+unavailable streams and remaining formal acceptance audit. No reference source
+or standard text is copied into production code.
