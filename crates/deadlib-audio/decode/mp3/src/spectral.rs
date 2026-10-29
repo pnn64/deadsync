@@ -11,6 +11,9 @@ static POWERS: std::sync::LazyLock<[f64; 16]> = std::sync::LazyLock::new(|| {
     std::array::from_fn(|n| std::hint::black_box(n as f64).powf(4.0 / 3.0))
 });
 
+static HALF_SCALE: std::sync::LazyLock<u64> =
+    std::sync::LazyLock::new(|| std::hint::black_box(-0.5f64).exp2().to_bits());
+
 static MPEG1_INTENSITY: std::sync::LazyLock<[(f64, f64); 5]> = std::sync::LazyLock::new(|| {
     std::array::from_fn(|n| {
         // Use runtime tan so cached gains retain the uncached math rounding.
@@ -114,6 +117,19 @@ fn power(value: i16, scale: f64, powers: &[f64; 16]) -> f64 {
         }
     }
 }
+
+#[inline]
+fn attenuation(exponent: i32, half: u64) -> f64 {
+    // Public u8 factors and subblock gains bound the exponent to 0..=1530.
+    // Every result is normal: only its binary exponent changes. Retain the
+    // platform exp2 mantissa for odd half-integers.
+    let base = if exponent & 1 == 0 {
+        1.0f64.to_bits()
+    } else {
+        half
+    };
+    f64::from_bits(base - (((exponent as u64) >> 1) << 52))
+}
 /// Requantization and short-block reordering into frequency order.
 pub fn requantize(
     input: &[i16; 576],
@@ -131,6 +147,7 @@ pub fn requantize(
         return Ok(());
     }
     let gain = ((info.global_gain as f64 - 210.0) * 0.25).exp2();
+    let half = *HALF_SCALE;
     let scale = 1 + i32::from(info.scalefac_scale);
     let short = info.block_type == 2;
     let long_bands = if !short {
@@ -148,7 +165,7 @@ pub fn requantize(
         }
         let exponent =
             scale * (factors.long[band] as i32 + if factors.preflag { pre as i32 } else { 0 });
-        let amplitude = gain * (-0.5 * exponent as f64).exp2();
+        let amplitude = gain * attenuation(exponent, half);
         for line in start..end {
             output[line] = power(input[line], amplitude, powers);
         }
@@ -170,7 +187,7 @@ pub fn requantize(
                 }
                 let exponent = scale * factors.short[band][window] as i32
                     + 4 * info.subblock_gain[window] as i32;
-                let amplitude = gain * (-0.5 * exponent as f64).exp2();
+                let amplitude = gain * attenuation(exponent, half);
                 for (line, &value) in (start..end).zip(values) {
                     output[3 * line + window] = power(value, amplitude, powers);
                 }
@@ -180,6 +197,7 @@ pub fn requantize(
     }
     Ok(())
 }
+
 fn intensity(version: MpegVersion, position: u8, width: u8, scale: bool) -> Option<(f64, f64)> {
     if version == MpegVersion::Mpeg1 {
         match position {
@@ -369,4 +387,19 @@ pub fn stereo(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn attenuation_preserves_platform_exp2_for_every_public_exponent() {
+        let half = *super::HALF_SCALE;
+        for exponent in 0..=1530 {
+            let expected = (-0.5 * std::hint::black_box(exponent) as f64).exp2();
+            assert_eq!(
+                super::attenuation(exponent, half).to_bits(),
+                expected.to_bits()
+            );
+        }
+    }
 }
