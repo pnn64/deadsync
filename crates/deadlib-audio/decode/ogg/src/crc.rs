@@ -39,7 +39,12 @@ const fn tables() -> [[u32; 256]; 16] {
 static TABLES: [[u32; 256]; 16] = tables();
 
 #[inline]
-pub(crate) fn update(mut crc: u32, bytes: &[u8]) -> u32 {
+pub(crate) fn update(crc: u32, bytes: &[u8]) -> u32 {
+    update_scalar(crc, bytes)
+}
+
+#[inline]
+pub(crate) fn update_scalar(mut crc: u32, bytes: &[u8]) -> u32 {
     let (words, tail) = bytes.as_chunks::<16>();
     for &[a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p] in words {
         // CRC is linear: merge its four bytes with the first four inputs,
@@ -81,6 +86,10 @@ pub(crate) fn update(mut crc: u32, bytes: &[u8]) -> u32 {
 }
 
 pub fn crc32(bytes: &[u8]) -> u32 {
+    #[cfg(target_arch = "x86_64")]
+    if let Some(crc) = crate::crc_hardware::update(0, bytes) {
+        return crc;
+    }
     update(0, bytes)
 }
 

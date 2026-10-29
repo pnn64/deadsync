@@ -2,10 +2,15 @@
 //!
 //! Granule positions are raw codec-defined values, not timestamps or samples.
 //! See the package coverage document for validation evidence and limitations.
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
+#![deny(unsafe_op_in_unsafe_fn)]
 
 mod capture;
 mod crc;
+// This exception contains only runtime-guarded CRC intrinsics.
+#[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)]
+mod crc_hardware;
 mod demux;
 mod index;
 mod page;

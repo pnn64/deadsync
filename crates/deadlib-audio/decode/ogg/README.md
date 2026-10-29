@@ -1,7 +1,9 @@
 # deadlib-audio-decode-ogg
 
-Independent, codec-neutral Ogg container implemented in safe Rust from RFC 3533
-and Xiph's framing/mapping requirements. No production dependencies. This crate
+Independent, codec-neutral Ogg container implemented in Rust from RFC 3533
+and Xiph's framing/mapping requirements. A runtime-guarded x86-64 CRC module
+uses audited SIMD intrinsics; other code and the portable fallback remain safe
+Rust. No production dependencies. This crate
 is a workspace member and is not integrated into DeadSync's decoding pipeline.
 
 The [container performance report](PERFORMANCE.md) compares page parsing, packet
