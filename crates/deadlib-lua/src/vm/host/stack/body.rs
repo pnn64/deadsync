@@ -28,7 +28,7 @@ pub(in crate::vm) struct Body {
     owner: usize,
     code: u64,
     closure: Value,
-    visible_owner: usize,
+    visible_owner: Option<usize>,
     hook: Option<NativeHookEvent>,
     complete: Option<(usize, usize)>,
     yielded: Option<(usize, usize)>,
@@ -89,7 +89,7 @@ impl Vm {
                 .iter()
                 .rev()
                 .find(|b| b.thread == self.thread && b.owner == owner)
-                .map(|b| b.visible_owner)
+                .and_then(|b| b.visible_owner)
         })
     }
     pub(in crate::vm) fn complete_native_body(
@@ -240,11 +240,10 @@ impl NativeStack<'_, '_> {
         if body.0 == threads::CO_YIELD {
             self.check_yield(self.top())?;
         }
-        let closure = self.context_function().expect("calling activation");
+        let closure = self.context_function().unwrap_or(Value::Nil);
         let visible_owner = self.call.vm.frames[..=self.frame]
             .iter()
-            .rposition(|f| f.is_call())
-            .expect("visible activation");
+            .rposition(|f| f.is_call());
         let vm = &mut self.call.vm;
         let original = vm.frames[self.frame];
         let workspace = vm.registers.len();

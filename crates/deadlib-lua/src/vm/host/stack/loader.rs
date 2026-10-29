@@ -68,7 +68,16 @@ impl NativeStack<'_, '_> {
             call_base: self.native_call_base(),
             native_bias: self.call.vm.threads[slot_index(self.call.vm.thread.0)].native_bias,
         };
-        let depth = self.call.vm.native_depth(scope.depth);
+        let depth = if matches!(
+            self.call.vm.frames[self.frame].function,
+            FrameKind::Native(CONT_NATIVE_WINDOW)
+        ) {
+            // There is no current host callback to subtract in an idle or
+            // selected stack window. The parser starts at its actual nCcalls.
+            usize::from(self.call.vm.thread_call_level(scope.owner))
+        } else {
+            self.call.vm.native_depth(scope.depth)
+        };
         self.call.vm.push_record(Frame {
             function: FrameKind::Native(CONT_HOST_LOAD),
             pc: 1,

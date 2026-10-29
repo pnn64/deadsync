@@ -86,6 +86,43 @@ impl NativeStack<'_, '_> {
                     .ok_or_else(|| self.error(b"invalid native error function index"))
             })
             .transpose()?;
+        if matches!(
+            self.call.vm.frames[self.frame].function,
+            FrameKind::Native(CONT_NATIVE_WINDOW)
+        ) {
+            // A selected/root window has no C activation carrying luaD_call's
+            // charge. Account for this API call just as the unprotected path.
+            let thread = self.thread_id();
+            let bias = self.call.vm.threads[slot_index(thread.0)].native_bias;
+            self.call
+                .vm
+                .set_thread_native_bias(thread, bias.wrapping_add(1));
+            let outcome =
+                self.call
+                    .vm
+                    .run_thread_api(self.base + prefix, arguments, results, handler, true);
+            if outcome.is_ok() {
+                let bias = self.call.vm.threads[slot_index(thread.0)].native_bias;
+                self.call
+                    .vm
+                    .set_thread_native_bias(thread, bias.wrapping_sub(1));
+            }
+            if let Err(error) = &outcome
+                && (error.kind() == ErrorKind::Limit || error.target_thread.is_some())
+            {
+                self.call.abort = Some(error.clone());
+            }
+            let result = outcome?;
+            if let Some(range) = result.yielded {
+                self.base = range.start;
+                self.set_window_end(range.end);
+            } else {
+                self.call.results = self.call.vm.top - self.base;
+                self.restore_window_call_base();
+            }
+            self.sync();
+            return Ok(result.status);
+        }
         let function = self.call.vm.registers[self.base + prefix];
         let values =
             self.call.vm.registers[self.base + prefix + 1..self.base + self.top()].to_vec();

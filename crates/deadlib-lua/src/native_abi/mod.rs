@@ -106,6 +106,30 @@ fn matching_version(pointer: usize) -> bool {
 /// Platform adapter for the implemented Lua 5.1 C API. The bundled C image is
 /// opened lazily; normal/build Cargo dependencies remain empty.
 impl NativeCAbiLoader {
+    /// Resolve a C driver that operates directly on an idle VM's main stack.
+    /// Its integer return is passed through; its complete stack is retained.
+    ///
+    /// # Safety
+    /// The symbol must have the `int (lua_State *)` signature and obey this
+    /// build's Lua 5.1 C API contracts. Its state pointer may only be used during
+    /// a driver entry or an ordinary native callback on the same live VM.
+    pub unsafe fn driver(&self, path: &[u8], symbol: &[u8]) -> Result<NativeCDriver, Box<[u8]>> {
+        let owner = self.open_loaded(path)?;
+        let function = owner
+            .library
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .try_symbol(symbol)?;
+        Ok(NativeCDriver {
+            binding: Binding {
+                function,
+                bridge: owner.bridge.clone(),
+                owner: Some(owner),
+            },
+        })
+    }
     /// Resolve an initializer from this VM build's C API image.
     /// Supported names are `base`, `math`, `string`, `table`, `os`, `debug`
     /// `package` and `io`.
@@ -240,6 +264,53 @@ struct Binding {
     bridge: Arc<Bridge>,
     owner: Option<Arc<LoadedLibrary>>,
 }
+/// A retained C entry point with no synthetic Lua-visible activation.
+pub struct NativeCDriver {
+    binding: Binding,
+}
+impl NativeCDriver {
+    /// Run the driver on the VM's persistent main stack.
+    ///
+    /// # Errors
+    /// Propagates entry restrictions, Lua errors and execution limits. Lua
+    /// protected calls retain their ordinary status/result behavior. Unprotected
+    /// errors escape to this Rust boundary and unwind the root operation.
+    pub fn run(&self, vm: &mut crate::Vm) -> Result<i32, Error> {
+        vm.with_native_stack(|stack| {
+            let bridge = bridge_for(stack, self.binding.bridge.clone())?;
+            let thread = stack.thread_id();
+            let state = state_for(stack, &bridge, thread)? as *mut c_void;
+            // SAFETY: the constructor's contract fixes this symbol's signature.
+            let function: CFunction = unsafe { std::mem::transmute(self.binding.function) };
+            let invoke = bridge.invoke;
+            let mut context = Context {
+                stack,
+                error: None,
+                yielded: None,
+                bridge,
+                owner: self.binding.owner.clone(),
+                state: state as usize,
+            };
+            // SAFETY: this synchronous C jump boundary returns after every
+            // Rust dispatcher, retaining the borrowed stack and library owner.
+            let count = unsafe {
+                invoke(
+                    state,
+                    (&mut context as *mut Context<'_, '_, '_>).cast(),
+                    dispatch,
+                    function,
+                )
+            };
+            if let Some(error) = context.error.take() {
+                return Err(error);
+            }
+            if let Some(count) = context.yielded {
+                context.stack.prepare_c_yield(count)?;
+            }
+            Ok(count)
+        })
+    }
+}
 #[derive(Debug, Default)]
 pub struct NativeCAbiLoader {
     bridge: std::sync::OnceLock<Result<Arc<Bridge>, Box<[u8]>>>,
@@ -254,6 +325,12 @@ impl NativeLibraryLoader for NativeCAbiLoader {
         Some(self)
     }
     fn open(&self, path: &[u8]) -> Result<Arc<dyn NativeLibrary>, Box<[u8]>> {
+        self.open_loaded(path)
+            .map(|library| library as Arc<dyn NativeLibrary>)
+    }
+}
+impl NativeCAbiLoader {
+    fn open_loaded(&self, path: &[u8]) -> Result<Arc<LoadedLibrary>, Box<[u8]>> {
         let bridge = self
             .bridge
             .get_or_init(Bridge::bundled)

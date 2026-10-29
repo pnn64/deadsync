@@ -1553,6 +1553,18 @@ Lua on all three profiles, including `false, thread` and its later completion.
 Lifecycle/allocator APIs, collector accounting, broader continuations and the
 other full parity gates remain unfinished.
 
+The [persistent native root stack](testing/2026-10-29-rust-lua-native-root.md)
+adds `Vm::with_native_stack` and retained `NativeCDriver` entries. An idle Rust
+VM can keep values on its main stack across separate native entries, without a
+synthetic Lua-visible C activation. Public-header C drivers initialize libraries,
+parse and dump functions, call Lua and C, run hooks/finalizers, and resume retained
+coroutines on that stack. Root parser and protected-call depth limits match the
+checked reference. Driver errors return through the protected Rust boundary.
+This is a foundation for lifecycle work: `lua_newstate`, `lua_close`,
+`lua_getallocf` and `lua_setallocf` remain absent, and C API calls outside a live
+driver/native entry are not supported. Core declaration coverage remains 76/80;
+full parity, exact GC accounting and standalone C lifecycle semantics remain open.
+
 ## Reference contract
 
 The oracle is `vendor/lua-src/lua-5.1.5`, linked only for development through the

@@ -15,6 +15,7 @@ mod loader;
 mod objects;
 mod parser_roots;
 mod protected;
+mod root;
 mod scalars;
 mod tables;
 mod thread;
@@ -24,7 +25,7 @@ mod upvalues;
 pub use loader::NativeLoadStatus;
 pub use protected::NativeCallStatus;
 
-/// A rooted mutable stack for one synchronous native callback.
+/// A rooted mutable stack for a synchronous callback or idle main-stack entry.
 ///
 /// Positive indexes start at one; negative indexes count back from the top.
 /// Lua 5.1 pseudo-indexes access the registry (-10000), closure environment
@@ -38,6 +39,8 @@ pub use protected::NativeCallStatus;
 /// [`Self::yield_results`] to end the callback at a coroutine yield. Dropping
 /// the stack without finishing selects zero results; the window remains
 /// available to fault/return inspectors until the native frame exits.
+/// [`Vm::with_native_stack`] instead borrows the complete persistent main stack;
+/// the borrow adds no visible call and does not need a result selection.
 pub struct NativeStack<'call, 'vm> {
     call: &'call mut HostCall<'vm>,
     base: usize,
@@ -579,7 +582,24 @@ impl NativeStack<'_, '_> {
             self.call.vm.registers[self.base + prefix + 1..self.base + self.top()].to_vec();
         self.call.results = prefix;
         self.sync();
+        let selected = matches!(
+            self.call.vm.frames[self.frame].function,
+            FrameKind::Native(CONT_NATIVE_WINDOW)
+        );
+        let thread = self.thread_id();
+        if selected {
+            let bias = self.call.vm.threads[slot_index(thread.0)].native_bias;
+            self.call
+                .vm
+                .set_thread_native_bias(thread, bias.wrapping_add(1));
+        }
         let outcome = self.call.call_range(function, &values, protected);
+        if selected {
+            let bias = self.call.vm.threads[slot_index(thread.0)].native_bias;
+            self.call
+                .vm
+                .set_thread_native_bias(thread, bias.wrapping_sub(1));
+        }
         match outcome {
             Ok(range) => {
                 let count = results.unwrap_or(range.len());
