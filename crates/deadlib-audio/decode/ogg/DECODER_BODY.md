@@ -240,3 +240,7 @@ Paired/protocol records retain exact rustc commands, source paths, linked-librar
 hashes and compiler details. The audit verifies all three production commits
 against their measured snapshots, unchanged benchmark controls, every heap
 counter and recomputed summaries.
+
+The subsequent [hardware CRC pass](HARDWARE_CRC.md) accelerates large checksums
+with runtime CPU checks and an unchanged scalar fallback, including native,
+Miri, cross-target and exact protocol validation.

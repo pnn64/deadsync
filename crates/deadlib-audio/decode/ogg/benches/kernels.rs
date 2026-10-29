@@ -263,6 +263,23 @@ fn main() {
             );
         }
     }
+    let crc_input: Vec<_> = (0usize..4112)
+        .map(|i| (i.wrapping_mul(37) ^ (i >> 3)) as u8)
+        .collect();
+    for length in [
+        63, 64, 65, 127, 128, 129, 255, 256, 257, 511, 512, 513, 4096,
+    ] {
+        for offset in [0, 1, 15] {
+            let input = &crc_input[offset..offset + length];
+            probe(
+                &format!("crc-boundary/{length}/{offset}"),
+                if length >= 4096 { 512 } else { 10_000 },
+                || {
+                    black_box(crc32(black_box(input)));
+                },
+            );
+        }
+    }
     for segments in [1, 17, 128, 255] {
         let frame = encode_page(
             PageHeader {

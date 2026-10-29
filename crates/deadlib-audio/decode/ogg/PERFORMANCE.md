@@ -1,6 +1,10 @@
 # Container performance
 
-The latest [incremental-body and empty-poll measurements](DECODER_BODY.md)
+The latest [hardware CRC measurements](HARDWARE_CRC.md) cover guarded polynomial
+folding, seeded container updates and four independent states, with CPU/heap
+data, real Ogg assets, Miri checks and portable-fallback validation.
+
+The earlier [incremental-body and empty-poll measurements](DECODER_BODY.md)
 cover direct partial-body appends, empty decoder polls and combined state
 checks, with paired CPU/heap evidence, exact state comparisons and control costs.
 

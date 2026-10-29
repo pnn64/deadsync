@@ -1,0 +1,951 @@
+{
+  "command": [
+    "rustc",
+    "--edition",
+    "2024",
+    "-D",
+    "warnings",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "codegen-units=1",
+    "-C",
+    "lto=yes",
+    "-C",
+    "debuginfo=1",
+    "-C",
+    "panic=abort",
+    "-C",
+    "target-feature=+crt-static",
+    "--extern",
+    "cl_before=C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\libcl_before.rlib",
+    "--extern",
+    "cl_public=C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\libcl_public.rlib",
+    "--extern",
+    "cl_seeded=C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\libcl_seeded.rlib",
+    "--extern",
+    "cl_four=C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\libcl_four.rlib",
+    "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-29-clmul-corpus.rs",
+    "-o",
+    "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\corpus.exe"
+  ],
+  "source": "crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-29-clmul-corpus.rs",
+  "source_sha256": "f1dae880aab1a67ef4ac21b0ddfb01b1a0bbd1a34abc0177e0d0213d47f260d2",
+  "binary_sha256": "af4977cf80667b76497d47843ad501cb238699e28070a76ea5263dd34abf1db6",
+  "support_sha256": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+  "libraries": {
+    "before": {
+      "command": [
+        "rustc",
+        "--crate-name",
+        "cl_before",
+        "--crate-type",
+        "rlib",
+        "--edition",
+        "2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "lto=yes",
+        "-C",
+        "debuginfo=1",
+        "-C",
+        "panic=abort",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\before\\crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\libcl_before.rlib"
+      ],
+      "library_sha256": "6ba0b58f138b2b438fef679153a7a139866014611514b4dbf492619865a9c396",
+      "sources": {
+        "capture.rs": "484a0e92b96339d6a810839c8f0180c5a03707de14c57973d18850283a928a0b",
+        "crc.rs": "6286c6320592f63ef3960dfab609057e0d42468d372daef70b0b23462247f286",
+        "demux.rs": "d6a81e16afeb747d211a09e7a93041958edb0e70a7adf72157c8032f5fdcee88",
+        "index.rs": "75178d5a693907de5fd7f5d5bf3de7b70c3c4891c2f2c6d939538005849a0ae3",
+        "lib.rs": "b2d96261435bdd26d3720684b2d150e4ad4b286a3edfea69feacbd1a3fc74580",
+        "page.rs": "7cf3866e8dea37f908b9ccc971abeb80ce18252af96f94f3170c77f2ac413de8",
+        "reader.rs": "8bb9390fef28bfe9a30a7376bfd64ed2ae89c2938e31f3d81bbb650a407c87cf",
+        "sync.rs": "6d57ca6bdb6429be48de73068eab36dfc455f515bce166d2fadb3596b9c49dcf",
+        "validation.rs": "aa63339e7362fed1c382ff694e8103d99f18476172cf2166b212cab8452f8797",
+        "writer.rs": "3acb98a33b59a98850cb9d5c993c8be25faf2d9f220ee64ba5c7b1d8b01430bd"
+      }
+    },
+    "public": {
+      "command": [
+        "rustc",
+        "--crate-name",
+        "cl_public",
+        "--crate-type",
+        "rlib",
+        "--edition",
+        "2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "lto=yes",
+        "-C",
+        "debuginfo=1",
+        "-C",
+        "panic=abort",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\public\\crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\libcl_public.rlib"
+      ],
+      "library_sha256": "3eca1aa657e13b42c9e9e448a18aaab1e1d8628dd5ad08911a26c935942026c9",
+      "sources": {
+        "capture.rs": "484a0e92b96339d6a810839c8f0180c5a03707de14c57973d18850283a928a0b",
+        "crc.rs": "887d0f0561608e7790781d87f7b028ead3b09817b4a3b4b902aebb1486cab3cd",
+        "crc_hardware.rs": "89662330619e46a2dceba29a3a6463d4b4f32c4ded8ffda1bbdfcb86572fbbb8",
+        "demux.rs": "d6a81e16afeb747d211a09e7a93041958edb0e70a7adf72157c8032f5fdcee88",
+        "index.rs": "7d96f9747207b9aed83931634c9498bf54807bc97f51d5772d2c30d238c1ff25",
+        "lib.rs": "c092ab5a244882cbc2ae5b66f4e7801e7a86fadca0ce0789315d46133524d8be",
+        "page.rs": "7cf3866e8dea37f908b9ccc971abeb80ce18252af96f94f3170c77f2ac413de8",
+        "reader.rs": "ed9126702a5fa39d4c055855805ac62fb51c4afab8dbaeccbf8a9f182436a7b8",
+        "sync.rs": "7787d5e43170750e6b723d10eb686ba92b4f8bba314dac462907542f7207dea7",
+        "validation.rs": "aa63339e7362fed1c382ff694e8103d99f18476172cf2166b212cab8452f8797",
+        "writer.rs": "3acb98a33b59a98850cb9d5c993c8be25faf2d9f220ee64ba5c7b1d8b01430bd"
+      }
+    },
+    "seeded": {
+      "command": [
+        "rustc",
+        "--crate-name",
+        "cl_seeded",
+        "--crate-type",
+        "rlib",
+        "--edition",
+        "2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "lto=yes",
+        "-C",
+        "debuginfo=1",
+        "-C",
+        "panic=abort",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\seeded\\crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\libcl_seeded.rlib"
+      ],
+      "library_sha256": "0f3fe1e84221e163a362af056a4b71541bb54b5a1fb5f23c0dba83261ba12ae3",
+      "sources": {
+        "capture.rs": "484a0e92b96339d6a810839c8f0180c5a03707de14c57973d18850283a928a0b",
+        "crc.rs": "c43724e37097d896432ead01d7a1427f804d97bc1e770821cd76bd68e214e535",
+        "crc_hardware.rs": "89662330619e46a2dceba29a3a6463d4b4f32c4ded8ffda1bbdfcb86572fbbb8",
+        "demux.rs": "d6a81e16afeb747d211a09e7a93041958edb0e70a7adf72157c8032f5fdcee88",
+        "index.rs": "7d96f9747207b9aed83931634c9498bf54807bc97f51d5772d2c30d238c1ff25",
+        "lib.rs": "c092ab5a244882cbc2ae5b66f4e7801e7a86fadca0ce0789315d46133524d8be",
+        "page.rs": "7cf3866e8dea37f908b9ccc971abeb80ce18252af96f94f3170c77f2ac413de8",
+        "reader.rs": "ed9126702a5fa39d4c055855805ac62fb51c4afab8dbaeccbf8a9f182436a7b8",
+        "sync.rs": "7787d5e43170750e6b723d10eb686ba92b4f8bba314dac462907542f7207dea7",
+        "validation.rs": "aa63339e7362fed1c382ff694e8103d99f18476172cf2166b212cab8452f8797",
+        "writer.rs": "3acb98a33b59a98850cb9d5c993c8be25faf2d9f220ee64ba5c7b1d8b01430bd"
+      }
+    },
+    "four": {
+      "command": [
+        "rustc",
+        "--crate-name",
+        "cl_four",
+        "--crate-type",
+        "rlib",
+        "--edition",
+        "2024",
+        "-C",
+        "opt-level=3",
+        "-C",
+        "codegen-units=1",
+        "-C",
+        "lto=yes",
+        "-C",
+        "debuginfo=1",
+        "-C",
+        "panic=abort",
+        "-C",
+        "target-feature=+crt-static",
+        "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\four\\crates\\deadlib-audio\\decode\\ogg\\src\\lib.rs",
+        "-o",
+        "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\libcl_four.rlib"
+      ],
+      "library_sha256": "78df40e8b6c858396bea501012ffd6486178df54d9cb7656202d7ddeee60b135",
+      "sources": {
+        "capture.rs": "484a0e92b96339d6a810839c8f0180c5a03707de14c57973d18850283a928a0b",
+        "crc.rs": "c43724e37097d896432ead01d7a1427f804d97bc1e770821cd76bd68e214e535",
+        "crc_hardware.rs": "67e9dd0f0f03324ac126d4c245e86fa5d0aaf987700d4521cc35feb705ae8222",
+        "demux.rs": "d6a81e16afeb747d211a09e7a93041958edb0e70a7adf72157c8032f5fdcee88",
+        "index.rs": "7d96f9747207b9aed83931634c9498bf54807bc97f51d5772d2c30d238c1ff25",
+        "lib.rs": "c092ab5a244882cbc2ae5b66f4e7801e7a86fadca0ce0789315d46133524d8be",
+        "page.rs": "7cf3866e8dea37f908b9ccc971abeb80ce18252af96f94f3170c77f2ac413de8",
+        "reader.rs": "ed9126702a5fa39d4c055855805ac62fb51c4afab8dbaeccbf8a9f182436a7b8",
+        "sync.rs": "7787d5e43170750e6b723d10eb686ba92b4f8bba314dac462907542f7207dea7",
+        "validation.rs": "aa63339e7362fed1c382ff694e8103d99f18476172cf2166b212cab8452f8797",
+        "writer.rs": "3acb98a33b59a98850cb9d5c993c8be25faf2d9f220ee64ba5c7b1d8b01430bd"
+      }
+    },
+    "command": [
+      "rustc",
+      "--edition",
+      "2024",
+      "-D",
+      "warnings",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "codegen-units=1",
+      "-C",
+      "lto=yes",
+      "-C",
+      "debuginfo=1",
+      "-C",
+      "panic=abort",
+      "-C",
+      "target-feature=+crt-static",
+      "--extern",
+      "cl_before=C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\libcl_before.rlib",
+      "--extern",
+      "cl_public=C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\libcl_public.rlib",
+      "--extern",
+      "cl_seeded=C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\libcl_seeded.rlib",
+      "--extern",
+      "cl_four=C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\libcl_four.rlib",
+      "C:\\GitHub\\deadsync\\crates\\deadlib-audio\\decode\\ogg\\validation\\2026-10-29-clmul-paired.rs",
+      "-o",
+      "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\clmul-paired.exe"
+    ],
+    "source_sha256": "d32dfaf9a8a04af7fbf7e864cec342c7d3e6bc070146e1761e42611c3e139375",
+    "binary_sha256": "05f1d16bbb352a30da90764d1296fad0edd2932b55722e10f6bccf0ca7160673",
+    "support_sha256": "498aba42c216d95f95c2526f21ea7e95bbf6982aa0f4f45636d471106aa4173f",
+    "allocation_support_sha256": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n"
+  },
+  "files": [
+    {
+      "path": "assets\\music\\SRPG10-GameOver.ogg",
+      "sha256": "743aa95524a33a01ba164c9862e4395d9f8c25daeb06bd67a8a9710776f9e23b",
+      "bytes": 7701390,
+      "packets": 8597,
+      "payload_bytes": 7662409
+    },
+    {
+      "path": "assets\\music\\in_two (loop).ogg",
+      "sha256": "670927f858874d016710bac6b38341045c5b0e06666c7fbb17a33ceaee48df33",
+      "bytes": 4939014,
+      "packets": 10352,
+      "payload_bytes": 4886897
+    },
+    {
+      "path": "assets\\sounds\\start.ogg",
+      "sha256": "5a1d37d17776942b1c87326e9186aaa1287eef02e0d6620444d131c80e6aa320",
+      "bytes": 6744,
+      "packets": 20,
+      "payload_bytes": 6629
+    }
+  ],
+  "rows": [
+    {
+      "run": 0,
+      "workload": "public/0",
+      "before_cycles": 10456431.0,
+      "after_cycles": 10431299.5,
+      "before_ns": 4775550.0,
+      "after_ns": 4778850.0
+    },
+    {
+      "run": 0,
+      "workload": "seeded/0",
+      "before_cycles": 10341084.5,
+      "after_cycles": 6029885.0,
+      "before_ns": 4726750.0,
+      "after_ns": 2766750.0
+    },
+    {
+      "run": 0,
+      "workload": "four/0",
+      "before_cycles": 5963595.5,
+      "after_cycles": 2880059.5,
+      "before_ns": 2718450.0,
+      "after_ns": 1312300.0
+    },
+    {
+      "run": 0,
+      "workload": "public/1",
+      "before_cycles": 6446166.5,
+      "after_cycles": 6523320.5,
+      "before_ns": 2947000.0,
+      "after_ns": 2981900.0
+    },
+    {
+      "run": 0,
+      "workload": "seeded/1",
+      "before_cycles": 6563928.5,
+      "after_cycles": 3623616.0,
+      "before_ns": 5008550.0,
+      "after_ns": 1651100.0
+    },
+    {
+      "run": 0,
+      "workload": "four/1",
+      "before_cycles": 3872968.0,
+      "after_cycles": 2029935.5,
+      "before_ns": 1770900.0,
+      "after_ns": 926150.0
+    },
+    {
+      "run": 0,
+      "workload": "public/2",
+      "before_cycles": 10865.5,
+      "after_cycles": 10975.0,
+      "before_ns": 4600.0,
+      "after_ns": 4600.0
+    },
+    {
+      "run": 0,
+      "workload": "seeded/2",
+      "before_cycles": 10975.0,
+      "after_cycles": 7572.5,
+      "before_ns": 4600.0,
+      "after_ns": 3100.0
+    },
+    {
+      "run": 0,
+      "workload": "four/2",
+      "before_cycles": 7353.5,
+      "after_cycles": 5048.5,
+      "before_ns": 3000.0,
+      "after_ns": 1950.0
+    },
+    {
+      "run": 1,
+      "workload": "public/0",
+      "before_cycles": 10380922.5,
+      "after_cycles": 10453028.5,
+      "before_ns": 4748550.0,
+      "after_ns": 6790950.0
+    },
+    {
+      "run": 1,
+      "workload": "seeded/0",
+      "before_cycles": 10154071.0,
+      "after_cycles": 6044372.0,
+      "before_ns": 4639000.0,
+      "after_ns": 2775200.0
+    },
+    {
+      "run": 1,
+      "workload": "four/0",
+      "before_cycles": 5857137.5,
+      "after_cycles": 2969615.5,
+      "before_ns": 2678700.0,
+      "after_ns": 1362550.0
+    },
+    {
+      "run": 1,
+      "workload": "public/1",
+      "before_cycles": 6444081.0,
+      "after_cycles": 6415546.0,
+      "before_ns": 2947300.0,
+      "after_ns": 4944350.0
+    },
+    {
+      "run": 1,
+      "workload": "seeded/1",
+      "before_cycles": 6378999.5,
+      "after_cycles": 3853212.5,
+      "before_ns": 2920050.0,
+      "after_ns": 1763400.0
+    },
+    {
+      "run": 1,
+      "workload": "four/1",
+      "before_cycles": 3743463.0,
+      "after_cycles": 1952782.0,
+      "before_ns": 1713450.0,
+      "after_ns": 890350.0
+    },
+    {
+      "run": 1,
+      "workload": "public/2",
+      "before_cycles": 13828.5,
+      "after_cycles": 11963.0,
+      "before_ns": 5850.0,
+      "after_ns": 5050.0
+    },
+    {
+      "run": 1,
+      "workload": "seeded/2",
+      "before_cycles": 18767.0,
+      "after_cycles": 12182.0,
+      "before_ns": 7800.0,
+      "after_ns": 5000.0
+    },
+    {
+      "run": 1,
+      "workload": "four/2",
+      "before_cycles": 8011.5,
+      "after_cycles": 5597.5,
+      "before_ns": 3300.0,
+      "after_ns": 2200.0
+    },
+    {
+      "run": 2,
+      "workload": "public/0",
+      "before_cycles": 10199068.0,
+      "after_cycles": 10402215.5,
+      "before_ns": 4662150.0,
+      "after_ns": 6761200.0
+    },
+    {
+      "run": 2,
+      "workload": "seeded/0",
+      "before_cycles": 10145838.5,
+      "after_cycles": 5897417.0,
+      "before_ns": 4635250.0,
+      "after_ns": 2702250.0
+    },
+    {
+      "run": 2,
+      "workload": "four/0",
+      "before_cycles": 5841334.0,
+      "after_cycles": 2943604.5,
+      "before_ns": 4674450.0,
+      "after_ns": 1349250.0
+    },
+    {
+      "run": 2,
+      "workload": "public/1",
+      "before_cycles": 6521894.0,
+      "after_cycles": 6416863.5,
+      "before_ns": 2980250.0,
+      "after_ns": 2928300.0
+    },
+    {
+      "run": 2,
+      "workload": "seeded/1",
+      "before_cycles": 6595316.0,
+      "after_cycles": 3879223.0,
+      "before_ns": 3021600.0,
+      "after_ns": 1774400.0
+    },
+    {
+      "run": 2,
+      "workload": "four/1",
+      "before_cycles": 3827751.0,
+      "after_cycles": 2016656.0,
+      "before_ns": 1752350.0,
+      "after_ns": 919500.0
+    },
+    {
+      "run": 2,
+      "workload": "public/2",
+      "before_cycles": 12621.0,
+      "after_cycles": 16353.0,
+      "before_ns": 5300.0,
+      "after_ns": 6950.0
+    },
+    {
+      "run": 2,
+      "workload": "seeded/2",
+      "before_cycles": 11633.5,
+      "after_cycles": 8012.0,
+      "before_ns": 4950.0,
+      "after_ns": 3300.0
+    },
+    {
+      "run": 2,
+      "workload": "four/2",
+      "before_cycles": 11853.0,
+      "after_cycles": 9438.5,
+      "before_ns": 4850.0,
+      "after_ns": 3850.0
+    },
+    {
+      "run": 3,
+      "workload": "public/0",
+      "before_cycles": 10234516.5,
+      "after_cycles": 10186775.5,
+      "before_ns": 6686600.0,
+      "after_ns": 4659800.0
+    },
+    {
+      "run": 3,
+      "workload": "seeded/0",
+      "before_cycles": 10070659.0,
+      "after_cycles": 5854613.5,
+      "before_ns": 4603700.0,
+      "after_ns": 2678750.0
+    },
+    {
+      "run": 3,
+      "workload": "four/0",
+      "before_cycles": 5771533.0,
+      "after_cycles": 2942946.0,
+      "before_ns": 2633150.0,
+      "after_ns": 1341100.0
+    },
+    {
+      "run": 3,
+      "workload": "public/1",
+      "before_cycles": 6410059.0,
+      "after_cycles": 6417192.0,
+      "before_ns": 2930400.0,
+      "after_ns": 4945250.0
+    },
+    {
+      "run": 3,
+      "workload": "seeded/1",
+      "before_cycles": 6474262.0,
+      "after_cycles": 3667077.0,
+      "before_ns": 2956600.0,
+      "after_ns": 1676850.0
+    },
+    {
+      "run": 3,
+      "workload": "four/1",
+      "before_cycles": 3858151.5,
+      "after_cycles": 1957610.5,
+      "before_ns": 3773500.0,
+      "after_ns": 893250.0
+    },
+    {
+      "run": 3,
+      "workload": "public/2",
+      "before_cycles": 11633.5,
+      "after_cycles": 11523.5,
+      "before_ns": 4900.0,
+      "after_ns": 4900.0
+    },
+    {
+      "run": 3,
+      "workload": "seeded/2",
+      "before_cycles": 11194.5,
+      "after_cycles": 7792.5,
+      "before_ns": 4700.0,
+      "after_ns": 3250.0
+    },
+    {
+      "run": 3,
+      "workload": "four/2",
+      "before_cycles": 7682.5,
+      "after_cycles": 5487.5,
+      "before_ns": 3200.0,
+      "after_ns": 2150.0
+    },
+    {
+      "run": 4,
+      "workload": "public/0",
+      "before_cycles": 10200714.0,
+      "after_cycles": 10237480.0,
+      "before_ns": 4657900.0,
+      "after_ns": 6690600.0
+    },
+    {
+      "run": 4,
+      "workload": "seeded/0",
+      "before_cycles": 9908779.5,
+      "after_cycles": 5939012.0,
+      "before_ns": 4533150.0,
+      "after_ns": 2708250.0
+    },
+    {
+      "run": 4,
+      "workload": "four/0",
+      "before_cycles": 5927597.5,
+      "after_cycles": 2799612.5,
+      "before_ns": 2705800.0,
+      "after_ns": 1285650.0
+    },
+    {
+      "run": 4,
+      "workload": "public/1",
+      "before_cycles": 6380974.5,
+      "after_cycles": 6405559.0,
+      "before_ns": 2915050.0,
+      "after_ns": 2936050.0
+    },
+    {
+      "run": 4,
+      "workload": "seeded/1",
+      "before_cycles": 6273529.5,
+      "after_cycles": 3743243.5,
+      "before_ns": 2862450.0,
+      "after_ns": 1707700.0
+    },
+    {
+      "run": 4,
+      "workload": "four/1",
+      "before_cycles": 3744340.5,
+      "after_cycles": 2081408.5,
+      "before_ns": 1716250.0,
+      "after_ns": 949050.0
+    },
+    {
+      "run": 4,
+      "workload": "public/2",
+      "before_cycles": 11633.5,
+      "after_cycles": 11633.5,
+      "before_ns": 4900.0,
+      "after_ns": 4900.0
+    },
+    {
+      "run": 4,
+      "workload": "seeded/2",
+      "before_cycles": 11633.5,
+      "after_cycles": 8012.0,
+      "before_ns": 4950.0,
+      "after_ns": 3300.0
+    },
+    {
+      "run": 4,
+      "workload": "four/2",
+      "before_cycles": 8011.5,
+      "after_cycles": 5597.0,
+      "before_ns": 3250.0,
+      "after_ns": 2200.0
+    },
+    {
+      "run": 5,
+      "workload": "public/0",
+      "before_cycles": 10263161.5,
+      "after_cycles": 10185239.0,
+      "before_ns": 4694900.0,
+      "after_ns": 4658250.0
+    },
+    {
+      "run": 5,
+      "workload": "seeded/0",
+      "before_cycles": 10284672.0,
+      "after_cycles": 5990593.5,
+      "before_ns": 4701450.0,
+      "after_ns": 2753450.0
+    },
+    {
+      "run": 5,
+      "workload": "four/0",
+      "before_cycles": 5848578.0,
+      "after_cycles": 3037770.0,
+      "before_ns": 2674200.0,
+      "after_ns": 1384850.0
+    },
+    {
+      "run": 5,
+      "workload": "public/1",
+      "before_cycles": 6379439.0,
+      "after_cycles": 6283517.0,
+      "before_ns": 4919600.0,
+      "after_ns": 4871850.0
+    },
+    {
+      "run": 5,
+      "workload": "seeded/1",
+      "before_cycles": 6163012.0,
+      "after_cycles": 3788130.5,
+      "before_ns": 2812050.0,
+      "after_ns": 1740500.0
+    },
+    {
+      "run": 5,
+      "workload": "four/1",
+      "before_cycles": 3648638.5,
+      "after_cycles": 1927430.0,
+      "before_ns": 3673950.0,
+      "after_ns": 892600.0
+    },
+    {
+      "run": 5,
+      "workload": "public/2",
+      "before_cycles": 11633.5,
+      "after_cycles": 11633.5,
+      "before_ns": 4950.0,
+      "after_ns": 4900.0
+    },
+    {
+      "run": 5,
+      "workload": "seeded/2",
+      "before_cycles": 11194.5,
+      "after_cycles": 7792.5,
+      "before_ns": 4750.0,
+      "after_ns": 3200.0
+    },
+    {
+      "run": 5,
+      "workload": "four/2",
+      "before_cycles": 8231.5,
+      "after_cycles": 8999.5,
+      "before_ns": 3350.0,
+      "after_ns": 3650.0
+    },
+    {
+      "run": 6,
+      "workload": "public/0",
+      "before_cycles": 10317157.5,
+      "after_cycles": 10314854.0,
+      "before_ns": 6723450.0,
+      "after_ns": 4703750.0
+    },
+    {
+      "run": 6,
+      "workload": "seeded/0",
+      "before_cycles": 10470589.0,
+      "after_cycles": 6142707.5,
+      "before_ns": 4791350.0,
+      "after_ns": 2800800.0
+    },
+    {
+      "run": 6,
+      "workload": "four/0",
+      "before_cycles": 6009471.0,
+      "after_cycles": 2938336.5,
+      "before_ns": 4753700.0,
+      "after_ns": 1339350.0
+    },
+    {
+      "run": 6,
+      "workload": "public/1",
+      "before_cycles": 6403144.0,
+      "after_cycles": 6330160.5,
+      "before_ns": 2929800.0,
+      "after_ns": 2899650.0
+    },
+    {
+      "run": 6,
+      "workload": "seeded/1",
+      "before_cycles": 6578304.5,
+      "after_cycles": 3730293.0,
+      "before_ns": 5019850.0,
+      "after_ns": 1706850.0
+    },
+    {
+      "run": 6,
+      "workload": "four/1",
+      "before_cycles": 3788570.0,
+      "after_cycles": 1907345.5,
+      "before_ns": 1735350.0,
+      "after_ns": 869850.0
+    },
+    {
+      "run": 6,
+      "workload": "public/2",
+      "before_cycles": 11633.5,
+      "after_cycles": 11524.0,
+      "before_ns": 4950.0,
+      "after_ns": 4900.0
+    },
+    {
+      "run": 6,
+      "workload": "seeded/2",
+      "before_cycles": 11194.5,
+      "after_cycles": 7792.5,
+      "before_ns": 4750.0,
+      "after_ns": 3200.0
+    },
+    {
+      "run": 6,
+      "workload": "four/2",
+      "before_cycles": 8012.0,
+      "after_cycles": 5707.0,
+      "before_ns": 3300.0,
+      "after_ns": 2250.0
+    },
+    {
+      "run": 7,
+      "workload": "public/0",
+      "before_cycles": 10243736.0,
+      "after_cycles": 10261186.5,
+      "before_ns": 6693900.0,
+      "after_ns": 4688300.0
+    },
+    {
+      "run": 7,
+      "workload": "seeded/0",
+      "before_cycles": 10141668.0,
+      "after_cycles": 5838261.0,
+      "before_ns": 4635800.0,
+      "after_ns": 2669950.0
+    },
+    {
+      "run": 7,
+      "workload": "four/0",
+      "before_cycles": 5778117.5,
+      "after_cycles": 3062244.5,
+      "before_ns": 2643350.0,
+      "after_ns": 1395150.0
+    },
+    {
+      "run": 7,
+      "workload": "public/1",
+      "before_cycles": 6444190.5,
+      "after_cycles": 6370110.0,
+      "before_ns": 2958150.0,
+      "after_ns": 2907000.0
+    },
+    {
+      "run": 7,
+      "workload": "seeded/1",
+      "before_cycles": 6046237.5,
+      "after_cycles": 3753669.0,
+      "before_ns": 4770200.0,
+      "after_ns": 1733850.0
+    },
+    {
+      "run": 7,
+      "workload": "four/1",
+      "before_cycles": 3639529.0,
+      "after_cycles": 2004694.0,
+      "before_ns": 1661200.0,
+      "after_ns": 913850.0
+    },
+    {
+      "run": 7,
+      "workload": "public/2",
+      "before_cycles": 11633.5,
+      "after_cycles": 11633.5,
+      "before_ns": 4950.0,
+      "after_ns": 4900.0
+    },
+    {
+      "run": 7,
+      "workload": "seeded/2",
+      "before_cycles": 11633.5,
+      "after_cycles": 8121.5,
+      "before_ns": 4900.0,
+      "after_ns": 3300.0
+    },
+    {
+      "run": 7,
+      "workload": "four/2",
+      "before_cycles": 8011.5,
+      "after_cycles": 5707.0,
+      "before_ns": 3300.0,
+      "after_ns": 2200.0
+    }
+  ],
+  "summary": [
+    {
+      "workload": "public/0",
+      "before_cycles": 10253448.75,
+      "after_cycles": 10288020.25,
+      "before_ns": 4762050.0,
+      "after_ns": 4741300.0,
+      "median_paired_throughput": 0.9992613434636703,
+      "faster_runs": 4
+    },
+    {
+      "workload": "seeded/0",
+      "before_cycles": 10149954.75,
+      "after_cycles": 5964802.75,
+      "before_ns": 4637400.0,
+      "after_ns": 2730850.0,
+      "median_paired_throughput": 1.715887805941212,
+      "faster_runs": 8
+    },
+    {
+      "workload": "four/0",
+      "before_cycles": 5852857.75,
+      "after_cycles": 2943275.25,
+      "before_ns": 2692250.0,
+      "after_ns": 1345175.0,
+      "median_paired_throughput": 1.9783854388007784,
+      "faster_runs": 8
+    },
+    {
+      "workload": "public/1",
+      "before_cycles": 6427070.0,
+      "after_cycles": 6410552.5,
+      "before_ns": 2947150.0,
+      "after_ns": 2958975.0,
+      "median_paired_throughput": 1.0079886381431271,
+      "faster_runs": 5
+    },
+    {
+      "workload": "seeded/1",
+      "before_cycles": 6426630.75,
+      "after_cycles": 3748456.25,
+      "before_ns": 2989100.0,
+      "after_ns": 1720775.0,
+      "median_paired_throughput": 1.6880625084321026,
+      "faster_runs": 8
+    },
+    {
+      "workload": "four/1",
+      "before_cycles": 3766455.25,
+      "after_cycles": 1981152.25,
+      "before_ns": 1743850.0,
+      "after_ns": 903550.0,
+      "median_paired_throughput": 1.9029975088218878,
+      "faster_runs": 8
+    },
+    {
+      "workload": "public/2",
+      "before_cycles": 11633.5,
+      "after_cycles": 11633.5,
+      "before_ns": 4950.0,
+      "after_ns": 4900.0,
+      "median_paired_throughput": 1.0,
+      "faster_runs": 3
+    },
+    {
+      "workload": "seeded/2",
+      "before_cycles": 11414.0,
+      "after_cycles": 7902.25,
+      "before_ns": 4825.0,
+      "after_ns": 3275.0,
+      "median_paired_throughput": 1.4429484187343964,
+      "faster_runs": 8
+    },
+    {
+      "workload": "four/2",
+      "before_cycles": 8011.5,
+      "after_cycles": 5652.25,
+      "before_ns": 3300.0,
+      "after_ns": 2200.0,
+      "median_paired_throughput": 1.4038461538461537,
+      "faster_runs": 7
+    }
+  ],
+  "runs": 8,
+  "logs": [
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\corpus-0.log",
+      "sha256": "07cea9c48a5804d7fe779baddc58c88d4501d5702a46c2d01111eb5868716bc0"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\corpus-1.log",
+      "sha256": "26e4cba427563d08f162aab0ec69ecb3e8a9a74338926b10e0a28c301bdd6661"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\corpus-2.log",
+      "sha256": "644724deeb44cc3032afd6f00b5f57a5bbf07d2730bbf8469b3211e51a85c395"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\corpus-3.log",
+      "sha256": "e843e50d2fa38bfdaab76eb2113b902cd4506d3457b5f6417335f6ae488d0e92"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\corpus-4.log",
+      "sha256": "6f8e0eb2f29fee55ede3009be2e0fb547a16ce67ca4dec413c594deae5e44066"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\corpus-5.log",
+      "sha256": "80231ca72cc2929850c72634763bb98e602f7fe142d17e02d0b5f46d5b3fdf17"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\corpus-6.log",
+      "sha256": "da81c19151468906ebebe189348d925fd88ba8f79bdb994607d0fa8804866b6c"
+    },
+    {
+      "path": "C:\\GitHub\\deadsync\\target\\ogg-clmul-20261029\\corpus-7.log",
+      "sha256": "babc7fce769557e985f77ff61cdb2435a012f3613185aa3e7a93640d05582fb3"
+    }
+  ]
+}
