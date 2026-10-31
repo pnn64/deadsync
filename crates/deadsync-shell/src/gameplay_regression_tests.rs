@@ -18,7 +18,7 @@ use deadsync_profile_gameplay::GameplayProfile;
 type State = deadsync_theme_simply_love::screens::gameplay::GameplayCoreState;
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     use super::{MAX_COLS, MAX_PLAYERS, ScrollSpeedSetting, refresh_active_attack_masks};
@@ -290,7 +290,7 @@ mod tests {
         }
     }
 
-    fn with_session<R>(
+    pub(crate) fn with_session<R>(
         play_style: profile_data::PlayStyle,
         player_side: profile_data::PlayerSide,
         p1_joined: bool,
@@ -681,7 +681,7 @@ mod tests {
     }
 
     /// Bound compilation for compositor fixtures that only exercise the opening.
-    fn build_compiled_test_state(
+    pub(crate) fn build_compiled_test_state(
         simfile: &Path,
         viewport: GameplayViewport,
         session: GameplaySession,

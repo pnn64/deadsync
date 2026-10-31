@@ -7,6 +7,8 @@ mod audio_requests;
 mod browser_skin;
 mod commands;
 mod config_requests;
+#[cfg(test)]
+mod course_transition_tests;
 mod evaluation_views;
 mod graphics;
 mod input_routing;
@@ -6796,32 +6798,6 @@ impl App {
         color_index: i32,
         prewarm_noteskin_catalog: bool,
     ) -> bool {
-        let reroll_endless = self
-            .state
-            .session
-            .course_run
-            .as_ref()
-            .is_some_and(|course| {
-                course.course_type == deadsync_theme::views::CourseTypeView::Endless
-                    && course.next_stage_index == course.stages.len()
-            });
-        if reroll_endless {
-            let selection = select_course::reroll_selected_endless_plan(
-                &self.state.screens.select_course_state,
-            )
-            .or_else(|| {
-                select_course::selected_course_plan(&self.state.screens.select_course_state)
-            });
-            if let Some(selection) = selection
-                && let Some(course) = self.state.session.course_run.as_mut()
-            {
-                let _ = append_endless_cycle(
-                    course,
-                    selection,
-                    profile::get_session_play_style().chart_type(),
-                );
-            }
-        }
         let Some(course_run) = self.state.session.course_run.as_ref() else {
             return false;
         };
@@ -12081,6 +12057,7 @@ mod tests {
             stages: vec![test_course_stage(song_a.clone()), test_course_stage(song_b)],
             course_display_totals,
             next_stage_index: 1,
+            interrupted: false,
             stage_summaries: vec![stage_stats::StageSummary {
                 song: song_a,
                 music_rate: 1.0,
@@ -12167,6 +12144,7 @@ mod tests {
                 },
             ],
             next_stage_index: 1,
+            interrupted: false,
             stage_summaries: vec![stage],
         };
         let summary = build_course_summary_stage(&course).expect("course summary");
@@ -12289,6 +12267,7 @@ mod tests {
             stages: vec![test_course_stage(song.clone()), test_course_stage(song)],
             course_display_totals: [CourseDisplayTotals::default(); MAX_PLAYERS],
             next_stage_index: 1,
+            interrupted: false,
             stage_summaries: Vec::new(),
         };
         let mut session = ShellSessionState::<()>::new(0, [0; MAX_PLAYERS]);
