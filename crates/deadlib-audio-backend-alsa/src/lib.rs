@@ -339,8 +339,6 @@ pub fn start(
 
 struct AlsaParams {
     sample_rate_hz: u32,
-    sample_rate_reciprocal: u64,
-    sample_rate_shift: u8,
     channels: usize,
     period_frames: u32,
     buffer_frames: u32,
@@ -445,18 +443,8 @@ fn render_thread_inner(
             prep.device_name
         )
     })?;
-    let period_ns = frames_to_nanos(
-        actual.sample_rate_hz,
-        actual.period_frames,
-        actual.sample_rate_reciprocal,
-        actual.sample_rate_shift,
-    );
-    let buffer_ns = frames_to_nanos(
-        actual.sample_rate_hz,
-        actual.buffer_frames,
-        actual.sample_rate_reciprocal,
-        actual.sample_rate_shift,
-    );
+    let period_ns = frames_to_nanos(actual.sample_rate_hz, actual.period_frames);
+    let buffer_ns = frames_to_nanos(actual.sample_rate_hz, actual.buffer_frames);
     info!(
         "ALSA '{}' using {} output with {} timing.",
         prep.device_name,
@@ -482,8 +470,6 @@ fn render_thread_inner(
         let timing_before = playback_status_timing(
             &pcm,
             actual.sample_rate_hz,
-            actual.sample_rate_reciprocal,
-            actual.sample_rate_shift,
             actual.host_clock,
             &mut clock_health,
         );
@@ -507,8 +493,6 @@ fn render_thread_inner(
         let timing_after = playback_status_timing(
             &pcm,
             actual.sample_rate_hz,
-            actual.sample_rate_reciprocal,
-            actual.sample_rate_shift,
             actual.host_clock,
             &mut clock_health,
         );
@@ -665,15 +649,11 @@ fn configure_pcm(
         .map_err(|e| format!("ALSA period size query failed: {e}"))?
         .max(1) as u32;
     let host_clock = apply_sw_params(&sw, pcm, period_frames, buffer_frames)?;
-    let sample_rate_hz = hw_current
-        .get_rate()
-        .unwrap_or(actual_rate_hz.max(1))
-        .max(1);
-    let (sample_rate_reciprocal, sample_rate_shift) = sample_rate_scale(sample_rate_hz);
     Ok(AlsaParams {
-        sample_rate_hz,
-        sample_rate_reciprocal,
-        sample_rate_shift,
+        sample_rate_hz: hw_current
+            .get_rate()
+            .unwrap_or(actual_rate_hz.max(1))
+            .max(1),
         channels: hw_current.get_channels().unwrap_or(channels as u32).max(1) as usize,
         period_frames,
         buffer_frames,
@@ -761,31 +741,16 @@ struct ClockSample {
 fn playback_status_timing(
     pcm: &PCM,
     sample_rate_hz: u32,
-    sample_rate_reciprocal: u64,
-    sample_rate_shift: u8,
     host_clock: AlsaHostClock,
     clock_health: &mut AlsaClockHealth,
 ) -> PlaybackStatusTiming {
     let delay_frames_fallback = current_delay_frames_fallback(pcm);
+    let delay_ns_fallback = frames_to_nanos(sample_rate_hz, delay_frames_fallback);
     let Some(status) = pcm.status().ok() else {
-        return fallback_timing(
-            delay_frames_fallback,
-            frames_to_nanos(
-                sample_rate_hz,
-                delay_frames_fallback,
-                sample_rate_reciprocal,
-                sample_rate_shift,
-            ),
-            clock_health,
-        );
+        return fallback_timing(delay_frames_fallback, delay_ns_fallback, clock_health);
     };
     let delay_frames = status.get_delay().max(0) as u32;
-    let delay_ns = frames_to_nanos(
-        sample_rate_hz,
-        delay_frames,
-        sample_rate_reciprocal,
-        sample_rate_shift,
-    );
+    let delay_ns = frames_to_nanos(sample_rate_hz, delay_frames);
     let Some(sample) = sample_host_clock(host_clock) else {
         return fallback_timing(delay_frames, delay_ns, clock_health);
     };
@@ -904,29 +869,11 @@ fn host_nanos_from_clock(target_nanos: u64, sample: ClockSample) -> u64 {
 }
 
 #[inline(always)]
-fn sample_rate_scale(sample_rate_hz: u32) -> (u64, u8) {
-    if sample_rate_hz > 1 {
-        // frames * 1e9 < 2^62. With L = floor(log2(rate)), precision 63 + L
-        // bounds reciprocal error below 1/rate, preserving integer truncation.
-        let shift = (sample_rate_hz.ilog2() - 1) as u8;
-        let reciprocal = (1_u128 << (64 + u32::from(shift))).div_ceil(u128::from(sample_rate_hz));
-        (reciprocal as u64, shift)
-    } else {
-        (0, 0)
-    }
-}
-
-#[inline(always)]
-fn frames_to_nanos(sample_rate_hz: u32, frames: u32, reciprocal: u64, shift: u8) -> u64 {
+fn frames_to_nanos(sample_rate_hz: u32, frames: u32) -> u64 {
     if sample_rate_hz == 0 || frames == 0 {
         return 0;
     }
-    let numerator = u64::from(frames) * 1_000_000_000;
-    if sample_rate_hz == 1 {
-        return numerator;
-    }
-    // Scale is prepared from the same rate; its product fits below 2^125.
-    (((u128::from(numerator) * u128::from(reciprocal)) >> 64) as u64) >> shift
+    (u64::from(frames) * 1_000_000_000) / u64::from(sample_rate_hz)
 }
 
 #[inline(always)]
@@ -985,25 +932,9 @@ mod tests {
         assert_eq!(suggested_period_frames(48_000), 240);
         assert_eq!(suggested_period_frames(192_000), 960);
         assert_eq!(suggested_period_frames(384_000), 1024);
-        assert_eq!(
-            frames_to_nanos(
-                48_000,
-                480,
-                sample_rate_scale(48_000).0,
-                sample_rate_scale(48_000).1
-            ),
-            10_000_000
-        );
-        assert_eq!(
-            frames_to_nanos(
-                44_100,
-                441,
-                sample_rate_scale(44_100).0,
-                sample_rate_scale(44_100).1
-            ),
-            10_000_000
-        );
-        assert_eq!(frames_to_nanos(0, 480, 0, 0), 0);
+        assert_eq!(frames_to_nanos(48_000, 480), 10_000_000);
+        assert_eq!(frames_to_nanos(44_100, 441), 10_000_000);
+        assert_eq!(frames_to_nanos(0, 480), 0);
         assert_eq!(timespec_nanos(2, 3), Some(2_000_000_003));
         assert_eq!(timespec_nanos(-1, 0), None);
         assert_eq!(timespec_nanos(0, -1), None);

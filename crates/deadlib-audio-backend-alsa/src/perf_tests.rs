@@ -254,9 +254,8 @@ fn check_frame_conversion(rate: u32, frames: u32) {
     } else {
         u64::from(frames) * 1_000_000_000 / u64::from(rate)
     };
-    let (reciprocal, shift) = sample_rate_scale(rate);
     assert_eq!(
-        frames_to_nanos(rate, frames, reciprocal, shift),
+        frames_to_nanos(rate, frames),
         expected,
         "rate={rate} frames={frames}"
     );
@@ -475,14 +474,7 @@ fn fixture_timing_preserves_delay_and_fallback() {
         .unwrap();
     let frames = delay.max(0) as u32;
     let mut health = AlsaClockHealth::new();
-    let timing = playback_status_timing(
-        &pcm,
-        48_000,
-        actual.sample_rate_reciprocal,
-        actual.sample_rate_shift,
-        actual.host_clock,
-        &mut health,
-    );
+    let timing = playback_status_timing(&pcm, 48_000, actual.host_clock, &mut health);
     assert_eq!(timing.delay_frames, frames);
     assert_eq!(
         timing.estimated_output_delay_ns,
@@ -519,14 +511,7 @@ fn fixture_clock_health_extremes_preserve_quality() {
                 last_playback_host_nanos: last_playback,
                 degraded_samples_remaining: 0,
             };
-            let timing = playback_status_timing(
-                &pcm,
-                48_000,
-                actual.sample_rate_reciprocal,
-                actual.sample_rate_shift,
-                actual.host_clock,
-                &mut health,
-            );
+            let timing = playback_status_timing(&pcm, 48_000, actual.host_clock, &mut health);
             if last_status == u64::MAX || last_playback == u64::MAX {
                 assert_eq!(timing.timing_quality, OutputTimingQuality::Fallback);
                 assert_eq!(health.last_status_host_nanos, last_status);
@@ -731,8 +716,6 @@ fn benchmark_alsa() {
                 black_box(playback_status_timing(
                     &pcm,
                     black_box(rate),
-                    actual.sample_rate_reciprocal,
-                    actual.sample_rate_shift,
                     actual.host_clock,
                     &mut health,
                 ));
@@ -744,32 +727,20 @@ fn benchmark_alsa() {
                 "frames_44100" => 44_100,
                 _ => 96_000,
             };
-            let (reciprocal, shift) = sample_rate_scale(rate);
             let mut frame = 0u32;
             run_work(iterations, || {
                 frame = frame.wrapping_add(239);
-                black_box(frames_to_nanos(
-                    black_box(rate),
-                    black_box(frame),
-                    black_box(reciprocal),
-                    black_box(shift),
-                ));
+                black_box(frames_to_nanos(black_box(rate), black_box(frame)));
             });
         }
         "frames_mixed" => {
             let mut frame = 0u32;
             let rates = [48_000, 44_100, 96_000, 192_000];
-            let scales = rates.map(sample_rate_scale);
             run_work(iterations, || {
                 let index = frame as usize & 3;
                 let rate = rates[index];
                 frame = frame.wrapping_add(239);
-                black_box(frames_to_nanos(
-                    black_box(rate),
-                    black_box(frame),
-                    black_box(scales[index].0),
-                    black_box(scales[index].1),
-                ));
+                black_box(frames_to_nanos(black_box(rate), black_box(frame)));
             });
         }
         _ => panic!("unknown workload {workload}"),
