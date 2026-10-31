@@ -402,4 +402,5 @@ pub fn update_overscan(translate_x: i32, translate_y: i32, add_width: i32, add_h
 }
 
 update_config_fn!(pub fn update_select_music_scorebox_cycle_golf(enabled: bool) => set_select_music_scorebox_cycle_golf);
+update_config_fn!(pub fn update_select_music_scorebox_events_first(enabled: bool) => set_select_music_scorebox_events_first);
 update_config_fn!(pub fn update_select_music_show_golf_pars(enabled: bool) => set_select_music_show_golf_pars);

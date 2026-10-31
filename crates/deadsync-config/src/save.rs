@@ -654,6 +654,7 @@ const fn select_music_options(cfg: &Config) -> SelectMusicOptions {
         scorebox_cycle_hard_ex: cfg.select_music_scorebox_cycle_hard_ex,
         scorebox_cycle_tournaments: cfg.select_music_scorebox_cycle_tournaments,
         scorebox_cycle_golf: cfg.select_music_scorebox_cycle_golf,
+        scorebox_events_first: cfg.select_music_scorebox_events_first,
         show_golf_pars: cfg.select_music_show_golf_pars,
         chart_info_peak_nps: cfg.select_music_chart_info_peak_nps,
         chart_info_effective_bpm: cfg.select_music_chart_info_effective_bpm,

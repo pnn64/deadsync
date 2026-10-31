@@ -611,6 +611,7 @@ pub enum SimplyLoveSelectMusicConfigRequest {
     ShowScorebox(bool),
     ScoreboxPlacement(SelectMusicScoreboxPlacement),
     ScoreboxCycleMask(u8),
+    ScoreboxEventsFirst(bool),
     ChartInfoMask(u8),
 }
 

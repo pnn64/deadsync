@@ -741,6 +741,9 @@ pub struct SelectMusicScoreboxFilter {
     pub ex: bool,
     pub hard_ex: bool,
     pub tournaments: bool,
+    /// Show event boards ahead of the core ITG/EX boards on charts that are
+    /// in an event.
+    pub events_first: bool,
 }
 
 impl Default for SelectMusicScoreboxFilter {
@@ -751,6 +754,7 @@ impl Default for SelectMusicScoreboxFilter {
             hard_ex: true,
             tournaments: true,
             golf: false,
+            events_first: true,
         }
     }
 }
@@ -789,6 +793,9 @@ pub fn select_music_scorebox_filtered_panes(
             out.push(pane);
         }
     }
+    if filter.events_first {
+        prioritize_event_panes(&mut out);
+    }
     out
 }
 
@@ -810,6 +817,9 @@ pub fn select_music_scorebox_pane_refs(
         if select_music_scorebox_filter_allows_kind(scorebox_pane_kind(pane), filter) {
             out.push(pane);
         }
+    }
+    if filter.events_first {
+        prioritize_event_panes(&mut out[..]);
     }
     out
 }
@@ -891,20 +901,24 @@ pub const fn default_scorebox_mode_text(show_ex_score: bool) -> &'static str {
 pub fn preferred_primary_scorebox_pane<'a>(
     panes: &'a [&'a LeaderboardPane],
     show_ex: bool,
+    events_first: bool,
 ) -> Option<&'a LeaderboardPane> {
     let want = if show_ex {
         ScoreboxPaneKind::Ex
     } else {
         ScoreboxPaneKind::Gs
     };
-    // A golf board only exists for a golf hole, and on a hole golf is the
-    // score that matters, so it leads whatever scoring mode the player uses.
-    if let Some(golf) = panes
-        .iter()
-        .copied()
-        .find(|pane| scorebox_pane_kind(pane) == ScoreboxPaneKind::Golf)
+    // An event board only exists for a chart that is in the event, and there
+    // the event score is the one that matters, so it leads whatever scoring
+    // mode the player uses. Panes keep the service's order, so the first event
+    // board wins when a chart is in more than one event.
+    if events_first
+        && let Some(event) = panes
+            .iter()
+            .copied()
+            .find(|pane| scorebox_pane_is_event(scorebox_pane_kind(pane)))
     {
-        return Some(golf);
+        return Some(event);
     }
     let mut first_gs = None;
     let mut first_ex = None;
@@ -922,11 +936,22 @@ pub fn preferred_primary_scorebox_pane<'a>(
     first_gs.or(first_ex).or_else(|| panes.first().copied())
 }
 
-/// Move golf boards ahead of every other pane, keeping each group's order.
-/// A golf board is only returned for a chart that is a golf hole, so on golf
-/// packs the leaderboard overlay and scorebox cycle open on golf.
-pub fn prioritize_golf_panes(panes: &mut [LeaderboardPane]) {
-    panes.sort_by_key(|pane| scorebox_pane_kind(pane) != ScoreboxPaneKind::Golf);
+/// Event boards are every board that is not one of the core ITG/EX/Hard EX
+/// boards: golf, ITL, SRPG and whatever a service adds next. A service only
+/// returns one for a chart that is in the event.
+#[inline(always)]
+#[must_use]
+pub const fn scorebox_pane_is_event(kind: ScoreboxPaneKind) -> bool {
+    !matches!(
+        kind,
+        ScoreboxPaneKind::Gs | ScoreboxPaneKind::Ex | ScoreboxPaneKind::HardEx
+    )
+}
+
+/// Move event boards ahead of the core boards, keeping each group's order so
+/// the service decides between events when a chart is in more than one.
+pub fn prioritize_event_panes<P: std::borrow::Borrow<LeaderboardPane>>(panes: &mut [P]) {
+    panes.sort_by_key(|pane| !scorebox_pane_is_event(scorebox_pane_kind(pane.borrow())));
 }
 
 #[must_use]
@@ -2063,6 +2088,7 @@ mod tests {
             hard_ex: false,
             tournaments: true,
             golf: false,
+            events_first: true,
         };
 
         assert!(select_music_scorebox_filter_has_any(filter));
@@ -2093,6 +2119,7 @@ mod tests {
             hard_ex: false,
             tournaments: true,
             golf: false,
+            events_first: false,
         };
 
         let filtered = select_music_scorebox_filtered_panes(&panes, filter);
@@ -2104,6 +2131,21 @@ mod tests {
         assert_eq!(names, vec!["GrooveStats", "ITL 2025"]);
         assert_eq!(scorebox_pane_kind(filtered[0]), ScoreboxPaneKind::Ex);
         assert_eq!(scorebox_pane_kind(filtered[1]), ScoreboxPaneKind::Itl);
+
+        let events_first = SelectMusicScoreboxFilter {
+            events_first: true,
+            ..filter
+        };
+        let names = select_music_scorebox_filtered_panes(&panes, events_first)
+            .iter()
+            .map(|pane| pane.name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["ITL 2025", "GrooveStats"]);
+        let names = select_music_scorebox_pane_refs(&panes, events_first)
+            .iter()
+            .map(|pane| pane.name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec!["ITL 2025", "GrooveStats"]);
     }
 
     #[test]
@@ -2115,56 +2157,98 @@ mod tests {
         let mixed = [&itl, &gs, &ex];
 
         assert_eq!(
-            preferred_primary_scorebox_pane(&mixed, true).map(scorebox_pane_kind),
+            preferred_primary_scorebox_pane(&mixed, true, false).map(scorebox_pane_kind),
             Some(ScoreboxPaneKind::Ex)
         );
         assert_eq!(
-            preferred_primary_scorebox_pane(&mixed, false).map(scorebox_pane_kind),
+            preferred_primary_scorebox_pane(&mixed, false, false).map(scorebox_pane_kind),
             Some(ScoreboxPaneKind::Gs)
         );
         assert_eq!(
-            preferred_primary_scorebox_pane(&only_tournament, true).map(scorebox_pane_kind),
+            preferred_primary_scorebox_pane(&only_tournament, true, false)
+                .map(scorebox_pane_kind),
             Some(ScoreboxPaneKind::Itl)
         );
-        assert!(preferred_primary_scorebox_pane(&[], true).is_none());
+        assert!(preferred_primary_scorebox_pane(&[], true, true).is_none());
     }
 
     #[test]
-    fn golf_board_leads_the_scorebox_whenever_a_hole_has_one() {
+    fn event_boards_lead_the_scorebox_when_enabled() {
         let gs = pane("GrooveStats", false, None);
         let ex = pane("GrooveStats", true, None);
         let golf = pane("Golf (ArrowCloud)", false, None);
+        let srpg = pane("SRPG 9", false, None);
+        let itl = pane("ITL Online 2026", true, None);
         let with_golf = [&gs, &ex, &golf];
+        let two_events = [&gs, &ex, &srpg, &itl];
         for show_ex in [false, true] {
             assert_eq!(
-                preferred_primary_scorebox_pane(&with_golf, show_ex).map(scorebox_pane_kind),
+                preferred_primary_scorebox_pane(&with_golf, show_ex, true)
+                    .map(scorebox_pane_kind),
                 Some(ScoreboxPaneKind::Golf)
             );
+            // The service's order decides between events.
+            assert_eq!(
+                preferred_primary_scorebox_pane(&two_events, show_ex, true)
+                    .map(scorebox_pane_kind),
+                Some(ScoreboxPaneKind::Srpg)
+            );
+        }
+        assert_eq!(
+            preferred_primary_scorebox_pane(&with_golf, true, false).map(scorebox_pane_kind),
+            Some(ScoreboxPaneKind::Ex)
+        );
+    }
+
+    #[test]
+    fn core_boards_are_never_event_boards() {
+        for kind in [
+            ScoreboxPaneKind::Gs,
+            ScoreboxPaneKind::Ex,
+            ScoreboxPaneKind::HardEx,
+        ] {
+            assert!(!scorebox_pane_is_event(kind));
+        }
+        for kind in [
+            ScoreboxPaneKind::Golf,
+            ScoreboxPaneKind::Itl,
+            ScoreboxPaneKind::Srpg,
+            ScoreboxPaneKind::Other,
+        ] {
+            assert!(scorebox_pane_is_event(kind));
         }
     }
 
     #[test]
-    fn prioritize_golf_panes_moves_golf_first_and_keeps_the_rest_in_order() {
+    fn prioritize_event_panes_moves_events_first_and_keeps_each_groups_order() {
         let mut panes = vec![
             pane("GrooveStats", false, None),
             pane("ArrowCloud", false, Some(ArrowCloudPaneKind::HardEx)),
+            pane("SRPG 9", false, None),
             pane("Golf (ArrowCloud)", false, None),
             pane("GrooveStats", true, None),
+            pane("ITL Online 2026", true, None),
         ];
-        prioritize_golf_panes(&mut panes);
+        prioritize_event_panes(&mut panes);
         let kinds: Vec<_> = panes.iter().map(scorebox_pane_kind).collect();
         assert_eq!(
             kinds,
             [
+                ScoreboxPaneKind::Srpg,
                 ScoreboxPaneKind::Golf,
+                ScoreboxPaneKind::Itl,
                 ScoreboxPaneKind::Gs,
                 ScoreboxPaneKind::HardEx,
                 ScoreboxPaneKind::Ex,
             ]
         );
-        let mut without_golf = vec![pane("GrooveStats", true, None), pane("GrooveStats", false, None)];
-        prioritize_golf_panes(&mut without_golf);
-        assert!(without_golf[0].is_ex && !without_golf[1].is_ex);
+        let mut refs: Vec<&LeaderboardPane> = panes.iter().rev().collect();
+        prioritize_event_panes(&mut refs);
+        assert_eq!(scorebox_pane_kind(refs[0]), ScoreboxPaneKind::Itl);
+        let mut without_events =
+            vec![pane("GrooveStats", true, None), pane("GrooveStats", false, None)];
+        prioritize_event_panes(&mut without_events);
+        assert!(without_events[0].is_ex && !without_events[1].is_ex);
     }
 
     #[test]

@@ -1586,6 +1586,12 @@ pub fn init(view: OptionsInitView) -> State {
         },
     );
     set_choice_by_id(
+        &mut state.sub[SubmenuKind::SelectMusic].choice_indices,
+        SELECT_MUSIC_OPTIONS_ROWS,
+        SubRowId::GsBoxEventsFirst,
+        yes_no_choice_index(cfg.select_music_scorebox_events_first),
+    );
+    set_choice_by_id(
         &mut state.sub[SubmenuKind::GrooveStats].choice_indices,
         GROOVESTATS_OPTIONS_ROWS,
         SubRowId::EnableGrooveStats,

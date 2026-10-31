@@ -154,6 +154,9 @@ fn apply_leaderboard_side_snapshot(
     let mut panes = snapshot
         .data
         .map_or_else(Vec::new, |data| data.panes.clone());
+    if side.scorebox.pane_filter.events_first {
+        score_data::prioritize_event_panes(&mut panes);
+    }
     if let Some(machine) = side.machine_pane.clone() {
         panes.push(machine);
     }

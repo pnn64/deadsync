@@ -228,6 +228,7 @@ pub enum ItemId {
     SmShowRivals,
     SmScoreboxPlacement,
     SmScoreboxCycle,
+    SmScoreboxEventsFirst,
 
     // Course Options submenu
     CrsShowRandom,

@@ -540,6 +540,9 @@ pub(super) fn execute_select_music(request: SimplyLoveSelectMusicConfigRequest) 
         Request::ScoreboxPlacement(mode) => {
             config::runtime_update::update_select_music_scorebox_placement(mode)
         }
+        Request::ScoreboxEventsFirst(enabled) => {
+            config::runtime_update::update_select_music_scorebox_events_first(enabled);
+        }
         Request::ScoreboxCycleMask(mask) => {
             config::runtime_update::update_select_music_scorebox_cycle_golf(mask & (1 << 4) != 0);
             config::runtime_update::update_select_music_scorebox_cycle_itg(mask & (1 << 0) != 0);

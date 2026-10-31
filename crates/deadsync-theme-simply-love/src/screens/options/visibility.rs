@@ -302,6 +302,8 @@ pub(super) fn submenu_visible_row_indices(
                         None
                     } else if row.id == SubRowId::GsBoxLeaderboards && !show_scorebox {
                         None
+                    } else if row.id == SubRowId::GsBoxEventsFirst && !show_scorebox {
+                        None
                     } else {
                         Some(idx)
                     }

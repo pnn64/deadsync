@@ -350,6 +350,15 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ROWS: &[SubRow] = &[
         ],
         inline: true,
     },
+    SubRow {
+        id: SubRowId::GsBoxEventsFirst,
+        label: lookup_key("OptionsSelectMusic", "GSBoxEventsFirst"),
+        choices: &[
+            localized_choice("Common", "No"),
+            localized_choice("Common", "Yes"),
+        ],
+        inline: true,
+    },
 ];
 
 pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
@@ -640,6 +649,14 @@ pub(in crate::screens::options) const SELECT_MUSIC_OPTIONS_ITEMS: &[Item] = &[
             HelpEntry::Paragraph(lookup_key("OptionsSelectMusicHelp", "GsBoxLeaderboardsHelp")),
             HelpEntry::Paragraph(lookup_key("OptionsSelectMusicHelp", "GolfLeaderboardHelp")),
         ],
+    },
+    Item {
+        id: ItemId::SmScoreboxEventsFirst,
+        name: lookup_key("OptionsSelectMusic", "GSBoxEventsFirst"),
+        help: &[HelpEntry::Paragraph(lookup_key(
+            "OptionsSelectMusicHelp",
+            "GsBoxEventsFirstHelp",
+        ))],
     },
     Item {
         id: ItemId::Exit,

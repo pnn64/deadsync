@@ -1111,6 +1111,11 @@ pub(super) fn apply_submenu_choice_delta(
                     select_music_scorebox_placement_from_choice(new_index),
                 )
             }
+            SubRowId::GsBoxEventsFirst => {
+                crate::SimplyLoveSelectMusicConfigRequest::ScoreboxEventsFirst(
+                    yes_no_from_choice(new_index),
+                )
+            }
             _ => return None,
         };
         action = Some(select_music_config_effect(request));

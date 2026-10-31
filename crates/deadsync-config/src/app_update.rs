@@ -921,6 +921,9 @@ mod tests {
 pub fn set_select_music_scorebox_cycle_golf(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.select_music_scorebox_cycle_golf, enabled)
 }
+pub fn set_select_music_scorebox_events_first(cfg: &mut Config, enabled: bool) -> bool {
+    set_if_changed(&mut cfg.select_music_scorebox_events_first, enabled)
+}
 pub fn set_select_music_show_golf_pars(cfg: &mut Config, enabled: bool) -> bool {
     set_if_changed(&mut cfg.select_music_show_golf_pars, enabled)
 }
