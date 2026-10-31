@@ -15158,6 +15158,38 @@ mod tests {
         assert_ne!(state.session_timer.text(), session_text);
     }
 
+    /// A loaded GrooveStats board, so the scorebox draws the GrooveStats logo
+    /// the placement tests locate it by. A loading pane belongs to no service
+    /// and draws no logo.
+    fn ready_gs_leaderboards() -> deadsync_score::CachedPlayerLeaderboardData {
+        deadsync_score::CachedPlayerLeaderboardData {
+            loading: false,
+            error: None,
+            data: Some(Arc::new(deadsync_score::PlayerLeaderboardData {
+                panes: vec![deadsync_score::LeaderboardPane {
+                    name: "GrooveStats".to_string(),
+                    entries: vec![deadsync_score::LeaderboardEntry {
+                        rank: 1,
+                        name: "PerfectTaste".to_string(),
+                        machine_tag: None,
+                        score: 9999.0,
+                        date: String::new(),
+                        is_rival: false,
+                        is_self: false,
+                        is_fail: false,
+                    }],
+                    is_ex: false,
+                    disabled: false,
+                    personalized: true,
+                    arrowcloud_kind: None,
+                }],
+                srpg_self_score: None,
+                itl_self_score: None,
+                itl_self_rank: None,
+            })),
+        }
+    }
+
     fn texture_offset(actor: &Actor, key: &str) -> Option<[f32; 2]> {
         match actor {
             Actor::Sprite { source, offset, .. } if source.texture_key() == Some(key) => {
@@ -15282,7 +15314,7 @@ mod tests {
                 joined: true,
                 chart_hash: Some(chart_hash),
                 groovestats_active: true,
-                leaderboards: Some(deadsync_score::CachedPlayerLeaderboardData::loading()),
+                leaderboards: Some(ready_gs_leaderboards()),
                 ..Default::default()
             };
         }
@@ -16518,7 +16550,7 @@ mod tests {
             joined: true,
             chart_hash: Some(chart_hash),
             groovestats_active: true,
-            leaderboards: Some(deadsync_score::CachedPlayerLeaderboardData::loading()),
+            leaderboards: Some(ready_gs_leaderboards()),
             ..Default::default()
         };
 

@@ -133,12 +133,9 @@ pub(super) fn push_leaderboard_overlay_unreserved<const INCLUDE_ICONS: bool>(
             .panes
             .get(side.pane_index.min(side.panes.len().saturating_sub(1)));
         let display_entries = pane.map(|pane| overlay_display_entries(&side.scorebox, pane));
-        let header_text = if side.loading {
-            "GrooveStats".to_string()
-        } else if let Some(p) = pane {
-            p.name.replace("ITL Online", "ITL")
-        } else {
-            "GrooveStats".to_string()
+        let header_text = match pane {
+            Some(p) if !side.loading => p.name.replace("ITL Online", "ITL"),
+            _ => GS_LEADERBOARD_STATUS_HEADER.to_string(),
         };
         let show_ex = !side.loading
             && side.error_text.is_none()
