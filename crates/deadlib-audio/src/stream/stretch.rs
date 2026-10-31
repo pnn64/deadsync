@@ -100,23 +100,6 @@ fn append_crossfade_samples(prev: &[i16], current: &[i16], weights: &[f32], out:
 }
 
 #[inline(always)]
-fn prefix_can_satisfy_reserve<T>(
-    buffer: &Vec<T>,
-    data_start: usize,
-    live: usize,
-    additional: usize,
-) -> bool {
-    data_start > 0
-        && buffer.len().saturating_add(additional) > buffer.capacity()
-        && live.saturating_add(additional) <= buffer.capacity()
-}
-
-fn compact_buffer<T: Copy>(buffer: &mut Vec<T>, data_start: usize, live: usize) {
-    buffer.copy_within(data_start.., 0);
-    buffer.truncate(live);
-}
-
-#[inline(always)]
 fn cursor_avail_cached(
     window_frames: usize,
     pos: usize,
@@ -197,13 +180,12 @@ pub struct SolaStretcher {
     data_avail_frames: usize,
     /// Physical index in each channel's `data` Vec where logical frame 0 lives.
     /// `erase_front` advances this cursor instead of memmoving the buffer; the
-    /// dead prefix is reclaimed lazily by [`compact`] once it grows past
-    /// `compact_threshold_frames`. Every logical position (`*_pos`, `pos`) is
+    /// dead prefix is reclaimed before a push would grow the allocation.
+    /// Every logical position (`*_pos`, `pos`) is
     /// relative to logical frame 0, so the physical sample is
     /// `data[data_start + logical]` and the invariant
     /// `data.len() == data_start + data_avail_frames` holds for every channel.
     data_start: usize,
-    compact_threshold_frames: usize,
     uncorrelated_pos: usize,
     pos: usize,
 
@@ -227,10 +209,6 @@ impl SolaStretcher {
         let fade_weights = (0..window_frames)
             .map(|frame| frame as f32 / window_frames as f32)
             .collect();
-        // Reclaim the erased prefix only after it grows to several windows, so
-        // the compaction memmove is amortized across many `erase_front` calls
-        // instead of moving the live region every single window like `drain`.
-        let compact_threshold_frames = (window_frames * 8).max(4096);
         let mut state = Vec::with_capacity(channels);
         for _ in 0..channels {
             state.push(ChannelState {
@@ -251,7 +229,6 @@ impl SolaStretcher {
             max_last_correlated_pos: 0,
             data_avail_frames: 0,
             data_start: 0,
-            compact_threshold_frames,
             uncorrelated_pos: 0,
             pos: 0,
             speed_ratio: 1.0,
@@ -427,22 +404,22 @@ impl SolaStretcher {
         self.pos += frames;
     }
 
-    /// Reclaim a dead logical prefix before growing channel storage when the
-    /// retained allocation already has enough room for the live frames and the
-    /// incoming packet. This keeps decoder packet-size jitter from turning
-    /// erased history into avoidable reallocations between periodic compactions.
+    /// Reclaim erased history only when an incoming packet needs its storage.
+    /// If growth is still necessary, reserve space for live samples alone.
     fn reclaim_source_prefix(&mut self, frames: usize) {
-        let reuse_prefix = self.state.iter().any(|channel| {
-            prefix_can_satisfy_reserve(
-                &channel.data,
-                self.data_start,
-                self.data_avail_frames,
-                frames,
-            )
-        });
-        if reuse_prefix {
-            self.compact_storage();
+        if self.data_start == 0
+            || self
+                .state
+                .iter()
+                .all(|channel| channel.data.len().saturating_add(frames) <= channel.data.capacity())
+        {
+            return;
         }
+        for channel in &mut self.state {
+            channel.data.copy_within(self.data_start.., 0);
+            channel.data.truncate(self.data_avail_frames);
+        }
+        self.data_start = 0;
     }
 
     /// Returns false if the search buffer doesn't yet have enough data to
@@ -606,30 +583,6 @@ impl SolaStretcher {
         self.data_start += frames;
         self.data_avail_frames -= frames;
         self.uncorrelated_pos -= frames;
-        self.compact();
-    }
-
-    /// Reclaim the dead prefix `data[..data_start]`. `copy_within` shifts the
-    /// live region down by `data_start`, which is exactly the offset every
-    /// logical position is read through, so no position needs adjusting. Runs
-    /// only once the prefix exceeds `compact_threshold_frames` (or the buffer
-    /// has drained empty), so the memmove is amortized across many windows.
-    fn compact(&mut self) {
-        if self.data_start == 0 {
-            return;
-        }
-        if self.data_start < self.compact_threshold_frames && self.data_avail_frames != 0 {
-            return;
-        }
-        self.compact_storage();
-    }
-
-    fn compact_storage(&mut self) {
-        let live = self.data_avail_frames;
-        for ch in &mut self.state {
-            compact_buffer(&mut ch.data, self.data_start, live);
-        }
-        self.data_start = 0;
     }
 }
 
@@ -645,14 +598,62 @@ fn find_closest_match(buffer: &[i16], correlate: &[i16]) -> usize {
     if buffer.len() <= correlate.len() {
         return 0;
     }
-    // Silence produces a perfect first candidate. Peel it so the mathematical
-    // lower bound exits immediately without adding a condition to every
-    // ordinary, nonmatching candidate.
-    let first_score = correlation_score(&buffer[..correlate.len()], correlate, f32::INFINITY);
-    if first_score == 0.0 {
+    // Equal PCM has the minimum possible score. Shared source windows need no
+    // reads; slice equality also checks silence in vector-sized byte batches.
+    let first = &buffer[..correlate.len()];
+    if std::ptr::eq(first.as_ptr(), correlate.as_ptr()) || first == correlate {
         return 0;
     }
+    let first_score = correlation_score(first, correlate, f32::INFINITY);
+    // Every PCM quantum is exactly representable through 512 normalized
+    // units (2^24 quanta). With a best score in that range, any improving
+    // candidate has an exact integer sum. Larger sums cannot win, including
+    // after float rounding. Keep comparisons and rejection entirely in PCM.
+    if first_score <= 512.0 {
+        return find_closest_match_pcm(buffer, correlate, (first_score * 32768.0) as u32);
+    }
     find_closest_match_after_first(buffer, correlate, first_score)
+}
+
+fn find_closest_match_pcm(buffer: &[i16], correlate: &[i16], mut best_score: u32) -> usize {
+    let mut best_offset = 0;
+    for (offset, frames) in buffer.windows(correlate.len()).enumerate().skip(1) {
+        let score = pcm_correlation_score(frames, correlate, best_score);
+        if score < best_score {
+            if score == 0 {
+                return offset;
+            }
+            best_score = score;
+            best_offset = offset;
+        }
+    }
+    best_offset
+}
+
+#[inline(always)]
+fn pcm_correlation_score(frames: &[i16], correlate: &[i16], best_score: u32) -> u32 {
+    // Larger reductions let LLVM use SIMD without horizontal sums every eight
+    // samples. A rejected block can overshoot 2^24 by at most 32 * 65535, so
+    // the accumulator cannot overflow u32, regardless of the window length.
+    let (frames, frame_tail) = frames.as_chunks::<32>();
+    let (correlate, correlate_tail) = correlate.as_chunks::<32>();
+    let mut score = 0;
+    for (frames, correlate) in frames.iter().zip(correlate) {
+        score += frames
+            .iter()
+            .zip(correlate)
+            .map(|(&a, &b)| u32::from(a.abs_diff(b)))
+            .sum::<u32>();
+        if score >= best_score {
+            return score;
+        }
+    }
+    score
+        + frame_tail
+            .iter()
+            .zip(correlate_tail)
+            .map(|(&a, &b)| u32::from(a.abs_diff(b)))
+            .sum::<u32>()
 }
 
 // Continue with candidate zero already scored, preserving its lead on ties.

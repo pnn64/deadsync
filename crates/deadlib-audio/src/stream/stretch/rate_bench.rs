@@ -2,6 +2,79 @@
 use super::*;
 
 #[test]
+#[ignore = "CPU-cycle benchmark; exact first candidates and a nonmatching control"]
+fn benchmark_sola_first_match() {
+    for len in [360, 720] {
+        for kind in ["same-source", "silence", "noise"] {
+            let input = noise(len * 2, 7);
+            let pattern = if kind == "silence" {
+                vec![0; len]
+            } else {
+                noise(len, 11)
+            };
+            let zeros = vec![0; len * 2];
+            let (buffer, pattern) = match kind {
+                "same-source" => (&input[..], &input[..len]),
+                "silence" => (&zeros[..], &pattern[..]),
+                _ => (&input[..], &pattern[..]),
+            };
+            let label = format!("sola/first-{kind}-{len}");
+            println!(
+                "{label}: fingerprint {:016x}",
+                find_closest_match(buffer, pattern)
+            );
+            let work = || {
+                black_box(find_closest_match(black_box(buffer), black_box(pattern)));
+            };
+            let (_, counts) = allocations::measure(work);
+            println!("{label}: allocation {counts:?}");
+            bench::measure(&label, if kind == "noise" { 256 } else { 65_536 }, work);
+        }
+    }
+}
+
+#[test]
+#[ignore = "CPU-cycle benchmark; retiring windows from large decoder packets"]
+fn benchmark_sola_retire() {
+    fn retire(stretch: &mut SolaStretcher, input: &[i16]) {
+        stretch.reset();
+        stretch.push_interleaved_i16(black_box(input));
+        while stretch.data_avail_frames > stretch.window_frames {
+            let frames = stretch.window_frames;
+            for channel in &mut stretch.state {
+                channel.correlated_pos += frames;
+            }
+            stretch.min_correlated_pos += frames;
+            stretch.max_correlated_pos += frames;
+            stretch.uncorrelated_pos += frames;
+            stretch.erase_front(frames);
+        }
+        for channel in &stretch.state {
+            black_box(&channel.data[stretch.data_start..]);
+        }
+        black_box(stretch.data_avail_frames);
+    }
+    for channels in [1, 2, 6] {
+        for frames in [12_001, 65_536] {
+            let input = noise(frames * channels, 7);
+            let mut stretch = SolaStretcher::new(channels, 48_000);
+            stretch.push_interleaved_i16(&input);
+            let (_, counts) = allocations::measure(|| retire(&mut stretch, &input));
+            let label = format!("sola/retire-{channels}ch-{frames}");
+            let mut hash = 0xcbf29ce484222325u64;
+            for channel in &stretch.state {
+                for &sample in &channel.data[stretch.data_start..] {
+                    hash = (hash ^ u64::from(sample as u16)).wrapping_mul(0x100000001b3);
+                }
+            }
+            println!("{label}: fingerprint {hash:016x}");
+            println!("{label}: allocation {counts:?}");
+            bench::measure(&label, 1024, || retire(&mut stretch, &input));
+        }
+    }
+}
+
+#[test]
 #[ignore = "CPU-cycle benchmark; one test thread"]
 fn benchmark_sola_rates() {
     for (channels, kind, rate) in [

@@ -53,7 +53,8 @@ def build(name, source, test_source=None):
         '#[path = "rate_bench.rs"]',
         f'#[path = {json.dumps((archive / "rate_bench.rs").as_posix())}]',
     )
-    (archive / "compiled-tests.rs").write_text(relocated_tests, encoding="utf-8", newline="\n")
+    with (archive / "compiled-tests.rs").open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(relocated_tests)
     relocated = snapshot.decode("utf-8").replace(
         '#[path = "stretch/perf_tests.rs"]',
         f'#[path = {json.dumps((archive / "compiled-tests.rs").as_posix())}]',
@@ -63,7 +64,8 @@ def build(name, source, test_source=None):
         relocated += (f'\n#[cfg(test)]\n#[path = '
                       f'{json.dumps((archive / "compiled-tests.rs").as_posix())}]\n'
                       'mod perf_tests;\n')
-    (archive / "compiled.rs").write_text(relocated, encoding="utf-8", newline="\n")
+    with (archive / "compiled.rs").open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(relocated)
     support = archive / "allocations-source.rs"
     harness.write_text(
         '#![allow(dead_code)]\n'
@@ -94,6 +96,9 @@ def compare(names, output, runs, benchmark):
     support = [manifest.get("support_sha256") for manifest in manifests.values()]
     if not all(support) or any(value != support[0] for value in support):
         raise ValueError("Rebuild all stages with identical frozen benchmark support files")
+    for field in ["test_source_sha256", "rate_source_sha256"]:
+        if len({manifest[field] for manifest in manifests.values()}) != 1:
+            raise ValueError("Rebuild all stages with identical benchmark fixtures")
     timing = re.compile(r"(sola/[^:\r\n]+): cycles/op ([\d.]+); ns/op ([\d.]+)")
     churn = re.compile(r"(sola/[^:\r\n]+): allocation Churn \{ ([^}]+) \}")
     storage = re.compile(r"(sola/[^:\r\n]+): storage Churn \{ ([^}]+) \}")
@@ -106,6 +111,8 @@ def compare(names, output, runs, benchmark):
         order = names[run % len(names):] + names[:run % len(names)]
         for name in order:
             binary = ARCHIVES / name / "sola.exe"
+            if hashlib.sha256(binary.read_bytes()).hexdigest() != manifests[name]["binary_sha256"]:
+                raise ValueError(f"Archived executable changed: {name}")
             result = subprocess.run([str(binary), benchmark, "--ignored",
                                      "--nocapture", "--test-threads=1"],
                                     capture_output=True, text=True, check=True)
@@ -134,9 +141,10 @@ def compare(names, output, runs, benchmark):
     with output.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]), delimiter="\t")
         writer.writeheader()
-        writer.writerows(rows)
+        writer.writerows({key: value if value != "" else "NA" for key, value in row.items()}
+                        for row in rows)
     metadata = dict(platform=platform.platform(), processor=os.environ.get("PROCESSOR_IDENTIFIER"),
-                    stages=manifests)
+                    benchmark=benchmark, runs=runs, stages=manifests)
     output.with_suffix(".manifest.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     for label in sorted({row["workload"] for row in rows}):
         values = [statistics.median(row["cycles_per_op"] for row in rows
@@ -150,10 +158,13 @@ def verify(names, output):
     expected = None
     records = []
     for name in names:
-        archive = "verify-" + name
-        build(archive, ARCHIVES / name / "stretch.rs")
-        pcm = ARCHIVES / archive / "pcm.bin"
-        result = subprocess.run([str(ARCHIVES / archive / "sola.exe"), "dump_sola_pcm",
+        archive = ARCHIVES / name
+        manifest = json.loads((archive / "manifest.json").read_text())
+        binary = archive / "sola.exe"
+        if hashlib.sha256(binary.read_bytes()).hexdigest() != manifest["binary_sha256"]:
+            raise ValueError(f"Archived executable changed: {name}")
+        pcm = archive / "pcm.bin"
+        result = subprocess.run([str(binary), "dump_sola_pcm",
                                  "--ignored", "--test-threads=1"], check=True,
                                 capture_output=True, text=True,
                                 env={**os.environ, "SOLA_PCM_OUT": str(pcm)})
@@ -163,7 +174,7 @@ def verify(names, output):
         if data != expected:
             raise ValueError(f"Full PCM bytes or pull boundaries changed: {name}")
         records.append(dict(stage=name, bytes=len(data), sha256=hashlib.sha256(data).hexdigest(),
-                            manifest=json.loads((ARCHIVES / archive / "manifest.json").read_text()),
+                            manifest=manifest,
                             capture_test=result.stdout))
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(records, indent=2), encoding="utf-8")
@@ -177,7 +188,8 @@ def main():
     parser.add_argument("--compare", nargs="+")
     parser.add_argument("--verify", nargs="+")
     parser.add_argument("--benchmark", choices=["benchmark_sola_kernels", "benchmark_sola_rates",
-                                              "benchmark_sola_packets"],
+                                              "benchmark_sola_packets", "benchmark_sola_first_match",
+                                              "benchmark_sola_retire"],
                         default="benchmark_sola_kernels")
     parser.add_argument("--runs", type=int, default=4)
     parser.add_argument("--output", type=Path)

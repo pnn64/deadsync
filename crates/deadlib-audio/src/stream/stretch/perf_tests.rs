@@ -86,6 +86,67 @@ fn correlation_matches_scalar_oracle() {
 }
 
 #[test]
+fn correlation_preserves_winners_at_the_exact_float_limit() {
+    for len in [264, 272, 360, 720, 1440] {
+        let pattern = vec![i16::MIN; len];
+        for extra in [254, 255, 256, 257, 258] {
+            // 256 full-scale differences plus 256 PCM quanta is exactly 512.
+            // Exercise integer winners and float-rounded ties on either side.
+            let mut input = vec![i16::MIN; len + 97];
+            input[..256].fill(i16::MAX);
+            input[256] = i16::MIN + extra;
+            assert_eq!(
+                find_closest_match(&input, &pattern),
+                reference(&input, &pattern)
+            );
+        }
+        for seed in 0..12 {
+            let mut input = noise(len + 97, seed);
+            let mut pattern = noise(len, seed + 12);
+            if seed % 2 == 0 {
+                input.iter_mut().for_each(|sample| *sample /= 128);
+                pattern.iter_mut().for_each(|sample| *sample /= 128);
+            }
+            assert_eq!(
+                find_closest_match(&input, &pattern),
+                reference(&input, &pattern)
+            );
+        }
+    }
+}
+
+#[test]
+fn retiring_and_refilling_preserves_live_pcm_with_packet_size_changes() {
+    for channels in [1, 2, 6, 16] {
+        let mut stretch = SolaStretcher::new(channels, 48_000);
+        let mut expected = vec![Vec::new(); channels];
+        for (iteration, frames) in [65_536, 1, 137, 997, 4096, 32_768, 137, 997]
+            .into_iter()
+            .enumerate()
+        {
+            let retired = stretch.data_avail_frames.saturating_sub(73);
+            for channel in &mut stretch.state {
+                channel.correlated_pos = retired;
+            }
+            stretch.min_correlated_pos = retired;
+            stretch.max_correlated_pos = retired;
+            stretch.uncorrelated_pos = retired;
+            stretch.erase_front(retired);
+            for channel in &mut expected {
+                channel.drain(..retired);
+            }
+            let input = noise(frames * channels, iteration as u32);
+            stretch.push_interleaved_i16(&input);
+            for (index, (channel, expected)) in stretch.state.iter().zip(&mut expected).enumerate()
+            {
+                expected.extend(input.iter().skip(index).step_by(channels).copied());
+                assert_eq!(&channel.data[stretch.data_start..], expected);
+            }
+        }
+    }
+}
+
+#[test]
 fn grouped_pcm_scores_preserve_rounding_and_rejection() {
     for len in [
         0, 1, 7, 8, 9, 31, 255, 256, 257, 263, 264, 265, 271, 272, 273, 360, 720, 1440, 4097,
@@ -147,8 +208,12 @@ fn grouped_pcm_scores_preserve_rounding_and_rejection() {
 }
 
 fn stream_input(channels: usize, kind: &str) -> Vec<i16> {
+    stream_input_frames(channels, kind, 12_001)
+}
+
+fn stream_input_frames(channels: usize, kind: &str, frames: usize) -> Vec<i16> {
     let mut state = 7u32;
-    (0..12_001 * channels)
+    (0..frames * channels)
         .map(|index| {
             state = state.wrapping_mul(1664525).wrapping_add(1013904223);
             if kind == "silence" || (kind == "left-silent" && index % channels == 0) {
@@ -265,20 +330,22 @@ fn crossfade_preserves_original_float_formula_across_pcm_range() {
 #[ignore = "writes complete PCM for byte comparison between archived sources"]
 fn dump_sola_pcm() {
     let mut bytes = Vec::new();
-    for (channels, hz, kind) in [
-        (1, 8_000, "noise"),
-        (1, 48_000, "tone"),
-        (2, 44_100, "noise"),
-        (2, 48_000, "left-silent"),
-        (2, 96_000, "tone"),
-        (2, 48_000, "silence"),
-        (5, 48_000, "noise"),
-        (6, 48_000, "noise"),
-        (8, 44_100, "tone"),
-        (16, 48_000, "noise"),
+    for (channels, hz, kind, frames) in [
+        (1, 8_000, "noise", 12_001),
+        (1, 48_000, "tone", 12_001),
+        (2, 44_100, "noise", 12_001),
+        (2, 48_000, "left-silent", 12_001),
+        (2, 96_000, "tone", 12_001),
+        (2, 48_000, "silence", 12_001),
+        (5, 48_000, "noise", 12_001),
+        (6, 48_000, "noise", 12_001),
+        (8, 44_100, "tone", 12_001),
+        (16, 48_000, "noise", 12_001),
+        (2, 48_000, "noise", 65_536),
+        (6, 48_000, "silence", 65_536),
     ] {
-        let input = stream_input(channels, kind);
-        for (packet, cap) in [(137, 7), (997, 256), (4096, 997)] {
+        let input = stream_input_frames(channels, kind, frames);
+        for (packet, cap) in [(137, 7), (997, 256), (4096, 997), (65_536, 256)] {
             let mut stretch = SolaStretcher::new(channels, hz);
             let mut output = vec![Vec::new(); channels];
             for _ in 0..2 {
@@ -376,7 +443,7 @@ fn benchmark_sola_kernels() {
         let label = format!("sola/append-{channels}ch");
         let (_, counts) = allocations::measure(&mut work);
         println!("{label}: allocation {counts:?}");
-        bench::measure(&label, 128, work);
+        bench::measure(&label, 1024, work);
     }
     for frames in [256, 1440] {
         let prev = noise(frames, 7);
@@ -398,7 +465,7 @@ fn benchmark_sola_kernels() {
         let label = format!("sola/crossfade-{frames}");
         let (_, counts) = allocations::measure(&mut work);
         println!("{label}: allocation {counts:?}");
-        bench::measure(&label, 1024, work);
+        bench::measure(&label, 16_384, work);
     }
     for len in [360, 720] {
         let left = noise(len * 2, 1);
@@ -439,7 +506,7 @@ fn benchmark_sola_kernels() {
             let label = format!("sola/{kind}/{len}");
             let (_, counts) = allocations::measure(work);
             println!("{label}: allocation {counts:?}");
-            bench::measure(&label, 32, work);
+            bench::measure(&label, 256, work);
         }
     }
     for (channels, kind, rate) in [
@@ -463,6 +530,6 @@ fn benchmark_sola_kernels() {
         };
         let (_, counts) = allocations::measure(&mut work);
         println!("{label}: allocation {counts:?}");
-        bench::measure(&label, 2, work);
+        bench::measure(&label, 32, work);
     }
 }
