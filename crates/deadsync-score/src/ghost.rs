@@ -29,8 +29,8 @@ impl GhostData {
             .zip(histories)
         {
             if !new.is_empty()
-                && new.iter().all(|point| point.is_finite())
                 && (old.len() != new.len() || old.last() < new.last())
+                && new.iter().all(|point| point.is_finite())
             {
                 old.clone_from(new);
                 changed = true;

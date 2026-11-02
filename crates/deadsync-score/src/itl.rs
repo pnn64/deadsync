@@ -1932,15 +1932,19 @@ pub fn parse_itl_points(chart_name: &str) -> Option<(u32, u32)> {
         while offset < bytes.len() && !bytes[offset].is_ascii_digit() {
             offset += 1;
         }
-        let mut value = (offset < bytes.len()).then_some(0_u32);
+        if offset == bytes.len() {
+            return None;
+        }
+        let mut value = u64::from(bytes[offset] - b'0');
+        offset += 1;
         while offset < bytes.len() && bytes[offset].is_ascii_digit() {
-            value = value
-                .and_then(|value| value.checked_mul(10))
-                .and_then(|value| value.checked_add(u32::from(bytes[offset] - b'0')));
+            // Keep overflow sticky without carrying an Option through each digit.
+            // This cap also keeps the next multiplication within u64 in debug builds.
+            value = (value * 10 + u64::from(bytes[offset] - b'0')).min(u64::from(u32::MAX) + 1);
             offset += 1;
         }
-        if let Some(value) = value {
-            values[found] = value;
+        if value <= u64::from(u32::MAX) {
+            values[found] = value as u32;
             found += 1;
         }
     }

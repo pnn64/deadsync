@@ -3381,13 +3381,14 @@ pub fn parse_gs_comment_counts(comment: &str) -> GsCommentCounts {
 
         let mut value: u32 = 0;
         let mut idx = 0usize;
-        for (i, ch) in s.char_indices() {
-            if let Some(d) = ch.to_digit(10) {
-                value = value.saturating_mul(10).saturating_add(d);
-                idx = i + ch.len_utf8();
-            } else {
+        for &byte in s.as_bytes() {
+            if !byte.is_ascii_digit() {
                 break;
             }
+            value = value
+                .saturating_mul(10)
+                .saturating_add(u32::from(byte - b'0'));
+            idx += 1;
         }
         if value == 0 {
             continue;
