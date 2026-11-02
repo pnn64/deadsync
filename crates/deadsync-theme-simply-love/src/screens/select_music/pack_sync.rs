@@ -101,39 +101,14 @@ fn pack_sync_targets_for_group(
 ) -> Option<Vec<shared_pack_sync::TargetSpec>> {
     let target_chart_type = state.session.play_style.chart_type();
     let preferred_difficulty_index = preferred_difficulty_index(state);
-    let mut current_pack_name: Option<&str> = None;
-    let mut targets = Vec::new();
-
-    for entry in state.group_entries.iter() {
-        match entry {
-            MusicWheelEntry::PackHeader { name, .. } => current_pack_name = Some(name.as_ref()),
-            MusicWheelEntry::Song(song) => {
-                if current_pack_name != Some(pack_group) {
-                    continue;
-                }
-                let Some(steps_index) =
-                    song.best_steps_index(target_chart_type, preferred_difficulty_index)
-                else {
-                    continue;
-                };
-                let Some(chart_ix) =
-                    selected_chart_ix_for_sync(song.as_ref(), target_chart_type, steps_index)
-                else {
-                    continue;
-                };
-                let Some(chart) = song.charts.get(chart_ix) else {
-                    continue;
-                };
-                targets.push(shared_pack_sync::TargetSpec {
-                    song: song.clone(),
-                    simfile_path: song.simfile_path.clone(),
-                    song_title: song.display_full_title(false),
-                    chart_label: shared_pack_sync::chart_label(chart),
-                    chart_ix,
-                });
-            }
-        }
-    }
-
+    let targets: Vec<_> = state
+        .song_packs
+        .iter()
+        .filter(|pack| pack.name == pack_group)
+        .flat_map(|pack| &pack.songs)
+        .filter_map(|song| {
+            shared_pack_sync::target_for_song(song, target_chart_type, preferred_difficulty_index)
+        })
+        .collect();
     (!targets.is_empty()).then_some(targets)
 }

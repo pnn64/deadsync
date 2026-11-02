@@ -17665,6 +17665,60 @@ mod tests {
         assert_eq!(state.session, session);
     }
 
+    #[test]
+    fn pack_sync_styles_select_music_includes_songs_hidden_by_the_play_style_filter() {
+        let single = super::test_folder_stats_song(0);
+        let mut double = (*super::test_folder_stats_song(1)).clone();
+        let mut pump = (*super::test_folder_stats_song(2)).clone();
+        for chart in &mut double.charts {
+            chart.chart_type = "dance-double".to_owned();
+        }
+        for chart in &mut pump.charts {
+            chart.chart_type = "pump-double".to_owned();
+        }
+        let songs = vec![single, Arc::new(double), Arc::new(pump)];
+        let mut pack = test_pack("Mixed pack", "");
+        pack.songs = songs.clone();
+        let mut other = test_pack("Other pack", "");
+        other.songs = vec![super::test_folder_stats_song(3)];
+        let mut state = super::init(super::SelectMusicInitView {
+            song_packs: vec![pack, other],
+            ..Default::default()
+        });
+        assert_eq!(state.session.play_style, profile_data::PlayStyle::Single);
+        assert_eq!(
+            state
+                .group_entries
+                .iter()
+                .filter(|entry| matches!(entry, super::MusicWheelEntry::Song(_)))
+                .count(),
+            2
+        );
+        state.entries = state.group_entries.to_vec();
+        state.selected_index = state
+            .entries
+            .iter()
+            .position(|entry| {
+                matches!(entry,
+                    super::MusicWheelEntry::PackHeader { name, .. } if name.as_ref() == "Mixed pack"
+                )
+            })
+            .unwrap();
+        state.preferred_difficulty_index = 2;
+        super::pack_sync::show_from_selected(&mut state);
+        let Some(crate::SimplyLoveSyncRequest::StartAnalysis { owner, targets, .. }) =
+            state.pending_sync.pop()
+        else {
+            panic!("Select Music must queue every song in the pack");
+        };
+        assert_eq!(owner, crate::SimplyLoveSyncOwner::SelectMusicPack);
+        assert_eq!(targets.len(), songs.len());
+        for (target, song) in targets.iter().zip(&songs) {
+            assert!(Arc::ptr_eq(&target.song, song));
+            assert_eq!(target.song.charts[target.chart_ix].difficulty, "Medium");
+        }
+    }
+
     fn test_pack_with_group(group_name: &str, name: &str, series: &str) -> SongPack {
         SongPack {
             group_name: group_name.to_string(),

@@ -99,8 +99,10 @@ refused before anything is downloaded.
 its sync (`sync_dialog.rs`), which offers:
 
 - **Measure with Null-or-Die.** The shell gathers the pack's songs and opens
-  the shared pack sync review on one chart per song, of the current play style.
-  The reader saves what they accept.
+  the shared pack sync review on one chart per song, preferring the current
+  play style and difficulty. Songs with only other styles, including doubles
+  and pump, use an available chart with note data. The reader saves what they
+  accept.
 - **Shift ITG to NULL.** Every simfile's offsets move by
   `ITG_SYNC_OFFSET_SECONDS`. A pack already recorded as NULL is offered the
   reverse instead, NULL to ITG, recorded as ITG.

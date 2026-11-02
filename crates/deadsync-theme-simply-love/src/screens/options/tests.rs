@@ -4012,3 +4012,39 @@ mod enumeration {
         "/../../tests/perf/option_enumeration.rs"
     ));
 }
+
+#[test]
+fn pack_sync_styles_options_can_measure_a_doubles_only_pack_from_singles() {
+    let parsed = deadsync_simfile::song::parse_song_bytes(
+        b"#TITLE:Doubles only;#BPMS:0=120;#NOTES:dance-double::Hard:9:0,0,0,0,0:10000000\n;",
+        "sm",
+        std::path::Path::new("Songs/Doubles only/Song/song.sm"),
+        &deadsync_simfile::song::ParseSongOptions::new(Vec::new(), Vec::new(), Vec::new()),
+        |_| 0.0,
+    )
+    .unwrap();
+    let song = Arc::new(deadsync_simfile::cache::build_song_meta(parsed, 0.0));
+    let mut state = init();
+    assert_eq!(state.pack_sync.target_chart_type, "dance-single");
+    state.song_packs = vec![crate::views::OptionsSongPackView {
+        group_name: "Doubles only".to_owned(),
+        display_name: "Doubles only".to_owned(),
+        songs: vec![Arc::clone(&song)],
+    }];
+    super::pack_sync::begin_pack_sync(
+        &mut state,
+        super::pack_sync::SyncPackSelection {
+            pack_group: Some("Doubles only".to_owned()),
+            pack_label: "Doubles only".to_owned(),
+        },
+    );
+    let Some(crate::SimplyLoveSyncRequest::StartAnalysis { owner, targets, .. }) =
+        state.pending_sync.pop()
+    else {
+        panic!("Options must queue a doubles-only pack in singles mode");
+    };
+    assert_eq!(owner, crate::SimplyLoveSyncOwner::OptionsPack);
+    assert_eq!(targets.len(), 1);
+    assert!(Arc::ptr_eq(&targets[0].song, &song));
+    assert_eq!(targets[0].chart_ix, 0);
+}

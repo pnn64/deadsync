@@ -5,7 +5,6 @@ use crate::fonts::machine_font_key;
 use crate::screens::Screen;
 use crate::screens::input as screen_input;
 use crate::screens::pack_sync as shared_pack_sync;
-use crate::screens::select_music;
 use crate::views::{
     OptionsInitView, OptionsPackSyncView, OptionsSongPackView, SimplyLoveUpdaterCapabilities,
     SimplyLoveUpdaterView,

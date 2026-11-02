@@ -206,10 +206,9 @@ pub fn take_pack_shift(state: &mut State) -> Option<PackShift> {
     })
 }
 
-/// Start measuring a pack: one chart per song, of the play style and
-/// difficulty the shell names, handed to the shared overlay. Returns the
-/// request that starts the analysis, or `None` -- with a note on the grid --
-/// when the pack has nothing of that style to measure.
+/// Start measuring one chart per song, preferring the shell's play style and
+/// difficulty, and falling back to another style when needed. Returns `None`
+/// with a note on the grid when no chart has note data to measure.
 pub fn begin_pack_measure(
     state: &mut State,
     group_name: &str,
@@ -224,22 +223,7 @@ pub fn begin_pack_measure(
     state.nav_hold = None;
     let targets: Vec<shared::TargetSpec> = songs
         .iter()
-        .filter_map(|song| {
-            let steps = song.best_steps_index(chart_type, preferred_difficulty_index)?;
-            let chart_ix = crate::screens::select_music::selected_chart_ix_for_sync(
-                song.as_ref(),
-                chart_type,
-                steps,
-            )?;
-            let chart = song.charts.get(chart_ix)?;
-            Some(shared::TargetSpec {
-                song: Arc::clone(song),
-                simfile_path: song.simfile_path.clone(),
-                song_title: song.display_full_title(false),
-                chart_label: shared::chart_label(chart),
-                chart_ix,
-            })
-        })
+        .filter_map(|song| shared::target_for_song(song, chart_type, preferred_difficulty_index))
         .collect();
     let request = shared::begin(
         &mut state.pack_sync_overlay,
@@ -251,7 +235,14 @@ pub fn begin_pack_measure(
     if request.is_some() {
         state.pack_sync_group = Some(group_name.to_owned());
     } else {
-        state.remove_result = Some(crate::i18n::tr_fmt("ContentBrowser", "MessageNothingInGroupNameToMeasureNoChartType", &[("group_name", &(group_name).to_string()), ("chart_type", &(chart_type).to_string())]).to_string());
+        state.remove_result = Some(
+            crate::i18n::tr_fmt(
+                "ContentBrowser",
+                "MessageNothingInGroupNameToMeasure",
+                &[("group_name", group_name)],
+            )
+            .to_string(),
+        );
     }
     request
 }
