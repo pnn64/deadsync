@@ -532,15 +532,24 @@ pub fn scan_song_roots(song_roots: &[PathBuf]) -> (Vec<PackScan>, Vec<ScanFailur
                 .map(|pack| pack.songs.as_slice())
                 .unwrap_or_default();
             let mut nested = scan_nested_packs(&path, direct_songs, &mut failures);
-            if flat.is_some() && !nested.is_empty() {
-                failures.push(ScanFailure {
-                    path: path.clone(),
-                    error: "top-level song folder contains both direct songs and nested packs"
-                        .to_string(),
-                });
-                continue;
-            }
             if let Some(pack) = flat {
+                // A folder with songs of its own is a pack, as it is to
+                // ITGmania, which reads every folder in it as a song. A
+                // folder of songs inside it is not a pack of its own -- a
+                // pack can keep a secret song in `_secret/` -- so its songs
+                // are left out, as ITGmania leaves them, rather than costing
+                // the pack every song it has.
+                if let Some(first) = nested.first() {
+                    let songs: usize = nested.iter().map(|pack| pack.songs.len()).sum();
+                    failures.push(ScanFailure {
+                        path: path.clone(),
+                        error: format!(
+                            "ignored {songs} song(s) in {} folder(s) of songs inside a pack with songs of its own; first: '{}'",
+                            nested.len(),
+                            first.dir.display()
+                        ),
+                    });
+                }
                 packs.push(pack);
             } else {
                 packs.append(&mut nested);
@@ -2328,25 +2337,41 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
+    /// pack.dat.4's shape: songs of its own, a secret song a folder deeper in
+    /// `_secret/`, and `_assets/` of images its songs borrow. ITGmania loads
+    /// it as a pack of its own songs; so does DeadSync, leaving out the song
+    /// in `_secret/` as ITGmania does, instead of dropping the whole pack.
     #[test]
-    fn scan_song_roots_rejects_mixed_pack_and_series_folder() {
+    fn scan_song_roots_keeps_a_pack_with_a_folder_of_songs_inside_it() {
         let root = test_dir("scan-mixed-folder");
-        let direct_song = root.join("Mixed").join("Direct Song");
-        let nested_song = root.join("Mixed").join("Nested Pack").join("Nested Song");
+        let pack = root.join("pack.dat.4");
+        let direct_song = pack.join("1-800");
+        let secret = pack.join("_secret");
+        let secret_song = secret.join("Chrysalis");
+        let assets = pack.join("_assets").join("7heavens");
         fs::create_dir_all(&direct_song).unwrap();
-        fs::create_dir_all(&nested_song).unwrap();
-        fs::write(direct_song.join("song.sm"), b"#TITLE:Direct;").unwrap();
-        fs::write(nested_song.join("song.sm"), b"#TITLE:Nested;").unwrap();
+        fs::create_dir_all(&secret_song).unwrap();
+        fs::create_dir_all(&assets).unwrap();
+        fs::write(direct_song.join("1800.sm"), b"#TITLE:1-800;").unwrap();
+        fs::write(secret_song.join("chrysalis.sm"), b"#TITLE:Chrysalis;").unwrap();
+        fs::write(secret.join("_secret.jpg"), b"").unwrap();
+        fs::write(assets.join("7hbg.png"), b"").unwrap();
 
         let (packs, failures) = scan_song_roots(std::slice::from_ref(&root));
 
-        assert!(packs.is_empty());
+        assert_eq!(packs.len(), 1);
+        assert_eq!(packs[0].group_name, "pack.dat.4");
+        assert!(packs[0].folder_series.is_empty());
+        assert_eq!(packs[0].songs.len(), 1);
+        assert_eq!(packs[0].songs[0].dir, direct_song);
         assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].path, pack);
         assert!(
             failures[0]
                 .error
-                .contains("both direct songs and nested packs")
+                .contains("ignored 1 song(s) in 1 folder(s)")
         );
+        assert!(failures[0].error.contains("_secret"));
 
         let _ = fs::remove_dir_all(root);
     }
