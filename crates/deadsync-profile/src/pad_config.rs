@@ -135,20 +135,17 @@ pub fn resolve<'a>(
     pad_type: Option<&str>,
     serial: &str,
 ) -> Option<&'a PadConfigProfile> {
-    let mut compatible = profiles
+    let compatible = |p: &&PadConfigProfile| config_matches(p, backend, pad_type);
+    profiles
         .iter()
-        .filter(|profile| config_matches(profile, backend, pad_type));
-    while let Some(profile) = compatible.next() {
-        if is_default_for(profile, serial) {
-            return Some(profile);
-        }
-        if profile.global_default {
-            return compatible
-                .find(|profile| is_default_for(profile, serial))
-                .or(Some(profile));
-        }
-    }
-    None
+        .filter(compatible)
+        .find(|p| is_default_for(p, serial))
+        .or_else(|| {
+            profiles
+                .iter()
+                .filter(compatible)
+                .find(|p| p.global_default)
+        })
 }
 
 #[must_use]

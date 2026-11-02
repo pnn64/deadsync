@@ -1081,4 +1081,4 @@ mod tests {
 
 #[cfg(test)]
 #[path = "perf_tests.rs"]
-pub(crate) mod perf_tests;
+mod perf_tests;

@@ -36,22 +36,13 @@ impl AudioDiagEventSlot {
         }
     }
 
-    fn load(
-        &self,
-        expected_seq: u64,
-        now_host_nanos: u64,
-        window_ns: u64,
-    ) -> Option<StutterDiagAudioEvent> {
+    fn load(&self) -> Option<(u64, StutterDiagAudioEvent)> {
         let version_start = self.version.load(Ordering::Acquire);
-        if version_start == 0 || version_start & 1 != 0 || version_start >> 1 != expected_seq {
-            return None;
-        }
-        let at_host_nanos = self.at_host_nanos.load(Ordering::Relaxed);
-        if at_host_nanos == 0 || now_host_nanos.saturating_sub(at_host_nanos) > window_ns {
+        if version_start == 0 || version_start & 1 != 0 {
             return None;
         }
         let event = StutterDiagAudioEvent {
-            at_host_nanos,
+            at_host_nanos: self.at_host_nanos.load(Ordering::Relaxed),
             kind: StutterDiagAudioEventKind::from_bits(self.kind.load(Ordering::Relaxed))?,
             value_ns: self.value_ns.load(Ordering::Relaxed),
             sample_rate_hz: self.sample_rate_hz.load(Ordering::Relaxed),
@@ -65,7 +56,7 @@ impl AudioDiagEventSlot {
             ),
         };
         let version_end = self.version.load(Ordering::Acquire);
-        (version_start == version_end).then_some(event)
+        (version_start == version_end).then_some((version_end >> 1, event))
     }
 }
 
@@ -307,7 +298,13 @@ impl AudioTelemetryState {
         for seq in (start + 1)..=head {
             let slot =
                 &self.stutter_diag_events[(seq as usize - 1) % AUDIO_STUTTER_DIAG_EVENT_COUNT];
-            if let Some(event) = slot.load(seq, now_host_nanos, window_ns) {
+            let Some((loaded_seq, event)) = slot.load() else {
+                continue;
+            };
+            if loaded_seq != seq || event.at_host_nanos == 0 {
+                continue;
+            }
+            if now_host_nanos.saturating_sub(event.at_host_nanos) <= window_ns {
                 out.push(event);
             }
         }

@@ -12,28 +12,40 @@ pub struct ParsedNote {
 
 #[must_use]
 pub fn step_type_lanes(step_type: &str) -> usize {
-    let bytes = step_type.trim().as_bytes();
-    let pump = |style: &[u8]| {
-        bytes.len() == 5 + style.len()
-            && matches!(bytes[4], b'-' | b'_')
-            && bytes[..4].eq_ignore_ascii_case(b"pump")
-            && bytes[5..].eq_ignore_ascii_case(style)
-    };
-    let dance = |style: &[u8]| {
-        bytes.len() == 6 + style.len()
-            && matches!(bytes[5], b'-' | b'_')
-            && bytes[..5].eq_ignore_ascii_case(b"dance")
-            && bytes[6..].eq_ignore_ascii_case(style)
-    };
+    let step_type = step_type.trim();
     // Partner charts span both pads, like doubles.
-    if pump(b"double") || pump(b"couple") || pump(b"routine") {
+    if step_type.eq_ignore_ascii_case("pump-double")
+        || step_type.eq_ignore_ascii_case("pump_double")
+        || step_type.eq_ignore_ascii_case("pump-couple")
+        || step_type.eq_ignore_ascii_case("pump_couple")
+        || step_type.eq_ignore_ascii_case("pump-routine")
+        || step_type.eq_ignore_ascii_case("pump_routine")
+    {
         10
-    } else if dance(b"double") || dance(b"couple") || dance(b"routine") {
+    } else if step_type.eq_ignore_ascii_case("dance-double")
+        || step_type.eq_ignore_ascii_case("dance_double")
+        || step_type.eq_ignore_ascii_case("dance-couple")
+        || step_type.eq_ignore_ascii_case("dance_couple")
+        || step_type.eq_ignore_ascii_case("dance-routine")
+        || step_type.eq_ignore_ascii_case("dance_routine")
+    {
         8
-    } else if pump(b"single") {
+    } else if step_type.eq_ignore_ascii_case("pump-single")
+        || step_type.eq_ignore_ascii_case("pump_single")
+    {
         5
     } else {
         4
+    }
+}
+
+fn invalidate_hold(
+    invalid_heads: &mut Vec<usize>,
+    hold_heads: &mut [Option<usize>],
+    col_index: usize,
+) {
+    if let Some(note_index) = hold_heads[col_index].take() {
+        invalid_heads.push(note_index);
     }
 }
 
@@ -60,28 +72,7 @@ pub(crate) fn parse_chart_notes_as<T>(
     new_note: impl FnMut(usize, usize, NoteType) -> T,
     set_tail: impl FnMut(&mut T, usize),
 ) -> Vec<T> {
-    let (words, tail) = minimized_note_data.as_chunks::<8>();
-    let mut note_capacity = 0;
-    for &bytes in words {
-        let word = u64::from_ne_bytes(bytes);
-        // Case folding also maps control bytes 0x11/12/14 to digits. Keep
-        // their original bit 5 as a high-bit mask for the digit comparisons.
-        let digit_mask = (word & 0x2020_2020_2020_2020) << 2;
-        let word = word | 0x2020_2020_2020_2020;
-        let equal = |byte: u8| {
-            let xor = word ^ (u64::from(byte) * 0x0101_0101_0101_0101);
-            // Set each zero byte's high bit. Masking before the addition
-            // prevents carries between bytes, so every match is exact.
-            !(((xor & 0x7f7f_7f7f_7f7f_7f7f) + 0x7f7f_7f7f_7f7f_7f7f) | xor | 0x7f7f_7f7f_7f7f_7f7f)
-        };
-        let matches = ((equal(b'1') | equal(b'2') | equal(b'4')) & digit_mask)
-            | equal(b'f')
-            | equal(b'm')
-            | equal(b'l');
-        // Sum eight independent 0/1 lanes without requiring a POPCNT target.
-        note_capacity += ((matches >> 7).wrapping_mul(0x0101_0101_0101_0101) >> 56) as usize;
-    }
-    note_capacity += tail
+    let note_capacity = minimized_note_data
         .iter()
         .filter(|&&ch| {
             matches!(
@@ -107,13 +98,12 @@ pub(crate) fn parse_chart_notes_as_with_capacity<T>(
     set_tail: impl FnMut(&mut T, usize),
 ) -> Vec<T> {
     let lanes = lanes.max(1);
-    // No Vec element can have index usize::MAX; keep each head in one word.
-    let mut stack_heads = [usize::MAX; 10];
+    let mut stack_heads = [None; 10];
     let mut heap_heads = Vec::new();
     let hold_heads = if lanes <= stack_heads.len() {
         &mut stack_heads[..lanes]
     } else {
-        heap_heads.resize(lanes, usize::MAX);
+        heap_heads.resize(lanes, None);
         heap_heads.as_mut_slice()
     };
     parse_chart_notes_with_heads(
@@ -127,7 +117,7 @@ pub(crate) fn parse_chart_notes_as_with_capacity<T>(
 
 fn parse_chart_notes_with_heads<T>(
     minimized_note_data: &[u8],
-    hold_heads: &mut [usize],
+    hold_heads: &mut [Option<usize>],
     note_capacity: usize,
     mut new_note: impl FnMut(usize, usize, NoteType) -> T,
     mut set_tail: impl FnMut(&mut T, usize),
@@ -137,61 +127,59 @@ fn parse_chart_notes_with_heads<T>(
     let lanes = hold_heads.len();
     let mut invalid_heads = Vec::new();
 
-    let mut line_start = 0;
-    for line_end in memchr::memchr_iter(b'\n', minimized_note_data)
-        .chain(std::iter::once(minimized_note_data.len()))
-    {
-        let line = &minimized_note_data[line_start..line_end];
-        line_start = line_end + 1;
+    for line in minimized_note_data.split(|&b| b == b'\n') {
         let trimmed_line = line.strip_suffix(b"\r").unwrap_or(line);
         if trimmed_line.is_empty() || trimmed_line == b"," {
             continue;
         }
 
         if trimmed_line.len() >= lanes {
-            for (col_index, (&ch, head)) in trimmed_line[..lanes]
-                .iter()
-                .zip(hold_heads.iter_mut())
-                .enumerate()
-            {
-                let note_type = match ch {
-                    b'1' => NoteType::Tap,
-                    b'F' | b'f' => NoteType::Fake,
-                    b'2' => NoteType::Hold,
-                    b'4' => NoteType::Roll,
-                    b'M' | b'm' => NoteType::Mine,
-                    b'L' | b'l' => NoteType::Lift,
+            for (col_index, &ch) in trimmed_line.iter().take(lanes).enumerate() {
+                match ch {
+                    b'1' => {
+                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
+                        notes.push(new_note(row_index, col_index, NoteType::Tap));
+                    }
+                    b'F' | b'f' => {
+                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
+                        notes.push(new_note(row_index, col_index, NoteType::Fake));
+                    }
+                    b'2' | b'4' => {
+                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
+                        let note_type = if ch == b'2' {
+                            NoteType::Hold
+                        } else {
+                            NoteType::Roll
+                        };
+                        let note_index = notes.len();
+                        notes.push(new_note(row_index, col_index, note_type));
+                        hold_heads[col_index] = Some(note_index);
+                    }
+                    b'M' | b'm' => {
+                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
+                        notes.push(new_note(row_index, col_index, NoteType::Mine));
+                    }
+                    b'L' | b'l' => {
+                        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
+                        notes.push(new_note(row_index, col_index, NoteType::Lift));
+                    }
                     b'3' => {
-                        let head_idx = std::mem::replace(head, usize::MAX);
-                        if head_idx != usize::MAX
+                        if let Some(head_idx) = hold_heads[col_index].take()
                             && let Some(note) = notes.get_mut(head_idx)
                         {
                             set_tail(note, row_index);
                         }
-                        continue;
                     }
-                    _ => continue,
-                };
-                let note_index = std::mem::replace(head, usize::MAX);
-                if note_index != usize::MAX {
-                    invalid_heads.push(note_index);
-                }
-                let note_index = notes.len();
-                notes.push(new_note(row_index, col_index, note_type));
-                if matches!(note_type, NoteType::Hold | NoteType::Roll) {
-                    *head = note_index;
+                    _ => {}
                 }
             }
         }
         row_index += 1;
     }
 
-    invalid_heads.extend(
-        hold_heads
-            .iter()
-            .copied()
-            .filter(|&index| index != usize::MAX),
-    );
+    for col_index in 0..lanes {
+        invalidate_hold(&mut invalid_heads, hold_heads, col_index);
+    }
     if invalid_heads.is_empty() {
         return notes;
     }

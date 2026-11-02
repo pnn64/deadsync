@@ -1,6 +1,7 @@
 use super::*;
 use std::hint::black_box;
-pub(super) use crate::perf_alloc as alloc;
+#[path = "../../../tests/perf/stream_alloc.rs"]
+mod alloc;
 #[path = "stream_original.rs"]
 mod original;
 #[path = "../../../tests/perf/stream_support.rs"]

@@ -61,16 +61,6 @@ impl SerialPortName {
         if trimmed.is_empty() || trimmed.len() > SERIAL_PORT_NAME_CAP {
             return default;
         }
-        if trimmed.len() >= 16 {
-            let bytes = trimmed.as_bytes();
-            if !bytes.iter().all(|byte| (b' '..=b'~').contains(byte)) {
-                return default;
-            }
-            let mut out = Self::empty();
-            out.bytes[..bytes.len()].copy_from_slice(bytes);
-            out.len = bytes.len() as u8;
-            return out;
-        }
         let mut out = Self::empty();
         for (i, b) in trimmed.bytes().enumerate() {
             if !b.is_ascii() || b.is_ascii_control() {
@@ -135,18 +125,13 @@ impl FromStr for DriverKind {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = [0; b"lightsdriverwin32serial".len()];
-        let mut len = 0;
-        for byte in s.bytes() {
-            if byte.is_ascii_alphanumeric() {
-                if len == key.len() {
-                    return Err(());
-                }
-                key[len] = byte.to_ascii_lowercase();
-                len += 1;
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
             }
         }
-        match std::str::from_utf8(&key[..len]).expect("ASCII light driver name") {
+        match key.as_str() {
             "" | "0" | "false" | "off" | "none" | "disabled" => Ok(Self::Off),
             "snek" | "snekboard" => Ok(Self::Snek),
             "lit" | "litboard" | "sextetstream" => Ok(Self::Litboard),
@@ -228,18 +213,13 @@ impl FromStr for GameplayPadLightMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut key = [0; b"notedata".len()];
-        let mut len = 0;
-        for byte in s.bytes() {
-            if byte.is_ascii_alphanumeric() {
-                if len == key.len() {
-                    return Err(());
-                }
-                key[len] = byte.to_ascii_lowercase();
-                len += 1;
+        let mut key = String::with_capacity(s.len());
+        for ch in s.trim().chars() {
+            if ch.is_ascii_alphanumeric() {
+                key.push(ch.to_ascii_lowercase());
             }
         }
-        match std::str::from_utf8(&key[..len]).expect("ASCII gameplay pad light mode") {
+        match key.as_str() {
             "" | "input" | "buttons" | "press" | "pressed" => Ok(Self::Input),
             "chart" | "notes" | "notedata" | "arrows" => Ok(Self::Chart),
             _ => Err(()),

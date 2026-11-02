@@ -274,10 +274,7 @@ impl StutterSampleRing {
             expected_seconds,
             severity,
         };
-        self.cursor += 1;
-        if self.cursor == STUTTER_SAMPLE_COUNT {
-            self.cursor = 0;
-        }
+        self.cursor = (self.cursor + 1) % STUTTER_SAMPLE_COUNT;
     }
 
     #[must_use]
@@ -345,14 +342,7 @@ impl<T: Copy, const N: usize> FixedFrameStatsRing<T, N> {
             return;
         }
         self.samples[self.cursor] = sample;
-        let next = self.cursor + 1;
-        self.cursor = if N.is_power_of_two() {
-            next & (N - 1)
-        } else if next == N {
-            0
-        } else {
-            next
-        };
+        self.cursor = (self.cursor + 1) % N;
         self.len = self.len.saturating_add(1).min(N);
     }
 
@@ -382,16 +372,13 @@ impl<T: Copy, const N: usize> FixedFrameStatsRing<T, N> {
             return;
         }
         let start = self.cursor.saturating_add(N).saturating_sub(self.len) % N;
-        let first_len = self.len.min(N - start);
-        self.samples[start..start + first_len]
-            .iter()
-            .chain(&self.samples[..self.len - first_len])
-            .for_each(|&sample| {
-                let sample_time = timestamp(sample);
-                if sample_time != 0 && now_host_nanos.saturating_sub(sample_time) <= window_ns {
-                    out.push(sample);
-                }
-            });
+        for i in 0..self.len {
+            let sample = self.samples[(start + i) % N];
+            let sample_time = timestamp(sample);
+            if sample_time != 0 && now_host_nanos.saturating_sub(sample_time) <= window_ns {
+                out.push(sample);
+            }
+        }
     }
 }
 

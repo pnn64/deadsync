@@ -117,13 +117,7 @@ fn minimum_period(fundamental: u32, min: u32, max: u32) -> Option<u32> {
     if fundamental == 0 || min == 0 || min > max {
         return None;
     }
-    let remainder = min % fundamental;
-    let padding = if remainder == 0 {
-        0
-    } else {
-        fundamental - remainder
-    };
-    let period = min.checked_add(padding)?;
+    let period = min.div_ceil(fundamental).checked_mul(fundamental)?;
     (period <= max).then_some(period)
 }
 

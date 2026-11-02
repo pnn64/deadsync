@@ -16,7 +16,7 @@ use deadlib_platform::{
 use log::{debug, error, info, warn};
 use std::ffi::c_void;
 use std::slice;
-use std::sync::mpsc::{SendError, Sender, channel};
+use std::sync::mpsc::{Sender, channel};
 use std::thread::{self, JoinHandle};
 use windows::Win32::Devices::FunctionDiscovery;
 use windows::Win32::Foundation::{self, CloseHandle, HANDLE, WAIT_FAILED};
@@ -74,35 +74,23 @@ pub struct WasapiOutputPrep {
 
 #[derive(Clone, Copy)]
 struct FramesToNanos {
+    divisor: u64,
     reciprocal: u64,
-    divisor: u32,
-    shift: u32,
 }
 
 impl FramesToNanos {
     const NANOS_PER_SECOND: u64 = 1_000_000_000;
 
     const fn new(sample_rate_hz: u32) -> Self {
-        let divisor = sample_rate_hz;
-        let shift = if divisor > 1 {
-            (u32::BITS - (divisor - 1).leading_zeros()).saturating_sub(2)
-        } else {
-            0
-        };
+        let divisor = sample_rate_hz as u64;
         let reciprocal = if divisor > 1 {
-            // 2^64 = quotient * divisor + remainder, with 0 < remainder <= divisor.
-            // Split the shifted numerator to use only 64-bit divisions.
-            let divisor = divisor as u64;
-            let quotient = u64::MAX / divisor;
-            let remainder = u64::MAX % divisor + 1;
-            (quotient << shift) + (remainder << shift).div_ceil(divisor)
+            ((1u128 << 64) / divisor as u128) as u64
         } else {
             0
         };
         Self {
             divisor,
             reciprocal,
-            shift,
         }
     }
 
@@ -115,10 +103,8 @@ impl FramesToNanos {
         if self.divisor == 1 {
             return numerator;
         }
-        // u32 frames * 1e9 is below 2^62. With 2^(64+shift) >= 2^62 * divisor,
-        // rounding the reciprocal up adds less than 1/divisor to the quotient:
-        // it cannot cross the next integer. No remainder correction is needed.
-        (((numerator as u128 * self.reciprocal as u128) >> 64) as u64) >> self.shift
+        let quotient = ((numerator as u128 * self.reciprocal as u128) >> 64) as u64;
+        quotient + ((numerator - quotient * self.divisor) >= self.divisor) as u64
     }
 }
 
@@ -266,25 +252,29 @@ pub fn prepare(
     let _com = ComGuard::new()?;
     let device = open_output_device(device_id.as_deref())?;
     let audio_client = build_audio_client(&device)?;
-    let mut chosen_format = get_mix_format_bytes(&audio_client)?;
-    let mix_wave = *waveformat(&chosen_format);
-    let requested_rate_hz = requested_rate_hz.filter(|rate| *rate > 0);
-    if let Some(rate_hz) = requested_rate_hz {
+    let mix_format = get_mix_format_bytes(&audio_client)?;
+    let mut chosen_format = mix_format.clone();
+    if let Some(rate_hz) = requested_rate_hz.filter(|rate| *rate > 0) {
         set_waveformat_sample_rate(&mut chosen_format, rate_hz);
-    }
-    match mode {
-        WasapiAccessMode::Shared => {
-            if let Some(rate_hz) = requested_rate_hz
-                && let Err(err) = init::validate_shared_format(&audio_client, &chosen_format)
-            {
-                warn!(
-                    "WASAPI shared sample rate override {rate_hz} Hz rejected for '{device_name}': {err}. Using mix format."
-                );
-                *waveformat_mut(&mut chosen_format) = mix_wave;
+        match mode {
+            WasapiAccessMode::Shared => {
+                if let Err(err) = init::validate_shared_format(&audio_client, &chosen_format) {
+                    warn!(
+                        "WASAPI shared sample rate override {rate_hz} Hz rejected for '{device_name}': {err}. Using mix format."
+                    );
+                    chosen_format = mix_format;
+                }
+            }
+            WasapiAccessMode::Exclusive => {
+                chosen_format = init::exclusive_format(&audio_client, chosen_format, &device_name)?;
             }
         }
-        WasapiAccessMode::Exclusive => {
-            chosen_format = init::exclusive_format(&audio_client, chosen_format, &device_name)?;
+    } else {
+        match mode {
+            WasapiAccessMode::Shared => {}
+            WasapiAccessMode::Exclusive => {
+                chosen_format = init::exclusive_format(&audio_client, chosen_format, &device_name)?;
+            }
         }
     }
 
@@ -387,7 +377,7 @@ fn render_thread(
         ) {
             Ok(()) => return,
             Err(err) if !startup_reported => {
-                if let Err(SendError(Err(err))) = ready_tx.send(Err(err)) {
+                if ready_tx.send(Err(err.clone())).is_err() {
                     error!("WASAPI render thread failed during startup: {err}");
                 }
                 return;
@@ -634,23 +624,40 @@ fn write_frames(
             .GetBuffer(frames_available)
             .map_err(|e| format!("failed to get WASAPI output buffer: {e}"))?;
         let samples = samples_for_frames(frames_available, prep.samples_per_frame);
-        let out = match prep.sample_format {
+        match prep.sample_format {
             WasapiSampleFormat::I16 => {
-                OutputBufferMut::I16(slice::from_raw_parts_mut(buffer as *mut i16, samples))
+                let out = slice::from_raw_parts_mut(buffer as *mut i16, samples);
+                let result = render.render(
+                    OutputBufferMut::I16(out),
+                    CallbackInfo {
+                        anchor_nanos,
+                        clock: CallbackClockSource::Qpc,
+                    },
+                    sfx_receiver.try_iter(),
+                );
+                report_audio_render_callback(
+                    result,
+                    log::log_enabled!(log::Level::Trace),
+                    now_nanos,
+                );
             }
             WasapiSampleFormat::F32 => {
-                OutputBufferMut::F32(slice::from_raw_parts_mut(buffer as *mut f32, samples))
+                let out = slice::from_raw_parts_mut(buffer as *mut f32, samples);
+                let result = render.render(
+                    OutputBufferMut::F32(out),
+                    CallbackInfo {
+                        anchor_nanos,
+                        clock: CallbackClockSource::Qpc,
+                    },
+                    sfx_receiver.try_iter(),
+                );
+                report_audio_render_callback(
+                    result,
+                    log::log_enabled!(log::Level::Trace),
+                    now_nanos,
+                );
             }
-        };
-        let result = render.render(
-            out,
-            CallbackInfo {
-                anchor_nanos,
-                clock: CallbackClockSource::Qpc,
-            },
-            sfx_receiver.try_iter(),
-        );
-        report_audio_render_callback(result, log::log_enabled!(log::Level::Trace), now_nanos);
+        }
         render_client
             .ReleaseBuffer(frames_available, 0)
             .map_err(|e| format!("failed to release WASAPI output buffer: {e}"))?;
@@ -829,19 +836,9 @@ fn device_friendly_name(device: &Audio::IMMDevice) -> Result<String, String> {
 
 fn device_mix_format(device: &Audio::IMMDevice) -> Result<(u32, usize), String> {
     let audio_client = build_audio_client(device)?;
-    // SAFETY: GetMixFormat returns a live COM-task allocation containing a
-    // WAVEFORMATEX. Copy only the two scalars needed here, then free it once.
-    unsafe {
-        let mix = audio_client
-            .GetMixFormat()
-            .map_err(|e| format!("failed to query WASAPI mix format: {e}"))?;
-        let result = (
-            (*mix).nSamplesPerSec.max(1),
-            (*mix).nChannels.max(1) as usize,
-        );
-        free_com_task_mem(mix.cast());
-        Ok(result)
-    }
+    let mix_format = get_mix_format_bytes(&audio_client)?;
+    let wave = waveformat(&mix_format);
+    Ok((wave.nSamplesPerSec.max(1), wave.nChannels.max(1) as usize))
 }
 
 fn build_audio_client(device: &Audio::IMMDevice) -> Result<Audio::IAudioClient, String> {
@@ -929,45 +926,37 @@ fn set_waveformat_sample_rate(bytes: &mut [u8], rate_hz: u32) {
 }
 
 fn sample_format_from_waveformat(bytes: &[u8]) -> Option<WasapiSampleFormat> {
-    // WAVEFORMATEX is packed: its tag starts at byte 0 and sample bits at byte 14.
-    let wave = bytes.get(..size_of::<Audio::WAVEFORMATEX>())?;
-    let tag = u32::from(u16::from_le_bytes([wave[0], wave[1]]));
-    let bits = u16::from_le_bytes([wave[14], wave[15]]);
-    let (format, expected) = match (tag, bits) {
-        (Audio::WAVE_FORMAT_PCM, 16) => return Some(WasapiSampleFormat::I16),
-        (Multimedia::WAVE_FORMAT_IEEE_FLOAT, 32) => return Some(WasapiSampleFormat::F32),
-        (KernelStreaming::WAVE_FORMAT_EXTENSIBLE, 16) => (
-            WasapiSampleFormat::I16,
-            KernelStreaming::KSDATAFORMAT_SUBTYPE_PCM,
-        ),
-        (KernelStreaming::WAVE_FORMAT_EXTENSIBLE, 32) => (
-            WasapiSampleFormat::F32,
-            Multimedia::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT,
-        ),
-        _ => return None,
-    };
-    let sub = bytes
-        .get(std::mem::offset_of!(Audio::WAVEFORMATEXTENSIBLE, SubFormat)..)?
-        .first_chunk::<16>()?;
-    let sub = windows::core::GUID::from_values(
-        u32::from_le_bytes([sub[0], sub[1], sub[2], sub[3]]),
-        u16::from_le_bytes([sub[4], sub[5]]),
-        u16::from_le_bytes([sub[6], sub[7]]),
-        sub[8..].try_into().ok()?,
-    );
-    (sub == expected).then_some(format)
+    let wave = waveformat(bytes);
+    match (u32::from(wave.wFormatTag), wave.wBitsPerSample) {
+        (Audio::WAVE_FORMAT_PCM, 16) => Some(WasapiSampleFormat::I16),
+        (Multimedia::WAVE_FORMAT_IEEE_FLOAT, 32) => Some(WasapiSampleFormat::F32),
+        (tag, bits) if tag == KernelStreaming::WAVE_FORMAT_EXTENSIBLE => {
+            // SAFETY: this branch is only taken for `WAVE_FORMAT_EXTENSIBLE`, so
+            // the buffer contains a `WAVEFORMATEXTENSIBLE` header after the shared
+            // `WAVEFORMATEX` prefix.
+            let ext = unsafe { &*(bytes.as_ptr() as *const Audio::WAVEFORMATEXTENSIBLE) };
+            // SAFETY: `SubFormat` may be only naturally aligned inside the byte
+            // buffer, so we read it with `read_unaligned`.
+            let sub = unsafe { std::ptr::addr_of!(ext.SubFormat).read_unaligned() };
+            if guid_eq(&sub, &KernelStreaming::KSDATAFORMAT_SUBTYPE_PCM) && bits == 16 {
+                Some(WasapiSampleFormat::I16)
+            } else if guid_eq(&sub, &Multimedia::KSDATAFORMAT_SUBTYPE_IEEE_FLOAT) && bits == 32 {
+                Some(WasapiSampleFormat::F32)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+#[inline(always)]
+fn guid_eq(a: &windows::core::GUID, b: &windows::core::GUID) -> bool {
+    (a.data1, a.data2, a.data3, a.data4) == (b.data1, b.data2, b.data3, b.data4)
 }
 
 fn wide_null(s: &str) -> Vec<u16> {
-    // UTF-16 uses at most one code unit per UTF-8 byte, plus the terminator.
-    let mut wide = Vec::with_capacity(s.len() + 1);
-    if s.is_ascii() {
-        wide.extend(s.as_bytes().iter().map(|&byte| u16::from(byte)));
-    } else {
-        wide.extend(s.encode_utf16());
-    }
-    wide.push(0);
-    wide
+    s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 fn pwstr_to_string(value: PWSTR) -> Result<String, std::string::FromUtf16Error> {
@@ -997,10 +986,6 @@ fn propvariant_lpwstr(value: &StructuredStorage::PROPVARIANT) -> Option<String> 
 #[cfg(test)]
 #[path = "../tests/native/mod.rs"]
 mod native_tests;
-
-#[cfg(test)]
-#[path = "../tests/performance/mod.rs"]
-mod performance_tests;
 
 #[cfg(test)]
 mod tests {

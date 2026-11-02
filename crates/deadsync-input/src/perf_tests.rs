@@ -24,7 +24,7 @@ mod original_bindings {
 
 #[path = "../../../tests/support/perf.rs"]
 #[allow(dead_code)]
-pub(crate) mod allocations;
+mod allocations;
 #[path = "../../../tests/support/paired_bench.rs"]
 mod paired;
 

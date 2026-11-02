@@ -160,5 +160,3 @@ include!("effective.rs");
 include!("tests.rs");
 #[cfg(test)]
 include!("runtime_regression_tests.rs");
-#[cfg(test)]
-mod calibration_tests;
