@@ -12,6 +12,7 @@ use serde::Serialize;
 use smallvec::{SmallVec, smallvec};
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
+use std::fmt::Write as _;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
@@ -5641,16 +5642,15 @@ pub fn score_import_pack_detail(
     pack_misses: usize,
     pack_failures: usize,
 ) -> String {
-    format!(
-        "Pack {}/{}: {pack_name} -> {pack_hits} hit, {pack_misses} missing{}",
+    let mut detail = format!(
+        "Pack {}/{}: {pack_name} -> {pack_hits} hit, {pack_misses} missing",
         pack_idx + 1,
         total_packs,
-        if pack_failures > 0 {
-            format!(", {pack_failures} failed")
-        } else {
-            String::new()
-        },
-    )
+    );
+    if pack_failures > 0 {
+        write!(detail, ", {pack_failures} failed").expect("writing to a String cannot fail");
+    }
+    detail
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -6115,16 +6115,16 @@ pub fn score_import_pack_complete_detail(
     pack_misses: usize,
     pack_failures: usize,
 ) -> String {
-    format!(
-        "Pack {}/{} complete: {pack_name} ({pack_chart_count} charts -> {pack_hits} hit, {pack_misses} missing{}).",
+    let mut detail = format!(
+        "Pack {}/{} complete: {pack_name} ({pack_chart_count} charts -> {pack_hits} hit, {pack_misses} missing",
         pack_idx + 1,
         total_packs,
-        if pack_failures > 0 {
-            format!(", {pack_failures} failed")
-        } else {
-            String::new()
-        },
-    )
+    );
+    if pack_failures > 0 {
+        write!(detail, ", {pack_failures} failed").expect("writing to a String cannot fail");
+    }
+    detail.push_str(").");
+    detail
 }
 
 #[must_use]
@@ -6198,8 +6198,8 @@ pub fn collect_chart_hashes_per_pack_for_import(
     let single_filter = nonempty_filters
         .next()
         .filter(|_| nonempty_filters.next().is_none());
-    let filter_set: HashSet<String> = if single_filter.is_some() {
-        HashSet::new()
+    let filter_set: HashSet<String, FxBuildHasher> = if single_filter.is_some() {
+        HashSet::default()
     } else {
         pack_groups_filter
             .iter()
@@ -6209,7 +6209,7 @@ pub fn collect_chart_hashes_per_pack_for_import(
     };
 
     let mut out: Vec<(String, Vec<String>)> = Vec::new();
-    let mut seen: HashSet<&str> = HashSet::new();
+    let mut seen: HashSet<&str, FxBuildHasher> = HashSet::default();
     let mut name_scratch = String::with_capacity(if filter_set.is_empty() { 0 } else { 64 });
     for pack in song_packs {
         let group_name = pack.group_name.trim();
@@ -6265,7 +6265,7 @@ pub fn collect_chart_hashes_per_pack_for_import(
 fn push_unique_import_chart_hash<'a>(
     raw_chart_hash: &'a str,
     existing_scores: &HashSet<String>,
-    seen: &mut HashSet<&'a str>,
+    seen: &mut HashSet<&'a str, FxBuildHasher>,
     hashes: &mut Vec<String>,
 ) {
     let chart_hash = raw_chart_hash.trim();

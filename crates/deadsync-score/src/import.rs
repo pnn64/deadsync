@@ -88,27 +88,13 @@ pub fn music_rate_from_modifiers(modifiers: &str) -> f32 {
 pub fn grade_from_itg(grade: &str) -> Option<Grade> {
     let trimmed = grade.trim();
     let tier = trimmed.strip_prefix("Grade_").unwrap_or(trimmed);
-    match tier {
-        "Tier01" => Some(Grade::Tier01),
-        "Tier02" => Some(Grade::Tier02),
-        "Tier03" => Some(Grade::Tier03),
-        "Tier04" => Some(Grade::Tier04),
-        "Tier05" => Some(Grade::Tier05),
-        "Tier06" => Some(Grade::Tier06),
-        "Tier07" => Some(Grade::Tier07),
-        "Tier08" => Some(Grade::Tier08),
-        "Tier09" => Some(Grade::Tier09),
-        "Tier10" => Some(Grade::Tier10),
-        "Tier11" => Some(Grade::Tier11),
-        "Tier12" => Some(Grade::Tier12),
-        "Tier13" => Some(Grade::Tier13),
-        "Tier14" => Some(Grade::Tier14),
-        "Tier15" => Some(Grade::Tier15),
-        "Tier16" => Some(Grade::Tier16),
-        "Tier17" => Some(Grade::Tier17),
-        "Failed" => Some(Grade::Failed),
-        _ => None,
-    }
+    let code = match tier.as_bytes() {
+        [b'T', b'i', b'e', b'r', b'0', last @ b'1'..=b'9'] => last - b'0',
+        [b'T', b'i', b'e', b'r', b'1', last @ b'0'..=b'7'] => last - b'0' + 10,
+        b"Failed" => 18,
+        _ => return None,
+    };
+    Some(crate::grade_from_code(code))
 }
 
 // ITGmania writes this fixed-width form. Unusual inputs continue through
