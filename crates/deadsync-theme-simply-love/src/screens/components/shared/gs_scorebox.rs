@@ -176,6 +176,7 @@ impl GameplayScoreboxPlan {
             center_y,
             zoom,
             elapsed_seconds,
+            1.0,
         );
     }
 }
@@ -237,15 +238,30 @@ impl ScoreboxCycleClock {
 pub(crate) struct SelectMusicScoreboxPresentation {
     local: SelectMusicScoreboxView,
     online: SelectMusicScoreboxView,
+    /// The online view with its loading label suppressed, shown while a fresh
+    /// fetch is still inside the loading grace window.
+    pending: SelectMusicScoreboxView,
     stale: SelectMusicScoreboxView,
 }
 
 impl SelectMusicScoreboxPresentation {
     pub(crate) fn new(runtime: &ScoreboxSideView) -> Self {
         let chart_present = runtime.chart_hash.is_some();
+        let online = build_select_music_scorebox_view(runtime, true, chart_present, true);
+        let mut pending = online.clone();
+        if runtime
+            .leaderboards
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.loading)
+        {
+            pending.mode_label = score_mode_label(score_data::default_scorebox_mode_text(
+                runtime.show_ex_score,
+            ));
+        }
         Self {
             local: build_select_music_scorebox_view(runtime, true, chart_present, false),
-            online: build_select_music_scorebox_view(runtime, true, chart_present, true),
+            online,
+            pending,
             stale: build_select_music_scorebox_view(runtime, false, false, false),
         }
     }
@@ -255,9 +271,12 @@ impl SelectMusicScoreboxPresentation {
         &self,
         chart_matches: bool,
         show_online: bool,
+        within_loading_grace: bool,
     ) -> &SelectMusicScoreboxView {
         if !chart_matches {
             &self.stale
+        } else if show_online && within_loading_grace {
+            &self.pending
         } else if show_online {
             &self.online
         } else {
@@ -771,12 +790,16 @@ fn gameplay_panes_from_snapshot(
     panes
 }
 
+/// Panes for the wheel-side scorebox. Inside the loading grace window a fresh
+/// fetch shows the status frame with blank rows instead of a loading label.
 fn select_music_panes_from_snapshot(
     snapshot: &score_data::CachedPlayerLeaderboardData,
     runtime: &ScoreboxSideView,
+    within_loading_grace: bool,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
-        return vec![gameplay_status_pane("Loading ...", false)];
+        let text = if within_loading_grace { "" } else { "Loading ..." };
+        return vec![gameplay_status_pane(text, false)];
     }
     if let Some(error) = snapshot.error.as_deref() {
         let text = error_text(error);
@@ -1238,6 +1261,7 @@ pub fn push_select_music_scorebox_actors(
     center_y: f32,
     zoom: f32,
     elapsed_seconds: f32,
+    fetch: SelectMusicScoreboxFetch,
 ) {
     if !show_scorebox || !runtime.online_active || runtime.chart_hash.as_deref() != chart_hash {
         return;
@@ -1248,7 +1272,7 @@ pub fn push_select_music_scorebox_actors(
     let Some(snapshot) = runtime.leaderboards.as_ref() else {
         return;
     };
-    let panes = select_music_panes_from_snapshot(snapshot, runtime);
+    let panes = select_music_panes_from_snapshot(snapshot, runtime, fetch.within_loading_grace);
     push_gameplay_scorebox_actors_from_panes(
         actors,
         &panes,
@@ -1256,9 +1280,31 @@ pub fn push_select_music_scorebox_actors(
         center_y,
         zoom,
         elapsed_seconds,
+        fetch.rows_alpha,
     );
 }
 
+/// Where a Select Music side's online fetch is, evaluated on the screen clock
+/// rather than the scorebox cycle clock.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SelectMusicScoreboxFetch {
+    pub within_loading_grace: bool,
+    pub rows_alpha: f32,
+}
+
+impl SelectMusicScoreboxFetch {
+    #[must_use]
+    pub fn at(phase: scorebox_theme::ScoreboxFetchPhase, now_seconds: f32) -> Self {
+        Self {
+            within_loading_grace: phase.within_loading_grace(now_seconds),
+            rows_alpha: phase.reveal_alpha(now_seconds),
+        }
+    }
+}
+
+/// `rows_alpha` scales only the rows: the frame, header and course pattern
+/// stay solid, so a fetch that just resolved fades its entries in under an
+/// unchanged frame.
 fn push_gameplay_scorebox_actors_from_panes(
     actors: &mut Vec<Actor>,
     panes: &[GameplayScoreboxPane],
@@ -1266,6 +1312,7 @@ fn push_gameplay_scorebox_actors_from_panes(
     center_y: f32,
     zoom: f32,
     elapsed_seconds: f32,
+    rows_alpha: f32,
 ) {
     if panes.is_empty() {
         return;
@@ -1329,7 +1376,7 @@ fn push_gameplay_scorebox_actors_from_panes(
         center_y,
         zoom,
         z_base,
-        cycle.cur_alpha,
+        cycle.cur_alpha * rows_alpha,
     );
     if cycle.next_idx != cycle.cur_idx {
         push_rows(
@@ -1339,7 +1386,7 @@ fn push_gameplay_scorebox_actors_from_panes(
             center_y,
             zoom,
             z_base,
-            cycle.next_alpha,
+            cycle.next_alpha * rows_alpha,
         );
     }
 }
@@ -1516,7 +1563,7 @@ mod tests {
         };
 
         let presentation = SelectMusicScoreboxPresentation::new(&runtime);
-        let view = presentation.view(true, false);
+        let view = presentation.view(true, false, false);
 
         assert_eq!(view.player_name.as_ref(), "P1");
         assert_eq!(view.player_score.as_ref(), "98.76%");
@@ -1524,9 +1571,9 @@ mod tests {
         assert_eq!(view.machine_score.as_ref(), "99.99%");
         assert_eq!(view.mode_label.as_ref(), "ITG Score");
         assert!(!view.show_rivals);
-        assert!(std::ptr::eq(view, presentation.view(true, false)));
+        assert!(std::ptr::eq(view, presentation.view(true, false, false)));
 
-        let stale = presentation.view(false, false);
+        let stale = presentation.view(false, false, false);
         assert_eq!(stale.player_name.as_ref(), "----");
         assert_eq!(stale.machine_name.as_ref(), "----");
         assert_eq!(stale.player_score.as_ref(), "??.??%");
@@ -1613,7 +1660,7 @@ mod tests {
             ..ScoreboxSideView::default()
         };
         let loading = score_data::CachedPlayerLeaderboardData::loading();
-        let panes = select_music_panes_from_snapshot(&loading, &runtime);
+        let panes = select_music_panes_from_snapshot(&loading, &runtime, false);
         assert_eq!(panes.len(), 1);
         let pane = &panes[0];
         assert_eq!(pane.kind, PaneKind::Other);
@@ -1624,7 +1671,7 @@ mod tests {
         assert!(!is_gs_logo(pane) && !is_ex_text(pane) && !is_arrowcloud_logo(pane));
 
         let mut actors = Vec::new();
-        push_gameplay_scorebox_actors_from_panes(&mut actors, &panes, 100.0, 100.0, 1.0, 0.0);
+        push_gameplay_scorebox_actors_from_panes(&mut actors, &panes, 100.0, 100.0, 1.0, 0.0, 1.0);
         assert!(
             actors.iter().all(|actor| !matches!(
                 actor,
@@ -1647,6 +1694,107 @@ mod tests {
         assert_eq!(gameplay[0].kind, PaneKind::Other);
         assert_eq!(gameplay[0].border_color, SCOREBOX_STATUS_GREY);
         assert!(gameplay[0].mode_text.as_str().is_empty());
+    }
+
+    fn online_runtime(leaderboards: score_data::CachedPlayerLeaderboardData) -> ScoreboxSideView {
+        ScoreboxSideView {
+            joined: true,
+            chart_hash: Some("chart".to_string()),
+            online_active: true,
+            leaderboards: Some(leaderboards),
+            ..ScoreboxSideView::default()
+        }
+    }
+
+    #[test]
+    fn select_music_loading_pane_waits_out_the_grace_window() {
+        let runtime = online_runtime(score_data::CachedPlayerLeaderboardData::loading());
+        let snapshot = runtime.leaderboards.as_ref().unwrap();
+
+        let pending = select_music_panes_from_snapshot(snapshot, &runtime, true);
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].kind, PaneKind::Other);
+        assert_eq!(pending[0].border_color, SCOREBOX_STATUS_GREY);
+        assert!(
+            pending[0].rows.iter().all(|row| row.name.as_str().is_empty()),
+            "inside the grace window the box shows no loading label"
+        );
+
+        let loading = select_music_panes_from_snapshot(snapshot, &runtime, false);
+        assert_eq!(loading[0].rows[0].name.as_str(), "Loading ...");
+    }
+
+    #[test]
+    fn pending_presentation_view_hides_the_loading_label() {
+        let runtime = online_runtime(score_data::CachedPlayerLeaderboardData::loading());
+        let presentation = SelectMusicScoreboxPresentation::new(&runtime);
+        assert_eq!(
+            presentation.view(true, true, false).mode_label.as_ref(),
+            "Loading ..."
+        );
+        assert_eq!(
+            presentation.view(true, true, true).mode_label.as_ref(),
+            "ITG Score"
+        );
+        assert!(std::ptr::eq(
+            presentation.view(true, false, true),
+            presentation.view(true, false, false)
+        ));
+        assert!(std::ptr::eq(
+            presentation.view(false, true, true),
+            presentation.view(false, true, false)
+        ));
+    }
+
+    #[test]
+    fn revealing_scorebox_fades_rows_but_keeps_the_frame() {
+        let runtime = online_runtime(score_data::CachedPlayerLeaderboardData::ready(
+            score_data::PlayerLeaderboardData {
+                panes: vec![pane("GrooveStats", vec![entry(1, "AAA", false, false)])],
+                srpg_self_score: None,
+                itl_self_score: None,
+                itl_self_rank: None,
+            },
+        ));
+        let just_ready = scorebox_theme::ScoreboxFetchPhase {
+            loading_since: Some(0.0),
+            ready_at: Some(1.0),
+        };
+        let push_at = |now: f32| {
+            let mut actors = Vec::new();
+            push_select_music_scorebox_actors(
+                &mut actors,
+                &runtime,
+                Some("chart"),
+                true,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                SelectMusicScoreboxFetch::at(just_ready, now),
+            );
+            actors
+        };
+        let name_rows = |actors: &[Actor]| {
+            actors
+                .iter()
+                .filter(|actor| matches!(actor, Actor::Text { content, .. } if content.as_str() == "AAA"))
+                .count()
+        };
+
+        let hidden = push_at(1.0);
+        assert!(hidden.len() >= 2, "frame quads are drawn at reveal start");
+        assert_eq!(name_rows(&hidden), 0);
+
+        let shown = push_at(2.0);
+        assert_eq!(name_rows(&shown), 1);
+        assert_eq!(
+            SelectMusicScoreboxFetch::at(scorebox_theme::ScoreboxFetchPhase::default(), 0.0),
+            SelectMusicScoreboxFetch {
+                within_loading_grace: false,
+                rows_alpha: 1.0,
+            }
+        );
     }
 }
 

@@ -711,9 +711,21 @@ pub fn sync_runtime_view(state: &mut State, view: SelectMusicRuntimeView) {
         state.music_wheel = music_wheel;
     }
     if let Some(scoreboxes) = view.scoreboxes {
+        let now = state.selection_animation_timer;
+        for (phase, (previous, current)) in state
+            .scorebox_fetch_phase
+            .iter_mut()
+            .zip(state.scoreboxes.iter().zip(scoreboxes.iter()))
+        {
+            *phase = phase.advanced(
+                previous.chart_hash.is_some() && previous.chart_hash == current.chart_hash,
+                previous.leaderboards.as_ref().map(|snapshot| snapshot.loading),
+                current.leaderboards.as_ref().map(|snapshot| snapshot.loading),
+                now,
+            );
+        }
         state.scorebox_presentation = prepare_scorebox_presentation(&scoreboxes);
         state.scoreboxes = scoreboxes;
-        let now = state.selection_animation_timer;
         for (clock, runtime) in state.scorebox_cycle_clocks.iter_mut().zip(&state.scoreboxes) {
             clock.sync(runtime, now);
         }
@@ -1675,6 +1687,8 @@ pub struct State {
     pub selection_animation_timer: f32,
     /// Per-side scorebox cycle clocks, restarted when a side's boards change.
     pub scorebox_cycle_clocks: [gs_scorebox::ScoreboxCycleClock; 2],
+    /// Per-side online fetch timeline on the selection-animation clock.
+    scorebox_fetch_phase: [crate::scorebox::ScoreboxFetchPhase; 2],
     pub wheel_offset_from_selection: f32,
     pub current_banner_key: Arc<str>,
     pub current_cdtitle_key: Option<Arc<str>>,
@@ -3887,6 +3901,7 @@ pub fn init(init_view: SelectMusicInitView) -> State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         selection_animation_timer: 0.0,
         scorebox_cycle_clocks: Default::default(),
+        scorebox_fetch_phase: Default::default(),
         wheel_offset_from_selection: 0.0,
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
@@ -4144,6 +4159,7 @@ pub fn init_placeholder() -> State {
         active_color_index: color::DEFAULT_COLOR_INDEX,
         selection_animation_timer: 0.0,
         scorebox_cycle_clocks: Default::default(),
+        scorebox_fetch_phase: Default::default(),
         wheel_offset_from_selection: 0.0,
         out_prompt: OutPromptState::None,
         exit_prompt: ExitPromptState::None,
@@ -7036,6 +7052,7 @@ fn refresh_after_reload(state: &mut State, song_packs: Vec<SongPack>) {
     refreshed.scoreboxes = scoreboxes;
     refreshed.scorebox_presentation = scorebox_presentation;
     refreshed.scorebox_cycle_clocks = state.scorebox_cycle_clocks.clone();
+    refreshed.scorebox_fetch_phase = state.scorebox_fetch_phase;
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
     refreshed.song_search_generation = song_search_generation;
@@ -7229,6 +7246,7 @@ fn refresh_after_style_switch(state: &mut State) {
     refreshed.scoreboxes = scoreboxes;
     refreshed.scorebox_presentation = scorebox_presentation;
     refreshed.scorebox_cycle_clocks = state.scorebox_cycle_clocks.clone();
+    refreshed.scorebox_fetch_phase = state.scorebox_fetch_phase;
     refreshed.unlock_downloads_available = unlock_downloads_available;
     refreshed.ready_song_reload_dirs = ready_song_reload_dirs;
     refreshed.song_search_generation = song_search_generation;
@@ -9382,6 +9400,7 @@ fn finish_style_switch(state: &mut State) {
         .push(PadConfigIntent::Invalidate { pad: 1 });
     state.selection_animation_timer = 0.0;
     state.scorebox_cycle_clocks = Default::default();
+    state.scorebox_fetch_phase = Default::default();
     deadlib_present::runtime::clear_all();
 }
 
@@ -13568,9 +13587,12 @@ pub fn push_actors(
         let show_ex_score = scorebox_runtime.show_ex_score;
 
         let chart_hash = chart.map(|c| c.short_hash.as_str());
-        let gs_view = state.scorebox_presentation[profile_data::player_side_index(side)].view(
+        let scorebox_side_idx = profile_data::player_side_index(side);
+        let gs_view = state.scorebox_presentation[scorebox_side_idx].view(
             scorebox_runtime.chart_hash.as_deref() == chart_hash,
             allow_gs_fetch && show_rivals,
+            state.scorebox_fetch_phase[scorebox_side_idx]
+                .within_loading_grace(state.selection_animation_timer),
         );
         select_pane::push_base(
             out,
@@ -14198,6 +14220,10 @@ pub fn push_actors(
                 zoom,
                 state.scorebox_cycle_clocks[profile_data::player_side_index(side)]
                     .elapsed_seconds(state.selection_animation_timer),
+                gs_scorebox::SelectMusicScoreboxFetch::at(
+                    state.scorebox_fetch_phase[profile_data::player_side_index(side)],
+                    state.selection_animation_timer,
+                ),
             );
             if z_boost != 0 && actors.len() > start {
                 let children = actors.split_off(start);
@@ -16482,6 +16508,63 @@ mod tests {
             effect,
             ThemeEffect::NavigateNoFade(super::Screen::PlayerOptions)
         ));
+    }
+
+    #[test]
+    fn scorebox_sync_tracks_the_fetch_phase_per_side() {
+        fn side(
+            hash: &str,
+            leaderboards: deadsync_score::CachedPlayerLeaderboardData,
+        ) -> crate::views::ScoreboxSideView {
+            crate::views::ScoreboxSideView {
+                joined: true,
+                chart_hash: Some(hash.to_string()),
+                online_active: true,
+                leaderboards: Some(leaderboards),
+                ..Default::default()
+            }
+        }
+        fn sync(state: &mut super::State, p1: crate::views::ScoreboxSideView) {
+            super::sync_runtime_view(
+                state,
+                crate::views::SelectMusicRuntimeView {
+                    scoreboxes: Some([p1, crate::views::ScoreboxSideView::default()]),
+                    ..Default::default()
+                },
+            );
+        }
+        let loading = deadsync_score::CachedPlayerLeaderboardData::loading;
+
+        let mut state = init_placeholder();
+        state.selection_animation_timer = 2.0;
+        sync(&mut state, side("a", loading()));
+        assert_eq!(state.scorebox_fetch_phase[0].loading_since, Some(2.0));
+        assert!(state.scorebox_fetch_phase[0].within_loading_grace(2.1));
+        assert_eq!(state.scorebox_fetch_phase[1], Default::default());
+
+        state.selection_animation_timer = 2.2;
+        sync(&mut state, side("a", ready_gs_leaderboards()));
+        assert_eq!(state.scorebox_fetch_phase[0].ready_at, Some(2.2));
+        assert_eq!(state.scorebox_fetch_phase[0].reveal_alpha(2.2), 0.0);
+        assert_eq!(state.scorebox_fetch_phase[0].reveal_alpha(3.0), 1.0);
+
+        state.selection_animation_timer = 9.0;
+        sync(&mut state, side("b", loading()));
+        assert_eq!(
+            state.scorebox_fetch_phase[0],
+            crate::scorebox::ScoreboxFetchPhase {
+                loading_since: Some(9.0),
+                ready_at: None,
+            }
+        );
+
+        state.selection_animation_timer = 9.1;
+        sync(&mut state, side("c", ready_gs_leaderboards()));
+        assert_eq!(
+            state.scorebox_fetch_phase[0],
+            crate::scorebox::ScoreboxFetchPhase::default(),
+            "a cached chart arrives ready and does not fade in"
+        );
     }
 
     #[test]
