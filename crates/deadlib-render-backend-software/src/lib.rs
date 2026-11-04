@@ -704,30 +704,38 @@ fn ensure_offscreen_targets(targets: &mut Vec<OffscreenTarget>, frame: &RenderFr
     }
 }
 
-fn copy_target_pixels<const PRESERVE_ALPHA: bool>(target: &mut OffscreenTarget) {
-    if target.with_depth {
-        for (source, dest) in target
-            .depth
-            .chunks_exact(target.viewport[0] as usize)
-            .zip(target.depth_image.chunks_exact_mut(target.width as usize))
+// Equal strides are contiguous; retain only complete rows on both sides.
+fn copy_target_rows<T: Copy>(source: &[T], dest: &mut [T], source_width: usize, dest_width: usize) {
+    if source_width == dest_width && source_width != 0 {
+        let len = source.len().min(dest.len()) / source_width * source_width;
+        dest[..len].copy_from_slice(&source[..len]);
+    } else {
+        for (source, dest) in source
+            .chunks_exact(source_width)
+            .zip(dest.chunks_exact_mut(dest_width))
         {
             dest[..source.len()].copy_from_slice(source);
         }
     }
+}
+
+fn copy_target_pixels<const PRESERVE_ALPHA: bool>(target: &mut OffscreenTarget) {
+    if target.with_depth {
+        copy_target_rows(
+            &target.depth,
+            &mut target.depth_image,
+            target.viewport[0] as usize,
+            target.width as usize,
+        );
+    }
 
     if target.float_color {
-        for (source, dest) in target
-            .half_pixels
-            .chunks_exact(target.viewport[0] as usize)
-            .zip(
-                target
-                    .texture
-                    .half_pixels
-                    .chunks_exact_mut(target.width as usize),
-            )
-        {
-            dest[..source.len()].copy_from_slice(source);
-        }
+        copy_target_rows(
+            &target.half_pixels,
+            &mut target.texture.half_pixels,
+            target.viewport[0] as usize,
+            target.width as usize,
+        );
         for (rgba, &pixel) in target
             .texture
             .image
@@ -3122,6 +3130,23 @@ fn encode_half(value: f32) -> u16 {
     sign | (rounded >> shift) as u16
 }
 
+// Exact byte quantization below one needs 15 KiB; larger encodings saturate or clear.
+static HALF_BYTE: [u8; 0x3c00] = {
+    let mut table = [0; 0x3c00];
+    let mut bits = 0;
+    while bits < table.len() {
+        table[bits] = if bits < 0x1800 {
+            0
+        } else {
+            let scaled = ((bits & 0x03ff) as u32 | 0x0400) * 255;
+            let shift = 25 - (bits >> 10);
+            ((scaled + (1 << (shift - 1))) >> shift) as u8
+        };
+        bits += 1;
+    }
+    table
+};
+
 fn decode_half(bits: u16) -> f32 {
     let sign = u32::from(bits & 0x8000) << 16;
     let exponent = bits & 0x7c00;
@@ -3137,22 +3162,11 @@ fn decode_half(bits: u16) -> f32 {
 }
 
 fn half_to_byte(bits: u16) -> u8 {
-    // Negative values and NaNs cast to zero after clamping; +infinity saturates.
-    if bits > 0x7c00 {
-        return 0;
-    }
     if bits >= 0x3c00 {
-        return 255;
+        if bits <= 0x7c00 { 255 } else { 0 }
+    } else {
+        HALF_BYTE[bits as usize]
     }
-    // Values below 2^-9 cannot round up to one byte, including all subnormals.
-    if bits < 0x1800 {
-        return 0;
-    }
-    // The 11-bit significand times 255 is exact in f32. Round that integer
-    // product directly, removing the float decode, clamp, scale and round.
-    let scaled = (u32::from(bits & 0x03ff) | 0x0400) * 255;
-    let shift = 25 - (bits >> 10);
-    ((scaled + (1 << (shift - 1))) >> shift) as u8
 }
 
 fn pack_half(color: [f32; 4]) -> u64 {
@@ -3188,6 +3202,11 @@ fn byte_writer(buffer: &mut [u32]) -> impl FnMut(usize, [f32; 4], BlendMode) + '
     move |index, color, mode| {
         if mode == BlendMode::Alpha && color[3] >= 1.0 {
             buffer[index] = pack_rgba([color[0], color[1], color[2], 1.0]);
+            return;
+        }
+        if mode == BlendMode::NoEffect {
+            // Preserve the original bounds check while skipping color work.
+            let _ = buffer[index];
             return;
         }
         let dst = buffer[index];
