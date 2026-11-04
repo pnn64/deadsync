@@ -2015,10 +2015,7 @@ pub fn folder_name_for_display(display_name: &str, fallback: &str, existing: &[S
 
 #[inline(always)]
 pub fn cmp_profile_ids_case_insensitive(a: &str, b: &str) -> core::cmp::Ordering {
-    a.chars()
-        .flat_map(char::to_lowercase)
-        .cmp(b.chars().flat_map(char::to_lowercase))
-        .then_with(|| a.cmp(b))
+    favorites_view::unicode_case_insensitive_cmp(a, b).then_with(|| a.cmp(b))
 }
 
 #[must_use]
