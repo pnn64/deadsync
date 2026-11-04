@@ -98,13 +98,32 @@ fn append_speed(out: &mut String, speed: ScrollSpeedSetting) {
     }
 }
 
+fn push_i16_decimal(out: &mut String, value: i16) {
+    let mut magnitude = value.unsigned_abs();
+    let mut digits = [0u8; 5];
+    let mut start = digits.len();
+    loop {
+        start -= 1;
+        digits[start] = b'0' + (magnitude % 10) as u8;
+        magnitude /= 10;
+        if magnitude == 0 {
+            break;
+        }
+    }
+    if value < 0 {
+        out.push('-');
+    }
+    out.push_str(std::str::from_utf8(&digits[start..]).expect("decimal digits are ASCII"));
+}
+
 fn append_mod_part(out: &mut String, percent: i16, name: &str) {
     if percent == 0 {
         return;
     }
     begin_display_mod_option(out);
     if percent != 100 {
-        write!(out, "{percent}%\u{00A0}").expect("writing to a String cannot fail");
+        push_i16_decimal(out, percent);
+        out.push_str("%\u{00A0}");
     }
     push_atomic_text(out, name);
 }
@@ -112,14 +131,16 @@ fn append_mod_part(out: &mut String, percent: i16, name: &str) {
 pub(crate) fn append_mini_part(out: &mut String, mini_percent: i16) {
     if mini_percent != 0 {
         begin_display_mod_option(out);
-        write!(out, "{mini_percent}%\u{00A0}Mini").expect("writing to a String cannot fail");
+        push_i16_decimal(out, mini_percent);
+        out.push_str("%\u{00A0}Mini");
     }
 }
 
 fn append_spacing_part(out: &mut String, spacing_percent: i16) {
     if spacing_percent != 0 {
         begin_display_mod_option(out);
-        write!(out, "{spacing_percent}%\u{00A0}Spacing").expect("writing to a String cannot fail");
+        push_i16_decimal(out, spacing_percent);
+        out.push_str("%\u{00A0}Spacing");
     }
 }
 
@@ -159,19 +180,21 @@ pub(crate) fn append_perspective_parts(out: &mut String, tilt: i16, skew: i16) {
 }
 
 pub(crate) fn append_turn_parts(out: &mut String, bits: u16) {
-    for (bit, name) in [
-        (DISPLAY_TURN_MIRROR, "Mirror"),
-        (DISPLAY_TURN_LEFT, "Left"),
-        (DISPLAY_TURN_RIGHT, "Right"),
-        (DISPLAY_TURN_LR_MIRROR, "LR-Mirror"),
-        (DISPLAY_TURN_UD_MIRROR, "UD-Mirror"),
-        (DISPLAY_TURN_SHUFFLE, "Shuffle"),
-        (DISPLAY_TURN_BLENDER, "Blender"),
-        (DISPLAY_TURN_RANDOM, "Random"),
-    ] {
-        if bits & bit != 0 {
-            push_display_mod_option(out, name);
-        }
+    const NAMES: [&str; 8] = [
+        "Mirror",
+        "Left",
+        "Right",
+        "LR-Mirror",
+        "UD-Mirror",
+        "Shuffle",
+        "Blender",
+        "Random",
+    ];
+    let mut remaining = bits & 0xff;
+    while remaining != 0 {
+        begin_display_mod_option(out);
+        out.push_str(NAMES[remaining.trailing_zeros() as usize]);
+        remaining &= remaining - 1;
     }
 }
 
@@ -190,6 +213,9 @@ pub(crate) fn push_transform_parts(
     remove_mask: u8,
     holds_mask: u8,
 ) {
+    if insert_mask | remove_mask | (holds_mask & 0x1f) == 0 {
+        return;
+    }
     for (enabled, name) in [
         (remove_mask & (1 << 2) != 0, "NoHolds"),
         (holds_mask & (1 << 3) != 0, "NoRolls"),
@@ -214,7 +240,8 @@ pub(crate) fn push_transform_parts(
         (remove_mask & (1 << 5) != 0, "NoQuads"),
     ] {
         if enabled {
-            push_display_mod_option(out, name);
+            begin_display_mod_option(out);
+            out.push_str(name);
         }
     }
 }
@@ -303,10 +330,14 @@ pub fn gameplay_mods_text(params: GameplayModsTextParams<'_>) -> String {
     }
     if params.visual_delay_ms != 0 {
         begin_display_mod_option(&mut out);
-        write!(out, "{}ms\u{00A0}VisualDelay", params.visual_delay_ms)
-            .expect("writing to a String cannot fail");
+        push_i16_decimal(&mut out, params.visual_delay_ms);
+        out.push_str("ms\u{00A0}VisualDelay");
     }
     append_average_error_bar_part(&mut out, params);
     append_disabled_timing_windows(&mut out, params.disabled_timing_windows);
     out
 }
+
+#[cfg(test)]
+#[path = "text_performance.rs"]
+mod text_performance;
