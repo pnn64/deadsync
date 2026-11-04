@@ -591,50 +591,38 @@ pub(crate) fn judgment_actor_zoom(mini: f32, judgment_back: bool, _tilt: f32, _s
 }
 
 pub(crate) fn tap_judgment_rows(params: TapJudgmentRowsParams) -> (usize, Option<usize>) {
+    let base = match params.grade {
+        JudgeGrade::Fantastic => 0,
+        JudgeGrade::Excellent => 1,
+        JudgeGrade::Great => 2,
+        JudgeGrade::Decent => 3,
+        JudgeGrade::WayOff => 4,
+        JudgeGrade::Miss => 5,
+    };
     if params.frame_rows < 7 {
-        let base = match params.grade {
-            JudgeGrade::Fantastic => 0,
-            JudgeGrade::Excellent => 1,
-            JudgeGrade::Great => 2,
-            JudgeGrade::Decent => 3,
-            JudgeGrade::WayOff => 4,
-            JudgeGrade::Miss => 5,
-        };
         return (base, None);
     }
-
+    if params.grade != JudgeGrade::Fantastic {
+        return (base + 1, None);
+    }
     let abs_error_ms = params.time_error_ms.abs();
     let uses_10ms_blue_mode =
         params.fa_plus_10ms_blue_window && !params.split_15_10ms && !params.custom_fantastic_window;
     let split_15_10ms_active = params.show_fa_plus_window
         && params.split_15_10ms
         && !params.custom_fantastic_window
-        && params.grade == JudgeGrade::Fantastic
         && abs_error_ms > deadsync_rules::timing::FA_PLUS_W010_MS
         && abs_error_ms <= deadsync_rules::timing::FA_PLUS_W0_MS;
-
-    let base = match params.grade {
-        JudgeGrade::Fantastic => {
-            let blue_fantastic = !params.show_fa_plus_window
-                || if uses_10ms_blue_mode {
-                    abs_error_ms <= deadsync_rules::timing::FA_PLUS_W010_MS
-                } else {
-                    params.window == Some(TimingWindow::W0)
-                };
-            if split_15_10ms_active || blue_fantastic {
-                0
-            } else {
-                1
-            }
-        }
-        JudgeGrade::Excellent => 2,
-        JudgeGrade::Great => 3,
-        JudgeGrade::Decent => 4,
-        JudgeGrade::WayOff => 5,
-        JudgeGrade::Miss => 6,
-    };
-    let overlay = split_15_10ms_active && params.frame_rows >= 7;
-    (base, overlay.then_some(1))
+    let blue_fantastic = !params.show_fa_plus_window
+        || if uses_10ms_blue_mode {
+            abs_error_ms <= deadsync_rules::timing::FA_PLUS_W010_MS
+        } else {
+            params.window == Some(TimingWindow::W0)
+        };
+    (
+        usize::from(!split_15_10ms_active && !blue_fantastic),
+        split_15_10ms_active.then_some(1),
+    )
 }
 
 pub(crate) fn held_miss_zoom(elapsed: f32, mini: f32) -> (f32, f32) {
@@ -1150,3 +1138,7 @@ mod tests {
         assert!(actors.is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "hud_performance.rs"]
+mod hud_performance;

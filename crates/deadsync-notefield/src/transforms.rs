@@ -2787,4 +2787,4 @@ mod tests {
 
 #[cfg(test)]
 #[path = "numeric_performance.rs"]
-mod numeric_performance;
+pub(crate) mod numeric_performance;

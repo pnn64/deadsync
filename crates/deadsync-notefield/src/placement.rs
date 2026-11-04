@@ -426,7 +426,8 @@ fn menu_camera(
 }
 
 pub(crate) fn combo_actor_zoom(mini: f32) -> f32 {
-    if !mini.is_finite() || mini <= 0.0 {
+    // Positive finite, nonzero encodings form one unsigned interval.
+    if mini.to_bits().wrapping_sub(1) >= f32::INFINITY.to_bits() - 1 {
         1.0
     } else {
         0.5_f32.powf(mini)

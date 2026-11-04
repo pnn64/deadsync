@@ -651,7 +651,8 @@ const fn with_alpha(mut color: [f32; 4], alpha: f32) -> [f32; 4] {
 }
 
 pub(crate) fn error_bar_tick_alpha(age: f32, dur: f32, multi_tick: bool) -> f32 {
-    if !age.is_finite() || age < 0.0 {
+    // Negative zero is accepted alongside nonnegative finite ages.
+    if age.to_bits() > f32::MAX.to_bits() && age.to_bits() != (-0.0_f32).to_bits() {
         return 0.0;
     }
     if multi_tick {

@@ -3,7 +3,7 @@ use std::hint::black_box;
 
 #[path = "../../../tests/support/perf.rs"]
 #[allow(dead_code)]
-mod allocations;
+pub(crate) mod allocations;
 #[path = "../../../tests/support/kernel_bench.rs"]
 mod bench;
 #[path = "numeric_original.rs"]
