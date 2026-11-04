@@ -121,21 +121,29 @@ impl TextureUploadQueue {
     }
 
     pub fn push(&mut self, handle: TextureHandle, image: Arc<RgbaImage>, sampler: SamplerDesc) {
-        self.push_inner(handle, UploadImage::Shared(image), sampler, None);
+        self.push_inner(handle, UploadImage::Shared(image), sampler, None, None);
     }
 
     /// Queue prepared pixels and the original dimensions from the same revision.
     pub fn push_prepared(
-        &mut self, handle: TextureHandle, image: Arc<RgbaImage>,
-        sampler: SamplerDesc, source_size: [u32; 2],
+        &mut self,
+        handle: TextureHandle,
+        image: Arc<RgbaImage>,
+        sampler: SamplerDesc,
+        source_size: [u32; 2],
     ) {
-        self.push(handle, image, sampler);
-        self.entries.get_mut(&handle).expect("queued upload").source_size = Some(source_size);
+        self.push_inner(
+            handle,
+            UploadImage::Shared(image),
+            sampler,
+            None,
+            Some(source_size),
+        );
     }
 
     /// Queues uniquely owned pixels without allocating a shared ownership handle.
     pub fn push_owned(&mut self, handle: TextureHandle, image: RgbaImage, sampler: SamplerDesc) {
-        self.push_inner(handle, UploadImage::Owned(image), sampler, None);
+        self.push_inner(handle, UploadImage::Owned(image), sampler, None, None);
     }
 
     pub fn push_recyclable(
@@ -145,7 +153,13 @@ impl TextureUploadQueue {
         sampler: SamplerDesc,
         recycle_tx: SyncSender<Vec<u8>>,
     ) {
-        self.push_inner(handle, UploadImage::Owned(image), sampler, Some(recycle_tx));
+        self.push_inner(
+            handle,
+            UploadImage::Owned(image),
+            sampler,
+            Some(recycle_tx),
+            None,
+        );
     }
 
     pub fn push_recyclable_yuv420(
@@ -160,22 +174,25 @@ impl TextureUploadQueue {
             UploadImage::RecyclableYuv420(image),
             sampler,
             Some(recycle_tx),
+            None,
         );
     }
 
+    #[inline(always)]
     fn push_inner(
         &mut self,
         handle: TextureHandle,
         image: UploadImage,
         sampler: SamplerDesc,
         recycle_tx: Option<SyncSender<Vec<u8>>>,
+        source_size: Option<[u32; 2]>,
     ) {
         let bytes = image.as_image().byte_len();
         let upload = PendingTextureUpload {
             image: Some(image),
             recycle_tx,
             sampler,
-            source_size: None,
+            source_size,
             bytes,
         };
         match self.entries.entry(handle) {
@@ -379,3 +396,7 @@ mod tests {
         assert_eq!(queued, 42);
     }
 }
+
+#[cfg(test)]
+#[path = "upload_cycle_performance.rs"]
+mod upload_cycle_performance;

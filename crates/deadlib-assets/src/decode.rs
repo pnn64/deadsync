@@ -148,7 +148,21 @@ pub fn decode_texture(path: &Path, hints: &TextureHints) -> image::ImageResult<D
     }
     // Native cleanup follows color keying and the final resize, including
     // sources that gain an alpha channel during preparation.
-    fix_hidden_alpha(&mut image);
+    if !hints.is_default() && hints.alphamap {
+        // Alphamaps have white RGB in every complete pixel. Only an entirely
+        // transparent result needs the native hidden-color cleanup.
+        if !image
+            .as_raw()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|pixel| pixel[3] != 0)
+        {
+            image.as_mut().as_chunks_mut::<4>().0.fill([0; 4]);
+        }
+    } else {
+        fix_hidden_alpha(&mut image);
+    }
     Ok(DecodedTexture { image, source_size })
 }
 
@@ -1124,3 +1138,7 @@ mod open_seek;
 
 #[cfg(test)]
 mod metadata_perf;
+
+#[cfg(test)]
+#[path = "decode/alpha_cleanup_performance.rs"]
+mod alpha_cleanup_performance;
