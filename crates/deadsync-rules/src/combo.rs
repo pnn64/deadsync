@@ -62,8 +62,8 @@ fn apply_successful_row_combo_state(
     state.combo = old_combo.saturating_add(row_combo_count);
     let combo = state.combo;
     // Jumps and combo multipliers can cross a milestone without landing on it.
-    let hit_thousand_milestone = combo / 1000 > old_combo / 1000;
     let hit_hundred_milestone = combo / 100 > old_combo / 100;
+    let hit_thousand_milestone = hit_hundred_milestone && combo / 1000 > old_combo / 1000;
 
     if !state.first_fc_attempt_broken {
         let new_grade = if let Some(current_fc_grade) = state.full_combo_grade {
