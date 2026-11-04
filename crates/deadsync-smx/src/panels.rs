@@ -314,19 +314,26 @@ impl PanelFx {
     pub fn tick(&mut self, dt_s: f32) -> &[u8; FRAME_BYTES] {
         let dt = dt_s.max(0.0);
         self.update_beat_rate(dt);
-        // Advance all backgrounds first, then composite each pad with its own.
         let mut bg_frames = [None::<usize>; PADS];
-        for pad in 0..PADS {
-            bg_frames[pad] =
-                advance_background(&mut self.backgrounds[pad], self.beat, self.beat_rate, dt);
+        for (frame, background) in bg_frames.iter_mut().zip(&mut self.backgrounds) {
+            *frame = advance_background(background, self.beat, self.beat_rate, dt);
         }
-        for pad in 0..PADS {
-            for panel in 0..PANELS {
-                let p = &mut self.panels[pad][panel];
+        for (pad, bg_frame) in bg_frames.into_iter().enumerate() {
+            // Background ownership and blackout are shared by all nine panels.
+            let background = if self.blackout[pad] {
+                None
+            } else {
+                bg_frame
+                    .and_then(|frame| self.backgrounds[pad].as_ref().map(|bg| (&bg.anim, frame)))
+            };
+            let out = &mut self.frame[pad * BYTES_PER_PAD..(pad + 1) * BYTES_PER_PAD];
+            for (panel, (p, out)) in self.panels[pad]
+                .iter_mut()
+                .zip(out.as_chunks_mut::<{ LEDS_PER_PANEL * 3 }>().0)
+                .enumerate()
+            {
                 advance_overlay(&mut p.overlay, dt);
                 advance_overlay(&mut p.press_overlay, dt);
-                let p = &*p;
-                let base = pad * BYTES_PER_PAD + panel * (LEDS_PER_PANEL * 3);
                 let top = p
                     .overlay
                     .as_ref()
@@ -336,21 +343,8 @@ impl PanelFx {
                             .as_ref()
                             .map(|overlay| &overlay.anim.frames[overlay.frame])
                     });
-                // A blackout suppresses only the background; feedback still
-                // composites over black. Resolve each layer once per panel.
-                let background = (!self.blackout[pad])
-                    .then_some(bg_frames[pad])
-                    .flatten()
-                    .and_then(|frame| {
-                        self.backgrounds[pad]
-                            .as_ref()
-                            .map(|background| &background.anim.panels[panel][frame])
-                    });
-                compose_panel(
-                    &mut self.frame[base..base + LEDS_PER_PANEL * 3],
-                    top,
-                    background,
-                );
+                let background = background.map(|(anim, frame)| &anim.panels[panel][frame]);
+                compose_panel(out, top, background);
             }
         }
         &self.frame
@@ -522,28 +516,32 @@ fn end_overlay(slot: &mut Option<Overlay>) {
 fn advance_overlay(overlay: &mut Option<Overlay>, dt: f32) {
     let Some(o) = overlay else { return };
     o.time_in_frame += dt;
-    while o.time_in_frame >= o.anim.durations[o.frame].max(MIN_FRAME_DURATION_S) {
+    let mut duration = o.anim.durations[o.frame].max(MIN_FRAME_DURATION_S);
+    if o.time_in_frame >= duration {
+        // Resolve invariant loop metadata only when a frame actually advances.
         let last = o.anim.frames.len() - 1;
         let loop_end = o.anim.loop_end.min(last);
-        // A freeze sustain wraps at the loop end while engaged, as does an
-        // engaged one-shot with an outro held back; a roll never wraps (it
-        // runs forward into the outro to show its drain).
         let wraps = !o.roll && o.engaged && (o.sustain || o.anim.has_outro());
-        if o.frame == loop_end && wraps {
-            o.time_in_frame -= o.anim.durations[o.frame].max(MIN_FRAME_DURATION_S);
-            o.frame = o.anim.loop_frame.min(loop_end);
-        } else if o.frame >= last {
-            // A roll holds on its last (fully drained) frame; everything else
-            // clears to reveal the layers under it.
-            if o.roll {
-                o.time_in_frame = 0.0;
+        loop {
+            if o.frame == loop_end && wraps {
+                o.time_in_frame -= duration;
+                o.frame = o.anim.loop_frame.min(loop_end);
+            } else if o.frame >= last {
+                if o.roll {
+                    o.time_in_frame = 0.0;
+                    return;
+                }
+                *overlay = None;
                 return;
+            } else {
+                o.time_in_frame -= duration;
+                o.frame += 1;
             }
-            *overlay = None;
-            return;
-        } else {
-            o.time_in_frame -= o.anim.durations[o.frame].max(MIN_FRAME_DURATION_S);
-            o.frame += 1;
+            duration = o.anim.durations[o.frame].max(MIN_FRAME_DURATION_S);
+            if o.time_in_frame >= duration {
+                continue;
+            }
+            break;
         }
     }
 }
@@ -1640,3 +1638,7 @@ mod tests {
         assert!(fx.tick(0.0).iter().all(|&b| b == 0));
     }
 }
+
+#[cfg(test)]
+#[path = "effects_performance.rs"]
+mod effects_performance;
