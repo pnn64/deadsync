@@ -1,4 +1,4 @@
-use super::{ButtonLight, CabinetLight, Player, State};
+use super::State;
 use hidapi::{HidApi, HidDevice};
 use log::{debug, warn};
 use std::time::{Duration, Instant};
@@ -10,31 +10,7 @@ const REOPEN_INTERVAL: Duration = Duration::from_millis(1500);
 
 const REPORT_ID: u8 = 0;
 const REPORT_SIZE: usize = 9;
-const LIGHTS_OFFSET: usize = 2;
-const BLUE_LED_OFFSET: usize = 6;
-const KB_ENABLE_OFFSET: usize = 7;
 const ON: u8 = 0xff;
-
-const P1_MENU: u8 = 2;
-const P2_MENU: u8 = 3;
-const MARQUEE_P2_LOWER: u8 = 4;
-const MARQUEE_P2_UPPER: u8 = 5;
-const MARQUEE_P1_LOWER: u8 = 6;
-const MARQUEE_P1_UPPER: u8 = 7;
-
-const P1_UP: u8 = 8;
-const P1_DOWN: u8 = 9;
-const P1_LEFT: u8 = 10;
-const P1_RIGHT: u8 = 11;
-const P1_PAD_ENABLE: u8 = 12;
-
-const P2_UP: u8 = 16;
-const P2_DOWN: u8 = 17;
-const P2_LEFT: u8 = 18;
-const P2_RIGHT: u8 = 19;
-const P2_PAD_ENABLE: u8 = 20;
-
-const NEONS: u8 = 24;
 
 pub struct Driver {
     api: Option<HidApi>,
@@ -152,73 +128,46 @@ impl Driver {
 }
 
 fn build_report(state: &State) -> [u8; REPORT_SIZE] {
-    let mut report = [0u8; REPORT_SIZE];
-    let mut lights = 0u32;
-    set_bit(
-        &mut lights,
-        MARQUEE_P1_LOWER,
-        state.cabinet(CabinetLight::MarqueeLowerLeft),
-    );
-    set_bit(
-        &mut lights,
-        MARQUEE_P2_LOWER,
-        state.cabinet(CabinetLight::MarqueeLowerRight),
-    );
-    set_bit(
-        &mut lights,
-        MARQUEE_P1_UPPER,
-        state.cabinet(CabinetLight::MarqueeUpperLeft),
-    );
-    set_bit(
-        &mut lights,
-        MARQUEE_P2_UPPER,
-        state.cabinet(CabinetLight::MarqueeUpperRight),
-    );
-    let neons = state.cabinet(CabinetLight::BassLeft) || state.cabinet(CabinetLight::BassRight);
-    set_bit(&mut lights, NEONS, neons);
-
-    set_bit(
-        &mut lights,
-        P1_MENU,
-        state.menu_button(Player::P1, ButtonLight::Start),
-    );
-    set_bit(
-        &mut lights,
-        P2_MENU,
-        state.menu_button(Player::P2, ButtonLight::Start),
-    );
-    set_player(&mut lights, Player::P1, state);
-    set_player(&mut lights, Player::P2, state);
-    set_bit(&mut lights, P1_PAD_ENABLE, true);
-    set_bit(&mut lights, P2_PAD_ENABLE, true);
-
-    report[0] = REPORT_ID;
-    report[LIGHTS_OFFSET..LIGHTS_OFFSET + 4].copy_from_slice(&lights.to_le_bytes());
-    report[BLUE_LED_OFFSET] = if neons { ON } else { 0 };
-    report[KB_ENABLE_OFFSET] = 1;
-    report
-}
-
-const fn set_player(lights: &mut u32, player: Player, state: &State) {
-    let (up, down, left, right) = match player {
-        Player::P1 => (P1_UP, P1_DOWN, P1_LEFT, P1_RIGHT),
-        Player::P2 => (P2_UP, P2_DOWN, P2_LEFT, P2_RIGHT),
-    };
-    set_bit(lights, up, state.button(player, ButtonLight::Up));
-    set_bit(lights, down, state.button(player, ButtonLight::Down));
-    set_bit(lights, left, state.button(player, ButtonLight::Left));
-    set_bit(lights, right, state.button(player, ButtonLight::Right));
-}
-
-const fn set_bit(bits: &mut u32, bit: u8, on: bool) {
-    if on {
-        *bits |= 1u32 << bit;
-    }
+    let cabinet = state.cabinet;
+    let neons = cabinet & 0x30 != 0;
+    // Cabinet order is P2 lower, P2 upper, P1 lower, P1 upper in bits 4..7.
+    let marquee = ((cabinet & 0x06) << 4) | ((cabinet & 0x01) << 7) | ((cabinet & 0x08) << 1);
+    let menus = ((state.menu_buttons[0] & 0x10) >> 2) | ((state.menu_buttons[1] & 0x10) >> 1);
+    let pads = u16::from_le_bytes(state.buttons);
+    let pads = (pads & 0x0a0a) | ((pads & 0x0101) << 2) | ((pads & 0x0404) >> 2);
+    [
+        REPORT_ID,
+        0,
+        marquee | menus,
+        (pads as u8) | 0x10,
+        ((pads >> 8) as u8) | 0x10,
+        neons as u8,
+        if neons { ON } else { 0 },
+        1,
+        0,
+    ]
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{ButtonLight, CabinetLight, Player};
+
+    const LIGHTS_OFFSET: usize = 2;
+    const BLUE_LED_OFFSET: usize = 6;
+    const KB_ENABLE_OFFSET: usize = 7;
+    const P1_MENU: u8 = 2;
+    const P2_MENU: u8 = 3;
+    const MARQUEE_P2_LOWER: u8 = 4;
+    const MARQUEE_P1_LOWER: u8 = 6;
+    const MARQUEE_P1_UPPER: u8 = 7;
+    const P1_UP: u8 = 8;
+    const P1_LEFT: u8 = 10;
+    const P1_PAD_ENABLE: u8 = 12;
+    const P2_DOWN: u8 = 17;
+    const P2_RIGHT: u8 = 19;
+    const P2_PAD_ENABLE: u8 = 20;
+    const NEONS: u8 = 24;
 
     #[test]
     fn report_maps_ddr_lights_to_minimaid_bits() {
@@ -261,4 +210,9 @@ mod tests {
     fn bit(bits: u32, bit: u8) -> bool {
         bits & (1u32 << bit) != 0
     }
+}
+
+#[cfg(test)]
+pub(super) fn performance_report(state: &State) -> [u8; REPORT_SIZE] {
+    build_report(state)
 }

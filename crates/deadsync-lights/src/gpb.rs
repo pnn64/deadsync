@@ -252,3 +252,8 @@ mod tests {
         assert_eq!(report[BTN16], 0);
     }
 }
+
+#[cfg(test)]
+pub(super) fn performance_report(state: &State) -> [u8; REPORT_SIZE] {
+    build_report(state)
+}
