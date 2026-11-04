@@ -431,9 +431,13 @@ impl SongData {
     #[must_use]
     pub fn is_no_cmod(&self) -> bool {
         let contains = |text: &str| {
-            text.as_bytes()
-                .windows(b"no cmod".len())
-                .any(|window| window.eq_ignore_ascii_case(b"no cmod"))
+            text.as_bytes().windows(b"no cmod".len()).any(|window| {
+                let prefix = u32::from_le_bytes(window[..4].try_into().unwrap());
+                // Clear the ASCII case bit in letters, keeping the space exact.
+                prefix & u32::from_le_bytes([0xdf, 0xdf, 0xff, 0xdf])
+                    == u32::from_le_bytes(*b"NO C")
+                    && window[4..].eq_ignore_ascii_case(b"mod")
+            })
         };
         if contains(&self.title) {
             return true;
@@ -460,8 +464,9 @@ impl SongData {
             return false;
         };
         self.charts.iter().any(|chart| {
-            chart.chart_type.eq_ignore_ascii_case(chart_type)
+            chart.chart_type.len() == chart_type.len()
                 && chart.difficulty.eq_ignore_ascii_case(target)
+                && chart.chart_type.eq_ignore_ascii_case(chart_type)
         })
     }
 

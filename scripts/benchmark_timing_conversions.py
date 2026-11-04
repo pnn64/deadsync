@@ -1,4 +1,4 @@
-"""Build exact core/rules sources in a small workspace and archive paired CPU runs."""
+"""Build exact timing/chart sources in a small workspace and archive paired CPU runs."""
 import argparse
 import csv
 import hashlib
@@ -18,12 +18,18 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def run(stage, runs, debug):
-    workspace = ARCHIVE / "workspace"
-    out = ARCHIVE / stage
+def run(stage, runs, debug, chart=False, baseline=None):
+    packages = ["deadsync-core", "deadsync-rules"]
+    if chart:
+        packages.append("deadsync-chart")
+    package = packages[-1]
+    suite = "chart-metadata-paths" if chart else "timing-conversions"
+    archive = Path(os.environ.get("DEADSYNC_CHART_ARCHIVE", ROOT / "target" / suite)) if chart else ARCHIVE
+    workspace = archive / "workspace"
+    out = archive / stage
     out.mkdir(parents=True, exist_ok=True)
     sources = []
-    for name in ["deadsync-core", "deadsync-rules"]:
+    for name in packages:
         sources.extend((ROOT / "crates" / name).rglob("*.rs"))
         sources.append(ROOT / "crates" / name / "Cargo.toml")
     sources.extend((ROOT / "tests/support").glob("*.rs"))
@@ -32,13 +38,15 @@ def run(stage, runs, debug):
     hashes = {}
     for source in sources:
         relative = source.relative_to(ROOT)
+        contents = source.read_bytes()
+        if baseline and relative.parts[0] == "crates" and relative.parts[2] == "src":
+            contents = subprocess.check_output(["git", "-C", str(ROOT), "show", f"{baseline}:{relative.as_posix()}"])
         for destination in [workspace / relative, out / "source" / relative]:
             destination.parent.mkdir(parents=True, exist_ok=True)
-            if not destination.exists() or sha(source) != sha(destination):
-                shutil.copyfile(source, destination)
-        hashes[str(relative)] = sha(source)
-    manifest = '''[workspace]
-members = ["crates/deadsync-core", "crates/deadsync-rules"]
+            if not destination.exists() or destination.read_bytes() != contents:
+                destination.write_bytes(contents)
+        hashes[str(relative)] = hashlib.sha256(contents).hexdigest()
+    manifest = '[workspace]\nmembers = ' + json.dumps([f"crates/{p}" for p in packages]) + '''
 resolver = "3"
 [profile.release]
 opt-level = 3
@@ -61,24 +69,27 @@ incremental = false
         if result.returncode:
             raise RuntimeError(result.stdout + result.stderr)
         return result.stdout
-    # Run every core/rules unit, integration and doc test in each stage.
+    # Run every selected package's unit, integration and doc test in each stage.
     execute(command + ["--", "--test-threads=1"], "correctness.log")
-    built = execute(command + ["-p", "deadsync-rules", "--lib", "--no-run", "--message-format=json"], "build.log")
+    target = ["--test", "chart_metadata_paths"] if chart else ["--lib"]
+    built = execute(command + ["-p", package] + target + ["--no-run", "--message-format=json"], "build.log")
     artifacts = [json.loads(line) for line in built.splitlines() if line.startswith("{")]
     binary = next(Path(a["executable"]) for a in artifacts if a.get("executable"))
     saved = out / binary.name
     shutil.copyfile(binary, saved)
     metadata = dict(stage=stage, command=command, workspace_manifest=manifest,
+                    baseline_revision=baseline,
                     rustc=subprocess.check_output(["rustc", "-Vv"], text=True),
                     cpu=os.environ.get("PROCESSOR_IDENTIFIER"),
                     binary_sha256=sha(saved), sources=hashes,
                     script_sha256=sha(Path(__file__)), runs=runs,
                     allocations=("Not measured in debug; assertions run in release benchmarks" if debug else
+                                 "Zero allocs/reallocs/frees/bytes, asserted for both variants of all eight workloads" if chart else
                                  "Zero allocs/reallocs/frees/bytes, asserted for both variants of all six workloads"))
     metadata["correctness_sha256"] = sha(out / "correctness.log")
     metadata["lockfile"] = (workspace / "Cargo.lock").read_text(encoding="utf-8")
     metadata["passed_tests"] = sum(map(int, re.findall(r"test result: ok\. (\d+) passed", (out / "correctness.log").read_text(encoding="utf-8"))))
-    report = ROOT / f"docs/performance/2026-11-04-timing-conversions-{stage}"
+    report = ROOT / f"docs/performance/2026-11-04-{suite}-{stage}"
     report.parent.mkdir(parents=True, exist_ok=True)
     report.with_suffix(".manifest.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     if debug:
@@ -86,12 +97,16 @@ incremental = false
         return
     rows = []
     for number in range(runs):
-        output = execute([str(saved), "benchmark_timing_conversions", "--ignored", "--nocapture", "--test-threads=1"], f"run-{number}.log")
+        benchmark = "benchmark_chart_metadata_paths" if chart else "benchmark_timing_conversions"
+        output = execute([str(saved), benchmark, "--ignored", "--nocapture", "--test-threads=1"], f"run-{number}.log")
         pairs = re.findall(r"([\w/]+): cycles/op ([\d.]+) -> ([\d.]+); ns/op ([\d.]+) -> ([\d.]+)", output)
-        assert len(pairs) == 6, output
+        assert len(pairs) == (8 if chart else 6), output
+        churn = {label: dict(re.findall(r"(\w+): (\d+)", fields)) for label, fields in
+                 re.findall(r"([\w/]+): allocation Churn \{ ([^}]+) \}", output)}
         for label, old_cpu, new_cpu, old_ns, new_ns in pairs:
             for variant, cpu, ns in [("original", old_cpu, old_ns), ("current", new_cpu, new_ns)]:
-                rows.append(dict(run=number, workload=label, variant=variant, cycles_per_batch=cpu, ns_per_batch=ns, allocations=0))
+                rows.append(dict(run=number, workload=label, variant=variant, cycles_per_batch=cpu,
+                                 ns_per_batch=ns, allocations=int(churn.get(label, {}).get("allocs", 0))))
         print(f"{stage}: run {number + 1}/{runs}", flush=True)
     with report.with_suffix(".tsv").open("w", newline="", encoding="utf-8") as stream:
         writer = csv.DictWriter(stream, fieldnames=list(rows[0]), delimiter="\t")
@@ -107,5 +122,7 @@ if __name__ == "__main__":
     parser.add_argument("stage")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--chart", action="store_true")
+    parser.add_argument("--baseline", help="Read production src files from this Git revision in the build copy")
     args = parser.parse_args()
-    run(args.stage, args.runs, args.debug)
+    run(args.stage, args.runs, args.debug, args.chart, args.baseline)
