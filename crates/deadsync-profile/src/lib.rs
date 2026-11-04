@@ -1938,11 +1938,20 @@ pub fn profile_guid_from_itgmania_guid(itg_guid: &str) -> Option<String> {
 const FOLDER_NAME_MAX_LEN: usize = 48;
 
 fn is_windows_reserved_name(name: &str) -> bool {
-    const RESERVED: [&str; 22] = [
-        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-    ];
-    RESERVED.iter().any(|r| name.eq_ignore_ascii_case(r))
+    let prefix = match name.as_bytes() {
+        [a, b, c] => [a | 0x20, b | 0x20, c | 0x20],
+        [a, b, c, b'1'..=b'9'] => {
+            return matches!(
+                [a | 0x20, b | 0x20, c | 0x20],
+                [b'c', b'o', b'm'] | [b'l', b'p', b't']
+            );
+        }
+        _ => return false,
+    };
+    matches!(
+        prefix,
+        [b'c', b'o', b'n'] | [b'p', b'r', b'n'] | [b'a', b'u', b'x'] | [b'n', b'u', b'l']
+    )
 }
 
 /// Derive a safe single-segment folder name from a display name. `None` (caller
@@ -1980,7 +1989,11 @@ pub fn sanitize_folder_base(display_name: &str) -> Option<String> {
     if trimmed.is_empty() || is_windows_reserved_name(trimmed) {
         return None;
     }
-    Some(trimmed.to_string())
+    if out.capacity() == trimmed.len() {
+        Some(out)
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 /// Largest numeric suffix tried before giving up and using the fallback.
@@ -2003,6 +2016,22 @@ pub fn folder_name_for_display(display_name: &str, fallback: &str, existing: &[S
         return base;
     }
     let mut candidate = String::with_capacity(base.len() + 5);
+    if existing.len() >= 32 {
+        // Preserve the common small-gap search before building the full index.
+        for n in 2..=8 {
+            candidate.clear();
+            let _ = write!(candidate, "{base}-{n}");
+            if !taken(&candidate) {
+                return candidate;
+            }
+        }
+        let Some(n) = available_folder_suffix(&base, existing) else {
+            return fallback.to_string();
+        };
+        candidate.clear();
+        let _ = write!(candidate, "{base}-{n}");
+        return candidate;
+    }
     for n in 2..=FOLDER_NAME_MAX_SUFFIX {
         candidate.clear();
         let _ = write!(candidate, "{base}-{n}");
@@ -2011,6 +2040,43 @@ pub fn folder_name_for_display(display_name: &str, fallback: &str, existing: &[S
         }
     }
     fallback.to_string()
+}
+
+// The bound is fixed: one bit per canonical suffix, with no heap index.
+#[inline(never)]
+fn available_folder_suffix(base: &str, existing: &[String]) -> Option<u32> {
+    let mut occupied = [0u64; 157];
+    occupied[0] = 3;
+    occupied[156] = u64::MAX << 16;
+    for name in existing {
+        let Some((prefix, suffix)) = name.as_bytes().split_at_checked(base.len()) else {
+            continue;
+        };
+        if !prefix.eq_ignore_ascii_case(base.as_bytes()) {
+            continue;
+        }
+        let [b'-', first @ b'1'..=b'9', tail @ ..] = suffix else {
+            continue;
+        };
+        if tail.len() > 3 {
+            continue;
+        }
+        let mut n = u32::from(first - b'0');
+        for &digit in tail {
+            if !digit.is_ascii_digit() {
+                n = 0;
+                break;
+            }
+            n = n * 10 + u32::from(digit - b'0');
+        }
+        if n >= 2 {
+            occupied[n as usize / 64] |= 1u64 << (n % 64);
+        }
+    }
+    occupied.iter().enumerate().find_map(|(word, &bits)| {
+        let free = !bits;
+        (free != 0).then(|| (word * 64 + free.trailing_zeros() as usize) as u32)
+    })
 }
 
 #[inline(always)]
@@ -15904,3 +15970,7 @@ fn dataflow_peak_bytes(churn: perf::Churn) -> usize {
 #[cfg(test)]
 #[path = "../../../tests/perf/visual_options.rs"]
 mod visual_options_perf;
+
+#[cfg(test)]
+#[path="folder_paths_performance.rs"]
+mod folder_paths_performance;
