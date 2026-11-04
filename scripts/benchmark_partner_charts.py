@@ -59,7 +59,9 @@ def full_tests(stage, debug):
         with tarfile.open(archive) as source:
             source.extractall(work, filter="data")
     overlays = {}
-    for relative in [PACKAGE / "src/partner_charts.rs", PACKAGE / "src/partner_charts/perf.rs", PACKAGE / "src/partner_charts/original.rs"]:
+    sources = [PACKAGE / "src/partner_charts.rs"]
+    sources += sorted(path.relative_to(ROOT) for path in (ROOT / PACKAGE / "src/partner_charts").glob("*.rs"))
+    for relative in sources:
         destination = work / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         contents = (ROOT / relative).read_bytes()
@@ -109,15 +111,18 @@ incremental = false
     print(f"{stage}: {metadata['passed_tests']} tests passed", flush=True)
 
 
-def run(stage, runs, debug, baseline):
+def run(stage, runs, debug, baseline, *, report_prefix="partner-charts",
+        benchmark="benchmark_partner_charts", extra_source=None):
     out = ARCHIVE / stage
     work = ARCHIVE / "workspace"
     out.mkdir(parents=True, exist_ok=True)
     temporary = ARCHIVE / "tmp"
     temporary.mkdir(exist_ok=True)
-    paths = [PACKAGE / "src/partner_charts.rs", PACKAGE / "src/partner_charts/perf.rs",
-             PACKAGE / "src/partner_charts/original.rs", PACKAGE / "src/metadata_perf.rs",
+    paths = [PACKAGE / "src/partner_charts.rs", PACKAGE / "src/metadata_perf.rs",
              Path("tests/support/kernel_bench.rs"), Path(__file__).relative_to(ROOT)]
+    paths += sorted(path.relative_to(ROOT) for path in (ROOT / PACKAGE / "src/partner_charts").glob("*.rs"))
+    if extra_source:
+        paths.append(extra_source.relative_to(ROOT))
     hashes = {}
     for relative in paths:
         contents = (ROOT / relative).read_bytes()
@@ -145,6 +150,7 @@ edition = "2024"
 path = "lib.rs"
 [dependencies]
 rssp = { git = "https://github.com/pnn64/rssp", branch = "main" }
+memchr = "2.8.3"
 [profile.release]
 opt-level = 3
 lto = true
@@ -187,7 +193,7 @@ incremental = false
                     compiled_sha256=sha(out / "compiled.rs"), lockfile=(work / "Cargo.lock").read_text(),
                     correctness_sha256=sha(out / "correctness.log"), trace_sha256=sha(trace), trace_bytes=trace.stat().st_size,
                     passed_tests=sum(map(int, re.findall(r"test result: ok\. (\d+) passed", (out / "correctness.log").read_text()))))
-    report = ROOT / f"docs/performance/2026-11-04-partner-charts-{stage}"
+    report = ROOT / f"docs/performance/2026-11-04-{report_prefix}-{stage}"
     report.parent.mkdir(parents=True, exist_ok=True)
     report.with_suffix(".manifest.json").write_text(json.dumps(metadata, indent=2), encoding="utf-8")
     if debug:
@@ -195,7 +201,7 @@ incremental = false
         return
     rows = []
     for number in range(runs):
-        output = execute([str(saved), "current::perf::benchmark_partner_charts", "--exact", "--ignored", "--nocapture", "--test-threads=1"],
+        output = execute([str(saved), "current::perf::" + benchmark, "--exact", "--ignored", "--nocapture", "--test-threads=1"],
                          f"run-{number}.log")
         pairs = re.findall(r"([\w/]+): cycles/op ([\d.]+) -> ([\d.]+); ns/op ([\d.]+) -> ([\d.]+)", output)
         assert len(pairs) == 9, output

@@ -35,10 +35,14 @@ pub(crate) fn project<'a>(
     let mut hash_notes = BTreeMap::new();
     let mut chart = 0;
     for entry in entries {
-        if entry.field_count < 5 || !playable(entry.fields[0]) {
+        if entry.field_count < 5 {
             continue;
         }
-        if let Some(width) = lanes(entry.fields[0]) {
+        let width = lanes(entry.fields[0]);
+        if width.is_none() && rssp::supported_stepstype_lanes_bytes(entry.fields[0]).is_none() {
+            continue;
+        }
+        if let Some(width) = width {
             let offset = entry.fields[0].as_ptr() as usize - data.as_ptr() as usize;
             let replacement = if width == 8 {
                 b"dance-double".as_slice()
@@ -56,30 +60,22 @@ pub(crate) fn project<'a>(
             {
                 let (notes, ownership) = merge_routine(entry.note_data, width);
                 let mut composite = Vec::new();
+                let mut part = notes.clone();
                 for participant in 0..2 {
                     if participant > 0 {
                         composite.extend_from_slice(b"&\n");
+                        part.copy_from_slice(&notes);
                     }
-                    let mut part = Vec::new();
-                    let mut row = 0;
-                    for line in notes.split(|&b| b == b'\n') {
-                        if line == b"," {
-                            part.extend_from_slice(b",\n");
-                        } else if line.len() == width {
-                            for (col, &symbol) in line.iter().enumerate() {
-                                part.push(if ownership.get(&(row, col)) == Some(&participant) {
-                                    symbol
-                                } else {
-                                    b'0'
-                                });
-                            }
-                            part.push(b'\n');
-                            row += 1;
+                    // Generated cells are zero or owned; mask only the other player's notes.
+                    for (&(row, col), &owner) in &ownership {
+                        if owner != participant {
+                            part[row * (width + 1) + row / 192 * 2 + col] = b'0';
                         }
                     }
                     composite
                         .extend_from_slice(&rssp::stats::minimize_chart_for_hash(&part, width));
                 }
+                drop(part);
                 hash_notes.insert(chart, composite);
                 owners.extend(
                     ownership
@@ -260,17 +256,25 @@ fn load_participant(part: &[u8], width: usize, owner: u8) -> (Vec<Track>, usize)
 /// a note on the same row and column, notes inside an earlier hold are skipped,
 /// and a hold absorbs what it covers. Only the first two participants are read.
 fn merge_routine(data: &[u8], width: usize) -> (Vec<u8>, Ownership) {
-    // Remove comments before splitting: '&' in a comment is not a participant.
-    let clean: Vec<u8> = data
-        .split(|&b| b == b'\n')
-        .flat_map(|line| {
-            let end = line
-                .windows(2)
-                .position(|s| s == b"//")
-                .unwrap_or(line.len());
-            line[..end].iter().copied().chain(std::iter::once(b'\n'))
-        })
-        .collect();
+    // The added final LF only changes raw measure counts after empty/trailing separators.
+    let clean: Cow<'_, [u8]> = if matches!(data.last(), Some(&last) if !matches!(last, b',' | b'&'))
+        && memchr::memchr(b'/', data).is_none()
+    {
+        Cow::Borrowed(data)
+    } else {
+        // Remove comments before splitting: '&' in a comment is not a participant.
+        Cow::Owned(
+            data.split(|&b| b == b'\n')
+                .flat_map(|line| {
+                    let end = line
+                        .windows(2)
+                        .position(|s| s == b"//")
+                        .unwrap_or(line.len());
+                    line[..end].iter().copied().chain(std::iter::once(b'\n'))
+                })
+                .collect(),
+        )
+    };
     let mut combined = vec![Track::new(); width];
     let mut measure_count = 0;
     for (owner, part) in clean.split(|&b| b == b'&').take(2).enumerate() {

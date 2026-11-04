@@ -6,6 +6,9 @@ mod bench;
 #[path = "original.rs"]
 mod original;
 
+#[path = "projection.rs"]
+mod projection;
+
 fn random(state: &mut u64) -> usize {
     *state ^= *state << 13;
     *state ^= *state >> 7;
