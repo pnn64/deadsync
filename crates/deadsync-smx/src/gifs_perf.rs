@@ -4,7 +4,7 @@ use std::hint::black_box;
 
 #[allow(dead_code)]
 #[path = "../../../tests/support/perf.rs"]
-mod allocations;
+pub(crate) mod allocations;
 #[path = "gifs_original.rs"]
 mod original;
 #[allow(dead_code)]

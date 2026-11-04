@@ -61,20 +61,24 @@ pub fn smx_panel_for_col(
     if cols_per_player == 0 || column >= cols_per_player.saturating_mul(num_players) {
         return None;
     }
-    let local = column % cols_per_player;
-    let pump = matches!(cols_per_player, 5 | 10);
-    let lanes_per_pad = if pump { 5 } else { 4 };
-    let (pad, local_col) = if cols_per_player > lanes_per_pad {
-        // A field spanning both pads (doubles, or each Routine participant):
-        // split at the native pad lane count.
-        (local / lanes_per_pad, local % lanes_per_pad)
-    } else {
-        let pad = column / cols_per_player;
-        if pad >= PADS {
-            return None;
+    let (pad, local_col, pump) = match cols_per_player {
+        4 => (column / 4, column % 4, false),
+        5 => (column / 5, column % 5, true),
+        // Doubles repeat the physical pad after two native lane groups.
+        8 => ((column / 4) & 1, column % 4, false),
+        10 => ((column / 5) & 1, column % 5, true),
+        _ => {
+            let local = column % cols_per_player;
+            if cols_per_player > 4 {
+                (local / 4, local % 4, false)
+            } else {
+                (column / cols_per_player, local, false)
+            }
         }
-        (pad, local)
     };
+    if cols_per_player <= 5 && pad >= PADS {
+        return None;
+    }
     let panel = if pump {
         PUMP_TO_PANEL.get(local_col)
     } else {

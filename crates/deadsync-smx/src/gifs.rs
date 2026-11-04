@@ -2271,4 +2271,4 @@ mod tests {
 
 #[cfg(test)]
 #[path = "gifs_perf.rs"]
-mod perf_tests;
+pub(crate) mod perf_tests;
