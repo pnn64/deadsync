@@ -18,13 +18,14 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def run(stage, runs, debug, chart=False, baseline=None):
+def run(stage, runs, debug, chart=False, baseline=None, runtime=False):
     packages = ["deadsync-core", "deadsync-rules"]
     if chart:
         packages.append("deadsync-chart")
     package = packages[-1]
-    suite = "chart-metadata-paths" if chart else "timing-conversions"
-    archive = Path(os.environ.get("DEADSYNC_CHART_ARCHIVE", ROOT / "target" / suite)) if chart else ARCHIVE
+    suite = "rules-runtime" if runtime else "chart-metadata-paths" if chart else "timing-conversions"
+    archive = (Path(os.environ.get("DEADSYNC_RUNTIME_ARCHIVE", ROOT / "target" / suite)) if runtime else
+               Path(os.environ.get("DEADSYNC_CHART_ARCHIVE", ROOT / "target" / suite)) if chart else ARCHIVE)
     workspace = archive / "workspace"
     out = archive / stage
     out.mkdir(parents=True, exist_ok=True)
@@ -39,8 +40,11 @@ def run(stage, runs, debug, chart=False, baseline=None):
     for source in sources:
         relative = source.relative_to(ROOT)
         contents = source.read_bytes()
-        if baseline and relative.parts[0] == "crates" and relative.parts[2] == "src":
+        if (baseline and relative.parts[0] == "crates" and relative.parts[2] == "src"
+                and not relative.name.startswith("runtime_kernels")):
             contents = subprocess.check_output(["git", "-C", str(ROOT), "show", f"{baseline}:{relative.as_posix()}"])
+            if runtime and relative.as_posix() == "crates/deadsync-rules/src/timing.rs":
+                contents += b'\n#[cfg(test)]\n#[path = "runtime_kernels.rs"]\nmod runtime_kernels;\n'
         for destination in [workspace / relative, out / "source" / relative]:
             destination.parent.mkdir(parents=True, exist_ok=True)
             if not destination.exists() or destination.read_bytes() != contents:
@@ -84,6 +88,7 @@ incremental = false
                     binary_sha256=sha(saved), sources=hashes,
                     script_sha256=sha(Path(__file__)), runs=runs,
                     allocations=("Not measured in debug; assertions run in release benchmarks" if debug else
+                                 "Zero allocation churn, asserted for both variants of all fourteen workloads" if runtime else
                                  "Zero allocs/reallocs/frees/bytes, asserted for both variants of all eight workloads" if chart else
                                  "Zero allocs/reallocs/frees/bytes, asserted for both variants of all six workloads"))
     metadata["correctness_sha256"] = sha(out / "correctness.log")
@@ -97,10 +102,10 @@ incremental = false
         return
     rows = []
     for number in range(runs):
-        benchmark = "benchmark_chart_metadata_paths" if chart else "benchmark_timing_conversions"
+        benchmark = "benchmark_rules_runtime" if runtime else "benchmark_chart_metadata_paths" if chart else "benchmark_timing_conversions"
         output = execute([str(saved), benchmark, "--ignored", "--nocapture", "--test-threads=1"], f"run-{number}.log")
         pairs = re.findall(r"([\w/]+): cycles/op ([\d.]+) -> ([\d.]+); ns/op ([\d.]+) -> ([\d.]+)", output)
-        assert len(pairs) == (8 if chart else 6), output
+        assert len(pairs) == (14 if runtime else 8 if chart else 6), output
         churn = {label: dict(re.findall(r"(\w+): (\d+)", fields)) for label, fields in
                  re.findall(r"([\w/]+): allocation Churn \{ ([^}]+) \}", output)}
         for label, old_cpu, new_cpu, old_ns, new_ns in pairs:
@@ -114,7 +119,8 @@ incremental = false
         writer.writerows(rows)
     for label in sorted({r["workload"] for r in rows}):
         medians = [statistics.median(float(r["cycles_per_batch"]) for r in rows if r["workload"] == label and r["variant"] == variant) for variant in ["original", "current"]]
-        print(f"{label}: {medians[0]:.2f} -> {medians[1]:.2f} cycles/256, {medians[0] / medians[1]:.3f}x CPU throughput", flush=True)
+        unit = "op" if runtime else "256"
+        print(f"{label}: {medians[0]:.2f} -> {medians[1]:.2f} cycles/{unit}, {medians[0] / medians[1]:.3f}x CPU throughput", flush=True)
 
 
 if __name__ == "__main__":
@@ -122,7 +128,9 @@ if __name__ == "__main__":
     parser.add_argument("stage")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--debug", action="store_true")
-    parser.add_argument("--chart", action="store_true")
+    suites = parser.add_mutually_exclusive_group()
+    suites.add_argument("--chart", action="store_true")
+    suites.add_argument("--runtime", action="store_true")
     parser.add_argument("--baseline", help="Read production src files from this Git revision in the build copy")
     args = parser.parse_args()
-    run(args.stage, args.runs, args.debug, args.chart, args.baseline)
+    run(args.stage, args.runs, args.debug, args.chart, args.baseline, args.runtime)

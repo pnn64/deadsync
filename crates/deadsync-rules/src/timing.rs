@@ -13,6 +13,10 @@ use std::sync::Arc;
 #[path = "timing_conversion_kernel.rs"]
 mod conversion_kernel;
 
+#[cfg(test)]
+#[path = "runtime_kernels.rs"]
+mod runtime_kernels;
+
 // --- ITGMania Parity Constants and Helpers ---
 type TimingNs = i64;
 const INVALID_TIMING_NS: TimingNs = i64::MIN;
@@ -1991,7 +1995,7 @@ pub struct LiveTimingSnapshot {
     pub all: TimingStats,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone)]
 pub struct LiveTimingStats {
     all_sum_abs_ms: f32,
     all_sum_ms: f32,
@@ -2004,6 +2008,26 @@ pub struct LiveTimingStats {
     recent_sum_abs_ms: f32,
     recent_sum_ms: f32,
     recent_sum_sq_ms: f32,
+    recent_max_abs_ms: f32,
+}
+
+impl std::fmt::Debug for LiveTimingStats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The maximum cache is derived state; retain the public diagnostic view.
+        f.debug_struct("LiveTimingStats")
+            .field("all_sum_abs_ms", &self.all_sum_abs_ms)
+            .field("all_sum_ms", &self.all_sum_ms)
+            .field("all_sum_sq_ms", &self.all_sum_sq_ms)
+            .field("all_max_abs_ms", &self.all_max_abs_ms)
+            .field("all_count", &self.all_count)
+            .field("recent_errors_ms", &self.recent_errors_ms)
+            .field("recent_next", &self.recent_next)
+            .field("recent_len", &self.recent_len)
+            .field("recent_sum_abs_ms", &self.recent_sum_abs_ms)
+            .field("recent_sum_ms", &self.recent_sum_ms)
+            .field("recent_sum_sq_ms", &self.recent_sum_sq_ms)
+            .finish()
+    }
 }
 
 impl Default for LiveTimingStats {
@@ -2020,6 +2044,7 @@ impl Default for LiveTimingStats {
             recent_sum_abs_ms: 0.0,
             recent_sum_ms: 0.0,
             recent_sum_sq_ms: 0.0,
+            recent_max_abs_ms: 0.0,
         }
     }
 }
@@ -2110,8 +2135,12 @@ pub fn record_live_timing_stats(stats: &mut LiveTimingStats, judgment: &Judgment
     stats.all_max_abs_ms = stats.all_max_abs_ms.max(abs);
     stats.all_count = stats.all_count.saturating_add(1);
 
+    // An incoming NaN cannot replace an evicted maximum.
+    let mut max_expired = false;
     if stats.recent_len == LIVE_TIMING_RECENT {
         let old = stats.recent_errors_ms[stats.recent_next];
+        max_expired =
+            old.abs() == stats.recent_max_abs_ms && (abs < stats.recent_max_abs_ms || abs.is_nan());
         stats.recent_sum_ms -= old;
         stats.recent_sum_abs_ms -= old.abs();
         stats.recent_sum_sq_ms = old.mul_add(-old, stats.recent_sum_sq_ms);
@@ -2119,6 +2148,14 @@ pub fn record_live_timing_stats(stats: &mut LiveTimingStats, judgment: &Judgment
         stats.recent_len += 1;
     }
     stats.recent_errors_ms[stats.recent_next] = e;
+    stats.recent_max_abs_ms = if max_expired {
+        stats
+            .recent_errors_ms
+            .iter()
+            .fold(0.0_f32, |max, value| max.max(value.abs()))
+    } else {
+        stats.recent_max_abs_ms.max(abs)
+    };
     stats.recent_sum_ms += e;
     stats.recent_sum_abs_ms += abs;
     stats.recent_sum_sq_ms += sq;
@@ -2128,17 +2165,13 @@ pub fn record_live_timing_stats(stats: &mut LiveTimingStats, judgment: &Judgment
 #[inline(always)]
 #[must_use]
 pub fn live_timing_stats_snapshot(stats: &LiveTimingStats) -> LiveTimingSnapshot {
-    let mut recent_max_abs = 0.0_f32;
-    for e in stats.recent_errors_ms.iter().take(stats.recent_len) {
-        recent_max_abs = recent_max_abs.max(e.abs());
-    }
     LiveTimingSnapshot {
         recent: stats_from_sums(
             stats.recent_len as u32,
             stats.recent_sum_ms,
             stats.recent_sum_abs_ms,
             stats.recent_sum_sq_ms,
-            recent_max_abs,
+            stats.recent_max_abs_ms,
         ),
         all: stats_from_sums(
             stats.all_count,
