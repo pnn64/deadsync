@@ -1,6 +1,9 @@
 use crate::note::{HoldResult, MineResult, Note};
 use crate::timing::{FA_PLUS_W0_MS, FA_PLUS_W010_MS, WindowCounts};
-use deadsync_core::{note::NoteType, song_time::song_time_ns_invalid};
+use deadsync_core::{
+    note::NoteType,
+    song_time::{normalized_song_rate, song_time_ns_invalid},
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TimingWindow {
@@ -81,14 +84,10 @@ pub fn judgment_time_error_ms_from_music_ns(time_error_music_ns: i64, music_rate
 #[inline(always)]
 #[must_use]
 pub fn judgment_time_error_music_ns_from_ms(time_error_ms: f32, music_rate: f32) -> i64 {
-    let rate = if music_rate.is_finite() && music_rate > 0.0 {
-        music_rate
-    } else {
-        1.0
-    };
-    (f64::from(time_error_ms) * f64::from(rate) * 1_000_000.0)
-        .round()
-        .clamp((i64::MIN + 1) as f64, i64::MAX as f64) as i64
+    let rate = normalized_song_rate(music_rate);
+    // Both former f64 clamp bounds round to the i64 endpoints used by the
+    // saturating cast. NaN still casts to zero, and infinities still saturate.
+    (f64::from(time_error_ms) * f64::from(rate) * 1_000_000.0).round() as i64
 }
 
 /// Aggregates per-note judgments on a single row into the final row judgment,

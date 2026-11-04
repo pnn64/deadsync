@@ -9,6 +9,10 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::sync::Arc;
 
+#[cfg(test)]
+#[path = "timing_conversion_kernel.rs"]
+mod conversion_kernel;
+
 // --- ITGMania Parity Constants and Helpers ---
 type TimingNs = i64;
 const INVALID_TIMING_NS: TimingNs = i64::MIN;
@@ -26,7 +30,11 @@ fn timing_ns_to_seconds(time_ns: TimingNs) -> f32 {
 
 #[inline(always)]
 fn timing_ns_delta_seconds(lhs: TimingNs, rhs: TimingNs) -> f32 {
-    ((i128::from(lhs) - i128::from(rhs)) as f64 * 1.0e-9) as f32
+    // Even MIN..MAX fits u64. Round the exact magnitude once, then restore
+    // its sign instead of converting a software-emulated signed i128.
+    let magnitude = lhs.abs_diff(rhs) as f64;
+    let delta = if lhs < rhs { -magnitude } else { magnitude };
+    (delta * 1.0e-9) as f32
 }
 
 #[inline(always)]
@@ -112,25 +120,16 @@ impl TimingProfileNs {
     #[inline(always)]
     #[must_use]
     pub fn from_profile_scaled(profile: &TimingProfile, seconds_per_second: f32) -> Self {
-        #[inline(always)]
-        fn scale_window_ns(seconds: f32, seconds_per_second: f32) -> TimingNs {
-            let seconds_per_second = if seconds_per_second.is_finite() && seconds_per_second > 0.0 {
-                seconds_per_second
-            } else {
-                1.0
-            };
-            let nanos = f64::from(seconds) * f64::from(seconds_per_second) * 1_000_000_000.0;
-            nanos.round().clamp((i64::MIN + 1) as f64, i64::MAX as f64) as TimingNs
-        }
+        let rate = f64::from(normalized_song_rate(seconds_per_second));
+        // Validate the shared rate once. The cast already saturates at the
+        // former f64 clamp bounds, which round to -2^63 and 2^63.
+        let scale_window_ns =
+            |seconds: f32| (f64::from(seconds) * rate * 1_000_000_000.0).round() as TimingNs;
 
         Self {
-            windows_ns: profile
-                .windows_s
-                .map(|seconds| scale_window_ns(seconds, seconds_per_second)),
-            fa_plus_window_ns: profile
-                .fa_plus_window_s
-                .map(|seconds| scale_window_ns(seconds, seconds_per_second)),
-            mine_window_ns: scale_window_ns(profile.mine_window_s, seconds_per_second),
+            windows_ns: profile.windows_s.map(scale_window_ns),
+            fa_plus_window_ns: profile.fa_plus_window_s.map(scale_window_ns),
+            mine_window_ns: scale_window_ns(profile.mine_window_s),
         }
     }
 }
