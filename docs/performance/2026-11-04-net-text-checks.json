@@ -1,0 +1,59 @@
+{
+  "commands": [
+    {
+      "command": "cargo clippy --offline --manifest-path D:/deadsync-net-text-20261104/workspace/Cargo.toml --all-targets --no-deps -- -D warnings",
+      "exit_code": 0,
+      "log_sha256": "0aeabd313a4c9f237b4c05ab92bc3bdd0883ddc46a48ec14359bca0633bf1a84"
+    },
+    {
+      "command": "rustfmt --check --edition 2024 (both src/lib.rs, both integration targets and frozen originals)",
+      "exit_code": 0
+    },
+    {
+      "command": "python -m py_compile scripts/benchmark_net_text.py",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "rustflags": "-C target-feature=+crt-static",
+  "verified_source_binary_and_correctness_hashes": {
+    "baseline": 25,
+    "control-aligned": 25,
+    "control-wrappers": 25,
+    "control": 25,
+    "debug": 21,
+    "final": 21,
+    "snippet": 21,
+    "timeout": 21,
+    "version": 21
+  },
+  "final_and_debug_sources_match_checkout": true,
+  "final_measurement_rows": 160,
+  "final_measurements_sha256": "7382537839b1f15dcbfd7098a1e295ff06c155aa2080c3c2f211e92c885aac91",
+  "final_run_log_sha256": {
+    "run-0-net.log": "c88484091030f19ff6a88234d0ca764c04b695b8e27acd482b88aefe5e4e1d32",
+    "run-0-version-default.log": "2884cccefd22f70d7a175b4ab70444090aa49cac5475d2a91968fcaf3df31518",
+    "run-0-version-invalid.log": "22e28b5dc14671e3a1830dd769403c4eabedfdc946e561585b3b88c5f4303c45",
+    "run-0-version-override.log": "c12f41c06aebc0a50fc5608b21bc603c9af9cfe070b9d379f1f9d1a4de06c248",
+    "run-1-net.log": "a1775219a8bb84a469ce8c7a809a29bd3dd7d46d95f5379ec20e12ee6d68bb53",
+    "run-1-version-default.log": "be2172864afa316c8c86419caacc8bff1afafb6578fff8e5565a3df6f4e2ec61",
+    "run-1-version-invalid.log": "9e3e2631920d54ea05b42f212f12d6c8d124f1e225d7aaa282ad602b9f212057",
+    "run-1-version-override.log": "266b48bd394c00d870d859d30bf1528f358d6599dadd0d6c8fbc494545d9dd1a",
+    "run-2-net.log": "b7362c8573eb4606d34e2db16a70b193bb204958d8a8a073d97c2e290cf7c185",
+    "run-2-version-default.log": "a405916b1dc78e2f3efa832ed0ad9fbbfc0c5cca1d508b660b49a79d26162082",
+    "run-2-version-invalid.log": "9c9deb9cd168bec2239ef684863478543b39aa95b55610e537d969566b15bdb6",
+    "run-2-version-override.log": "19b56bc77ce2f5611c3e1782bc6bb6d22d900ce9369a8e71325f059eb33d90d9",
+    "run-3-net.log": "8445fc524f14db656b3ae93d36efb338de2fb699bb7521ccd1112e2190ed8ba8",
+    "run-3-version-default.log": "962b6102224033af89fd512a1a36da37e86cbd25db5d32161952eef503bb895b",
+    "run-3-version-invalid.log": "63d750876e70affdbf597490c2c20bb3e016fb8d28d60441e0fd458716667a68",
+    "run-3-version-override.log": "53aaf4950b1ecc7bfe81608b1acaff89fd85f3bc7184dee136a423d739882867",
+    "run-4-net.log": "1ee567ca228630a7b18f5eb5c195bb157fa84702cf0e1a2f2d3577e79b33f2d8",
+    "run-4-version-default.log": "9d6951a696177a86fbbd754fb1c0d181f02cc269583b29486ae67e1aa0cd7789",
+    "run-4-version-invalid.log": "915c70ae03b6b0d7ecf6c33ec5848d3ce6cfe8c60120630992b849972effb8a2",
+    "run-4-version-override.log": "3437ed76e8fbd3e7cd7d346e2dfec0d5a674c94faf126b03277c503caf303a65"
+  },
+  "final_sources_match_index_after_git_newline_normalization": true
+}
