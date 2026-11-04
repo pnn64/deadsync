@@ -1,0 +1,110 @@
+{
+  "baseline": "a2d215ee50f2a90cf7424e9c314b6fd8380704a1",
+  "stages": [
+    {
+      "stage": "baseline",
+      "runs": 1,
+      "rows": 62,
+      "trace_bytes": 276312335,
+      "trace_sha256": "ce67d9d89cae5dbc4dba7704a7fb78016704b2ebba6e58eeaffcc8caacf879b5"
+    },
+    {
+      "stage": "lint-debug",
+      "runs": 0,
+      "rows": 0,
+      "trace_bytes": 276312335,
+      "trace_sha256": "ce67d9d89cae5dbc4dba7704a7fb78016704b2ebba6e58eeaffcc8caacf879b5"
+    },
+    {
+      "stage": "checked-debug",
+      "runs": 0,
+      "rows": 0,
+      "trace_bytes": 276312335,
+      "trace_sha256": "ce67d9d89cae5dbc4dba7704a7fb78016704b2ebba6e58eeaffcc8caacf879b5"
+    },
+    {
+      "stage": "final-debug",
+      "runs": 0,
+      "rows": 0,
+      "trace_bytes": 276312335,
+      "trace_sha256": "ce67d9d89cae5dbc4dba7704a7fb78016704b2ebba6e58eeaffcc8caacf879b5"
+    },
+    {
+      "stage": "final",
+      "runs": 5,
+      "rows": 310,
+      "trace_bytes": 276312335,
+      "trace_sha256": "ce67d9d89cae5dbc4dba7704a7fb78016704b2ebba6e58eeaffcc8caacf879b5"
+    },
+    {
+      "stage": "control",
+      "runs": 5,
+      "rows": 310,
+      "trace_bytes": 276312335,
+      "trace_sha256": "ce67d9d89cae5dbc4dba7704a7fb78016704b2ebba6e58eeaffcc8caacf879b5"
+    }
+  ],
+  "full_tests": 112,
+  "fixture_files": 859,
+  "source_scope": "two production bodies and one test registration",
+  "normal_check": {
+    "command": [
+      "cargo",
+      "check",
+      "--offline",
+      "--jobs",
+      "2",
+      "--manifest-path",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.toml",
+      "-p",
+      "deadlib-assets",
+      "--lib",
+      "--release",
+      "--message-format=json"
+    ],
+    "exit_code": 0,
+    "before": {
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.toml": "67216631b3a2875635711ac280e15a08ed17a78c1e934e3a525bf59be8a280b5",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.lock": "b6d7ef10dbd293a81581b81f1de3d4e8ec855385e13c0cc0db6b59319d693a24",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-assets\\src\\lib.rs": "4b7561513a0f0dbcfc438855b677ff53242d9d164521f7af331379a0e43d0688",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-assets\\src\\decode.rs": "bd139d2a7b2f8cc820959bd6b8abb03a141388a593d92f52f9deb9e07079948f",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-assets\\src\\decode\\texture_axis_performance.rs": "0c9a0ac11540fb29b5721520ddbda2b0ba8d2218fda681c288112f27def94cb8",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-assets\\src\\texture_axis_original.rs": "ea2ae85c0356f3bb7a8d2185d98a617709dcbee7b325252e14c193f743a17382"
+    },
+    "after": {
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.toml": "67216631b3a2875635711ac280e15a08ed17a78c1e934e3a525bf59be8a280b5",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.lock": "b6d7ef10dbd293a81581b81f1de3d4e8ec855385e13c0cc0db6b59319d693a24",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-assets\\src\\lib.rs": "4b7561513a0f0dbcfc438855b677ff53242d9d164521f7af331379a0e43d0688",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-assets\\src\\decode.rs": "bd139d2a7b2f8cc820959bd6b8abb03a141388a593d92f52f9deb9e07079948f",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-assets\\src\\decode\\texture_axis_performance.rs": "0c9a0ac11540fb29b5721520ddbda2b0ba8d2218fda681c288112f27def94cb8",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\crates\\deadlib-assets\\src\\texture_axis_original.rs": "ea2ae85c0356f3bb7a8d2185d98a617709dcbee7b325252e14c193f743a17382"
+    },
+    "log_sha256": "7eb05d7407d1506e59fdee73bf7c4f913ab4ccaca541eb46380a5f8d8f26cb93"
+  },
+  "clippy": {
+    "command": [
+      "C:\\Users\\PerfectTaste\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin\\clippy-driver.exe",
+      "--test",
+      "--edition=2024",
+      "-C",
+      "opt-level=3",
+      "-C",
+      "target-feature=+crt-static",
+      "-C",
+      "debuginfo=0",
+      "-C",
+      "lto=fat",
+      "--extern",
+      "image=D:\\deadsync-partner-charts-20261104\\full-workspace\\target\\release\\deps\\libimage-09b48357b23196b7.rlib",
+      "-L",
+      "dependency=D:\\deadsync-partner-charts-20261104\\full-workspace\\target\\release\\deps",
+      "D:\\deadsync-texture-axis-20261104\\final\\compiled.rs",
+      "-o",
+      "D:\\deadsync-texture-axis-20261104\\clippy.rmeta",
+      "--emit=metadata",
+      "-D",
+      "warnings"
+    ],
+    "exit_code": 0
+  }
+}

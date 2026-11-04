@@ -729,6 +729,50 @@ fn zoom_image(mut image: RgbaImage, size: [u32; 2]) -> RgbaImage {
             image = zoom_half(&image, next);
             continue;
         }
+        // Equal-axis coordinates select the same pixel through 2^22.
+        // Beyond that, f32 rounding can put the unused right sample out of bounds.
+        let vertical = image.width() == next[0] && image.width() <= 1 << 22;
+        let horizontal = image.height() == next[1] && image.height() <= 1 << 22;
+        if vertical || horizontal {
+            let blend = |a: [u8; 4], b: [u8; 4], weight: u32, rounding: u64| {
+                let mut pixel = [0; 4];
+                for c in 0..2 {
+                    let a = u64::from(a[c]) | (u64::from(a[c + 2]) << 32);
+                    let b = u64::from(b[c]) | (u64::from(b[c + 2]) << 32);
+                    let pair =
+                        (a * u64::from(weight) + b * u64::from(16777216 - weight) + rounding) >> 24;
+                    pixel[c] = pair as u8;
+                    pixel[c + 2] = (pair >> 32) as u8;
+                }
+                pixel
+            };
+            let mut output = RgbaImage::new(next[0], next[1]);
+            let width = image.width() as usize;
+            let source = image.as_raw().as_chunks::<4>().0;
+            let rows = output
+                .as_mut()
+                .as_chunks_mut::<4>()
+                .0
+                .chunks_exact_mut(next[0] as usize);
+            if vertical {
+                for (row, (top, bottom, weight)) in rows.zip(zoom_axis(image.height(), next[1])) {
+                    let upper = &source[top as usize * width..(top as usize + 1) * width];
+                    let lower = &source[bottom as usize * width..(bottom as usize + 1) * width];
+                    for ((pixel, &a), &b) in row.iter_mut().zip(upper).zip(lower) {
+                        *pixel = blend(a, b, weight, 0x0080_0000_0080_0000);
+                    }
+                }
+            } else {
+                let xs: Vec<_> = zoom_axis(image.width(), next[0]).collect();
+                for (row, source) in rows.zip(source.chunks_exact(width)) {
+                    for (pixel, &(left, right, weight)) in row.iter_mut().zip(&xs) {
+                        *pixel = blend(source[left as usize], source[right as usize], weight, 0);
+                    }
+                }
+            }
+            image = output;
+            continue;
+        }
         let xs: Vec<_> = zoom_axis(image.width(), next[0]).collect();
         let ys = zoom_axis(image.height(), next[1]);
         let mut output = RgbaImage::new(next[0], next[1]);
@@ -1056,6 +1100,9 @@ mod indexed_pixels_perf;
 
 #[cfg(test)]
 mod preparation_perf;
+
+#[cfg(test)]
+mod texture_axis_performance;
 
 #[cfg(test)]
 mod direct_media_perf;
