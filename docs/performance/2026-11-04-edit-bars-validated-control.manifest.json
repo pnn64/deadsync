@@ -1,0 +1,46 @@
+{
+  "stage": "validated-control",
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "target-feature=+crt-static",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "lto=fat",
+    "D:\\deadsync-edit-bars-20261104\\validated-control\\compiled.rs",
+    "-o",
+    "D:\\deadsync-edit-bars-20261104\\validated-control\\edit_bars.exe"
+  ],
+  "baseline_revision": "c3946aad58d02096c11465f11dd63a160752fb42",
+  "sources": {
+    "crates/deadsync-notefield/src/measure_lines.rs": "cbcb8d217c909d0934b5003f1047b2763f4e9577022bba762c4adaef5e61b49d",
+    "crates/deadsync-notefield/src/edit_bars_performance.rs": "f10fa95ea723562e8910b3c308ebdc3db18553ebd2ad8df09d8c9a87fb70d334",
+    "crates/deadsync-notefield/src/edit_bars_original.rs": "3bcba9b95d6950ab50cdfee87d438c451f9dffb4bf4e67398e39f8f4c169c1f1",
+    "crates/deadsync-rules/src/timing.rs": "3b47d80fdf2e24cfbeefe42efd552d60b37190071ab72a36eed6f93fe7634cec",
+    "crates/deadsync-core/src/timing.rs": "9ee2cc7caafdb584026908caa44324f480b51642f0dbad322225ad7f51224f36",
+    "tests/support/perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "tests/support/kernel_bench.rs": "c51545a68563311e33b5d3a1b6b3b08a99224b7cc46555a55a21d7d0cbdd2866",
+    "scripts/benchmark_edit_bars.py": "146946043fa65b9393c3ea7dbd0f2bac1bbaf86fd87fcd1dffe32cb9d9590397"
+  },
+  "fragments": {
+    "kernels": "c4240a81f84b0b579da33b21084f548d282fcb91ac541a96074d3ece1ae97495",
+    "signature": "f0516a82e26843ef16abf1745fa3df3c6ca7680a4b44ac54ac42565fd851ca8d",
+    "default": "ad3dabff25f9925af5ad5a9c5d3a85ca74778e214578f8446087260e4a30febc",
+    "rows": "c95e5b7b894f645a8fad2f8b20659dcbbfa9f1fb2f23367692d2a0d7ad2c2704",
+    "convert": "746b19b68f17db09e2d0df9cb1e1e8641c1b90bb9c9cb75ccb17ec7124b56499"
+  },
+  "compiled_sha256": "a80c1ead5c18afb7b7a568603306a01a30370069597221a60c9b2ca0ebdfaa10",
+  "binary_sha256": "784b32889932b079efcbb90fabffbc9ea28bcfe5f273b0a0de18510115ec4895",
+  "correctness_sha256": "6593c1948419a50b1b234ec011819948b2dee7cfef1cf386a7ea07576909da7f",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cpu": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "passed_tests": 5,
+  "runs": 5,
+  "trace_sha256": "23a28a302afda0676bcb8eb8a4dbd76daeb9e441877cd099a78a9324e67dbd0d",
+  "trace_bytes": 3389752
+}
