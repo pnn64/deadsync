@@ -605,7 +605,9 @@ pub struct ScoreboxMachineView {
 pub struct ScoreboxSideView {
     pub joined: bool,
     pub chart_hash: Option<String>,
-    pub groovestats_active: bool,
+    /// Any online leaderboard service (GrooveStats, BoogieStats, or ArrowCloud)
+    /// can serve this side.
+    pub online_active: bool,
     pub show_ex_score: bool,
     pub pane_filter: deadsync_score::SelectMusicScoreboxFilter,
     pub display_name: Arc<str>,

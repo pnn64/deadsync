@@ -2655,7 +2655,7 @@ fn scorebox_refresh_pending_from(
     profiles.iter().zip(snapshots).zip(rival_score_types).any(
         |((profile, snapshot), rival_score_type)| {
             (profile.display_scorebox || rival_score_type.is_some())
-                && profile.gs_active
+                && profile.online_active()
                 && snapshot.as_ref().is_some_and(|snapshot| snapshot.loading)
         },
     )
@@ -6693,6 +6693,12 @@ mod tests {
         profiles[0].display_scorebox = true;
         profiles[0].gs_active = false;
         assert!(!scorebox_refresh_pending_from(
+            &profiles,
+            &snapshots,
+            &rival_score_types,
+        ));
+        profiles[0].ac_active = true;
+        assert!(scorebox_refresh_pending_from(
             &profiles,
             &snapshots,
             &rival_score_types,

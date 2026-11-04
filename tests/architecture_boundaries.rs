@@ -3906,7 +3906,7 @@ fn select_music_leaderboard_refresh_is_shell_owned() {
     assert!(screen.contains("SimplyLoveOnlineRequest::RefreshPlayerLeaderboard"));
     assert!(
         views.contains("pub struct ScoreboxSideView")
-            && views.contains("pub groovestats_active: bool")
+            && views.contains("pub online_active: bool")
             && views.contains("pub scoreboxes: Option<[ScoreboxSideView; 2]>")
     );
     assert!(effects.contains("RefreshPlayerLeaderboard {"));

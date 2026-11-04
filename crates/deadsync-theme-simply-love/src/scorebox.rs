@@ -5,6 +5,78 @@ pub const SCOREBOX_H: f32 = 80.0;
 pub const SCOREBOX_BORDER: f32 = 5.0;
 pub const SCOREBOX_LOGO_MAX_W_FRAC: f32 = 0.94;
 pub const SCOREBOX_LOGO_MAX_H_FRAC: f32 = 0.94;
+/// Online fetches that resolve inside this window never show a loading label.
+/// The box keeps its frame with blank rows until the data lands, so a fast
+/// service does not flash "Loading ..." for a few frames.
+pub const SCOREBOX_LOADING_GRACE_SECONDS: f32 = 0.4;
+/// Rows fade in over this long once a pending fetch resolves.
+pub const SCOREBOX_REVEAL_SECONDS: f32 = 0.15;
+
+/// Where one Select Music side's online fetch is on the screen's
+/// selection-animation clock. The theme advances it from each shell snapshot
+/// and reads it every frame to decide between a blank pending box, a loading
+/// label, and how far the rows have faded in.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ScoreboxFetchPhase {
+    pub loading_since: Option<f32>,
+    pub ready_at: Option<f32>,
+}
+
+impl ScoreboxFetchPhase {
+    /// Advance from the previous shell snapshot to the current one.
+    /// `previous_loading` and `current_loading` are `None` when that snapshot
+    /// carried no online leaderboards at all.
+    #[must_use]
+    pub fn advanced(
+        self,
+        same_chart: bool,
+        previous_loading: Option<bool>,
+        current_loading: Option<bool>,
+        now: f32,
+    ) -> Self {
+        let Some(current_loading) = current_loading else {
+            return Self::default();
+        };
+        if !same_chart {
+            return Self {
+                loading_since: current_loading.then_some(now),
+                ready_at: None,
+            };
+        }
+        match (previous_loading, current_loading) {
+            (Some(true), false) => Self {
+                ready_at: Some(now),
+                ..self
+            },
+            (Some(false) | None, true) => Self {
+                loading_since: Some(now),
+                ready_at: None,
+            },
+            (Some(true), true) => Self {
+                loading_since: self.loading_since.or(Some(now)),
+                ready_at: None,
+            },
+            (Some(false) | None, false) => self,
+        }
+    }
+
+    /// True while a fetch is young enough that no loading label should show.
+    #[inline(always)]
+    #[must_use]
+    pub fn within_loading_grace(self, now: f32) -> bool {
+        self.loading_since
+            .is_some_and(|since| now - since < SCOREBOX_LOADING_GRACE_SECONDS)
+    }
+
+    /// Row alpha for a fetch that resolved at `ready_at`; 1.0 when nothing is
+    /// fading in.
+    #[inline(always)]
+    #[must_use]
+    pub fn reveal_alpha(self, now: f32) -> f32 {
+        self.ready_at
+            .map_or(1.0, |ready_at| clamp01((now - ready_at) / SCOREBOX_REVEAL_SECONDS))
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ScoreboxCycleState {
@@ -211,5 +283,75 @@ mod tests {
         let tiny = fit_scorebox_logo(10, 10, 0.5, 2.0);
         assert_eq!(tiny.width, 10.0);
         assert_eq!(tiny.height, 10.0);
+    }
+}
+
+#[cfg(test)]
+mod fetch_phase_tests {
+    use super::*;
+
+    #[test]
+    fn new_chart_starts_a_fresh_phase() {
+        let stale = ScoreboxFetchPhase {
+            loading_since: Some(1.0),
+            ready_at: Some(2.0),
+        };
+        assert_eq!(
+            stale.advanced(false, Some(false), Some(true), 10.0),
+            ScoreboxFetchPhase {
+                loading_since: Some(10.0),
+                ready_at: None,
+            }
+        );
+        assert_eq!(
+            stale.advanced(false, None, Some(false), 10.0),
+            ScoreboxFetchPhase::default(),
+            "a cached chart arrives ready and never fades in"
+        );
+        assert_eq!(
+            stale.advanced(true, Some(true), None, 10.0),
+            ScoreboxFetchPhase::default()
+        );
+    }
+
+    #[test]
+    fn same_chart_tracks_loading_start_and_ready_time() {
+        let started = ScoreboxFetchPhase::default().advanced(true, None, Some(true), 3.0);
+        assert_eq!(started.loading_since, Some(3.0));
+        assert!(started.ready_at.is_none());
+
+        let still_loading = started.advanced(true, Some(true), Some(true), 3.2);
+        assert_eq!(still_loading.loading_since, Some(3.0));
+
+        let ready = still_loading.advanced(true, Some(true), Some(false), 3.3);
+        assert_eq!(ready.loading_since, Some(3.0));
+        assert_eq!(ready.ready_at, Some(3.3));
+
+        let retained = ready.advanced(true, Some(false), Some(false), 9.0);
+        assert_eq!(retained, ready);
+
+        let refetch = retained.advanced(true, Some(false), Some(true), 20.0);
+        assert_eq!(
+            refetch,
+            ScoreboxFetchPhase {
+                loading_since: Some(20.0),
+                ready_at: None,
+            }
+        );
+    }
+
+    #[test]
+    fn grace_and_reveal_follow_the_clock() {
+        let phase = ScoreboxFetchPhase::default().advanced(true, None, Some(true), 5.0);
+        assert!(phase.within_loading_grace(5.0));
+        assert!(phase.within_loading_grace(5.0 + SCOREBOX_LOADING_GRACE_SECONDS * 0.5));
+        assert!(!phase.within_loading_grace(5.0 + SCOREBOX_LOADING_GRACE_SECONDS));
+        assert!(!ScoreboxFetchPhase::default().within_loading_grace(5.0));
+
+        let ready = phase.advanced(true, Some(true), Some(false), 5.2);
+        assert_eq!(ready.reveal_alpha(5.2), 0.0);
+        assert!((ready.reveal_alpha(5.2 + SCOREBOX_REVEAL_SECONDS * 0.5) - 0.5).abs() < 1e-4);
+        assert_eq!(ready.reveal_alpha(5.2 + SCOREBOX_REVEAL_SECONDS), 1.0);
+        assert_eq!(ScoreboxFetchPhase::default().reveal_alpha(0.0), 1.0);
     }
 }

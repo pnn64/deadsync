@@ -66,6 +66,62 @@ struct GameplayScoreboxRow {
     score_color: [f32; 4],
 }
 
+/// Fairway green for the golf pane's border: deep enough to frame the pattern
+/// behind it without glowing next to the blue and pink boards.
+pub(crate) const SCOREBOX_GOLF_GREEN: [f32; 4] = [0.16, 0.48, 0.22, 1.0];
+/// Pattern tint and alpha over the pane's black fill, in the spirit of the
+/// event's result cards: visible texture, never competing with the rows.
+const GOLF_PANE_PATTERN_RGB: [f32; 3] = [0.85, 1.0, 0.85];
+const GOLF_PANE_PATTERN_ALPHA: f32 = 0.22;
+/// Drift in tiles per second.
+const GOLF_PANE_PATTERN_UV_VEL: [f32; 2] = [0.02, 0.012];
+/// Scorebox tiles are this many pane heights tall so the flags stay legible at
+/// scorebox size.
+const SCOREBOX_GOLF_PATTERN_TILE_HEIGHTS: f32 = 3.0;
+
+/// Where the course pattern is drawn and how large one tile is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct GolfPanePattern {
+    pub(crate) center: [f32; 2],
+    /// The pane's fill size; the texture repeats to cover it.
+    pub(crate) size: [f32; 2],
+    /// One pattern tile's height in pixels. Its width follows the texture.
+    pub(crate) tile_h: f32,
+    pub(crate) alpha: f32,
+    pub(crate) z: i16,
+}
+
+/// Tile the course pattern across a pane, drifting with `elapsed_seconds`.
+/// Pushed right after the pane's fill at the same z.
+pub(crate) fn push_golf_pane_pattern(
+    actors: &mut Vec<Actor>,
+    pattern: GolfPanePattern,
+    elapsed_seconds: f32,
+) {
+    let GolfPanePattern {
+        center: [center_x, center_y],
+        size: [w, h],
+        tile_h,
+        alpha,
+        z,
+    } = pattern;
+    if alpha <= 0.0 || tile_h <= 0.0 {
+        return;
+    }
+    let [tex_w, tex_h] = crate::resources::GOLF_PANE_PATTERN_TEXTURE_SIZE;
+    let tile_w = tile_h * (tex_w as f32 / tex_h as f32);
+    let u0 = (GOLF_PANE_PATTERN_UV_VEL[0] * elapsed_seconds).rem_euclid(1.0);
+    let v0 = (GOLF_PANE_PATTERN_UV_VEL[1] * elapsed_seconds).rem_euclid(1.0);
+    actors.push(act!(sprite_static(crate::resources::GOLF_PANE_PATTERN_TEXTURE):
+        align(0.5, 0.5):
+        xy(center_x, center_y):
+        setsize(w, h):
+        customtexturerect(u0, v0, u0 + w / tile_w, v0 + h / tile_h):
+        diffuse(GOLF_PANE_PATTERN_RGB[0], GOLF_PANE_PATTERN_RGB[1], GOLF_PANE_PATTERN_RGB[2], alpha):
+        z(z)
+    ));
+}
+
 #[derive(Clone, Debug)]
 struct GameplayScoreboxPane {
     kind: PaneKind,
@@ -95,7 +151,7 @@ impl GameplayScoreboxPlan {
         filter: score_data::SelectMusicScoreboxFilter,
         palette: JudgmentPalette,
     ) -> Self {
-        if !profile.display_scorebox || !profile.gs_active {
+        if !profile.display_scorebox || !profile.online_active() {
             return Self::default();
         }
         Self {
@@ -120,6 +176,7 @@ impl GameplayScoreboxPlan {
             center_y,
             zoom,
             elapsed_seconds,
+            1.0,
         );
     }
 }
@@ -181,15 +238,30 @@ impl ScoreboxCycleClock {
 pub(crate) struct SelectMusicScoreboxPresentation {
     local: SelectMusicScoreboxView,
     online: SelectMusicScoreboxView,
+    /// The online view with its loading label suppressed, shown while a fresh
+    /// fetch is still inside the loading grace window.
+    pending: SelectMusicScoreboxView,
     stale: SelectMusicScoreboxView,
 }
 
 impl SelectMusicScoreboxPresentation {
     pub(crate) fn new(runtime: &ScoreboxSideView) -> Self {
         let chart_present = runtime.chart_hash.is_some();
+        let online = build_select_music_scorebox_view(runtime, true, chart_present, true);
+        let mut pending = online.clone();
+        if runtime
+            .leaderboards
+            .as_ref()
+            .is_some_and(|snapshot| snapshot.loading)
+        {
+            pending.mode_label = score_mode_label(score_data::default_scorebox_mode_text(
+                runtime.show_ex_score,
+            ));
+        }
         Self {
             local: build_select_music_scorebox_view(runtime, true, chart_present, false),
-            online: build_select_music_scorebox_view(runtime, true, chart_present, true),
+            online,
+            pending,
             stale: build_select_music_scorebox_view(runtime, false, false, false),
         }
     }
@@ -199,9 +271,12 @@ impl SelectMusicScoreboxPresentation {
         &self,
         chart_matches: bool,
         show_online: bool,
+        within_loading_grace: bool,
     ) -> &SelectMusicScoreboxView {
         if !chart_matches {
             &self.stale
+        } else if show_online && within_loading_grace {
+            &self.pending
         } else if show_online {
             &self.online
         } else {
@@ -239,7 +314,7 @@ fn pane_color(kind: PaneKind) -> [f32; 4] {
                 .mul_add(SCOREBOX_HARD_EX_BORDER_TINT, SCOREBOX_GS_BLUE[2]),
             1.0,
         ],
-        PaneKind::Golf => [0.2, 0.8, 0.2, 1.0],
+        PaneKind::Golf => SCOREBOX_GOLF_GREEN,
         PaneKind::Srpg => SCOREBOX_SRPG_YELLOW,
         PaneKind::Itl => SCOREBOX_ITL_PINK,
     }
@@ -445,7 +520,7 @@ fn build_select_music_scorebox_view(
         show_rivals: false,
     };
 
-    if !show_rivals || !runtime.groovestats_active || !chart_matches {
+    if !show_rivals || !runtime.online_active || !chart_matches {
         return view;
     }
     let filter = runtime.pane_filter;
@@ -715,12 +790,16 @@ fn gameplay_panes_from_snapshot(
     panes
 }
 
+/// Panes for the wheel-side scorebox. Inside the loading grace window a fresh
+/// fetch shows the status frame with blank rows instead of a loading label.
 fn select_music_panes_from_snapshot(
     snapshot: &score_data::CachedPlayerLeaderboardData,
     runtime: &ScoreboxSideView,
+    within_loading_grace: bool,
 ) -> Vec<GameplayScoreboxPane> {
     if snapshot.loading {
-        return vec![gameplay_status_pane("Loading ...", false)];
+        let text = if within_loading_grace { "" } else { "Loading ..." };
+        return vec![gameplay_status_pane(text, false)];
     }
     if let Some(error) = snapshot.error.as_deref() {
         let text = error_text(error);
@@ -1182,9 +1261,9 @@ pub fn push_select_music_scorebox_actors(
     center_y: f32,
     zoom: f32,
     elapsed_seconds: f32,
+    fetch: SelectMusicScoreboxFetch,
 ) {
-    if !show_scorebox || !runtime.groovestats_active || runtime.chart_hash.as_deref() != chart_hash
-    {
+    if !show_scorebox || !runtime.online_active || runtime.chart_hash.as_deref() != chart_hash {
         return;
     }
     if chart_hash.is_none() {
@@ -1193,7 +1272,7 @@ pub fn push_select_music_scorebox_actors(
     let Some(snapshot) = runtime.leaderboards.as_ref() else {
         return;
     };
-    let panes = select_music_panes_from_snapshot(snapshot, runtime);
+    let panes = select_music_panes_from_snapshot(snapshot, runtime, fetch.within_loading_grace);
     push_gameplay_scorebox_actors_from_panes(
         actors,
         &panes,
@@ -1201,9 +1280,31 @@ pub fn push_select_music_scorebox_actors(
         center_y,
         zoom,
         elapsed_seconds,
+        fetch.rows_alpha,
     );
 }
 
+/// Where a Select Music side's online fetch is, evaluated on the screen clock
+/// rather than the scorebox cycle clock.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SelectMusicScoreboxFetch {
+    pub within_loading_grace: bool,
+    pub rows_alpha: f32,
+}
+
+impl SelectMusicScoreboxFetch {
+    #[must_use]
+    pub fn at(phase: scorebox_theme::ScoreboxFetchPhase, now_seconds: f32) -> Self {
+        Self {
+            within_loading_grace: phase.within_loading_grace(now_seconds),
+            rows_alpha: phase.reveal_alpha(now_seconds),
+        }
+    }
+}
+
+/// `rows_alpha` scales only the rows: the frame, header and course pattern
+/// stay solid, so a fetch that just resolved fades its entries in under an
+/// unchanged frame.
 fn push_gameplay_scorebox_actors_from_panes(
     actors: &mut Vec<Actor>,
     panes: &[GameplayScoreboxPane],
@@ -1211,6 +1312,7 @@ fn push_gameplay_scorebox_actors_from_panes(
     center_y: f32,
     zoom: f32,
     elapsed_seconds: f32,
+    rows_alpha: f32,
 ) {
     if panes.is_empty() {
         return;
@@ -1245,6 +1347,26 @@ fn push_gameplay_scorebox_actors_from_panes(
         diffuse(0.0, 0.0, 0.0, 1.0):
         z(z_base + 1)
     ));
+    // The golf pane carries the course pattern; it fades with the pane as the
+    // cycle crosses into or out of it.
+    let mut golf_mix = 0.0;
+    if cur.kind == PaneKind::Golf {
+        golf_mix += cycle.cur_alpha;
+    }
+    if cycle.next_idx != cycle.cur_idx && next.kind == PaneKind::Golf {
+        golf_mix += cycle.next_alpha;
+    }
+    push_golf_pane_pattern(
+        actors,
+        GolfPanePattern {
+            center: [center_x, center_y],
+            size: [w, h],
+            tile_h: h * SCOREBOX_GOLF_PATTERN_TILE_HEIGHTS,
+            alpha: GOLF_PANE_PATTERN_ALPHA * golf_mix.min(1.0),
+            z: z_base + 1,
+        },
+        elapsed_seconds,
+    );
     push_header_overlays(actors, cycle, cur, next, center_x, center_y, zoom, z_base);
 
     push_rows(
@@ -1254,7 +1376,7 @@ fn push_gameplay_scorebox_actors_from_panes(
         center_y,
         zoom,
         z_base,
-        cycle.cur_alpha,
+        cycle.cur_alpha * rows_alpha,
     );
     if cycle.next_idx != cycle.cur_idx {
         push_rows(
@@ -1264,7 +1386,7 @@ fn push_gameplay_scorebox_actors_from_panes(
             center_y,
             zoom,
             z_base,
-            cycle.next_alpha,
+            cycle.next_alpha * rows_alpha,
         );
     }
 }
@@ -1441,7 +1563,7 @@ mod tests {
         };
 
         let presentation = SelectMusicScoreboxPresentation::new(&runtime);
-        let view = presentation.view(true, false);
+        let view = presentation.view(true, false, false);
 
         assert_eq!(view.player_name.as_ref(), "P1");
         assert_eq!(view.player_score.as_ref(), "98.76%");
@@ -1449,9 +1571,9 @@ mod tests {
         assert_eq!(view.machine_score.as_ref(), "99.99%");
         assert_eq!(view.mode_label.as_ref(), "ITG Score");
         assert!(!view.show_rivals);
-        assert!(std::ptr::eq(view, presentation.view(true, false)));
+        assert!(std::ptr::eq(view, presentation.view(true, false, false)));
 
-        let stale = presentation.view(false, false);
+        let stale = presentation.view(false, false, false);
         assert_eq!(stale.player_name.as_ref(), "----");
         assert_eq!(stale.machine_name.as_ref(), "----");
         assert_eq!(stale.player_score.as_ref(), "??.??%");
@@ -1538,7 +1660,7 @@ mod tests {
             ..ScoreboxSideView::default()
         };
         let loading = score_data::CachedPlayerLeaderboardData::loading();
-        let panes = select_music_panes_from_snapshot(&loading, &runtime);
+        let panes = select_music_panes_from_snapshot(&loading, &runtime, false);
         assert_eq!(panes.len(), 1);
         let pane = &panes[0];
         assert_eq!(pane.kind, PaneKind::Other);
@@ -1549,7 +1671,7 @@ mod tests {
         assert!(!is_gs_logo(pane) && !is_ex_text(pane) && !is_arrowcloud_logo(pane));
 
         let mut actors = Vec::new();
-        push_gameplay_scorebox_actors_from_panes(&mut actors, &panes, 100.0, 100.0, 1.0, 0.0);
+        push_gameplay_scorebox_actors_from_panes(&mut actors, &panes, 100.0, 100.0, 1.0, 0.0, 1.0);
         assert!(
             actors.iter().all(|actor| !matches!(
                 actor,
@@ -1572,6 +1694,107 @@ mod tests {
         assert_eq!(gameplay[0].kind, PaneKind::Other);
         assert_eq!(gameplay[0].border_color, SCOREBOX_STATUS_GREY);
         assert!(gameplay[0].mode_text.as_str().is_empty());
+    }
+
+    fn online_runtime(leaderboards: score_data::CachedPlayerLeaderboardData) -> ScoreboxSideView {
+        ScoreboxSideView {
+            joined: true,
+            chart_hash: Some("chart".to_string()),
+            online_active: true,
+            leaderboards: Some(leaderboards),
+            ..ScoreboxSideView::default()
+        }
+    }
+
+    #[test]
+    fn select_music_loading_pane_waits_out_the_grace_window() {
+        let runtime = online_runtime(score_data::CachedPlayerLeaderboardData::loading());
+        let snapshot = runtime.leaderboards.as_ref().unwrap();
+
+        let pending = select_music_panes_from_snapshot(snapshot, &runtime, true);
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].kind, PaneKind::Other);
+        assert_eq!(pending[0].border_color, SCOREBOX_STATUS_GREY);
+        assert!(
+            pending[0].rows.iter().all(|row| row.name.as_str().is_empty()),
+            "inside the grace window the box shows no loading label"
+        );
+
+        let loading = select_music_panes_from_snapshot(snapshot, &runtime, false);
+        assert_eq!(loading[0].rows[0].name.as_str(), "Loading ...");
+    }
+
+    #[test]
+    fn pending_presentation_view_hides_the_loading_label() {
+        let runtime = online_runtime(score_data::CachedPlayerLeaderboardData::loading());
+        let presentation = SelectMusicScoreboxPresentation::new(&runtime);
+        assert_eq!(
+            presentation.view(true, true, false).mode_label.as_ref(),
+            "Loading ..."
+        );
+        assert_eq!(
+            presentation.view(true, true, true).mode_label.as_ref(),
+            "ITG Score"
+        );
+        assert!(std::ptr::eq(
+            presentation.view(true, false, true),
+            presentation.view(true, false, false)
+        ));
+        assert!(std::ptr::eq(
+            presentation.view(false, true, true),
+            presentation.view(false, true, false)
+        ));
+    }
+
+    #[test]
+    fn revealing_scorebox_fades_rows_but_keeps_the_frame() {
+        let runtime = online_runtime(score_data::CachedPlayerLeaderboardData::ready(
+            score_data::PlayerLeaderboardData {
+                panes: vec![pane("GrooveStats", vec![entry(1, "AAA", false, false)])],
+                srpg_self_score: None,
+                itl_self_score: None,
+                itl_self_rank: None,
+            },
+        ));
+        let just_ready = scorebox_theme::ScoreboxFetchPhase {
+            loading_since: Some(0.0),
+            ready_at: Some(1.0),
+        };
+        let push_at = |now: f32| {
+            let mut actors = Vec::new();
+            push_select_music_scorebox_actors(
+                &mut actors,
+                &runtime,
+                Some("chart"),
+                true,
+                0.0,
+                0.0,
+                1.0,
+                0.0,
+                SelectMusicScoreboxFetch::at(just_ready, now),
+            );
+            actors
+        };
+        let name_rows = |actors: &[Actor]| {
+            actors
+                .iter()
+                .filter(|actor| matches!(actor, Actor::Text { content, .. } if content.as_str() == "AAA"))
+                .count()
+        };
+
+        let hidden = push_at(1.0);
+        assert!(hidden.len() >= 2, "frame quads are drawn at reveal start");
+        assert_eq!(name_rows(&hidden), 0);
+
+        let shown = push_at(2.0);
+        assert_eq!(name_rows(&shown), 1);
+        assert_eq!(
+            SelectMusicScoreboxFetch::at(scorebox_theme::ScoreboxFetchPhase::default(), 0.0),
+            SelectMusicScoreboxFetch {
+                within_loading_grace: false,
+                rows_alpha: 1.0,
+            }
+        );
     }
 }
 
@@ -1623,6 +1846,45 @@ mod cycle_clock_tests {
 #[cfg(test)]
 mod golf_tests {
     use super::*;
+
+    #[test]
+    fn golf_pane_pattern_tiles_and_drifts_inside_the_pane() {
+        let pattern = GolfPanePattern {
+            center: [100.0, 50.0],
+            size: [162.0, 80.0],
+            tile_h: 240.0,
+            alpha: 0.22,
+            z: 72,
+        };
+        let mut actors = Vec::new();
+        push_golf_pane_pattern(&mut actors, pattern, 10.0);
+        let Some(Actor::Sprite { source, uv_rect, tint, .. }) = actors.first() else {
+            panic!("the pattern is one sprite");
+        };
+        assert_eq!(source.texture_key(), Some(crate::resources::GOLF_PANE_PATTERN_TEXTURE));
+        let uv = uv_rect.expect("the pattern repeats through a custom texture rect");
+        assert!((uv[2] - uv[0] - 162.0 / 300.0).abs() < 1e-4, "u span is pane width over tile width");
+        assert!((uv[3] - uv[1] - 80.0 / 240.0).abs() < 1e-4, "v span is pane height over tile height");
+        assert!((tint[3] - 0.22).abs() < 1e-6);
+
+        let mut later = Vec::new();
+        push_golf_pane_pattern(&mut later, pattern, 20.0);
+        let Some(Actor::Sprite { uv_rect: later_uv, .. }) = later.first() else { panic!() };
+        assert_ne!(later_uv, uv_rect, "the pattern drifts");
+
+        let mut none = Vec::new();
+        push_golf_pane_pattern(&mut none, GolfPanePattern { alpha: 0.0, ..pattern }, 0.0);
+        assert!(none.is_empty(), "a fully faded pattern pushes nothing");
+    }
+
+    #[test]
+    fn golf_pane_border_is_a_muted_green() {
+        let [r, g, b, a] = pane_color(PaneKind::Golf);
+        assert!(g > r && g > b, "still reads as green");
+        assert!(g < 0.6, "but no longer glows");
+        assert_eq!(a, 1.0);
+    }
+
     #[test]
     fn golf_rows_format_raw_strokes_without_percent_clamping() {
         let entry = score_data::LeaderboardEntry { rank: 1, name: "Golf Player".into(), machine_tag: None, score: 123456.0, date: String::new(), is_rival: false, is_self: false, is_fail: false };

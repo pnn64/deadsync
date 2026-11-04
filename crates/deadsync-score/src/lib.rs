@@ -11483,6 +11483,8 @@ mod tests {
         let snapshot = GameplayScoreboxProfileSnapshot::default();
         assert!(!snapshot.display_scorebox);
         assert!(!snapshot.gs_active);
+        assert!(!snapshot.ac_active);
+        assert!(!snapshot.online_active());
         assert!(!snapshot.show_ex_score);
         assert!(snapshot.api_key().is_empty());
         assert!(snapshot.arrowcloud_api_key().is_empty());
@@ -11510,6 +11512,8 @@ mod tests {
 
         assert!(snapshot.display_scorebox);
         assert!(snapshot.gs_active);
+        assert!(snapshot.ac_active);
+        assert!(snapshot.online_active());
         assert!(snapshot.show_ex_score);
         assert_eq!(snapshot.api_key(), "gs-key");
         assert_eq!(snapshot.arrowcloud_api_key(), "ac-key");
@@ -11518,6 +11522,32 @@ mod tests {
         assert_eq!(snapshot.persistent_profile_id(), Some("profile-1"));
         assert_eq!(snapshot.auto_profile_id(), Some("profile-1"));
         assert!(snapshot.should_auto_populate());
+    }
+
+    #[test]
+    fn scorebox_snapshot_is_online_with_only_an_arrowcloud_key() {
+        let snapshot = scorebox_snapshot(
+            true,
+            false,
+            true,
+            true,
+            true,
+            false,
+            "  ",
+            "ac-key",
+            "",
+            Some("profile-1".to_string()),
+        );
+        assert!(!snapshot.gs_active);
+        assert!(snapshot.ac_active);
+        assert!(snapshot.online_active());
+        assert!(snapshot.include_arrowcloud());
+
+        let disabled = scorebox_snapshot(
+            true, false, true, true, false, false, "  ", "ac-key", "", None,
+        );
+        assert!(!disabled.ac_active);
+        assert!(!disabled.online_active());
     }
 
     #[test]
@@ -11535,6 +11565,8 @@ mod tests {
             Some("profile-1".to_string()),
         );
         assert!(!not_joined.gs_active);
+        assert!(!not_joined.ac_active);
+        assert!(!not_joined.online_active());
         assert!(not_joined.include_arrowcloud());
 
         let missing_keys = scorebox_snapshot(
@@ -11550,6 +11582,7 @@ mod tests {
             Some("profile-1".to_string()),
         );
         assert!(!missing_keys.gs_active);
+        assert!(!missing_keys.ac_active);
         assert!(!missing_keys.include_arrowcloud());
         assert_eq!(missing_keys.auto_profile_id(), Some("profile-1"));
         assert!(!missing_keys.should_auto_populate());
@@ -11580,9 +11613,9 @@ mod tests {
     }
 
     #[test]
-    fn player_leaderboard_cache_key_requires_chart_and_gs() {
+    fn player_leaderboard_cache_key_requires_chart_and_an_online_service() {
         let inactive = scorebox_snapshot(
-            true, false, true, true, true, false, " ", "ac-key", "player", None,
+            true, false, true, true, true, false, " ", " ", "player", None,
         );
         assert!(player_leaderboard_cache_key("deadbeef", &inactive).is_none());
 
@@ -11590,6 +11623,18 @@ mod tests {
             true, false, true, true, true, false, "gs-key", "ac-key", "player", None,
         );
         assert!(player_leaderboard_cache_key(" ", &active).is_none());
+    }
+
+    #[test]
+    fn player_leaderboard_cache_key_accepts_arrowcloud_only_profiles() {
+        let arrowcloud_only = scorebox_snapshot(
+            true, false, true, true, true, false, " ", "ac-key", "", None,
+        );
+        let key = player_leaderboard_cache_key("deadbeef", &arrowcloud_only)
+            .expect("ArrowCloud-only profile should fetch leaderboards");
+        assert!(key.api_key.is_empty());
+        assert_eq!(key.arrowcloud_api_key, "ac-key");
+        assert!(key.include_arrowcloud);
     }
 
     #[test]

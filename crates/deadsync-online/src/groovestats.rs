@@ -837,6 +837,36 @@ pub fn fetched_player_leaderboards_from_api(
     }
 }
 
+#[inline(always)]
+fn empty_fetched_player_leaderboards() -> FetchedPlayerLeaderboards {
+    FetchedPlayerLeaderboards {
+        data: PlayerLeaderboardData {
+            panes: Vec::new(),
+            srpg_self_score: None,
+            itl_self_score: None,
+            itl_self_rank: None,
+        },
+        imported_score: None,
+        itl_self_found: false,
+    }
+}
+
+/// Why a combined leaderboard request cannot run, if no service has a key.
+#[must_use]
+pub fn combined_leaderboard_request_error(
+    api_key: &str,
+    arrowcloud_api_key: Option<&str>,
+) -> Option<&'static str> {
+    let has_groovestats = !api_key.trim().is_empty();
+    let has_arrowcloud = arrowcloud_api_key.is_some_and(|key| !key.trim().is_empty());
+    (!has_groovestats && !has_arrowcloud)
+        .then_some("Missing GrooveStats and ArrowCloud API keys for leaderboard request.")
+}
+
+/// Fetch the `GrooveStats` (or `BoogieStats`) boards when that key is set,
+/// then merge the `ArrowCloud` boards when that key is set. Either service
+/// alone is enough; an `ArrowCloud` failure is fatal only when it is the sole
+/// service, otherwise it is reported beside the `GrooveStats` result.
 pub fn fetch_combined_player_leaderboards(
     service: Service,
     api_key: &str,
@@ -847,13 +877,19 @@ pub fn fetch_combined_player_leaderboards(
     max_entries: usize,
 ) -> Result<CombinedPlayerLeaderboards, OnlineRequestError> {
     let max_entries = max_entries.max(1);
-    let decoded = fetch_player_leaderboards(service, api_key, chart_hash, Some(max_entries))?;
-    let mut fetched = fetched_player_leaderboards_from_api(decoded, username, show_ex_score);
+    let has_groovestats = !api_key.trim().is_empty();
+    let mut fetched = if has_groovestats {
+        let decoded = fetch_player_leaderboards(service, api_key, chart_hash, Some(max_entries))?;
+        fetched_player_leaderboards_from_api(decoded, username, show_ex_score)
+    } else {
+        empty_fetched_player_leaderboards()
+    };
     let mut arrowcloud_error = None;
 
     if let Some(arrowcloud_api_key) = arrowcloud_api_key {
         match crate::arrowcloud::fetch_leaderboard_panes(chart_hash, arrowcloud_api_key, max_entries) {
             Ok(arrowcloud_panes) => insert_arrowcloud_panes(&mut fetched, arrowcloud_panes),
+            Err(error) if !has_groovestats => return Err(error),
             Err(error) => arrowcloud_error = Some(error),
         }
     }
@@ -876,8 +912,8 @@ pub fn fetch_validated_combined_player_leaderboards(
     if chart_hash.trim().is_empty() {
         return Err("Missing chart hash for leaderboard request.".into());
     }
-    if api_key.trim().is_empty() {
-        return Err("Missing GrooveStats API key for leaderboard request.".into());
+    if let Some(message) = combined_leaderboard_request_error(api_key, arrowcloud_api_key) {
+        return Err(message.into());
     }
     fetch_combined_player_leaderboards(
         service,
@@ -4335,10 +4371,25 @@ mod tests {
             true,
             10,
         )
-        .expect_err("missing key should fail before request");
+        .expect_err("missing keys should fail before request");
         assert_eq!(
             missing_key.to_string(),
-            "Missing GrooveStats API key for leaderboard request."
+            "Missing GrooveStats and ArrowCloud API keys for leaderboard request."
+        );
+
+        let blank_keys = fetch_validated_combined_player_leaderboards(
+            Service::GrooveStats,
+            " ",
+            "player",
+            "deadbeef",
+            Some("  "),
+            true,
+            10,
+        )
+        .expect_err("blank keys should fail before request");
+        assert_eq!(
+            blank_keys.to_string(),
+            "Missing GrooveStats and ArrowCloud API keys for leaderboard request."
         );
     }
 
@@ -4817,6 +4868,52 @@ mod tests {
         assert_eq!(fetched.data.panes[2].name, "SRPG");
         assert_eq!(fetched.data.panes[3].name, "ITL");
         assert!(fetched.data.panes[3].is_ex);
+    }
+
+    #[test]
+    fn combined_leaderboard_request_accepts_either_service_key() {
+        assert!(combined_leaderboard_request_error("gs-key", None).is_none());
+        assert!(combined_leaderboard_request_error("gs-key", Some("ac-key")).is_none());
+        assert!(combined_leaderboard_request_error("  ", Some("ac-key")).is_none());
+        assert!(combined_leaderboard_request_error("  ", Some("  ")).is_some());
+        assert!(combined_leaderboard_request_error("", None).is_some());
+    }
+
+    #[test]
+    fn insert_arrowcloud_panes_fill_an_empty_groovestats_result() {
+        let mut fetched = empty_fetched_player_leaderboards();
+        insert_arrowcloud_panes(
+            &mut fetched,
+            vec![
+                LeaderboardPane {
+                    name: "ArrowCloud".to_string(),
+                    entries: Vec::new(),
+                    is_ex: false,
+                    disabled: false,
+                    personalized: false,
+                    arrowcloud_kind: Some(deadsync_score::ArrowCloudPaneKind::Itg),
+                },
+                LeaderboardPane {
+                    name: "ArrowCloud".to_string(),
+                    entries: Vec::new(),
+                    is_ex: true,
+                    disabled: false,
+                    personalized: false,
+                    arrowcloud_kind: Some(deadsync_score::ArrowCloudPaneKind::Ex),
+                },
+            ],
+        );
+
+        assert_eq!(fetched.data.panes.len(), 2);
+        assert_eq!(
+            fetched.data.panes[0].arrowcloud_kind,
+            Some(deadsync_score::ArrowCloudPaneKind::Itg)
+        );
+        assert_eq!(
+            fetched.data.panes[1].arrowcloud_kind,
+            Some(deadsync_score::ArrowCloudPaneKind::Ex)
+        );
+        assert!(fetched.imported_score.is_none());
     }
 
     #[test]
