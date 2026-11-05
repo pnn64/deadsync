@@ -1,6 +1,6 @@
 # Non-Lua Rust optimization measurements
 
-Measurements, validation and report links for batches 1–42. Relative report links resolve within the same repository revision.
+Measurements, validation and report links for batches 1–43. Relative report links resolve within the same repository revision.
 
 Font and texture preparation, gameplay calculations, audio callbacks, chart loading, renderer setup and HTTP text handling repeat validation, scans and temporary string normalization. This change shares rate validation, removes redundant timestamp conversions/clamps, dispatches chart metadata prefixes once, and reuses carried-hold counts until an end-row boundary. Timing snapshots read a maintained maximum; scroll BPM and scoring-window validation use positive-finite bit intervals.
 
@@ -242,3 +242,11 @@ Measured costs: `numeric/empty` 7.18 → 8.45 cycles (0.850×; control 1.177×).
 - **Costs:** normal nonzero scalar examples rise about 3.95 → 7.09 cycles (0.557×; control 1.000×), NaN 3.95 → 5.52 cycles. Full ranges and all inputs remain visible. Active average drawing 0.978× (control 0.977×) is near its control. The first average-loop rewrite slowed active cases and was rejected; its three 515-test gates and **640 trial rows** remain verified and recorded.
 - **Validation:** baseline/release/package opt0 with assertions each pass **516 unit tests**. Exact sprite/float/panic and cold Vec checks, matching **5,919,380-byte trace**, 16 frozen external fixtures, 19 shipped PNGs, scoped Clippy, production-only opt3 and provenance/raw-field audits pass. FPS, GPU work and application-wide gains are unmeasured.
 - Report: [notefield feedback and atlas measurements](./2026-11-05-notefield-feedback.md).
+
+### Batch 43: combo flow and hold-feedback geometry
+
+- Check milestone assets/empty slices before mini zoom, fold the single-use combo-number helper into its caller with guards before zoom and a targeted inline hint, and skip hold-indicator geometry when neither available sprite has feedback in its bounded lane prefix. Preserve complete output bits/order, miss precedence, expiry checks and allocation behavior. No unsafe, new production helper/cache/buffer, state field, dependency or API change.
+- **CPU:** empty positive-mini milestones **1.300× (control 1.000×)**; missing-font positive-mini numbers **1.977× (control 1.000×)**; empty hold feedback **2.908× (control 1.029×)**, reaching 8.783× with visual effects. All six warm heap counters remain zero; **800 current rows** cover 40 workloads and controls.
+- **Costs:** prepared expired holds rise 46.16 → 50.84 cycles, 0.908× (control 1.090×). Active results are mixed; application-wide gains are unmeasured. The easing-clamp and text-slot cursor candidates were rejected, with **1,180 earlier rows** and failed checkpoints preserved.
+- **Validation:** four **520-test** gates cover release/assertion baseline and candidate. Before/after traces match exactly within each profile. Release versus assertion differs in 128 combo words, including 64 in unchanged frozen output; the profile-specific baselines retain exact comparisons without normalization. Cold allocation/prefix checks, 16 frozen fixtures, 19 PNGs, scoped Clippy, production-only opt3 and artifact/raw-field audits pass. Two hold-caller fixtures are borrowed extracted sequences; full application/FPS/GPU performance is unmeasured.
+- Report: [combo and hold-feedback measurements](./2026-11-05-notefield-combo.md).

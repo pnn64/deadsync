@@ -209,6 +209,13 @@ fn append_hold_indicators(draws: &mut Vec<FlatDraw>, request: &JudgmentFeedbackR
         .num_cols
         .min(MAX_COLS)
         .min(request.column_reverse_percent.len());
+    if (request.held_miss_sprite.is_none()
+        || !request.held_misses.iter().take(num_cols).any(Option::is_some))
+        && (request.hold_sprite.is_none()
+            || !request.hold_judgments.iter().take(num_cols).any(Option::is_some))
+    {
+        return;
+    }
     let mut fallback_offsets;
     let mut fallback_invert;
     let mut fallback_tornado;
@@ -1082,4 +1089,9 @@ mod tests {
 #[cfg(test)]
 mod atlas_kernel_perf {
     include!("atlas_kernel_perf.rs");
+}
+
+#[cfg(test)]
+mod hold_guard_perf {
+    include!("hold_guard_perf.rs");
 }
