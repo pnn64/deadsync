@@ -2638,7 +2638,9 @@ fn song_sort_group_label(group: &SongSortGroup) -> String {
         SongSortGroup::Length { lo, hi } => {
             format!("{}-{}", format_chart_length(*lo), format_chart_length(*hi))
         }
-        SongSortGroup::Meter(Some(meter)) => format!("{:02}", (*meter).min(99)),
+        // ITGmania's SORT_METER uses %d. These names also identify the
+        // opened section and its selected chart, so preserve the full meter.
+        SongSortGroup::Meter(Some(meter)) => meter.to_string(),
         SongSortGroup::Meter(None) => tr("SelectMusic", "NotAvailable").to_string(),
     }
 }
@@ -17863,6 +17865,97 @@ mod tests {
     }
 
     #[test]
+    fn meter_sort_preserves_full_levels_in_folder_names_and_selection() {
+        let cases = [
+            (8, "8"),
+            (99, "99"),
+            (100, "100"),
+            (195, "195"),
+            (1111, "1111"),
+            (6339, "6339"),
+        ];
+        let songs: Vec<_> = cases
+            .iter()
+            .enumerate()
+            .map(|(index, &(meter, _))| {
+                let mut song = (*super::test_folder_stats_song(index)).clone();
+                song.charts.truncate(2);
+                // Edit-only songs still participate in level sort. A second
+                // level ensures selection must use the opened folder's meter.
+                for (chart, level) in song.charts.iter_mut().zip([1, meter]) {
+                    chart.difficulty = "Edit".to_string();
+                    chart.meter = level;
+                }
+                Arc::new(song)
+            })
+            .collect();
+        let group_entries: Vec<_> = songs
+            .iter()
+            .rev()
+            .cloned()
+            .map(super::MusicWheelEntry::Song)
+            .collect();
+        let meter_entries = super::build_meter_grouped_entries(&group_entries, "dance-single");
+        let headers: Vec<_> = meter_entries
+            .iter()
+            .filter_map(|entry| match entry {
+                super::MusicWheelEntry::PackHeader {
+                    name, song_count, ..
+                } => Some((name.as_ref(), *song_count)),
+                super::MusicWheelEntry::Song(_) => None,
+            })
+            .collect();
+        assert_eq!(
+            headers,
+            [
+                ("1", 6),
+                ("8", 1),
+                ("99", 1),
+                ("100", 1),
+                ("195", 1),
+                ("1111", 1),
+                ("6339", 1)
+            ]
+        );
+
+        for ((meter, label), expected_song) in cases.into_iter().zip(&songs) {
+            for wheel_style in [SelectMusicWheelStyle::Itg, SelectMusicWheelStyle::Iidx] {
+                let entries = super::build_displayed_entries(
+                    &meter_entries,
+                    None,
+                    Some(label),
+                    wheel_style,
+                    false,
+                );
+                let visible_songs: Vec<_> = entries
+                    .iter()
+                    .filter_map(|entry| match entry {
+                        super::MusicWheelEntry::Song(song) => Some(song),
+                        super::MusicWheelEntry::PackHeader { .. } => None,
+                    })
+                    .collect();
+                assert_eq!(visible_songs.len(), 1, "level {label}");
+                assert!(Arc::ptr_eq(visible_songs[0], expected_song));
+                let steps_index = super::wheel_steps_index(
+                    expected_song,
+                    "dance-single",
+                    WheelSortMode::Meter,
+                    Some(label),
+                    0,
+                )
+                .expect("folder should select a chart");
+                assert_eq!(
+                    expected_song
+                        .chart_for_steps_index("dance-single", steps_index)
+                        .unwrap()
+                        .meter,
+                    meter,
+                );
+            }
+        }
+    }
+
+    #[test]
     fn meter_sort_selects_open_section_chart_without_changing_preferences() {
         let song_with_meters = |index, meters| {
             let mut song = (*super::test_folder_stats_song(index)).clone();
@@ -17879,7 +17972,7 @@ mod tests {
             super::MusicWheelEntry::Song(song_b.clone()),
         ];
         let meter_entries = vec![
-            header("08", 0, 2, None),
+            header("8", 0, 2, None),
             super::MusicWheelEntry::Song(song_a),
             super::MusicWheelEntry::Song(song_b),
         ];
@@ -17897,7 +17990,7 @@ mod tests {
 
         super::apply_wheel_sort(&mut state, WheelSortMode::Meter);
 
-        assert_eq!(state.expanded_pack_name.as_deref(), Some("08"));
+        assert_eq!(state.expanded_pack_name.as_deref(), Some("8"));
         assert_eq!(state.selected_steps_index, 2);
         assert_eq!(state.p2_selected_steps_index, 2);
         assert_eq!(state.preferred_difficulty_index, 4);
