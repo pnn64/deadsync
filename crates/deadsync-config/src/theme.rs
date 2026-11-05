@@ -644,9 +644,15 @@ impl FromStr for SelectMusicSeriesSource {
     type Err = ();
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "packini" | "pack.ini" | "metadata" => Ok(Self::PackIni),
-            "folder" | "folders" | "directory" | "filesystem" => Ok(Self::Folder),
+        let value = value.trim();
+        match value.len() {
+            6 if value.eq_ignore_ascii_case("folder") => Ok(Self::Folder),
+            7 if value.eq_ignore_ascii_case("packini") => Ok(Self::PackIni),
+            7 if value.eq_ignore_ascii_case("folders") => Ok(Self::Folder),
+            8 if value.eq_ignore_ascii_case("pack.ini") => Ok(Self::PackIni),
+            8 if value.eq_ignore_ascii_case("metadata") => Ok(Self::PackIni),
+            9 if value.eq_ignore_ascii_case("directory") => Ok(Self::Folder),
+            10 if value.eq_ignore_ascii_case("filesystem") => Ok(Self::Folder),
             _ => Err(()),
         }
     }
@@ -1257,10 +1263,15 @@ impl FromStr for SrpgShopFolder {
     type Err = ();
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "unlocks" | "srpg10 unlocks" => Ok(Self::Unlocks),
-            "shops" | "srpg10 - shops" => Ok(Self::Shops),
-            "faction" | "factions" | "by faction" => Ok(Self::Faction),
+        let value = value.trim();
+        match value.len() {
+            5 if value.eq_ignore_ascii_case("shops") => Ok(Self::Shops),
+            7 if value.eq_ignore_ascii_case("unlocks") => Ok(Self::Unlocks),
+            7 if value.eq_ignore_ascii_case("faction") => Ok(Self::Faction),
+            8 if value.eq_ignore_ascii_case("factions") => Ok(Self::Faction),
+            10 if value.eq_ignore_ascii_case("by faction") => Ok(Self::Faction),
+            14 if value.eq_ignore_ascii_case("srpg10 unlocks") => Ok(Self::Unlocks),
+            14 if value.eq_ignore_ascii_case("srpg10 - shops") => Ok(Self::Shops),
             _ => Err(()),
         }
     }
@@ -1718,9 +1729,9 @@ impl FromStr for TournamentScoringSystem {
     type Err = ();
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "ex" => Ok(Self::Ex),
-            "itg" => Ok(Self::Itg),
+        match value.trim().as_bytes() {
+            [b'e' | b'E', b'x' | b'X'] => Ok(Self::Ex),
+            [b'i' | b'I', b't' | b'T', b'g' | b'G'] => Ok(Self::Itg),
             _ => Err(()),
         }
     }
@@ -3336,4 +3347,9 @@ mod preference_performance {
 #[cfg(test)]
 mod alias_performance {
     include!("alias_performance.rs");
+}
+
+#[cfg(test)]
+mod choice_performance {
+    include!("choice_performance.rs");
 }
