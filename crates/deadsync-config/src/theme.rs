@@ -1288,12 +1288,13 @@ impl MachineFont {
 
 impl FromStr for MachineFont {
     type Err = ();
-
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "common" | "wendy" => Ok(Self::Wendy),
-            "mega" => Ok(Self::Mega),
-            "unprofessional" => Ok(Self::Unprofessional),
+        let s = s.trim();
+        match s.len() {
+            4 if s.eq_ignore_ascii_case("mega") => Ok(Self::Mega),
+            5 if s.eq_ignore_ascii_case("wendy") => Ok(Self::Wendy),
+            6 if s.eq_ignore_ascii_case("common") => Ok(Self::Wendy),
+            14 if s.eq_ignore_ascii_case("unprofessional") => Ok(Self::Unprofessional),
             _ => Err(()),
         }
     }
@@ -1517,27 +1518,37 @@ impl LanguageFlag {
 /// - `"zh-CN"` / `"zh-SG"` -> `"zh-Hans"`
 #[must_use]
 pub fn normalize_locale(raw: &str) -> String {
-    let mut lower = raw
+    let base = raw
         .trim()
         .split('.')
         .next()
         .unwrap_or(raw)
         .split('@')
         .next()
-        .unwrap_or(raw)
-        .replace('_', "-");
+        .unwrap_or(raw);
+    if base.len() <= 64
+        && base
+            .as_bytes()
+            .get(..2)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(b"zh"))
+    {
+        let mut bytes = [0u8; 64];
+        let lower = &mut bytes[..base.len()];
+        lower.copy_from_slice(base.as_bytes());
+        lower.make_ascii_lowercase();
+        // Underscore replacement cannot change these letter-only matches.
+        let traditional = lower.windows(4).any(|part| part == b"hant")
+            || lower.windows(2).any(|part| part == b"tw" || part == b"hk");
+        return if traditional { "zh-Hant" } else { "zh-Hans" }.to_string();
+    }
+    let mut lower = base.replace('_', "-");
     lower.make_ascii_lowercase();
-
     if lower.starts_with("zh") {
         if lower.contains("hant") || lower.contains("tw") || lower.contains("hk") {
             return "zh-Hant".to_string();
         }
-        if lower.contains("hans") || lower.contains("cn") || lower.contains("sg") {
-            return "zh-Hans".to_string();
-        }
         return "zh-Hans".to_string();
     }
-
     lower
 }
 
@@ -3305,4 +3316,9 @@ MachineEvaluationStyle=Default\n\
             "en"
         );
     }
+}
+
+#[cfg(test)]
+mod preference_performance {
+    include!("preference_performance.rs");
 }

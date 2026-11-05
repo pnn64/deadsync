@@ -7,7 +7,7 @@ use std::hint::black_box;
 use std::str::FromStr;
 
 #[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
+pub(crate) mod bench;
 #[path = "text_codecs_original.rs"]
 mod original;
 
