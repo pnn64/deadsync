@@ -5,10 +5,21 @@ use std::cmp::Ordering;
 pub fn ascii_case_insensitive_cmp(left: &str, right: &str) -> Ordering {
     let (left, right) = (left.as_bytes(), right.as_bytes());
     if left.len().min(right.len()) < 20 {
-        return left
-            .iter()
-            .map(u8::to_ascii_lowercase)
-            .cmp(right.iter().map(u8::to_ascii_lowercase));
+        if left.first() != right.first() {
+            return left
+                .iter()
+                .map(u8::to_ascii_lowercase)
+                .cmp(right.iter().map(u8::to_ascii_lowercase));
+        }
+        for (&a, &b) in left.iter().zip(right) {
+            if a != b {
+                let order = a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase());
+                if order != Ordering::Equal {
+                    return order;
+                }
+            }
+        }
+        return left.len().cmp(&right.len());
     }
     for (&a, &b) in left[..4].iter().zip(&right[..4]) {
         let order = a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase());
@@ -16,7 +27,11 @@ pub fn ascii_case_insensitive_cmp(left: &str, right: &str) -> Ordering {
             return order;
         }
     }
-    cmp_ascii_blocks(&left[4..], &right[4..])
+    if left.len().min(right.len()) >= 68 {
+        cmp_ascii_prefix_blocks(&left[4..], &right[4..])
+    } else {
+        cmp_ascii_blocks(&left[4..], &right[4..])
+    }
 }
 
 // Keep block temporaries out of the short/first-byte return paths.
@@ -41,6 +56,20 @@ fn cmp_ascii_blocks(left: &[u8], right: &[u8]) -> Ordering {
         .iter()
         .map(u8::to_ascii_lowercase)
         .cmp(right[offset..].iter().map(u8::to_ascii_lowercase))
+}
+
+// Isolate long-prefix probing from the ordinary folded-block loop.
+#[inline(never)]
+fn cmp_ascii_prefix_blocks(left: &[u8], right: &[u8]) -> Ordering {
+    let shared = left.len().min(right.len());
+    let mut offset = 0;
+    while shared - offset >= 16 {
+        if left[offset..offset + 16] != right[offset..offset + 16] {
+            break;
+        }
+        offset += 16;
+    }
+    cmp_ascii_blocks(&left[offset..], &right[offset..])
 }
 
 /// Compare names using Rust's Unicode lowercase mapping without allocating.

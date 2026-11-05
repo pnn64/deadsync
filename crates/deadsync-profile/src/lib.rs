@@ -4597,20 +4597,38 @@ fn with_lower_option_key<R>(value: &str, use_key: impl FnOnce(&str) -> R) -> R {
 #[inline]
 fn with_compact_option_key<R>(value: &str, use_key: impl FnOnce(&str) -> R) -> R {
     let value = value.trim();
+    const MAP: [u8; 256] = {
+        let mut map = [0u8; 256];
+        let mut byte = 0usize;
+        while byte < 256 {
+            let value = byte as u8;
+            if value.is_ascii_alphanumeric() {
+                map[byte] = value.to_ascii_lowercase();
+            }
+            byte += 1;
+        }
+        map
+    };
     let mut bytes = [0u8; OPTION_KEY_STACK_BYTES];
     let mut len = 0;
-    for byte in value.bytes().filter(u8::is_ascii_alphanumeric) {
+    for byte in value.bytes().filter_map(|byte| {
+        let mapped = MAP[usize::from(byte)];
+        (mapped != 0).then_some(mapped)
+    }) {
         if len == OPTION_KEY_STACK_BYTES {
             let mut key = String::with_capacity(value.len());
             key.extend(
                 value
                     .bytes()
-                    .filter(u8::is_ascii_alphanumeric)
-                    .map(|byte| byte.to_ascii_lowercase() as char),
+                    .filter_map(|byte| {
+                        let mapped = MAP[usize::from(byte)];
+                        (mapped != 0).then_some(mapped)
+                    })
+                    .map(char::from),
             );
             return use_key(&key);
         }
-        bytes[len] = byte.to_ascii_lowercase();
+        bytes[len] = byte;
         len += 1;
     }
     let key = std::str::from_utf8(&bytes[..len])
@@ -15996,3 +16014,7 @@ mod folder_paths_performance;
 #[cfg(test)]
 #[path = "identity_performance.rs"]
 mod identity_performance;
+
+#[cfg(test)]
+#[path = "normalization_performance.rs"]
+mod normalization_performance;
