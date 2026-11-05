@@ -1875,9 +1875,9 @@ pub fn load_theme_presentation_options(
                 .unwrap_or(default.tournament.scoring_system),
             show_step_stats: conf
                 .get("Theme", "StepStats")
-                .and_then(|value| match value.trim().to_ascii_lowercase().as_str() {
-                    "show" => Some(true),
-                    "hide" => Some(false),
+                .and_then(|value| match value.trim() {
+                    v if v.eq_ignore_ascii_case("show") => Some(true),
+                    v if v.eq_ignore_ascii_case("hide") => Some(false),
                     _ => parse_loose_bool_str(value),
                 })
                 .unwrap_or(default.tournament.show_step_stats),
@@ -3380,4 +3380,9 @@ mod mode_performance {
 #[cfg(test)]
 mod key_performance {
     include!("key_performance.rs");
+}
+
+#[cfg(test)]
+mod field_performance {
+    include!("field_performance.rs");
 }

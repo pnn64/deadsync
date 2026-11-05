@@ -1,20 +1,41 @@
 #[must_use]
 pub fn parse_bool_str(raw: &str) -> Option<bool> {
-    let raw = raw.trim();
-    if matches!(raw, "1")
-        || raw.eq_ignore_ascii_case("true")
-        || raw.eq_ignore_ascii_case("yes")
-        || raw.eq_ignore_ascii_case("on")
-    {
-        Some(true)
-    } else if matches!(raw, "0")
-        || raw.eq_ignore_ascii_case("false")
-        || raw.eq_ignore_ascii_case("no")
-        || raw.eq_ignore_ascii_case("off")
-    {
-        Some(false)
-    } else {
-        None
+    match raw.trim().as_bytes() {
+        [b'1'] => Some(true),
+        [b'0'] => Some(false),
+        [a, b] => {
+            const ON: u16 = u16::from_le_bytes(*b"on");
+            const NO: u16 = u16::from_le_bytes(*b"no");
+            match u16::from_le_bytes([*a, *b]) | 0x2020 {
+                ON => Some(true),
+                NO => Some(false),
+                _ => None,
+            }
+        }
+        [a, b, c] => {
+            let key = [*a | 0x20, *b | 0x20, *c | 0x20];
+            if key == *b"yes" {
+                Some(true)
+            } else if key == *b"off" {
+                Some(false)
+            } else {
+                None
+            }
+        }
+        [a, b, c, d]
+            if u32::from_le_bytes([*a, *b, *c, *d]) | 0x20202020
+                == u32::from_le_bytes(*b"true") =>
+        {
+            Some(true)
+        }
+        [a, b, c, d, e]
+            if u32::from_le_bytes([*a, *b, *c, *d]) | 0x20202020
+                == u32::from_le_bytes(*b"fals")
+                && (*e | 0x20) == b'e' =>
+        {
+            Some(false)
+        }
+        _ => None,
     }
 }
 

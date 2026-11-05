@@ -1,10 +1,22 @@
 #[must_use]
 pub fn parse_auto_threads_u8(raw: &str) -> Option<u8> {
     let raw = raw.trim();
-    if raw.eq_ignore_ascii_case("auto") || raw.is_empty() {
-        Some(0)
-    } else {
-        raw.parse::<u8>().ok()
+    match raw.as_bytes() {
+        [] => Some(0),
+        [a] => {
+            if a.is_ascii_digit() {
+                Some(*a - b'0')
+            } else {
+                None
+            }
+        }
+        [a, b, c] if a.is_ascii_digit() && b.is_ascii_digit() && c.is_ascii_digit() => {
+            let value =
+                u16::from(*a - b'0') * 100 + u16::from(*b - b'0') * 10 + u16::from(*c - b'0');
+            u8::try_from(value).ok()
+        }
+        [_, _, _, _] if raw.eq_ignore_ascii_case("auto") => Some(0),
+        _ => raw.parse::<u8>().ok(),
     }
 }
 

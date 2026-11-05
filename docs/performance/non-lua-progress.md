@@ -1,6 +1,6 @@
 # Non-Lua Rust optimization measurements
 
-Measurements, validation and report links for batches 1–39. Relative report links resolve within the same repository revision.
+Measurements, validation and report links for batches 1–40. Relative report links resolve within the same repository revision.
 
 Font and texture preparation, gameplay calculations, audio callbacks, chart loading, renderer setup and HTTP text handling repeat validation, scans and temporary string normalization. This change shares rate validation, removes redundant timestamp conversions/clamps, dispatches chart metadata prefixes once, and reuses carried-hold counts until an end-row boundary. Timing snapshots read a maintained maximum; scroll BPM and scoring-window validation use positive-finite bit intervals.
 
@@ -214,3 +214,13 @@ Measured costs: `default/1-first` 260.50 → 286.32 cycles (0.923×; control 0.9
 
 - **Validation:** baseline/release/package opt0 with assertions each pass **254 unit + 13 integration tests**, including all five integration targets. Binary32 high-word/mantissa/boundary/random inputs and exhaustive Unicode/case/insertion cohorts compare exact results. The **10,674,523-byte trace**, scoped Clippy, production-only opt3 check and full source/input/binary/log/measurement audit pass. Three severity rewrites were rejected; unchanged severity/target drift is reported separately from optimization effects.
 - Report: [frame conversion and text-kernel measurements](./2026-11-05-frame-kernels.md).
+
+### Batch 40: boolean, thread-count and tournament fields
+
+- Match fixed boolean words directly, dispatch common thread widths with unchanged general parsing fallback, and remove StepStats' temporary lowercase String. Preserve all aliases, errors, defaults and complete theme-loader records. No unsafe, production helper, table, dependency or public API change; ring candidates were rejected and ring code remains unchanged.
+- **CPU:** False boolean **1.296× (clean control 1.037×)**; three-digit thread count **1.412× (clean control 0.941×)**; complete Show loader **1.212× (clean control 1.017×)**. Each public nonempty StepStats fixture removes one allocation/free. Caller CPU combines boolean matching and String removal; extracted StepStats comparisons isolate the latter with frozen fallback. **640 selected rows** use clean controls/final; all **960 rows** are audited. The first 320 timings overlapped archive maintenance and are preserved but excluded. Six extracted comparisons are repeated old/new kernels in both builds, not identical-body controls.
+
+Public-path measured costs: `number/auto` 21.30 → 24.25 cycles (0.948×; clean control 0.965×), `number/unicode` 20.68 → 21.62 cycles (0.957×; clean control 1.032×), `number/zeros` 34.04 → 34.68 cycles (0.966×; clean control 0.906×). Full process ranges remain in the report.
+
+- **Validation:** selected control/release/package opt0 with assertions each pass **255 unit + 13 integration tests**, including all five targets; initial baseline also passes. Exact Option/boolean/integer and complete-loader/default cases cover Unicode scalars, case/insertions, all ASCII three-byte numeric inputs and seeded strings. The **4,980,049-byte trace**, production-scope Clippy, production-only opt3 check and full provenance/measurement audit pass.
+- Report: [text-field measurements and timing exclusion](./2026-11-05-config-fields.md).
