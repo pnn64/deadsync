@@ -1,6 +1,6 @@
 # Non-Lua Rust optimization measurements
 
-Measurements, validation and report links for batches 1–35. Relative report links resolve within the same repository revision.
+Measurements, validation and report links for batches 1–36. Relative report links resolve within the same repository revision.
 
 Font and texture preparation, gameplay calculations, audio callbacks, chart loading, renderer setup and HTTP text handling repeat validation, scans and temporary string normalization. This change shares rate validation, removes redundant timestamp conversions/clamps, dispatches chart metadata prefixes once, and reuses carried-hold counts until an end-row boundary. Timing snapshots read a maintained maximum; scroll BPM and scoring-window validation use positive-finite bit intervals.
 
@@ -181,3 +181,10 @@ Measurements and reproduction: [timing conversions](./2026-11-04-timing-conversi
 - **CPU:** title-case compact keys **1.461× (control 0.943×)**; short late differences **1.648× (control 0.998×)**; long shared prefixes **3.791× (control 1.015×)**. Public parser and complete-sort callers are measured separately. The early-difference fixture costs **2.54 additional cycles**. All **640 rows**, thirty-two workloads, controls, costs and process ranges are retained. Whole-application gains are unmeasured.
 - **Validation:** baseline/release/package opt0 with assertions each pass **245 unit + 8 integration tests**, including all four integration targets. All Unicode scalars, ASCII character pairs, seeded/boundary inputs, callback panics, parser errors and stable sorts compare exact results. The **10,132,289-byte trace**, scoped Clippy, production-only opt3 check and full source/binary/log/measurement audit pass. Earlier borrowing, reorder and per-block probing candidates were withdrawn.
 - Report: [profile-kernel measurements](./2026-11-05-profile-kernels.md).
+
+### Batch 36: borrowed pattern, play and game mode parsing
+
+- Match the seven existing names directly in `SelectMusicPatternInfoMode`, `MachinePreferredPlayMode` and `GameFlag`, removing temporary lowercase strings. Preserve exact ASCII case handling, Unicode trimming, punctuation rejection, enum outcomes, defaults and serialization. No helper/table/buffer, unsafe, dependency or public API is added.
+- **CPU:** Tech **6.977× (control 0.985×)**; Marathon **5.645× (control 1.017×)**; Dance **6.935× (control 0.982×)**. Each measured nonempty input drops **one allocation/free to zero**. Empty pattern input changes **9.20 → 11.92 cycles**, **0.812× (control 1.011×)**. All **320 raw rows**, sixteen workloads, six allocation counters, controls, costs and process ranges are retained. These are preference-parser microbenchmarks; startup and whole-application gains are unmeasured.
+- **Validation:** baseline/release/package opt0 with assertions each pass **252 unit + 13 integration tests**, including all five integration targets. Every case combination of all seven names, every ASCII insertion, every Unicode scalar in three contexts and seeded mixed strings compare exact outcomes. The **4,063,148-byte trace**, scoped Clippy, production-only opt3 check and full source/input/binary/log/measurement audit pass.
+- Report: [mode-parser measurements](./2026-11-05-config-modes.md).

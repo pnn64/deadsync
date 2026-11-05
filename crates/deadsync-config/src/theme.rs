@@ -375,10 +375,11 @@ impl FromStr for SelectMusicPatternInfoMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "tech" => Ok(Self::Tech),
-            "stamina" => Ok(Self::Stamina),
-            "auto" => Ok(Self::Auto),
+        let s = s.trim();
+        match s.len() {
+            4 if s.eq_ignore_ascii_case("tech") => Ok(Self::Tech),
+            4 if s.eq_ignore_ascii_case("auto") => Ok(Self::Auto),
+            7 if s.eq_ignore_ascii_case("stamina") => Ok(Self::Stamina),
             _ => Err(()),
         }
     }
@@ -1144,9 +1145,10 @@ impl FromStr for MachinePreferredPlayMode {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "regular" => Ok(Self::Regular),
-            "marathon" => Ok(Self::Marathon),
+        let s = s.trim();
+        match s.len() {
+            7 if s.eq_ignore_ascii_case("regular") => Ok(Self::Regular),
+            8 if s.eq_ignore_ascii_case("marathon") => Ok(Self::Marathon),
             _ => Err(()),
         }
     }
@@ -1436,9 +1438,10 @@ impl FromStr for GameFlag {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "dance" => Ok(Self::Dance),
-            "pump" => Ok(Self::Pump),
+        let s = s.trim();
+        match s.len() {
+            4 if s.eq_ignore_ascii_case("pump") => Ok(Self::Pump),
+            5 if s.eq_ignore_ascii_case("dance") => Ok(Self::Dance),
             _ => Err(()),
         }
     }
@@ -3352,4 +3355,9 @@ mod alias_performance {
 #[cfg(test)]
 mod choice_performance {
     include!("choice_performance.rs");
+}
+
+#[cfg(test)]
+mod mode_performance {
+    include!("mode_performance.rs");
 }
