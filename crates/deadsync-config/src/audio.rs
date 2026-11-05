@@ -58,32 +58,51 @@ impl FromStr for NoteScrollClock {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let value = value.trim();
-        if value.eq_ignore_ascii_case("rawaudio")
-            || value.eq_ignore_ascii_case("raw")
-            || value.eq_ignore_ascii_case("off")
-            || value == "0"
-            || value.eq_ignore_ascii_case("false")
-        {
-            Ok(Self::RawAudio)
-        } else if value.eq_ignore_ascii_case("framestable")
-            || value.eq_ignore_ascii_case("frame-stable")
-            || value.eq_ignore_ascii_case("frame_stable")
-            || value.eq_ignore_ascii_case("frame stable")
-            || value.eq_ignore_ascii_case("smooth")
-            || value.eq_ignore_ascii_case("smoothed")
-            || value.eq_ignore_ascii_case("itgdestep")
-            || value.eq_ignore_ascii_case("itg-destep")
-            || value.eq_ignore_ascii_case("itgdestepped")
-            || value.eq_ignore_ascii_case("itg-de-stepped")
-            || value.eq_ignore_ascii_case("itg_de_stepped")
-            || value.eq_ignore_ascii_case("itg")
-            || value.eq_ignore_ascii_case("on")
-            || value == "1"
-            || value.eq_ignore_ascii_case("true")
-        {
-            Ok(Self::FrameStable)
-        } else {
-            Err(())
+        match value.as_bytes() {
+            [b'0'] => Ok(Self::RawAudio),
+            [b'1'] => Ok(Self::FrameStable),
+            [] | [_] => Err(()),
+            [a, b, c, d, e, f, g, h] => {
+                match u64::from_le_bytes([*a, *b, *c, *d, *e, *f, *g, *h]) | 0x2020202020202020 {
+                    n if n == u64::from_le_bytes(*b"rawaudio") => Ok(Self::RawAudio),
+                    n if n == u64::from_le_bytes(*b"smoothed") => Ok(Self::FrameStable),
+                    _ => Err(()),
+                }
+            }
+            [a, b, c, d, e, f, g, h, i, j, k] => {
+                if u64::from_le_bytes([*a, *b, *c, *d, *e, *f, *g, *h]) | 0x2020202020202020
+                    == u64::from_le_bytes(*b"framesta")
+                    && [*i | 0x20, *j | 0x20, *k | 0x20] == *b"ble"
+                {
+                    Ok(Self::FrameStable)
+                } else {
+                    Err(())
+                }
+            }
+            _ => {
+                if value.eq_ignore_ascii_case("raw")
+                    || value.eq_ignore_ascii_case("off")
+                    || value.eq_ignore_ascii_case("false")
+                {
+                    Ok(Self::RawAudio)
+                } else if value.eq_ignore_ascii_case("frame-stable")
+                    || value.eq_ignore_ascii_case("frame_stable")
+                    || value.eq_ignore_ascii_case("frame stable")
+                    || value.eq_ignore_ascii_case("smooth")
+                    || value.eq_ignore_ascii_case("itgdestep")
+                    || value.eq_ignore_ascii_case("itg-destep")
+                    || value.eq_ignore_ascii_case("itgdestepped")
+                    || value.eq_ignore_ascii_case("itg-de-stepped")
+                    || value.eq_ignore_ascii_case("itg_de_stepped")
+                    || value.eq_ignore_ascii_case("itg")
+                    || value.eq_ignore_ascii_case("on")
+                    || value.eq_ignore_ascii_case("true")
+                {
+                    Ok(Self::FrameStable)
+                } else {
+                    Err(())
+                }
+            }
         }
     }
 }

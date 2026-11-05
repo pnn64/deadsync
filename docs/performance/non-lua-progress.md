@@ -1,6 +1,6 @@
 # Non-Lua Rust optimization measurements
 
-Measurements, validation and report links for batches 1–40. Relative report links resolve within the same repository revision.
+Measurements, validation and report links for batches 1–41. Relative report links resolve within the same repository revision.
 
 Font and texture preparation, gameplay calculations, audio callbacks, chart loading, renderer setup and HTTP text handling repeat validation, scans and temporary string normalization. This change shares rate validation, removes redundant timestamp conversions/clamps, dispatches chart metadata prefixes once, and reuses carried-hold counts until an end-row boundary. Timing snapshots read a maintained maximum; scroll BPM and scoring-window validation use positive-finite bit intervals.
 
@@ -224,3 +224,13 @@ Public-path measured costs: `number/auto` 21.30 → 24.25 cycles (0.948×; clean
 
 - **Validation:** selected control/release/package opt0 with assertions each pass **255 unit + 13 integration tests**, including all five targets; initial baseline also passes. Exact Option/boolean/integer and complete-loader/default cases cover Unicode scalars, case/insertions, all ASCII three-byte numeric inputs and seeded strings. The **4,980,049-byte trace**, production-scope Clippy, production-only opt3 check and full provenance/measurement audit pass.
 - Report: [text-field measurements and timing exclusion](./2026-11-05-config-fields.md).
+
+### Batch 41: audio clock, overlay anchor and numeric boolean kernels
+
+- Specialize canonical audio-clock aliases with packed word comparisons, replace overlay-anchor iteration with exact-width matches, and parse significant numeric-boolean digits after skipping redundant zeroes. Preserve all aliases, separator bytes, overflow/errors, defaults and complete audio records. No unsafe, lookup table, normalized buffer, production helper, dependency or public API change.
+- **CPU:** FrameStable clock **1.488× (control 1.000×)**; last overlay anchor **1.999× (control 1.087×)**; zero-prefixed numeric boolean **1.457× (control 1.133×)**. All six heap counters retain zero. All **640 raw rows** cover 32 public paths with source-identical baseline controls, including full audio callers and short/invalid/missing cases. Audio playback, rendering and whole-application gains are unmeasured.
+
+Measured costs: `numeric/empty` 7.18 → 8.45 cycles (0.850×; control 1.177×). Full process ranges remain in the report.
+
+- **Validation:** baseline/release/package opt0 with assertions each pass **256 unit + 13 integration tests** across all five integration targets. Exact enum/error/Option/text and full-record cases cover every Unicode scalar, alias cases/insertions/substitutions, all ASCII numeric triples, long zero prefixes and seeded mixed UTF-8. Matching **12,114,922-byte trace**, production-scope Clippy, production-only opt3 check and complete provenance/raw-field audit pass. One intentional benchmark Result-sink compiler warning is reviewed and recorded. Width-only, overbroad packed-clock and lowercase-buffer trials were rejected or refined before production edits.
+- Report: [audio and machine word-kernel measurements](./2026-11-05-audio-kernels.md).

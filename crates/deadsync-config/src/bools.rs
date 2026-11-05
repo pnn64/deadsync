@@ -50,7 +50,26 @@ pub fn parse_loose_bool_str(raw: &str) -> Option<bool> {
 
 #[must_use]
 pub fn parse_u8_bool_str(raw: &str) -> Option<bool> {
-    raw.trim().parse::<u8>().ok().map(|n| n != 0)
+    let raw = raw.trim();
+    let raw = raw.strip_prefix('+').unwrap_or(raw);
+    if raw.is_empty() {
+        return None;
+    }
+    let mut bytes = raw.as_bytes();
+    while let [b'0', rest @ ..] = bytes {
+        bytes = rest;
+    }
+    match bytes {
+        [] => Some(false),
+        [a] if a.is_ascii_digit() => Some(true),
+        [a, b] if a.is_ascii_digit() && b.is_ascii_digit() => Some(true),
+        [a, b, c] if a.is_ascii_digit() && b.is_ascii_digit() && c.is_ascii_digit() => {
+            let value =
+                u16::from(*a - b'0') * 100 + u16::from(*b - b'0') * 10 + u16::from(*c - b'0');
+            (value <= 255).then_some(true)
+        }
+        _ => None,
+    }
 }
 
 pub fn parse_u8_bool_or_default(raw: Option<&str>, default: bool) -> bool {
