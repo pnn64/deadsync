@@ -1,0 +1,61 @@
+{
+  "stage": "control",
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "target-feature=+crt-static",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "lto=fat",
+    "--extern",
+    "rustc_hash=D:\\deadsync-partner-charts-20261104\\full-workspace\\target\\release\\deps\\librustc_hash-211e77caf41ec2ea.rlib",
+    "--extern",
+    "smallvec=D:\\deadsync-partner-charts-20261104\\full-workspace\\target\\release\\deps\\libsmallvec-42807898b9216da6.rlib",
+    "-L",
+    "dependency=D:\\deadsync-partner-charts-20261104\\full-workspace\\target\\release\\deps",
+    "D:\\deadsync-font-cache-20261104\\control\\compiled.rs",
+    "-o",
+    "D:\\deadsync-font-cache-20261104\\control\\font_cache.exe"
+  ],
+  "baseline_revision": "74a02c1808bd693fe4fcdab41ae7b26be339c54d",
+  "sources": {
+    "crates/deadlib-present/src/font.rs": "1708043e8b09dbe3c6a8801e58c3125673730561041f4b75b0348101cb25aa27",
+    "crates/deadlib-present/src/font_cache_original.rs": "e49a6f139b61aceb61449f855e3d4ab6383aa94c982699385776316301a07e5c",
+    "crates/deadlib-present/src/font_cache_checks.rs": "45f52530465c168826d74b838cd3388f3a73ffb8ce50f986e3246d6011d34a8a",
+    "crates/deadlib-present/src/font_cache_performance.rs": "28cbc873aaf72767cd8b2b018dbecc0ead6d6d1dbc2313843ceae3e3d08c2b97",
+    "crates/deadlib-present/src/font_cache_ablation.rs": "028c305c7bd816d9f8890458a18d721a67140e3a9464ca6dccb4822b11986feb",
+    "tests/support/perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "tests/support/kernel_bench.rs": "c51545a68563311e33b5d3a1b6b3b08a99224b7cc46555a55a21d7d0cbdd2866",
+    "scripts/benchmark_font_cache.py": "bfc92ccaf4ca1067b0ace4259169c4b4fece2a67de2fe656370aa8a2051be8ab"
+  },
+  "fragments_sha256": "35a2a5952f4f03e35eb7687179ddf6969eeecdd46a25dcc47a236d60720c773c",
+  "compiled_sha256": "6c2093ba1a0bf1c61353ba7151f96e8397ac0a218a7cdde4bb06f4aa2cb9fa06",
+  "binary_sha256": "6ce8b552317c19ab2b0d8aaf2a10e800c4f054d3a096cf9bba300242d6e7151c",
+  "correctness_sha256": "399577df3c29ee2e1d2f3c488cf84a9f091df9acaf35e66125ab3d89c39ffe46",
+  "libraries": {
+    "rustc_hash": {
+      "path": "D:\\deadsync-partner-charts-20261104\\full-workspace\\target\\release\\deps\\librustc_hash-211e77caf41ec2ea.rlib",
+      "sha256": "497bf8faa99769bd4245666e6352271b8b43cf43ab7e2583cd62cf27d6f0a019"
+    },
+    "smallvec": {
+      "path": "D:\\deadsync-partner-charts-20261104\\full-workspace\\target\\release\\deps\\libsmallvec-42807898b9216da6.rlib",
+      "sha256": "81e2bd9942c6f9333edcf15db014441862f518941ffa0ea4de58f82c3b93d25a"
+    }
+  },
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cpu": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "passed_tests": 6,
+  "runs": 5,
+  "ablation_runs": 0,
+  "trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+  "trace_bytes": 29797483,
+  "reference_trace": "D:\\deadsync-font-cache-20261104\\baseline\\font-cache-trace.bin",
+  "reference_trace_sha256": "33038e06553cb29704197876354222acbcd3021a588c071e0809ff01b98a2454",
+  "exhaustive": false,
+  "exhaustive_sha256": null
+}

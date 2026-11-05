@@ -145,10 +145,21 @@ fn for_each_stream_segment(
         "stream chart exceeds 31-bit measure indices"
     );
     let mut runs = StreamRuns::default();
-    for (idx, &density) in measures.iter().enumerate() {
-        if usize::from(density) >= threshold {
-            runs.record(idx, &mut visit);
+    let mut index = 0;
+    while index < measures.len() {
+        if usize::from(measures[index]) >= threshold {
+            runs.record(index, &mut visit);
+            index += 1;
+            if index < measures.len() && usize::from(measures[index]) >= threshold {
+                index += 1;
+                while index < measures.len() && usize::from(measures[index]) >= threshold {
+                    index += 1;
+                }
+                runs.end = index;
+            }
         }
+        // The scan stopped at the first nonqualifying measure (or chart end).
+        index += 1;
     }
     runs.finish(measures.len(), visit);
 }
@@ -492,23 +503,51 @@ fn build_stream_outputs(
     let mut totals = StreamTotals::default();
 
     if counter_threshold == zmod_threshold {
-        for_each_stream_segment(measures, zmod_threshold, |segment| {
-            counter_segments.push(segment);
-            zmod_segments.push(segment);
-            totals.record(segment);
-        });
+        if counter_capacity == zmod_capacity {
+            for_each_stream_segment(measures, zmod_threshold, |segment| {
+                zmod_segments.push(segment);
+                totals.record(segment);
+            });
+            // Identical initial capacities and pushes grow to the same final
+            // capacity. Preserve that shape while copying the segments in bulk.
+            counter_segments.reserve_exact(zmod_segments.capacity());
+            counter_segments.extend_from_slice(&zmod_segments);
+        } else {
+            for_each_stream_segment(measures, zmod_threshold, |segment| {
+                counter_segments.push(segment);
+                zmod_segments.push(segment);
+                totals.record(segment);
+            });
+        }
     } else {
         let mut counter_runs = StreamRuns::default();
         let mut zmod_runs = StreamRuns::default();
-        for (idx, &density) in measures.iter().enumerate() {
-            if usize::from(density) >= counter_threshold {
-                counter_runs.record(idx, |segment| counter_segments.push(segment));
+        if counter_threshold < zmod_threshold {
+            for (idx, &density) in measures.iter().enumerate() {
+                if usize::from(density) >= zmod_threshold {
+                    counter_runs.record(idx, |segment| counter_segments.push(segment));
+                    zmod_runs.record(idx, |segment| {
+                        totals.record(segment);
+                        zmod_segments.push(segment);
+                    });
+                } else if usize::from(density) >= counter_threshold {
+                    counter_runs.record(idx, |segment| counter_segments.push(segment));
+                }
             }
-            if usize::from(density) >= zmod_threshold {
-                zmod_runs.record(idx, |segment| {
-                    totals.record(segment);
-                    zmod_segments.push(segment);
-                });
+        } else {
+            for (idx, &density) in measures.iter().enumerate() {
+                if usize::from(density) >= counter_threshold {
+                    counter_runs.record(idx, |segment| counter_segments.push(segment));
+                    zmod_runs.record(idx, |segment| {
+                        totals.record(segment);
+                        zmod_segments.push(segment);
+                    });
+                } else if usize::from(density) >= zmod_threshold {
+                    zmod_runs.record(idx, |segment| {
+                        totals.record(segment);
+                        zmod_segments.push(segment);
+                    });
+                }
             }
         }
         counter_runs.finish(measures.len(), |segment| counter_segments.push(segment));
@@ -888,3 +927,7 @@ mod stream_perf;
 #[cfg(test)]
 #[path = "density_kernel.rs"]
 mod density_kernel;
+
+#[cfg(test)]
+#[path = "stream_scans_performance.rs"]
+mod stream_scans_performance;

@@ -1,0 +1,51 @@
+{
+  "stage": "packed-composition",
+  "command": [
+    "rustc",
+    "--test",
+    "--edition=2024",
+    "-C",
+    "opt-level=3",
+    "-C",
+    "target-feature=+crt-static",
+    "-C",
+    "debuginfo=0",
+    "-C",
+    "lto=fat",
+    "D:\\deadsync-smx-effects-20261104\\packed-composition\\compiled.rs",
+    "-o",
+    "D:\\deadsync-smx-effects-20261104\\packed-composition\\effects.exe"
+  ],
+  "baseline_revision": null,
+  "sources": {
+    "crates/deadsync-smx/src/panels.rs": "d2c5d9c9a1d120f4da4bfe45110d99487b637118d580a9207d1adbc129e32cc9",
+    "crates/deadsync-smx/src/panel_fx.rs": "4a7327aafce574d8525e09235b583fa0b11032fb4ea0f8365c1bb107eeb49de7",
+    "crates/deadsync-smx/src/gifs.rs": "72a30d06b36d855d7daaeb87ce4f3cfaf7f3a0c4f73b5c2efe40ce646d3c318c",
+    "crates/deadsync-smx/src/effects_performance.rs": "4922d9d98c9b4055a5de5078b96e4d4cd1e7542ec91f3da071b44678cfc16dc6",
+    "crates/deadsync-smx/src/effects_original.rs": "cda07045933de7a43369e81b1e6f5bf4eba20ffdd44834529a9ac70998125f29",
+    "crates/deadsync-score/src/lib.rs": "b6d81eddf1dd9a3bb454915926f41af4d6aa61a05459a324f0609424e6276910",
+    "tests/support/perf.rs": "67fcae868779bae11a863114a6583fec5f4a0bc1d45a60df1ef76142b4cd70ac",
+    "tests/support/kernel_bench.rs": "c51545a68563311e33b5d3a1b6b3b08a99224b7cc46555a55a21d7d0cbdd2866",
+    "scripts/benchmark_smx_effects.py": "7ef64f6beee3228b80505d9e1fb763fe158c9921fc43760481bcc83828e86d52"
+  },
+  "fragments": {
+    "panel_constants": "ed966b01f20ad81e2f9c103c29998a81ded769e264050e251322670786390214",
+    "effect_engine": "6c78ac18a9d98dbcb1fc96e21425e90ec81f412e2506a3a5fe23828d2ad33eca",
+    "results_roles": "5410bff490a4058956b430c9871864246c96bf75bb40e879ca94dd765736eb34",
+    "full_pad_anim": "dd1e86790aef56210e642bc7df472bd78ec78120aec459d9e8f6717741e6c8c9",
+    "panel_anim": "6a6c88268f8a1419859344f51e5516f90095211c37dbe0c83a94f07c0704199a",
+    "panel_anim_impl": "d3c6a8d337447ac245dc9e3b7c17e7fd96761186cb6dd74723b328b43c0d33c7",
+    "grade_enum": "06fc6e1e7a56da8def2fec12789323992f595927b4696b1df129fc1a2ee3335f",
+    "grade_suffix": "86005ea1f737cb17354b08124718b2d39554b099e30248d247890509c715c054",
+    "grade_base": "56329fb457aa44fcbbbb07b849f46f350aa9f000a6d7cf62e84e15a23d9e1fb9"
+  },
+  "compiled_sha256": "182fde318d1b244a69660e5171801c3b3461d3ed0f1c57942442003f37924243",
+  "binary_sha256": "0180f664cdf1b173382c5f48574df7f6d743125529053f133624f6898abe2b10",
+  "correctness_sha256": "a1f77453bde61a18ae2ab05b0fc6e72843c281e477c85380747030cc0cb6a87d",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+  "cpu": "Intel64 Family 6 Model 79 Stepping 1, GenuineIntel",
+  "passed_tests": 3,
+  "runs": 3,
+  "trace_sha256": "8982ff7c62f85d0693e5d5a354a8a4802c32542bd7678215b28a814814130d2c",
+  "trace_bytes": 5747871
+}

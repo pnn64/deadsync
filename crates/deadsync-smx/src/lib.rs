@@ -22,6 +22,12 @@ pub mod gifs;
 pub mod panel_fx;
 pub mod panels;
 
+#[cfg(test)]
+use gifs::perf_tests::allocations as lighting_allocations;
+#[cfg(test)]
+#[path = "lighting_performance.rs"]
+mod lighting_performance;
+
 /// Number of panels per SMX pad (from the SDK's hardware-shape constants).
 pub const PANEL_COUNT: usize = NUM_PANELS;
 /// Center panel index (the non-playable middle panel in the 3x3 grid).
@@ -88,6 +94,7 @@ fn brightness_factor(pct: u8) -> f32 {
 /// laid out as `[slot0 .. | slot1 ..]`, so the first half scales by `pct[0]` and
 /// the second by `pct[1]`. Round-to-nearest keeps dim colours fading smoothly
 /// instead of snapping to black. Caller skips this entirely when both are 100.
+#[cfg(test)]
 pub(crate) fn apply_brightness(frame: &mut [u8], pct: [u8; 2]) {
     let half = frame.len() / 2;
     let factor = [brightness_factor(pct[0]), brightness_factor(pct[1])];
@@ -133,8 +140,14 @@ impl BrightnessScale {
                 self.pct[slot] = pct;
             }
             let range = slot * half..(slot + 1) * half;
-            for value in &mut frame[range] {
-                *value = self.table[slot][usize::from(*value)];
+            match pct {
+                0 => frame[range].fill(0),
+                100 => {}
+                _ => {
+                    for value in &mut frame[range] {
+                        *value = self.table[slot][usize::from(*value)];
+                    }
+                }
             }
         }
     }
@@ -145,15 +158,19 @@ fn player_light_frame(
     brightness: [u8; 2],
 ) -> [u8; PLAYER_LIGHT_FRAME_BYTES] {
     let mut frame = [0; PLAYER_LIGHT_FRAME_BYTES];
+    let dimmed = brightness != [100, 100];
     for (pad, color) in colors.iter().enumerate() {
         let Some(rgb) = color else { continue };
+        let rgb = if dimmed {
+            let factor = brightness_factor(brightness[pad]);
+            (*rgb).map(|value| f32::from(value).mul_add(factor, 0.5) as u8)
+        } else {
+            *rgb
+        };
         let base = pad * BYTES_PER_PAD_25;
         for led in frame[base..base + BYTES_PER_PAD_25].as_chunks_mut::<3>().0 {
-            *led = *rgb;
+            *led = rgb;
         }
-    }
-    if brightness != [100, 100] {
-        apply_brightness(&mut frame, brightness);
     }
     frame
 }

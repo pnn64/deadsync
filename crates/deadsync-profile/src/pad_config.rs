@@ -79,10 +79,14 @@ pub fn upsert_config(
 }
 
 pub fn set_default_config(list: &mut [PadConfigProfile], serial: &str, name: &str) -> bool {
-    if !list.iter().any(|p| p.name.eq_ignore_ascii_case(name)) {
+    let Some(first) = list.iter().position(|p| p.name.eq_ignore_ascii_case(name)) else {
         return false;
+    };
+    let (before, rest) = list.split_at_mut(first);
+    for p in before {
+        p.default_for_serials.retain(|s| s != serial);
     }
-    for p in list.iter_mut() {
+    for p in rest {
         let should = p.name.eq_ignore_ascii_case(name);
         p.default_for_serials.retain(|s| s != serial);
         if should {
@@ -94,17 +98,19 @@ pub fn set_default_config(list: &mut [PadConfigProfile], serial: &str, name: &st
 
 pub fn rename_config(list: &mut [PadConfigProfile], old: &str, new: &str) -> bool {
     let new = new.trim();
-    if new.is_empty()
-        || !list.iter().any(|p| p.name.eq_ignore_ascii_case(old))
-        || list
-            .iter()
-            .any(|p| !p.name.eq_ignore_ascii_case(old) && p.name.eq_ignore_ascii_case(new))
+    if new.is_empty() {
+        return false;
+    }
+    let Some(index) = list.iter().position(|p| p.name.eq_ignore_ascii_case(old)) else {
+        return false;
+    };
+    if list
+        .iter()
+        .any(|p| p.name.eq_ignore_ascii_case(new) && !p.name.eq_ignore_ascii_case(old))
     {
         return false;
     }
-    if let Some(p) = list.iter_mut().find(|p| p.name.eq_ignore_ascii_case(old)) {
-        p.name = new.to_string();
-    }
+    list[index].name = new.to_string();
     true
 }
 
@@ -332,10 +338,13 @@ pub fn save_path(path: &Path, profiles: &[PadConfigProfile]) -> std::io::Result<
 pub fn migrated_config_name(owner: &str, name: &str) -> String {
     let owner = owner.trim();
     if owner.is_empty() {
-        name.to_owned()
-    } else {
-        format!("{owner} - {name}")
+        return name.to_owned();
     }
+    let mut result = String::new();
+    result.push_str(owner);
+    result.push_str(" - ");
+    result.push_str(name);
+    result
 }
 
 /// Merge legacy per-profile config lists, newest source first, into one
@@ -916,4 +925,9 @@ Panel0.FsrLow=1 2 3 4
         assert!(is_default_for(&list[0], "S1"));
         assert!(is_default_for(&list[0], "S2"));
     }
+}
+
+#[cfg(test)]
+mod mutation_performance {
+    include!("pad_mutation_performance.rs");
 }

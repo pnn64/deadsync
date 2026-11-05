@@ -1795,12 +1795,12 @@ pub const fn clamp_custom_fantastic_window_ms(ms: u8) -> u8 {
 #[must_use]
 pub fn sanitize_player_initials(raw: &str) -> String {
     let mut out = String::with_capacity(PLAYER_INITIALS_MAX_LEN);
-    for ch in raw.chars() {
-        if out.len() >= PLAYER_INITIALS_MAX_LEN {
-            break;
-        }
-        if ch.is_ascii_alphanumeric() || ch == '?' || ch == '!' {
-            out.push(ch.to_ascii_uppercase());
+    for byte in raw.bytes() {
+        if byte.is_ascii_alphanumeric() || byte == b'?' || byte == b'!' {
+            out.push(char::from(byte.to_ascii_uppercase()));
+            if out.len() == PLAYER_INITIALS_MAX_LEN {
+                break;
+            }
         }
     }
     out
@@ -1894,17 +1894,27 @@ pub fn push_profile_guid_line(out: &mut String, guid: &str) {
 /// this canonical dashed-lowercase form.
 #[must_use]
 pub fn is_valid_profile_guid(s: &str) -> bool {
-    let groups = [8usize, 4, 4, 4, 12];
-    let mut parts = s.split('-');
-    for &len in &groups {
-        let Some(part) = parts.next() else {
-            return false;
-        };
-        if part.len() != len || !part.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return false;
-        }
+    let bytes = s.as_bytes();
+    if bytes.len() != 36
+        || bytes[8] != b'-'
+        || bytes[13] != b'-'
+        || bytes[18] != b'-'
+        || bytes[23] != b'-'
+    {
+        return false;
     }
-    parts.next().is_none()
+    [
+        &bytes[..8],
+        &bytes[9..13],
+        &bytes[14..18],
+        &bytes[19..23],
+        &bytes[24..],
+    ]
+    .iter()
+    .all(|part| {
+        part.iter()
+            .fold(true, |valid, byte| valid & byte.is_ascii_hexdigit())
+    })
 }
 
 /// Fixed namespace UUID for deriving `DeadSync` profile GUIDs from `ITGmania`
@@ -1928,21 +1938,38 @@ pub fn profile_guid_from_itgmania_guid(itg_guid: &str) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
-    let derived = uuid::Uuid::new_v5(
-        &ITGMANIA_GUID_NAMESPACE,
-        trimmed.to_ascii_lowercase().as_bytes(),
-    );
+    let mut folded = [0u8; 64];
+    let derived = if trimmed.len() <= folded.len() {
+        let name = &mut folded[..trimmed.len()];
+        name.copy_from_slice(trimmed.as_bytes());
+        name.make_ascii_lowercase();
+        uuid::Uuid::new_v5(&ITGMANIA_GUID_NAMESPACE, name)
+    } else {
+        uuid::Uuid::new_v5(
+            &ITGMANIA_GUID_NAMESPACE,
+            trimmed.to_ascii_lowercase().as_bytes(),
+        )
+    };
     Some(derived.to_string())
 }
 
 const FOLDER_NAME_MAX_LEN: usize = 48;
 
 fn is_windows_reserved_name(name: &str) -> bool {
-    const RESERVED: [&str; 22] = [
-        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-    ];
-    RESERVED.iter().any(|r| name.eq_ignore_ascii_case(r))
+    let prefix = match name.as_bytes() {
+        [a, b, c] => [a | 0x20, b | 0x20, c | 0x20],
+        [a, b, c, b'1'..=b'9'] => {
+            return matches!(
+                [a | 0x20, b | 0x20, c | 0x20],
+                [b'c', b'o', b'm'] | [b'l', b'p', b't']
+            );
+        }
+        _ => return false,
+    };
+    matches!(
+        prefix,
+        [b'c', b'o', b'n'] | [b'p', b'r', b'n'] | [b'a', b'u', b'x'] | [b'n', b'u', b'l']
+    )
 }
 
 /// Derive a safe single-segment folder name from a display name. `None` (caller
@@ -1980,7 +2007,11 @@ pub fn sanitize_folder_base(display_name: &str) -> Option<String> {
     if trimmed.is_empty() || is_windows_reserved_name(trimmed) {
         return None;
     }
-    Some(trimmed.to_string())
+    if out.capacity() == trimmed.len() {
+        Some(out)
+    } else {
+        Some(trimmed.to_string())
+    }
 }
 
 /// Largest numeric suffix tried before giving up and using the fallback.
@@ -2003,6 +2034,22 @@ pub fn folder_name_for_display(display_name: &str, fallback: &str, existing: &[S
         return base;
     }
     let mut candidate = String::with_capacity(base.len() + 5);
+    if existing.len() >= 32 {
+        // Preserve the common small-gap search before building the full index.
+        for n in 2..=8 {
+            candidate.clear();
+            let _ = write!(candidate, "{base}-{n}");
+            if !taken(&candidate) {
+                return candidate;
+            }
+        }
+        let Some(n) = available_folder_suffix(&base, existing) else {
+            return fallback.to_string();
+        };
+        candidate.clear();
+        let _ = write!(candidate, "{base}-{n}");
+        return candidate;
+    }
     for n in 2..=FOLDER_NAME_MAX_SUFFIX {
         candidate.clear();
         let _ = write!(candidate, "{base}-{n}");
@@ -2013,12 +2060,46 @@ pub fn folder_name_for_display(display_name: &str, fallback: &str, existing: &[S
     fallback.to_string()
 }
 
+// The bound is fixed: one bit per canonical suffix, with no heap index.
+#[inline(never)]
+fn available_folder_suffix(base: &str, existing: &[String]) -> Option<u32> {
+    let mut occupied = [0u64; 157];
+    occupied[0] = 3;
+    occupied[156] = u64::MAX << 16;
+    for name in existing {
+        let Some((prefix, suffix)) = name.as_bytes().split_at_checked(base.len()) else {
+            continue;
+        };
+        if !prefix.eq_ignore_ascii_case(base.as_bytes()) {
+            continue;
+        }
+        let [b'-', first @ b'1'..=b'9', tail @ ..] = suffix else {
+            continue;
+        };
+        if tail.len() > 3 {
+            continue;
+        }
+        let mut n = u32::from(first - b'0');
+        for &digit in tail {
+            if !digit.is_ascii_digit() {
+                n = 0;
+                break;
+            }
+            n = n * 10 + u32::from(digit - b'0');
+        }
+        if n >= 2 {
+            occupied[n as usize / 64] |= 1u64 << (n % 64);
+        }
+    }
+    occupied.iter().enumerate().find_map(|(word, &bits)| {
+        let free = !bits;
+        (free != 0).then(|| (word * 64 + free.trailing_zeros() as usize) as u32)
+    })
+}
+
 #[inline(always)]
 pub fn cmp_profile_ids_case_insensitive(a: &str, b: &str) -> core::cmp::Ordering {
-    a.chars()
-        .flat_map(char::to_lowercase)
-        .cmp(b.chars().flat_map(char::to_lowercase))
-        .then_with(|| a.cmp(b))
+    favorites_view::unicode_case_insensitive_cmp(a, b).then_with(|| a.cmp(b))
 }
 
 #[must_use]
@@ -4518,20 +4599,38 @@ fn with_lower_option_key<R>(value: &str, use_key: impl FnOnce(&str) -> R) -> R {
 #[inline]
 fn with_compact_option_key<R>(value: &str, use_key: impl FnOnce(&str) -> R) -> R {
     let value = value.trim();
+    const MAP: [u8; 256] = {
+        let mut map = [0u8; 256];
+        let mut byte = 0usize;
+        while byte < 256 {
+            let value = byte as u8;
+            if value.is_ascii_alphanumeric() {
+                map[byte] = value.to_ascii_lowercase();
+            }
+            byte += 1;
+        }
+        map
+    };
     let mut bytes = [0u8; OPTION_KEY_STACK_BYTES];
     let mut len = 0;
-    for byte in value.bytes().filter(u8::is_ascii_alphanumeric) {
+    for byte in value.bytes().filter_map(|byte| {
+        let mapped = MAP[usize::from(byte)];
+        (mapped != 0).then_some(mapped)
+    }) {
         if len == OPTION_KEY_STACK_BYTES {
             let mut key = String::with_capacity(value.len());
             key.extend(
                 value
                     .bytes()
-                    .filter(u8::is_ascii_alphanumeric)
-                    .map(|byte| byte.to_ascii_lowercase() as char),
+                    .filter_map(|byte| {
+                        let mapped = MAP[usize::from(byte)];
+                        (mapped != 0).then_some(mapped)
+                    })
+                    .map(char::from),
             );
             return use_key(&key);
         }
-        bytes[len] = byte.to_ascii_lowercase();
+        bytes[len] = byte;
         len += 1;
     }
     let key = std::str::from_utf8(&bytes[..len])
@@ -15912,3 +16011,15 @@ fn dataflow_peak_bytes(churn: perf::Churn) -> usize {
 #[cfg(test)]
 #[path = "../../../tests/perf/visual_options.rs"]
 mod visual_options_perf;
+
+#[cfg(test)]
+#[path="folder_paths_performance.rs"]
+mod folder_paths_performance;
+
+#[cfg(test)]
+#[path = "identity_performance.rs"]
+mod identity_performance;
+
+#[cfg(test)]
+#[path = "normalization_performance.rs"]
+mod normalization_performance;

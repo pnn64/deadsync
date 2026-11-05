@@ -13,24 +13,29 @@ pub struct ParsedNote {
 #[must_use]
 pub fn step_type_lanes(step_type: &str) -> usize {
     let bytes = step_type.trim().as_bytes();
-    let pump = |style: &[u8]| {
-        bytes.len() == 5 + style.len()
-            && matches!(bytes[4], b'-' | b'_')
-            && bytes[..4].eq_ignore_ascii_case(b"pump")
-            && bytes[5..].eq_ignore_ascii_case(style)
-    };
-    let dance = |style: &[u8]| {
-        bytes.len() == 6 + style.len()
+    if !(11..=13).contains(&bytes.len()) {
+        return 4;
+    }
+    // Both prefixes contain only ASCII letters, so one word folds their case.
+    let prefix = u32::from_le_bytes(bytes[..4].try_into().unwrap()) | 0x2020_2020;
+    let (style, wide_lanes) =
+        if prefix == u32::from_le_bytes(*b"pump") && matches!(bytes[4], b'-' | b'_') {
+            (&bytes[5..], 10)
+        } else if prefix == u32::from_le_bytes(*b"danc")
+            && matches!(bytes[4], b'e' | b'E')
             && matches!(bytes[5], b'-' | b'_')
-            && bytes[..5].eq_ignore_ascii_case(b"dance")
-            && bytes[6..].eq_ignore_ascii_case(style)
-    };
+        {
+            (&bytes[6..], 8)
+        } else {
+            return 4;
+        };
     // Partner charts span both pads, like doubles.
-    if pump(b"double") || pump(b"couple") || pump(b"routine") {
-        10
-    } else if dance(b"double") || dance(b"couple") || dance(b"routine") {
-        8
-    } else if pump(b"single") {
+    if style.eq_ignore_ascii_case(b"double")
+        || style.eq_ignore_ascii_case(b"couple")
+        || style.eq_ignore_ascii_case(b"routine")
+    {
+        wide_lanes
+    } else if wide_lanes == 10 && style.eq_ignore_ascii_case(b"single") {
         5
     } else {
         4

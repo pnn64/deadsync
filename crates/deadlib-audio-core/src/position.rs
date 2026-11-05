@@ -18,7 +18,8 @@ pub fn music_nanos_from_seconds(seconds: f64) -> i64 {
 #[inline(always)]
 #[must_use]
 pub fn normalized_music_rate(rate: f32) -> f32 {
-    if rate.is_finite() && rate > 0.0 {
+    // Positive finite f32 bit patterns occupy 1..0x7f80_0000.
+    if rate.to_bits().wrapping_sub(1) < 0x7f7f_ffff {
         rate
     } else {
         1.0

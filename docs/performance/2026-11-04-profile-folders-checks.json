@@ -1,0 +1,8864 @@
+{
+  "indexed_parser_edges": {
+    "sources": {
+      "crates/deadsync-profile/src/lib.rs": "0a81693c20a7cee9cb4cf4057cdbafe504d9b6585c8d8f6c20a78eaa7e60f975",
+      "crates/deadsync-profile/src/folder_paths_original.rs": "7e361c218fab84a65d1946e33958a1d7c8b1d3c5b3ffdfaa391be3c9cd34ee80",
+      "tests/perf/profile_folder_index_edges.rs": "8953284aa1898ef1c74314f6d5f9f5401f9b9e105d7a94fa1ae15f8e9a0f425f",
+      "scripts/check_profile_folder_index.py": "2122e3cf2f0725a79550e6c84edd8e66540caab862b497a2d9ada2583c8ee33a"
+    },
+    "profiles": {
+      "release": {
+        "build_command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--jobs",
+          "2",
+          "--manifest-path",
+          "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.toml",
+          "-p",
+          "deadsync-profile",
+          "--test",
+          "folder_index_edgecases",
+          "--release",
+          "--no-run",
+          "--message-format=json"
+        ],
+        "command": [
+          "D:\\deadsync-profile-folders-20261104\\index-edges\\release\\folder_index_edgecases-124f65705ea14d7b.exe",
+          "--test-threads=1"
+        ],
+        "profile": {
+          "opt_level": "3",
+          "debuginfo": 0,
+          "debug_assertions": false,
+          "overflow_checks": false,
+          "test": true
+        },
+        "passed_tests": 1,
+        "exit_code": 0,
+        "binary_sha256": "381f9464b77018a2c3460924f536a45236d3133404a70e443d1ac275c583c0fb",
+        "build_sha256": "2379180c1a5c1af9e6fe62a3cc51f2b30980183ba09fb33d7118893541388347",
+        "log_sha256": "50e89e5eec0ea61e823e08497744edd2f7a924b9be203d7a0f64c7df7f69c9a8"
+      },
+      "debug": {
+        "build_command": [
+          "cargo",
+          "test",
+          "--offline",
+          "--locked",
+          "--jobs",
+          "2",
+          "--manifest-path",
+          "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.toml",
+          "-p",
+          "deadsync-profile",
+          "--test",
+          "folder_index_edgecases",
+          "--release",
+          "--no-run",
+          "--message-format=json"
+        ],
+        "command": [
+          "D:\\deadsync-profile-folders-20261104\\index-edges\\debug\\folder_index_edgecases-4c7fc957fa9b0be2.exe",
+          "--test-threads=1"
+        ],
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": 0,
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": true
+        },
+        "passed_tests": 1,
+        "exit_code": 0,
+        "binary_sha256": "d84295112d40c5bfb85992b80ed9f17b7970cb81a201994fe3df9e31718b6add",
+        "build_sha256": "50dfbc5512fa0f84b62cfd825c55309bc8dfd184be1fce4d9f40b5f518a73131",
+        "log_sha256": "07bffc62f7bc4b18fc9abb72b59f17938697ebf263fb316ea369d2e3263b2040"
+      }
+    },
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-pc-windows-msvc\nrelease: 1.99.1\nLLVM version: 23.1.1\n",
+    "temporary_target_removed": true,
+    "workspace_manifest_restored": true
+  },
+  "base_revision": "9b0ffa6aae31fbd9535b678a1c9b49b36c416555",
+  "scope": "Only reserved-name classification, sanitizer ownership, collision dispatch/index and test registration; frozen bodies match Git",
+  "no_unsafe_added": true,
+  "stages": {
+    "baseline": {
+      "unit": 240,
+      "integration": 8,
+      "trace": {
+        "bytes": 25511931,
+        "sha256": "65ab5c8967bdc17ad68fdea1725a4e5cdde986540516661c5b00e5d16d086bbc",
+        "reference": "D:\\deadsync-profile-folders-20261104\\baseline\\trace.bin",
+        "reference_sha256": "65ab5c8967bdc17ad68fdea1725a4e5cdde986540516661c5b00e5d16d086bbc"
+      },
+      "unit_result": [
+        "test result: ok. 240 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 5.67s"
+      ],
+      "integration_results": {
+        "pad_lookup_growth": [
+          "test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.03s"
+        ],
+        "name_comparison": [
+          "test result: ok. 3 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.82s"
+        ],
+        "pad_config_migration": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s"
+        ],
+        "noteskin_parts": [
+          "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+        ]
+      }
+    },
+    "debug": {
+      "unit": 240,
+      "integration": 8,
+      "trace": {
+        "bytes": 25511931,
+        "sha256": "65ab5c8967bdc17ad68fdea1725a4e5cdde986540516661c5b00e5d16d086bbc",
+        "reference": "D:\\deadsync-profile-folders-20261104\\baseline\\trace.bin",
+        "reference_sha256": "65ab5c8967bdc17ad68fdea1725a4e5cdde986540516661c5b00e5d16d086bbc"
+      },
+      "unit_result": [
+        "test result: ok. 240 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 16.63s"
+      ],
+      "integration_results": {
+        "name_comparison": [
+          "test result: ok. 3 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 8.03s"
+        ],
+        "noteskin_parts": [
+          "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+        ],
+        "pad_lookup_growth": [
+          "test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.07s"
+        ],
+        "pad_config_migration": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s"
+        ]
+      }
+    },
+    "final": {
+      "unit": 240,
+      "integration": 8,
+      "trace": {
+        "bytes": 25511931,
+        "sha256": "65ab5c8967bdc17ad68fdea1725a4e5cdde986540516661c5b00e5d16d086bbc",
+        "reference": "D:\\deadsync-profile-folders-20261104\\baseline\\trace.bin",
+        "reference_sha256": "65ab5c8967bdc17ad68fdea1725a4e5cdde986540516661c5b00e5d16d086bbc"
+      },
+      "unit_result": [
+        "test result: ok. 240 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 3.87s"
+      ],
+      "integration_results": {
+        "pad_lookup_growth": [
+          "test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.03s"
+        ],
+        "noteskin_parts": [
+          "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s"
+        ],
+        "name_comparison": [
+          "test result: ok. 3 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.80s"
+        ],
+        "pad_config_migration": [
+          "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s"
+        ]
+      }
+    }
+  },
+  "clippy": {
+    "command": [
+      "cargo",
+      "clippy",
+      "--offline",
+      "--locked",
+      "--jobs",
+      "2",
+      "--manifest-path",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.toml",
+      "-p",
+      "deadsync-profile",
+      "--lib",
+      "--tests",
+      "--release",
+      "--message-format=json"
+    ],
+    "files": {
+      "crates/deadsync-profile/src/lib.rs": "0a81693c20a7cee9cb4cf4057cdbafe504d9b6585c8d8f6c20a78eaa7e60f975",
+      "crates/deadsync-profile/src/favorites_view.rs": "e3e953591ed85fd1aa85067292a3949f5cd765b250b555e22f3eb546b28829f5",
+      "crates/deadsync-profile/src/folder_paths_original.rs": "7e361c218fab84a65d1946e33958a1d7c8b1d3c5b3ffdfaa391be3c9cd34ee80",
+      "crates/deadsync-profile/src/folder_paths_ablation.rs": "e878ed9ee5b61bb00da144346bd66edd1016f758e3d24bd270c6fe42cdc9204e",
+      "crates/deadsync-profile/src/folder_paths_performance.rs": "b4660db8deec0119205d31b460adc1438ed6f23f7de9815e3bea045804c64526",
+      "Cargo.toml": "84690b048704e8e7a5d7b476d0d4bd85f40b1cf49cdc24d5c8efafafc181364e",
+      "Cargo.lock": "82f794afbcea17a4ad1b4d684ebc9d56368b2837da75e7c662068a6cc58735b4"
+    },
+    "lib_scope": [
+      [
+        1940,
+        1955
+      ],
+      [
+        1961,
+        1997
+      ],
+      [
+        2008,
+        2043
+      ],
+      [
+        2047,
+        2080
+      ]
+    ],
+    "exit_code": 0,
+    "log_sha256": "7592592da57d803c178a25af074872cb5f3b9c9d094efe0a6ef928e2920a9220",
+    "scoped_diagnostics": [],
+    "total_messages": 509
+  },
+  "production_check": {
+    "command": [
+      "cargo",
+      "check",
+      "--offline",
+      "--locked",
+      "--jobs",
+      "2",
+      "--manifest-path",
+      "D:\\deadsync-partner-charts-20261104\\full-workspace\\Cargo.toml",
+      "-p",
+      "deadsync-profile",
+      "--lib",
+      "--release",
+      "--message-format=json"
+    ],
+    "files": {
+      "crates\\deadsync-profile\\src\\app_runtime.rs": "aa73b014a6c4c04b25fa4ab17d99bf07b156d4873594617435a20a9cd6ce958c",
+      "crates\\deadsync-profile\\src\\compat.rs": "087a01dce3540c41fab6d3e4fa54b21376462f459c13aaa8bb37638322b9cd26",
+      "crates\\deadsync-profile\\src\\favorites_view.rs": "e3e953591ed85fd1aa85067292a3949f5cd765b250b555e22f3eb546b28829f5",
+      "crates\\deadsync-profile\\src\\folder_paths_ablation.rs": "e878ed9ee5b61bb00da144346bd66edd1016f758e3d24bd270c6fe42cdc9204e",
+      "crates\\deadsync-profile\\src\\folder_paths_original.rs": "7e361c218fab84a65d1946e33958a1d7c8b1d3c5b3ffdfaa391be3c9cd34ee80",
+      "crates\\deadsync-profile\\src\\folder_paths_performance.rs": "b4660db8deec0119205d31b460adc1438ed6f23f7de9815e3bea045804c64526",
+      "crates\\deadsync-profile\\src\\lib.rs": "0a81693c20a7cee9cb4cf4057cdbafe504d9b6585c8d8f6c20a78eaa7e60f975",
+      "crates\\deadsync-profile\\src\\lock_wait.rs": "fdb7a392b132d4c1a1e20d0dda29a93f2900bc367ff1d0c2cff1060dc536def0",
+      "crates\\deadsync-profile\\src\\pad_config.rs": "e81c3b3894cd388483736a05cf0500ed54eb2585052a0c3b8d6cc643541fbc84",
+      "crates\\deadsync-profile\\src\\pad_config_migration_tests.rs": "5655713ddfb5acd1085df7b826237c227b94c424579622b9b0827ad60eaab936",
+      "crates\\deadsync-profile\\src\\pad_config_sync.rs": "9151d9598fa7d1e337ae7699114a2a90244926d22ed8ecfb32f2fbbaba5a9f53",
+      "crates\\deadsync-profile\\src\\perf_original.rs": "f625f0554553e4d8f4e1599d8f7ee94350a2f8402a8f96d6f38703aa6c6f9076",
+      "crates\\deadsync-profile\\src\\perf_tests.rs": "d1ef68285f2a2b9ca898cc7081bb04ece7e246c1e5a8e78e40ce3b99f8933988",
+      "crates\\deadsync-profile\\src\\profile_ini.rs": "e36ace3f3168f32356a71521345ee62b637dd1c91133839a61759e2a646ced5a",
+      "crates\\deadsync-profile\\src\\update.rs": "90d7a32506d2a7d55083a1194481af5fb554efc46f1da94e32d05f9536ef9b68",
+      "crates\\deadsync-profile\\tests\\name_comparison.rs": "3e69b45bee23b31b724eb513e96a64118133b4e3d64bf89f7a74331564569fed",
+      "crates\\deadsync-profile\\tests\\noteskin_parts.rs": "45467c649a592e7888fff04a5911068043a68eeec2557b6890e69bb044cdbc8b",
+      "crates\\deadsync-profile\\tests\\pad_config_migration.rs": "458c813d8149e2c05fbb34761b0e1319845a4c05d2fb613f79166bb355224907",
+      "crates\\deadsync-profile\\tests\\pad_lookup_growth.rs": "a41a47c3124fc69bf10befb4d79100d845d9b7d92803168a51dc3c1ed6e7b906",
+      "crates\\deadsync-profile\\tests\\support\\name_comparison_original.rs": "96bc6e3e2bb1199aff97052d4e0624d39a8f8a3726f7e39715b7a7bbe0904403",
+      "crates\\deadsync-profile\\tests\\support\\pad_lookup_original.rs": "1d84e659aced0e3486095520643ba4782c55334d1bc8bb2f55de7ff46c8f2999",
+      "Cargo.toml": "84690b048704e8e7a5d7b476d0d4bd85f40b1cf49cdc24d5c8efafafc181364e",
+      "Cargo.lock": "82f794afbcea17a4ad1b4d684ebc9d56368b2837da75e7c662068a6cc58735b4",
+      "crates\\deadsync-profile\\Cargo.toml": "f2b80a3727dec9df0056c732f40b1f8811a929492719176ecc239d3c726a4764"
+    },
+    "exit_code": 0,
+    "log_sha256": "f4115f66ec10e7c723ccc17b5c31f0ced072f046e4af8e7445fbd0eba7e1f006"
+  },
+  "verified_package_inputs": 22,
+  "prototypes": {
+    "deadsync-profile-folders-20261104": {
+      "manifest_sha256": "d9b3b93139b33b5e287b5e1d059ebfe55f4e7a99bd4e2e3362518c8d78426b1f",
+      "generated_source_sha256": "b5f2550e815e6234217eebea4d87a9abbf61400846ca5e71574b53d60eaf4a47",
+      "binary_sha256": "0707f79fcc3ac3425c9c0fb73736b018e9ef7d0d4b10946962601dfbebeb1fa7",
+      "logs": {
+        "bench-0.log": "56b202254f6136096ad2d9aab77d0e8d8fca492227d3c28cf1df89a684b38489",
+        "bench-1.log": "20212939db33097d44a1bd69e6b8caea8a5f43a0dd26fd5765a9e03a46566323",
+        "bench-2.log": "363936d70060e29c16b4cac93998fa455a31e246652dc659baf206b4850f4b6d",
+        "correctness.log": "4a22830f4e37ce855c407e9e332ff12b2c430b9a5fb51d22ab1e51473ccbf34b"
+      }
+    },
+    "trial2": {
+      "manifest_sha256": "6e7635ae01195c7ca85e69362d36c87ddfba79ed1bea3b49e7f28fa6ba17b633",
+      "generated_source_sha256": "4fdd681acb863ddc211f29a173a9f2aea00b5b65c610858b3d7414eb2fc267ae",
+      "binary_sha256": "4c9e9ac2df2e629800e73ac3f76e7ca797da863cac3524cda1439e0bd951b911",
+      "logs": {
+        "bench-0.log": "c8035066e3c1db61a392921264dc838b29c837604bdd95f96ee4c472f9e56ead",
+        "bench-1.log": "81d47ecfeecfa50465f61d7f7d6c5a4e4d4d1d1de8d57e3b8013e79ef40d911b",
+        "bench-2.log": "ab5f5bde720ec2409b6246dbb55e283eb56d840d67b467d4fcd1ac6000b98386",
+        "correctness.log": "a78c34d8dab4569bf9a05a3225537f16b5f371807a85f94b4ace6cd49ae4c7de"
+      }
+    }
+  },
+  "results": {
+    "baseline": {
+      "folder/0": {
+        "original_cycles": 423.64,
+        "current_cycles": 432.41,
+        "paired": 0.9847054995118776,
+        "ratios": [
+          0.9622272842318401,
+          0.9847054995118776,
+          0.9898478331252023,
+          0.9797183228879998,
+          0.9847054995118776
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "freed_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "peak_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "freed_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "peak_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ]
+          }
+        }
+      },
+      "folder/2048": {
+        "original_cycles": 32085193.0,
+        "current_cycles": 32237966.0,
+        "paired": 0.9977903506553355,
+        "ratios": [
+          1.005743504913856,
+          0.9790379333939585,
+          1.0085721909378527,
+          0.989025382920983,
+          0.9977903506553355
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/256": {
+        "original_cycles": 532946.0,
+        "current_cycles": 537775.0,
+        "paired": 0.993853392583741,
+        "ratios": [
+          1.0020609610586833,
+          1.0057142857142858,
+          0.993853392583741,
+          0.988599348534202,
+          0.9897783001208798
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/31": {
+        "original_cycles": 13433.4,
+        "current_cycles": 13587.0,
+        "paired": 0.9886950761757562,
+        "ratios": [
+          0.992551554556563,
+          0.9935170417626558,
+          0.9886950761757562,
+          0.9838709677419355,
+          0.9854640465150512
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/32": {
+        "original_cycles": 14267.56,
+        "current_cycles": 14389.44,
+        "paired": 0.9881322692196499,
+        "ratios": [
+          0.9878828262589765,
+          0.9915298997042274,
+          0.9881322692196499,
+          0.9915072004321582,
+          0.9273369602885327
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/64": {
+        "original_cycles": 55204.0,
+        "current_cycles": 55424.0,
+        "paired": 0.9957173447537473,
+        "ratios": [
+          0.9957173447537473,
+          0.9940549220554272,
+          0.9940666444578498,
+          0.9960395860961505,
+          1.0
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/8": {
+        "original_cycles": 2464.98,
+        "current_cycles": 2458.4,
+        "paired": 1.008106055942047,
+        "ratios": [
+          0.982017200938233,
+          1.008106055942047,
+          1.0524465754423193,
+          1.00989003785582,
+          0.9892857142857142
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/9999": {
+        "original_cycles": 1281219967.0,
+        "current_cycles": 1282247892.0,
+        "paired": 1.000488939111869,
+        "ratios": [
+          0.9948770221701563,
+          1.009812111479941,
+          0.9946794747090121,
+          1.000488939111869,
+          1.0007696273132185
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "allocated_bytes": [
+              31,
+              31,
+              31,
+              31,
+              31
+            ],
+            "freed_bytes": [
+              31,
+              31,
+              31,
+              31,
+              31
+            ],
+            "peak_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ]
+          },
+          "current": {
+            "allocs": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "allocated_bytes": [
+              31,
+              31,
+              31,
+              31,
+              31
+            ],
+            "freed_bytes": [
+              31,
+              31,
+              31,
+              31,
+              31
+            ],
+            "peak_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ]
+          }
+        }
+      },
+      "folder/gap3/combined": {
+        "original_cycles": 8780.0,
+        "current_cycles": 8769.0,
+        "paired": 1.001254418975938,
+        "ratios": [
+          0.9958706189995422,
+          0.9682700286410235,
+          1.0050511159107272,
+          1.0050251256281406,
+          1.001254418975938
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/gap3/index": {
+        "original_cycles": 9262.9,
+        "current_cycles": 8911.7,
+        "paired": 1.0075282523822318,
+        "ratios": [
+          0.9999968515539155,
+          1.0578845786999111,
+          1.0075282523822318,
+          1.0180968867639382,
+          1.0025278203868715
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/0": {
+        "original_cycles": 436.81,
+        "current_cycles": 436.8,
+        "paired": 1.0041152263374487,
+        "ratios": [
+          1.0041152263374487,
+          1.0000228937728937,
+          1.0050136214830248,
+          1.0000228937728937,
+          1.0050620096178182
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "freed_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "peak_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "freed_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "peak_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ]
+          }
+        }
+      },
+      "folder/index/2048": {
+        "original_cycles": 32284935.0,
+        "current_cycles": 32004637.0,
+        "paired": 1.008758043404773,
+        "ratios": [
+          1.018940423368008,
+          0.9975175794505426,
+          1.0138944782656742,
+          1.008758043404773,
+          1.0000406096345493
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/256": {
+        "original_cycles": 537116.0,
+        "current_cycles": 535580.0,
+        "paired": 1.0008203445447088,
+        "ratios": [
+          1.0008203445447088,
+          0.9987704175161313,
+          1.002867918891669,
+          0.9247787610619469,
+          1.0188524590163934
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/31": {
+        "original_cycles": 13499.2,
+        "current_cycles": 13565.1,
+        "paired": 0.9967658807806188,
+        "ratios": [
+          1.000831767468062,
+          0.9935275080906149,
+          0.9967658807806188,
+          0.9935275080906149,
+          1.0016249545532119
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/32": {
+        "original_cycles": 14340.67,
+        "current_cycles": 14389.44,
+        "paired": 0.9966107089643516,
+        "ratios": [
+          0.98959258301734,
+          0.9982986555619832,
+          0.9966107089643516,
+          0.9949191907398759,
+          1.2159899084212942
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/64": {
+        "original_cycles": 56521.0,
+        "current_cycles": 55423.5,
+        "paired": 1.0,
+        "ratios": [
+          0.994654829656194,
+          0.9980243037700615,
+          1.0218208771739523,
+          1.118821438559456,
+          1.0
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/8": {
+        "original_cycles": 2489.13,
+        "current_cycles": 2443.03,
+        "paired": 1.0188700097829335,
+        "ratios": [
+          0.9814604479972395,
+          1.0179856115107913,
+          1.021543985637343,
+          1.020699977446538,
+          1.0188700097829335
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/9999": {
+        "original_cycles": 1276531874.0,
+        "current_cycles": 1286415304.0,
+        "paired": 0.9942023477675348,
+        "ratios": [
+          0.9968720764427502,
+          0.9916425801510714,
+          0.9923170767875131,
+          0.9942023477675348,
+          0.9957104053389723
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "allocated_bytes": [
+              31,
+              31,
+              31,
+              31,
+              31
+            ],
+            "freed_bytes": [
+              31,
+              31,
+              31,
+              31,
+              31
+            ],
+            "peak_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ]
+          },
+          "current": {
+            "allocs": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "allocated_bytes": [
+              31,
+              31,
+              31,
+              31,
+              31
+            ],
+            "freed_bytes": [
+              31,
+              31,
+              31,
+              31,
+              31
+            ],
+            "peak_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ]
+          }
+        }
+      },
+      "folder/sparse/combined": {
+        "original_cycles": 6167.95,
+        "current_cycles": 6135.0,
+        "paired": 1.0071684587813619,
+        "ratios": [
+          1.0030526701585254,
+          1.0071684587813619,
+          1.025044824775876,
+          0.9161073825503355,
+          1.0224298110411896
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/sparse/index": {
+        "original_cycles": 5904.55,
+        "current_cycles": 5904.55,
+        "paired": 1.0,
+        "ratios": [
+          0.995917893465843,
+          1.0018699214632985,
+          0.6979103501732147,
+          1.0018789412723605,
+          1.0
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "reserved/empty": {
+        "original_cycles": 235.88,
+        "current_cycles": 233.63,
+        "paired": 1.003648068669528,
+        "ratios": [
+          0.9973890339425588,
+          1.0202568961886713,
+          1.0111887512324773,
+          0.9937844735325595,
+          1.003648068669528
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "current": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "reserved/long": {
+        "original_cycles": 14.22,
+        "current_cycles": 14.16,
+        "paired": 0.9964362081254455,
+        "ratios": [
+          0.9964362081254455,
+          0.9553333333333334,
+          0.9978813559322034,
+          1.0296886314265026,
+          0.989561586638831
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "current": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "reserved/near": {
+        "original_cycles": 894.99,
+        "current_cycles": 901.12,
+        "paired": 0.9957111587649026,
+        "ratios": [
+          0.9930752840909091,
+          1.0047303793043174,
+          0.9957111587649026,
+          0.989485903814262,
+          0.9974291312275615
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "current": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "reserved/reserved": {
+        "original_cycles": 530.83,
+        "current_cycles": 530.98,
+        "paired": 0.9976694795797545,
+        "ratios": [
+          0.9976694795797545,
+          0.9895810282510881,
+          1.0045592130155125,
+          0.9944065689856492,
+          1.0072002903034818
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "current": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "reserved/short": {
+        "original_cycles": 294.47,
+        "current_cycles": 296.4,
+        "paired": 0.993488529014845,
+        "ratios": [
+          0.9960912491154768,
+          0.9842743400839142,
+          0.993488529014845,
+          0.9940564635958395,
+          0.9913164884560376
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "current": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "reserved/unicode": {
+        "original_cycles": 337.56,
+        "current_cycles": 339.07,
+        "paired": 0.9958314034275128,
+        "ratios": [
+          0.9985505102795444,
+          1.0130082266638947,
+          0.9958314034275128,
+          0.9690974022233741,
+          0.9899135871648922
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "current": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "sanitize/clean": {
+        "original_cycles": 416.22,
+        "current_cycles": 424.16,
+        "paired": 0.9811434535544474,
+        "ratios": [
+          0.9811434535544474,
+          1.0371135524013222,
+          0.9961467582509634,
+          0.8995426254243681,
+          0.924349502088018
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "freed_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "peak_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "freed_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "peak_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ]
+          }
+        }
+      },
+      "sanitize/dirty": {
+        "original_cycles": 468.26,
+        "current_cycles": 498.84,
+        "paired": 0.9526672430780367,
+        "ratios": [
+          0.9578421938898245,
+          0.9526672430780367,
+          0.8781683899556868,
+          0.8833512142787477,
+          0.9663213504478105
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "freed_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "peak_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "freed_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "peak_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ]
+          }
+        }
+      },
+      "sanitize/empty": {
+        "original_cycles": 212.76,
+        "current_cycles": 203.2,
+        "paired": 1.0212903546734318,
+        "ratios": [
+          0.9191288125298277,
+          1.0659318637274549,
+          1.18873031496063,
+          1.0193655950752394,
+          1.0212903546734318
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          }
+        }
+      },
+      "sanitize/limit": {
+        "original_cycles": 833.78,
+        "current_cycles": 794.54,
+        "paired": 1.0517914691943129,
+        "ratios": [
+          1.012279136177048,
+          1.083683640848793,
+          1.0462399457919767,
+          1.0555787823360336,
+          1.0517914691943129
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ],
+            "freed_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ],
+            "peak_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ],
+            "freed_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ],
+            "peak_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ]
+          }
+        }
+      },
+      "sanitize/long": {
+        "original_cycles": 805.86,
+        "current_cycles": 765.19,
+        "paired": 1.055702570283229,
+        "ratios": [
+          1.0322036099207894,
+          1.004429383693776,
+          1.055702570283229,
+          1.10143315228061,
+          1.056103712803356
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "freed_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "peak_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "freed_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "peak_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ]
+          }
+        }
+      },
+      "sanitize/reserved": {
+        "original_cycles": 233.12,
+        "current_cycles": 231.44,
+        "paired": 0.9921841076856274,
+        "ratios": [
+          1.0318441064638784,
+          0.966884288291384,
+          0.9921841076856274,
+          1.019594121763471,
+          0.94283866273194
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "freed_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "peak_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "freed_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "peak_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/clean": {
+        "original_cycles": 439.66,
+        "current_cycles": 432.81,
+        "paired": 1.0150181372888796,
+        "ratios": [
+          1.0633390625725831,
+          0.9858289609399524,
+          1.0150181372888796,
+          1.0519883425777945,
+          0.9915592768963417
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "freed_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "peak_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "freed_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "peak_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/dirty": {
+        "original_cycles": 516.02,
+        "current_cycles": 501.6,
+        "paired": 1.0342105263157895,
+        "ratios": [
+          1.0342105263157895,
+          1.0795526398988302,
+          1.0373335495247167,
+          1.0333420109337765,
+          0.9899080199455669
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "freed_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "peak_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "freed_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "peak_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/empty": {
+        "original_cycles": 208.59,
+        "current_cycles": 206.94,
+        "paired": 0.9856353069035582,
+        "ratios": [
+          0.7799087435545499,
+          0.9687348990045423,
+          0.9856353069035582,
+          1.0334106027010683,
+          1.1106279012948936
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/limit": {
+        "original_cycles": 785.65,
+        "current_cycles": 790.73,
+        "paired": 0.9945057759790988,
+        "ratios": [
+          1.013342878655097,
+          1.0062094520253437,
+          0.936501692652458,
+          0.9945057759790988,
+          0.9922728381275109
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ],
+            "freed_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ],
+            "peak_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ],
+            "freed_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ],
+            "peak_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/long": {
+        "original_cycles": 779.06,
+        "current_cycles": 775.45,
+        "paired": 1.0003338469440164,
+        "ratios": [
+          0.9736248980961972,
+          0.9844090528080469,
+          1.010790105823541,
+          1.0003338469440164,
+          1.0290803057766569
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "freed_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "peak_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "freed_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "peak_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/reserved": {
+        "original_cycles": 234.89,
+        "current_cycles": 241.81,
+        "paired": 0.9925437835963239,
+        "ratios": [
+          0.971382490385013,
+          1.051284346191712,
+          1.0464047610079474,
+          0.863519186860131,
+          0.9925437835963239
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "freed_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "peak_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "freed_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "peak_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/spaces": {
+        "original_cycles": 461.54,
+        "current_cycles": 468.95,
+        "paired": 0.994012749827705,
+        "ratios": [
+          0.9656568623337389,
+          1.0852859876674463,
+          0.994012749827705,
+          0.9803390553363899,
+          1.0128745115067301
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "freed_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "peak_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "freed_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "peak_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/unicode": {
+        "original_cycles": 432.56,
+        "current_cycles": 446.79,
+        "paired": 0.9997630500201409,
+        "ratios": [
+          0.9765437901474966,
+          1.014565497830421,
+          0.9997630500201409,
+          1.0176707883890204,
+          0.9121468078720577
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ],
+            "freed_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ],
+            "peak_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ],
+            "freed_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ],
+            "peak_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ]
+          }
+        }
+      },
+      "sanitize/spaces": {
+        "original_cycles": 458.88,
+        "current_cycles": 463.28,
+        "paired": 0.9728946913366765,
+        "ratios": [
+          0.9905025038853393,
+          0.9428912783751493,
+          0.9728946913366765,
+          1.063510967713995,
+          0.9291404164442071
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "freed_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "peak_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "freed_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "peak_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ]
+          }
+        }
+      },
+      "sanitize/unicode": {
+        "original_cycles": 405.35,
+        "current_cycles": 438.05,
+        "paired": 0.9119963474489213,
+        "ratios": [
+          0.903729962321361,
+          0.9498047964305634,
+          0.9595144476956841,
+          0.895516595900105,
+          0.9119963474489213
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ],
+            "freed_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ],
+            "peak_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ],
+            "freed_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ],
+            "peak_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ]
+          }
+        }
+      }
+    },
+    "final": {
+      "folder/0": {
+        "original_cycles": 449.97,
+        "current_cycles": 265.59,
+        "paired": 1.6942018072289156,
+        "ratios": [
+          1.6827142106185387,
+          1.681797473597018,
+          3.407709830033292,
+          1.6942018072289156,
+          1.6942279453292672
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "freed_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "peak_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          }
+        }
+      },
+      "folder/2048": {
+        "original_cycles": 32672354.0,
+        "current_cycles": 78800.0,
+        "paired": 418.64057106598983,
+        "ratios": [
+          450.9253468627045,
+          418.64057106598983,
+          375.37309066521743,
+          466.6079319061424,
+          376.74501138952166
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/256": {
+        "original_cycles": 546775.0,
+        "current_cycles": 11634.0,
+        "paired": 47.18518518518518,
+        "ratios": [
+          48.04347826086956,
+          49.759217075845775,
+          47.18518518518518,
+          46.073491490459,
+          46.99802303592917
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/31": {
+        "original_cycles": 13565.1,
+        "current_cycles": 13411.4,
+        "paired": 1.0130933385030645,
+        "ratios": [
+          1.1838998773152996,
+          1.0130933385030645,
+          1.011460399361737,
+          0.8930635838150289,
+          1.0152503764333423
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/32": {
+        "original_cycles": 14365.11,
+        "current_cycles": 3268.11,
+        "paired": 4.395506883183247,
+        "ratios": [
+          4.395506883183247,
+          4.395506883183247,
+          4.402985211636083,
+          4.363059007909028,
+          4.385104599460602
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/64": {
+        "original_cycles": 55423.5,
+        "current_cycles": 4829.0,
+        "paired": 11.45,
+        "ratios": [
+          11.45,
+          11.24501366811785,
+          11.477220956719817,
+          10.978310389224522,
+          11.454545454545455
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/8": {
+        "original_cycles": 2504.49,
+        "current_cycles": 2458.39,
+        "paired": 0.9605022874753546,
+        "ratios": [
+          0.9517895858671732,
+          1.1144469754492534,
+          0.9605022874753546,
+          1.1115446479072397,
+          0.8322389626961393
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/9999": {
+        "original_cycles": 1294823043.0,
+        "current_cycles": 373150.0,
+        "paired": 3469.9800160793247,
+        "ratios": [
+          3603.742288699836,
+          3344.2673895004996,
+          3469.9800160793247,
+          3655.143763889642,
+          3415.5483451077544
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "allocated_bytes": [
+              31,
+              31,
+              31,
+              31,
+              31
+            ],
+            "freed_bytes": [
+              31,
+              31,
+              31,
+              31,
+              31
+            ],
+            "peak_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ],
+            "freed_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ],
+            "peak_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ]
+          }
+        }
+      },
+      "folder/gap3/combined": {
+        "original_cycles": 8812.9,
+        "current_cycles": 8582.45,
+        "paired": 1.0268513070277134,
+        "ratios": [
+          1.0610085150233213,
+          1.0336350884637597,
+          1.0268513070277134,
+          0.9868290394037602,
+          1.0148274541604723
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/gap3/index": {
+        "original_cycles": 9032.45,
+        "current_cycles": 9219.0,
+        "paired": 1.0063463871079534,
+        "ratios": [
+          1.0063463871079534,
+          1.0064379569747468,
+          1.0459081836327344,
+          0.9881235154394299,
+          0.9797646165527716
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/0": {
+        "original_cycles": 267.79,
+        "current_cycles": 263.4,
+        "paired": 1.016566888813585,
+        "ratios": [
+          1.0,
+          1.009153222435844,
+          1.023981339747795,
+          1.016566888813585,
+          1.0166666666666668
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          }
+        }
+      },
+      "folder/index/2048": {
+        "original_cycles": 31777673.0,
+        "current_cycles": 74191.0,
+        "paired": 446.1775013141756,
+        "ratios": [
+          458.8789808917197,
+          418.4190685609702,
+          394.1276595744681,
+          453.1536989431591,
+          446.1775013141756
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/256": {
+        "original_cycles": 533824.0,
+        "current_cycles": 11634.0,
+        "paired": 46.76923076923077,
+        "ratios": [
+          51.09205776173285,
+          46.76923076923077,
+          45.03703703703704,
+          47.40200463883367,
+          45.888764721052176
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/31": {
+        "original_cycles": 13279.8,
+        "current_cycles": 13433.4,
+        "paired": 0.8475447178759477,
+        "ratios": [
+          0.8475447178759477,
+          0.8168418744594546,
+          0.9885658135691634,
+          0.8309652995361907,
+          1.0016996903303919
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/32": {
+        "original_cycles": 14145.56,
+        "current_cycles": 3292.44,
+        "paired": 4.296219355152222,
+        "ratios": [
+          4.328361040479053,
+          4.27207414174121,
+          5.007447729727579,
+          4.28156018029182,
+          4.296219355152222
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/64": {
+        "original_cycles": 53448.0,
+        "current_cycles": 4829.0,
+        "paired": 11.255811237005023,
+        "ratios": [
+          11.894736842105264,
+          11.255811237005023,
+          11.068130047628909,
+          11.154990888843896,
+          11.386415406916546
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/8": {
+        "original_cycles": 2295.97,
+        "current_cycles": 2276.21,
+        "paired": 1.0145512231334841,
+        "ratios": [
+          0.9904761904761905,
+          0.8200916838751339,
+          1.0145512231334841,
+          1.027967542537815,
+          1.0146364012142925
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/index/9999": {
+        "original_cycles": 1297880011.0,
+        "current_cycles": 372930.0,
+        "paired": 3599.6885882614315,
+        "ratios": [
+          3679.2164336962433,
+          3814.018335688129,
+          3445.795114364626,
+          3599.6885882614315,
+          3016.7821370461625
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ],
+            "freed_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ],
+            "peak_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ]
+          },
+          "current": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ],
+            "freed_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ],
+            "peak_bytes": [
+              25,
+              25,
+              25,
+              25,
+              25
+            ]
+          }
+        }
+      },
+      "folder/sparse/combined": {
+        "original_cycles": 5893.55,
+        "current_cycles": 5805.8,
+        "paired": 1.0082334486666615,
+        "ratios": [
+          0.8808549259681093,
+          1.0075527920355505,
+          1.0307103070156263,
+          1.018552954103626,
+          1.0082334486666615
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              3,
+              3,
+              3,
+              3,
+              3
+            ],
+            "allocated_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "freed_bytes": [
+              23,
+              23,
+              23,
+              23,
+              23
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "folder/sparse/index": {
+        "original_cycles": 5849.7,
+        "current_cycles": 5838.7,
+        "paired": 1.0114068441064639,
+        "ratios": [
+          1.0321933065055777,
+          1.001883981023173,
+          0.7754205114345649,
+          1.0432486541447612,
+          1.0114068441064639
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "freed_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ],
+            "peak_bytes": [
+              17,
+              17,
+              17,
+              17,
+              17
+            ]
+          }
+        }
+      },
+      "reserved/empty": {
+        "original_cycles": 241.36,
+        "current_cycles": 35.21,
+        "paired": 6.860643637437261,
+        "ratios": [
+          6.860643637437261,
+          7.063505999414692,
+          6.786796536796537,
+          6.849758591309287,
+          6.861372440509131
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "current": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "reserved/long": {
+        "original_cycles": 16.52,
+        "current_cycles": 17.64,
+        "paired": 0.939169982944855,
+        "ratios": [
+          0.9614512471655329,
+          0.974078341013825,
+          0.9021678710394665,
+          0.939169982944855,
+          0.92230296254891
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "current": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "reserved/near": {
+        "original_cycles": 919.58,
+        "current_cycles": 61.18,
+        "paired": 15.082543314808762,
+        "ratios": [
+          14.608737707560856,
+          15.082543314808762,
+          14.689776357827476,
+          15.787580003459608,
+          15.389576117433615
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "current": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "reserved/reserved": {
+        "original_cycles": 553.92,
+        "current_cycles": 89.02,
+        "paired": 6.176424755120213,
+        "ratios": [
+          6.283952040581048,
+          6.441739732348869,
+          6.176424755120213,
+          6.154010334756236,
+          5.941435160356108
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "current": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "reserved/short": {
+        "original_cycles": 326.06,
+        "current_cycles": 43.69,
+        "paired": 7.385277463193658,
+        "ratios": [
+          7.349696014411169,
+          7.366858457997697,
+          7.385277463193658,
+          7.487526229890417,
+          7.591897459372855
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "current": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "reserved/unicode": {
+        "original_cycles": 357.37,
+        "current_cycles": 44.73,
+        "paired": 8.049308344489067,
+        "ratios": [
+          8.07981008365363,
+          7.973619494746257,
+          8.049308344489067,
+          7.972911963882619,
+          8.674065934065935
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          },
+          "current": {
+            "allocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "allocated_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "freed_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "peak_bytes": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ]
+          }
+        }
+      },
+      "sanitize/clean": {
+        "original_cycles": 445.71,
+        "current_cycles": 240.41,
+        "paired": 1.8870824336339387,
+        "ratios": [
+          2.0949809555951977,
+          1.7935102118724948,
+          1.9424050632911392,
+          1.8870824336339387,
+          1.814400399317832
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "freed_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "peak_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          }
+        }
+      },
+      "sanitize/dirty": {
+        "original_cycles": 483.03,
+        "current_cycles": 450.49,
+        "paired": 1.0858335571125162,
+        "ratios": [
+          1.0427433456382358,
+          1.0858335571125162,
+          0.984855392788471,
+          1.093919953828054,
+          1.1721016708662573
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "freed_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "peak_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "freed_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "peak_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ]
+          }
+        }
+      },
+      "sanitize/empty": {
+        "original_cycles": 232.63,
+        "current_cycles": 207.03,
+        "paired": 1.0467489711934157,
+        "ratios": [
+          0.9668647055982225,
+          1.1238726042841038,
+          1.0467489711934157,
+          1.0461598900019642,
+          1.1391704617795406
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          }
+        }
+      },
+      "sanitize/limit": {
+        "original_cycles": 845.82,
+        "current_cycles": 620.54,
+        "paired": 1.376833080865053,
+        "ratios": [
+          1.452828947368421,
+          1.4417921159202365,
+          1.3423989737010904,
+          1.264456138252706,
+          1.376833080865053
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ],
+            "freed_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ],
+            "peak_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              51,
+              51,
+              51,
+              51,
+              51
+            ],
+            "freed_bytes": [
+              51,
+              51,
+              51,
+              51,
+              51
+            ],
+            "peak_bytes": [
+              51,
+              51,
+              51,
+              51,
+              51
+            ]
+          }
+        }
+      },
+      "sanitize/long": {
+        "original_cycles": 825.79,
+        "current_cycles": 781.04,
+        "paired": 1.0431773322252234,
+        "ratios": [
+          1.0431773322252234,
+          1.0288519410171533,
+          1.0572954010037898,
+          1.0022299832456285,
+          1.0827849959438056
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "freed_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "peak_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "freed_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "peak_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ]
+          }
+        }
+      },
+      "sanitize/reserved": {
+        "original_cycles": 248.3,
+        "current_cycles": 215.3,
+        "paired": 1.1267013947235758,
+        "ratios": [
+          1.1992851622874807,
+          1.0283325592196935,
+          1.1267013947235758,
+          1.0991591376688432,
+          1.2552804253077254
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "freed_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "peak_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "freed_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "peak_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/clean": {
+        "original_cycles": 389.4,
+        "current_cycles": 230.3,
+        "paired": 1.6451584889274857,
+        "ratios": [
+          1.6451584889274857,
+          1.5768025078369905,
+          1.6132400139205751,
+          1.8669827354861794,
+          1.6959191672836547
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "freed_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ],
+            "peak_bytes": [
+              12,
+              12,
+              12,
+              12,
+              12
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/dirty": {
+        "original_cycles": 413.69,
+        "current_cycles": 420.01,
+        "paired": 0.995448128133976,
+        "ratios": [
+          0.9553827834979337,
+          0.9601049015967322,
+          1.0287850289278828,
+          1.0973350163137965,
+          0.995448128133976
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "freed_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "peak_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "freed_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ],
+            "peak_bytes": [
+              15,
+              15,
+              15,
+              15,
+              15
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/empty": {
+        "original_cycles": 215.32,
+        "current_cycles": 222.02,
+        "paired": 1.001846680479236,
+        "ratios": [
+          1.092663697332719,
+          1.001846680479236,
+          0.9502524018889432,
+          0.9481699171787336,
+          1.0385375970674768
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "freed_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ],
+            "peak_bytes": [
+              6,
+              6,
+              6,
+              6,
+              6
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/limit": {
+        "original_cycles": 795.22,
+        "current_cycles": 630.26,
+        "paired": 1.2841367054866246,
+        "ratios": [
+          1.1925220341036435,
+          1.3583639446171234,
+          1.3144727872283082,
+          1.2841367054866246,
+          1.2738602505366354
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ],
+            "freed_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ],
+            "peak_bytes": [
+              102,
+              102,
+              102,
+              102,
+              102
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              51,
+              51,
+              51,
+              51,
+              51
+            ],
+            "freed_bytes": [
+              51,
+              51,
+              51,
+              51,
+              51
+            ],
+            "peak_bytes": [
+              51,
+              51,
+              51,
+              51,
+              51
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/long": {
+        "original_cycles": 792.45,
+        "current_cycles": 773.36,
+        "paired": 1.0118702803351607,
+        "ratios": [
+          1.0428620308469758,
+          0.9972473252311208,
+          1.0118702803351607,
+          1.020551590661667,
+          0.999790195981636
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "freed_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "peak_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "freed_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ],
+            "peak_bytes": [
+              208,
+              208,
+              208,
+              208,
+              208
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/reserved": {
+        "original_cycles": 220.32,
+        "current_cycles": 209.46,
+        "paired": 1.0513811873632801,
+        "ratios": [
+          1.0513811873632801,
+          0.8306915090841676,
+          0.9669802115452169,
+          1.1462573631531057,
+          1.0518476081352048
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "freed_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "peak_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "freed_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ],
+            "peak_bytes": [
+              4,
+              4,
+              4,
+              4,
+              4
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/spaces": {
+        "original_cycles": 410.67,
+        "current_cycles": 416.39,
+        "paired": 0.9862628785513582,
+        "ratios": [
+          0.9149237373276099,
+          0.9862628785513582,
+          1.2114370427977739,
+          0.9739986256733092,
+          1.0093756975965473
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "freed_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "peak_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "freed_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "peak_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ]
+          }
+        }
+      },
+      "sanitize/reuse/unicode": {
+        "original_cycles": 380.51,
+        "current_cycles": 228.68,
+        "paired": 1.6242388439516495,
+        "ratios": [
+          1.7466354324560194,
+          1.6242388439516495,
+          1.622021399036617,
+          1.5849945505045178,
+          1.6729490991778904
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ],
+            "freed_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ],
+            "peak_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              9,
+              9,
+              9,
+              9,
+              9
+            ],
+            "freed_bytes": [
+              9,
+              9,
+              9,
+              9,
+              9
+            ],
+            "peak_bytes": [
+              9,
+              9,
+              9,
+              9,
+              9
+            ]
+          }
+        }
+      },
+      "sanitize/spaces": {
+        "original_cycles": 473.77,
+        "current_cycles": 414.95,
+        "paired": 1.1417520183154597,
+        "ratios": [
+          1.2218543046357615,
+          1.0790001179106237,
+          1.2079974281616301,
+          1.1048753648150806,
+          1.1417520183154597
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "freed_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "peak_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ]
+          },
+          "current": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "freed_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ],
+            "peak_bytes": [
+              16,
+              16,
+              16,
+              16,
+              16
+            ]
+          }
+        }
+      },
+      "sanitize/unicode": {
+        "original_cycles": 421.4,
+        "current_cycles": 233.69,
+        "paired": 1.782200761590704,
+        "ratios": [
+          1.5333124682132937,
+          1.7813404779395878,
+          1.8064128943758573,
+          1.782200761590704,
+          1.843253883349737
+        ],
+        "counters": {
+          "original": {
+            "allocs": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              2,
+              2,
+              2,
+              2,
+              2
+            ],
+            "allocated_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ],
+            "freed_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ],
+            "peak_bytes": [
+              18,
+              18,
+              18,
+              18,
+              18
+            ]
+          },
+          "current": {
+            "allocs": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "reallocs": [
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "frees": [
+              1,
+              1,
+              1,
+              1,
+              1
+            ],
+            "allocated_bytes": [
+              9,
+              9,
+              9,
+              9,
+              9
+            ],
+            "freed_bytes": [
+              9,
+              9,
+              9,
+              9,
+              9
+            ],
+            "peak_bytes": [
+              9,
+              9,
+              9,
+              9,
+              9
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -68,6 +68,17 @@ fn push_display_mod_option(out: &mut String, option: &str) {
 }
 
 fn push_trimmed_float2(out: &mut String, value: f32) {
+    let integer = value as i16;
+    if value == f32::from(integer) {
+        if integer == 0 && value.is_sign_negative() {
+            out.push('-');
+        }
+        push_i16_decimal(out, integer);
+        out.push_str(".00");
+        out.truncate(out.len() - 3);
+        return;
+    }
+
     let start = out.len();
     write!(out, "{value:.2}").expect("writing to a String cannot fail");
     if out[start..].contains('.') {
@@ -98,13 +109,39 @@ fn append_speed(out: &mut String, speed: ScrollSpeedSetting) {
     }
 }
 
+fn push_i16_decimal(out: &mut String, value: i16) {
+    const PAIRS: &[u8; 200] = b"00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899";
+    let mut magnitude = value.unsigned_abs();
+    let mut digits = [0u8; 5];
+    let mut start = digits.len();
+    while magnitude >= 100 {
+        let pair = usize::from(magnitude % 100) * 2;
+        magnitude /= 100;
+        start -= 2;
+        digits[start..start + 2].copy_from_slice(&PAIRS[pair..pair + 2]);
+    }
+    if magnitude >= 10 {
+        start -= 2;
+        let pair = usize::from(magnitude) * 2;
+        digits[start..start + 2].copy_from_slice(&PAIRS[pair..pair + 2]);
+    } else {
+        start -= 1;
+        digits[start] = b'0' + magnitude as u8;
+    }
+    if value < 0 {
+        out.push('-');
+    }
+    out.push_str(std::str::from_utf8(&digits[start..]).expect("decimal digits are ASCII"));
+}
+
 fn append_mod_part(out: &mut String, percent: i16, name: &str) {
     if percent == 0 {
         return;
     }
     begin_display_mod_option(out);
     if percent != 100 {
-        write!(out, "{percent}%\u{00A0}").expect("writing to a String cannot fail");
+        push_i16_decimal(out, percent);
+        out.push_str("%\u{00A0}");
     }
     push_atomic_text(out, name);
 }
@@ -112,14 +149,16 @@ fn append_mod_part(out: &mut String, percent: i16, name: &str) {
 pub(crate) fn append_mini_part(out: &mut String, mini_percent: i16) {
     if mini_percent != 0 {
         begin_display_mod_option(out);
-        write!(out, "{mini_percent}%\u{00A0}Mini").expect("writing to a String cannot fail");
+        push_i16_decimal(out, mini_percent);
+        out.push_str("%\u{00A0}Mini");
     }
 }
 
 fn append_spacing_part(out: &mut String, spacing_percent: i16) {
     if spacing_percent != 0 {
         begin_display_mod_option(out);
-        write!(out, "{spacing_percent}%\u{00A0}Spacing").expect("writing to a String cannot fail");
+        push_i16_decimal(out, spacing_percent);
+        out.push_str("%\u{00A0}Spacing");
     }
 }
 
@@ -159,19 +198,21 @@ pub(crate) fn append_perspective_parts(out: &mut String, tilt: i16, skew: i16) {
 }
 
 pub(crate) fn append_turn_parts(out: &mut String, bits: u16) {
-    for (bit, name) in [
-        (DISPLAY_TURN_MIRROR, "Mirror"),
-        (DISPLAY_TURN_LEFT, "Left"),
-        (DISPLAY_TURN_RIGHT, "Right"),
-        (DISPLAY_TURN_LR_MIRROR, "LR-Mirror"),
-        (DISPLAY_TURN_UD_MIRROR, "UD-Mirror"),
-        (DISPLAY_TURN_SHUFFLE, "Shuffle"),
-        (DISPLAY_TURN_BLENDER, "Blender"),
-        (DISPLAY_TURN_RANDOM, "Random"),
-    ] {
-        if bits & bit != 0 {
-            push_display_mod_option(out, name);
-        }
+    const NAMES: [&str; 8] = [
+        "Mirror",
+        "Left",
+        "Right",
+        "LR-Mirror",
+        "UD-Mirror",
+        "Shuffle",
+        "Blender",
+        "Random",
+    ];
+    let mut remaining = bits & 0xff;
+    while remaining != 0 {
+        begin_display_mod_option(out);
+        out.push_str(NAMES[remaining.trailing_zeros() as usize]);
+        remaining &= remaining - 1;
     }
 }
 
@@ -190,32 +231,68 @@ pub(crate) fn push_transform_parts(
     remove_mask: u8,
     holds_mask: u8,
 ) {
-    for (enabled, name) in [
-        (remove_mask & (1 << 2) != 0, "NoHolds"),
-        (holds_mask & (1 << 3) != 0, "NoRolls"),
-        (remove_mask & (1 << 1) != 0, "NoMines"),
-        (remove_mask & (1 << 0) != 0, "Little"),
-        (insert_mask & (1 << 0) != 0, "Wide"),
-        (insert_mask & (1 << 1) != 0, "Big"),
-        (insert_mask & (1 << 2) != 0, "Quick"),
-        (insert_mask & (1 << 3) != 0, "BMRize"),
-        (insert_mask & (1 << 4) != 0, "Skippy"),
-        (insert_mask & (1 << 7) != 0, "Mines"),
-        (insert_mask & (1 << 5) != 0, "Echo"),
-        (insert_mask & (1 << 6) != 0, "Stomp"),
-        (holds_mask & (1 << 0) != 0, "Planted"),
-        (holds_mask & (1 << 1) != 0, "Floored"),
-        (holds_mask & (1 << 2) != 0, "Twister"),
-        (holds_mask & (1 << 4) != 0, "HoldsToRolls"),
-        (remove_mask & (1 << 3) != 0, "NoJumps"),
-        (remove_mask & (1 << 4) != 0, "NoHands"),
-        (remove_mask & (1 << 6) != 0, "NoLifts"),
-        (remove_mask & (1 << 7) != 0, "NoFakes"),
-        (remove_mask & (1 << 5) != 0, "NoQuads"),
-    ] {
-        if enabled {
-            push_display_mod_option(out, name);
+    if insert_mask | remove_mask | (holds_mask & 0x1f) == 0 {
+        return;
+    }
+    const NAMES: [&str; 21] = [
+        "NoHolds",
+        "NoRolls",
+        "NoMines",
+        "Little",
+        "Wide",
+        "Big",
+        "Quick",
+        "BMRize",
+        "Skippy",
+        "Mines",
+        "Echo",
+        "Stomp",
+        "Planted",
+        "Floored",
+        "Twister",
+        "HoldsToRolls",
+        "NoJumps",
+        "NoHands",
+        "NoLifts",
+        "NoFakes",
+        "NoQuads",
+    ];
+    const MASKS: [[u32; 256]; 3] = {
+        let mut maps = [[0u32; 256]; 3];
+        let mut value = 0usize;
+        while value < 256 {
+            maps[0][value] = ((value & 1) as u32) << 4
+                | (((value >> 1) & 1) as u32) << 5
+                | (((value >> 2) & 1) as u32) << 6
+                | (((value >> 3) & 1) as u32) << 7
+                | (((value >> 4) & 1) as u32) << 8
+                | (((value >> 7) & 1) as u32) << 9
+                | (((value >> 5) & 1) as u32) << 10
+                | (((value >> 6) & 1) as u32) << 11;
+            maps[1][value] = (((value >> 2) & 1) as u32)
+                | (((value >> 1) & 1) as u32) << 2
+                | ((value & 1) as u32) << 3
+                | (((value >> 3) & 1) as u32) << 16
+                | (((value >> 4) & 1) as u32) << 17
+                | (((value >> 6) & 1) as u32) << 18
+                | (((value >> 7) & 1) as u32) << 19
+                | (((value >> 5) & 1) as u32) << 20;
+            maps[2][value] = (((value >> 3) & 1) as u32) << 1
+                | ((value & 1) as u32) << 12
+                | (((value >> 1) & 1) as u32) << 13
+                | (((value >> 2) & 1) as u32) << 14
+                | (((value >> 4) & 1) as u32) << 15;
+            value += 1;
         }
+        maps
+    };
+    let mut remaining = MASKS[0][usize::from(insert_mask)]
+        | MASKS[1][usize::from(remove_mask)]
+        | MASKS[2][usize::from(holds_mask)];
+    while remaining != 0 {
+        begin_display_mod_option(out);
+        out.push_str(NAMES[remaining.trailing_zeros() as usize]);
+        remaining &= remaining - 1;
     }
 }
 
@@ -303,10 +380,19 @@ pub fn gameplay_mods_text(params: GameplayModsTextParams<'_>) -> String {
     }
     if params.visual_delay_ms != 0 {
         begin_display_mod_option(&mut out);
-        write!(out, "{}ms\u{00A0}VisualDelay", params.visual_delay_ms)
-            .expect("writing to a String cannot fail");
+        push_i16_decimal(&mut out, params.visual_delay_ms);
+        out.push_str("ms\u{00A0}VisualDelay");
     }
     append_average_error_bar_part(&mut out, params);
     append_disabled_timing_windows(&mut out, params.disabled_timing_windows);
     out
+}
+
+#[cfg(test)]
+#[path = "text_performance.rs"]
+mod text_performance;
+
+#[cfg(test)]
+mod number_performance {
+    include!("number_performance.rs");
 }

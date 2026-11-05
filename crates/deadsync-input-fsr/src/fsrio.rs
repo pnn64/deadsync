@@ -318,25 +318,35 @@ mod imp {
     }
 
     fn button_views(config: &ConfigReport, input: &InputReport) -> ButtonViews {
-        mapped_buttons(&config.sensor_to_button_mapping)
-            .into_iter()
-            .map(|button| button_view(config, input, button))
-            .collect()
-    }
-
-    fn button_view(config: &ConfigReport, input: &InputReport, button: usize) -> ButtonView {
-        let mut sensors = SensorViews::new();
-        let mut aggregate_value = 0;
-        let mut aggregate_threshold = 0;
+        let mut buttons = ButtonViews::new();
+        let mut slots = [0usize; BUTTON_COUNT];
+        let mut mask = mapped_button_mask(&config.sensor_to_button_mapping);
+        while mask != 0 {
+            let button = mask.trailing_zeros() as usize;
+            slots[button] = buttons.len();
+            buttons.push(ButtonView {
+                label: ButtonLabel::Hid((button + 1) as u8),
+                sensors: SensorViews::new(),
+                min_raw_threshold: 0,
+                max_raw_threshold: MAX_SENSOR_VALUE,
+                aggregate_value: 0,
+                aggregate_threshold: 0,
+                active: false,
+                value_curve: VALUE_CURVE,
+                release_threshold: None,
+            });
+            mask &= mask - 1;
+        }
         for (index, &mapped) in config.sensor_to_button_mapping.iter().enumerate() {
-            if mapped < 0 || mapped as usize != button {
+            if mapped < 0 || mapped as usize >= BUTTON_COUNT {
                 continue;
             }
+            let button = &mut buttons[slots[mapped as usize]];
             let raw_value = input.sensor_values[index];
             let raw_threshold = config.sensor_thresholds[index];
-            aggregate_value = aggregate_value.max(raw_value);
-            aggregate_threshold = aggregate_threshold.max(raw_threshold);
-            sensors.push(SensorView {
+            button.aggregate_value = button.aggregate_value.max(raw_value);
+            button.aggregate_threshold = button.aggregate_threshold.max(raw_threshold);
+            button.sensors.push(SensorView {
                 firmware_index: index,
                 label: None,
                 raw_value,
@@ -347,17 +357,11 @@ mod imp {
                 enabled: true,
             });
         }
-        ButtonView {
-            label: ButtonLabel::Hid((button + 1) as u8),
-            sensors,
-            min_raw_threshold: 0,
-            max_raw_threshold: MAX_SENSOR_VALUE,
-            aggregate_value,
-            aggregate_threshold,
-            active: aggregate_value >= aggregate_threshold && aggregate_threshold > 0,
-            value_curve: VALUE_CURVE,
-            release_threshold: None,
+        for button in &mut buttons {
+            button.active =
+                button.aggregate_value >= button.aggregate_threshold && button.aggregate_threshold > 0;
         }
+        buttons
     }
 
     fn read_pending(device: &mut Device) -> bool {
@@ -660,14 +664,9 @@ mod imp {
             _ => return None,
         };
 
-        let _button_bits = u16::from_le_bytes(payload[0..2].try_into().ok()?);
-        let mut sensor_values = [0u16; SENSOR_COUNT];
-        let mut offset = 2usize;
-        for value in &mut sensor_values {
-            let end = offset + 2;
-            *value = u16::from_le_bytes(payload[offset..end].try_into().ok()?);
-            offset = end;
-        }
+        let sensor_values = std::array::from_fn(|index| {
+            u16::from_le_bytes([payload[2 + index * 2], payload[3 + index * 2]])
+        });
         Some(InputReport { sensor_values })
     }
 
@@ -683,42 +682,51 @@ mod imp {
         SENSOR_NORMALIZED[min(raw, MAX_SENSOR_VALUE) as usize]
     }
 
-    fn mapped_buttons(mapping: &[i8; SENSOR_COUNT]) -> ArrayVec<usize, SENSOR_COUNT> {
-        let mut mapped_mask = 0u16;
-        for &mapped in mapping {
-            if mapped >= 0 && (mapped as usize) < BUTTON_COUNT {
-                mapped_mask |= 1 << mapped;
-            }
+    const BUTTON_BITS: [u16; 256] = {
+        let mut bits = [0; 256];
+        let mut index = 0;
+        while index < BUTTON_COUNT {
+            bits[index] = 1 << index;
+            index += 1;
         }
-        let mut buttons: ArrayVec<usize, SENSOR_COUNT> = ArrayVec::new();
-        while mapped_mask != 0 {
-            let button = mapped_mask.trailing_zeros() as usize;
-            buttons.push(button);
-            mapped_mask &= mapped_mask - 1;
-        }
-        buttons
+        bits
+    };
+
+    fn mapped_button_mask(mapping: &[i8; SENSOR_COUNT]) -> u16 {
+        mapping
+            .iter()
+            .fold(0, |mask, &mapped| mask | BUTTON_BITS[mapped as u8 as usize])
     }
 
     fn group_sensor_indices(
         mapping: &[i8; SENSOR_COUNT],
         group: usize,
     ) -> ArrayVec<usize, SENSOR_COUNT> {
-        mapped_buttons(mapping)
-            .get(group)
-            .map_or_else(ArrayVec::new, |&button| sensor_indices(mapping, button))
+        let mut mask = mapped_button_mask(mapping);
+        if group >= mask.count_ones() as usize {
+            return ArrayVec::new();
+        }
+        for _ in 0..group {
+            mask &= mask - 1;
+        }
+        let button = mask.trailing_zeros() as usize;
+        let mut indices = ArrayVec::new();
+        for (index, &mapped) in mapping.iter().enumerate() {
+            if mapped as u8 as usize == button {
+                indices.push(index);
+            }
+        }
+        indices
     }
 
-    fn sensor_indices(
-        mapping: &[i8; SENSOR_COUNT],
-        button: usize,
-    ) -> ArrayVec<usize, SENSOR_COUNT> {
-        mapping
-            .iter()
-            .enumerate()
-            .filter_map(|(index, &mapped)| {
-                (mapped >= 0 && mapped as usize == button).then_some(index)
-            })
-            .collect()
+    #[cfg(test)]
+    mod mask_performance {
+        include!("mask_performance.rs");
+    }
+
+    #[cfg(test)]
+    mod polling_performance {
+        include!("fsrio_performance.rs");
     }
 
     #[cfg(test)]
@@ -761,10 +769,15 @@ mod imp {
             for (index, mapped) in mapping[..8].iter_mut().enumerate() {
                 *mapped = index as i8;
             }
-            assert_eq!(
-                mapped_buttons(&mapping).as_slice(),
-                [0, 1, 2, 3, 4, 5, 6, 7]
-            );
+            let config = ConfigReport {
+                sensor_to_button_mapping: mapping,
+                ..ConfigReport::default()
+            };
+            let buttons = button_views(&config, &InputReport::default());
+            assert_eq!(buttons.len(), 8);
+            for (index, button) in buttons.iter().enumerate() {
+                assert_eq!(button.label, ButtonLabel::Hid((index + 1) as u8));
+            }
             assert_eq!(group_sensor_indices(&mapping, 7).as_slice(), [7]);
             assert!(group_sensor_indices(&mapping, 8).is_empty());
         }

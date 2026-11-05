@@ -29,19 +29,60 @@ pub fn push_default_noteskin_option_line(content: &mut String, noteskin: &str) {
 
 #[must_use]
 pub fn canonical_frame_stats_overlay_anchor(value: &str) -> &'static str {
-    const KEYS: &[&str] = &[
-        "top-left",
-        "top-right",
-        "bottom-left",
-        "bottom-right",
-        "top-center",
-        "bottom-center",
-    ];
-    let value = value.trim();
-    KEYS.iter()
-        .copied()
-        .find(|&key| key.eq_ignore_ascii_case(value))
-        .unwrap_or(DEFAULT_FRAME_STATS_OVERLAY_ANCHOR)
+    match value.trim().as_bytes() {
+        [b0, b1, b2, b3, b4, b5, b6, b7]
+            if (u64::from_le_bytes([*b0, *b1, *b2, *b3, *b4, *b5, *b6, *b7])
+                | 0x2020202000202020)
+                == u64::from_le_bytes(*b"top-left") =>
+        {
+            "top-left"
+        }
+        [b0, b1, b2, b3, b4, b5, b6, b7, b8]
+            if (u64::from_le_bytes([*b0, *b1, *b2, *b3, *b4, *b5, *b6, *b7])
+                | 0x2020202000202020)
+                == u64::from_le_bytes(*b"top-righ")
+                && (*b8 | 0x20) == b't' =>
+        {
+            "top-right"
+        }
+        [b0, b1, b2, b3, b4, b5, b6, b7, b8, b9]
+            if (u64::from_le_bytes([*b0, *b1, *b2, *b3, *b4, *b5, *b6, *b7])
+                | 0x2020202000202020)
+                == u64::from_le_bytes(*b"top-cent")
+                && (u16::from_le_bytes([*b8, *b9]) | 0x2020) == u16::from_le_bytes(*b"er") =>
+        {
+            "top-center"
+        }
+        [b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10]
+            if (u64::from_le_bytes([*b0, *b1, *b2, *b3, *b4, *b5, *b6, *b7])
+                | 0x2000202020202020)
+                == u64::from_le_bytes(*b"bottom-l")
+                && (u16::from_le_bytes([*b8, *b9]) | 0x2020) == u16::from_le_bytes(*b"ef")
+                && (*b10 | 0x20) == b't' =>
+        {
+            "bottom-left"
+        }
+        [b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11]
+            if (u64::from_le_bytes([*b0, *b1, *b2, *b3, *b4, *b5, *b6, *b7])
+                | 0x2000202020202020)
+                == u64::from_le_bytes(*b"bottom-r")
+                && (u32::from_le_bytes([*b8, *b9, *b10, *b11]) | 0x20202020)
+                    == u32::from_le_bytes(*b"ight") =>
+        {
+            "bottom-right"
+        }
+        [b0, b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12]
+            if (u64::from_le_bytes([*b0, *b1, *b2, *b3, *b4, *b5, *b6, *b7])
+                | 0x2000202020202020)
+                == u64::from_le_bytes(*b"bottom-c")
+                && (u32::from_le_bytes([*b8, *b9, *b10, *b11]) | 0x20202020)
+                    == u32::from_le_bytes(*b"ente")
+                && (*b12 | 0x20) == b'r' =>
+        {
+            "bottom-center"
+        }
+        _ => DEFAULT_FRAME_STATS_OVERLAY_ANCHOR,
+    }
 }
 
 #[must_use]
@@ -127,4 +168,9 @@ mod tests {
             DEFAULT_FRAME_STATS_OVERLAY_STYLE
         );
     }
+}
+
+#[cfg(test)]
+mod audio_kernel_perf {
+    include!("audio_kernel_perf.rs");
 }

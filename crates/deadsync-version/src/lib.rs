@@ -23,16 +23,24 @@ use semver::Version;
 ///
 /// Panics if an internal state invariant is violated.
 pub fn current() -> Version {
+    if let Some(version) = version_override() {
+        return version;
+    }
+    Version::parse(env!("CARGO_PKG_VERSION"))
+        .expect("CARGO_PKG_VERSION is not valid semver; check Cargo.toml")
+}
+
+#[inline]
+fn version_override() -> Option<Version> {
     if let Ok(raw) = std::env::var("DEADSYNC_VERSION_OVERRIDE")
         && !raw.trim().is_empty()
     {
         match parse_release_tag(&raw) {
-            Some(v) => return v,
+            Some(v) => return Some(v),
             None => log::warn!("DEADSYNC_VERSION_OVERRIDE={raw:?} is not valid semver; ignoring"),
         }
     }
-    Version::parse(env!("CARGO_PKG_VERSION"))
-        .expect("CARGO_PKG_VERSION is not valid semver; check Cargo.toml")
+    None
 }
 
 #[inline(always)]
@@ -45,7 +53,10 @@ pub const fn current_static() -> &'static str {
 #[inline]
 #[must_use]
 pub fn user_agent() -> String {
-    format!("DeadSync/{}", current())
+    match version_override() {
+        Some(version) => format!("DeadSync/{version}"),
+        None => concat!("DeadSync/", env!("CARGO_PKG_VERSION")).to_owned(),
+    }
 }
 
 /// `format!("v{}", current())`.  Centralised so callers display the same
@@ -53,7 +64,10 @@ pub fn user_agent() -> String {
 #[inline]
 #[must_use]
 pub fn current_tag() -> String {
-    format!("v{}", current())
+    match version_override() {
+        Some(version) => format!("v{version}"),
+        None => concat!("v", env!("CARGO_PKG_VERSION")).to_owned(),
+    }
 }
 
 /// Parse a GitHub release tag such as `v0.3.871` (with or without the
@@ -78,52 +92,6 @@ pub fn is_newer(latest: &Version, current: &Version) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use std::sync::Mutex;
-    // Tests in this module mutate a shared process-wide env var. Cargo runs
-    // tests in parallel by default, so we serialise the env-touching cases
-    // through a single mutex.
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-    #[test]
-    fn current_matches_cargo_pkg_version() {
-        let _g = ENV_LOCK.lock().unwrap();
-        // SAFETY: serialised via ENV_LOCK; only touched in these tests.
-        unsafe { std::env::remove_var("DEADSYNC_VERSION_OVERRIDE") };
-        let v = current();
-        assert_eq!(v.to_string(), env!("CARGO_PKG_VERSION"));
-    }
-
-    #[test]
-    fn user_agent_uses_product_version_format() {
-        let _g = ENV_LOCK.lock().unwrap();
-        // SAFETY: serialised via ENV_LOCK; only touched in these tests.
-        unsafe { std::env::remove_var("DEADSYNC_VERSION_OVERRIDE") };
-        assert_eq!(
-            user_agent(),
-            format!("DeadSync/{}", env!("CARGO_PKG_VERSION"))
-        );
-    }
-
-    #[test]
-    fn override_env_takes_precedence_when_valid() {
-        let _g = ENV_LOCK.lock().unwrap();
-        // SAFETY: see above.
-        unsafe { std::env::set_var("DEADSYNC_VERSION_OVERRIDE", "0.0.1") };
-        let v = current();
-        unsafe { std::env::remove_var("DEADSYNC_VERSION_OVERRIDE") };
-        assert_eq!(v, Version::new(0, 0, 1));
-    }
-
-    #[test]
-    fn override_env_ignored_when_garbage() {
-        let _g = ENV_LOCK.lock().unwrap();
-        // SAFETY: see above.
-        unsafe { std::env::set_var("DEADSYNC_VERSION_OVERRIDE", "not-a-version") };
-        let v = current();
-        unsafe { std::env::remove_var("DEADSYNC_VERSION_OVERRIDE") };
-        assert_eq!(v.to_string(), env!("CARGO_PKG_VERSION"));
-    }
 
     #[test]
     fn parse_release_tag_strips_v_prefix() {

@@ -55,11 +55,18 @@ const MIX_CHUNK_FRAMES: usize = 2048;
 #[inline(always)]
 fn advance_gain(current: &mut f32, target: f32) -> bool {
     let diff = target - *current;
-    if diff.abs() <= MUSIC_GAIN_MAX_STEP {
+    // Magnitude bits have numeric order up to infinity; larger patterns are NaNs.
+    let magnitude = diff.to_bits() & 0x7fff_ffff;
+    if magnitude <= MUSIC_GAIN_MAX_STEP.to_bits() {
         *current = target;
         true
     } else {
-        *current = diff.signum().mul_add(MUSIC_GAIN_MAX_STEP, *current);
+        *current = if magnitude > f32::INFINITY.to_bits() {
+            diff.signum().mul_add(MUSIC_GAIN_MAX_STEP, *current)
+        } else {
+            // Multiplying the step by +/-1 is exact, so only the addition rounds.
+            *current + MUSIC_GAIN_MAX_STEP.copysign(diff)
+        };
         false
     }
 }
