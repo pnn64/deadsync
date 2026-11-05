@@ -1494,6 +1494,28 @@ pub fn itg_active_model_commands(
     out
 }
 
+pub type ModelDrawProgram = (ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState);
+
+pub fn itg_active_parent_model_programs(
+    commands: &HashMap<String, String>,
+    active_key: &str,
+) -> Option<Arc<[ModelDrawProgram]>> {
+    let parents: Vec<HashMap<String, String>> = commands
+        .get(crate::actor::ITG_PARENT_COMMANDS)
+        .and_then(|value| serde_json::from_str(value).ok())?;
+    (!parents.is_empty()).then(|| {
+        parents
+            .iter()
+            .map(|parent| {
+                model_draw_program_from_scripts([
+                    parent.get("initcommand").map(String::as_str),
+                    parent.get(active_key).map(String::as_str),
+                ])
+            })
+            .collect()
+    })
+}
+
 pub fn model_draw_program(
     commands: &HashMap<String, String>,
 ) -> (ModelDrawState, Arc<[ModelTweenSegment]>, ModelEffectState) {
