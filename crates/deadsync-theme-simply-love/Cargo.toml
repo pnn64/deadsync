@@ -13,6 +13,18 @@ path = "examples/gameplay/export_gameplay.rs"
 harness = false
 test = false
 
+[[example]]
+name = "export_menus"
+path = "examples/menus/export_menus.rs"
+harness = false
+test = false
+
+[[example]]
+name = "export_screenshot"
+path = "examples/export_screenshot.rs"
+harness = false
+test = false
+
 [dependencies]
 deadsync-song-lua = { path = "../deadsync-song-lua" }
 null-or-die = { git = "https://github.com/pnn64/null-or-die", branch = "main" }
