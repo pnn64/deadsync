@@ -1,6 +1,6 @@
 # Non-Lua Rust optimization measurements
 
-Measurements, validation and report links for batches 1–38. Relative report links resolve within the same repository revision.
+Measurements, validation and report links for batches 1–39. Relative report links resolve within the same repository revision.
 
 Font and texture preparation, gameplay calculations, audio callbacks, chart loading, renderer setup and HTTP text handling repeat validation, scans and temporary string normalization. This change shares rate validation, removes redundant timestamp conversions/clamps, dispatches chart metadata prefixes once, and reuses carried-hold counts until an end-row boundary. Timing snapshots read a maintained maximum; scroll BPM and scoring-window validation use positive-finite bit intervals.
 
@@ -206,3 +206,11 @@ Measured costs: `default/1-first` 260.50 → 286.32 cycles (0.923×; control 0.9
 
 - **Validation:** baseline/release/package opt0 with assertions each pass **246 unit + 8 integration tests**, across all four integration targets. Differential checks cover names, conflicts/duplicates, serial order, complete records and ordinary/spare capacities, plus 8,192 seeded mixed lists. The **17,010,961-byte trace**, production-only opt3 check and full source/input/binary/log/measurement audit pass. Clippy exits successfully with zero diagnostics in changed production code and one recorded fixture-only style warning. The initial checker used unequal starting capacities; its correction and original artifacts remain documented.
 - Report: [pad-config update measurements](./2026-11-05-pad-mutations.md).
+
+### Batch 39: saturating frame conversion and fixed text kernels
+
+- Use the existing saturating float-to-u32 cast directly for frame microseconds; map normalized kernel-type bytes through a local table; match fixed-length ASCII coin-mode names with value arrays/packed words. Preserve exact integer/enum results, Unicode trimming, strict coin spelling and normalized kernel aliases. The type table adds 256 logical bytes; physical binary-size change is unmeasured. No unsafe, heap allocation, production helper, dependency or public API change. Severity/target parsers remain unchanged context controls.
+- **CPU:** normal frame microseconds **1.380× (control 0.971×)**; Rising kernel type **2.013× (control 0.981×)**; Home coin mode **1.348× (control 1.000×)**. Every fixture retains zero in all six heap counters. All **640 raw rows**, 32 workloads (21 optimized paths/11 unchanged controls), costs and process ranges are retained. Mixed numeric fixtures contain 256 values per operation. Frame rate, startup and whole-application gains are unmeasured.
+
+- **Validation:** baseline/release/package opt0 with assertions each pass **254 unit + 13 integration tests**, including all five integration targets. Binary32 high-word/mantissa/boundary/random inputs and exhaustive Unicode/case/insertion cohorts compare exact results. The **10,674,523-byte trace**, scoped Clippy, production-only opt3 check and full source/input/binary/log/measurement audit pass. Three severity rewrites were rejected; unchanged severity/target drift is reported separately from optimization effects.
+- Report: [frame conversion and text-kernel measurements](./2026-11-05-frame-kernels.md).

@@ -298,10 +298,23 @@ pub const fn null_or_die_kernel_type_str(kind: BiasKernel) -> &'static str {
 }
 
 pub fn parse_null_or_die_kernel_type(raw: &str) -> Option<BiasKernel> {
-    let mut key = raw
-        .bytes()
-        .filter(u8::is_ascii_alphanumeric)
-        .map(|byte| byte.to_ascii_lowercase());
+    const ALNUM_LOWER: [u8; 256] = {
+        let mut map = [0u8; 256];
+        let mut byte = 0usize;
+        while byte < 256 {
+            let value = byte as u8;
+            if value.is_ascii_alphanumeric() {
+                map[byte] = value.to_ascii_lowercase();
+            }
+            byte += 1;
+        }
+        map
+    };
+
+    let mut key = raw.bytes().filter_map(|byte| {
+        let mapped = ALNUM_LOWER[usize::from(byte)];
+        (mapped != 0).then_some(mapped)
+    });
     match key.next()? {
         b'r' if key.by_ref().eq(b"ising".iter().copied()) => Some(BiasKernel::Rising),
         b'l' if key.by_ref().eq(b"oudest".iter().copied()) => Some(BiasKernel::Loudest),
