@@ -247,10 +247,22 @@ pub const fn null_or_die_kernel_target_str(target: KernelTarget) -> &'static str
 }
 
 pub fn parse_null_or_die_kernel_target(raw: &str) -> Option<KernelTarget> {
-    let mut key = raw
-        .bytes()
-        .filter(u8::is_ascii_alphanumeric)
-        .map(|byte| byte.to_ascii_lowercase());
+    const MAP: [u8; 256] = {
+        let mut map = [0u8; 256];
+        let mut byte = 0usize;
+        while byte < 256 {
+            let value = byte as u8;
+            if value.is_ascii_alphanumeric() {
+                map[byte] = value.to_ascii_lowercase();
+            }
+            byte += 1;
+        }
+        map
+    };
+    let mut key = raw.bytes().filter_map(|byte| {
+        let mapped = MAP[usize::from(byte)];
+        (mapped != 0).then_some(mapped)
+    });
     match key.next()? {
         b'd' if key.by_ref().eq(b"igest".iter().copied()) => Some(KernelTarget::Digest),
         b'a' if key.by_ref().eq(b"ccumulator".iter().copied()) => Some(KernelTarget::Accumulator),

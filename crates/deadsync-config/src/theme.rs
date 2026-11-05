@@ -26,21 +26,36 @@ struct NormalizedAsciiKey {
 
 impl NormalizedAsciiKey {
     fn parse(raw: &str) -> Option<Self> {
+        const MAP: [u8; 256] = {
+            let mut map = [0u8; 256];
+            let mut byte = 0usize;
+            while byte < 256 {
+                let value = byte as u8;
+                if value.is_ascii_alphanumeric() {
+                    map[byte] = value.to_ascii_lowercase();
+                }
+                byte += 1;
+            }
+            map
+        };
         let mut key = Self {
             bytes: [0; NORMALIZED_KEY_CAPACITY],
             len: 0,
         };
-        for byte in raw.trim().bytes() {
-            if !byte.is_ascii_alphanumeric() {
+        let mut len = 0usize;
+        for byte in raw.bytes() {
+            let byte = MAP[usize::from(byte)];
+            if byte == 0 {
                 continue;
             }
-            let index = usize::from(key.len);
+            let index = len;
             if index == NORMALIZED_KEY_CAPACITY {
                 return None;
             }
-            key.bytes[index] = byte.to_ascii_lowercase();
-            key.len += 1;
+            key.bytes[index] = byte;
+            len += 1;
         }
+        key.len = len as u8;
         Some(key)
     }
 
@@ -3360,4 +3375,9 @@ mod choice_performance {
 #[cfg(test)]
 mod mode_performance {
     include!("mode_performance.rs");
+}
+
+#[cfg(test)]
+mod key_performance {
+    include!("key_performance.rs");
 }

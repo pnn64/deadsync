@@ -11,13 +11,30 @@ pub struct TwitchChannel {
 
 impl TwitchChannel {
     pub fn parse(raw: &str) -> Option<Self> {
-        let raw = raw.trim().strip_prefix('#').unwrap_or(raw.trim());
-        if raw.len() > 25 || !raw.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_') {
+        const MAP: [u8; 256] = {
+            let mut map = [0u8; 256];
+            let mut byte = 0usize;
+            while byte < 256 {
+                let value = byte as u8;
+                if value.is_ascii_alphanumeric() || value == b'_' {
+                    map[byte] = value.to_ascii_lowercase();
+                }
+                byte += 1;
+            }
+            map
+        };
+        let raw = raw.trim();
+        let raw = raw.strip_prefix('#').unwrap_or(raw);
+        if raw.len() > 25 {
             return None;
         }
         let mut channel = Self::default();
         for (out, byte) in channel.bytes.iter_mut().zip(raw.bytes()) {
-            *out = byte.to_ascii_lowercase();
+            let mapped = MAP[usize::from(byte)];
+            if mapped == 0 {
+                return None;
+            }
+            *out = mapped;
         }
         channel.len = raw.len() as u8;
         Some(channel)

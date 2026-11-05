@@ -1,6 +1,6 @@
 # Non-Lua Rust optimization measurements
 
-Measurements, validation and report links for batches 1–36. Relative report links resolve within the same repository revision.
+Measurements, validation and report links for batches 1–37. Relative report links resolve within the same repository revision.
 
 Font and texture preparation, gameplay calculations, audio callbacks, chart loading, renderer setup and HTTP text handling repeat validation, scans and temporary string normalization. This change shares rate validation, removes redundant timestamp conversions/clamps, dispatches chart metadata prefixes once, and reuses carried-hold counts until an end-row boundary. Timing snapshots read a maintained maximum; scroll BPM and scoring-window validation use positive-finite bit intervals.
 
@@ -188,3 +188,11 @@ Measurements and reproduction: [timing conversions](./2026-11-04-timing-conversi
 - **CPU:** Tech **6.977× (control 0.985×)**; Marathon **5.645× (control 1.017×)**; Dance **6.935× (control 0.982×)**. Each measured nonempty input drops **one allocation/free to zero**. Empty pattern input changes **9.20 → 11.92 cycles**, **0.812× (control 1.011×)**. All **320 raw rows**, sixteen workloads, six allocation counters, controls, costs and process ranges are retained. These are preference-parser microbenchmarks; startup and whole-application gains are unmeasured.
 - **Validation:** baseline/release/package opt0 with assertions each pass **252 unit + 13 integration tests**, including all five integration targets. Every case combination of all seven names, every ASCII insertion, every Unicode scalar in three contexts and seeded mixed strings compare exact outcomes. The **4,063,148-byte trace**, scoped Clippy, production-only opt3 check and full source/input/binary/log/measurement audit pass.
 - Report: [mode-parser measurements](./2026-11-05-config-modes.md).
+
+### Batch 37: shared byte normalization and channel parsing
+
+- Use safe byte tables and a local usize cursor in the existing fixed theme-key buffer; fuse Twitch channel validation/lowercase copying with a cached trim; map normalized kernel-target bytes lazily. Preserve complete records, 32/25-byte limits, case/punctuation/Unicode rules, hash handling and caller outcomes. Three local tables add 768 bytes of logical lookup data; physical binary-size change is unmeasured. No unsafe, heap, buffer, dependency or public API change.
+- **CPU:** shared plain key **2.518× (control 1.000×)**; channel **2.032× (control 0.997×)**; Digest target **2.229× (control 1.021×)**. Unchanged ThemeFlag caller **1.935× (control 0.944×)**; preferred-style caller **1.663× (control 1.016×)**. All six heap counters remain zero across all fixtures. All **560 raw rows**, 28 workloads, controls, costs and process ranges are retained. These are parser microbenchmarks; startup, networking and whole-application gains are unmeasured.
+
+- **Validation:** baseline/release/package opt0 with assertions each pass **253 unit + 13 integration tests**, including all five integration targets. Full record and enum comparisons cover every Unicode scalar in three contexts, ASCII insertion/capitalization, fixed-buffer boundaries and seeded mixed strings. The **13,057,776-byte trace**, scoped Clippy, production-only opt3 check and full input/binary/log/measurement audit pass. The first key prototype's boundary slowdown was corrected and remeasured before production edits.
+- Report: [shared byte-parser measurements](./2026-11-05-config-keys.md).
