@@ -1795,12 +1795,12 @@ pub const fn clamp_custom_fantastic_window_ms(ms: u8) -> u8 {
 #[must_use]
 pub fn sanitize_player_initials(raw: &str) -> String {
     let mut out = String::with_capacity(PLAYER_INITIALS_MAX_LEN);
-    for ch in raw.chars() {
-        if out.len() >= PLAYER_INITIALS_MAX_LEN {
-            break;
-        }
-        if ch.is_ascii_alphanumeric() || ch == '?' || ch == '!' {
-            out.push(ch.to_ascii_uppercase());
+    for byte in raw.bytes() {
+        if byte.is_ascii_alphanumeric() || byte == b'?' || byte == b'!' {
+            out.push(char::from(byte.to_ascii_uppercase()));
+            if out.len() == PLAYER_INITIALS_MAX_LEN {
+                break;
+            }
         }
     }
     out
@@ -1894,17 +1894,27 @@ pub fn push_profile_guid_line(out: &mut String, guid: &str) {
 /// this canonical dashed-lowercase form.
 #[must_use]
 pub fn is_valid_profile_guid(s: &str) -> bool {
-    let groups = [8usize, 4, 4, 4, 12];
-    let mut parts = s.split('-');
-    for &len in &groups {
-        let Some(part) = parts.next() else {
-            return false;
-        };
-        if part.len() != len || !part.bytes().all(|b| b.is_ascii_hexdigit()) {
-            return false;
-        }
+    let bytes = s.as_bytes();
+    if bytes.len() != 36
+        || bytes[8] != b'-'
+        || bytes[13] != b'-'
+        || bytes[18] != b'-'
+        || bytes[23] != b'-'
+    {
+        return false;
     }
-    parts.next().is_none()
+    [
+        &bytes[..8],
+        &bytes[9..13],
+        &bytes[14..18],
+        &bytes[19..23],
+        &bytes[24..],
+    ]
+    .iter()
+    .all(|part| {
+        part.iter()
+            .fold(true, |valid, byte| valid & byte.is_ascii_hexdigit())
+    })
 }
 
 /// Fixed namespace UUID for deriving `DeadSync` profile GUIDs from `ITGmania`
@@ -1928,10 +1938,18 @@ pub fn profile_guid_from_itgmania_guid(itg_guid: &str) -> Option<String> {
     if trimmed.is_empty() {
         return None;
     }
-    let derived = uuid::Uuid::new_v5(
-        &ITGMANIA_GUID_NAMESPACE,
-        trimmed.to_ascii_lowercase().as_bytes(),
-    );
+    let mut folded = [0u8; 64];
+    let derived = if trimmed.len() <= folded.len() {
+        let name = &mut folded[..trimmed.len()];
+        name.copy_from_slice(trimmed.as_bytes());
+        name.make_ascii_lowercase();
+        uuid::Uuid::new_v5(&ITGMANIA_GUID_NAMESPACE, name)
+    } else {
+        uuid::Uuid::new_v5(
+            &ITGMANIA_GUID_NAMESPACE,
+            trimmed.to_ascii_lowercase().as_bytes(),
+        )
+    };
     Some(derived.to_string())
 }
 
@@ -15974,3 +15992,7 @@ mod visual_options_perf;
 #[cfg(test)]
 #[path="folder_paths_performance.rs"]
 mod folder_paths_performance;
+
+#[cfg(test)]
+#[path = "identity_performance.rs"]
+mod identity_performance;
