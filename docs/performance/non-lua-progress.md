@@ -1,6 +1,6 @@
 # Non-Lua Rust optimization measurements
 
-Measurements, validation and report links for batches 1–41. Relative report links resolve within the same repository revision.
+Measurements, validation and report links for batches 1–42. Relative report links resolve within the same repository revision.
 
 Font and texture preparation, gameplay calculations, audio callbacks, chart loading, renderer setup and HTTP text handling repeat validation, scans and temporary string normalization. This change shares rate validation, removes redundant timestamp conversions/clamps, dispatches chart metadata prefixes once, and reuses carried-hold counts until an end-row boundary. Timing snapshots read a maintained maximum; scroll BPM and scoring-window validation use positive-finite bit intervals.
 
@@ -234,3 +234,11 @@ Measured costs: `numeric/empty` 7.18 → 8.45 cycles (0.850×; control 1.177×).
 
 - **Validation:** baseline/release/package opt0 with assertions each pass **256 unit + 13 integration tests** across all five integration targets. Exact enum/error/Option/text and full-record cases cover every Unicode scalar, alias cases/insertions/substitutions, all ASCII numeric triples, long zero prefixes and seeded mixed UTF-8. Matching **12,114,922-byte trace**, production-scope Clippy, production-only opt3 check and complete provenance/raw-field audit pass. One intentional benchmark Result-sink compiler warning is reviewed and recorded. Width-only, overbroad packed-clock and lowercase-buffer trials were rejected or refined before production edits.
 - Report: [audio and machine word-kernel measurements](./2026-11-05-audio-kernels.md).
+
+### Batch 42: mini scaling, long-average feedback and atlas coordinates
+
+- Return exact 1.1 for both zero-mini signs, reject invisible long-average ticks before scale calculations, and specialize one/two-column atlas coordinates. Keep fused scalar fallbacks, complete sprite bits/order, cold allocation parity, dimensions/casts and profile-specific panic outcomes. Two targeted inline hints; no unsafe, new production helper/table/buffer, heap policy, dependency or API change.
+- **CPU:** zero-mini scale **1.660× (control 1.008×)**; future long-average tick **1.471× (control 1.029×)**; one-column atlas **1.818× (control 1.007×)**. All six warm heap counters remain zero. All **800 current rows** cover 40 actual-package workloads and identical-body controls.
+- **Costs:** normal nonzero scalar examples rise about 3.95 → 7.09 cycles (0.557×; control 1.000×), NaN 3.95 → 5.52 cycles. Full ranges and all inputs remain visible. Active average drawing 0.978× (control 0.977×) is near its control. The first average-loop rewrite slowed active cases and was rejected; its three 515-test gates and **640 trial rows** remain verified and recorded.
+- **Validation:** baseline/release/package opt0 with assertions each pass **516 unit tests**. Exact sprite/float/panic and cold Vec checks, matching **5,919,380-byte trace**, 16 frozen external fixtures, 19 shipped PNGs, scoped Clippy, production-only opt3 and provenance/raw-field audits pass. FPS, GPU work and application-wide gains are unmeasured.
+- Report: [notefield feedback and atlas measurements](./2026-11-05-notefield-feedback.md).

@@ -426,9 +426,22 @@ fn append_sprite(
     }));
 }
 
+#[inline(always)]
 fn frame_uv(frame_index: u32, frame_cols: usize, frame_rows: usize) -> [f32; 4] {
     let cols = frame_cols.max(1) as u32;
     let rows = frame_rows.max(1) as u32;
+    if cols <= 2 && cols != 0 {
+        let (col, row, cell_width) = if cols == 1 {
+            (0, frame_index, 1.0)
+        } else {
+            (frame_index & 1, frame_index >> 1, 0.5)
+        };
+        let row = row.min(rows - 1);
+        let height = 1.0 / rows as f32;
+        let left = col as f32 * cell_width;
+        let top = row as f32 * height;
+        return [left, top, left + cell_width, top + height];
+    }
     let col = frame_index % cols;
     let row = (frame_index / cols).min(rows - 1);
     let cell = [1.0 / cols as f32, 1.0 / rows as f32];
@@ -1064,4 +1077,9 @@ mod tests {
         assert!((actual - expected).abs() <= 1e-6);
         assert!((actual - swapped).abs() > 1e-3);
     }
+}
+
+#[cfg(test)]
+mod atlas_kernel_perf {
+    include!("atlas_kernel_perf.rs");
 }

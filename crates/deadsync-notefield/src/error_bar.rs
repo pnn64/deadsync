@@ -418,6 +418,14 @@ fn append_long_average(draws: &mut Vec<FlatDraw>, request: &ErrorBarComposeReque
         return;
     };
     let style = request.style;
+    let alpha = error_bar_tick_alpha(
+        request.elapsed_s - tick.started_at,
+        style.long_average_tick_duration,
+        request.multi_tick,
+    );
+    if alpha <= 0.0 {
+        return;
+    }
     let max_offset_s = request.timing_windows_s[request.max_window_ix.min(4)];
     let width = if request.modes.average {
         style.average_width
@@ -436,12 +444,7 @@ fn append_long_average(draws: &mut Vec<FlatDraw>, request: &ErrorBarComposeReque
     } else {
         0.0
     };
-    let alpha = error_bar_tick_alpha(
-        request.elapsed_s - tick.started_at,
-        style.long_average_tick_duration,
-        request.multi_tick,
-    );
-    if alpha <= 0.0 || !wscale.is_finite() || wscale <= 0.0 {
+    if !wscale.is_finite() || wscale <= 0.0 {
         return;
     }
     let scaled_offset = if max_offset_s.is_finite() && max_offset_s > 0.0 {
@@ -1649,4 +1652,10 @@ mod tests {
             3,
         );
     }
+}
+
+#[cfg(test)]
+#[allow(clippy::approx_constant, reason="Fixture colors are authored RGB values.")]
+mod feedback_kernel_perf {
+    include!("feedback_kernel_perf.rs");
 }
