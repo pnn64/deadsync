@@ -37,6 +37,8 @@ Export Simply Love menu PNGs (requires a desktop and Vulkan-capable GPU).
 cargo run -p deadsync-theme-simply-love --example export_menus -- [OPTIONS]
 
   --preset NAME   Select a preset; repeat to select several (default: all)
+    --images-only   Export images without writing the gallery index
+    --index-only    Write the gallery index without exporting images
   --help          Show this help
 
 Available presets: vga, svga, xga, 5-4, square, 16-10, 720p, ultrawide,
@@ -44,17 +46,23 @@ uwqhd, portrait-9-16, portrait-10-16.";
 
 struct Options {
     sizes: Vec<Size>,
+    images_only: bool,
+    index_only: bool,
 }
 
 fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
     let mut args = args.into_iter();
     let mut sizes = Vec::new();
+    let mut images_only = false;
+    let mut index_only = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
                 println!("{HELP}");
                 return Ok(None);
             }
+            "--images-only" => images_only = true,
+            "--index-only" => index_only = true,
             "--preset" => {
                 let name = args.next().ok_or("--preset requires a name")?;
                 let &(_, width, height) = PRESETS
@@ -69,6 +77,9 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
             _ => return Err(format!("unknown option '{arg}'; use --help").into()),
         }
     }
+    if images_only && index_only {
+        return Err("--images-only and --index-only cannot be combined".into());
+    }
     if sizes.is_empty() {
         for &(_, width, height) in PRESETS {
             let size = Size::from_preset(width, height);
@@ -77,7 +88,11 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
             }
         }
     }
-    Ok(Some(Options { sizes }))
+    Ok(Some(Options {
+        sizes,
+        images_only,
+        index_only,
+    }))
 }
 
 fn main() -> Result<()> {
@@ -99,6 +114,14 @@ fn run() -> Result<()> {
     let Some(options) = options(std::env::args().skip(1))? else {
         return Ok(());
     };
+    let output = export_support::workspace_root()
+        .join("target")
+        .join("menu-exports");
+    if options.index_only {
+        std::fs::create_dir_all(&output)?;
+        export_menus_viewer::write_index(&output, &options.sizes)?;
+        return Ok(());
+    }
     export_support::init_logger()?;
     let isolated = tempfile::tempdir()?;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
@@ -148,7 +171,9 @@ fn export(
         .join("target")
         .join("menu-exports");
     std::fs::create_dir_all(&output)?;
-    export_menus_viewer::write_index(&output, &options.sizes)?;
+    if !options.images_only {
+        export_menus_viewer::write_index(&output, &options.sizes)?;
+    }
 
     for size in &options.sizes {
         let logical_width = 480.0 * size.aspect.0 as f32 / size.aspect.1 as f32;
@@ -163,8 +188,12 @@ fn export(
             std::fs::create_dir_all(&folder)?;
             let path = folder.join(format!("{name}.png"));
             if name == "content-browser" && size.aspect != (16, 9) {
-                image::RgbaImage::from_pixel(size.width, size.height, image::Rgba([0, 0, 0, 255]))
-                    .save(&path)?;
+                let image = image::RgbaImage::from_pixel(
+                    size.width,
+                    size.height,
+                    image::Rgba([0, 0, 0, 255]),
+                );
+                image.save(&path)?;
                 println!("{} (disabled: requires 16:9)", path.display());
                 continue;
             }

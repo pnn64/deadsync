@@ -34,6 +34,8 @@ cargo test -p deadsync-theme-simply-love --example export_gameplay -- [OPTIONS]
 
   --preset NAME   Select a preset; repeat to select several (default: all)
   --reverse       Use reverse scrolling
+    --images-only   Export images without writing the gallery index
+    --index-only    Write the gallery index without exporting images
   --help          Show this help
 
 Available presets: vga, svga, xga, 5-4, square, 16-10, 720p, ultrawide,
@@ -42,12 +44,16 @@ uwqhd, portrait-9-16, portrait-10-16.";
 struct Options {
     sizes: Vec<Size>,
     reverse: bool,
+    images_only: bool,
+    index_only: bool,
 }
 
 fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
     let mut args = args.into_iter();
     let mut sizes = Vec::new();
     let mut reverse = false;
+    let mut images_only = false;
+    let mut index_only = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
@@ -55,6 +61,8 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
                 return Ok(None);
             }
             "--reverse" => reverse = true,
+            "--images-only" => images_only = true,
+            "--index-only" => index_only = true,
             "--preset" => {
                 let name = args.next().ok_or("--preset requires a name")?;
                 let &(_, width, height) = PRESETS
@@ -69,6 +77,9 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
             _ => return Err(format!("unknown option '{arg}'; use --help").into()),
         }
     }
+    if images_only && index_only {
+        return Err("--images-only and --index-only cannot be combined".into());
+    }
     if sizes.is_empty() {
         for &(_, width, height) in PRESETS {
             let size = Size::from_preset(width, height);
@@ -77,7 +88,12 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
             }
         }
     }
-    Ok(Some(Options { sizes, reverse }))
+    Ok(Some(Options {
+        sizes,
+        reverse,
+        images_only,
+        index_only,
+    }))
 }
 
 fn main() -> Result<()> {
@@ -99,6 +115,14 @@ fn run() -> Result<()> {
     let Some(options) = options(std::env::args().skip(1))? else {
         return Ok(());
     };
+    let output = export_support::workspace_root()
+        .join("target")
+        .join("gameplay-exports");
+    if options.index_only {
+        std::fs::create_dir_all(&output)?;
+        export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
+        return Ok(());
+    }
     export_support::init_logger()?;
     let isolated = tempfile::tempdir()?;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
@@ -161,7 +185,9 @@ fn export(
         .join("target")
         .join("gameplay-exports");
     std::fs::create_dir_all(&output)?;
-    export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
+    if !options.images_only {
+        export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
+    }
     for size in &options.sizes {
         let logical_width = 480.0 * size.aspect.0 as f32 / size.aspect.1 as f32;
         let logical_height = 480.0;
@@ -207,6 +233,11 @@ fn export(
                         assets.texture_context(),
                         center_single_notefield,
                     );
+                    let filename = format!(
+                        "{stem}{}.png",
+                        if options.reverse { "-reverse" } else { "" }
+                    );
+                    let output = folder.join(&filename);
                     backend.request_screenshot();
                     backend.draw(&frame, assets.textures(), false)?;
                     let image = backend.capture_frame()?;
@@ -219,11 +250,6 @@ fn export(
                         )
                         .into());
                     }
-                    let filename = format!(
-                        "{stem}{}.png",
-                        if options.reverse { "-reverse" } else { "" }
-                    );
-                    let output = folder.join(&filename);
                     image.save(&output)?;
                     println!("{}", output.display());
                 }
