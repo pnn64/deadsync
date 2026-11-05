@@ -69,9 +69,9 @@ impl FromStr for BreakdownStyle {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "sl" => Ok(Self::Sl),
-            "sn" => Ok(Self::Sn),
+        match s.trim().as_bytes() {
+            [b's' | b'S', b'l' | b'L'] => Ok(Self::Sl),
+            [b's' | b'S', b'n' | b'N'] => Ok(Self::Sn),
             _ => Err(()),
         }
     }
@@ -303,9 +303,11 @@ impl FromStr for DefaultSyncOffset {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "null" | "none" | "off" => Ok(Self::Null),
-            "itg" => Ok(Self::Itg),
+        let s = s.trim();
+        match s.len() {
+            3 if s.eq_ignore_ascii_case("itg") => Ok(Self::Itg),
+            3 if s.eq_ignore_ascii_case("off") => Ok(Self::Null),
+            4 if s.eq_ignore_ascii_case("null") || s.eq_ignore_ascii_case("none") => Ok(Self::Null),
             _ => Err(()),
         }
     }
@@ -335,9 +337,17 @@ impl FromStr for VersionOverlaySide {
     type Err = ();
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "left" | "l" | "lhs" => Ok(Self::Left),
-            "right" | "r" | "rhs" => Ok(Self::Right),
+        let s = s.trim();
+        match s.len() {
+            1 => match s.as_bytes()[0] | 0x20 {
+                b'l' => Ok(Self::Left),
+                b'r' => Ok(Self::Right),
+                _ => Err(()),
+            },
+            3 if s.eq_ignore_ascii_case("lhs") => Ok(Self::Left),
+            3 if s.eq_ignore_ascii_case("rhs") => Ok(Self::Right),
+            4 if s.eq_ignore_ascii_case("left") => Ok(Self::Left),
+            5 if s.eq_ignore_ascii_case("right") => Ok(Self::Right),
             _ => Err(()),
         }
     }
@@ -3321,4 +3331,9 @@ MachineEvaluationStyle=Default\n\
 #[cfg(test)]
 mod preference_performance {
     include!("preference_performance.rs");
+}
+
+#[cfg(test)]
+mod alias_performance {
+    include!("alias_performance.rs");
 }
