@@ -122,7 +122,20 @@ pub fn gamepad_code_binding_to_token(binding: GamepadCodeBinding) -> String {
 
 fn write_gamepad_code_binding_token(s: &mut String, binding: GamepadCodeBinding) {
     use std::fmt::Write;
-    let _ = write!(s, "PadCode[0x{:08X}]", binding.code_u32);
+    const CODE_HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut hex = [0u8; 8];
+    for (pair, byte) in hex
+        .as_chunks_mut::<2>()
+        .0
+        .iter_mut()
+        .zip(binding.code_u32.to_be_bytes())
+    {
+        pair[0] = CODE_HEX[usize::from(byte >> 4)];
+        pair[1] = CODE_HEX[usize::from(byte & 15)];
+    }
+    s.push_str("PadCode[0x");
+    s.push_str(std::str::from_utf8(&hex).expect("hex digits are ASCII"));
+    s.push(']');
     if let Some(device) = binding.device {
         let _ = write!(s, "@{device}");
     }

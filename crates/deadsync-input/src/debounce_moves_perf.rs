@@ -4,7 +4,7 @@ use std::cell::{Cell, RefCell};
 use std::hint::black_box;
 
 #[path = "../../../tests/support/kernel_bench.rs"]
-mod bench;
+pub(super) mod bench;
 #[allow(dead_code)]
 #[expect(clippy::too_many_arguments, reason = "frozen production reference")]
 #[path = "debounce_moves_original.rs"]
