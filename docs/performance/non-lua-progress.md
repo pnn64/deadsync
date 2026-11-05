@@ -1,6 +1,6 @@
 # Non-Lua Rust optimization measurements
 
-Measurements, validation and report links for batches 1–37. Relative report links resolve within the same repository revision.
+Measurements, validation and report links for batches 1–38. Relative report links resolve within the same repository revision.
 
 Font and texture preparation, gameplay calculations, audio callbacks, chart loading, renderer setup and HTTP text handling repeat validation, scans and temporary string normalization. This change shares rate validation, removes redundant timestamp conversions/clamps, dispatches chart metadata prefixes once, and reuses carried-hold counts until an end-row boundary. Timing snapshots read a maintained maximum; scroll BPM and scoring-window validation use positive-finite bit intervals.
 
@@ -196,3 +196,13 @@ Measurements and reproduction: [timing conversions](./2026-11-04-timing-conversi
 
 - **Validation:** baseline/release/package opt0 with assertions each pass **253 unit + 13 integration tests**, including all five integration targets. Full record and enum comparisons cover every Unicode scalar in three contexts, ASCII insertion/capitalization, fixed-buffer boundaries and seeded mixed strings. The **13,057,776-byte trace**, scoped Clippy, production-only opt3 check and full input/binary/log/measurement audit pass. The first key prototype's boundary slowdown was corrected and remeasured before production edits.
 - Report: [shared byte-parser measurements](./2026-11-05-config-keys.md).
+
+### Batch 38: pad-config updates and migrated names
+
+- Reuse matching positions for pad-config rename/default updates, skip redundant prefix name comparisons, and build migrated names with direct appends. Preserve duplicate-name rules, serial order, complete fields, return values and String/Vec capacities on the measured toolchain. No new unsafe, heap policy, helper, lookup table, buffer, dependency or public API.
+- **CPU:** 16-record rename round trip **1.870× (control 1.001×)**; last-match default update **1.482× (control 0.982×)**; normal migrated name **1.095× (control 1.014×)**. Rename operations contain two calls; default timings are repeated updates. All six allocation counters retain exact parity. All **500 raw rows**, 25 workloads, first/last/missing controls, costs and process ranges are retained. File I/O, UI and whole-application gains are unmeasured.
+
+Measured costs: `default/1-first` 260.50 → 286.32 cycles (0.923×; control 0.958×), `default/1-last` 286.89 → 291.58 cycles (0.943×; control 0.913×), `default/missing` 45.66 → 45.85 cycles (0.918×; control 1.001×). Full process ranges remain in the report.
+
+- **Validation:** baseline/release/package opt0 with assertions each pass **246 unit + 8 integration tests**, across all four integration targets. Differential checks cover names, conflicts/duplicates, serial order, complete records and ordinary/spare capacities, plus 8,192 seeded mixed lists. The **17,010,961-byte trace**, production-only opt3 check and full source/input/binary/log/measurement audit pass. Clippy exits successfully with zero diagnostics in changed production code and one recorded fixture-only style warning. The initial checker used unequal starting capacities; its correction and original artifacts remain documented.
+- Report: [pad-config update measurements](./2026-11-05-pad-mutations.md).
