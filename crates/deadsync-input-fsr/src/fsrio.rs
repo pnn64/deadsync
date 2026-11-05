@@ -682,14 +682,20 @@ mod imp {
         SENSOR_NORMALIZED[min(raw, MAX_SENSOR_VALUE) as usize]
     }
 
-    fn mapped_button_mask(mapping: &[i8; SENSOR_COUNT]) -> u16 {
-        let mut mapped_mask = 0u16;
-        for &mapped in mapping {
-            if mapped >= 0 && (mapped as usize) < BUTTON_COUNT {
-                mapped_mask |= 1 << mapped;
-            }
+    const BUTTON_BITS: [u16; 256] = {
+        let mut bits = [0; 256];
+        let mut index = 0;
+        while index < BUTTON_COUNT {
+            bits[index] = 1 << index;
+            index += 1;
         }
-        mapped_mask
+        bits
+    };
+
+    fn mapped_button_mask(mapping: &[i8; SENSOR_COUNT]) -> u16 {
+        mapping
+            .iter()
+            .fold(0, |mask, &mapped| mask | BUTTON_BITS[mapped as u8 as usize])
     }
 
     fn group_sensor_indices(
@@ -703,20 +709,19 @@ mod imp {
         for _ in 0..group {
             mask &= mask - 1;
         }
-        sensor_indices(mapping, mask.trailing_zeros() as usize)
+        let button = mask.trailing_zeros() as usize;
+        let mut indices = ArrayVec::new();
+        for (index, &mapped) in mapping.iter().enumerate() {
+            if mapped as u8 as usize == button {
+                indices.push(index);
+            }
+        }
+        indices
     }
 
-    fn sensor_indices(
-        mapping: &[i8; SENSOR_COUNT],
-        button: usize,
-    ) -> ArrayVec<usize, SENSOR_COUNT> {
-        mapping
-            .iter()
-            .enumerate()
-            .filter_map(|(index, &mapped)| {
-                (mapped >= 0 && mapped as usize == button).then_some(index)
-            })
-            .collect()
+    #[cfg(test)]
+    mod mask_performance {
+        include!("mask_performance.rs");
     }
 
     #[cfg(test)]
