@@ -23,7 +23,9 @@ use deadlib_platform::input::{KeyCode, RawKeyboardEvent};
 use deadlib_present::actors::{Actor, TextContent};
 use deadlib_present::space::{screen_center_x, screen_center_y, screen_height, screen_width};
 use deadsync_core::input::InputSource;
-use deadsync_input::fsr::{ButtonLabel, ButtonView, PadDeviceId, PadView, SensorView, ValueCurve};
+use deadsync_input::fsr::{
+    BackendKind, ButtonLabel, ButtonView, PadDeviceId, PadView, SensorView, ValueCurve,
+};
 use deadsync_input::{InputEvent, VirtualAction};
 use smallvec::SmallVec;
 use std::time::Duration;
@@ -280,6 +282,9 @@ pub const fn set_fsr_enabled(state: &mut State, enabled: bool) {
 pub fn set_pads(state: &mut State, mut pads: Vec<PadView>) {
     pads.retain(|p| match state.filter {
         PadFilter::All => true,
+        // FSRio has no player-side assignment; its placeholder side must not
+        // hide connected controllers when only P2 is joined.
+        PadFilter::Sides { .. } if p.device_id.backend == BackendKind::Fsrio => true,
         PadFilter::Sides { p1, p2 } => {
             if p.is_p2_side {
                 p2
@@ -2969,7 +2974,6 @@ fn push_bar(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use deadsync_input::fsr::BackendKind;
     use std::time::Instant;
 
     // ── Event + pad fixtures ──
@@ -3288,17 +3292,46 @@ mod tests {
 
     #[test]
     fn set_pads_filters_by_side() {
-        let mut s = init();
-        set_filter(
-            &mut s,
-            PadFilter::Sides {
-                p1: true,
-                p2: false,
-            },
-        );
-        set_pads(&mut s, vec![smx_pad(0, false), smx_pad(1, true)]);
-        assert_eq!(total_bars(&s), FIXTURE_BUTTON_COUNT); // only the P1 pad survives
-        assert_eq!(selected_device(&s).map(|d| d.index), Some(0));
+        for (p1, p2, index) in [(true, false, 0), (false, true, 1)] {
+            let mut s = init();
+            set_filter(&mut s, PadFilter::Sides { p1, p2 });
+            set_pads(
+                &mut s,
+                vec![smx_pad(0, false), smx_pad(1, true), fsrio_pad(&[1, 3])],
+            );
+            assert_eq!(total_bars(&s), FIXTURE_BUTTON_COUNT + 2);
+            assert_eq!(selected_device(&s).map(|d| d.index), Some(index));
+            assert_eq!(s.pads.len(), 2);
+            assert_eq!(s.pads[0].device_id.backend, BackendKind::Smx);
+            assert_eq!(s.pads[1].device_id.backend, BackendKind::Fsrio);
+        }
+    }
+
+    #[test]
+    fn fsrio_thresholds_are_editable_for_either_player_side() {
+        for (p1, p2, action) in [
+            (true, false, VirtualAction::p1_up),
+            (false, true, VirtualAction::p2_up),
+        ] {
+            let mut s = init();
+            set_filter(&mut s, PadFilter::Sides { p1, p2 });
+            let pad = fsrio_pad(&[1, 3]);
+            let device = pad.device_id;
+            set_pads(&mut s, vec![pad]);
+
+            assert_eq!(selected_device(&s), Some(device));
+            assert_eq!(total_bars(&s), 2);
+            apply_edit(&mut s, &ev(action), false);
+            assert_eq!(
+                take_commands(&mut s),
+                vec![PadCommand::Threshold {
+                    device,
+                    button: 0,
+                    sensor: Some(0),
+                    value: 35,
+                }]
+            );
+        }
     }
 
     #[test]

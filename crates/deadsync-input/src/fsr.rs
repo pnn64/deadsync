@@ -152,8 +152,9 @@ pub struct PadView {
     /// this only when device identity changes, so cloning a frame never copies
     /// or reallocates the label text.
     pub device_name: Arc<str>,
-    /// Player side the pad maps to (P2 vs P1), used to filter by play style. Taken
-    /// from the device slot (slot 1 = P2 for SMX), not the hardware jumper.
+    /// Player side for SMX play-style filtering, taken from the device slot
+    /// (slot 1 = P2), not the hardware jumper. FSRio has no side assignment;
+    /// its placeholder value is ignored when filtering.
     pub is_p2_side: bool,
     pub buttons: ButtonViews,
     /// Whether the Advanced view is available for this pad. Load-cell pads are
