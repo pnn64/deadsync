@@ -434,3 +434,145 @@ fn interrupted_endless_saves_accumulated_routine_score_and_all_evaluation_pages(
         }
     });
 }
+
+#[test]
+fn course_stage_load_failures_preserve_recorded_results_and_evaluation_pages() {
+    on_app_thread(|| {
+        for pump in [false, true] {
+            for endless in [false, true] {
+                for worker_failure in [false, true] {
+                    let style = if pump {
+                        profile_data::PlayStyle::PumpRoutine
+                    } else {
+                        profile_data::PlayStyle::Routine
+                    };
+                    with_session(style, profile_data::PlayerSide::P1, true, true, || {
+                        let root = tempfile::tempdir().unwrap();
+                        let mut app = test_app(root.path());
+                        let b = prepare_boundary(&mut app, root.path(), pump);
+                        let profiles = ScoreProfiles::new();
+                        let (target, _) = app.prepare_global_fade_entry(CurrentScreen::Gameplay);
+                        assert_eq!(target, CurrentScreen::Gameplay);
+                        finish_pending_stage(&mut app);
+                        let stages_played = app.state.coin.bookkeeping().stages_played;
+                        let course = app.state.session.course_run.as_mut().unwrap();
+                        if !endless {
+                            course.course_type = deadsync_theme::views::CourseTypeView::Nonstop;
+                        }
+                        let score_hash = course.score_hash.clone();
+                        // Nonzero earned points distinguish the accumulated result
+                        // from a saved empty result or the next, unplayed song.
+                        for player in course.stage_summaries[0].players.iter_mut().flatten() {
+                            assert_eq!(player.possible_grade_points, 5);
+                            player.earned_grade_points = 2;
+                            player.score_percent = 0.4;
+                            player.grade = score_data::score_to_grade(4000.0);
+                        }
+                        let completed_songs = if worker_failure {
+                            // Exercise preparation failure with recorded history and an
+                            // unfinished replacement stage. It must not become a result.
+                            app.fail_gameplay_init("course preparation worker failed".into());
+                            assert!(matches!(
+                                app.state.shell.transition,
+                                TransitionState::FadingOut {
+                                    target: CurrentScreen::Evaluation,
+                                    ..
+                                }
+                            ));
+                            app.prepare_global_fade_entry(CurrentScreen::Evaluation);
+                            1
+                        } else {
+                            app.state
+                                .screens
+                                .gameplay_state
+                                .as_mut()
+                                .unwrap()
+                                .progress
+                                .stage
+                                .song_completed_naturally = true;
+                            // B was validated during renewal, but disappears while A
+                            // is playing. This transition is inside the prepared cycle.
+                            std::fs::remove_file(&b.simfile_path).unwrap();
+                            let (target, _) =
+                                app.prepare_global_fade_entry(CurrentScreen::Gameplay);
+                            assert_eq!(target, CurrentScreen::Evaluation);
+                            2
+                        };
+                        assert_eq!(app.state.screens.current_screen, CurrentScreen::Evaluation);
+                        assert!(app.state.session.course_run.is_none());
+                        assert!(app.pending_gameplay_init.is_none());
+                        assert!(app.state.screens.gameplay_state.is_none());
+                        assert!(app.state.screens.player_options_state.is_none());
+                        assert_eq!(
+                            app.state.shell.interaction.message(),
+                            Some("Unable to prepare next course stage")
+                        );
+                        assert_eq!(app.state.session.played_stages.len(), completed_songs + 1);
+                        assert_eq!(
+                            app.state.session.course_eval_pages.len(),
+                            completed_songs + 1
+                        );
+                        assert!(app.state.session.course_stage_eval_pages.is_empty());
+                        assert!(app.state.screens.evaluation_state.return_to_course);
+                        assert_eq!(
+                            app.state.coin.bookkeeping().stages_played,
+                            stages_played + 1
+                        );
+                        for stage in &app.state.session.played_stages[..completed_songs] {
+                            assert_eq!(stage.song.title, "A");
+                        }
+                        let summary = app.state.session.played_stages.last().unwrap();
+                        assert_eq!(summary.song.title, "PR845 transition");
+                        for player in summary.players.iter().flatten() {
+                            assert!(player.score_valid);
+                            assert_ne!(player.grade, score_data::Grade::Failed);
+                        }
+                        for (side, directory) in profiles.directories.iter().enumerate() {
+                            let index = score_data::load_local_score_index_from_root(
+                                &directory.path().join("scores/local"),
+                            );
+                            assert_eq!(index.best_itg.contains_key(&score_hash), side == 0);
+                            if let Some(score) = index.best_itg.get(&score_hash) {
+                                let expected = if !endless {
+                                    0.1333 // ITG truncates the displayed percentage.
+                                } else if worker_failure {
+                                    0.4
+                                } else {
+                                    0.2
+                                };
+                                assert!((score.score_percent - expected).abs() < 1e-9);
+                            }
+                        }
+                    });
+                }
+            }
+        }
+    });
+}
+
+#[test]
+fn preparation_failure_without_completed_course_songs_keeps_existing_exit() {
+    on_app_thread(|| {
+        with_session(
+            profile_data::PlayStyle::Routine,
+            profile_data::PlayerSide::P1,
+            true,
+            true,
+            || {
+                let root = tempfile::tempdir().unwrap();
+                let mut app = test_app(root.path());
+                prepare_boundary(&mut app, root.path(), false);
+                app.fail_gameplay_init("initial preparation failed".into());
+                assert!(matches!(
+                    app.state.shell.transition,
+                    TransitionState::FadingOut {
+                        target: CurrentScreen::SelectMusic,
+                        ..
+                    }
+                ));
+                assert!(!app.state.session.course_run.as_ref().unwrap().interrupted);
+                assert!(app.state.session.played_stages.is_empty());
+            },
+        );
+    });
+}

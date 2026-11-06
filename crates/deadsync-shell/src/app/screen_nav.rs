@@ -473,7 +473,9 @@ impl App {
         self.prepare_screen_state(prev, target);
         commands.extend(self.handle_screen_entry_on_fade(prev, target));
 
-        (target, commands)
+        // Loading the requested screen can recover to course evaluation (or
+        // Player Options). Apply the fade and input policy to that screen.
+        (self.state.screens.current_screen, commands)
     }
 
     pub(super) fn get_out_transition_for_route(

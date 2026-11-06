@@ -3112,11 +3112,40 @@ impl App {
 
     fn fail_gameplay_init(&mut self, error: String) {
         self.pending_gameplay_init = None;
+        if self.interrupt_course_loading(&error) {
+            self.handle_navigation_action(CurrentScreen::Evaluation);
+            return;
+        }
         error!("Unable to prepare gameplay: {error}");
         self.state.shell.interaction.show_message(
             "Unable to prepare gameplay".to_string(), Instant::now(),
         );
         self.handle_navigation_action(CurrentScreen::SelectMusic);
+    }
+
+    /// A failed next-stage load has no gameplay result of its own. Keep the
+    /// completed songs and finish the course through the evaluation lifecycle.
+    fn interrupt_course_loading(&mut self, error: &str) -> bool {
+        let Some(course) = self.state.session.course_run.as_mut() else {
+            return false;
+        };
+        if course.stage_summaries.is_empty() {
+            return false;
+        }
+        course.interrupted = true;
+        error!("Unable to prepare next course stage: {error}");
+        self.state.shell.interaction.show_message(
+            "Unable to prepare next course stage".to_string(),
+            Instant::now(),
+        );
+        self.state.screens.player_options_state = None;
+        self.pending_gameplay_init = None;
+        // A failed Lua screen replacement can still have an unfinished stage.
+        // Only completed, already recorded songs belong in this result.
+        if let Some(mut gameplay) = self.state.screens.gameplay_state.take() {
+            crate::gameplay_runtime::exit(&mut gameplay);
+        }
+        true
     }
 
     /// Apply a window focus change to all subsystems that care about it.
@@ -7192,6 +7221,13 @@ impl App {
             }
         }
         self.state.session.record_stage_result(stage);
+        self.finish_course_result(failed)
+    }
+
+    fn finish_course_result(
+        &mut self,
+        failed: bool,
+    ) -> Option<(CourseRunState, stage_stats::StageSummary)> {
         let course = self.state.session.take_final_course(failed)?;
         let summary = build_course_summary_stage(&course)?;
         let routine_shared =
@@ -10045,6 +10081,12 @@ impl App {
                         ) {
                             Ok(gameplay_song) => gameplay_song,
                             Err(e) => {
+                                if self.interrupt_course_loading(&e) {
+                                    commands.extend(
+                                        self.prepare_global_fade_entry(CurrentScreen::Evaluation).1,
+                                    );
+                                    return commands;
+                                }
                                 error!(
                                     "Failed to load gameplay payload for '{}': {}",
                                     song_arc.title, e
@@ -10290,7 +10332,15 @@ impl App {
                 } else {
                     match init() {
                         Ok(gs) => commands.extend(self.finish_gameplay_init(gs, &finish)),
-                        Err(error) => self.fail_gameplay_init(error),
+                        Err(error) => {
+                            if self.interrupt_course_loading(&error) {
+                                commands.extend(
+                                    self.prepare_global_fade_entry(CurrentScreen::Evaluation).1,
+                                );
+                            } else {
+                                self.fail_gameplay_init(error);
+                            }
+                        }
                     }
                 }
             } else {
@@ -10333,7 +10383,11 @@ impl App {
                     completed,
                 )
             } else {
-                (EvaluationInitView::default(), false, None)
+                let completed = self.finish_course_result(false);
+                if completed.is_some() {
+                    self.state.coin.record_course_stage();
+                }
+                (EvaluationInitView::default(), false, completed)
             };
             self.state.screens.evaluation_state = evaluation::init(init_view);
             self.state.screens.evaluation_state.active_color_index = color_idx;
@@ -10349,7 +10403,7 @@ impl App {
                 session_elapsed,
                 gameplay_elapsed,
             );
-            if in_course_run {
+            if in_course_run && gameplay_results.is_some() {
                 self.state
                     .session
                     .course_stage_eval_pages
