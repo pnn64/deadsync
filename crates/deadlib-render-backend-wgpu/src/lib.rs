@@ -479,8 +479,7 @@ pub struct State {
     present_done: Arc<PresentCompletionCell>,
     last_completed_present_id: u32,
     screenshot_requested: bool,
-    screenshot_offscreen_requested: bool,
-    captured_frame: Option<RgbaImage>,
+    screenshot_offline: screenshot::OfflineScreenshot,
 }
 
 #[cfg(all(not(target_pointer_width = "32"), not(target_vendor = "win7")))]
@@ -917,8 +916,7 @@ fn init(
         present_done,
         last_completed_present_id: 0,
         screenshot_requested: false,
-        screenshot_offscreen_requested: false,
-        captured_frame: None,
+        screenshot_offline: screenshot::OfflineScreenshot::new(),
     })
 }
 
@@ -1921,15 +1919,13 @@ fn ensure_cached_tmesh(
 #[inline(always)]
 pub fn request_screenshot(state: &mut State) {
     state.screenshot_requested = true;
-    state.screenshot_offscreen_requested =
-        std::env::var_os("DEADSYNC_SCREENSHOT_WITHOUT_SURFACE").is_some();
+    state
+        .screenshot_offline
+        .request(std::env::var_os("DEADSYNC_SCREENSHOT_WITHOUT_SURFACE").is_some());
 }
 
 pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
-    state
-        .captured_frame
-        .take()
-        .ok_or_else(|| std::io::Error::other("No captured screenshot frame available").into())
+    Ok(state.screenshot_offline.capture_frame(&state.device)?)
 }
 
 pub fn draw(
@@ -2027,8 +2023,11 @@ pub fn draw(
         .backend_upload_us
         .saturating_add(elapsed_us_since(backend_upload_started));
 
-    let capture_requested = state.screenshot_requested;
-    let screenshot_target = screenshot::take_target(state);
+    let capture_requested = std::mem::take(&mut state.screenshot_requested);
+    let screenshot_target =
+        state
+            .screenshot_offline
+            .take_target(capture_requested, &state.device, &state.config);
     let offscreen_capture = screenshot_target.is_some();
     let acquire_started = Instant::now();
     let (surface_frame, suboptimal) = if offscreen_capture {
@@ -2119,8 +2118,13 @@ pub fn draw(
         );
     }
 
-    let screenshot_readback =
-        screenshot::encode_readback(state, &mut encoder, output_texture, capture_requested);
+    let screenshot_readback = state.screenshot_offline.encode_readback(
+        &state.device,
+        &state.config,
+        &mut encoder,
+        output_texture,
+        capture_requested,
+    );
     stats.backend_record_us = stats
         .backend_record_us
         .saturating_add(elapsed_us_since(backend_record_started));
@@ -2149,15 +2153,19 @@ pub fn draw(
         // work continuously; wait for this frame to retire before proceeding.
         let wait_started = Instant::now();
         let _ = state.device.poll(wgpu::PollType::Wait {
-            submission_index: Some(submission_index),
+            submission_index: Some(submission_index.clone()),
             timeout: None,
         });
         let wait_us = elapsed_us_since(wait_started);
         stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
         back_pressure_waited = wait_us >= WGPU_BACK_PRESSURE_THRESHOLD_US;
     }
-    let (screenshot_wait_us, queue_idle_waited) =
-        screenshot::finish_readback(state, screenshot_readback);
+    let (screenshot_wait_us, queue_idle_waited) = state.screenshot_offline.submit_readback(
+        &state.device,
+        screenshot_readback,
+        submission_index.clone(),
+        offscreen_capture,
+    );
     stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(screenshot_wait_us);
     let completion = state
         .present_done
