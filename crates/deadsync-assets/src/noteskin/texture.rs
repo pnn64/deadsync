@@ -11,7 +11,7 @@ use deadsync_noteskin::model::{ItgModelSlotPlan, ItgTextureAnimation, ItgTexture
 #[cfg(test)]
 use deadsync_noteskin::script::apply_sprite_animation_script_plans;
 use deadsync_noteskin::script::{
-    ScriptCommand, apply_sprite_animation_command_plans, normalized_script_command,
+    ModelDrawProgram, ScriptCommand, apply_sprite_animation_command_plans, normalized_script_command,
     parse_script_bool, parse_script_number, split_script_token,
 };
 use deadsync_noteskin::{
@@ -21,7 +21,7 @@ use deadsync_noteskin::{
     SpriteSourcePlan, generated_animation_sprite_slot_plan,
     itg_all_frames_sprite_slot_plan_from_path, itg_animation_sprite_slot_plan_from_path,
     itg_frame_sprite_slot_plan_from_path, itg_sprite_slot_plan_from_path, model_draw_at,
-    model_draw_at_cursor, model_glow_at, model_glow_with_draw, model_vertex_for_sprite,
+    model_draw_at_cursor, model_glow_with_draw, model_vertex_for_sprite,
     neg_rot_sin_cos, sprite_frame_index_from_phase_with_timing, sprite_frame_index_with_timing,
     sprite_scrolled_uv, sprite_sheet_frame, sprite_state_properties_animation_owned,
 };
@@ -204,6 +204,8 @@ pub struct SpriteSlot {
     pub model_draw: ModelDrawState,
     pub model_timeline: Arc<[ModelTweenSegment]>,
     pub model_effect: ModelEffectState,
+    /// Explosion wrappers keep their own animation and inherited draw state.
+    pub(super) actor_frame_programs: Option<Arc<[ModelDrawProgram]>>,
     pub model_auto_rot_total_frames: f32,
     pub model_auto_rot_z_keys: Arc<[ModelAutoRotKey]>,
 }
@@ -237,6 +239,7 @@ impl Clone for SpriteSlot {
             model_draw: self.model_draw,
             model_timeline: self.model_timeline.clone(),
             model_effect: self.model_effect,
+            actor_frame_programs: self.actor_frame_programs.clone(),
             model_auto_rot_total_frames: self.model_auto_rot_total_frames,
             model_auto_rot_z_keys: self.model_auto_rot_z_keys.clone(),
         }
@@ -365,7 +368,7 @@ impl SpriteSlot {
 
     #[must_use]
     pub fn model_draw_at(&self, time: f32, beat: f32) -> ModelDrawState {
-        model_draw_at(
+        let draw = model_draw_at(
             self.model_draw,
             self.model_timeline.as_ref(),
             self.model_effect,
@@ -373,7 +376,8 @@ impl SpriteSlot {
             self.model_auto_rot_z_keys.as_ref(),
             time,
             beat,
-        )
+        );
+        self.apply_actor_frames(draw, time, beat)
     }
 
     #[inline(always)]
@@ -383,7 +387,7 @@ impl SpriteSlot {
         beat: f32,
         cursor: &mut ModelTweenCursor,
     ) -> ModelDrawState {
-        model_draw_at_cursor(
+        let draw = model_draw_at_cursor(
             self.model_draw,
             self.model_timeline.as_ref(),
             self.model_effect,
@@ -391,7 +395,28 @@ impl SpriteSlot {
             self.model_auto_rot_z_keys.as_ref(),
             [time, beat],
             cursor,
-        )
+        );
+        self.apply_actor_frames(draw, time, beat)
+    }
+
+    fn apply_actor_frames(&self, mut draw: ModelDrawState, time: f32, beat: f32) -> ModelDrawState {
+        if let Some(parents) = &self.actor_frame_programs {
+            for (base, timeline, effect) in parents.iter() {
+                let parent = model_draw_at(*base, timeline, *effect, 0.0, &[], time, beat);
+                for axis in 0..3 {
+                    draw.pos[axis] += parent.pos[axis];
+                    draw.rot[axis] += parent.rot[axis];
+                    draw.zoom[axis] *= parent.zoom[axis];
+                }
+                for channel in 0..4 {
+                    draw.tint[channel] *= parent.tint[channel];
+                }
+                draw.visible &= parent.visible;
+                // ActorFrame does not set render states for its children.
+                // In particular, the Sprite retains its own blend mode.
+            }
+        }
+        draw
     }
 
     #[inline(always)]
@@ -403,18 +428,30 @@ impl SpriteSlot {
         beat: f32,
         diffuse_alpha: f32,
     ) -> Option<[f32; 4]> {
-        model_glow_with_draw(draw, self.model_effect, time, beat, diffuse_alpha)
+        let glow = model_glow_with_draw(draw, self.model_effect, time, beat, diffuse_alpha);
+        let Some(parents) = &self.actor_frame_programs else {
+            return glow;
+        };
+        let mut glow = glow.unwrap_or(draw.glow);
+        for (base, timeline, effect) in parents.iter() {
+            let parent = model_draw_at(*base, timeline, *effect, 0.0, &[], time, beat);
+            if let Some(parent_glow) =
+                model_glow_with_draw(parent, *effect, time, beat, parent.tint[3])
+            {
+                // Actor::PreDraw combines an ActorFrame's internal glow using Screen.
+                for channel in 0..4 {
+                    glow[channel] += parent_glow[channel] * (1.0 - glow[channel]);
+                }
+            }
+        }
+        (glow[3] > f32::EPSILON).then_some(glow)
     }
 
     #[inline(always)]
     #[must_use]
     pub fn model_glow_at(&self, time: f32, beat: f32, diffuse_alpha: f32) -> Option<[f32; 4]> {
-        model_glow_at(
-            self.model_draw,
-            self.model_timeline.as_ref(),
-            self.model_effect,
-            self.model_auto_rot_total_frames,
-            self.model_auto_rot_z_keys.as_ref(),
+        self.model_glow_with_draw(
+            self.model_draw_at(time, beat),
             time,
             beat,
             diffuse_alpha,
@@ -741,6 +778,7 @@ pub fn test_model_slot() -> SpriteSlot {
         model_draw: ModelDrawState::default(),
         model_timeline: Arc::<[ModelTweenSegment]>::from([]),
         model_effect: ModelEffectState::default(),
+        actor_frame_programs: None,
         model_auto_rot_total_frames: 0.0,
         model_auto_rot_z_keys: Arc::<[ModelAutoRotKey]>::from([]),
     }
@@ -1087,6 +1125,7 @@ fn slot_from_plan(plan: SpriteSlotPlan) -> SpriteSlot {
         model_draw: ModelDrawState::default(),
         model_timeline: Arc::clone(&EMPTY_MODEL_TIMELINE),
         model_effect: ModelEffectState::default(),
+        actor_frame_programs: None,
         model_auto_rot_total_frames: 0.0,
         model_auto_rot_z_keys: Arc::clone(&EMPTY_MODEL_AUTO_ROT_KEYS),
     }
