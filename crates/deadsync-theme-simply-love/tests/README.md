@@ -7,7 +7,7 @@ renderer). Run commands from the repository root.
 ## Export gameplay screenshots
 
 ```powershell
-cargo test -p deadsync-theme-simply-love --example export_gameplay
+cargo run -p deadsync-theme-simply-love --example export_screenshot -- gameplay
 ```
 
 The exporter generates PNGs of the actual Simply Love gameplay presentation,
@@ -24,8 +24,8 @@ filters. Filter preferences persist across refreshes. Select presets to export,
 or use `--reverse` to export reverse-scrolling gameplay:
 
 ```powershell
-cargo test -p deadsync-theme-simply-love --example export_gameplay -- --preset 720p --preset ultrawide
-cargo test -p deadsync-theme-simply-love --example export_gameplay -- --reverse
+cargo run -p deadsync-theme-simply-love --example export_screenshot -- gameplay --preset 720p --preset ultrawide
+cargo run -p deadsync-theme-simply-love --example export_screenshot -- gameplay --reverse
 ```
 
 `--preset` may be repeated. If no preset is specified, all built-in presets are
@@ -82,7 +82,7 @@ inspection. It does not compare actual images against expected images, golden
 files, or left/right values:
 
 ```powershell
-cargo test -p deadsync-theme-simply-love --example export_gameplay
+cargo run -p deadsync-theme-simply-love --example export_screenshot -- gameplay
 ```
 
 This runs the same exporter as `cargo run`, including graphics initialization.
@@ -90,7 +90,7 @@ It fails only if exporting fails (for example, invalid arguments, unavailable
 graphics, or a file-write error). Pass exporter options after `--`:
 
 ```powershell
-cargo test -p deadsync-theme-simply-love --example export_gameplay -- --preset 720p
+cargo run -p deadsync-theme-simply-love --example export_screenshot -- gameplay --preset 720p
 ```
 
 ## Separate automated layout checks

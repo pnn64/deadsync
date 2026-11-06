@@ -1,33 +1,58 @@
-//! Run both Simply Love screenshot exporters in sequence.
+//! Single-executable dispatcher for Simply Love screenshot exports.
+#[path = "gameplay/export_gameplay.rs"]
+mod export_gameplay;
+#[path = "menus/export_menus.rs"]
+mod export_menus;
 #[allow(dead_code)]
 #[path = "export_support.rs"]
 mod export_support;
 
 use export_support::{PRESETS, Result};
-use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-    process::Command,
-    time::Instant,
-};
+use std::{collections::HashSet, path::Path, process::Command, time::Instant};
 
 const HELP: &str = "\
-Export both Simply Love menu and gameplay screenshots.
+Export Simply Love screenshots from one executable.
 
-cargo run -p deadsync-theme-simply-love --example export_screenshot -- [OPTIONS]
+cargo run -p deadsync-theme-simply-love --example export_screenshot -- [MODE] [OPTIONS]
+
+    MODE              all (default), menus/export_menus, or gameplay/export_gameplay
 
   --preset NAME   Select a preset; repeat to select several (default: all)
-  --reverse       Also export reverse-scroll gameplay images
+    --reverse       Export reverse-scroll gameplay images
   --help          Show this help
 
 Available presets: vga, svga, xga, 5-4, square, 16-10, 720p, ultrawide,
 uwqhd, portrait-9-16, portrait-10-16.";
+const SCREENSHOT_WITHOUT_SURFACE: &str = "DEADSYNC_SCREENSHOT_WITHOUT_SURFACE";
 
 fn main() -> Result<()> {
+    // SAFETY: this CLI sets the variable before initializing libraries or spawning worker threads.
+    unsafe { std::env::set_var(SCREENSHOT_WITHOUT_SURFACE, "1") };
+    let mut args = std::env::args().skip(1).collect::<Vec<_>>();
+    let mode = match args.first().map(String::as_str) {
+        Some("menus" | "export_menus" | "gameplay" | "export_gameplay" | "all") => args.remove(0),
+        Some("-h" | "--help") => {
+            println!("{HELP}");
+            return Ok(());
+        }
+        Some(argument) if !argument.starts_with('-') => {
+            return Err(format!("unknown mode '{argument}'; use --help").into());
+        }
+        _ => "all".to_owned(),
+    };
+    match mode.as_str() {
+        "menus" | "export_menus" => export_menus::run(args),
+        "gameplay" | "export_gameplay" => export_gameplay::run(args),
+        "all" => run_all(args),
+        _ => unreachable!(),
+    }
+}
+
+fn run_all(args: Vec<String>) -> Result<()> {
     let mut presets = Vec::new();
     let mut seen_sizes = HashSet::new();
     let mut reverse = false;
-    let mut args = std::env::args().skip(1);
+    let mut args = args.into_iter();
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--help" | "-h" => {
@@ -58,18 +83,12 @@ fn main() -> Result<()> {
     }
 
     let started = Instant::now();
-    build_exporters()?;
-    let examples_dir = std::env::current_exe()?
-        .parent()
-        .ok_or("could not find exporter examples directory")?
-        .to_path_buf();
-    let menu_exe = exporter_path(&examples_dir, "export_menus")?;
-    let gameplay_exe = exporter_path(&examples_dir, "export_gameplay")?;
+    let executable = std::env::current_exe()?;
 
-    run_exporters(&menu_exe, &gameplay_exe, &presets, reverse)?;
+    run_exporters(&executable, &presets, reverse)?;
 
-    build_index(&menu_exe, &presets, false)?;
-    build_index(&gameplay_exe, &presets, reverse)?;
+    build_index(&executable, "menus", &presets, false)?;
+    build_index(&executable, "gameplay", &presets, reverse)?;
     println!(
         "Screenshot export completed in {:.1}s",
         started.elapsed().as_secs_f64()
@@ -77,47 +96,15 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn build_exporters() -> Result<()> {
-    let status = Command::new("cargo")
-        .current_dir(export_support::workspace_root())
-        .args([
-            "build",
-            "-p",
-            "deadsync-theme-simply-love",
-            "--example",
-            "export_menus",
-            "--example",
-            "export_gameplay",
-        ])
-        .status()?;
-    if !status.success() {
-        return Err(format!("building screenshot exporters exited with {status}").into());
-    }
-    Ok(())
-}
-
-fn exporter_path(examples_dir: &Path, name: &str) -> Result<PathBuf> {
-    let path = examples_dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
-    if !path.is_file() {
-        return Err(format!("exporter executable not found: {}", path.display()).into());
-    }
-    Ok(path)
-}
-
-fn run_exporters(
-    menu_exe: &Path,
-    gameplay_exe: &Path,
-    presets: &[&str],
-    reverse: bool,
-) -> Result<()> {
-    let mut menu_command = Command::new(menu_exe);
-    menu_command.arg("--images-only");
+fn run_exporters(executable: &Path, presets: &[&str], reverse: bool) -> Result<()> {
+    let mut menu_command = Command::new(executable);
+    menu_command.arg("menus").arg("--images-only");
     for preset in presets {
         menu_command.arg("--preset").arg(*preset);
     }
 
-    let mut gameplay_command = Command::new(gameplay_exe);
-    gameplay_command.arg("--images-only");
+    let mut gameplay_command = Command::new(executable);
+    gameplay_command.arg("gameplay").arg("--images-only");
     for preset in presets {
         gameplay_command.arg("--preset").arg(*preset);
     }
@@ -125,28 +112,20 @@ fn run_exporters(
         gameplay_command.arg("--reverse");
     }
 
-    let mut menu_child = menu_command.spawn()?;
-    let mut gameplay_child = match gameplay_command.spawn() {
-        Ok(child) => child,
-        Err(error) => {
-            let _ = menu_child.wait();
-            return Err(error.into());
-        }
-    };
-    let menu_status = menu_child.wait()?;
-    let gameplay_status = gameplay_child.wait()?;
-    if !menu_status.success() || !gameplay_status.success() {
-        return Err(format!(
-            "exporter failure (menus: {menu_status}, gameplay: {gameplay_status})"
-        )
-        .into());
+    let menu_status = menu_command.status()?;
+    if !menu_status.success() {
+        return Err(format!("menu exporter exited with {menu_status}").into());
+    }
+    let gameplay_status = gameplay_command.status()?;
+    if !gameplay_status.success() {
+        return Err(format!("gameplay exporter exited with {gameplay_status}").into());
     }
     Ok(())
 }
 
-fn build_index(executable: &Path, presets: &[&str], reverse: bool) -> Result<()> {
+fn build_index(executable: &Path, mode: &str, presets: &[&str], reverse: bool) -> Result<()> {
     let mut command = Command::new(executable);
-    command.arg("--index-only");
+    command.arg(mode).arg("--index-only");
     for preset in presets {
         command.arg("--preset").arg(*preset);
     }

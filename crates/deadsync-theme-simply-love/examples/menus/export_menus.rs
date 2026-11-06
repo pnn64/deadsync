@@ -11,7 +11,7 @@ use deadlib_present::{
 };
 use deadlib_render::{Backend, RenderFrame};
 use deadsync_theme_simply_love::{self as theme, screens, views};
-use export_support::{PRESETS, Result, Size};
+use export_support::{PRESETS, Size};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
@@ -35,7 +35,7 @@ const CAPTURE_TIME: f32 = 2.0;
 const HELP: &str = "\
 Export Simply Love menu PNGs (requires a desktop and Vulkan-capable GPU).
 
-cargo run -p deadsync-theme-simply-love --example export_menus -- [OPTIONS]
+cargo run -p deadsync-theme-simply-love --example export_screenshot -- menus [OPTIONS]
 
   --preset NAME   Select a preset; repeat to select several (default: all)
     --images-only   Export images without writing the gallery index
@@ -96,23 +96,25 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
     }))
 }
 
-fn main() -> Result<()> {
+pub(super) type Result<T> = export_support::Result<T>;
+
+pub(super) fn run(args: Vec<String>) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
         return std::thread::Builder::new()
             .name("menus-export".into())
             .stack_size(32 * 1024 * 1024)
-            .spawn(|| run().map_err(|error| error.to_string()))?
+            .spawn(move || run_with_args(args).map_err(|error| error.to_string()))?
             .join()
             .map_err(|_| "menu export thread panicked")?
             .map_err(Into::into);
     }
     #[cfg(not(target_os = "windows"))]
-    run()
+    run_with_args(args)
 }
 
-fn run() -> Result<()> {
-    let Some(options) = options(std::env::args().skip(1))? else {
+fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<()> {
+    let Some(options) = options(args)? else {
         return Ok(());
     };
     let output = export_support::workspace_root()

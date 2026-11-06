@@ -26,12 +26,12 @@ use std::{
 
 use export_support::{CaptureTextures, PRESETS};
 
-type Result<T> = export_support::Result<T>;
+pub(super) type Result<T> = export_support::Result<T>;
 const LAYOUTS: &[&str] = &["p1", "p2", "versus", "double"];
 const HELP: &str = "\
 Export Simply Love gameplay PNGs (requires a desktop and Vulkan-capable GPU).
 
-cargo test -p deadsync-theme-simply-love --example export_gameplay -- [OPTIONS]
+cargo run -p deadsync-theme-simply-love --example export_screenshot -- gameplay [OPTIONS]
 
   --preset NAME   Select a preset; repeat to select several (default: all)
   --reverse       Use reverse scrolling
@@ -97,23 +97,23 @@ fn options(args: impl IntoIterator<Item = String>) -> Result<Option<Options>> {
     }))
 }
 
-fn main() -> Result<()> {
+pub(super) fn run(args: Vec<String>) -> Result<()> {
     #[cfg(target_os = "windows")]
     {
         return std::thread::Builder::new()
             .name("gameplay-export".into())
             .stack_size(32 * 1024 * 1024)
-            .spawn(|| run().map_err(|error| error.to_string()))?
+            .spawn(move || run_with_args(args).map_err(|error| error.to_string()))?
             .join()
             .map_err(|_| "gameplay export thread panicked")?
             .map_err(Into::into);
     }
     #[cfg(not(target_os = "windows"))]
-    run()
+    run_with_args(args)
 }
 
-fn run() -> Result<()> {
-    let Some(options) = options(std::env::args().skip(1))? else {
+fn run_with_args(args: impl IntoIterator<Item = String>) -> Result<()> {
+    let Some(options) = options(args)? else {
         return Ok(());
     };
     let output = export_support::workspace_root()
