@@ -2610,7 +2610,7 @@ pub fn push_actors(
     step_artist_bar::push(
         actors,
         step_artist_bar::StepArtistBarParams {
-            x0: step_artist_x0,
+            left_x: step_artist_x0 + 25.5,
             center_y: step_artist_y,
             layout: step_artist_bar::StepArtistBarLayout::Legacy,
             expanded_line_count: 0,
@@ -2619,7 +2619,7 @@ pub fn push_actors(
             label_text: step_idx_text.into(),
             label_max_width: 22.0,
             artist_text: step_artist_text.into(),
-            artist_x_offset: 60.0,
+            artist_x_offset: 34.5,
             artist_max_width: 138.0,
             artist_color: [
                 UI_BOX_BG_COLOR[0],

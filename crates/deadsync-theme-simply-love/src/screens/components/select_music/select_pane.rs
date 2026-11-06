@@ -34,6 +34,10 @@ pub struct StatsPaneParams {
     pub meter: Option<Arc<str>>,
 }
 
+fn meter_anchor_x(pane_cx: f32, pane_width: f32) -> f32 {
+    pane_cx + pane_width * 0.5 - 8.0
+}
+
 #[inline(always)]
 #[must_use]
 pub fn layout() -> PaneLayout {
@@ -106,7 +110,7 @@ pub fn push_base(out: &mut Vec<Actor>, p: StatsPaneParams) {
             settext(meter):
             align(1.0, 0.5):
             horizalign(right):
-            xy(pane_cx + l.cols[3], l.pane_top + l.rows[1]):
+            xy(meter_anchor_x(pane_cx, l.pane_width), l.pane_top + l.rows[1]):
             z(121):
             diffuse(0.0, 0.0, 0.0, 1.0)
         );
@@ -116,5 +120,18 @@ pub fn push_base(out: &mut Vec<Actor>, p: StatsPaneParams) {
             *max_width = Some(66.0);
         }
         out.push(meter_actor);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::meter_anchor_x;
+
+    #[test]
+    fn meter_is_anchored_inside_the_stats_pane_right_edge() {
+        let pane_cx = 145.0;
+        let pane_width = 290.0;
+
+        assert_eq!(meter_anchor_x(pane_cx, pane_width), 282.0);
     }
 }

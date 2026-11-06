@@ -1,4 +1,5 @@
 pub mod lobby_overlay;
+pub(crate) mod layout;
 pub mod music_wheel;
 pub mod screen_bars;
 pub mod select_music_menu;

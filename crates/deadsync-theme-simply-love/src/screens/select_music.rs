@@ -15,7 +15,8 @@ use crate::color;
 use crate::rgba_const;
 use crate::screens::components::{
     select_music::{
-        lobby_overlay, music_wheel, screen_bars, select_music_menu, select_pane, step_artist_bar,
+        layout::{SongDetailsLayout, SongSelectLayout}, lobby_overlay, music_wheel, screen_bars,
+        select_music_menu, select_pane, step_artist_bar,
     },
     shared::{
         banner as shared_banner, gs_scorebox, heart_rate, lobby_hud, mode_pads, profile_boxes,
@@ -24,6 +25,7 @@ use crate::screens::components::{
 };
 use crate::screens::pad_config;
 use crate::screens::{DensityGraphSlot, DensityGraphSource, Screen, input as screen_input};
+use crate::ui_layout::UILayoutType;
 use crate::views::{
     MUSIC_WHEEL_SLOT_COUNT, MusicWheelRankSource, MusicWheelRuntimeRequest, MusicWheelRuntimeView,
     MusicWheelSideRuntimeRequest, MusicWheelSlotRuntimeRequest, ProfilePickerView,
@@ -1525,7 +1527,12 @@ pub enum SmxPadProfileEvent {
 
 #[derive(Clone, PartialEq, Eq)]
 struct InfoBoxActorKey {
-    box_w_bits: u32,
+    widget_x_bits: u32,
+    widget_y_bits: u32,
+    widget_width_bits: u32,
+    widget_height_bits: u32,
+    design_width_bits: u32,
+    zoom_bits: u32,
     artist_label: Arc<str>,
     bpm_label: Arc<str>,
     length_label: Arc<str>,
@@ -1591,14 +1598,25 @@ impl MatrixRatingCache {
 impl InfoBoxActorCache {
     fn resolve(
         &mut self,
-        box_w: f32,
+        layout: SongDetailsLayout,
         labels: &SelectMusicLabels,
         artist: Arc<str>,
         bpm: Arc<str>,
         length: Arc<str>,
     ) -> Arc<[Actor]> {
+        let widget_x = layout.widget.bounds.x;
+        let widget_y = layout.widget.bounds.y;
+        let widget_width = layout.widget.bounds.width;
+        let widget_height = layout.widget.bounds.height;
+        let design_width = layout.design_width;
+        let zoom = layout.widget.zoom;
         if let Some(key) = self.key.as_ref()
-            && key.box_w_bits == box_w.to_bits()
+            && key.widget_x_bits == widget_x.to_bits()
+            && key.widget_y_bits == widget_y.to_bits()
+            && key.widget_width_bits == widget_width.to_bits()
+            && key.widget_height_bits == widget_height.to_bits()
+            && key.design_width_bits == design_width.to_bits()
+            && key.zoom_bits == zoom.to_bits()
             && key.artist_label == labels.artist
             && key.bpm_label == labels.bpm
             && key.length_label == labels.length
@@ -1614,7 +1632,12 @@ impl InfoBoxActorCache {
         }
 
         let key = InfoBoxActorKey {
-            box_w_bits: box_w.to_bits(),
+            widget_x_bits: widget_x.to_bits(),
+            widget_y_bits: widget_y.to_bits(),
+            widget_width_bits: widget_width.to_bits(),
+            widget_height_bits: widget_height.to_bits(),
+            design_width_bits: design_width.to_bits(),
+            zoom_bits: zoom.to_bits(),
             artist_label: Arc::clone(&labels.artist),
             bpm_label: Arc::clone(&labels.bpm),
             length_label: Arc::clone(&labels.length),
@@ -1623,31 +1646,33 @@ impl InfoBoxActorCache {
             length,
         };
 
-        let children = Arc::<[Actor]>::from(build_info_box_children(&key, box_w));
+        let children = Arc::<[Actor]>::from(build_info_box_children(&key, layout));
         self.key = Some(key);
         self.children = Some(Arc::clone(&children));
         children
     }
 }
 
-fn build_info_box_children(key: &InfoBoxActorKey, box_w: f32) -> Vec<Actor> {
+fn build_info_box_children(
+    key: &InfoBoxActorKey,
+    layout: SongDetailsLayout,
+) -> Vec<Actor> {
+    let bounds = layout.widget.bounds;
+    let artist_label = layout.artist_label.bounds;
+    let artist_value = layout.artist_value.bounds;
+    let bpm_label = layout.bpm_label.bounds;
+    let bpm_value = layout.bpm_value.bounds;
+    let length_label = layout.length_label.bounds;
+    let length_value = layout.length_value.bounds;
+    let text_height = 15.0 * layout.widget.zoom;
     vec![
-        act!(quad: setsize(box_w, 50.0): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3])),
-        Actor::Frame {
-            align: [0.0, 0.0],
-            offset: [-110.0, -6.0],
-            size: [SizeSpec::Fill, SizeSpec::Fill],
-            background: None,
-            z: 0,
-            children: vec![
-                act!(text: font("miso"): settext(key.artist_label.clone()): align(1.0, 0.0): y(-11.0): maxwidth(44.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
-                act!(text: font("miso"): settext(key.artist.clone()): align(0.0, 0.0): xy(5.0, -11.0): maxwidth(box_w - 60.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                act!(text: font("miso"): settext(key.bpm_label.clone()): align(1.0, 0.0): y(10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
-                act!(text: font("miso"): settext(key.bpm.clone()): align(0.0, 0.0): xy(5.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-                act!(text: font("miso"): settext(key.length_label.clone()): align(1.0, 0.0): xy(box_w - 130.0, 10.0): diffuse(0.5, 0.5, 0.5, 1.0): z(52)),
-                act!(text: font("miso"): settext(key.length.clone()): align(0.0, 0.0): xy(box_w - 125.0, 10.0): zoomtoheight(15.0): diffuse(1.0, 1.0, 1.0, 1.0): z(52)),
-            ],
-        },
+        act!(quad: align(0.0, 0.0): xy(bounds.x, bounds.y): setsize(bounds.width, bounds.height): diffuse(UI_BOX_BG_COLOR[0], UI_BOX_BG_COLOR[1], UI_BOX_BG_COLOR[2], UI_BOX_BG_COLOR[3]): z(51)),
+        act!(text: font("miso"): settext(key.artist_label.clone()): align(1.0, 0.5): horizalign(right): xy(bounds.x + artist_label.right(), bounds.y + artist_label.center_y()): maxwidth(artist_label.width): zoomtoheight(text_height): diffuse(0.5, 0.5, 0.5, 1.0): z(103)),
+        act!(text: font("miso"): settext(key.artist.clone()): align(0.0, 0.5): xy(bounds.x + artist_value.x, bounds.y + artist_value.center_y()): maxwidth(artist_value.width): zoomtoheight(text_height): diffuse(1.0, 1.0, 1.0, 1.0): z(103)),
+        act!(text: font("miso"): settext(key.bpm_label.clone()): align(1.0, 0.5): horizalign(right): xy(bounds.x + bpm_label.right(), bounds.y + bpm_label.center_y()): maxwidth(bpm_label.width): zoomtoheight(text_height): diffuse(0.5, 0.5, 0.5, 1.0): z(103)),
+        act!(text: font("miso"): settext(key.bpm.clone()): align(0.0, 0.5): xy(bounds.x + bpm_value.x, bounds.y + bpm_value.center_y()): maxwidth(bpm_value.width): zoomtoheight(text_height): diffuse(1.0, 1.0, 1.0, 1.0): z(103)),
+        act!(text: font("miso"): settext(key.length_label.clone()): align(1.0, 0.5): horizalign(right): xy(bounds.x + length_label.right(), bounds.y + length_label.center_y()): maxwidth(length_label.width): zoomtoheight(text_height): diffuse(0.5, 0.5, 0.5, 1.0): z(103)),
+        act!(text: font("miso"): settext(key.length.clone()): align(0.0, 0.5): xy(bounds.x + length_value.x, bounds.y + length_value.center_y()): maxwidth(length_value.width): zoomtoheight(text_height): diffuse(1.0, 1.0, 1.0, 1.0): z(103)),
     ]
 }
 
@@ -13040,6 +13065,12 @@ pub fn push_actors(
     stage_number: usize,
     visual_policy: crate::views::SimplyLoveVisualPolicyView,
 ) {
+    let song_select_layout = SongSelectLayout::new(
+        screen_width(),
+        screen_height(),
+        UILayoutType::current(),
+    );
+    let left_panel_scale = song_select_layout.zoom;
     actors.reserve(256);
     state.labels.borrow_mut().sync();
     let labels = state.labels.borrow();
@@ -13134,11 +13165,10 @@ pub fn push_actors(
     }
 
     // Banner
-    let (banner_zoom, banner_cx, banner_cy) = if is_wide() {
-        (0.7655, screen_center_x() - 170.0, 96.0)
-    } else {
-        (0.75, screen_center_x() - 166.0, 96.0)
-    };
+    let banner_bounds = song_select_layout.banner.bounds;
+    let banner_zoom = song_select_layout.banner.zoom;
+    let banner_cx = banner_bounds.center_x();
+    let banner_cy = banner_bounds.center_y();
     actors.push(shared_banner::sprite(
         banner_texture_key(state),
         banner_cx,
@@ -13226,11 +13256,7 @@ pub fn push_actors(
     }
 
     // Info Box
-    let (box_w, frame_x, frame_y) = if is_wide() {
-        (320.0, screen_center_x() - 170.0, screen_center_y() - 55.0)
-    } else {
-        (310.0, screen_center_x() - 165.0, screen_center_y() - 55.0)
-    };
+    let song_details_layout = song_select_layout.song_details;
     let entry_opt = selected_entry;
     let (artist, bpm, len_text): (Arc<str>, Arc<str>, Arc<str>) = match entry_opt {
         Some(MusicWheelEntry::Song(s)) => {
@@ -13267,17 +13293,8 @@ pub fn push_actors(
     let info_box_children = state
         .info_box_actor_cache
         .borrow_mut()
-        .resolve(box_w, &labels, artist, bpm, len_text);
-    actors.push(Actor::SharedFrame {
-        align: [0.0, 0.0],
-        offset: [frame_x, frame_y],
-        size: [SizeSpec::Px(box_w), SizeSpec::Px(50.0)],
-        children: info_box_children,
-        background: None,
-        z: 51,
-        tint: [1.0; 4],
-        blend: None,
-    });
+        .resolve(song_details_layout, &labels, artist, bpm, len_text);
+    actors.extend(info_box_children.iter().cloned());
 
     // Chart Stats & Graph
 
@@ -13319,11 +13336,16 @@ pub fn push_actors(
     let (steps_p2, jumps_p2, holds_p2, mines_p2, hands_p2, rolls_p2, meter_p2) =
         chart_panel_stats(immediate_chart_p2, entry_opt);
 
+    let chart_panel = song_select_layout.chart_panel.bounds;
+    let panel_w = chart_panel.width;
+    let graph_h = chart_panel.height;
+    let graph_left = chart_panel.x;
+
     // Step Artist & Steps
     let base_y = 0.5f32.mul_add(-(screen_height() / 28.0), screen_center_y() - 9.0);
     let mut push_step_artist =
         |y_cen: f32,
-         x0: f32,
+         left_x: f32,
          sel_col: [f32; 4],
          step_artist: Arc<str>,
          line_count: usize,
@@ -13331,31 +13353,26 @@ pub fn push_actors(
             step_artist_bar::push(
                 actors,
                 step_artist_bar::StepArtistBarParams {
-                    x0,
+                    left_x,
                     center_y: y_cen,
                     layout,
                     expanded_line_count: line_count,
                     accent_color: sel_col,
                     z_base: 120,
                     label_text: labels.steps.clone().into(),
-                    label_max_width: 40.0,
+                    label_max_width: 40.0 * left_panel_scale,
                     artist_text: step_artist.into(),
-                    artist_x_offset: 75.0,
-                    artist_max_width: 124.0,
+                    artist_x_offset: 49.5,
+                    artist_max_width: 124.0 * left_panel_scale,
                     artist_color: [0.0, 0.0, 0.0, 1.0],
                 },
             );
         };
 
     if is_versus {
-        let x0_p1 = if is_wide() {
-            screen_center_x() - 355.5
-        } else {
-            screen_center_x() - 345.5
-        };
         push_step_artist(
             base_y,
-            x0_p1,
+            graph_left,
             sel_col_p1,
             step_artist,
             0,
@@ -13363,7 +13380,7 @@ pub fn push_actors(
         );
         push_step_artist(
             base_y + 88.0,
-            screen_center_x() - 244.0,
+            graph_left,
             sel_col_p2,
             step_artist_p2,
             0,
@@ -13375,18 +13392,9 @@ pub fn push_actors(
         } else {
             base_y + if is_p2_single { 88.0 } else { 0.0 }
         };
-        let step_artist_x0 = if is_p2_single && step_artist_expanded {
-            screen_center_x() - 260.0
-        } else if is_p2_single {
-            screen_center_x() - 244.0
-        } else if is_wide() {
-            screen_center_x() - 355.5
-        } else {
-            screen_center_x() - 345.5
-        };
         push_step_artist(
             y_cen,
-            step_artist_x0,
+            graph_left,
             sel_col_p1,
             step_artist,
             step_artist_lines,
@@ -13395,11 +13403,8 @@ pub fn push_actors(
     }
 
     // Density Graph
-    let panel_w = if is_wide() { 286.0 } else { 276.0 };
-    let graph_h = 64.0_f32;
     let graph_body_h = 47.0_f32;
-    let chart_info_cx = screen_center_x() - 182.0 - if is_wide() { 5.0 } else { 0.0 };
-    let graph_left = 0.5f32.mul_add(-panel_w, chart_info_cx);
+    let chart_info_cx = chart_panel.center_x();
     let breakdown_style = presentation.breakdown_style;
     let pattern_info_mode = presentation.pattern_info_mode;
     let preview_sec = if state.policy.media.show_preview_marker {
@@ -13825,7 +13830,7 @@ pub fn push_actors(
             let col_w1 = panel_w / 3.0;
             let col_w2 = panel_w / 3.0;
             let col_w3 = panel_w / 3.0;
-            let col1_left = panel_left + 4.0;
+            let col1_left = panel_left + 4.0 * left_panel_scale;
             let col2_left = col1_left + col_w1;
             let col3_left = col2_left + col_w2;
 
@@ -13841,7 +13846,7 @@ pub fn push_actors(
                                      num: &Arc<str>,
                                      label: &Arc<str>| {
                 let y = (row as f32).mul_add(stamina_row_step, stamina_base_y);
-                let label_x = num_right_x + 3.0;
+                let label_x = num_right_x + 3.0 * left_panel_scale;
                 let num_w = (num_right_x - col_left).max(8.0);
                 let label_w = (col_left + col_w - label_x - 2.0).max(8.0);
                 actors.push(act!(text: font("miso"): settext(num): align(1.0, 0.5): horizalign(right): xy(num_right_x, y): maxwidth(num_w): zoom(stamina_zoom): z(121): diffuse(1.0, 1.0, 1.0, 1.0)));
@@ -13946,7 +13951,7 @@ pub fn push_actors(
                 &labels.copters,
             );
 
-            let col3_label_x = col3_num_x + 3.0;
+            let col3_label_x = col3_num_x + 3.0 * left_panel_scale;
             let col3_num_w = (col3_num_x - col3_left).max(8.0);
             let col3_label_w = (col3_left + col_w3 - col3_label_x - 2.0).max(8.0);
             let relaxed_num_w = col3_num_w * 1.65;
@@ -13994,10 +13999,13 @@ pub fn push_actors(
                 )
             };
 
-            let p_v_x = pat_cx - panel_w * 0.5 + if step_artist_expanded { 40.0 } else { 39.0 };
-            let p_l_x = pat_cx - panel_w * 0.5 + if step_artist_expanded { 50.0 } else { 48.0 };
+            let p_v_x = pat_cx - panel_w * 0.5
+                + (if step_artist_expanded { 40.0 } else { 39.0 }) * left_panel_scale;
+            let p_l_x = pat_cx - panel_w * 0.5
+                + (if step_artist_expanded { 50.0 } else { 48.0 }) * left_panel_scale;
             let p_base_y = pat_cy - 18.0;
-            let tech_col_spacing = if step_artist_expanded { 150.0 } else { 148.0 };
+            let tech_col_spacing =
+                (if step_artist_expanded { 150.0 } else { 148.0 }) * left_panel_scale;
             let tech_row_step = if step_artist_expanded { 17.0 } else { 19.0 };
             let tech_value_zoom = if step_artist_expanded { 0.7 } else { 0.78 };
             let tech_label_zoom = if step_artist_expanded { 0.8 } else { 0.78 };
@@ -15562,8 +15570,14 @@ mod tests {
     fn info_box_cache_preserves_children_and_refreshes_changed_content() {
         let mut cache = super::InfoBoxActorCache::default();
         let labels = super::SelectMusicLabels::load();
+        let layout = super::SongSelectLayout::new(
+            853.0,
+            480.0,
+            crate::ui_layout::UILayoutType::Wide,
+        )
+        .song_details;
         let first = cache.resolve(
-            320.0,
+            layout,
             &labels,
             Arc::from("Artist A"),
             Arc::from("120"),
@@ -15574,12 +15588,12 @@ mod tests {
                 .key
                 .as_ref()
                 .expect("cache should retain its input key"),
-            320.0,
+            layout,
         );
         assert_eq!(format!("{expected:?}"), format!("{:?}", first.as_ref()));
 
         let repeated = cache.resolve(
-            320.0,
+            layout,
             &labels,
             Arc::from("Artist A"),
             Arc::from("120"),
@@ -15588,13 +15602,36 @@ mod tests {
         assert!(Arc::ptr_eq(&first, &repeated));
 
         let changed = cache.resolve(
-            320.0,
+            layout,
             &labels,
             Arc::from("Artist B"),
             Arc::from("120"),
             Arc::from("2:00"),
         );
         assert!(!Arc::ptr_eq(&first, &changed));
+
+        let square_layout = super::SongSelectLayout::new(
+            480.0,
+            480.0,
+            crate::ui_layout::UILayoutType::Squareish,
+        )
+        .song_details;
+        let resized = cache.resolve(
+            square_layout,
+            &labels,
+            Arc::from("Artist B"),
+            Arc::from("120"),
+            Arc::from("2:00"),
+        );
+        assert!(!Arc::ptr_eq(&changed, &resized));
+        let widget_bounds = square_layout.widget.bounds;
+        for actor in resized.iter().skip(1) {
+            let Actor::Text { offset, .. } = actor else {
+                panic!("Song Details layout should produce text actors");
+            };
+            assert!((widget_bounds.x..=widget_bounds.right()).contains(&offset[0]));
+            assert!((widget_bounds.y..=widget_bounds.y + widget_bounds.height).contains(&offset[1]));
+        }
     }
 
     #[test]
