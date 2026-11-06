@@ -21,6 +21,7 @@ use std::{
     collections::BTreeSet,
     path::{Path, PathBuf},
     sync::Arc,
+    time::{Duration, Instant},
 };
 
 use export_support::{CaptureTextures, PRESETS};
@@ -123,6 +124,7 @@ fn run() -> Result<()> {
         export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
         return Ok(());
     }
+    let started = Instant::now();
     export_support::init_logger()?;
     let isolated = tempfile::tempdir()?;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
@@ -170,7 +172,12 @@ fn run() -> Result<()> {
                 .with_inner_size(winit::dpi::PhysicalSize::new(640, 480)),
         )?,
     );
-    export(&options, song, window)
+    export(&options, song, window)?;
+    println!(
+        "Gameplay export completed in {:.1}s",
+        started.elapsed().as_secs_f64()
+    );
+    Ok(())
 }
 
 fn export(
@@ -189,12 +196,23 @@ fn export(
         export_gameplay_viewer::write_index(&output, &options.sizes, options.reverse)?;
     }
     for size in &options.sizes {
+        let resolution_started = Instant::now();
+        let mut resize_elapsed = Duration::ZERO;
+        let mut prepare_elapsed = Duration::ZERO;
+        let mut render_readback_elapsed = Duration::ZERO;
+        let mut png_write_elapsed = Duration::ZERO;
+        let mut acquire_us = 0u64;
+        let mut gpu_wait_us = 0u64;
+        let mut present_us = 0u64;
+        let mut suboptimal_frames = 0u32;
         let logical_width = 480.0 * size.aspect.0 as f32 / size.aspect.1 as f32;
         let logical_height = 480.0;
         let metrics = Metrics::centered(logical_width, logical_height);
         space::set_current_metrics(metrics);
         space::set_current_window_px(size.width, size.height);
+        let resize_started = Instant::now();
         backend.resize(size.width, size.height);
+        resize_elapsed += resize_started.elapsed();
         backend.set_default_projection(metrics.projection());
         for &layout in LAYOUTS {
             let mut variants = vec![(layout.to_owned(), false)];
@@ -205,6 +223,7 @@ fn export(
                 let folder = output.join(size.name()).join(&export_layout);
                 std::fs::create_dir_all(&folder)?;
                 for (show_scorebox, stem) in [(true, "gameplay"), (false, "gameplay-hmr")] {
+                    let prepare_started = Instant::now();
                     let mut state = sample_state(
                         song.clone(),
                         logical_width,
@@ -238,8 +257,14 @@ fn export(
                         if options.reverse { "-reverse" } else { "" }
                     );
                     let output = folder.join(&filename);
+                    prepare_elapsed += prepare_started.elapsed();
                     backend.request_screenshot();
-                    backend.draw(&frame, assets.textures(), false)?;
+                    let render_started = Instant::now();
+                    let stats = backend.draw(&frame, assets.textures(), false)?;
+                    acquire_us += u64::from(stats.acquire_us);
+                    gpu_wait_us += u64::from(stats.gpu_wait_us);
+                    present_us += u64::from(stats.present_us);
+                    suboptimal_frames += u32::from(stats.present_stats.suboptimal);
                     let image = backend.capture_frame()?;
                     if image.dimensions() != (size.width, size.height) {
                         return Err(format!(
@@ -250,11 +275,33 @@ fn export(
                         )
                         .into());
                     }
+                    render_readback_elapsed += render_started.elapsed();
+                    let save_started = Instant::now();
                     image.save(&output)?;
+                    png_write_elapsed += save_started.elapsed();
                     println!("{}", output.display());
                 }
             }
         }
+        eprintln!(
+            "gameplay resolution={} elapsed={:.2}s resize={:.2}s prepare={:.2}s render_readback={:.2}s png_write={:.2}s other={:.2}s acquire={:.2}s gpu_wait={:.2}s present={:.2}s suboptimal={}",
+            size.name(),
+            resolution_started.elapsed().as_secs_f64(),
+            resize_elapsed.as_secs_f64(),
+            prepare_elapsed.as_secs_f64(),
+            render_readback_elapsed.as_secs_f64(),
+            png_write_elapsed.as_secs_f64(),
+            resolution_started
+                .elapsed()
+                .saturating_sub(
+                    resize_elapsed + prepare_elapsed + render_readback_elapsed + png_write_elapsed,
+                )
+                .as_secs_f64(),
+            acquire_us as f64 / 1_000_000.0,
+            gpu_wait_us as f64 / 1_000_000.0,
+            present_us as f64 / 1_000_000.0,
+            suboptimal_frames,
+        );
     }
     backend.dispose_textures(&mut assets.take_textures());
     backend.cleanup();

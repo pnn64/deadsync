@@ -19,12 +19,13 @@ use std::{
     sync::{
         Arc,
         atomic::{AtomicU32, AtomicU64, Ordering},
-        mpsc,
     },
     time::Instant,
 };
 use wgpu::util::DeviceExt;
 use winit::window::Window;
+
+mod screenshot;
 
 const WGPU_IMAGE_WAIT_THRESHOLD_US: u32 = 1_000;
 const WGPU_BACK_PRESSURE_THRESHOLD_US: u32 = 1_000;
@@ -478,6 +479,7 @@ pub struct State {
     present_done: Arc<PresentCompletionCell>,
     last_completed_present_id: u32,
     screenshot_requested: bool,
+    screenshot_offscreen_requested: bool,
     captured_frame: Option<RgbaImage>,
 }
 
@@ -784,15 +786,15 @@ fn init(
                 depth: depth_format.map(|format_depth| {
                     writes.map(|write| {
                         deadlib_render_core::DepthMode::ALL.map(|depth_mode| {
-                        build_tmesh_pipelines(
-                            &device,
-                            &pipeline_layout,
-                            format,
-                            &tmesh_shader,
+                            build_tmesh_pipelines(
+                                &device,
+                                &pipeline_layout,
+                                format,
+                                &tmesh_shader,
                                 depth_mode,
-                            write,
-                            Some(format_depth),
-                        )
+                                write,
+                                Some(format_depth),
+                            )
                         })
                     })
                 }),
@@ -915,6 +917,7 @@ fn init(
         present_done,
         last_completed_present_id: 0,
         screenshot_requested: false,
+        screenshot_offscreen_requested: false,
         captured_frame: None,
     })
 }
@@ -1553,10 +1556,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
         &state.tmesh_pipelines
     };
     let tmesh_depth_pipelines = if let Some(capture) = capture {
-        capture
-            .depth
-            .as_ref()
-            .map(|p| &p[write_alpha as usize])
+        capture.depth.as_ref().map(|p| &p[write_alpha as usize])
     } else {
         Some(&state.tmesh_depth_pipelines)
     };
@@ -1715,9 +1715,7 @@ fn record_draw_ops<'pass, T: TextureLookup + ?Sized>(
                 } else {
                     deadlib_render_core::DepthMode::Off
                 };
-                if last_blend != Some(run.blend)
-                    || last_tmesh_depth != Some(depth_mode)
-                {
+                if last_blend != Some(run.blend) || last_tmesh_depth != Some(depth_mode) {
                     pass.set_pipeline(if let Some(pipelines) = tmesh_depth_pipelines {
                         pipelines[depth_mode as usize].get(run.blend)
                     } else {
@@ -1921,8 +1919,10 @@ fn ensure_cached_tmesh(
 }
 
 #[inline(always)]
-pub const fn request_screenshot(state: &mut State) {
+pub fn request_screenshot(state: &mut State) {
     state.screenshot_requested = true;
+    state.screenshot_offscreen_requested =
+        std::env::var_os("DEADSYNC_SCREENSHOT_WITHOUT_SURFACE").is_some();
 }
 
 pub fn capture_frame(state: &mut State) -> Result<RgbaImage, Box<dyn Error>> {
@@ -2027,28 +2027,39 @@ pub fn draw(
         .backend_upload_us
         .saturating_add(elapsed_us_since(backend_upload_started));
 
+    let capture_requested = state.screenshot_requested;
+    let screenshot_target = screenshot::take_target(state);
+    let offscreen_capture = screenshot_target.is_some();
     let acquire_started = Instant::now();
-    let (surface_frame, suboptimal) = match state.surface.get_current_texture() {
-        wgpu::CurrentSurfaceTexture::Success(frame) => (frame, false),
-        wgpu::CurrentSurfaceTexture::Suboptimal(frame) => (frame, true),
-        wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
-            stats.acquire_us = elapsed_us_since(acquire_started);
-            reconfigure_surface(state);
-            return Ok(stats);
-        }
-        wgpu::CurrentSurfaceTexture::Timeout
-        | wgpu::CurrentSurfaceTexture::Occluded
-        | wgpu::CurrentSurfaceTexture::Validation => {
-            stats.acquire_us = elapsed_us_since(acquire_started);
-            return Ok(stats);
+    let (surface_frame, suboptimal) = if offscreen_capture {
+        (None, false)
+    } else {
+        match state.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(frame) => (Some(frame), false),
+            wgpu::CurrentSurfaceTexture::Suboptimal(frame) => (Some(frame), true),
+            wgpu::CurrentSurfaceTexture::Lost | wgpu::CurrentSurfaceTexture::Outdated => {
+                stats.acquire_us = elapsed_us_since(acquire_started);
+                reconfigure_surface(state);
+                return Ok(stats);
+            }
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded
+            | wgpu::CurrentSurfaceTexture::Validation => {
+                stats.acquire_us = elapsed_us_since(acquire_started);
+                return Ok(stats);
+            }
         }
     };
-    stats.acquire_us = elapsed_us_since(acquire_started);
+    stats.acquire_us = if offscreen_capture {
+        0
+    } else {
+        elapsed_us_since(acquire_started)
+    };
     let waited_for_image = stats.acquire_us >= WGPU_IMAGE_WAIT_THRESHOLD_US;
     let backend_setup_started = Instant::now();
-    let view = surface_frame
-        .texture
-        .create_view(&wgpu::TextureViewDescriptor::default());
+    let output = screenshot::render_target(screenshot_target.as_ref(), surface_frame.as_ref());
+    let output_texture = output.texture();
+    let view = output.view();
     let mut encoder = state
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -2064,7 +2075,7 @@ pub fn draw(
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("wgpu render pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
+                view,
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
@@ -2108,82 +2119,30 @@ pub fn draw(
         );
     }
 
-    let screenshot_readback = if state.screenshot_requested {
-        state.screenshot_requested = false;
-        if state.config.usage.contains(wgpu::TextureUsages::COPY_SRC) {
-            let format = state.config.format;
-            debug!(
-                "wgpu screenshot: surface format={:?} size={}x{}",
-                format, state.config.width, state.config.height
-            );
-            let width = state.config.width.max(1);
-            let height = state.config.height.max(1);
-            let bytes_per_row = 4 * width;
-            let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-            let padded_bytes_per_row = bytes_per_row.div_ceil(align) * align;
-            let readback_size = u64::from(padded_bytes_per_row) * u64::from(height);
-            let readback_buffer = state.device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("wgpu screenshot readback"),
-                size: readback_size,
-                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                mapped_at_creation: false,
-            });
-            encoder.copy_texture_to_buffer(
-                wgpu::TexelCopyTextureInfo {
-                    texture: &surface_frame.texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
-                },
-                wgpu::TexelCopyBufferInfo {
-                    buffer: &readback_buffer,
-                    layout: wgpu::TexelCopyBufferLayout {
-                        offset: 0,
-                        bytes_per_row: Some(padded_bytes_per_row),
-                        rows_per_image: Some(height),
-                    },
-                },
-                wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
-            );
-            Some((
-                readback_buffer,
-                width as usize,
-                height as usize,
-                padded_bytes_per_row as usize,
-                state.config.format,
-            ))
-        } else {
-            state.captured_frame = None;
-            warn!(
-                "{} (wgpu) surface does not support COPY_SRC; screenshot unavailable.",
-                state.api.name()
-            );
-            None
-        }
-    } else {
-        None
-    };
+    let screenshot_readback =
+        screenshot::encode_readback(state, &mut encoder, output_texture, capture_requested);
     stats.backend_record_us = stats
         .backend_record_us
         .saturating_add(elapsed_us_since(backend_record_started));
 
-    let submitted_present_id = next_present_id(state);
     let submit_started = Instant::now();
     let submission_index = state.queue.submit(Some(encoder.finish()));
     stats.submit_us = stats
         .submit_us
         .saturating_add(elapsed_us_since(submit_started));
-    let present_done = Arc::clone(&state.present_done);
-    state.queue.on_submitted_work_done(move || {
-        present_done.publish(submitted_present_id, current_host_nanos());
-    });
-    let present_started = Instant::now();
-    state.queue.present(surface_frame);
-    stats.present_us = elapsed_us_since(present_started);
+    let submitted_present_id = if let Some(surface_frame) = surface_frame {
+        let submitted_present_id = next_present_id(state);
+        let present_done = Arc::clone(&state.present_done);
+        state.queue.on_submitted_work_done(move || {
+            present_done.publish(submitted_present_id, current_host_nanos());
+        });
+        let present_started = Instant::now();
+        state.queue.present(surface_frame);
+        stats.present_us = elapsed_us_since(present_started);
+        submitted_present_id
+    } else {
+        state.last_completed_present_id
+    };
     let mut back_pressure_waited = false;
     if apply_present_back_pressure && screenshot_readback.is_none() {
         // Uncapped wgpu submission can otherwise keep the CPU hot by queuing
@@ -2197,67 +2156,9 @@ pub fn draw(
         stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
         back_pressure_waited = wait_us >= WGPU_BACK_PRESSURE_THRESHOLD_US;
     }
-    let mut queue_idle_waited = false;
-    if let Some((readback_buffer, width, height, padded_row_bytes, format)) = screenshot_readback {
-        let slice = readback_buffer.slice(..);
-        let (tx, rx) = mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |res| {
-            let _ = tx.send(res);
-        });
-        let wait_started = Instant::now();
-        let _ = state.device.poll(wgpu::PollType::Wait {
-            submission_index: None,
-            timeout: None,
-        });
-        let wait_us = elapsed_us_since(wait_started);
-        stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(wait_us);
-        queue_idle_waited = wait_us != 0;
-        if rx.recv().is_ok_and(|res| res.is_ok()) {
-            match slice.get_mapped_range() {
-                Ok(data) => {
-                    let row_bytes = width * 4;
-                    let mut rgba = vec![0u8; row_bytes * height];
-                    let swap_rb = matches!(
-                        format,
-                        wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Bgra8UnormSrgb
-                    );
-                    for y in 0..height {
-                        let src = y * padded_row_bytes;
-                        // Surface readback rows are already top-to-bottom for this path.
-                        let dst = y * row_bytes;
-                        if swap_rb {
-                            let mut x = 0usize;
-                            while x < width {
-                                let s = src + x * 4;
-                                let d = dst + x * 4;
-                                rgba[d] = data[s + 2];
-                                rgba[d + 1] = data[s + 1];
-                                rgba[d + 2] = data[s];
-                                rgba[d + 3] = data[s + 3];
-                                x += 1;
-                            }
-                        } else {
-                            rgba[dst..dst + row_bytes].copy_from_slice(&data[src..src + row_bytes]);
-                        }
-                    }
-                    drop(data);
-                    readback_buffer.unmap();
-                    if let Some(img) = RgbaImage::from_raw(width as u32, height as u32, rgba) {
-                        state.captured_frame = Some(img);
-                    }
-                }
-                Err(err) => {
-                    readback_buffer.unmap();
-                    state.captured_frame = None;
-                    warn!("wgpu screenshot readback failed: {err}");
-                }
-            }
-        } else {
-            readback_buffer.unmap();
-            state.captured_frame = None;
-            warn!("wgpu screenshot readback failed: map_async returned error");
-        }
-    }
+    let (screenshot_wait_us, queue_idle_waited) =
+        screenshot::finish_readback(state, screenshot_readback);
+    stats.gpu_wait_us = stats.gpu_wait_us.saturating_add(screenshot_wait_us);
     let completion = state
         .present_done
         .load_since(&mut state.last_completed_present_id);
@@ -3306,13 +3207,13 @@ fn build_textured_mesh_pipeline_set(
     );
     let depth_pipelines = deadlib_render_core::DepthMode::ALL.map(|depth_mode| {
         build_tmesh_pipelines(
-        device,
-        pipeline_layout,
-        format,
-        &shader,
+            device,
+            pipeline_layout,
+            format,
+            &shader,
             depth_mode,
-        surface_write_mask(),
-        Some(DEPTH_FORMAT),
+            surface_write_mask(),
+            Some(DEPTH_FORMAT),
         )
     });
 

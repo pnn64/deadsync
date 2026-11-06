@@ -15,6 +15,7 @@ use export_support::{PRESETS, Result, Size};
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
+    time::{Duration, Instant},
 };
 
 const MENUS: &[(&str, &str)] = &[
@@ -122,6 +123,7 @@ fn run() -> Result<()> {
         export_menus_viewer::write_index(&output, &options.sizes)?;
         return Ok(());
     }
+    let started = Instant::now();
     export_support::init_logger()?;
     let isolated = tempfile::tempdir()?;
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
@@ -155,7 +157,12 @@ fn run() -> Result<()> {
                 .with_inner_size(winit::dpi::PhysicalSize::new(640, 480)),
         )?,
     );
-    export(&options, song, song_pack, window)
+    export(&options, song, song_pack, window)?;
+    println!(
+        "Menus export completed in {:.1}s",
+        started.elapsed().as_secs_f64()
+    );
+    Ok(())
 }
 
 fn export(
@@ -176,11 +183,18 @@ fn export(
     }
 
     for size in &options.sizes {
+        let resolution_started = Instant::now();
+        let mut resize_elapsed = Duration::ZERO;
+        let mut prepare_elapsed = Duration::ZERO;
+        let mut render_readback_elapsed = Duration::ZERO;
+        let mut png_write_elapsed = Duration::ZERO;
         let logical_width = 480.0 * size.aspect.0 as f32 / size.aspect.1 as f32;
         let metrics = Metrics::centered(logical_width, 480.0);
         space::set_current_metrics(metrics);
         space::set_current_window_px(size.width, size.height);
+        let resize_started = Instant::now();
         backend.resize(size.width, size.height);
+        resize_elapsed += resize_started.elapsed();
         backend.set_default_projection(metrics.projection());
 
         for &(name, _) in MENUS {
@@ -188,16 +202,21 @@ fn export(
             std::fs::create_dir_all(&folder)?;
             let path = folder.join(format!("{name}.png"));
             if name == "content-browser" && size.aspect != (16, 9) {
+                let prepare_started = Instant::now();
                 let image = image::RgbaImage::from_pixel(
                     size.width,
                     size.height,
                     image::Rgba([0, 0, 0, 255]),
                 );
+                prepare_elapsed += prepare_started.elapsed();
+                let save_started = Instant::now();
                 image.save(&path)?;
+                png_write_elapsed += save_started.elapsed();
                 println!("{} (disabled: requires 16:9)", path.display());
                 continue;
             }
 
+            let prepare_started = Instant::now();
             let mut actors = menu_actors(name, &assets, song.clone(), song_pack.clone())?;
             let capture = export_support::CaptureTextures::new(&assets);
             let _ = compose::build_screen_with_texture_context(
@@ -219,10 +238,29 @@ fn export(
                 CAPTURE_TIME,
                 assets.texture_context(),
             );
-            draw_capture(&mut backend, &assets, frame, size, &path)?;
+            prepare_elapsed += prepare_started.elapsed();
+            let (render_readback, png_write) =
+                draw_capture(&mut backend, &assets, frame, size, &path)?;
+            render_readback_elapsed += render_readback;
+            png_write_elapsed += png_write;
             actors.clear();
             println!("{}", path.display());
         }
+        eprintln!(
+            "menu resolution={} elapsed={:.2}s resize={:.2}s prepare={:.2}s render_readback={:.2}s png_write={:.2}s other={:.2}s",
+            size.name(),
+            resolution_started.elapsed().as_secs_f64(),
+            resize_elapsed.as_secs_f64(),
+            prepare_elapsed.as_secs_f64(),
+            render_readback_elapsed.as_secs_f64(),
+            png_write_elapsed.as_secs_f64(),
+            resolution_started
+                .elapsed()
+                .saturating_sub(
+                    resize_elapsed + prepare_elapsed + render_readback_elapsed + png_write_elapsed,
+                )
+                .as_secs_f64(),
+        );
     }
 
     backend.dispose_textures(&mut assets.take_textures());
@@ -334,8 +372,9 @@ fn draw_capture(
     frame: RenderFrame,
     size: &Size,
     path: &PathBuf,
-) -> Result<()> {
+) -> Result<(Duration, Duration)> {
     backend.request_screenshot();
+    let render_started = Instant::now();
     backend.draw(&frame, assets.textures(), false)?;
     let image = backend.capture_frame()?;
     if image.dimensions() != (size.width, size.height) {
@@ -347,8 +386,10 @@ fn draw_capture(
         )
         .into());
     }
+    let render_readback = render_started.elapsed();
+    let save_started = Instant::now();
     image.save(path)?;
-    Ok(())
+    Ok((render_readback, save_started.elapsed()))
 }
 
 fn sample_song(directory: &Path) -> Result<deadsync_chart::SongPack> {
