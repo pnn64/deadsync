@@ -4426,6 +4426,38 @@ mod runtime_regression_tests {
     }
 
     #[test]
+    fn cancelled_failed_stage_is_not_finalized() {
+        let mut state = regression_state();
+        assert!(!state.should_finalize_stage_result());
+        state.force_fail_player(0);
+        assert!(state.all_joined_players_failed());
+        assert!(state.should_finalize_stage_result());
+
+        state.begin_exit_transition(ExitTransitionKind::Cancel);
+        assert!(!state.should_finalize_stage_result());
+        state.progress.stage.song_completed_naturally = true;
+        assert!(!state.should_finalize_stage_result());
+
+        state
+            .control
+            .exit_input
+            .exit_transition
+            .as_mut()
+            .unwrap()
+            .started_at = Instant::now() - std::time::Duration::from_secs(2);
+        assert_eq!(
+            state.update_exit_transition(0.0),
+            Some(GameplayAction::NavigateNoFade(GameplayExit::Cancel))
+        );
+        assert!(state.control.exit_input.exit_transition.is_none());
+        assert!(!state.should_finalize_stage_result());
+
+        let mut completed = regression_state();
+        completed.progress.stage.song_completed_naturally = true;
+        assert!(completed.should_finalize_stage_result());
+    }
+
+    #[test]
     fn begin_restart_exit_arms_cancel_transition_like_back_out() {
         let mut state = regression_state();
         assert!(state.control.exit_input.exit_transition.is_none());

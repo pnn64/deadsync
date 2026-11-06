@@ -39,8 +39,18 @@ pub(crate) fn evaluation_view(
         fail_stream_progress[player_idx] = player.fail_stream_progress;
         let machine_records =
             scores::get_machine_leaderboard_local(player.chart.short_hash.as_str(), usize::MAX);
-        let machine_record_highlight_rank =
-            score_data::leaderboard_rank_for_score(machine_records.as_slice(), score_percent);
+        let machine_score_passed = player.grade != score_data::Grade::Failed
+            && (routine_shared.is_none()
+                || stage
+                    .players
+                    .iter()
+                    .flatten()
+                    .all(|player| player.grade != score_data::Grade::Failed));
+        let machine_record_highlight_rank = machine_score_passed
+            .then(|| {
+                score_data::leaderboard_rank_for_score(machine_records.as_slice(), score_percent)
+            })
+            .flatten();
         let personal_records = scores::get_personal_leaderboard_local_for_side(
             player.chart.short_hash.as_str(),
             side,

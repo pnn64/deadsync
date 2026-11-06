@@ -425,6 +425,7 @@ pub struct SelectFlowRuntimeView {
 pub struct PostSongPlayerView {
     pub joined: bool,
     pub guest: bool,
+    pub name_entry_eligible: bool,
     pub display_name: String,
     pub player_initials: String,
     pub avatar_texture_key: Option<String>,
@@ -439,6 +440,7 @@ impl Default for PostSongPlayerView {
         Self {
             joined: false,
             guest: false,
+            name_entry_eligible: false,
             display_name: String::new(),
             player_initials: String::new(),
             avatar_texture_key: None,

@@ -9563,9 +9563,7 @@ impl App {
                 .screens
                 .gameplay_state
                 .as_ref()
-                .is_some_and(|gameplay| {
-                    gameplay.song_completed_naturally() || gameplay.all_joined_players_failed()
-                })
+                .is_some_and(|gameplay| gameplay.should_finalize_stage_result())
             && let Some(mut gameplay) = self.state.screens.gameplay_state.take()
         {
             crate::gameplay_runtime::exit(&mut gameplay);

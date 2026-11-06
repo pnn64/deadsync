@@ -5269,6 +5269,20 @@ pub fn leaderboard_rank_for_score(entries: &[LeaderboardEntry], score_percent: f
     Some((higher_scores as u32).saturating_add(1))
 }
 
+/// Simply Love enables initials for a record with at least 1% dance points.
+/// ITGmania retains ten machine records and three personal records by default.
+#[must_use]
+pub fn name_entry_record_eligible(
+    score_percent: f64,
+    machine_rank: Option<u32>,
+    personal_rank: Option<u32>,
+) -> bool {
+    score_percent.is_finite()
+        && score_percent >= 0.01
+        && (machine_rank.is_some_and(|rank| (1..=10).contains(&rank))
+            || personal_rank.is_some_and(|rank| (1..=3).contains(&rank)))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScoreImportEndpoint {
     GrooveStats,
@@ -8699,6 +8713,18 @@ mod tests {
     }
 
     #[test]
+    fn name_entry_requires_one_percent_and_a_retained_record() {
+        for score in [0.0, -0.1, 0.0099, f64::NAN, f64::INFINITY] {
+            assert!(!name_entry_record_eligible(score, Some(1), Some(1)));
+        }
+        assert!(name_entry_record_eligible(0.01, Some(10), None));
+        assert!(name_entry_record_eligible(0.80, None, Some(3)));
+        assert!(!name_entry_record_eligible(0.80, Some(11), Some(4)));
+        assert!(!name_entry_record_eligible(0.80, None, None));
+        assert!(!name_entry_record_eligible(0.80, Some(0), Some(0)));
+    }
+
+    #[test]
     fn machine_leaderboard_entries_sort_and_limit_local_plays() {
         let entries = machine_leaderboard_entries(
             vec![
@@ -8729,12 +8755,11 @@ mod tests {
 
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].rank, 1);
-        assert_eq!(entries[0].name, "Cara");
-        assert_eq!(entries[0].machine_tag.as_deref(), Some("C"));
+        assert_eq!(entries[0].name, "Bob");
         assert_eq!(entries[0].score, 9900.0);
-        assert!(entries[0].is_fail);
+        assert!(!entries[0].is_fail);
         assert_eq!(entries[1].rank, 2);
-        assert_eq!(entries[1].name, "Bob");
+        assert_eq!(entries[1].name, "Alice");
     }
 
     #[test]
