@@ -86,8 +86,6 @@ fn run_all(args: Vec<String>) -> Result<()> {
 
     run_exporters(&executable, &presets, reverse)?;
 
-    build_index(&executable, "menus", &presets, false)?;
-    build_index(&executable, "gameplay", &presets, reverse)?;
     println!(
         "Screenshot export completed in {:.1}s",
         started.elapsed().as_secs_f64()
@@ -97,13 +95,13 @@ fn run_all(args: Vec<String>) -> Result<()> {
 
 fn run_exporters(executable: &Path, presets: &[&str], reverse: bool) -> Result<()> {
     let mut menu_command = Command::new(executable);
-    menu_command.arg("menus").arg("--images-only");
+    menu_command.arg("menus");
     for preset in presets {
         menu_command.arg("--preset").arg(*preset);
     }
 
     let mut gameplay_command = Command::new(executable);
-    gameplay_command.arg("gameplay").arg("--images-only");
+    gameplay_command.arg("gameplay");
     for preset in presets {
         gameplay_command.arg("--preset").arg(*preset);
     }
@@ -118,26 +116,6 @@ fn run_exporters(executable: &Path, presets: &[&str], reverse: bool) -> Result<(
     let gameplay_status = gameplay_command.status()?;
     if !gameplay_status.success() {
         return Err(format!("gameplay exporter exited with {gameplay_status}").into());
-    }
-    Ok(())
-}
-
-fn build_index(executable: &Path, mode: &str, presets: &[&str], reverse: bool) -> Result<()> {
-    let mut command = Command::new(executable);
-    command.arg(mode).arg("--index-only");
-    for preset in presets {
-        command.arg("--preset").arg(*preset);
-    }
-    if reverse {
-        command.arg("--reverse");
-    }
-    let status = command.status()?;
-    if !status.success() {
-        return Err(format!(
-            "building index with {} exited with {status}",
-            executable.display()
-        )
-        .into());
     }
     Ok(())
 }
