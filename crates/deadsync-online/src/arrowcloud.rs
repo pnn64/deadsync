@@ -1940,6 +1940,17 @@ pub const fn turn_label(turn: profile_data::TurnOption) -> &'static str {
 
 #[inline(always)]
 #[must_use]
+pub const fn disabled_windows_label(windows: profile_data::TimingWindowsOption) -> &'static str {
+    match windows {
+        profile_data::TimingWindowsOption::None => "None",
+        profile_data::TimingWindowsOption::WayOffs => "Way Offs",
+        profile_data::TimingWindowsOption::DecentsAndWayOffs => "Decents + Way Offs",
+        profile_data::TimingWindowsOption::FantasticsAndExcellents => "Fantastics + Excellents",
+    }
+}
+
+#[inline(always)]
+#[must_use]
 pub fn scroll_label(scroll: profile_data::ScrollOption) -> Option<&'static str> {
     if scroll.contains(profile_data::ScrollOption::Reverse) {
         Some("Reverse")
@@ -1993,7 +2004,7 @@ pub fn modifiers_from_profile(profile: &Profile) -> ArrowCloudModifiers {
         ),
         mini: profile.mini_percent.clamp(-100, 150),
         turn: turn_label(profile.turn_option),
-        disabled_windows: "None",
+        disabled_windows: disabled_windows_label(profile.timing_windows),
         speed: speed_payload(profile.scroll_speed),
         perspective: match profile.perspective {
             profile_data::Perspective::Overhead => "Overhead",
@@ -3101,6 +3112,31 @@ mod tests {
     #[test]
     fn user_url_uses_user_route() {
         assert_eq!(user_url(), "https://api.arrowcloud.dance/user");
+    }
+
+    #[test]
+    fn modifiers_from_profile_reports_disabled_timing_windows() {
+        let cases = [
+            (profile_data::TimingWindowsOption::None, "None"),
+            (profile_data::TimingWindowsOption::WayOffs, "Way Offs"),
+            (
+                profile_data::TimingWindowsOption::DecentsAndWayOffs,
+                "Decents + Way Offs",
+            ),
+            (
+                profile_data::TimingWindowsOption::FantasticsAndExcellents,
+                "Fantastics + Excellents",
+            ),
+        ];
+        for (timing_windows, expected) in cases {
+            let mut profile = Profile::default();
+            profile.timing_windows = timing_windows;
+
+            let modifiers = modifiers_from_profile(&profile);
+            assert_eq!(modifiers.disabled_windows, expected);
+            let json = serde_json::to_value(&modifiers).unwrap();
+            assert_eq!(json["disabledWindows"], expected);
+        }
     }
 
     #[test]
