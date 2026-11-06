@@ -32,7 +32,7 @@ pub(super) fn append_endless_cycle(
         return false;
     }
     for stage in &stages {
-        add_course_stage_totals(&mut course.course_display_totals, stage, chart_type);
+        let _ = add_course_stage_totals(&mut course.course_display_totals, stage, chart_type);
     }
     course.stages.extend(stages);
     true
@@ -54,7 +54,7 @@ pub(super) fn build_course_run_from_selection(
 
     let mut course_display_totals = [CourseDisplayTotals::default(); MAX_PLAYERS];
     for stage in &stages {
-        add_course_stage_totals(&mut course_display_totals, stage, chart_type);
+        let _ = add_course_stage_totals(&mut course_display_totals, stage, chart_type);
     }
 
     Some(CourseRunState {
@@ -71,6 +71,7 @@ pub(super) fn build_course_run_from_selection(
         stages,
         course_display_totals,
         next_stage_index: 0,
+        interrupted: false,
         stage_summaries: Vec::new(),
     })
 }
